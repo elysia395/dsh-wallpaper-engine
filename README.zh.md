@@ -149,6 +149,12 @@ Wallpaper Engine 没有 macOS 客户端，所以 macOS 上本插件是**目录�
 - `~/Documents/dsh/we-content/`——手动放 loose 文件到这里即可用作背景。
 - `DSH_WALLPAPER_ENGINE_CONTENT` 环境变量（冒号分隔的目录列表），或拷过来的 Wallpaper Engine 安装 / projects 目录树。
 
+## 分支约定
+
+- `main` — Windows 优先的上游主线。**macOS 相关改动不要提交到这里。**
+- `dsh-wallpaper-engine-mac` — 上游仓库里的 macOS 分支（WaifuX 集成）。macOS 相关工作请基于此分支开发 / 把 PR 指向这个分支。
+- [ruijiaang-lab fork](https://github.com/ruijiaang-lab/dsh-wallpaper-engine) 里的 `mac` 分支是持续维护的 macOS 分支（上游 PR 的源）。
+
 ## 已知限制
 
 - Scene（原生 3D）和 Application 壁纸无法内嵌，选择器里会显示为 `[不可播放]`；它们的动态渲染仍是 Wallpaper Engine 在桌面上的工作。

@@ -183,6 +183,14 @@ instead of Steam-driven. It scans content folders and treats every `.mp4`/`.webm
 - Any folders listed in `DSH_WALLPAPER_ENGINE_CONTENT` (colon-separated), or a
   copied Wallpaper Engine install/projects tree.
 
+## Branch convention
+
+- `main` — the Windows-first upstream line. **Do not commit macOS work here.**
+- `dsh-wallpaper-engine-mac` — the macOS branch in the upstream repo (WaifuX
+  integration). Push / open PRs for macOS work against this branch.
+- In the [ruijiaang-lab fork](https://github.com/ruijiaang-lab/dsh-wallpaper-engine),
+  `mac` is the maintained macOS branch (source of the upstream PR).
+
 ## Limitations
 
 - Scene (native 3D) and Application wallpapers cannot be embedded; they appear as
