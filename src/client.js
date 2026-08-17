@@ -152,6 +152,13 @@ function applySelection(id) {
 
 // ── Behind-body layer: wallpaper + scrim (plain DOM, NOT a slot) ───────────
 function buildMedia(sel) {
+  if (sel.type === "image") {
+    const img = document.createElement("img");
+    img.src = sel.url;
+    img.alt = "";
+    img.className = "we-media we-image";
+    return img;
+  }
   const media = sel.type === "video"
     ? document.createElement("video")
     : document.createElement("iframe");
