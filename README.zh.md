@@ -111,6 +111,14 @@ dsh plugin --profile web add link:./dsh-wallpaper-engine
 
 本插件不会向模型暴露任何工具或提示文本，对 agent 零 token 开销。所有状态都是进程内 / 浏览器内的，不会写入任何持久化 DSH 设置。
 
+## macOS
+
+Wallpaper Engine 没有 macOS 客户端，所以 macOS 上本插件是**目录驱动**而非 Steam 驱动。它会扫描内容文件夹，把其中的 `.mp4`/`.webm`（视频）和 `.png`/`.jpg`/`.gif`/`.webp`（图片）文件都当作壁纸：
+
+- **WaifuX**（macOS 上常用的壁纸软件）——它的下载目录 `~/Library/Application Support/WaifuX/Wallpapers/` 会被默认扫描，在 WaifuX 里保存的壁纸**零配置**自动成为 DSH 背景。
+- `~/Documents/dsh/we-content/`——手动放 loose 文件到这里即可用作背景。
+- `DSH_WALLPAPER_ENGINE_CONTENT` 环境变量（冒号分隔的目录列表），或拷过来的 Wallpaper Engine 安装 / projects 目录树。
+
 ## 已知限制
 
 - Scene（原生 3D）和 Application 壁纸无法内嵌，选择器里会显示为 `[不可播放]`；它们的动态渲染仍是 Wallpaper Engine 在桌面上的工作。

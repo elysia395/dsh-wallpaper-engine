@@ -145,6 +145,19 @@ While a wallpaper is active, four sliders let you tune how it blends with the UI
 There is no model-visible tool or prompt text. The bundle adds zero tokens to the
 agent. All state is process-local/browser-local; no durable DSH settings are written.
 
+## macOS
+
+Wallpaper Engine has no macOS client, so on macOS the plugin is **directory-driven**
+instead of Steam-driven. It scans content folders and treats every `.mp4`/`.webm`
+(video) and `.png`/`.jpg`/`.gif`/`.webp` (image) file in them as a wallpaper:
+
+- **WaifuX** (the popular macOS wallpaper app) — its download folder
+  `~/Library/Application Support/WaifuX/Wallpapers/` is scanned by default, so
+  anything you save in WaifuX becomes a DSH background with no setup.
+- `~/Documents/dsh/we-content/` — drop loose files here to use them as backgrounds.
+- Any folders listed in `DSH_WALLPAPER_ENGINE_CONTENT` (colon-separated), or a
+  copied Wallpaper Engine install/projects tree.
+
 ## Limitations
 
 - Scene (native 3D) and Application wallpapers cannot be embedded; they appear as
