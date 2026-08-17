@@ -25,6 +25,26 @@ export interface WallpaperDescriptor {
   preview: string | null;
 }
 
+/** A Wallpaper Engine playlist read from `config.json`. */
+export interface PlaylistDescriptor {
+  /** Stable identifier derived from the Wallpaper Engine profile and index. */
+  id: string;
+  /** Playlist name shown in the picker. */
+  name: string;
+  /** Wallpaper Engine ordering mode (`sequence` or `random`). */
+  order: 'sequence' | 'random';
+  /** Wallpaper Engine delay in seconds, when present. */
+  delay: number | null;
+  /** Inventory ids in the playlist order. */
+  wallpaperIds: string[];
+  /** Number of resolved entries in the playlist. */
+  total: number;
+  /** Number of resolved Video/Web entries. */
+  portableCount: number;
+  /** Number of config entries that could not be matched to the inventory. */
+  unresolvedCount: number;
+}
+
 /** Shape returned by GET /wallpaper-engine/inventory. */
 export interface Inventory {
   /** Absolute Wallpaper Engine install dir, or null when not found. */
@@ -35,6 +55,8 @@ export interface Inventory {
   portableCount: number;
   /** All installed wallpapers. */
   wallpapers: WallpaperDescriptor[];
+  /** Saved Wallpaper Engine playlists available for scoped rotation. */
+  playlists: PlaylistDescriptor[];
 }
 
 /** The host plugin hard-depends on the webserver service (`webServer`). */

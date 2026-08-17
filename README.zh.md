@@ -118,6 +118,12 @@ dsh plugin --profile web add link:./dsh-wallpaper-engine
 4. 用 **暂停/播放** 暂停视频壁纸，用 **关闭** 清除壁纸。
    选择会保存在浏览器的 `localStorage`（键 `dsh-wallpaper-engine:selection`）中。
 
+### 自动轮转
+
+在壁纸选择器中先选择一个 Wallpaper Engine 播放列表，再勾选 **自动轮转**，插件只会在该播放列表内循环，不会把全部壁纸一股脑加入。可选间隔为 1、5、10、30、60 或 120 分钟；默认关闭。至少需要两张可播放的 Video/Web 壁纸，手动切换壁纸会重新计算下一次轮转时间；播放列表的随机/顺序设置也会被保留。Scene 和 Application 壁纸不能嵌入网页，会自动从轮转候选中剔除，但仍会显示在选择列表中并标记为 `[不可播放]`。
+
+播放列表从 Wallpaper Engine 安装目录的 `config.json` 读取（优先使用保存的 `general.playlists`；没有保存列表时回退到当前显示器的活动列表）。
+
 ### 四个滑动条
 
 壁纸激活后，四个滑动条可以微调它与界面的融合效果：

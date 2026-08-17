@@ -139,6 +139,12 @@ via `libraryfolders.vdf`. Nothing further is required.
    The choice is remembered in your browser's `localStorage` (key
    `dsh-wallpaper-engine:selection`).
 
+### Automatic rotation
+
+Select a Wallpaper Engine playlist first, then enable **自动轮转**. Rotation is scoped to that playlist; the plugin never silently adds the entire inventory. The interval can be set to 1, 5, 10, 30, 60, or 120 minutes; it is off by default. At least two playable Video/Web wallpapers are required, manual changes reset the next timer, and the playlist's random/sequential order is preserved. Scene and Application wallpapers cannot be embedded in the web UI, so they are automatically excluded from rotation while remaining visible in the picker as `[不可播放]`.
+
+Playlists are read from `config.json` in the Wallpaper Engine install directory, preferring saved `general.playlists` and falling back to the active monitor playlist when no saved list exists.
+
 ### The four sliders
 
 While a wallpaper is active, four sliders let you tune how it blends with the UI:
