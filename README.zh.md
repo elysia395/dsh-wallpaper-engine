@@ -115,7 +115,7 @@ dsh plugin --profile web add link:./dsh-wallpaper-engine
 
 Wallpaper Engine 没有 macOS 客户端，所以 macOS 上本插件是**目录驱动**而非 Steam 驱动。它会扫描内容文件夹，把其中的 `.mp4`/`.webm`（视频）和 `.png`/`.jpg`/`.gif`/`.webp`（图片）文件都当作壁纸：
 
-- **WaifuX**（macOS 上常用的壁纸软件）——它的下载目录 `~/Library/Application Support/WaifuX/Wallpapers/` 会被默认扫描，在 WaifuX 里保存的壁纸**零配置**自动成为 DSH 背景。
+- **WaifuX**（macOS 上常用的壁纸软件）——它的下载目录会被默认扫描：`Wallpapers/`（静态图片）和 `Media/`（动态视频），在 WaifuX 里保存的壁纸**零配置**自动成为 DSH 背景。
 - `~/Documents/dsh/we-content/`——手动放 loose 文件到这里即可用作背景。
 - `DSH_WALLPAPER_ENGINE_CONTENT` 环境变量（冒号分隔的目录列表），或拷过来的 Wallpaper Engine 安装 / projects 目录树。
 
