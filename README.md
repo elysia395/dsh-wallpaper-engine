@@ -4,7 +4,24 @@
 
 A DSH bundle that turns your **Wallpaper Engine** wallpapers into the **background of the DSH web GUI** (`dsh web`).
 
-It discovers the Wallpaper Engine install on your machine, lists its wallpapers, and renders the *portable* ones (Video `.mp4` and Web/HTML) behind the DSH chat interface with an iOS-style **liquid glass** effect. You pick the wallpaper from a settings row, fine-tune it with four sliders, and pause/clear it anytime.
+It discovers the wallpapers on your machine (WaifuX on macOS, Wallpaper Engine on Windows), lists them, and renders video/still wallpapers behind the DSH chat interface with an iOS-style **liquid glass** effect. You pick the wallpaper from a settings row, fine-tune it with four sliders, and pause/clear it anytime.
+
+## Quick start (no command line needed)
+
+**macOS (WaifuX wallpapers)**
+
+1. Install **WaifuX**, log in (Steam account), download wallpapers you like — videos and stills both work
+2. In DSH, open **Plugin Market**, search `wallpaper`, install this plugin (the mac build includes WaifuX support)
+3. Open **Settings → General → Wallpaper Engine**, pick a wallpaper — the chat background updates immediately
+
+No configuration needed: the plugin reads WaifuX's download folder automatically, and wallpapers you download later appear on their own. If text is hard to read, raise the **Dim** and **Border** sliders (instant effect). Wallpaper not showing? Restart DSH once after downloading, and make sure WaifuX uses its default download location.
+
+**Windows (Wallpaper Engine wallpapers)**
+
+1. Install **Wallpaper Engine** in Steam and subscribe to wallpapers (video / web)
+2. Install this plugin from the DSH plugin market, then Settings → General → Wallpaper Engine → pick one
+
+The plugin finds the Steam library automatically, on any drive.
 
 ## Why only Video and Web wallpapers?
 
