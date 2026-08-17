@@ -202,6 +202,15 @@ instead of Steam-driven. It scans content folders and treats every `.mp4`/`.webm
 - The picker is English/Chinese mixed (this bundle is not yet wired into DSH's
   locale namespaces).
 
+## Acknowledgements
+
+This plugin is a macOS-focused extension of
+[elysia395/dsh-wallpaper-engine](https://github.com/elysia395/dsh-wallpaper-engine),
+the Windows (Wallpaper Engine) implementation. The macOS support (WaifuX
+integration, directory-based discovery) is maintained in this fork; the
+original Windows code and its upstream features remain authored and
+maintained by **elysia395**.
+
 ## Development / rebuild
 
 The host half (`lib/index.js`) is plain ESM with no build step. The client half

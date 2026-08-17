@@ -162,6 +162,10 @@ Wallpaper Engine 没有 macOS 客户端，所以 macOS 上本插件是**目录�
 - 媒体从你本机的 Wallpaper Engine 安装路径提供；host 只提供它已枚举过的文件，不会暴露任意文件系统。
 - 选择器文案为中英混合（本 bundle 尚未接入 DSH 的 locale 命名空间）。
 
+## 致谢
+
+本插件是 [elysia395/dsh-wallpaper-engine](https://github.com/elysia395/dsh-wallpaper-engine) 的 **macOS 扩展分支**。原项目（Windows / Wallpaper Engine 实现）由 **elysia395** 开发维护；本 fork 在其基础上新增 macOS 支持（WaifuX 集成、目录式发现），Windows 原有代码与上游功能均保留原作者署名与维护。
+
 ## 开发 / 重建
 
 host 端（`lib/index.js`）是纯 ESM，无需构建。client 端（`lib/client.js`）是**编译产物**，由规范源文件 `src/client.js` 经 `scripts/build-client.mjs` 生成，输出 DSH 模块加载器要求的 `window.__ModuleLoader__.load({ id, factory })` 外壳（与盒内 client 包 `tsdown` 产出的形态一致）。
