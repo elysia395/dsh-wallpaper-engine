@@ -4,7 +4,24 @@
 
 A DSH bundle that turns your **Wallpaper Engine** wallpapers into the **background of the DSH web GUI** (`dsh web`).
 
-It discovers the Wallpaper Engine install on your machine, lists its wallpapers, and renders the *portable* ones (Video `.mp4` and Web/HTML) behind the DSH chat interface with an iOS-style **liquid glass** effect. You pick the wallpaper from a settings row, fine-tune it with four sliders, and pause/clear it anytime.
+It discovers the wallpapers on your machine (WaifuX on macOS, Wallpaper Engine on Windows), lists them, and renders video/still wallpapers behind the DSH chat interface with an iOS-style **liquid glass** effect. You pick the wallpaper from a settings row, fine-tune it with four sliders, and pause/clear it anytime.
+
+## Quick start (no command line needed)
+
+**macOS (WaifuX wallpapers)**
+
+1. Install **WaifuX**, log in (Steam account), download wallpapers you like — videos and stills both work
+2. In DSH, open **Plugin Market**, search `wallpaper`, install this plugin (the mac build includes WaifuX support)
+3. Open **Settings → General → Wallpaper Engine**, pick a wallpaper — the chat background updates immediately
+
+No configuration needed: the plugin reads WaifuX's download folder automatically, and wallpapers you download later appear on their own. If text is hard to read, raise the **Dim** and **Border** sliders (instant effect). Wallpaper not showing? Restart DSH once after downloading, and make sure WaifuX uses its default download location.
+
+**Windows (Wallpaper Engine wallpapers)**
+
+1. Install **Wallpaper Engine** in Steam and subscribe to wallpapers (video / web)
+2. Install this plugin from the DSH plugin market, then Settings → General → Wallpaper Engine → pick one
+
+The plugin finds the Steam library automatically, on any drive.
 
 ## Why only Video and Web wallpapers?
 
@@ -151,6 +168,29 @@ While a wallpaper is active, four sliders let you tune how it blends with the UI
 There is no model-visible tool or prompt text. The bundle adds zero tokens to the
 agent. All state is process-local/browser-local; no durable DSH settings are written.
 
+## macOS
+
+Wallpaper Engine has no macOS client, so on macOS the plugin is **directory-driven**
+instead of Steam-driven. It scans content folders and treats every `.mp4`/`.webm`
+(video) and `.png`/`.jpg`/`.gif`/`.webp` (image) file in them as a wallpaper:
+
+- **WaifuX** (the popular macOS wallpaper app) — its download folders are
+  scanned by default (`Wallpapers/` for static images, `Media/` for motion
+  videos), and so are the **Wallpaper Engine workshop items WaifuX downloads
+  via its bundled steamcmd** (standard Steam directory, no setup), so anything
+  you save in WaifuX becomes a DSH background with no setup.
+- `~/Documents/dsh/we-content/` — drop loose files here to use them as backgrounds.
+- Any folders listed in `DSH_WALLPAPER_ENGINE_CONTENT` (colon-separated), or a
+  copied Wallpaper Engine install/projects tree.
+
+## Branch convention
+
+- `main` — the Windows-first upstream line. **Do not commit macOS work here.**
+- `dsh-wallpaper-engine-mac` — the macOS branch in the upstream repo (WaifuX
+  integration). Push / open PRs for macOS work against this branch.
+- In the [ruijiaang-lab fork](https://github.com/ruijiaang-lab/dsh-wallpaper-engine),
+  `mac` is the maintained macOS branch (source of the upstream PR).
+
 ## Limitations
 
 - Scene (native 3D) and Application wallpapers cannot be embedded; they appear as
@@ -161,6 +201,15 @@ agent. All state is process-local/browser-local; no durable DSH settings are wri
   serves files it has already enumerated (no arbitrary filesystem exposure).
 - The picker is English/Chinese mixed (this bundle is not yet wired into DSH's
   locale namespaces).
+
+## Acknowledgements
+
+This plugin is a macOS-focused extension of
+[elysia395/dsh-wallpaper-engine](https://github.com/elysia395/dsh-wallpaper-engine),
+the Windows (Wallpaper Engine) implementation. The macOS support (WaifuX
+integration, directory-based discovery) is maintained in this fork; the
+original Windows code and its upstream features remain authored and
+maintained by **elysia395**.
 
 ## Development / rebuild
 

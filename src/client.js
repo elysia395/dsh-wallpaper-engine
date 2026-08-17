@@ -148,7 +148,7 @@ async function loadInventory() {
 
   // After a refresh, drop the selection if the chosen wallpaper vanished or is
   // no longer playable (avoids a dangling media URL).
-  if (selection.id && !selection.inventory.wallpapers.some((w) => w.id === selection.id && isRotatableWallpaper(w))) {
+  if (selection.id && !selection.inventory.wallpapers.some((w) => w.id === selection.id && w.playable)) {
     selection.id = "";
     persistSelection();
   }
@@ -232,7 +232,7 @@ function applySelection(id) {
     return;
   }
   const w = selection.inventory.wallpapers.find((x) => x.id === selection.id);
-  if (!w || !isRotatableWallpaper(w)) {
+  if (!w || !w.playable) {
     selection.url = null;
     selection.type = null;
     syncRotationTimer();
@@ -247,6 +247,13 @@ function applySelection(id) {
 
 // ── Behind-body layer: wallpaper + scrim (plain DOM, NOT a slot) ───────────
 function buildMedia(sel) {
+  if (sel.type === "image") {
+    const img = document.createElement("img");
+    img.src = sel.url;
+    img.alt = "";
+    img.className = "we-media we-image";
+    return img;
+  }
   const media = sel.type === "video"
     ? document.createElement("video")
     : document.createElement("iframe");
@@ -438,8 +445,8 @@ function WallpaperPicker() {
     React.createElement("select", { className: "we-picker__select", value: sel.id, onChange },
       React.createElement("option", { value: "" }, "— 无（关闭） —"),
       ...list.map((w) => React.createElement("option", {
-        key: w.id, value: w.id, disabled: !isRotatableWallpaper(w),
-      }, (isRotatableWallpaper(w) ? "" : "[不可播放] ") + w.title)),
+        key: w.id, value: w.id, disabled: !w.playable,
+      }, (w.playable ? "" : "[不可播放] ") + w.title)),
     ),
     React.createElement("div", { className: "we-picker__row" },
       React.createElement("button", {

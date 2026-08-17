@@ -4,7 +4,29 @@
 
 一个 DSH bundle，把你电脑上的 **Wallpaper Engine** 壁纸变成 **DSH 网页界面（`dsh web`）的背景**。
 
-它会自动发现你本机的 Wallpaper Engine 安装，列出你的壁纸，并把其中*可移植*的类型（Video `.mp4` 和 Web/HTML）渲染到 DSH 对话界面的后方，配以 **iOS 风格液态玻璃**效果。你可以在设置里挑选壁纸、用四个滑动条微调，也能随时暂停或关闭。
+它会自动发现你本机的壁纸（macOS 读 WaifuX、Windows 读 Wallpaper Engine），列出你的壁纸，并把动态视频 / 图片渲染到 DSH 对话界面的后方，配以 **iOS 风格液态玻璃**效果。你可以在设置里挑选壁纸、用四个滑动条微调，也能随时暂停或关闭。
+
+## 快速开始（新手从这里看，全程鼠标点击，不用命令行）
+
+**macOS（用 WaifuX 壁纸）**
+
+1. **装好 WaifuX 并登录**（用 Steam 账号登录），在 WaifuX 里下载你喜欢的壁纸——动态视频、静态图片都行
+2. **在 DSH 里装本插件**：打开 DSH → **插件市场** → 搜索 `wallpaper` → 找到本插件 → 安装（mac 版包含 WaifuX 支持）
+3. **选壁纸**：DSH → **设置 → 通用 → Wallpaper Engine** → 点开选择器选一张，聊天背景立刻变成它
+
+不需要任何配置。插件会自动读取 WaifuX 的下载文件夹，**以后你在 WaifuX 里下载的新壁纸也会自动出现**，不用重装、不用设置。
+
+**Windows（用 Wallpaper Engine 壁纸）**
+
+1. 在 Steam 里装好 **Wallpaper Engine**，订阅你喜欢的壁纸（视频 / 网页壁纸）
+2. 在 DSH 插件市场安装本插件（步骤同上）
+3. 设置 → 通用 → Wallpaper Engine → 选壁纸
+
+插件会自动发现 Steam 里的壁纸库，装在哪块盘都能找到。
+
+**让文字更清楚**：选完壁纸后，下面有四个滑动条（模糊 / 暗化 / 边框 / 玻璃），都是拖一下立刻生效。如果聊天文字看不清，把 **暗化** 和 **边框** 调高一点就行。每张壁纸的明暗不一样，可以配合 DSH 的浅色 / 深色主题切换着试。
+
+**壁纸没出现？** 两步排查：① 重启 DSH Desktop（换壁纸不用重启，**刚改完设置或刚下载完壁纸要重启一次**）；② 确认 WaifuX 用的是默认下载位置（没有改过下载目录）。
 
 ## 为什么只支持 Video 和 Web 壁纸？
 
@@ -30,9 +52,11 @@ Wallpaper Engine 的壁纸分四种类型：
      - `GET /wallpaper-engine/preview/<token>` → 预览图
 - **Client 端**（`lib/client.js`）：一个浏览器模块，拉取壁纸列表，把选中壁纸渲染到应用三列**后方**的固定图层，并在「设置 → General」里加一个「Wallpaper Engine」行（含选择器）。
 
-## 安装
+## 安装（命令行，给需要手动安装的人）
 
-### 普通用户（安装已发布版本，推荐）
+> 新手用户不需要看这一节——用上面「快速开始」里的插件市场方式安装即可。
+
+### 普通用户（安装已发布版本）
 
 如果你只是想用这个插件，直接装 npm 上已发布的包即可：
 
@@ -117,12 +141,30 @@ dsh plugin --profile web add link:./dsh-wallpaper-engine
 
 本插件不会向模型暴露任何工具或提示文本，对 agent 零 token 开销。所有状态都是进程内 / 浏览器内的，不会写入任何持久化 DSH 设置。
 
+## macOS
+
+Wallpaper Engine 没有 macOS 客户端，所以 macOS 上本插件是**目录驱动**而非 Steam 驱动。它会扫描内容文件夹，把其中的 `.mp4`/`.webm`（视频）和 `.png`/`.jpg`/`.gif`/`.webp`（图片）文件都当作壁纸：
+
+- **WaifuX**（macOS 上常用的壁纸软件）——它的下载目录会被默认扫描：`Wallpapers/`（静态图片）、`Media/`（动态视频），以及 **WaifuX 通过 steamcmd 下载的 Wallpaper Engine 工坊壁纸**（标准 Steam 目录，无需任何设置），在 WaifuX 里保存的壁纸**零配置**自动成为 DSH 背景。
+- `~/Documents/dsh/we-content/`——手动放 loose 文件到这里即可用作背景。
+- `DSH_WALLPAPER_ENGINE_CONTENT` 环境变量（冒号分隔的目录列表），或拷过来的 Wallpaper Engine 安装 / projects 目录树。
+
+## 分支约定
+
+- `main` — Windows 优先的上游主线。**macOS 相关改动不要提交到这里。**
+- `dsh-wallpaper-engine-mac` — 上游仓库里的 macOS 分支（WaifuX 集成）。macOS 相关工作请基于此分支开发 / 把 PR 指向这个分支。
+- [ruijiaang-lab fork](https://github.com/ruijiaang-lab/dsh-wallpaper-engine) 里的 `mac` 分支是持续维护的 macOS 分支（上游 PR 的源）。
+
 ## 已知限制
 
 - Scene（原生 3D）和 Application 壁纸无法内嵌，选择器里会显示为 `[不可播放]`；它们的动态渲染仍是 Wallpaper Engine 在桌面上的工作。
 - 浏览器需能自动播放静音 `<video>`（DSH 跑在 loopback，现代浏览器允许静音自动播放）。
 - 媒体从你本机的 Wallpaper Engine 安装路径提供；host 只提供它已枚举过的文件，不会暴露任意文件系统。
 - 选择器文案为中英混合（本 bundle 尚未接入 DSH 的 locale 命名空间）。
+
+## 致谢
+
+本插件是 [elysia395/dsh-wallpaper-engine](https://github.com/elysia395/dsh-wallpaper-engine) 的 **macOS 扩展分支**。原项目（Windows / Wallpaper Engine 实现）由 **elysia395** 开发维护；本 fork 在其基础上新增 macOS 支持（WaifuX 集成、目录式发现），Windows 原有代码与上游功能均保留原作者署名与维护。
 
 ## 开发 / 重建
 
