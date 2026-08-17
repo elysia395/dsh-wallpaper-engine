@@ -445,8 +445,8 @@ function WallpaperPicker() {
     React.createElement("select", { className: "we-picker__select", value: sel.id, onChange },
       React.createElement("option", { value: "" }, "— 无（关闭） —"),
       ...list.map((w) => React.createElement("option", {
-        key: w.id, value: w.id, disabled: !isRotatableWallpaper(w),
-      }, (isRotatableWallpaper(w) ? "" : "[不可播放] ") + w.title)),
+        key: w.id, value: w.id, disabled: !w.playable,
+      }, (w.playable ? "" : "[不可播放] ") + w.title)),
     ),
     React.createElement("div", { className: "we-picker__row" },
       React.createElement("button", {
