@@ -148,7 +148,7 @@ async function loadInventory() {
 
   // After a refresh, drop the selection if the chosen wallpaper vanished or is
   // no longer playable (avoids a dangling media URL).
-  if (selection.id && !selection.inventory.wallpapers.some((w) => w.id === selection.id && isRotatableWallpaper(w))) {
+  if (selection.id && !selection.inventory.wallpapers.some((w) => w.id === selection.id && w.playable)) {
     selection.id = "";
     persistSelection();
   }
@@ -232,7 +232,7 @@ function applySelection(id) {
     return;
   }
   const w = selection.inventory.wallpapers.find((x) => x.id === selection.id);
-  if (!w || !isRotatableWallpaper(w)) {
+  if (!w || !w.playable) {
     selection.url = null;
     selection.type = null;
     syncRotationTimer();
