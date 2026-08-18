@@ -114,15 +114,15 @@ dsh plugin --profile web add link:./dsh-wallpaper-engine
 
 1. 打开 `dsh web`，进入 DSH 界面。
 2. 打开 **设置 → General**，找到 **Wallpaper Engine** 行。
-3. 在下拉框里选一个 Video 或 Web 壁纸，它会出现在界面后方。
+3. 在**缩略图网格**里点选一张 Video 或 Web 壁纸，它会出现在界面后方（Scene/Application 无法内嵌网页，已从网格中隐藏）。
 4. 用 **暂停/播放** 暂停视频壁纸，用 **关闭** 清除壁纸。
    选择会保存在浏览器的 `localStorage`（键 `dsh-wallpaper-engine:selection`）中。
 
-### 自动轮转
+### 自动轮转（轮播列表）
 
-在壁纸选择器中先选择一个 Wallpaper Engine 播放列表，再勾选 **自动轮转**，插件只会在该播放列表内循环，不会把全部壁纸一股脑加入。可选间隔为 1、5、10、30、60 或 120 分钟；默认关闭。至少需要两张可播放的 Video/Web 壁纸，手动切换壁纸会重新计算下一次轮转时间；播放列表的随机/顺序设置也会被保留。Scene 和 Application 壁纸不能嵌入网页，会自动从轮转候选中剔除，但仍会显示在选择列表中并标记为 `[不可播放]`。
+轮转基于**自定义轮播列表**（轮播列表）。用 **新建** 可以创建任意多个列表，从库存里勾选 Video/Web 壁纸加入每个列表，并为每个列表单独设置**切换间隔**（1、5、10、30、60 或 120 分钟）和**播放顺序**（顺序/随机），勾选 **自动轮转** 后只在该列表内循环。列表保存在浏览器 `localStorage`，完全在客户端维护——轮转不再依赖 Wallpaper Engine 自己的 `config.json` 播放列表路径。
 
-播放列表从 Wallpaper Engine 安装目录的 `config.json` 读取（优先使用保存的 `general.playlists`；没有保存列表时回退到当前显示器的活动列表）。
+每个列表至少需要 2 个可播放壁纸；手动切换壁纸会重新计算下一次轮转时间；不同列表可以有不同的间隔（比如一个每 5 分钟、一个每 30 分钟）。首次使用时，插件会自动把第一个可播放的 WE 播放列表导入成一个轮播列表，开箱即用；编辑列表时也可以用 **从 WE 播放列表导入** 把其它播放列表导入当前编辑的列表。Scene 和 Application 壁纸不能嵌入网页，会自动从轮转候选和选择器中剔除。
 
 ### 四个滑动条
 
@@ -151,13 +151,16 @@ Wallpaper Engine 没有 macOS 客户端，所以 macOS 上本插件是**目录�
 
 ## 分支约定
 
-- `main` — Windows 优先的上游主线。**macOS 相关改动不要提交到这里。**
+- 上游 `main`（elysia395）— Windows 优先的上游主线。
 - `dsh-wallpaper-engine-mac` — 上游仓库里的 macOS 分支（WaifuX 集成）。macOS 相关工作请基于此分支开发 / 把 PR 指向这个分支。
-- [ruijiaang-lab fork](https://github.com/ruijiaang-lab/dsh-wallpaper-engine) 里的 `mac` 分支是持续维护的 macOS 分支（上游 PR 的源）。
+- [ruijiaang-lab fork](https://github.com/ruijiaang-lab/dsh-wallpaper-engine)：
+  - `main` — 完整分发分支：上游 Windows 实现 + 已合并的 macOS 适配，DSH 插件市场安装的就是它。
+  - `mac` — 持续维护的 macOS 开发分支（上游 PR 的源）。
+- **npm** — macOS 分支以独立包名 `dsh-plugin-wallpaper-engine-mac` 发布（不占用上游的 `dsh-plugin-wallpaper-engine` 包名）。发新版：改 `package.json` 版本号 → 运行 `node scripts/npm-publish.mjs`。
 
 ## 已知限制
 
-- Scene（原生 3D）和 Application 壁纸无法内嵌，选择器里会显示为 `[不可播放]`；它们的动态渲染仍是 Wallpaper Engine 在桌面上的工作。
+- Scene（原生 3D）和 Application 壁纸无法内嵌，不会显示在缩略图选择器和轮播候选中；它们的动态渲染仍是 Wallpaper Engine 在桌面上的工作。
 - 浏览器需能自动播放静音 `<video>`（DSH 跑在 loopback，现代浏览器允许静音自动播放）。
 - 媒体从你本机的 Wallpaper Engine 安装路径提供；host 只提供它已枚举过的文件，不会暴露任意文件系统。
 - 选择器文案为中英混合（本 bundle 尚未接入 DSH 的 locale 命名空间）。

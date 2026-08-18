@@ -20,6 +20,13 @@
  *      The "glass" effect turns the opaque conversation surfaces (composer card,
  *      message bubbles, raised panels) into translucent frosted glass backed by
  *      `backdrop-filter`, so the wallpaper shows through them softly.
+ *   4. Automatic rotation over USER-DEFINED carousel lists (轮播列表): the user
+ *      can create any number of lists, pick wallpapers into each from the
+ *      inventory, and give each list its own switch interval and order. Lists
+ *      are persisted client-side (localStorage), so rotation never depends on
+ *      Wallpaper Engine's own config.json playlist paths. A playable WE
+ *      playlist is imported as the first list on first run so the feature
+ *      starts working out of the box.
  */
 
 const React = require("react");
@@ -39,16 +46,43 @@ const SCRIM_ID = "dsh-wallpaper-engine-scrim";
 const DEFAULTS = {
   scrim: 0.25,
   border: 0.35,
-  blur: 24,
+  blur: 16,
   wallpaperBlur: 0,
+  speed: 1,
   rotationEnabled: false,
   rotationInterval: 30,
-  playlistId: "",
+  rotationGroupId: "",
+  rotationGroups: [],
+  rotationSeeded: false,
 };
 
 // ── Persisted selection ─────────────────────────────────────────────────────
 function clampNum(v, lo, hi, fallback) {
   return typeof v === "number" && v >= lo && v <= hi ? v : fallback;
+}
+
+// Rotation groups are user-defined carousel lists: each holds a set of
+// wallpaper ids picked from the inventory, its own switch interval (minutes),
+// and its own playback order. They are fully client-side (localStorage), so
+// rotation never depends on Wallpaper Engine's own config.json paths.
+function readRotationGroups(raw) {
+  if (!Array.isArray(raw)) return [];
+  const groups = [];
+  for (const g of raw) {
+    if (!g || typeof g !== "object") continue;
+    const id = typeof g.id === "string" && g.id ? g.id : "";
+    if (!id) continue;
+    groups.push({
+      id,
+      name: typeof g.name === "string" && g.name.trim() ? g.name.trim() : "轮播列表",
+      interval: clampNum(g.interval, 1, 1440, DEFAULTS.rotationInterval),
+      order: g.order === "random" ? "random" : "sequence",
+      wallpaperIds: Array.isArray(g.wallpaperIds)
+        ? g.wallpaperIds.filter((x) => typeof x === "string" && x)
+        : [],
+    });
+  }
+  return groups;
 }
 
 function readPersisted() {
@@ -62,9 +96,11 @@ function readPersisted() {
       border: clampNum(o.border, 0, 1, DEFAULTS.border),
       blur: clampNum(o.blur, 0, 40, DEFAULTS.blur),
       wallpaperBlur: clampNum(o.wallpaperBlur, 0, 60, DEFAULTS.wallpaperBlur),
+      speed: clampNum(o.speed, 0.25, 2, DEFAULTS.speed),
       rotationEnabled: o.rotationEnabled === true,
-      rotationInterval: clampNum(o.rotationInterval, 1, 1440, DEFAULTS.rotationInterval),
-      playlistId: typeof o.playlistId === "string" ? o.playlistId : "",
+      rotationGroupId: typeof o.rotationGroupId === "string" ? o.rotationGroupId : "",
+      rotationGroups: readRotationGroups(o.rotationGroups),
+      rotationSeeded: o.rotationSeeded === true,
     };
   } catch {
     return { id: "", ...DEFAULTS };
@@ -79,6 +115,9 @@ const selection = {
   playing: true,
   loading: false,
   rotationTimer: null,
+  // Draft of the rotation group currently being created/edited in the picker
+  // (null when the editor is closed). Mutated live; committed on 保存.
+  editing: null,
   inventory: { installDir: null, wallpapers: [], total: 0, portableCount: 0, playlists: [], error: null },
   loaded: false,
 };
@@ -102,9 +141,11 @@ function persistSelection() {
       border: selection.border,
       blur: selection.blur,
       wallpaperBlur: selection.wallpaperBlur,
+      speed: selection.speed,
       rotationEnabled: selection.rotationEnabled,
-      rotationInterval: selection.rotationInterval,
-      playlistId: selection.playlistId,
+      rotationGroupId: selection.rotationGroupId,
+      rotationGroups: selection.rotationGroups,
+      rotationSeeded: selection.rotationSeeded,
     }));
   } catch { /* ignore */ }
 }
@@ -137,13 +178,31 @@ async function loadInventory() {
   selection.loading = false;
   selection.loaded = true;
 
-  if (selection.playlistId && !selectedPlaylist()) {
-    selection.playlistId = "";
+  // Rotation groups: validate the active one and seed a first group from a
+  // playable Wallpaper Engine playlist when the user has none yet (so the
+  // rotation feature starts working out of the box, using ids the host already
+  // resolved — no WE config.json path matching involved). Seeding happens once
+  // (`rotationSeeded`), so deleting every list stays respected on refresh.
+  if (!selection.rotationGroups.length && !selection.rotationSeeded) {
+    selection.rotationSeeded = true;
+    seedGroupsFromPlaylists();
     persistSelection();
   }
-  if (selection.rotationEnabled && !selection.playlistId) {
-    const firstPlaylist = firstPlayablePlaylist();
-    if (firstPlaylist) selection.playlistId = firstPlaylist.id;
+  if (selection.rotationGroupId && !activeRotationGroup()) {
+    selection.rotationGroupId = "";
+    persistSelection();
+  }
+  if (selection.rotationEnabled) {
+    if (!selection.rotationGroupId) {
+      const usable = firstUsableGroup();
+      if (usable) selection.rotationGroupId = usable.id;
+      else selection.rotationEnabled = false;
+    } else if (rotationCandidates().length < 2) {
+      const usable = firstUsableGroup();
+      if (usable && usable.id !== selection.rotationGroupId) selection.rotationGroupId = usable.id;
+      else if (!usable) selection.rotationEnabled = false;
+    }
+    persistSelection();
   }
 
   // After a refresh, drop the selection if the chosen wallpaper vanished or is
@@ -152,12 +211,12 @@ async function loadInventory() {
     selection.id = "";
     persistSelection();
   }
-  if (selection.rotationEnabled && selection.id && !playableWallpapers().some((w) => w.id === selection.id)) {
+  if (selection.rotationEnabled && selection.id && !rotationCandidates().some((w) => w.id === selection.id)) {
     selection.id = "";
     persistSelection();
   }
   if (!selection.id && selection.rotationEnabled) {
-    const first = playableWallpapers()[0];
+    const first = rotationCandidates()[0];
     if (first) selection.id = first.id;
   }
   applySelection(selection.id);
@@ -168,31 +227,58 @@ function isRotatableWallpaper(w) {
   return Boolean(w && w.playable && (w.type === "video" || w.type === "web"));
 }
 
-function selectedPlaylist() {
-  return selection.inventory.playlists.find((p) => p.id === selection.playlistId) || null;
+function playableInventory() {
+  return selection.inventory.wallpapers.filter(isRotatableWallpaper);
 }
 
-function playlistWallpapers(playlist) {
-  if (!playlist || !Array.isArray(playlist.wallpaperIds)) return [];
+// ── Rotation groups (user-defined carousel lists) ───────────────────────────
+function activeRotationGroup() {
+  return selection.rotationGroups.find((g) => g.id === selection.rotationGroupId) || null;
+}
+
+function groupWallpapers(group) {
+  if (!group || !Array.isArray(group.wallpaperIds)) return [];
   const byId = new Map(selection.inventory.wallpapers.map((w) => [w.id, w]));
-  return playlist.wallpaperIds
-    .map((id) => byId.get(id))
-    .filter(isRotatableWallpaper);
+  return group.wallpaperIds.map((id) => byId.get(id)).filter(isRotatableWallpaper);
 }
 
-function playableWallpapers() {
-  return playlistWallpapers(selectedPlaylist());
+function rotationCandidates() {
+  return groupWallpapers(activeRotationGroup());
 }
 
-function firstPlayablePlaylist() {
-  return selection.inventory.playlists.find((playlist) => playlistWallpapers(playlist).length > 0) || null;
+function firstUsableGroup() {
+  return selection.rotationGroups.find((g) => groupWallpapers(g).length >= 2) || null;
+}
+
+// First run / upgrade path: turn the first playable Wallpaper Engine playlist
+// into a rotation group so existing setups keep working without any WE-side
+// configuration. Returns true when a group was created.
+function seedGroupsFromPlaylists() {
+  const playable = selection.inventory.playlists.filter((p) => (p.portableCount || 0) >= 2);
+  const source = playable[0];
+  if (!source) return false;
+  const ids = Array.isArray(source.wallpaperIds) ? source.wallpaperIds.slice() : [];
+  if (!ids.length) return false;
+  selection.rotationGroups.push({
+    id: nextGroupId(),
+    name: typeof source.name === "string" && source.name.trim() ? source.name.trim() : "轮播列表",
+    interval: DEFAULTS.rotationInterval,
+    order: source.order === "random" ? "random" : "sequence",
+    wallpaperIds: ids,
+  });
+  selection.rotationGroupId = selection.rotationGroups[selection.rotationGroups.length - 1].id;
+  return true;
+}
+
+function nextGroupId() {
+  return "grp-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
 }
 
 function nextRotationWallpaper() {
-  const list = playableWallpapers();
+  const list = rotationCandidates();
   if (list.length < 2) return null;
-  const playlist = selectedPlaylist();
-  if (playlist && playlist.order === "random") {
+  const group = activeRotationGroup();
+  if (group && group.order === "random") {
     const candidates = list.filter((w) => w.id !== selection.id);
     return candidates[Math.floor(Math.random() * candidates.length)] || null;
   }
@@ -211,14 +297,91 @@ function clearRotationTimer() {
 function syncRotationTimer() {
   clearRotationTimer();
   if (!selection.rotationEnabled || !selection.id) return;
-  if (playableWallpapers().length < 2) return;
+  if (rotationCandidates().length < 2) return;
   if (typeof window === "undefined" || typeof window.setTimeout !== "function") return;
+  const group = activeRotationGroup();
+  const minutes = group ? group.interval : DEFAULTS.rotationInterval;
   selection.rotationTimer = window.setTimeout(() => {
     selection.rotationTimer = null;
     if (!selection.rotationEnabled || !selection.id) return;
     const next = nextRotationWallpaper();
     if (next) applySelection(next.id);
-  }, selection.rotationInterval * 60 * 1000);
+  }, minutes * 60 * 1000);
+}
+
+// ── Rotation group CRUD (draft-based editor) ────────────────────────────────
+function startEditGroup(id) {
+  const group = selection.rotationGroups.find((g) => g.id === id);
+  if (!group) return;
+  selection.editing = JSON.parse(JSON.stringify(group));
+  emit();
+}
+
+function startCreateGroup() {
+  selection.editing = {
+    id: nextGroupId(),
+    name: "轮播列表 " + (selection.rotationGroups.length + 1),
+    interval: DEFAULTS.rotationInterval,
+    order: "sequence",
+    wallpaperIds: [],
+  };
+  emit();
+}
+
+function saveEditingGroup() {
+  const draft = selection.editing;
+  if (!draft) return;
+  const idx = selection.rotationGroups.findIndex((g) => g.id === draft.id);
+  const cleaned = {
+    id: draft.id,
+    name: typeof draft.name === "string" && draft.name.trim() ? draft.name.trim() : "轮播列表",
+    interval: clampNum(draft.interval, 1, 1440, DEFAULTS.rotationInterval),
+    order: draft.order === "random" ? "random" : "sequence",
+    wallpaperIds: Array.isArray(draft.wallpaperIds)
+      ? draft.wallpaperIds.filter((x) => typeof x === "string" && x)
+      : [],
+  };
+  if (idx >= 0) selection.rotationGroups[idx] = cleaned;
+  else selection.rotationGroups.push(cleaned);
+  selection.rotationGroupId = cleaned.id;
+  selection.editing = null;
+  if (selection.rotationEnabled && !rotationCandidates().some((w) => w.id === selection.id)) {
+    const first = rotationCandidates()[0];
+    applySelection(first ? first.id : "");
+    return;
+  }
+  persistSelection();
+  syncRotationTimer();
+  emit();
+}
+
+function cancelEditGroup() {
+  selection.editing = null;
+  emit();
+}
+
+function deleteGroup(id) {
+  const idx = selection.rotationGroups.findIndex((g) => g.id === id);
+  if (idx < 0) return;
+  selection.rotationGroups.splice(idx, 1);
+  if (selection.rotationGroupId === id) {
+    selection.rotationGroupId = "";
+    if (selection.rotationEnabled) {
+      const fallback = firstUsableGroup();
+      if (fallback) selection.rotationGroupId = fallback.id;
+      else selection.rotationEnabled = false;
+    }
+  }
+  if (selection.editing && selection.editing.id === id) selection.editing = null;
+  persistSelection();
+  syncRotationTimer();
+  emit();
+}
+
+function importPlaylistIntoDraft(playlist) {
+  if (!selection.editing || !playlist || !Array.isArray(playlist.wallpaperIds)) return;
+  selection.editing.wallpaperIds = playlist.wallpaperIds.slice();
+  emit();
 }
 
 function applySelection(id) {
@@ -291,6 +454,7 @@ function syncLayers() {
     }
     const video = node.querySelector("video");
     if (video) {
+      try { video.playbackRate = selection.speed; } catch {}
       if (selection.playing) { try { video.play().catch(() => {}); } catch {} }
       else video.pause();
     }
@@ -323,6 +487,12 @@ function applyEffects() {
   s.setProperty("--we-border-alpha", String(selection.border));
   // Glass blur strength in px (0 disables the frosted-glass effect).
   s.setProperty("--we-blur", selection.blur + "px");
+  // iOS liquid glass: the backdrop "colour melt" (saturation) scales with the
+  // blur radius, so the 玻璃 slider drives BOTH frosted depth and how strongly
+  // the wallpaper colour bleeds through the glass (0 blur → no melt). Kept
+  // gentle so the glass stays 通透 (clear) instead of oversaturated.
+  s.setProperty("--we-saturate", String(1.15 + selection.blur * 0.028));
+  s.setProperty("--we-glass-brightness", "1.04");
   // Wallpaper blur strength in px (blurs the wallpaper itself).
   s.setProperty("--we-wallpaper-blur", selection.wallpaperBlur + "px");
   // Compensate for the fringe the blur reveals by scaling the layer up.
@@ -349,6 +519,8 @@ function clearEffects() {
   s.removeProperty("--we-scrim-color");
   s.removeProperty("--we-border-alpha");
   s.removeProperty("--we-blur");
+  s.removeProperty("--we-saturate");
+  s.removeProperty("--we-glass-brightness");
   s.removeProperty("--we-wallpaper-blur");
   s.removeProperty("--we-wallpaper-scale");
   const scrim = document.getElementById(SCRIM_ID);
@@ -375,14 +547,13 @@ function SliderRow(label, min, max, step, value, onInput, suffix) {
 
 function WallpaperPicker() {
   const sel = useStore();
-  const onChange = (e) => applySelection(e.target.value);
   const onTogglePlay = () => { selection.playing = !selection.playing; emit(); };
   const onClear = () => applySelection("");
   const onRefresh = () => loadInventory();
-  const onPlaylistChange = (e) => {
-    selection.playlistId = e.target.value;
-    const first = playableWallpapers()[0];
+  const onGroupChange = (e) => {
+    selection.rotationGroupId = e.target.value;
     if (selection.rotationEnabled) {
+      const first = rotationCandidates()[0];
       if (first) applySelection(first.id);
       else applySelection("");
       return;
@@ -393,26 +564,40 @@ function WallpaperPicker() {
   };
   const onToggleRotation = () => {
     selection.rotationEnabled = !selection.rotationEnabled;
-    if (selection.rotationEnabled && !selection.playlistId) {
-      const firstPlaylist = firstPlayablePlaylist();
-      if (firstPlaylist) selection.playlistId = firstPlaylist.id;
-    }
-    if (selection.rotationEnabled && !playableWallpapers().some((w) => w.id === selection.id)) {
-      const first = playableWallpapers()[0];
-      if (first) {
-        applySelection(first.id);
-        return;
+    if (selection.rotationEnabled) {
+      if (!selection.rotationGroupId) {
+        const usable = firstUsableGroup();
+        if (usable) selection.rotationGroupId = usable.id;
+      }
+      if (!rotationCandidates().some((w) => w.id === selection.id)) {
+        const first = rotationCandidates()[0];
+        if (first) {
+          applySelection(first.id);
+          return;
+        }
       }
     }
     persistSelection();
     syncRotationTimer();
     emit();
   };
-  const onRotationInterval = (e) => {
-    selection.rotationInterval = clampNum(Number(e.target.value), 1, 1440, DEFAULTS.rotationInterval);
+  // Per-group interval: writes straight into the active group so each rotation
+  // list keeps its own switch cadence.
+  const onGroupInterval = (e) => {
+    const group = activeRotationGroup();
+    if (!group) return;
+    group.interval = clampNum(Number(e.target.value), 1, 1440, DEFAULTS.rotationInterval);
     persistSelection();
     syncRotationTimer();
     emit();
+  };
+  const onDeleteGroup = () => {
+    const group = activeRotationGroup();
+    if (!group) return;
+    if (typeof window !== "undefined" && typeof window.confirm === "function") {
+      if (!window.confirm("删除轮播列表「" + group.name + "」？")) return;
+    }
+    deleteGroup(group.id);
   };
 
   // Slider callbacks: keep the stored value in its canonical unit, then apply
@@ -420,9 +605,21 @@ function WallpaperPicker() {
   // the visual feedback is instant even if a listener/emit path is lagging;
   // emit() additionally re-renders the picker's numeric readouts.
   const onScrim = (pct) => { selection.scrim = pct / 100; persistSelection(); applyEffects(); emit(); };
+
+  // macOS loose media has no sidecar preview image, so thumbnails fall back to
+  // the wallpaper itself: images render as <img>, videos show their first
+  // frame via a metadata-only <video> (no autoplay, just a still).
+  const cardThumb = (w) => w.preview
+    ? React.createElement("img", { src: w.preview, alt: w.title, loading: "lazy", onError: (e) => { e.target.style.display = "none"; } })
+    : (w.type === "image"
+        ? React.createElement("img", { src: w.media, alt: w.title, loading: "lazy" })
+        : (w.type === "video"
+            ? React.createElement("video", { src: w.media, preload: "metadata", muted: true, playsInline: true })
+            : React.createElement("span", { className: "we-picker__card-placeholder" }, "无预览")));
   const onBorder = (pct) => { selection.border = pct / 100; persistSelection(); applyEffects(); emit(); };
   const onBlur = (px) => { selection.blur = px; persistSelection(); applyEffects(); emit(); };
   const onWallpaperBlur = (px) => { selection.wallpaperBlur = px; persistSelection(); applyEffects(); emit(); };
+  const onSpeed = (v) => { selection.speed = v; persistSelection(); const el = document.getElementById(LAYER_ID); const video = el && el.querySelector("video"); if (video) { try { video.playbackRate = v; } catch {} } emit(); };
 
   if (!sel.loaded) {
     return React.createElement("div", { className: "we-picker" },
@@ -438,15 +635,39 @@ function WallpaperPicker() {
   }
 
   const list = sel.inventory.wallpapers;
-  const playlists = sel.inventory.playlists;
-  const playlist = selectedPlaylist();
-  const playableCount = playableWallpapers().length;
+  // Only playable wallpapers are shown — Scene/Application cannot be embedded
+  // in the web UI, so hiding them keeps the grid useful. Image wallpapers are
+  // playable and stay in the grid (don't gate on rotation eligibility).
+  const playableList = list.filter((w) => w.playable);
+  const groups = sel.rotationGroups;
+  const group = activeRotationGroup();
+  const candidates = rotationCandidates();
+  const playableCount = candidates.length;
+  const editing = sel.editing;
+  const INTERVALS = [1, 5, 10, 30, 60, 120];
   return React.createElement("div", { className: "we-picker" },
-    React.createElement("select", { className: "we-picker__select", value: sel.id, onChange },
-      React.createElement("option", { value: "" }, "— 无（关闭） —"),
-      ...list.map((w) => React.createElement("option", {
-        key: w.id, value: w.id, disabled: !w.playable,
-      }, (w.playable ? "" : "[不可播放] ") + w.title)),
+    React.createElement("div", { className: "we-picker__grid" },
+      // "Close wallpaper" card — equivalent of the old first <option>.
+      React.createElement("button", {
+        className: "we-picker__card" + (sel.id ? "" : " we-picker__card--selected"),
+        type: "button",
+        onClick: onClear,
+        title: "关闭壁纸",
+      },
+      React.createElement("span", { className: "we-picker__card-close" }, "✕ 关闭"),
+      ),
+      playableList.length === 0
+        ? React.createElement("span", { className: "we-picker__hint" }, "没有可播放的壁纸")
+        : playableList.map((w) => React.createElement("button", {
+            key: w.id,
+            className: "we-picker__card" + (w.id === sel.id ? " we-picker__card--selected" : ""),
+            type: "button",
+            onClick: () => applySelection(w.id),
+            title: w.title,
+          },
+          cardThumb(w),
+          React.createElement("span", { className: "we-picker__card-title" }, w.title),
+          )),
     ),
     React.createElement("div", { className: "we-picker__row" },
       React.createElement("button", {
@@ -462,18 +683,113 @@ function WallpaperPicker() {
         onClick: onRefresh, disabled: sel.loading,
       }, sel.loading ? "刷新中…" : "刷新"),
     ),
+    // ── Rotation groups: user-defined carousel lists, each with its own
+    //    wallpaper set, interval and order. Fully client-side, so rotation no
+    //    longer depends on Wallpaper Engine's own playlist paths.
     React.createElement("div", { className: "we-picker__row we-picker__playlist-row" },
-      React.createElement("span", { className: "we-picker__hint we-picker__label" }, "播放列表"),
+      React.createElement("span", { className: "we-picker__hint we-picker__label" }, "轮播列表"),
       React.createElement("select", {
         className: "we-picker__playlist-select",
-        value: sel.playlistId,
-        onChange: onPlaylistChange,
-        disabled: playlists.length === 0,
+        value: sel.rotationGroupId,
+        onChange: onGroupChange,
+        disabled: groups.length === 0,
       },
-      React.createElement("option", { value: "" }, playlists.length ? "— 选择播放列表 —" : "— 未检测到播放列表 —"),
-      ...playlists.map((p) => React.createElement("option", {
-        key: p.id, value: p.id,
-      }, p.name + "（" + (p.portableCount || 0) + " 可播放）")),
+      React.createElement("option", { value: "" }, groups.length ? "— 选择轮播列表 —" : "— 暂无轮播列表 —"),
+      ...groups.map((g) => React.createElement("option", {
+        key: g.id, value: g.id,
+      }, g.name + "（" + groupWallpapers(g).length + " 可播放 · " + g.interval + " 分钟）")),
+      ),
+      React.createElement("button", {
+        className: "we-picker__btn", type: "button",
+        onClick: startCreateGroup,
+      }, "新建"),
+      React.createElement("button", {
+        className: "we-picker__btn", type: "button",
+        onClick: () => startEditGroup(sel.rotationGroupId),
+        disabled: !sel.rotationGroupId,
+      }, "编辑"),
+      React.createElement("button", {
+        className: "we-picker__btn", type: "button",
+        onClick: onDeleteGroup,
+        disabled: !sel.rotationGroupId,
+      }, "删除"),
+    ),
+    editing && React.createElement("div", { className: "we-picker__editor" },
+      React.createElement("div", { className: "we-picker__row" },
+        React.createElement("span", { className: "we-picker__hint we-picker__label" }, "名称"),
+        React.createElement("input", {
+          className: "we-picker__text", type: "text",
+          value: editing.name,
+          onInput: (e) => { editing.name = e.target.value; emit(); },
+        }),
+      ),
+      React.createElement("div", { className: "we-picker__row" },
+        React.createElement("span", { className: "we-picker__hint we-picker__label" }, "间隔"),
+        React.createElement("select", {
+          className: "we-picker__rotation-interval",
+          value: String(editing.interval),
+          onChange: (e) => { editing.interval = clampNum(Number(e.target.value), 1, 1440, DEFAULTS.rotationInterval); emit(); },
+        },
+        ...INTERVALS.map((minutes) =>
+          React.createElement("option", { key: minutes, value: String(minutes) }, minutes + " 分钟"),
+        )),
+        React.createElement("span", { className: "we-picker__hint we-picker__label" }, "顺序"),
+        React.createElement("select", {
+          className: "we-picker__playlist-select",
+          value: editing.order,
+          onChange: (e) => { editing.order = e.target.value; emit(); },
+        },
+        React.createElement("option", { value: "sequence" }, "顺序"),
+        React.createElement("option", { value: "random" }, "随机"),
+        ),
+      ),
+      React.createElement("div", { className: "we-picker__editor-grid" },
+        playableInventory().length === 0
+          ? React.createElement("span", { className: "we-picker__hint" }, "没有可播放的 Video/Web 壁纸")
+          : playableInventory().map((w) => {
+              const checked = editing.wallpaperIds.indexOf(w.id) >= 0;
+              return React.createElement("button", {
+                key: w.id,
+                className: "we-picker__editor-card" + (checked ? " we-picker__editor-card--checked" : ""),
+                type: "button",
+                title: w.title,
+                onClick: () => {
+                  const i = editing.wallpaperIds.indexOf(w.id);
+                  if (i >= 0) editing.wallpaperIds.splice(i, 1);
+                  else editing.wallpaperIds.push(w.id);
+                  emit();
+                },
+              },
+              cardThumb(w),
+              checked && React.createElement("span", { className: "we-picker__editor-check" }, "✓"),
+              );
+            }),
+      ),
+      React.createElement("div", { className: "we-picker__row" },
+        React.createElement("span", { className: "we-picker__hint" }, "已选 " + editing.wallpaperIds.length + " 个"),
+        sel.inventory.playlists.length > 0 && React.createElement("select", {
+          className: "we-picker__playlist-select",
+          value: "",
+          onChange: (e) => {
+            const p = sel.inventory.playlists.find((pl) => pl.id === e.target.value);
+            if (p) importPlaylistIntoDraft(p);
+          },
+        },
+        React.createElement("option", { value: "" }, "从 WE 播放列表导入…"),
+        ...sel.inventory.playlists.map((p) => React.createElement("option", {
+          key: p.id, value: p.id,
+        }, p.name + "（" + (p.portableCount || 0) + " 可播放）")),
+        ),
+      ),
+      React.createElement("div", { className: "we-picker__row" },
+        React.createElement("button", {
+          className: "we-picker__btn", type: "button",
+          onClick: saveEditingGroup,
+        }, "保存"),
+        React.createElement("button", {
+          className: "we-picker__btn", type: "button",
+          onClick: cancelEditGroup,
+        }, "取消"),
       ),
     ),
     React.createElement("div", { className: "we-picker__row we-picker__rotation-row" },
@@ -482,24 +798,25 @@ function WallpaperPicker() {
           type: "checkbox",
           checked: sel.rotationEnabled,
           onChange: onToggleRotation,
-          disabled: !sel.playlistId || playableCount < 2,
+          disabled: !sel.rotationGroupId || playableCount < 2,
         }),
         "自动轮转",
       ),
       React.createElement("select", {
         className: "we-picker__rotation-interval",
-        value: String(sel.rotationInterval),
-        onChange: onRotationInterval,
-        disabled: !sel.rotationEnabled || !sel.playlistId || playableCount < 2,
-        title: "自动轮转间隔",
+        value: String(group ? group.interval : DEFAULTS.rotationInterval),
+        onChange: onGroupInterval,
+        disabled: !sel.rotationEnabled || !sel.rotationGroupId || playableCount < 2,
+        title: "当前列表的切换间隔",
       },
-      ...[1, 5, 10, 30, 60, 120].map((minutes) =>
+      ...INTERVALS.map((minutes) =>
         React.createElement("option", { key: minutes, value: String(minutes) }, minutes + " 分钟"),
       )),
-      !sel.playlistId && React.createElement("span", { className: "we-picker__hint" }, "请先选择播放列表"),
-      sel.playlistId && playableCount < 2 && React.createElement("span", { className: "we-picker__hint" }, "当前播放列表至少需要 2 个可播放壁纸"),
+      !sel.rotationGroupId && React.createElement("span", { className: "we-picker__hint" }, "请先选择或新建一个轮播列表"),
+      sel.rotationGroupId && playableCount < 2 && React.createElement("span", { className: "we-picker__hint" }, "当前列表至少需要 2 个可播放壁纸"),
     ),
     sel.id && React.createElement(React.Fragment, null,
+      SliderRow("播放速度", 0.25, 2, "any", sel.speed, onSpeed, (Math.round(sel.speed * 100) / 100) + "x"),
       SliderRow("壁纸模糊", 0, 60, 1, sel.wallpaperBlur, onWallpaperBlur, sel.wallpaperBlur + "px"),
       SliderRow("暗化", 0, 90, 5, Math.round(sel.scrim * 100), onScrim, Math.round(sel.scrim * 100) + "%"),
       SliderRow("边框", 0, 90, 5, Math.round(sel.border * 100), onBorder, Math.round(sel.border * 100) + "%"),
@@ -507,10 +824,10 @@ function WallpaperPicker() {
     ),
     React.createElement("div", { className: "we-picker__row" },
       React.createElement("span", { className: "we-picker__hint" },
-        (playlist
-          ? playlist.name + "：" + (playlist.total || 0) + " 项 · " + playableCount + " 可播放"
-          : list.length + " 个壁纸 · " + sel.inventory.portableCount + " 可播放") +
-        (sel.rotationEnabled ? " · 每 " + sel.rotationInterval + " 分钟轮转" : "")),
+        (group
+          ? "列表「" + group.name + "」：" + group.wallpaperIds.length + " 项 · " + playableCount + " 可播放 · 每 " + group.interval + " 分钟 · " + (group.order === "random" ? "随机" : "顺序")
+          : playableList.length + " 个可播放壁纸") +
+        (sel.rotationEnabled ? " · 自动轮转中" : "")),
     ),
   );
 }
@@ -570,11 +887,17 @@ const CSS = `
   /* ── iOS liquid glass ──────────────────────────────────────────────────────
      The opaque conversation surfaces become translucent glass. The recipe is
      Apple-like, not a plain blur:
-       - large-radius blur + HIGH saturation + slight brightness boost, so the
-         wallpaper colour melts into a soft glow instead of a gray smear;
+       - LARGE-radius blur + HIGH saturation + brightness/contrast lift, so the
+         wallpaper colour melts into a soft glow instead of a gray smear
+         (saturation scales with blur in applyEffects: 0 blur → no melt);
+       - a top-weighted specular gradient (background-image) — the sheen is
+         what makes the surface read as "wet glass", not a flat tint;
        - a light, low-alpha base (not a dark one) so the wallpaper shows through;
-       - a 1px top highlight (refraction edge) + soft shadow for "thick glass";
-       - blur radius + saturation both scale off --we-blur / --we-saturate.
+       - a 1px top refraction highlight + 0.5px hairline + soft elevation
+         shadow for "thick glass";
+       - blur radius + saturation both scale off --we-blur / --we-saturate
+         (the 玻璃 slider drives both, so composer, bubbles AND the
+         better-sidebar shell stay in one uniform liquid look).
 
      Transparency is driven through the design tokens the surfaces already read
      (--dsw-specific-input-major on the composer card, --dsw-specific-bubble on
@@ -586,21 +909,72 @@ const CSS = `
      attribute, so they fall back to the module-CSS suffix convention; if that
      ever stops matching the bubble stays translucent, just without the blur. */
   body[data-we-wallpaper] {
-    --dsw-specific-input-major: rgba(255, 255, 255, 0.18);
-    --dsw-specific-bubble: rgba(255, 255, 255, 0.14);
+    --dsw-specific-input-major: rgba(255, 255, 255, 0.15);
+    --dsw-specific-bubble: rgba(255, 255, 255, 0.12);
   }
   body[data-ds-dark-theme][data-we-wallpaper] {
-    --dsw-specific-input-major: rgba(255, 255, 255, 0.07);
-    --dsw-specific-bubble: rgba(255, 255, 255, 0.06);
+    --dsw-specific-input-major: rgba(255, 255, 255, 0.06);
+    --dsw-specific-bubble: rgba(255, 255, 255, 0.05);
   }
   body[data-we-wallpaper] [data-composer-card],
   body[data-we-wallpaper] [class*="_bubble"] {
-    -webkit-backdrop-filter: blur(var(--we-blur, 24px)) saturate(var(--we-saturate, 1.8)) brightness(1.08);
-    backdrop-filter: blur(var(--we-blur, 24px)) saturate(var(--we-saturate, 1.8)) brightness(1.08);
+    /* Specular sheen: a top-weighted white gradient turns a flat translucent
+       tint into "wet glass" — kept faint so the wallpaper stays 通透 (clear)
+       instead of glaring. */
+    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.05) 38%, rgba(255, 255, 255, 0.02));
+    -webkit-backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
+    backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, var(--we-glass-highlight, 0.3)),
-      inset 0 -1px 0 rgba(255, 255, 255, 0.05),
-      0 8px 32px rgba(0, 0, 0, var(--we-glass-shadow, 0.14));
+      inset 0 1px 0 rgba(255, 255, 255, var(--we-glass-highlight, 0.32)),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.08),
+      inset 0 0 0 0.5px rgba(255, 255, 255, 0.08),
+      0 12px 40px rgba(0, 0, 0, var(--we-glass-shadow, 0.12));
+  }
+
+  /* ── dsh-better-sidebar glass ──────────────────────────────────────────────
+     The sidebar shell is portalled onto <body> under a stable host attribute
+     "data-dsh-better-sidebar" (set by the plugin's own mount code), so we can
+     target the whole tree without depending on its CSS-module hashes. Its root
+     panels read the opaque --dsw-alias-bg-layer-1 token (hence the "black
+     frame") — give them the SAME clear liquid-glass recipe as the
+     composer/bubbles (faint specular sheen + gentle frosted melt), with blur
+     radius + saturation driven by the 玻璃 slider (--we-blur / --we-saturate).
+     Inner chrome surfaces that paint the same opaque tokens get a translucent
+     base too; the blur lives on the root panels (one blur per shell). */
+  body[data-we-wallpaper] [data-dsh-better-sidebar] [class*="_boundaryError"],
+  body[data-we-wallpaper] [data-dsh-better-sidebar] [class*="_panel"] {
+    background-color: rgba(255, 255, 255, 0.1) !important;
+    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04) 38%, rgba(255, 255, 255, 0.01)) !important;
+    -webkit-backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01) !important;
+    backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01) !important;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, var(--we-glass-highlight, 0.32)),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.08),
+      inset 0 0 0 0.5px rgba(255, 255, 255, 0.06);
+  }
+  body[data-we-wallpaper] [data-dsh-better-sidebar] [class*="_pane"],
+  body[data-we-wallpaper] [data-dsh-better-sidebar] [class*="_tabBar"],
+  body[data-we-wallpaper] [data-dsh-better-sidebar] [class*="_paneCard"],
+  body[data-we-wallpaper] [data-dsh-better-sidebar] [class*="_editorHeader"],
+  body[data-we-wallpaper] [data-dsh-better-sidebar] [class*="_explorerHeader"],
+  body[data-we-wallpaper] [data-dsh-better-sidebar] [class*="_gitHeader"],
+  body[data-we-wallpaper] [data-dsh-better-sidebar] [class*="_browserBar"],
+  body[data-we-wallpaper] [data-dsh-better-sidebar] [class*="_terminalWrap"] {
+    background-color: rgba(255, 255, 255, 0.08) !important;
+  }
+  body[data-ds-dark-theme][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_boundaryError"],
+  body[data-ds-dark-theme][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_panel"] {
+    background-color: rgba(255, 255, 255, 0.05) !important;
+  }
+  body[data-ds-dark-theme][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_pane"],
+  body[data-ds-dark-theme][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_tabBar"],
+  body[data-ds-dark-theme][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_paneCard"],
+  body[data-ds-dark-theme][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_editorHeader"],
+  body[data-ds-dark-theme][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_explorerHeader"],
+  body[data-ds-dark-theme][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_gitHeader"],
+  body[data-ds-dark-theme][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_browserBar"],
+  body[data-ds-dark-theme][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_terminalWrap"] {
+    background-color: rgba(255, 255, 255, 0.04) !important;
   }
 
   /* Picker chrome. */
@@ -617,6 +991,68 @@ const CSS = `
   .we-picker__slider-row { display: flex; align-items: center; gap: 8px; }
   .we-picker__label { min-width: 28px; }
   .we-picker__value { min-width: 40px; text-align: right; }
+  .we-picker__text { flex: 1; min-width: 0; }
+  .we-picker__editor {
+    display: flex; flex-direction: column; gap: 6px;
+    padding: 8px;
+    border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));
+    border-radius: 8px;
+  }
+  /* Wallpaper thumbnail grid (main picker). */
+  .we-picker__grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 8px; max-height: 280px; overflow-y: auto; padding: 2px;
+  }
+  .we-picker__card {
+    position: relative; width: 100%; padding: 0; cursor: pointer;
+    aspect-ratio: 16 / 9; display: block; overflow: hidden;
+    border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));
+    border-radius: 8px;
+    background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.15));
+  }
+  .we-picker__card img, .we-picker__card video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .we-picker__card--selected {
+    outline: 2px solid var(--dsw-alias-brand-primary, #4f8cff);
+    outline-offset: -2px;
+  }
+  .we-picker__card-close {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.8em; color: var(--dsw-alias-label-secondary, #888);
+  }
+  .we-picker__card-title {
+    position: absolute; left: 0; right: 0; bottom: 0; padding: 3px 6px;
+    font-size: 0.7em; line-height: 1.2; color: #fff;
+    background: linear-gradient(transparent, rgba(0, 0, 0, 0.7));
+    text-overflow: ellipsis; white-space: nowrap; overflow: hidden;
+  }
+  .we-picker__card-placeholder {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.72em; opacity: 0.55;
+  }
+  /* Rotation group editor thumbnail grid. */
+  .we-picker__editor-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+    gap: 6px; max-height: 220px; overflow-y: auto; padding: 2px;
+  }
+  .we-picker__editor-card {
+    position: relative; width: 100%; padding: 0; cursor: pointer;
+    aspect-ratio: 16 / 10; display: block; overflow: hidden;
+    border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));
+    border-radius: 6px;
+    background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.15));
+  }
+  .we-picker__editor-card img, .we-picker__editor-card video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .we-picker__editor-card--checked {
+    outline: 2px solid var(--dsw-alias-brand-primary, #4f8cff);
+    outline-offset: -2px;
+  }
+  .we-picker__editor-check {
+    position: absolute; top: 4px; left: 4px; width: 18px; height: 18px;
+    border-radius: 4px; background: rgba(0, 0, 0, 0.55); color: #fff;
+    font-size: 12px; line-height: 18px; text-align: center;
+  }
 `;
 
 const TAG_ID = "dsh-wallpaper-engine/styles";

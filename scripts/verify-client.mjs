@@ -2,7 +2,8 @@
 // under the DSH module-loader contract. Exercises apply(), syncLayers(), and
 // confirms: wallpaper + scrim layers are `<body>` children (no shell.overlay),
 // the four effect knobs (wallpaper blur/scrim/border/glass blur) push CSS
-// variables, and rotation stays scoped to a playlist.
+// variables, the picker renders, and automatic rotation is scoped to a
+// user-defined rotation group (list) with its own interval.
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
@@ -11,7 +12,10 @@ const React = {
   useState: (init) => [init, () => {}],
   useEffect: () => {},
   useRef: (v) => ({ current: v }),
-  createElement: (type, props, ...children) => ({ type, props, children }),
+  // Minimal-but-real renderer: invoke function components so the picker tree
+  // actually materializes (descriptors only for host elements).
+  createElement: (type, props, ...children) =>
+    typeof type === 'function' ? type(props || {}) : ({ type, props: props || null, children }),
 };
 
 let byId = {};
@@ -42,9 +46,16 @@ const document = {
 };
 
 const localStorage = {
-  // Select a wallpaper and enable rotation; omit effect knobs so the new
-  // DEFAULTS (scrim 0.25, border 0.35, blur 24) should apply.
-  _store: { 'dsh-wallpaper-engine:selection': JSON.stringify({ id: 'a', playlistId: 'p1', rotationEnabled: true, rotationInterval: 5 }) },
+  // Select a wallpaper and enable rotation over a user-defined group; omit
+  // effect knobs so the new DEFAULTS (scrim 0.25, border 0.35, blur 24) apply.
+  _store: { 'dsh-wallpaper-engine:selection': JSON.stringify({
+    id: 'a',
+    rotationGroupId: 'g1',
+    rotationEnabled: true,
+    rotationGroups: [
+      { id: 'g1', name: 'My list', interval: 5, order: 'sequence', wallpaperIds: ['a', 'b', 'c'] },
+    ],
+  }) },
   getItem(k) { return this._store[k] ?? null; },
   setItem(k, v) { this._store[k] = v; },
 };
@@ -91,9 +102,10 @@ console.log('Symbol.toStringTag:', Object.prototype.toString.call(exportsObj));
 
 const registrations = [];
 const effects = [];
+const pickerRenders = [];
 const slots = {
   inject: (key, cb) => cb(),
-  register: (opts) => { registrations.push({ key: opts.name, id: opts.id, label: opts.label, order: opts.order }); },
+  register: (opts, render) => { registrations.push({ key: opts.name, id: opts.id, label: opts.label, order: opts.order }); pickerRenders.push(render); },
 };
 const ctx = { slots, effect(fn) { effects.push(fn); fn(); return fn; } };
 
@@ -122,6 +134,27 @@ setTimeout(() => {
     if (wrapTimer) {
       wrapTimer.fn();
       console.log('rotation wraps to id:', JSON.parse(localStorage._store['dsh-wallpaper-engine:selection']).id);
+    }
+  }
+  console.log('picker renders:', pickerRenders.length > 0);
+  if (pickerRenders.length) {
+    let renderError = null;
+    let tree = null;
+    try { tree = pickerRenders[0](); } catch (e) { renderError = e && e.message; }
+    console.log('picker render threw:', renderError || '(none)');
+    if (tree) {
+      // Thumbnail grid: only playable Video/Web wallpapers + the close card.
+      // Scene "c" must be filtered out entirely.
+      const cards = [];
+      (function walk(node) {
+        if (Array.isArray(node)) { node.forEach(walk); return; }
+        if (!node || typeof node !== 'object') return;
+        const cls = typeof node.props?.className === 'string' ? node.props.className : '';
+        if (cls === 'we-picker__card' || cls === 'we-picker__card we-picker__card--selected') cards.push(node);
+        if (Array.isArray(node.children)) node.children.forEach(walk);
+      })(tree);
+      console.log('grid cards (expect 3: close + a + b):', cards.length);
+      console.log('scene wallpaper excluded from grid:', !JSON.stringify(cards).includes('Scene C'));
     }
   }
   console.log('effects ran:', effects.length);

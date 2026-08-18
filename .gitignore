@@ -1,3 +1,5 @@
 node_modules/
 *.log
 *.tgz
+.playwright-mcp/
+.npm/
