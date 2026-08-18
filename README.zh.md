@@ -173,6 +173,8 @@ Wallpaper Engine 没有 macOS 客户端，所以 macOS 上本插件是**目录�
 
 host 端（`lib/index.js`）是纯 ESM，无需构建。client 端（`lib/client.js`）是**编译产物**，由规范源文件 `src/client.js` 经 `scripts/build-client.mjs` 生成，输出 DSH 模块加载器要求的 `window.__ModuleLoader__.load({ id, factory })` 外壳（与盒内 client 包 `tsdown` 产出的形态一致）。
 
+> **需要 Node.js 24 及以上**（与插件市场检查一致）。`package.json` 的 `engines` 字段已声明，且 `.npmrc` 开启了 `engine-strict`——Node 版本低于 24 时安装会直接报错，不会静默带病运行。
+
 ```sh
 npm run build      # 从 src/client.js 重新生成 lib/client.js
 npm run verify     # 物化生成的 bundle 并断言其导出
