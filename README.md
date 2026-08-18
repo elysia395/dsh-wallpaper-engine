@@ -226,6 +226,11 @@ The host half (`lib/index.js`) is plain ESM with no build step. The client half
 `window.__ModuleLoader__.load({ id, factory })` envelope the DSH module loader
 consumes (the same shape `tsdown` emits for in-box client packages).
 
+> **Requires Node.js 24 or newer** (the same floor as the plugin market CI).
+> Declared via the `engines` field in `package.json`, with `engine-strict`
+> enabled in `.npmrc` — installs fail loudly on older Node instead of
+> silently running in a mismatched environment.
+
 ```sh
 npm run build      # regenerate lib/client.js from src/client.js
 npm run verify     # materialize the emitted bundle and assert its exports

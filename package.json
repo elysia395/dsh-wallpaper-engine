@@ -3,6 +3,9 @@
   "version": "0.1.6",
   "description": "Wallpaper Engine backgrounds for the DSH web GUI: render your local Wallpaper Engine Video/Web wallpapers behind the chat, with iOS-style liquid glass, adjustable scrim/border/blur.",
   "type": "module",
+  "engines": {
+    "node": ">=24"
+  },
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",
   "repository": {
