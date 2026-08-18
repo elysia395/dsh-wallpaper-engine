@@ -48,6 +48,7 @@ const DEFAULTS = {
   border: 0.35,
   blur: 16,
   wallpaperBlur: 0,
+  speed: 1,
   rotationEnabled: false,
   rotationInterval: 30,
   rotationGroupId: "",
@@ -95,6 +96,7 @@ function readPersisted() {
       border: clampNum(o.border, 0, 1, DEFAULTS.border),
       blur: clampNum(o.blur, 0, 40, DEFAULTS.blur),
       wallpaperBlur: clampNum(o.wallpaperBlur, 0, 60, DEFAULTS.wallpaperBlur),
+      speed: clampNum(o.speed, 0.25, 2, DEFAULTS.speed),
       rotationEnabled: o.rotationEnabled === true,
       rotationGroupId: typeof o.rotationGroupId === "string" ? o.rotationGroupId : "",
       rotationGroups: readRotationGroups(o.rotationGroups),
@@ -139,6 +141,7 @@ function persistSelection() {
       border: selection.border,
       blur: selection.blur,
       wallpaperBlur: selection.wallpaperBlur,
+      speed: selection.speed,
       rotationEnabled: selection.rotationEnabled,
       rotationGroupId: selection.rotationGroupId,
       rotationGroups: selection.rotationGroups,
@@ -451,6 +454,7 @@ function syncLayers() {
     }
     const video = node.querySelector("video");
     if (video) {
+      try { video.playbackRate = selection.speed; } catch {}
       if (selection.playing) { try { video.play().catch(() => {}); } catch {} }
       else video.pause();
     }
@@ -604,6 +608,7 @@ function WallpaperPicker() {
   const onBorder = (pct) => { selection.border = pct / 100; persistSelection(); applyEffects(); emit(); };
   const onBlur = (px) => { selection.blur = px; persistSelection(); applyEffects(); emit(); };
   const onWallpaperBlur = (px) => { selection.wallpaperBlur = px; persistSelection(); applyEffects(); emit(); };
+  const onSpeed = (v) => { selection.speed = v; persistSelection(); const el = document.getElementById(LAYER_ID); const video = el && el.querySelector("video"); if (video) { try { video.playbackRate = v; } catch {} } emit(); };
 
   if (!sel.loaded) {
     return React.createElement("div", { className: "we-picker" },
@@ -810,6 +815,7 @@ function WallpaperPicker() {
       sel.rotationGroupId && playableCount < 2 && React.createElement("span", { className: "we-picker__hint" }, "当前列表至少需要 2 个可播放壁纸"),
     ),
     sel.id && React.createElement(React.Fragment, null,
+      SliderRow("播放速度", 0.25, 2, 0.25, sel.speed, onSpeed, sel.speed + "x"),
       SliderRow("壁纸模糊", 0, 60, 1, sel.wallpaperBlur, onWallpaperBlur, sel.wallpaperBlur + "px"),
       SliderRow("暗化", 0, 90, 5, Math.round(sel.scrim * 100), onScrim, Math.round(sel.scrim * 100) + "%"),
       SliderRow("边框", 0, 90, 5, Math.round(sel.border * 100), onBorder, Math.round(sel.border * 100) + "%"),
