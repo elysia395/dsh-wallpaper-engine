@@ -151,9 +151,12 @@ Wallpaper Engine 没有 macOS 客户端，所以 macOS 上本插件是**目录�
 
 ## 分支约定
 
-- `main` — Windows 优先的上游主线。**macOS 相关改动不要提交到这里。**
+- 上游 `main`（elysia395）— Windows 优先的上游主线。
 - `dsh-wallpaper-engine-mac` — 上游仓库里的 macOS 分支（WaifuX 集成）。macOS 相关工作请基于此分支开发 / 把 PR 指向这个分支。
-- [ruijiaang-lab fork](https://github.com/ruijiaang-lab/dsh-wallpaper-engine) 里的 `mac` 分支是持续维护的 macOS 分支（上游 PR 的源）。
+- [ruijiaang-lab fork](https://github.com/ruijiaang-lab/dsh-wallpaper-engine)：
+  - `main` — 完整分发分支：上游 Windows 实现 + 已合并的 macOS 适配，DSH 插件市场安装的就是它。
+  - `mac` — 持续维护的 macOS 开发分支（上游 PR 的源）。
+- **npm** — macOS 分支以独立包名 `dsh-plugin-wallpaper-engine-mac` 发布（不占用上游的 `dsh-plugin-wallpaper-engine` 包名）。发新版：改 `package.json` 版本号 → 运行 `node scripts/npm-publish.mjs`。
 
 ## 已知限制
 

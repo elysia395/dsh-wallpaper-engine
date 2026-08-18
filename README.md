@@ -185,11 +185,17 @@ instead of Steam-driven. It scans content folders and treats every `.mp4`/`.webm
 
 ## Branch convention
 
-- `main` — the Windows-first upstream line. **Do not commit macOS work here.**
+- Upstream `main` (elysia395) — the Windows-first upstream line.
 - `dsh-wallpaper-engine-mac` — the macOS branch in the upstream repo (WaifuX
   integration). Push / open PRs for macOS work against this branch.
-- In the [ruijiaang-lab fork](https://github.com/ruijiaang-lab/dsh-wallpaper-engine),
-  `mac` is the maintained macOS branch (source of the upstream PR).
+- In the [ruijiaang-lab fork](https://github.com/ruijiaang-lab/dsh-wallpaper-engine):
+  - `main` — the full distribution branch: the upstream Windows implementation
+    with the macOS adaptations merged in. This is what the DSH plugin market installs.
+  - `mac` — the maintained macOS development branch (source of the upstream PR).
+- **npm** — the macOS line publishes under its own package name
+  `dsh-plugin-wallpaper-engine-mac` (the upstream `dsh-plugin-wallpaper-engine`
+  name stays with elysia395). Release: bump `package.json` version, then
+  `node scripts/npm-publish.mjs`.
 
 ## Limitations
 
