@@ -199,6 +199,47 @@ via `libraryfolders.vdf`. Nothing further is required.
 
 Every wallpaper card has a **隐藏** button in its top-right corner — it only removes the wallpaper from the list, **never touches the source file**. Restore any wallpaper from the **已隐藏** tab in the modal (single restore or **全部恢复**); the **批量** button in the modal toolbar enters multi-select mode to hide several at once. Hidden state is persisted in `localStorage` (survives refresh/restart); hiding the currently playing wallpaper doesn't interrupt playback, and automatic rotation skips hidden wallpapers.
 
+### Content-rating & type filters
+
+Above the thumbnail grid in the picker modal there are two dropdowns that
+reproduce Wallpaper Engine's own categorisation:
+
+- **内容分级** (content rating) — reads each wallpaper's `contentrating` field
+  from `project.json` (WE's workshop tags G / PG13 / R): **全部** (all) /
+  **Everyone (G, default)** / **PG13** (parental guidance) / **Mature (R)** /
+  **未分级** (unrated — wallpapers without the field, typically local projects
+  or custom uploads).
+- **类型** (type) — filters by the embeddable type: **全部** (all) / **视频**
+  (video) / **网页** (web) / **图片** (image, custom uploads).
+
+Every option shows how many playable wallpapers currently match. Wallpapers
+outside the selected categories are dropped from the grid, the rotation editor
+and the rotation candidates — they are never auto-selected or rotated either.
+The choice persists in browser `localStorage`; the default is **Everyone**,
+mirroring Wallpaper Engine's conservative first-run stance.
+
+> Note: the rating is read from each wallpaper file's `contentrating` field —
+> the same rating WE's client shows — but the plugin does **not** follow the
+> adult-content switch inside the Wallpaper Engine client (it scans the disk
+> directly and bypasses WE's configuration).
+
+### Card style & vinyl record
+
+- **卡片样式 (card style)**: a switch at the top of the settings page toggles
+  between two thumbnail-card styles — **经典 (CD-rack style)** (cards stack
+  like CD jewel cases: each row's cards slightly overlap the row above,
+  vertical only, hovering scales the card up and brings it to the front; the
+  grid is more compact — about 7 cards per row — and shows everything on ONE
+  page with no pagination) and **新版 (overlap-proof)** (the rewritten
+  fixed-height cards whose images are absolutely positioned to fill the card,
+  so they never overlap in any
+  browser; default). The choice persists in `localStorage`.
+- **黑胶唱片 (vinyl record)**: next to the wallpaper selection there is a
+  **rotating vinyl record** that uses the selected wallpaper's cover as the
+  record label — it spins while the wallpaper plays and stops when paused
+  (animation is disabled under `prefers-reduced-motion`). A small record also
+  sits in the picker modal head. The vinyl shows in **both** card styles.
+
 ### Playback speed & horizontal flip
 
 With a video wallpaper selected, the **壁纸效果** area shows the **倍速** presets (0.5x / 0.75x / 1x / 1.25x / 1.5x / 2x) — driven by the browser's native `playbackRate`, instant, no reload or black flash (wallpaper videos are muted, so there is no audio to keep in sync). The **水平翻转** toggle mirrors the image via CSS `scaleX(-1)` — it works for video, web, and uploaded images/videos alike, with zero main-thread cost.
