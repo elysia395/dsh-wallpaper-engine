@@ -890,6 +890,9 @@ function WallpaperPicker() {
   // Card style: classic (aspect-ratio CD look) vs fixed (overlap-proof).
   const onLayoutChange = (value) => {
     selection.pickerLayout = value;
+  // Settings-page layout: vinyl (CD/record style) vs compact card.
+  const onLayoutChange = (e) => {
+    selection.pickerLayout = e.target.value;
     persistSelection();
     emit();
   };
@@ -1060,6 +1063,14 @@ function WallpaperPicker() {
           title: "新版（固定高度防重叠）",
           onClick: () => onLayoutChange("fixed"),
         }, "新版（防重叠）"),
+      React.createElement("select", {
+        className: "we-picker__playlist-select",
+        value: sel.pickerLayout,
+        onChange: onLayoutChange,
+        title: "缩略图卡片样式：经典（aspect-ratio 16:9）或新版（固定高度防重叠）",
+      },
+      React.createElement("option", { value: "classic" }, "经典（CD 风）"),
+      React.createElement("option", { value: "fixed" }, "新版（防重叠）"),
       ),
       React.createElement("span", { className: "we-picker__hint" }, "黑胶唱片展示选中壁纸封面"),
     ),
@@ -2032,6 +2043,25 @@ const CSS = `
   .we-picker[data-we-cards="classic"] .we-picker__editor-card img,
   .we-picker__modal[data-we-cards="classic"] .we-picker__editor-card img {
     position: static; width: 100%; height: 100%; object-fit: cover; display: block;
+  }
+  .we-picker__card img {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; display: block;
+  }
+  /* Classic (CD-like) card style — WE's ORIGINAL aspect-ratio 16/9 cards with
+     percentage-height images. Opt-in via the 卡片样式 switch (the author liked
+     this look; note it can overlap in older browsers, which is why the fixed
+     style above is the default). */
+  .we-picker[data-we-cards="classic"] .we-picker__card,
+  .we-picker[data-we-cards="classic"] .we-picker__editor-card {
+    height: auto; aspect-ratio: 16 / 9;
+  }
+  .we-picker[data-we-cards="classic"] .we-picker__editor-card {
+    aspect-ratio: 16 / 10;
+  }
+  .we-picker[data-we-cards="classic"] .we-picker__card img,
+  .we-picker[data-we-cards="classic"] .we-picker__editor-card img {
+    position: static; width: 100%; height: 100%;
   }
   .we-picker__card--selected {
     outline: 2px solid var(--dsw-alias-brand-primary, #4f8cff);

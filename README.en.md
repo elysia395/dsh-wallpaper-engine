@@ -233,6 +233,10 @@ mirroring Wallpaper Engine's conservative first-run stance.
   page with no pagination) and **新版 (overlap-proof)** (the rewritten
   fixed-height cards whose images are absolutely positioned to fill the card,
   so they never overlap in any
+  between two thumbnail-card styles — **经典 (CD style)** (the original
+  `aspect-ratio 16:9` cards, the retro look the author liked) and
+  **新版 (overlap-proof)** (the rewritten fixed-height cards whose images are
+  absolutely positioned to fill the card, so they never overlap in any
   browser; default). The choice persists in `localStorage`.
 - **黑胶唱片 (vinyl record)**: next to the wallpaper selection there is a
   **rotating vinyl record** that uses the selected wallpaper's cover as the
