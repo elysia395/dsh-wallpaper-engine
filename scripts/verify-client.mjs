@@ -94,7 +94,11 @@ new vm.Script(code, { filename: 'client.js' }).runInContext(sandbox);
 const { id, factory } = cap.handoff;
 console.log('registered id:', id);
 
-const requireMock = (spec) => { if (spec === 'react') return React; throw new Error('unexpected require: ' + spec); };
+const requireMock = (spec) => {
+  if (spec === 'react') return React;
+  if (spec === 'react-dom') return { createPortal: (node) => node }; // modal renders inline in the mock
+  throw new Error('unexpected require: ' + spec);
+};
 const exportsObj = factory(requireMock);
 console.log('factory keys:', Object.keys(exportsObj));
 console.log('inject:', JSON.stringify(exportsObj.inject));
@@ -143,17 +147,30 @@ setTimeout(() => {
     try { tree = pickerRenders[0](); } catch (e) { renderError = e && e.message; }
     console.log('picker render threw:', renderError || '(none)');
     if (tree) {
-      // Thumbnail grid: only playable Video/Web wallpapers + the close card.
-      // Scene "c" must be filtered out entirely.
-      const cards = [];
+      // The thumbnail grid lives inside the picker MODAL now (settings page
+      // shows only the summary + "选择壁纸" trigger). Open the modal by
+      // invoking the trigger button's onClick, re-render, then count cards.
+      const openBtn = [];
       (function walk(node) {
         if (Array.isArray(node)) { node.forEach(walk); return; }
         if (!node || typeof node !== 'object') return;
         const cls = typeof node.props?.className === 'string' ? node.props.className : '';
-        if (cls === 'we-picker__card' || cls === 'we-picker__card we-picker__card--selected') cards.push(node);
+        if (cls.includes('we-picker__btn') && Array.isArray(node.children) && node.children.length === 1 && node.children[0] === '选择壁纸') openBtn.push(node);
         if (Array.isArray(node.children)) node.children.forEach(walk);
       })(tree);
-      console.log('grid cards (expect 3: close + a + b):', cards.length);
+      if (openBtn.length && typeof openBtn[0].props.onClick === 'function') {
+        try { openBtn[0].props.onClick(); } catch (e) { console.log('open modal onClick threw:', e && e.message); }
+      }
+      try { tree = pickerRenders[0](); } catch (e) { renderError = e && e.message; }
+      const cards = [];
+      (function walk2(node) {
+        if (Array.isArray(node)) { node.forEach(walk2); return; }
+        if (!node || typeof node !== 'object') return;
+        const cls = typeof node.props?.className === 'string' ? node.props.className : '';
+        if (cls === 'we-picker__card' || cls === 'we-picker__card we-picker__card--selected') cards.push(node);
+        if (Array.isArray(node.children)) node.children.forEach(walk2);
+      })(tree);
+      console.log('modal grid cards (expect 3: close + a + b):', cards.length);
       console.log('scene wallpaper excluded from grid:', !JSON.stringify(cards).includes('Scene C'));
     }
   }
