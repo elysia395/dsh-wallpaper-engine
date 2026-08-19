@@ -225,12 +225,13 @@ mirroring Wallpaper Engine's conservative first-run stance.
 
 ### Card style & vinyl record
 
-- **卡片样式 (card style)**: a switch at the top of the settings page toggles
-  between two thumbnail-card styles — **经典 (CD style)** (the original
-  `aspect-ratio 16:9` cards, the retro look the author liked) and
-  **新版 (overlap-proof)** (the rewritten fixed-height cards whose images are
-  absolutely positioned to fill the card, so they never overlap in any
-  browser; default). The choice persists in `localStorage`.
+- **紧凑布局 (compact layout)**: a sliding toggle at the top of the settings
+  page. ON gives the **CD-rack** look — cards stack like CD jewel cases
+  (each row's top covers the row above, vertical only), hovering scales the
+  card up and brings it to the front, the grid is tighter (~7 cards per row)
+  and shows everything on ONE page with no pagination. OFF is the regular
+  grid (fixed-height overlap-proof cards with pagination, default). The
+  choice persists in `localStorage`.
 - **黑胶唱片 (vinyl record)**: next to the wallpaper selection there is a
   **rotating vinyl record** that uses the selected wallpaper's cover as the
   record label — it spins while the wallpaper plays and stops when paused
