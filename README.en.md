@@ -12,6 +12,9 @@ It discovers the Wallpaper Engine install on your machine, lists its wallpapers,
 - **Horizontal flip** — mirror the image (video / web / uploaded images);
 - **Custom uploads** — use your own local JPG / PNG / MP4 as a wallpaper, with a configurable storage location and fit modes;
 - **Scene static frames** (v0.3) — Scene wallpapers extract their main texture as a static background instead of being an unusable "not playable" entry.
+- **Liquid-glass settings page** (v0.3.1) — the settings UI is now a **first-level settings page** (following the dsh-web-ui-all skin-center design): the whole page is a customizable liquid-glass card with **accent color** (6 presets + a custom color picker) and **glass transparency** (0–60%). Both apply instantly and persist.
+- **Whole-settings-window liquid glass** (v0.3.2) — one click turns the **entire native DSH settings window** (dialog + left nav + ALL native sections: General / Models / Plugins / …) into liquid glass with your custom accent + transparency. With the「设置窗口液态玻璃」master switch on, the window background, nav active/hover, buttons, switches and links all follow the chosen accent and transparency; off restores the stock look.
+- **Unified glass tuning** (v0.3.3–v0.3.5) — the settings-window glass blur shares the SAME adjustment as the conversation bar: the **玻璃** (glass) slider (0–60 px) drives the blur radius of both the settings window and the composer/bubbles, with an identical saturation/brightness/contrast recipe. A new **玻璃颜色** (glass color) control lets you tint the glass BASE itself (6 presets + custom picker; defaults white in light / deep navy in dark; once picked, both themes use that color) — **配色** styles the interactive elements, **玻璃颜色** styles the glass itself.
 
 ![Wallpaper showcase](docs/images/showcase.png)
 
@@ -86,8 +89,9 @@ the picker.
      - `POST /wallpaper-engine/upload-dir` → change the upload directory (persisted to `~/.dsh-wallpaper-engine/config.json`, migrates existing files)
 - **Client half** (`lib/client.js`): a browser module that fetches the inventory
   and renders the selected wallpaper into a fixed layer *behind* the app columns,
-  plus a "Wallpaper Engine" row in General settings (picker modal, hide/restore,
-  playback speed / flip, and custom-upload management).
+  plus a **first-level settings page** "Wallpaper Engine" (liquid-glass card,
+  picker modal, hide/restore, playback speed / flip, accent color + glass
+  transparency, and custom-upload management).
 - **Custom-upload storage**: uploaded files are written to a plugin-managed local
   directory (default `~/.dsh-wallpaper-engine/uploads`, changeable from the
   settings UI) and served through the same `/media` + `/preview` routes as WE
@@ -103,7 +107,7 @@ If you simply want to use the plugin, install the published package from npm:
 dsh plugin --profile web add dsh-plugin-wallpaper-engine
 ```
 
-Then restart `dsh web` and open **Settings → General → Wallpaper Engine**.
+Then restart `dsh web` and open **Settings → Wallpaper Engine**.
 
 > **macOS users**: Wallpaper Engine has no macOS client. The macOS line of this
 > plugin (WaifuX + loose-media support) is maintained by Jerry and published as
@@ -181,7 +185,7 @@ via `libraryfolders.vdf`. Nothing further is required.
 ## Usage
 
 1. Open `dsh web` → the DSH GUI.
-2. Open **Settings → General** and find the **Wallpaper Engine** row.
+2. Open **Settings** and pick **Wallpaper Engine** from the left navigation (a first-level settings page, its own nav entry).
 3. Click **选择壁纸** to open the picker modal, then click a Video/Web wallpaper (or an uploaded image/video) in the thumbnail grid. It appears behind the app; close the modal via the backdrop, ESC, or the close button. Scene/Application wallpapers cannot be embedded in the web UI and are hidden from the grid.
 4. Use **暂停/播放** to pause a video wallpaper, and **关闭** to clear it.
    The choice is remembered in your browser's `localStorage` (key
@@ -189,7 +193,7 @@ via `libraryfolders.vdf`. Nothing further is required.
 
 ![Settings UI overview](docs/images/features.png)
 
-> The settings panel: the current-wallpaper card plus the 自定义壁纸 / 轮播列表 / 壁纸效果 sections.
+> The settings page: the liquid-glass card (外观 accent/transparency), the current-wallpaper card, plus the 自定义壁纸 / 轮播列表 / 壁纸效果 sections.
 
 ![Wallpaper picker modal](docs/images/wallpaper-library.png)
 
@@ -258,6 +262,33 @@ Rotation runs over **user-defined carousel lists** (轮播列表). Create any nu
 
 At least two playable Video/Web wallpapers per list are required; manual changes reset the next timer; each list keeps its own cadence, so you can have one list switching every 5 minutes and another every 30. On first run, the first playable Wallpaper Engine playlist is imported automatically as a list so the feature works out of the box; **从 WE 播放列表导入** inside the editor imports any other playlist into the list being edited. Scene and Application wallpapers cannot be embedded in the web UI, so they are automatically excluded from rotation and hidden from the picker.
 
+### Liquid-glass appearance (whole settings window + accent + transparency)
+
+The **外观** (appearance) area at the top of the settings page controls the look
+of the **entire native DSH settings window** (following the dsh-web-ui-all
+skin-center design):
+
+| Control | What it controls | Range | Default |
+|---|---|---|---|
+| **设置窗口液态玻璃** (settings-window glass) | Master switch: turns the whole settings window (dialog + left nav + all native sections) into liquid glass | on / off | on |
+| **配色** (accent) | Theme color: buttons, switches, links, nav active, sliders and glass highlights inside the window all follow it | 6 presets + custom color picker | `#4f8cff` classic blue |
+| **玻璃颜色** (glass color) | The BASE TINT of the settings-window glass itself (not just transparency) | 6 presets + custom color picker | white (light) / deep navy (dark) |
+| **玻璃透明度** (glass transparency) | Opacity of the glass surfaces (settings window, composer, bubbles, sidebar panels) | 0–60 % | 12 % |
+
+> With the master switch on, **every native section** (General / Models /
+> Plugins / …) and the left nav become one liquid-glass + accent look — the
+> plugin overrides the shell tokens scoped to the settings dialog, so nothing
+> outside the window is touched. The settings-window glass blur uses the SAME
+> adjustment range as the conversation bar: the **玻璃** (glass) slider (0–60 px)
+> drives the blur radius of both the settings window and the composer/bubbles,
+> with an identical saturation/brightness/contrast recipe; **玻璃颜色** sets the
+> base tint of the glass itself (defaults white in light / deep navy in dark;
+> once picked, both themes use that color), and the **玻璃透明度** control sets
+> the transparency — higher lets the wallpaper colour show through more clearly,
+> lower approaches solid. Browsers without `backdrop-filter` automatically fall
+> back to a high-opacity solid so text stays readable. All controls apply
+> instantly and persist in `localStorage`.
+
 ### The four sliders
 
 While a wallpaper is active, four sliders let you tune how it blends with the UI:
@@ -267,7 +298,7 @@ While a wallpaper is active, four sliders let you tune how it blends with the UI
 | **壁纸模糊** (wallpaper blur) | Blurs the wallpaper itself | 0–60 px | 0 |
 | **暗化** (scrim) | Darkens the overlay between wallpaper and text | 0–90 % | 25 % |
 | **边框** (border) | Raises border/divider contrast | 0–90 % | 35 % |
-| **玻璃** (glass) | Blur radius of the frosted-glass panels (composer, bubbles) | 0–40 px | 24 |
+| **玻璃** (glass) | Blur radius of the frosted-glass panels (composer, bubbles) | 0–60 px | 24 |
 
 > **Light vs. dark mode** — Wallpapers differ wildly in colour and brightness, so
 > there is no one mode that fits every wallpaper. Switch DSH's theme between

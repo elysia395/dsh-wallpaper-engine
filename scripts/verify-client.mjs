@@ -128,6 +128,12 @@ try { exportsObj.apply(ctx); } catch (e) { thrown = e && e.message; }
 console.log('apply threw:', thrown || '(none)');
 console.log('slot registrations:', JSON.stringify(registrations));
 
+const sectionReg = registrations.find((r) => r.key === 'settings.section');
+console.log('registered as first-level settings.section:', !!sectionReg);
+console.log('section id:', sectionReg ? sectionReg.id : '(missing)');
+console.log('section label:', sectionReg ? sectionReg.label : '(missing)');
+console.log('no longer registered as general item:', !registrations.some((r) => r.key === 'settings.general.item'));
+
 setTimeout(() => {
   console.log('body children ids:', JSON.stringify(bodyEl.children.map((c) => c.id)));
   console.log('has wallpaper layer:', !!document.getElementById('dsh-wallpaper-engine-layer'));
@@ -139,6 +145,10 @@ setTimeout(() => {
   console.log('--we-blur:', JSON.stringify(p['--we-blur']));
   console.log('--we-wallpaper-blur:', JSON.stringify(p['--we-wallpaper-blur']));
   console.log('--we-wallpaper-scale:', JSON.stringify(p['--we-wallpaper-scale']));
+  console.log('--we-accent:', JSON.stringify(p['--we-accent']));
+  console.log('--we-glass-alpha:', JSON.stringify(p['--we-glass-alpha']));
+  console.log('--we-glass-color:', JSON.stringify(p['--we-glass-color']));
+  console.log('body[data-we-glass-window] (default on):', JSON.stringify(bodyEl.attributes['data-we-glass-window']));
   const timer = rotationTimers.find((item) => !item.cleared);
   console.log('rotation timer scheduled:', !!timer, timer ? timer.ms : null);
   if (timer) {
@@ -157,6 +167,40 @@ setTimeout(() => {
     try { tree = pickerRenders[0](); } catch (e) { renderError = e && e.message; }
     console.log('picker render threw:', renderError || '(none)');
     if (tree) {
+      // First-level section wrapper: ul.we-picker__section-list > li glass card.
+      const rootUl = tree.type === 'ul' ? tree : null;
+      const rootCls = typeof tree.props?.className === 'string' ? tree.props.className : '';
+      console.log('section wrapper is ul.we-picker__section-list:', rootUl && rootCls.includes('we-picker__section-list'));
+      const liChildren = rootUl ? (Array.isArray(rootUl.children) ? rootUl.children : []) : [];
+      const li = liChildren.find((n) => n && typeof n === 'object' && typeof n.props?.className === 'string' && n.props.className.includes('we-picker__card-shell'));
+      console.log('glass card shell (li.we-picker__card-shell) present:', !!li);
+      const treeText = JSON.stringify(tree);
+      console.log('card head (we-picker__card-head) present:', treeText.includes('we-picker__card-head'));
+      console.log('card name "Wallpaper Engine":', treeText.includes('Wallpaper Engine'));
+      console.log('accent preset swatches (expect 6):', (treeText.match(/"aria-label":"配色 /g) || []).length);
+      console.log('glass-color preset swatches (expect 6):', (treeText.match(/"aria-label":"玻璃颜色 /g) || []).length);
+      console.log('glass color custom input present:', treeText.includes('自定义玻璃颜色'));
+      console.log('custom color input present:', treeText.includes('type":"color"'));
+      console.log('glass transparency slider row present:', treeText.includes('玻璃透明度'));
+      // 玻璃 slider now spans 0–60 px (was 0–40): assert the raised max on the
+      // 玻璃 range input (label "玻璃", max 60) so the range stays in sync.
+      const glassSlider = (() => {
+        let hit = null;
+        (function walk(node) {
+          if (Array.isArray(node)) { node.forEach(walk); return; }
+          if (!node || typeof node !== 'object') return;
+          const cls = typeof node.props?.className === 'string' ? node.props.className : '';
+          const children = Array.isArray(node.children) ? node.children : [];
+          const label = children.find((c) => c && typeof c === 'object' && Array.isArray(c.children) && c.children.includes('玻璃'));
+          if (cls.includes('we-picker__slider-row') && label) hit = node;
+          if (Array.isArray(node.children)) node.children.forEach(walk);
+        })(tree);
+        return hit;
+      })();
+      const sliderMax = glassSlider ? JSON.stringify(glassSlider).match(/"max":"(\d+)"/)?.[1] : null;
+      console.log('玻璃 slider max (expect 60):', sliderMax);
+      console.log('whole-window glass master switch present:', treeText.includes('设置窗口液态玻璃'));
+      console.log('window glass hint present:', treeText.includes('整个设置窗口'));
       // The thumbnail grid lives inside the picker MODAL now (settings page
       // shows only the summary + "选择壁纸" trigger). Open the modal by
       // invoking the trigger button's onClick, re-render, then count cards.
