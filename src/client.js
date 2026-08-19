@@ -68,7 +68,24 @@ const DEFAULTS = {
   // Fit mode for CUSTOM-uploaded wallpapers only (WE wallpapers keep cover):
   // 覆盖=cover · 填充=contain · 居中=center · 拉伸=fill (one object-fit var).
   objectFit: "cover",
+  // Content-rating filter, reproducing Wallpaper Engine's own rating taxonomy
+  // (project.json `contentrating`: "Everyone" / "PG13" / "Mature" — WE's
+  // workshop tags G / PG13 / R; projects without the field are "unrated").
+  // "everyone" is the default, matching WE's conservative first-run stance.
+  contentRatingFilter: "everyone",
+  // Wallpaper-type filter (all / video / web / image / scene). "all" disables it.
+  typeFilter: "all",
+  // Thumbnail-card style: "classic" (WE's original aspect-ratio 16/9 cards —
+  // the CD-like look the author liked; can overlap in older browsers) or
+  // "fixed" (rewritten fixed-height cards that never overlap). The vinyl
+  // record next to the selection is shown in BOTH styles (here + modal head).
+  pickerLayout: "fixed",
 };
+
+// Selectable values for the two filters. Declared up top because
+// readPersisted() validates against them at module load (const TDZ).
+const RATING_VALUES = ["all", "everyone", "pg13", "mature", "unrated"];
+const TYPE_VALUES = ["all", "video", "web", "image", "scene"];
 
 // ── Persisted selection ─────────────────────────────────────────────────────
 function clampNum(v, lo, hi, fallback) {
@@ -121,6 +138,11 @@ function readPersisted() {
       flip: o.flip === true,
       objectFit: ["cover", "contain", "center", "fill"].includes(o.objectFit)
         ? o.objectFit : DEFAULTS.objectFit,
+      contentRatingFilter: RATING_VALUES.includes(o.contentRatingFilter)
+        ? o.contentRatingFilter : DEFAULTS.contentRatingFilter,
+      typeFilter: TYPE_VALUES.includes(o.typeFilter)
+        ? o.typeFilter : DEFAULTS.typeFilter,
+      pickerLayout: o.pickerLayout === "classic" ? "classic" : "fixed",
     };
   } catch {
     return { id: "", ...DEFAULTS };
@@ -189,6 +211,9 @@ function persistSelection() {
       playbackRate: selection.playbackRate,
       flip: selection.flip,
       objectFit: selection.objectFit,
+      contentRatingFilter: selection.contentRatingFilter,
+      typeFilter: selection.typeFilter,
+      pickerLayout: selection.pickerLayout,
     }));
   } catch { /* ignore */ }
 }
@@ -254,15 +279,75 @@ async function loadInventory() {
     persistSelection();
   }
 
-  // After a refresh, drop the selection if the chosen wallpaper vanished or is
-  // no longer playable (avoids a dangling media URL).
+  // Re-validate the selection against the refreshed inventory + filters (also
+  // covers the rating/type filters): drop vanished/no-longer-matching
+  // selections, then restore rotation state.
+  revalidateSelection();
+}
+
+// ── Content-rating + type filters ───────────────────────────────────────────
+// Reproduces Wallpaper Engine's own content categories (project.json
+// `contentrating`): "Everyone" (G) / "PG13" (parental guidance) / "Mature" (R);
+// projects without the field are "unrated". A separate type filter narrows the
+// playable types (video / web / image / scene static frame). Both are enforced
+// at the single choke point below, so the grid, the rotation editor, the
+// rotation candidates and the auto-selection all stay consistent. Matching is
+// case-insensitive and accepts common spellings so other local copies behave
+// the same.
+const ADULT_RATING_PATTERN = /^(mature|adult|adultonly|18\+|r18)$/i;
+const PG13_RATING_PATTERN = /^(pg13|pg-13|pg ?13|questionable)$/i;
+
+function ratingOf(w) {
+  const rating = typeof w.contentrating === "string" ? w.contentrating.trim() : "";
+  if (!rating) return "unrated";
+  if (/^(everyone|general|g)$/i.test(rating)) return "everyone";
+  if (PG13_RATING_PATTERN.test(rating)) return "pg13";
+  if (ADULT_RATING_PATTERN.test(rating)) return "mature";
+  return "unrated";
+}
+
+function matchesRatingFilter(w) {
+  const filter = selection.contentRatingFilter;
+  if (filter === "all") return true;
+  return ratingOf(w) === filter;
+}
+
+function matchesTypeFilter(w) {
+  const filter = selection.typeFilter;
+  if (filter === "all") return true;
+  return w.type === filter;
+}
+
+function isPlayableType(w) {
+  // "image" = user-uploaded still image (custom uploads, id prefix "up-").
+  // "scene" = WE scene wallpaper — usable as a static frame when the host
+  // served a frameUrl (extracted from its main texture).
+  if (!w) return false;
+  if (w.playable && (w.type === "video" || w.type === "web" || w.type === "image")) return true;
+  return w.type === "scene" && Boolean(w.frameUrl);
+}
+
+function isRotatableWallpaper(w) {
+  return isPlayableType(w) && matchesRatingFilter(w) && matchesTypeFilter(w);
+}
+
+function playableInventory() {
+  return selection.inventory.wallpapers.filter(
+    (w) => isRotatableWallpaper(w) && !isHiddenWallpaper(w.id),
+  );
+}
+
+// Re-validate the active selection against the current inventory + filters.
+// Called after a refresh AND after changing the rating/type filter: drop a
+// selection that vanished, is no longer playable, or no longer matches the
+// selected categories; when rotation is on and nothing matches, pick the next
+// candidate instead of stopping playback.
+function revalidateSelection() {
   if (selection.id && !selection.inventory.wallpapers.some((w) => w.id === selection.id && isRotatableWallpaper(w))) {
     selection.id = "";
     persistSelection();
   }
   if (selection.rotationEnabled && selection.id && !rotationCandidates().some((w) => w.id === selection.id)) {
-    // The current wallpaper left the active group's candidates (e.g. the user
-    // just hid it): switch to the next candidate instead of stopping playback.
     const first = rotationCandidates()[0];
     selection.id = first ? first.id : "";
     persistSelection();
@@ -273,21 +358,6 @@ async function loadInventory() {
   }
   applySelection(selection.id);
   emit();
-}
-
-function isRotatableWallpaper(w) {
-  // "image" = user-uploaded still image (custom uploads, id prefix "up-").
-  // "scene" = WE scene wallpaper — usable as a static frame when the host
-  // served a frameUrl (extracted from its main texture).
-  if (!w) return false;
-  if (w.playable && (w.type === "video" || w.type === "web" || w.type === "image")) return true;
-  return w.type === "scene" && Boolean(w.frameUrl);
-}
-
-function playableInventory() {
-  return selection.inventory.wallpapers.filter(
-    (w) => isRotatableWallpaper(w) && !isHiddenWallpaper(w.id),
-  );
 }
 
 // ── Rotation groups (user-defined carousel lists) ───────────────────────────
@@ -772,11 +842,57 @@ function SliderRow(label, min, max, step, value, onInput, suffix) {
   );
 }
 
+// ── Vinyl record (黑胶唱片) ─────────────────────────────────────────────────
+// A rotating record disc showing the SELECTED wallpaper's cover as the label —
+// the "CD player" presentation the author liked. Pure presentational: cover =
+// the current wallpaper's preview URL (or null), playing drives the spin.
+// Shown in BOTH settings layouts and in the picker modal head.
+function VinylRecord(props) {
+  const cover = props.cover;
+  const title = props.title || "未选择壁纸";
+  const playing = props.playing === true;
+  const sm = props.sm === true;
+  return React.createElement("div", {
+    className: "we-vinyl" +
+      (playing ? " we-vinyl--playing" : "") +
+      (sm ? " we-vinyl--sm" : ""),
+    title: title,
+  },
+    React.createElement("div", { className: "we-vinyl__cover" },
+      cover
+        ? React.createElement("img", {
+            src: cover, alt: "", loading: "lazy",
+            onError: (e) => { e.target.style.display = "none"; },
+          })
+        : React.createElement("span", { className: "we-vinyl__empty" }, "▦"),
+    ),
+    React.createElement("span", { className: "we-vinyl__hole" }),
+  );
+}
+
 function WallpaperPicker() {
   const sel = useStore();
   const onTogglePlay = () => { selection.playing = !selection.playing; emit(); };
   const onClear = () => applySelection("");
   const onRefresh = () => loadInventory();
+  // Filter changes: persist + re-validate so wallpapers outside the selected
+  // categories drop out of the grid/rotation immediately.
+  const onRatingFilterChange = (e) => {
+    selection.contentRatingFilter = e.target.value;
+    persistSelection();
+    revalidateSelection();
+  };
+  const onTypeFilterChange = (e) => {
+    selection.typeFilter = e.target.value;
+    persistSelection();
+    revalidateSelection();
+  };
+  // Settings-page layout: vinyl (CD/record style) vs compact card.
+  const onLayoutChange = (e) => {
+    selection.pickerLayout = e.target.value;
+    persistSelection();
+    emit();
+  };
   const onGroupChange = (e) => {
     selection.rotationGroupId = e.target.value;
     if (selection.rotationEnabled) {
@@ -873,10 +989,16 @@ function WallpaperPicker() {
   }
 
   const list = sel.inventory.wallpapers;
-  // Only playable Video/Web wallpapers are shown — Scene/Application cannot be
-  // embedded in the web UI, so hiding them keeps the grid useful. Hidden
-  // (soft-deleted) wallpapers leave this list and move to the 已隐藏 section.
+  // Only playable Video/Web/Image wallpapers are shown — Scene/Application
+  // cannot be embedded in the web UI, so hiding them keeps the grid useful.
+  // Hidden (soft-deleted) wallpapers leave this list and move to the 已隐藏
+  // section. The rating/type filters further narrow playableList.
   const playableList = list.filter((w) => isRotatableWallpaper(w) && !isHiddenWallpaper(w.id));
+  // Per-category counts for the two filter dropdowns (playable, non-hidden):
+  // they reflect what is actually available, independent of the active filters.
+  const basePlayable = list.filter((w) => isPlayableType(w) && !isHiddenWallpaper(w.id));
+  const ratingCount = (r) => basePlayable.filter((w) => ratingOf(w) === r).length;
+  const typeCount = (t) => basePlayable.filter((w) => w.type === t).length;
   const hiddenList = hiddenInventoryList();
   const current = list.find((w) => w.id === sel.id) || null;
   const uploadedList = list.filter(isUploadedWallpaper);
@@ -916,24 +1038,37 @@ function WallpaperPicker() {
       }, "下一页 ›"),
     );
 
-  return React.createElement("div", { className: "we-picker" },
-    // ── 当前壁纸: compact card (thumbnail + title + type) with the primary
-    //    "选择壁纸" action. The thumbnail grid lives in a modal (see below). ──
+  return React.createElement("div", { className: "we-picker", "data-we-cards": sel.pickerLayout },
+    // ── Card-style switch: classic (WE's original aspect-ratio 16/9 cards —
+    //    the CD-like look the author liked) vs the rewritten fixed-height
+    //    cards that never overlap in older browsers. The vinyl record beside
+    //    the selection stays in BOTH styles (here + modal head). ──
+    React.createElement("div", { className: "we-picker__row" },
+      React.createElement("span", { className: "we-picker__hint we-picker__label" }, "卡片样式"),
+      React.createElement("select", {
+        className: "we-picker__playlist-select",
+        value: sel.pickerLayout,
+        onChange: onLayoutChange,
+        title: "缩略图卡片样式：经典（aspect-ratio 16:9）或新版（固定高度防重叠）",
+      },
+      React.createElement("option", { value: "classic" }, "经典（CD 风）"),
+      React.createElement("option", { value: "fixed" }, "新版（防重叠）"),
+      ),
+      React.createElement("span", { className: "we-picker__hint" }, "黑胶唱片展示选中壁纸封面"),
+    ),
+    // ── 当前壁纸: vinyl record beside the selection, in both card styles. ──
     React.createElement("div", { className: "we-picker__section" },
       React.createElement("div", { className: "we-picker__current" },
-        current && current.preview
-          ? React.createElement("img", {
-              className: "we-picker__current-thumb",
-              src: current.preview, alt: "",
-              onError: (e) => { e.target.style.display = "none"; },
-            })
-          : React.createElement("div", { className: "we-picker__current-thumb we-picker__current-thumb--empty" }, "▦"),
+        React.createElement(VinylRecord, {
+          cover: current && current.preview, title: current ? current.title : "",
+          playing: sel.playing && Boolean(sel.url),
+        }),
         React.createElement("div", { className: "we-picker__current-info" },
           React.createElement("div", { className: "we-picker__current-title", title: current ? current.title : "" },
             sel.id && current ? current.title : "未选择壁纸"),
           React.createElement("div", { className: "we-picker__current-meta" },
             current
-              ? ({ video: "视频壁纸", web: "网页壁纸", image: "图片壁纸" }[current.type] || "壁纸") + (sel.playing ? " · 播放中" : " · 已暂停")
+              ? ({ video: "视频壁纸", web: "网页壁纸", image: "图片壁纸", scene: "场景壁纸（静态帧）" }[current.type] || "壁纸") + (sel.playing ? " · 播放中" : " · 已暂停")
               : "尚未选择壁纸"),
         ),
         React.createElement("button", {
@@ -949,7 +1084,13 @@ function WallpaperPicker() {
       React.createElement("div", { className: "we-picker__modal-overlay", onClick: closePicker },
         React.createElement("div", { className: "we-picker__modal", onClick: (e) => e.stopPropagation() },
           React.createElement("div", { className: "we-picker__modal-head" },
-            React.createElement("span", { className: "we-picker__modal-title" }, "选择壁纸"),
+            React.createElement("div", { className: "we-picker__modal-head-left" },
+              React.createElement(VinylRecord, {
+                cover: current && current.preview, title: current ? current.title : "",
+                playing: sel.playing && Boolean(sel.url), sm: true,
+              }),
+              React.createElement("span", { className: "we-picker__modal-title" }, "选择壁纸"),
+            ),
             React.createElement("button", {
               className: "we-picker__btn", type: "button", onClick: closePicker,
             }, "关闭"),
@@ -1041,13 +1182,49 @@ function WallpaperPicker() {
                     onClick: () => { selection.batchMode = false; selection.batchSelected = []; emit(); },
                   }, "取消"),
                 ),
+                React.createElement("div", { className: "we-picker__row we-picker__filter-row" },
+                  React.createElement("span", { className: "we-picker__hint we-picker__label" }, "内容分级"),
+                  React.createElement("select", {
+                    className: "we-picker__playlist-select",
+                    value: sel.contentRatingFilter,
+                    onChange: onRatingFilterChange,
+                    title: "对应 Wallpaper Engine 的内容分级（project.json contentrating）",
+                  },
+                  React.createElement("option", { value: "all" }, "全部（" + basePlayable.length + "）"),
+                  React.createElement("option", { value: "everyone" }, "Everyone / G（" + ratingCount("everyone") + "）"),
+                  React.createElement("option", { value: "pg13" }, "PG13（" + ratingCount("pg13") + "）"),
+                  React.createElement("option", { value: "mature" }, "Mature / R（" + ratingCount("mature") + "）"),
+                  React.createElement("option", { value: "unrated" }, "未分级（" + ratingCount("unrated") + "）"),
+                  ),
+                  React.createElement("span", { className: "we-picker__hint we-picker__label" }, "类型"),
+                  React.createElement("select", {
+                    className: "we-picker__playlist-select",
+                    value: sel.typeFilter,
+                    onChange: onTypeFilterChange,
+                    title: "按壁纸类型过滤",
+                  },
+                  React.createElement("option", { value: "all" }, "全部（" + basePlayable.length + "）"),
+                  React.createElement("option", { value: "video" }, "视频（" + typeCount("video") + "）"),
+                  React.createElement("option", { value: "web" }, "网页（" + typeCount("web") + "）"),
+                  React.createElement("option", { value: "image" }, "图片（" + typeCount("image") + "）"),
+                  React.createElement("option", { value: "scene" }, "场景（" + typeCount("scene") + "）"),
+                  ),
+                ),
                 React.createElement("div", { className: "we-picker__grid" },
                   // "Close wallpaper" card — equivalent of the old first <option>.
-                  React.createElement("button", {
+                  // Rendered as a <div role="button"> like every other card:
+                  // <button> ignores aspect-ratio in several browsers, which
+                  // collapses the cell and lets the "✕ 关闭" label float over
+                  // the adjacent thumbnail.
+                  React.createElement("div", {
                     className: "we-picker__card" + (sel.id ? "" : " we-picker__card--selected"),
-                    type: "button",
+                    role: "button",
+                    tabIndex: 0,
                     onClick: onClear,
                     title: "关闭壁纸",
+                    onKeyDown: (e) => {
+                      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); }
+                    },
                   },
                   React.createElement("span", { className: "we-picker__card-close" }, "✕ 关闭"),
                   ),
@@ -1580,6 +1757,8 @@ const CSS = `
     margin-top: auto; padding-top: 8px; flex-wrap: wrap;
   }
   .we-picker__playlist-select { flex: 1; min-width: 0; }
+  .we-picker__filter-row { flex-wrap: wrap; flex-shrink: 0; }
+  .we-picker__filter-row .we-picker__playlist-select { flex: 1 1 130px; }
   .we-picker__rotation-toggle { display: inline-flex; align-items: center; gap: 6px; }
   .we-picker__rotation-interval { margin-left: auto; }
   /* Flat, uniform-height controls. Native <select> renders as a raised "3D"
@@ -1622,6 +1801,52 @@ const CSS = `
     font-size: 0.75em; font-weight: 500; opacity: 0.55;
     letter-spacing: 0.01em;
   }
+
+  /* ── Vinyl record (黑胶唱片): rotating disc with the selected wallpaper's
+     cover as the label. Spins while the wallpaper is playing; pauses
+     otherwise. Shown in both settings layouts and in the modal head. ── */
+  .we-vinyl {
+    position: relative; width: 128px; height: 128px; flex: 0 0 auto;
+    border-radius: 50%;
+    background:
+      repeating-radial-gradient(circle at center, #191920 0 2px, #23232c 2px 4px);
+    box-shadow:
+      0 6px 18px rgba(0, 0, 0, 0.55),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.07);
+    animation: we-vinyl-spin 8s linear infinite;
+    animation-play-state: paused;
+  }
+  .we-vinyl--playing { animation-play-state: running; }
+  .we-vinyl--sm { width: 56px; height: 56px; }
+  .we-vinyl__cover {
+    position: absolute; inset: 24%; border-radius: 50%; overflow: hidden;
+    background: rgba(128, 128, 128, 0.25);
+    border: 2px solid rgba(0, 0, 0, 0.85);
+    box-shadow:
+      0 0 0 2px rgba(255, 255, 255, 0.1),
+      inset 0 0 8px rgba(0, 0, 0, 0.6);
+  }
+  .we-vinyl__cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .we-vinyl__empty {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: rgba(255, 255, 255, 0.45); font-size: 1.3em;
+  }
+  .we-vinyl__hole {
+    position: absolute; left: 50%; top: 50%;
+    width: 12px; height: 12px; margin: -6px 0 0 -6px;
+    border-radius: 50%; background: #0b0b0e;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.9);
+  }
+  .we-vinyl--sm .we-vinyl__hole { width: 6px; height: 6px; margin: -3px 0 0 -3px; }
+  @keyframes we-vinyl-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .we-vinyl { animation: none; }
+  }
+  .we-picker__modal-head-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
 
   /* ── Current-wallpaper card: thumbnail + title + type + primary action. ── */
   .we-picker__current {
@@ -1716,19 +1941,42 @@ const CSS = `
     border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));
     border-radius: 8px;
   }
-  /* Wallpaper thumbnail grid (main picker). */
+  /* Wallpaper thumbnail grid (main picker).
+     Cards use a FIXED height + absolutely-positioned filling <img>, never
+     aspect-ratio: some browsers (old Chromium/WebView) ignore aspect-ratio on
+     cards and let percentage-height images resolve to their intrinsic size,
+     which made previews bleed over the row above. inset:0 + overflow:hidden
+     pins the image inside the card in every engine. */
   .we-picker__grid {
     display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
     gap: 8px; max-height: 280px; overflow-y: auto; padding: 2px;
   }
   .we-picker__card {
-    position: relative; width: 100%; padding: 0; cursor: pointer;
-    aspect-ratio: 16 / 9; display: block; overflow: hidden;
+    position: relative; height: 92px; padding: 0; cursor: pointer;
+    display: block; overflow: hidden;
     border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));
     border-radius: 8px;
     background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.15));
   }
-  .we-picker__card img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .we-picker__card img {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; display: block;
+  }
+  /* Classic (CD-like) card style — WE's ORIGINAL aspect-ratio 16/9 cards with
+     percentage-height images. Opt-in via the 卡片样式 switch (the author liked
+     this look; note it can overlap in older browsers, which is why the fixed
+     style above is the default). */
+  .we-picker[data-we-cards="classic"] .we-picker__card,
+  .we-picker[data-we-cards="classic"] .we-picker__editor-card {
+    height: auto; aspect-ratio: 16 / 9;
+  }
+  .we-picker[data-we-cards="classic"] .we-picker__editor-card {
+    aspect-ratio: 16 / 10;
+  }
+  .we-picker[data-we-cards="classic"] .we-picker__card img,
+  .we-picker[data-we-cards="classic"] .we-picker__editor-card img {
+    position: static; width: 100%; height: 100%;
+  }
   .we-picker__card--selected {
     outline: 2px solid var(--dsw-alias-brand-primary, #4f8cff);
     outline-offset: -2px;
@@ -1879,13 +2127,16 @@ const CSS = `
     gap: 6px; max-height: 220px; overflow-y: auto; padding: 2px;
   }
   .we-picker__editor-card {
-    position: relative; width: 100%; padding: 0; cursor: pointer;
-    aspect-ratio: 16 / 10; display: block; overflow: hidden;
+    position: relative; height: 80px; padding: 0; cursor: pointer;
+    display: block; overflow: hidden;
     border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));
     border-radius: 6px;
     background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.15));
   }
-  .we-picker__editor-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .we-picker__editor-card img {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; display: block;
+  }
   .we-picker__editor-card--checked {
     outline: 2px solid var(--dsw-alias-brand-primary, #4f8cff);
     outline-offset: -2px;

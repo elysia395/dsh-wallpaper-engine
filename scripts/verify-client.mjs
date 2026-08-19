@@ -68,13 +68,18 @@ const fetch = () => Promise.resolve({
     ],
     wallpapers: [
       // 30 synthetic videos force pagination (33 playable cards → 2 pages at 24/page).
+      // All carry contentrating "Everyone" so they stay visible under the
+      // default Everyone filter.
       ...Array.from({ length: 30 }, (_, i) => ({
         id: "w" + i, title: "Wall " + i, type: "video", playable: true, media: "/wallpaper-engine/media/w" + i, preview: null,
+        contentrating: "Everyone",
       })),
-      { id: "a", title: "Video A", type: "video", playable: true, media: "/wallpaper-engine/media/xyz", preview: null },
-      { id: "b", title: "Video B", type: "video", playable: true, media: "/wallpaper-engine/media/def", preview: null },
-      { id: "c", title: "Scene C", type: "scene", playable: false, media: null, preview: "/wallpaper-engine/preview/ccc", frameUrl: "/wallpaper-engine/scene-frame/ccc" },
-      { id: "d", title: "Scene D (no frame)", type: "scene", playable: false, media: null, preview: null, frameUrl: null },
+      { id: "a", title: "Video A", type: "video", playable: true, media: "/wallpaper-engine/media/xyz", preview: null, contentrating: "Everyone" },
+      { id: "b", title: "Video B", type: "video", playable: true, media: "/wallpaper-engine/media/def", preview: null, contentrating: "Everyone" },
+      { id: "c", title: "Scene C", type: "scene", playable: false, media: null, preview: "/wallpaper-engine/preview/ccc", frameUrl: "/wallpaper-engine/scene-frame/ccc", contentrating: "Everyone" },
+      { id: "d", title: "Scene D (no frame)", type: "scene", playable: false, media: null, preview: null, frameUrl: null, contentrating: "Everyone" },
+      // e is PG13 and must be excluded under the default Everyone filter.
+      { id: "e", title: "PG13 E", type: "web", playable: true, media: "/wallpaper-engine/media/pg", preview: null, contentrating: "PG13" },
     ],
   }),
 });
@@ -198,6 +203,7 @@ setTimeout(() => {
       console.log('page 1 shows first wallpaper (Wall 0):', page1Text.includes('Wall 0'));
       console.log('page 1 does NOT show page-2 item (Wall 30):', !page1Text.includes('Wall 30'));
       console.log('scene D (no frameUrl) excluded from grid:', !page1Text.includes('Scene D'));
+      console.log('pg13 wallpaper excluded under default Everyone filter:', !page1Text.includes('PG13 E'));
       // Flip to page 2 → 33 - 24 = 9 wallpapers + close card = 10.
       clickPager(tree, '下一页 ›');
       try { tree = pickerRenders[0](); } catch (e) { renderError = e && e.message; }
