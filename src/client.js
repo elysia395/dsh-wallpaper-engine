@@ -2313,7 +2313,7 @@ const CSS = `
     border-radius: 8px;
   }
   /* Wallpaper thumbnail grid (main picker).
-     Cards use a FIXED height + absolutely-positioned filling <img>, never
+     Cards use a FIXED height + absolutely-positioned filling image, never
      aspect-ratio: some browsers (old Chromium/WebView) ignore aspect-ratio on
      cards and let percentage-height images resolve to their intrinsic size,
      which made previews bleed over the row above. inset:0 + overflow:hidden
