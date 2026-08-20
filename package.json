@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-wallpaper-engine",
-  "version": "0.3.6",
+  "version": "0.3.7",
   "description": "Wallpaper Engine backgrounds for the DSH web GUI: render your local Wallpaper Engine Video/Web wallpapers behind the chat, Scene wallpapers as extracted static frames, with iOS-style liquid glass, adjustable scrim/border/blur, and a customizable accent color + glass transparency for the whole settings window.",
   "type": "module",
   "engines": {
