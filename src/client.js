@@ -586,7 +586,8 @@ function revalidateSelection() {
     if (first) selection.id = first.id;
   }
   applySelection(selection.id);
-  emit();
+  // applySelection already emits; the trailing emit() here was a redundant
+  // second render on every filter change. Removed.
 }
 
 // ── Rotation groups (user-defined carousel lists) ───────────────────────────
@@ -901,6 +902,12 @@ async function changeUploadDir(dir, migrate) {
     if (!res.ok) throw new Error(data.error || ("HTTP " + res.status));
     selection.editingUploadDir = false;
     selection.uploadDirDraft = "";
+    // Surface partial-migration failures (the host reports which files it could
+    // not move — usually a cross-volume lock or permission issue) so the user
+    // knows some wallpapers did not follow the directory change.
+    if (Array.isArray(data.migrationErrors) && data.migrationErrors.length) {
+      selection.uploadNote = "存储位置已更改，但 " + data.migrationErrors.length + " 个文件未能迁移，请手动检查旧目录";
+    }
     await loadInventory();
   } catch (err) {
     selection.uploadError = STR.changeFailed + (err && err.message ? err.message : err);
@@ -1516,6 +1523,13 @@ function WallpaperPicker() {
                         tabIndex: 0,
                         title: w.title,
                         onClick: () => applySelection(w.id),
+                        // Keyboard parity with the normal-grid cards: the card
+                        // carries role="button" + tabIndex 0, so Enter/Space
+                        // must activate it too (without this, keyboard users
+                        // cannot restore a hidden wallpaper).
+                        onKeyDown: (e) => {
+                          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); }
+                        },
                       },
                       w.preview
                         ? React.createElement("img", {

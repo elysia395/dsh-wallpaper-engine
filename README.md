@@ -45,13 +45,15 @@
 3. 在 DSH webserver 注册同源 HTTP 路由（见下文契约表）；
 4. 管理自定义上传目录（迁移、持久化）与场景静态帧磁盘缓存。
 
-库存计算带 **5 秒 TTL 缓存**（`?refresh=1` 强制重扫），注册表探测结果进程内只查一次。
+库存计算带 **5 秒 TTL 缓存**（`?refresh=1` 强制重扫），注册表探测结果进程内只查一次。每次库存计算开头清理 token→路径映射表，避免长会话下无界增长（token 是路径的确定性 base64url，下次扫描自动重新生成）。
 
 ### Client 端（`src/client.js` → `lib/client.js`）
 
 浏览器模块（`window.__ModuleLoader__.load({ id, factory })` 外壳）。规范源文件是 `src/client.js` + `src/client.css`，由 `scripts/build-client.mjs` 拼接生成编译产物 `lib/client.js`。**不要手改 `lib/client.js`。**
 
 职责：拉取库存 → 把选中壁纸渲染到应用三列后方的固定图层（`position:fixed; z-index:-2`）+ 遮罩层 → 注册一级设置页「Wallpaper Engine」。全部用户偏好保存在浏览器 `localStorage`（键 `dsh-wallpaper-engine:selection`）。
+
+> **渲染分辨率**：壁纸的模糊（`filter: blur`）和镜像/缩放补偿（`transform`）都挂在**父容器 `.we-layer`** 上，而非媒体元素本身。直接在全屏 video/img 上叠 filter + transform 会触发 Chromium 对该合成层降采样（0.5–0.75x）以省 GPU 显存，是「壁纸变糊」的主因。把效果挪到固定尺寸的父容器、并加 `will-change` / `backface-visibility: hidden` / `contain` 强制全 DPR 栅格化，可保持原生分辨率。
 
 ## HTTP 契约（Host ↔ Browser，同源）
 
@@ -60,7 +62,7 @@
 | GET | `/wallpaper-engine/inventory` | `?refresh=1` 强制重扫 | JSON 库存 | 5s TTL 缓存；`no-store` |
 | GET | `/wallpaper-engine/media/<token>` | `Range` 头 | 视频 / HTML 流 | 206/416/304；`nosniff` |
 | GET | `/wallpaper-engine/preview/<token>` | `Range` 头 | 预览图流 | 同上 |
-| GET | `/wallpaper-engine/scene-frame/<token>` | — | JPEG / PNG | 按 `<版本>_<路径>_<mtime>` 磁盘缓存 |
+| GET | `/wallpaper-engine/scene-frame/<token>` | `If-None-Match` | JPEG / PNG / 304 | 按 `<版本>_<路径>_<mtime>` 磁盘缓存；并发请求共享一次提取；带 ETag |
 | POST | `/wallpaper-engine/upload` | `?title=`；body 原始字节；`Content-Type` 白名单 | 壁纸条目 | 512MB 上限；流式落盘；SHA-256 去重 |
 | POST | `/wallpaper-engine/remove` | JSON `{ id }` | `{ removed }` | 仅限 `up-*` 文件 |
 | POST | `/wallpaper-engine/upload-dir` | JSON `{ dir, migrate? }` | 迁移统计 | 绝对路径（支持 `~`）；配置写入失败会报错 |
@@ -92,9 +94,10 @@
 ## 场景静态帧：工作原理
 
 - **读取**：解析 `scene.pkg`（PKGV 容器 + LZ4 条目链）或松散 `scene.json` 目录；从第一个 image 对象出发定位主纹理，其余 .tex 按「艺术图可能性」评分兜底（内嵌 JPEG/PNG 最高分，mask/effect/depth 降权，R8/RG88 灰度几乎排除）。
-- **解码**：TEX 容器（TEXV0005/TEXI0001、TEXB0001-4）→ **RGBA8888 / R8 / RG88 / DXT1 / DXT3 / DXT5**，以及 **WE 内嵌 JPEG / PNG**（原样直出）。
+- **解码**：TEX 容器（TEXV0005/TEXI0001、TEXB0001-4）→ **RGBA8888 / R8 / RG88 / DXT1 / DXT3 / DXT5**，以及 **WE 内嵌 JPEG / PNG**（原样直出）。提取时**按像素面积选择最大 mipmap**（非盲目取 mip 0），避免个别纹理 mip 顺序非标准导致取到缩小帧、损失分辨率。
 - **质量门**：灰度 >88% 或纯色（方差 <3）的帧被拒绝并尝试下一候选；全部失败回退项目 `preview.jpg`。
-- **缓存**：`<版本>_<路径>_<mtime>` 键控；工坊更新自动失效。
+- **并发去重**：选择器一次打开会触发多张场景卡的帧请求，相同场景的并发请求**共享一次 LZ4/TEX 解析**（in-flight promise 表），避免对同一个多 MB 的 `scene.pkg` 重复解码。磁盘读取走 `fs/promises` 异步 IO，不阻塞 webserver 事件循环。
+- **缓存**：`<版本>_<路径>_<mtime>` 键控；工坊更新自动失效。响应带 `ETag` + `Cache-Control: no-cache`，浏览器跨多次打开选择器可走 `If-None-Match → 304` 复用已缓存的帧，避免重复下载。
 - **限制**：BC7 / RGB565 / 16 位浮点无法解码（回退预览图）；静态帧 ≠ 3D 渲染。
 
 ## 安装
@@ -180,3 +183,17 @@ ffmpeg -i docs/images/vinyl-record.gif -c:v libwebp -lossless 0 docs/images/viny
 ## 贡献
 
 改动请遵循：先改 `src/` 再 `npm run build`；提交前跑 `npm test`。MIT License（见 [LICENSE](LICENSE)）。
+
+## 更新日志
+
+### 未发布
+
+- **壁纸渲染分辨率**：把 `filter: blur` 和镜像/缩放 `transform` 从媒体元素挪到父容器 `.we-layer`，并加 `will-change` / `backface-visibility: hidden` / `contain` 强制全 DPR 栅格化——修复全屏 video/img 叠 filter+transform 触发 Chromium 合成层降采样导致「壁纸变糊」的问题。
+- **场景帧分辨率**：`decodeTex` 改为按像素面积选最大 mipmap（非盲取 mip 0），修复个别 WE 纹理 mip 顺序非标准时取到缩小帧的分辨率损失。
+- **修复内存泄漏**：每次库存计算清理 token→路径映射表（`mediaMap`），避免长会话下随刷新次数无界增长。
+- **修复进程崩溃**：scene-frame 路由的并发提取去重改用双参数 `.then(cleanup, cleanup)` 而非 `.finally()`，避免提取失败时产生未处理 rejection 被 dsh 当致命错误杀掉进程。
+- **场景帧并发提取去重**：选择器一次打开多张场景卡时，相同场景共享一次 LZ4/TEX 解析（in-flight promise 表）。
+- **场景帧异步 IO**：`scene.pkg` 磁盘读取改用 `fs/promises`，不阻塞 webserver 事件循环。
+- **场景帧条件请求**：响应带 `ETag` + `Cache-Control: no-cache`，浏览器跨多次打开选择器可走 `If-None-Match → 304` 复用缓存帧。
+- **键盘可达性**：「已隐藏」tab 的壁纸卡片补 Enter/Space 激活处理（原仅鼠标可点）。
+- **迁移失败可见**：更改存储位置时若有文件未能迁移，UI 显示具体数量提示，不再静默吞错。

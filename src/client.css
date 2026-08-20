@@ -1,16 +1,36 @@
   /* Wallpaper layer: a fixed child of <body>, sunk BELOW the app frame. */
   .we-layer { position: fixed; inset: 0; z-index: -2; overflow: hidden; pointer-events: none; }
-  /* Blurring via CSS filter darkens/thins the edges, so the layer is scaled up
-     (--we-wallpaper-scale tracks blur) to hide the transparent fringe the blur
-     would otherwise reveal at the viewport edges. */
+  /* The MEDIA element itself stays transform/filter-free: any transform or
+     filter on a full-viewport video/img makes Chromium downsample its
+     composited layer to 0.5–0.75x resolution (GPU memory saving), which is
+     the single biggest source of perceived "壁纸变糊". So:
+       - the blur lives on the WRAPPER (.we-layer), not the media — blurring
+         a fixed-size wrapper does NOT trigger the media's own layer
+         downsampling, and the wrapper is already sized to the viewport so it
+         is rasterized at full DPR;
+       - the mirror (scaleX) + the blur-edge compensation scale move onto
+         the wrapper too, composed with the blur so the fringe stays hidden;
+       - the media keeps only properties that do not create a separate layer.
+     `image-rendering: auto` + a high-quality hint steer the compositor to
+     bilinear (not nearest) for scene frames and uploaded stills. */
+  .we-layer {
+    filter: blur(var(--we-wallpaper-blur, 0px));
+    /* Flip composes with the blur-compensation scale on the SAME transform
+       (scaleX(-1) mirrors around the center; pure compositor work). Applied
+       on the WRAPPER so the media pixel buffer stays at native resolution. */
+    transform: scale(var(--we-wallpaper-scale, 1)) scaleX(var(--we-wallpaper-flip, 1));
+    transform-origin: center;
+    /* Promote to a dedicated composited layer and lock it to full-DPR
+       rasterization. Without this, full-screen + transform layers are
+       heuristic-downsampled on weaker GPUs. */
+    will-change: transform, filter;
+    backface-visibility: hidden;
+    contain: layout paint;
+  }
   .we-layer .we-media {
     width: 100%; height: 100%; object-fit: cover; display: block;
     background: transparent; border: 0;
-    filter: blur(var(--we-wallpaper-blur, 0px));
-    /* Flip composes with the blur-compensation scale on the SAME transform
-       (scaleX(-1) mirrors around the center; pure compositor work). */
-    transform: scale(var(--we-wallpaper-scale, 1)) scaleX(var(--we-wallpaper-flip, 1));
-    transform-origin: center;
+    image-rendering: auto;
   }
   /* Custom uploads: the user-chosen fit mode (覆盖/填充/居中/拉伸). WE media
      keeps cover above; only .we-media--fit reads the variable. */

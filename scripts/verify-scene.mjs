@@ -380,8 +380,13 @@ function fakeRes() {
  *  stream to finish (the scene-frame handler kicks off an async IIFE that
  *  pipes a file stream into res). */
 async function runHandler(route, url) {
+  return runHandlerWithHeaders(route, url, {});
+}
+/** Invoke a route handler with an optional set of request headers (used to
+ *  exercise the conditional-GET / If-None-Match branch). */
+async function runHandlerWithHeaders(route, url, headers) {
   const res = fakeRes();
-  const done = route.handler(fakeReq(url), res);
+  const done = route.handler({ url, headers, method: 'GET' }, res);
   if (done && typeof done.then === 'function') await done;
   if (!res.__state.ended) {
     await new Promise((resolveFn) => {
@@ -416,6 +421,21 @@ if (token) {
   // Second call must hit the cache (handler still returns the payload).
   const secondRes = await runHandler(sceneRoute, '/wallpaper-engine/scene-frame/' + token);
   check('scene-frame cache-hit returns payload', secondRes.__state.status === 200 && secondRes.__state.body.equals(firstRes.__state.body), secondRes.__state.body.length + 'B');
+
+  // Conditional GET: re-send with the ETag the first response set → expect
+  // 304 with an empty body. Guards the ETag/If-None-Match branch that lets
+  // the browser reuse its cached frame across picker reopens.
+  const etag = firstRes.__state.headers['ETag'] || firstRes.__state.headers['etag'];
+  if (etag) {
+    const condRes = await runHandlerWithHeaders(sceneRoute, '/wallpaper-engine/scene-frame/' + token, { 'if-none-match': etag });
+    check('scene-frame If-None-Match → 304', condRes.__state.status === 304 && condRes.__state.body.length === 0, 'status=' + condRes.__state.status + ' ' + condRes.__state.body.length + 'B');
+  }
+
+  // Cache-Control must be revalidation-friendly (no-cache), NOT no-store: a
+  // no-store header would force the browser to re-download the frame on every
+  // single picker open even though it is byte-identical and on-disk cached.
+  const cc = (firstRes.__state.headers['Cache-Control'] || firstRes.__state.headers['cache-control'] || '').toLowerCase();
+  check('scene-frame Cache-Control allows revalidation', cc.includes('no-cache') || cc.includes('max-age') || cc.includes('public'), cc || '(none)');
 }
 
 // C: error paths
