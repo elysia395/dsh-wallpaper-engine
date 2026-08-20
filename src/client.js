@@ -397,6 +397,10 @@ function playableInventory() {
 // selected categories; when rotation is on and nothing matches, pick the next
 // candidate instead of stopping playback.
 function revalidateSelection() {
+  // Empty inventory = the scan hasn't finished / the host isn't ready yet
+  // (boot, bundle update, WSL mount lag). Keep the saved selection instead of
+  // wiping it — re-validation runs again on the next successful refresh.
+  if (selection.inventory.wallpapers.length === 0) return;
   if (selection.id && !selection.inventory.wallpapers.some((w) => w.id === selection.id && isRotatableWallpaper(w))) {
     selection.id = "";
     persistSelection();
