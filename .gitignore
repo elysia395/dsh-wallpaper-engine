@@ -3,3 +3,5 @@ node_modules/
 *.tgz
 .playwright-mcp/
 .npm/
+.test-cache/
+scene-diagnosis.tsv

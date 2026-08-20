@@ -1,7 +1,7 @@
 {
   "name": "dsh-plugin-wallpaper-engine",
-  "version": "0.1.6",
-  "description": "Wallpaper Engine backgrounds for the DSH web GUI: render your local Wallpaper Engine Video/Web wallpapers behind the chat, with iOS-style liquid glass, adjustable scrim/border/blur.",
+  "version": "0.3.5",
+  "description": "Wallpaper Engine backgrounds for the DSH web GUI: render your local Wallpaper Engine Video/Web wallpapers behind the chat, Scene wallpapers as extracted static frames, with iOS-style liquid glass, adjustable scrim/border/blur, and a customizable accent color + glass transparency for the whole settings window.",
   "type": "module",
   "engines": {
     "node": ">=24"
@@ -39,6 +39,7 @@
   "files": [
     "lib/index.js",
     "lib/client.js",
+    "lib/pkg-extract.js",
     "lib/types/index.d.ts",
     "lib/types/client.d.ts",
     "cordis.patch.yml",
