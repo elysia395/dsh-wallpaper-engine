@@ -53,7 +53,7 @@ const localStorage = {
     rotationGroupId: 'g1',
     rotationEnabled: true,
     rotationGroups: [
-      { id: 'g1', name: 'My list', interval: 5, order: 'sequence', wallpaperIds: ['a', 'b', 'c'] },
+      { id: 'g1', name: 'My list', interval: 5, order: 'sequence', wallpaperIds: ['a', 'b'] },
     ],
   }) },
   getItem(k) { return this._store[k] ?? null; },
@@ -62,14 +62,24 @@ const localStorage = {
 const fetch = () => Promise.resolve({
   ok: true, status: 200,
   json: () => Promise.resolve({
-    installDir: "D:/we", total: 3, portableCount: 2,
+    installDir: "D:/we", total: 34, portableCount: 33,
     playlists: [
       { id: "p1", name: "Test playlist", order: "sequence", wallpaperIds: ["a", "b", "c"], total: 3, portableCount: 2 },
     ],
     wallpapers: [
-      { id: "a", title: "Video A", type: "video", playable: true, media: "/wallpaper-engine/media/xyz", preview: null },
-      { id: "b", title: "Video B", type: "video", playable: true, media: "/wallpaper-engine/media/def", preview: null },
-      { id: "c", title: "Scene C", type: "scene", playable: false, media: null, preview: null },
+      // 30 synthetic videos force pagination (33 playable cards → 2 pages at 24/page).
+      // All carry contentrating "Everyone" so they stay visible under the
+      // default Everyone filter.
+      ...Array.from({ length: 30 }, (_, i) => ({
+        id: "w" + i, title: "Wall " + i, type: "video", playable: true, media: "/wallpaper-engine/media/w" + i, preview: null,
+        contentrating: "Everyone",
+      })),
+      { id: "a", title: "Video A", type: "video", playable: true, media: "/wallpaper-engine/media/xyz", preview: null, contentrating: "Everyone" },
+      { id: "b", title: "Video B", type: "video", playable: true, media: "/wallpaper-engine/media/def", preview: null, contentrating: "Everyone" },
+      { id: "c", title: "Scene C", type: "scene", playable: false, media: null, preview: "/wallpaper-engine/preview/ccc", frameUrl: "/wallpaper-engine/scene-frame/ccc", contentrating: "Everyone" },
+      { id: "d", title: "Scene D (no frame)", type: "scene", playable: false, media: null, preview: null, frameUrl: null, contentrating: "Everyone" },
+      // e is PG13 and must be excluded under the default Everyone filter.
+      { id: "e", title: "PG13 E", type: "web", playable: true, media: "/wallpaper-engine/media/pg", preview: null, contentrating: "PG13" },
     ],
   }),
 });
@@ -118,6 +128,12 @@ try { exportsObj.apply(ctx); } catch (e) { thrown = e && e.message; }
 console.log('apply threw:', thrown || '(none)');
 console.log('slot registrations:', JSON.stringify(registrations));
 
+const sectionReg = registrations.find((r) => r.key === 'settings.section');
+console.log('registered as first-level settings.section:', !!sectionReg);
+console.log('section id:', sectionReg ? sectionReg.id : '(missing)');
+console.log('section label:', sectionReg ? sectionReg.label : '(missing)');
+console.log('no longer registered as general item:', !registrations.some((r) => r.key === 'settings.general.item'));
+
 setTimeout(() => {
   console.log('body children ids:', JSON.stringify(bodyEl.children.map((c) => c.id)));
   console.log('has wallpaper layer:', !!document.getElementById('dsh-wallpaper-engine-layer'));
@@ -129,6 +145,10 @@ setTimeout(() => {
   console.log('--we-blur:', JSON.stringify(p['--we-blur']));
   console.log('--we-wallpaper-blur:', JSON.stringify(p['--we-wallpaper-blur']));
   console.log('--we-wallpaper-scale:', JSON.stringify(p['--we-wallpaper-scale']));
+  console.log('--we-accent:', JSON.stringify(p['--we-accent']));
+  console.log('--we-glass-alpha:', JSON.stringify(p['--we-glass-alpha']));
+  console.log('--we-glass-color:', JSON.stringify(p['--we-glass-color']));
+  console.log('body[data-we-glass-window] (default on):', JSON.stringify(bodyEl.attributes['data-we-glass-window']));
   const timer = rotationTimers.find((item) => !item.cleared);
   console.log('rotation timer scheduled:', !!timer, timer ? timer.ms : null);
   if (timer) {
@@ -147,6 +167,40 @@ setTimeout(() => {
     try { tree = pickerRenders[0](); } catch (e) { renderError = e && e.message; }
     console.log('picker render threw:', renderError || '(none)');
     if (tree) {
+      // First-level section wrapper: ul.we-picker__section-list > li glass card.
+      const rootUl = tree.type === 'ul' ? tree : null;
+      const rootCls = typeof tree.props?.className === 'string' ? tree.props.className : '';
+      console.log('section wrapper is ul.we-picker__section-list:', rootUl && rootCls.includes('we-picker__section-list'));
+      const liChildren = rootUl ? (Array.isArray(rootUl.children) ? rootUl.children : []) : [];
+      const li = liChildren.find((n) => n && typeof n === 'object' && typeof n.props?.className === 'string' && n.props.className.includes('we-picker__card-shell'));
+      console.log('glass card shell (li.we-picker__card-shell) present:', !!li);
+      const treeText = JSON.stringify(tree);
+      console.log('card head (we-picker__card-head) present:', treeText.includes('we-picker__card-head'));
+      console.log('card name "Wallpaper Engine":', treeText.includes('Wallpaper Engine'));
+      console.log('accent preset swatches (expect 6):', (treeText.match(/"aria-label":"配色 /g) || []).length);
+      console.log('glass-color preset swatches (expect 6):', (treeText.match(/"aria-label":"玻璃颜色 /g) || []).length);
+      console.log('glass color custom input present:', treeText.includes('自定义玻璃颜色'));
+      console.log('custom color input present:', treeText.includes('type":"color"'));
+      console.log('glass transparency slider row present:', treeText.includes('玻璃透明度'));
+      // 玻璃 slider now spans 0–60 px (was 0–40): assert the raised max on the
+      // 玻璃 range input (label "玻璃", max 60) so the range stays in sync.
+      const glassSlider = (() => {
+        let hit = null;
+        (function walk(node) {
+          if (Array.isArray(node)) { node.forEach(walk); return; }
+          if (!node || typeof node !== 'object') return;
+          const cls = typeof node.props?.className === 'string' ? node.props.className : '';
+          const children = Array.isArray(node.children) ? node.children : [];
+          const label = children.find((c) => c && typeof c === 'object' && Array.isArray(c.children) && c.children.includes('玻璃'));
+          if (cls.includes('we-picker__slider-row') && label) hit = node;
+          if (Array.isArray(node.children)) node.children.forEach(walk);
+        })(tree);
+        return hit;
+      })();
+      const sliderMax = glassSlider ? JSON.stringify(glassSlider).match(/"max":"(\d+)"/)?.[1] : null;
+      console.log('玻璃 slider max (expect 60):', sliderMax);
+      console.log('whole-window glass master switch present:', treeText.includes('设置窗口液态玻璃'));
+      console.log('window glass hint present:', treeText.includes('整个设置窗口'));
       // The thumbnail grid lives inside the picker MODAL now (settings page
       // shows only the summary + "选择壁纸" trigger). Open the modal by
       // invoking the trigger button's onClick, re-render, then count cards.
@@ -162,16 +216,47 @@ setTimeout(() => {
         try { openBtn[0].props.onClick(); } catch (e) { console.log('open modal onClick threw:', e && e.message); }
       }
       try { tree = pickerRenders[0](); } catch (e) { renderError = e && e.message; }
-      const cards = [];
-      (function walk2(node) {
-        if (Array.isArray(node)) { node.forEach(walk2); return; }
-        if (!node || typeof node !== 'object') return;
-        const cls = typeof node.props?.className === 'string' ? node.props.className : '';
-        if (cls === 'we-picker__card' || cls === 'we-picker__card we-picker__card--selected') cards.push(node);
-        if (Array.isArray(node.children)) node.children.forEach(walk2);
-      })(tree);
-      console.log('modal grid cards (expect 3: close + a + b):', cards.length);
-      console.log('scene wallpaper excluded from grid:', !JSON.stringify(cards).includes('Scene C'));
+      const collectCards = (root) => {
+        const cards = [];
+        (function walk2(node) {
+          if (Array.isArray(node)) { node.forEach(walk2); return; }
+          if (!node || typeof node !== 'object') return;
+          const cls = typeof node.props?.className === 'string' ? node.props.className : '';
+          if (cls === 'we-picker__card' || cls === 'we-picker__card we-picker__card--selected') cards.push(node);
+          if (Array.isArray(node.children)) node.children.forEach(walk2);
+        })(root);
+        return cards;
+      };
+      const clickPager = (root, label) => {
+        let hit = null;
+        (function walk(node) {
+          if (Array.isArray(node)) { node.forEach(walk); return; }
+          if (!node || typeof node !== 'object') return;
+          const cls = typeof node.props?.className === 'string' ? node.props.className : '';
+          if (cls.includes('we-picker__btn') && Array.isArray(node.children) && node.children.length === 1 && node.children[0] === label) hit = node;
+          if (Array.isArray(node.children)) node.children.forEach(walk);
+        })(root);
+        if (hit && typeof hit.props.onClick === 'function') { try { hit.props.onClick(); } catch (e) { console.log('pager click threw:', e && e.message); } }
+        return hit;
+      };
+      // Page 1: 33 playable wallpapers → 2 pages @ 24; grid = close card + 24.
+      let cards = collectCards(tree);
+      console.log('page 1 cards (expect 25: close + 24):', cards.length);
+      console.log('pager rendered (pages > 1):', JSON.stringify(tree).includes('we-picker__pager'));
+      const page1Text = JSON.stringify(cards);
+      console.log('page 1 shows first wallpaper (Wall 0):', page1Text.includes('Wall 0'));
+      console.log('page 1 does NOT show page-2 item (Wall 30):', !page1Text.includes('Wall 30'));
+      console.log('scene D (no frameUrl) excluded from grid:', !page1Text.includes('Scene D'));
+      console.log('pg13 wallpaper excluded under default Everyone filter:', !page1Text.includes('PG13 E'));
+      // Flip to page 2 → 33 - 24 = 9 wallpapers + close card = 10.
+      clickPager(tree, '下一页 ›');
+      try { tree = pickerRenders[0](); } catch (e) { renderError = e && e.message; }
+      cards = collectCards(tree);
+      console.log('page 2 cards (expect 10: close + 9):', cards.length);
+      const page2Text = JSON.stringify(cards);
+      console.log('page 2 shows last wallpaper (Wall 29):', page2Text.includes('Wall 29'));
+      console.log('page 2 no longer shows page-1 item (Wall 0):', !page2Text.includes('Wall 0'));
+      console.log('scene C (frameUrl) in grid:', page2Text.includes('Scene C'));
     }
   }
   console.log('effects ran:', effects.length);

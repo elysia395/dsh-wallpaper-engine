@@ -68,7 +68,68 @@ const DEFAULTS = {
   // Fit mode for CUSTOM-uploaded wallpapers only (WE wallpapers keep cover):
   // 覆盖=cover · 填充=contain · 居中=center · 拉伸=fill (one object-fit var).
   objectFit: "cover",
+  // Content-rating filter, reproducing Wallpaper Engine's own rating taxonomy
+  // (project.json `contentrating`: "Everyone" / "PG13" / "Mature" — WE's
+  // workshop tags G / PG13 / R; projects without the field are "unrated").
+  // "everyone" is the default, matching WE's conservative first-run stance.
+  contentRatingFilter: "everyone",
+  // Wallpaper-type filter (all / video / web / image / scene). "all" disables it.
+  typeFilter: "all",
+  // Thumbnail-card style: "classic" (WE's original aspect-ratio 16/9 cards —
+  // the CD-like look the author liked; can overlap in older browsers) or
+  // "fixed" (rewritten fixed-height cards that never overlap). The vinyl
+  // record next to the selection is shown in BOTH styles (here + modal head).
+  pickerLayout: "fixed",
+  // Settings-page liquid-glass theming:
+  // - accent: the plugin's own accent color (#rrggbb), written to --we-accent
+  //   and consumed by buttons/sliders/selected cards/badges/glass highlights —
+  //   independent of the shell's theme brand token.
+  // - glassAlpha: glass-surface transparency in % (0–60, step 5), written to
+  //   --we-glass-alpha and used by the settings window, settings card, composer
+  //   card, bubbles and sidebar panels. Higher = MORE transparent (clearer
+  //   wallpaper shows through), lower = closer to solid.
+  // - glassColor: the GLASS BASE COLOR of the settings window (#rrggbb),
+  //   written to --we-glass-color. Defaults keep the stock look (white glass
+  //   in light mode, deep navy in dark); once the user picks a color BOTH
+  //   themes use it, so the window glass can be tinted to taste.
+  // - glassWindow: master switch for the WHOLE native settings window — when
+  //   on, the dialog (nav + every native section: General/Models/Plugins/…)
+  //   becomes liquid glass with the accent + transparency above; off restores
+  //   the shell's stock look.
+  accent: "#4f8cff",
+  glassAlpha: 12,
+  glassColor: "#ffffff",
+  glassWindow: true,
 };
+
+// Selectable values for the two filters. Declared up top because
+// readPersisted() validates against them at module load (const TDZ).
+const RATING_VALUES = ["all", "everyone", "pg13", "mature", "unrated"];
+const TYPE_VALUES = ["all", "video", "web", "image", "scene"];
+
+// 配色 presets for the settings-page liquid-glass theme. The accent drives
+// buttons/sliders/selected cards/badges and the glass sheen via --we-accent;
+// users can also pick any color with the native <input type="color">.
+const ACCENT_PRESETS = [
+  "#4f8cff", // 经典蓝 (default)
+  "#67DCE7", // 冰青 (summer-liquid-glass primary)
+  "#DD8FAC", // 玫瑰粉 (summer-liquid-glass brand)
+  "#F3B75F", // 琥珀金
+  "#F1717F", // 珊瑚红
+  "#CBE77D", // 黄绿 (success)
+];
+
+// 玻璃颜色 presets for the settings-window glass BASE tint (--we-glass-color).
+// The first two are the stock-look defaults (white in light mode, deep navy in
+// dark); picking any preset (or a custom color) tints the glass in BOTH themes.
+const GLASS_COLOR_PRESETS = [
+  "#ffffff", // 白（浅色默认）
+  "#0d1524", // 深夜蓝（深色默认）
+  "#67DCE7", // 冰青
+  "#DD8FAC", // 玫瑰粉
+  "#F3B75F", // 琥珀金
+  "#F1717F", // 珊瑚红
+];
 
 // ── Persisted selection ─────────────────────────────────────────────────────
 function clampNum(v, lo, hi, fallback) {
@@ -108,7 +169,7 @@ function readPersisted() {
       id: typeof o.id === "string" ? o.id : "",
       scrim: clampNum(o.scrim, 0, 1, DEFAULTS.scrim),
       border: clampNum(o.border, 0, 1, DEFAULTS.border),
-      blur: clampNum(o.blur, 0, 40, DEFAULTS.blur),
+      blur: clampNum(o.blur, 0, 60, DEFAULTS.blur),
       wallpaperBlur: clampNum(o.wallpaperBlur, 0, 60, DEFAULTS.wallpaperBlur),
       rotationEnabled: o.rotationEnabled === true,
       rotationGroupId: typeof o.rotationGroupId === "string" ? o.rotationGroupId : "",
@@ -121,6 +182,17 @@ function readPersisted() {
       flip: o.flip === true,
       objectFit: ["cover", "contain", "center", "fill"].includes(o.objectFit)
         ? o.objectFit : DEFAULTS.objectFit,
+      contentRatingFilter: RATING_VALUES.includes(o.contentRatingFilter)
+        ? o.contentRatingFilter : DEFAULTS.contentRatingFilter,
+      typeFilter: TYPE_VALUES.includes(o.typeFilter)
+        ? o.typeFilter : DEFAULTS.typeFilter,
+      pickerLayout: o.pickerLayout === "classic" ? "classic" : "fixed",
+      accent: typeof o.accent === "string" && /^#[0-9a-f]{6}$/i.test(o.accent)
+        ? o.accent : DEFAULTS.accent,
+      glassAlpha: clampNum(o.glassAlpha, 0, 60, DEFAULTS.glassAlpha),
+      glassColor: typeof o.glassColor === "string" && /^#[0-9a-f]{6}$/i.test(o.glassColor)
+        ? o.glassColor : DEFAULTS.glassColor,
+      glassWindow: o.glassWindow !== false,
     };
   } catch {
     return { id: "", ...DEFAULTS };
@@ -132,6 +204,7 @@ const selection = {
   ...readPersisted(),
   url: null,
   type: null,
+  previewUrl: null,
   playing: true,
   loading: false,
   rotationTimer: null,
@@ -144,6 +217,9 @@ const selection = {
   // lives as a tab inside the modal (see WallpaperPicker).
   batchMode: false,
   batchSelected: [],
+  page: 0,
+  hiddenPage: 0,
+  editorPage: 0,
   hiddenOpen: false,
   pickerOpen: false,
   modalView: "normal",
@@ -185,6 +261,13 @@ function persistSelection() {
       playbackRate: selection.playbackRate,
       flip: selection.flip,
       objectFit: selection.objectFit,
+      contentRatingFilter: selection.contentRatingFilter,
+      typeFilter: selection.typeFilter,
+      pickerLayout: selection.pickerLayout,
+      accent: selection.accent,
+      glassAlpha: selection.glassAlpha,
+      glassColor: selection.glassColor,
+      glassWindow: selection.glassWindow,
     }));
   } catch { /* ignore */ }
 }
@@ -218,6 +301,10 @@ async function loadInventory() {
   }
   selection.loading = false;
   selection.loaded = true;
+  // Fresh inventory → reset pagination (the list changed under the user).
+  selection.page = 0;
+  selection.hiddenPage = 0;
+  selection.editorPage = 0;
 
   // Rotation groups: validate the active one and seed a first group from a
   // playable Wallpaper Engine playlist when the user has none yet (so the
@@ -246,15 +333,75 @@ async function loadInventory() {
     persistSelection();
   }
 
-  // After a refresh, drop the selection if the chosen wallpaper vanished or is
-  // no longer playable (avoids a dangling media URL).
+  // Re-validate the selection against the refreshed inventory + filters (also
+  // covers the rating/type filters): drop vanished/no-longer-matching
+  // selections, then restore rotation state.
+  revalidateSelection();
+}
+
+// ── Content-rating + type filters ───────────────────────────────────────────
+// Reproduces Wallpaper Engine's own content categories (project.json
+// `contentrating`): "Everyone" (G) / "PG13" (parental guidance) / "Mature" (R);
+// projects without the field are "unrated". A separate type filter narrows the
+// playable types (video / web / image / scene static frame). Both are enforced
+// at the single choke point below, so the grid, the rotation editor, the
+// rotation candidates and the auto-selection all stay consistent. Matching is
+// case-insensitive and accepts common spellings so other local copies behave
+// the same.
+const ADULT_RATING_PATTERN = /^(mature|adult|adultonly|18\+|r18)$/i;
+const PG13_RATING_PATTERN = /^(pg13|pg-13|pg ?13|questionable)$/i;
+
+function ratingOf(w) {
+  const rating = typeof w.contentrating === "string" ? w.contentrating.trim() : "";
+  if (!rating) return "unrated";
+  if (/^(everyone|general|g)$/i.test(rating)) return "everyone";
+  if (PG13_RATING_PATTERN.test(rating)) return "pg13";
+  if (ADULT_RATING_PATTERN.test(rating)) return "mature";
+  return "unrated";
+}
+
+function matchesRatingFilter(w) {
+  const filter = selection.contentRatingFilter;
+  if (filter === "all") return true;
+  return ratingOf(w) === filter;
+}
+
+function matchesTypeFilter(w) {
+  const filter = selection.typeFilter;
+  if (filter === "all") return true;
+  return w.type === filter;
+}
+
+function isPlayableType(w) {
+  // "image" = user-uploaded still image (custom uploads, id prefix "up-").
+  // "scene" = WE scene wallpaper — usable as a static frame when the host
+  // served a frameUrl (extracted from its main texture).
+  if (!w) return false;
+  if (w.playable && (w.type === "video" || w.type === "web" || w.type === "image")) return true;
+  return w.type === "scene" && Boolean(w.frameUrl);
+}
+
+function isRotatableWallpaper(w) {
+  return isPlayableType(w) && matchesRatingFilter(w) && matchesTypeFilter(w);
+}
+
+function playableInventory() {
+  return selection.inventory.wallpapers.filter(
+    (w) => isRotatableWallpaper(w) && !isHiddenWallpaper(w.id),
+  );
+}
+
+// Re-validate the active selection against the current inventory + filters.
+// Called after a refresh AND after changing the rating/type filter: drop a
+// selection that vanished, is no longer playable, or no longer matches the
+// selected categories; when rotation is on and nothing matches, pick the next
+// candidate instead of stopping playback.
+function revalidateSelection() {
   if (selection.id && !selection.inventory.wallpapers.some((w) => w.id === selection.id && isRotatableWallpaper(w))) {
     selection.id = "";
     persistSelection();
   }
   if (selection.rotationEnabled && selection.id && !rotationCandidates().some((w) => w.id === selection.id)) {
-    // The current wallpaper left the active group's candidates (e.g. the user
-    // just hid it): switch to the next candidate instead of stopping playback.
     const first = rotationCandidates()[0];
     selection.id = first ? first.id : "";
     persistSelection();
@@ -265,17 +412,6 @@ async function loadInventory() {
   }
   applySelection(selection.id);
   emit();
-}
-
-function isRotatableWallpaper(w) {
-  // "image" = user-uploaded still image (custom uploads, id prefix "up-").
-  return Boolean(w && w.playable && (w.type === "video" || w.type === "web" || w.type === "image"));
-}
-
-function playableInventory() {
-  return selection.inventory.wallpapers.filter(
-    (w) => isRotatableWallpaper(w) && !isHiddenWallpaper(w.id),
-  );
 }
 
 // ── Rotation groups (user-defined carousel lists) ───────────────────────────
@@ -439,6 +575,7 @@ function applySelection(id) {
   if (!selection.id) {
     selection.url = null;
     selection.type = null;
+    selection.previewUrl = null;
     syncRotationTimer();
     emit();
     return;
@@ -447,12 +584,15 @@ function applySelection(id) {
   if (!w || !isRotatableWallpaper(w)) {
     selection.url = null;
     selection.type = null;
+    selection.previewUrl = null;
     syncRotationTimer();
     emit();
     return;
   }
-  selection.url = w.media;
+  selection.url = w.type === "scene" ? w.frameUrl : w.media;
   selection.type = w.type;
+  // Keep the preview around so a failed static frame can fall back to it.
+  selection.previewUrl = w.preview || null;
   syncRotationTimer();
   emit();
 }
@@ -596,9 +736,12 @@ async function changeUploadDir(dir, migrate) {
 
 // ── Behind-body layer: wallpaper + scrim (plain DOM, NOT a slot) ───────────
 function buildMedia(sel) {
+  // Scene wallpapers render as a static frame image (extracted by the host),
+  // exactly like an uploaded image — with a preview fallback on load failure.
+  const isStill = sel.type === "image" || sel.type === "scene";
   const media = sel.type === "video"
     ? document.createElement("video")
-    : sel.type === "image"
+    : isStill
       ? document.createElement("img")
       : document.createElement("iframe");
   // Custom uploads (id prefix "up-") get the user-chosen object-fit mode;
@@ -614,11 +757,18 @@ function buildMedia(sel) {
     // Native playbackRate — hardware-decoded, instant, no reload (and the
     // videos are muted anyway, so there is no audio to keep in sync).
     try { media.playbackRate = sel.playbackRate; } catch { /* ignore */ }
-  } else if (sel.type === "image") {
+  } else if (isStill) {
     media.src = sel.url;
     media.alt = "";
     media.draggable = false;
     media.className = "we-media" + fitClass;
+    // Scene frames are generated on demand; a failed extraction (e.g. an
+    // unsupported texture format) falls back to the project preview image.
+    if (sel.type === "scene" && sel.previewUrl) {
+      media.onerror = () => {
+        if (media.src !== sel.previewUrl) media.src = sel.previewUrl;
+      };
+    }
   } else {
     media.src = sel.url;
     media.setAttribute("frameborder", "0");
@@ -698,6 +848,30 @@ function applyEffects() {
   // Fit mode for custom uploads (consumed by .we-media--fit only).
   s.setProperty("--we-object-fit", selection.objectFit);
 
+  // Settings-page liquid-glass theming:
+  // - --we-accent: plugin-owned accent color; every fallback below that used
+  //   the shell's brand token (var(--dsw-alias-brand-primary, #4f8cff)) now
+  //   reads --we-accent first, so the 配色 control restyles the whole picker
+  //   and glass highlights without touching the shell theme.
+  s.setProperty("--we-accent", selection.accent);
+  // - --we-glass-alpha: white-overlay alpha of the glass surfaces. The 玻璃透明
+  //   度 slider semantics: higher = MORE transparent (clearer wallpaper shows
+  //   through), lower = closer to solid. 0% → ~0.25 (frosted, solid-ish),
+  //   60% → ~0.03 (nearly invisible glass). The 12% default ≈ the previous
+  //   hardcoded look (~0.15–0.2 white overlay).
+  const glassAlpha = Math.max(0.03, 0.25 - (selection.glassAlpha / 60) * 0.22);
+  s.setProperty("--we-glass-alpha", String(glassAlpha));
+  // - --we-glass-color: glass base tint of the settings window. The stock
+  //   defaults live in CSS (white glass light / deep navy dark); once the user
+  //   picks a color (玻璃颜色), both themes use it.
+  s.setProperty("--we-glass-color", selection.glassColor);
+  // - Master switch for the WHOLE native settings window: when on, the dialog
+  //   (nav + every native section) becomes liquid glass with the accent +
+  //   transparency above. Toggled instantly via a body attribute the scoped
+  //   CSS below keys on; off restores the shell's stock look.
+  if (selection.glassWindow) document.body.setAttribute("data-we-glass-window", "on");
+  else document.body.removeAttribute("data-we-glass-window");
+
   // Scrim immediacy: some composited/kiosk environments do not repaint a
   // z-index:-1 layer promptly when only an inherited CSS variable changes.
   // Write the resolved color DIRECTLY onto the scrim element's inline style and
@@ -724,6 +898,10 @@ function clearEffects() {
   s.removeProperty("--we-wallpaper-scale");
   s.removeProperty("--we-wallpaper-flip");
   s.removeProperty("--we-object-fit");
+  s.removeProperty("--we-accent");
+  s.removeProperty("--we-glass-alpha");
+  s.removeProperty("--we-glass-color");
+  document.body.removeAttribute("data-we-glass-window");
   const scrim = document.getElementById(SCRIM_ID);
   if (scrim) scrim.style.background = "";
 }
@@ -757,11 +935,57 @@ function SliderRow(label, min, max, step, value, onInput, suffix) {
   );
 }
 
+// ── Vinyl record (黑胶唱片) ─────────────────────────────────────────────────
+// A rotating record disc showing the SELECTED wallpaper's cover as the label —
+// the "CD player" presentation the author liked. Pure presentational: cover =
+// the current wallpaper's preview URL (or null), playing drives the spin.
+// Shown in BOTH settings layouts and in the picker modal head.
+function VinylRecord(props) {
+  const cover = props.cover;
+  const title = props.title || "未选择壁纸";
+  const playing = props.playing === true;
+  const sm = props.sm === true;
+  return React.createElement("div", {
+    className: "we-vinyl" +
+      (playing ? " we-vinyl--playing" : "") +
+      (sm ? " we-vinyl--sm" : ""),
+    title: title,
+  },
+    React.createElement("div", { className: "we-vinyl__cover" },
+      cover
+        ? React.createElement("img", {
+            src: cover, alt: "", loading: "lazy",
+            onError: (e) => { e.target.style.display = "none"; },
+          })
+        : React.createElement("span", { className: "we-vinyl__empty" }, "▦"),
+    ),
+    React.createElement("span", { className: "we-vinyl__hole" }),
+  );
+}
+
 function WallpaperPicker() {
   const sel = useStore();
   const onTogglePlay = () => { selection.playing = !selection.playing; emit(); };
   const onClear = () => applySelection("");
   const onRefresh = () => loadInventory();
+  // Filter changes: persist + re-validate so wallpapers outside the selected
+  // categories drop out of the grid/rotation immediately.
+  const onRatingFilterChange = (e) => {
+    selection.contentRatingFilter = e.target.value;
+    persistSelection();
+    revalidateSelection();
+  };
+  const onTypeFilterChange = (e) => {
+    selection.typeFilter = e.target.value;
+    persistSelection();
+    revalidateSelection();
+  };
+  // Card style: classic (CD-rack) vs fixed (overlap-proof).
+  const onLayoutChange = (value) => {
+    selection.pickerLayout = value;
+    persistSelection();
+    emit();
+  };
   const onGroupChange = (e) => {
     selection.rotationGroupId = e.target.value;
     if (selection.rotationEnabled) {
@@ -821,6 +1045,24 @@ function WallpaperPicker() {
   const onBlur = (px) => { selection.blur = px; persistSelection(); applyEffects(); emit(); };
   const onWallpaperBlur = (px) => { selection.wallpaperBlur = px; persistSelection(); applyEffects(); emit(); };
   const onPlaybackRate = (v) => { selection.playbackRate = v; persistSelection(); emit(); };
+  // 配色 (accent color) + 玻璃透明度 (glass transparency) + 玻璃颜色 (glass base
+  // tint): applied instantly through applyEffects() (--we-accent /
+  // --we-glass-alpha / --we-glass-color), persisted so the settings page keeps
+  // its custom look across reloads.
+  const onAccent = (hex) => {
+    if (!/^#[0-9a-f]{6}$/i.test(hex)) return;
+    selection.accent = hex;
+    persistSelection(); applyEffects(); emit();
+  };
+  const onGlassColor = (hex) => {
+    if (!/^#[0-9a-f]{6}$/i.test(hex)) return;
+    selection.glassColor = hex;
+    persistSelection(); applyEffects(); emit();
+  };
+  const onGlassAlpha = (pct) => {
+    selection.glassAlpha = clampNum(pct, 0, 60, DEFAULTS.glassAlpha);
+    persistSelection(); applyEffects(); emit();
+  };
 
   // Close the picker modal (ESC / backdrop / close buttons share this path).
   const closePicker = () => {
@@ -859,10 +1101,18 @@ function WallpaperPicker() {
   }
 
   const list = sel.inventory.wallpapers;
-  // Only playable Video/Web wallpapers are shown — Scene/Application cannot be
-  // embedded in the web UI, so hiding them keeps the grid useful. Hidden
-  // (soft-deleted) wallpapers leave this list and move to the 已隐藏 section.
+  // Only playable Video/Web/Image wallpapers are shown — Scene/Application
+  // cannot be embedded in the web UI, so hiding them keeps the grid useful.
+  // Hidden (soft-deleted) wallpapers leave this list and move to the 已隐藏
+  // section. The rating/type filters further narrow playableList.
   const playableList = list.filter((w) => isRotatableWallpaper(w) && !isHiddenWallpaper(w.id));
+  // Per-category counts for the two filter dropdowns (playable, non-hidden):
+  // they reflect what is actually available, independent of the active filters.
+  const basePlayable = list.filter((w) => isPlayableType(w) && !isHiddenWallpaper(w.id));
+  const ratingCount = (r) => basePlayable.filter((w) => ratingOf(w) === r).length;
+  const typeCount = (t) => basePlayable.filter((w) => w.type === t).length;
+  // CD-rack mode: compact one-page grid (no pagination) + stronger overlap.
+  const cdMode = sel.pickerLayout === "classic";
   const hiddenList = hiddenInventoryList();
   const current = list.find((w) => w.id === sel.id) || null;
   const uploadedList = list.filter(isUploadedWallpaper);
@@ -872,24 +1122,153 @@ function WallpaperPicker() {
   const playableCount = candidates.length;
   const editing = sel.editing;
   const INTERVALS = [1, 5, 10, 30, 60, 120];
-  return React.createElement("div", { className: "we-picker" },
-    // ── 当前壁纸: compact card (thumbnail + title + type) with the primary
-    //    "选择壁纸" action. The thumbnail grid lives in a modal (see below). ──
+
+  // ── Pagination: big libraries must not render every card at once (hundreds
+  //    of thumbnails per emit make the picker lag). Each list slices to one
+  //    page of PAGE_SIZE cards; the page number clamps automatically when the
+  //    list shrinks (hide/restore/refresh). ──
+  const PAGE_SIZE = 24;
+  function pageSlice(list, page) {
+    const pages = Math.max(1, Math.ceil(list.length / PAGE_SIZE));
+    const p = Math.min(Math.max(0, page | 0), pages - 1);
+    return { items: list.slice(p * PAGE_SIZE, (p + 1) * PAGE_SIZE), page: p, pages };
+  }
+  const normalPage = pageSlice(playableList, sel.page);
+  const hiddenPageView = pageSlice(hiddenList, sel.hiddenPage);
+  const editorPageView = pageSlice(playableInventory(), sel.editorPage);
+  const pagerRow = (count, page, pages, onPrev, onNext) =>
+    React.createElement("div", { className: "we-picker__pager" },
+      React.createElement("span", { className: "we-picker__hint" },
+        "共 " + count + " 个 · 第 " + (page + 1) + " / " + pages + " 页"),
+      React.createElement("button", {
+        className: "we-picker__btn", type: "button",
+        disabled: page <= 0,
+        onClick: onPrev,
+      }, "‹ 上一页"),
+      React.createElement("button", {
+        className: "we-picker__btn", type: "button",
+        disabled: page >= pages - 1,
+        onClick: onNext,
+      }, "下一页 ›"),
+    );
+
+  return React.createElement("div", { className: "we-picker", "data-we-cards": sel.pickerLayout },
+    // ── Card header (mirrors the skin-center's pluginCard header): plugin
+    //    name + live wallpaper count badge + description. ──
+    React.createElement("div", { className: "we-picker__card-head" },
+      React.createElement("span", { className: "we-picker__card-name" }, "Wallpaper Engine"),
+      React.createElement("span", { className: "we-picker__card-badge" }, String(playableList.length)),
+      React.createElement("span", { className: "we-picker__card-desc" }, "本地 Wallpaper Engine 壁纸 · 液态玻璃主题"),
+    ),
+    // ── 外观 (liquid-glass theming): 配色 presets + custom color, and the
+    //    glass 透明度 slider. Applied instantly via --we-accent /
+    //    --we-glass-alpha (applyEffects), persisted in localStorage. ──
+    React.createElement("div", { className: "we-picker__section" },
+      React.createElement("div", { className: "we-picker__section-head" },
+        React.createElement("span", { className: "we-picker__section-label" }, "外观"),
+      ),
+      React.createElement("div", { className: "we-picker__row we-picker__accent-row" },
+        React.createElement("span", { className: "we-picker__hint we-picker__label" }, "配色"),
+        ACCENT_PRESETS.map((hex) => React.createElement("button", {
+          key: hex,
+          className: "we-picker__swatch" + (sel.accent === hex ? " we-picker__swatch--active" : ""),
+          type: "button",
+          style: { background: hex },
+          title: hex,
+          onClick: () => onAccent(hex),
+          "aria-label": "配色 " + hex,
+        })),
+        React.createElement("label", { className: "we-picker__swatch-custom" },
+          React.createElement("input", {
+            type: "color",
+            value: sel.accent,
+            onInput: (e) => onAccent(e.target.value),
+            onChange: (e) => onAccent(e.target.value),
+            title: "自定义配色",
+          }),
+          React.createElement("span", { className: "we-picker__hint" }, "自定义"),
+        ),
+      ),
+      // 玻璃颜色: the settings-window glass BASE tint. Defaults keep the stock
+      // look (white light / deep navy dark); picking any preset or a custom
+      // color tints the whole window glass in BOTH themes.
+      React.createElement("div", { className: "we-picker__row we-picker__accent-row" },
+        React.createElement("span", { className: "we-picker__hint we-picker__label" }, "玻璃颜色"),
+        GLASS_COLOR_PRESETS.map((hex) => React.createElement("button", {
+          key: hex,
+          className: "we-picker__swatch" + (sel.glassColor === hex ? " we-picker__swatch--active" : ""),
+          type: "button",
+          style: { background: hex },
+          title: hex,
+          onClick: () => onGlassColor(hex),
+          "aria-label": "玻璃颜色 " + hex,
+        })),
+        React.createElement("label", { className: "we-picker__swatch-custom" },
+          React.createElement("input", {
+            type: "color",
+            value: sel.glassColor,
+            onInput: (e) => onGlassColor(e.target.value),
+            onChange: (e) => onGlassColor(e.target.value),
+            title: "自定义玻璃颜色",
+          }),
+          React.createElement("span", { className: "we-picker__hint" }, "自定义"),
+        ),
+      ),
+      SliderRow("玻璃透明度", 0, 60, 5, sel.glassAlpha, onGlassAlpha, sel.glassAlpha + "%"),
+      // 设置窗口液态玻璃 master switch: turns the WHOLE native settings window
+      // (nav + every native section, not just this page) into liquid glass with
+      // the accent + transparency above; off restores the stock shell look.
+      React.createElement("label", { className: "we-picker__rotation-toggle we-picker__window-toggle" },
+        React.createElement("input", {
+          type: "checkbox",
+          checked: sel.glassWindow,
+          onChange: (e) => {
+            selection.glassWindow = e.target.checked;
+            persistSelection();
+            applyEffects();
+            emit();
+          },
+        }),
+        "设置窗口液态玻璃",
+      ),
+      React.createElement("span", { className: "we-picker__hint" },
+        "整个设置窗口（含 General / 模型 / 插件等全部原生分区）跟随配色与透明度；关闭则恢复原生样式",
+      ),
+    ),
+    // ── Card-style switch: classic (WE's original aspect-ratio 16/9 cards —
+    //    the CD-like look the author liked) vs the rewritten fixed-height
+    //    cards that never overlap in older browsers. The vinyl record beside
+    //    the selection stays in BOTH styles (here + modal head). ──
+    React.createElement("div", { className: "we-picker__row" },
+      React.createElement("span", { className: "we-picker__hint we-picker__label" }, "紧凑布局"),
+      React.createElement("label", { className: "we-picker__switch", title: "紧凑 CD 架：层叠 + 一页到底" },
+        React.createElement("input", {
+          type: "checkbox",
+          checked: sel.pickerLayout === "classic",
+          onChange: (e) => onLayoutChange(e.target.checked ? "classic" : "fixed"),
+        }),
+        React.createElement("span", { className: "we-picker__switch-track" },
+          React.createElement("span", { className: "we-picker__switch-thumb" }),
+        ),
+      ),
+      React.createElement("span", { className: "we-picker__hint" },
+        sel.pickerLayout === "classic"
+          ? "CD 架：层叠 + 一页到底"
+          : "常规网格 · 分页"),
+    ),
+    // ── 当前壁纸: vinyl record beside the selection, in both card styles. ──
     React.createElement("div", { className: "we-picker__section" },
       React.createElement("div", { className: "we-picker__current" },
-        current && current.preview
-          ? React.createElement("img", {
-              className: "we-picker__current-thumb",
-              src: current.preview, alt: "",
-              onError: (e) => { e.target.style.display = "none"; },
-            })
-          : React.createElement("div", { className: "we-picker__current-thumb we-picker__current-thumb--empty" }, "▦"),
+        React.createElement(VinylRecord, {
+          cover: current && current.preview, title: current ? current.title : "",
+          playing: sel.playing && Boolean(sel.url),
+        }),
         React.createElement("div", { className: "we-picker__current-info" },
           React.createElement("div", { className: "we-picker__current-title", title: current ? current.title : "" },
             sel.id && current ? current.title : "未选择壁纸"),
           React.createElement("div", { className: "we-picker__current-meta" },
             current
-              ? ({ video: "视频壁纸", web: "网页壁纸", image: "图片壁纸" }[current.type] || "壁纸") + (sel.playing ? " · 播放中" : " · 已暂停")
+              ? ({ video: "视频壁纸", web: "网页壁纸", image: "图片壁纸", scene: "场景壁纸（静态帧）" }[current.type] || "壁纸") + (sel.playing ? " · 播放中" : " · 已暂停")
               : "尚未选择壁纸"),
         ),
         React.createElement("button", {
@@ -903,9 +1282,19 @@ function WallpaperPicker() {
     //    shell overlays. Close: ESC, backdrop click, or the close buttons. ──
     sel.pickerOpen && ReactDOM.createPortal(
       React.createElement("div", { className: "we-picker__modal-overlay", onClick: closePicker },
-        React.createElement("div", { className: "we-picker__modal", onClick: (e) => e.stopPropagation() },
+        React.createElement("div", {
+          className: "we-picker__modal",
+          "data-we-cards": sel.pickerLayout,
+          onClick: (e) => e.stopPropagation(),
+        },
           React.createElement("div", { className: "we-picker__modal-head" },
-            React.createElement("span", { className: "we-picker__modal-title" }, "选择壁纸"),
+            React.createElement("div", { className: "we-picker__modal-head-left" },
+              React.createElement(VinylRecord, {
+                cover: current && current.preview, title: current ? current.title : "",
+                playing: sel.playing && Boolean(sel.url), sm: true,
+              }),
+              React.createElement("span", { className: "we-picker__modal-title" }, "选择壁纸"),
+            ),
             React.createElement("button", {
               className: "we-picker__btn", type: "button", onClick: closePicker,
             }, "关闭"),
@@ -938,7 +1327,7 @@ function WallpaperPicker() {
                           },
                         }, "全部恢复"),
                       ),
-                      hiddenList.map((w) => React.createElement("div", {
+                      (cdMode ? hiddenList : hiddenPageView.items).map((w) => React.createElement("div", {
                         key: w.id,
                         className: "we-picker__card we-picker__card--hidden",
                         role: "button",
@@ -948,12 +1337,18 @@ function WallpaperPicker() {
                       },
                       cardThumb(w),
                       React.createElement("span", { className: "we-picker__card-title" }, w.title),
+                      w.type === "scene" && React.createElement("span", { className: "we-picker__card-badge" }, "静态帧"),
                       React.createElement("button", {
                         className: "we-picker__card-hide", type: "button",
                         title: "恢复此壁纸",
                         onClick: (e) => { e.stopPropagation(); restoreWallpapers([w.id]); },
                       }, "恢复"),
                       )),
+                    ),
+                    !cdMode && hiddenPageView.pages > 1 && pagerRow(
+                      hiddenList.length, hiddenPageView.page, hiddenPageView.pages,
+                      () => { selection.hiddenPage--; emit(); },
+                      () => { selection.hiddenPage++; emit(); },
                     ),
               )
             : React.createElement("div", { className: "we-picker__modal-body" },
@@ -986,19 +1381,55 @@ function WallpaperPicker() {
                     onClick: () => { selection.batchMode = false; selection.batchSelected = []; emit(); },
                   }, "取消"),
                 ),
+                React.createElement("div", { className: "we-picker__row we-picker__filter-row" },
+                  React.createElement("span", { className: "we-picker__hint we-picker__label" }, "内容分级"),
+                  React.createElement("select", {
+                    className: "we-picker__playlist-select",
+                    value: sel.contentRatingFilter,
+                    onChange: onRatingFilterChange,
+                    title: "对应 Wallpaper Engine 的内容分级（project.json contentrating）",
+                  },
+                  React.createElement("option", { value: "all" }, "全部（" + basePlayable.length + "）"),
+                  React.createElement("option", { value: "everyone" }, "Everyone / G（" + ratingCount("everyone") + "）"),
+                  React.createElement("option", { value: "pg13" }, "PG13（" + ratingCount("pg13") + "）"),
+                  React.createElement("option", { value: "mature" }, "Mature / R（" + ratingCount("mature") + "）"),
+                  React.createElement("option", { value: "unrated" }, "未分级（" + ratingCount("unrated") + "）"),
+                  ),
+                  React.createElement("span", { className: "we-picker__hint we-picker__label" }, "类型"),
+                  React.createElement("select", {
+                    className: "we-picker__playlist-select",
+                    value: sel.typeFilter,
+                    onChange: onTypeFilterChange,
+                    title: "按壁纸类型过滤",
+                  },
+                  React.createElement("option", { value: "all" }, "全部（" + basePlayable.length + "）"),
+                  React.createElement("option", { value: "video" }, "视频（" + typeCount("video") + "）"),
+                  React.createElement("option", { value: "web" }, "网页（" + typeCount("web") + "）"),
+                  React.createElement("option", { value: "image" }, "图片（" + typeCount("image") + "）"),
+                  React.createElement("option", { value: "scene" }, "场景（" + typeCount("scene") + "）"),
+                  ),
+                ),
                 React.createElement("div", { className: "we-picker__grid" },
                   // "Close wallpaper" card — equivalent of the old first <option>.
-                  React.createElement("button", {
+                  // Rendered as a <div role="button"> like every other card:
+                  // <button> ignores aspect-ratio in several browsers, which
+                  // collapses the cell and lets the "✕ 关闭" label float over
+                  // the adjacent thumbnail.
+                  React.createElement("div", {
                     className: "we-picker__card" + (sel.id ? "" : " we-picker__card--selected"),
-                    type: "button",
+                    role: "button",
+                    tabIndex: 0,
                     onClick: onClear,
                     title: "关闭壁纸",
+                    onKeyDown: (e) => {
+                      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); }
+                    },
                   },
                   React.createElement("span", { className: "we-picker__card-close" }, "✕ 关闭"),
                   ),
                   playableList.length === 0
                     ? React.createElement("span", { className: "we-picker__hint" }, "没有可播放的壁纸")
-                    : playableList.map((w) => React.createElement("div", {
+                    : (cdMode ? playableList : normalPage.items).map((w) => React.createElement("div", {
                         key: w.id,
                         className: "we-picker__card" + (w.id === sel.id ? " we-picker__card--selected" : ""),
                         role: "button",
@@ -1020,6 +1451,7 @@ function WallpaperPicker() {
                       },
                       cardThumb(w),
                       React.createElement("span", { className: "we-picker__card-title" }, w.title),
+                      w.type === "scene" && React.createElement("span", { className: "we-picker__card-badge" }, "静态帧"),
                       selection.batchMode
                         ? React.createElement("span", { className: "we-picker__card-check" },
                             selection.batchSelected.indexOf(w.id) >= 0 ? "✓" : "")
@@ -1029,6 +1461,11 @@ function WallpaperPicker() {
                             onClick: (e) => { e.stopPropagation(); hideWallpapers([w.id]); },
                           }, "隐藏"),
                       )),
+                ),
+                !cdMode && normalPage.pages > 1 && pagerRow(
+                  playableList.length, normalPage.page, normalPage.pages,
+                  () => { selection.page--; emit(); },
+                  () => { selection.page++; emit(); },
                 ),
               ),
           React.createElement("div", { className: "we-picker__modal-foot" },
@@ -1229,7 +1666,7 @@ function WallpaperPicker() {
       React.createElement("div", { className: "we-picker__editor-grid" },
         playableInventory().length === 0
           ? React.createElement("span", { className: "we-picker__hint" }, "没有可播放的壁纸")
-          : playableInventory().map((w) => {
+          : (cdMode ? playableInventory() : editorPageView.items).map((w) => {
               const checked = editing.wallpaperIds.indexOf(w.id) >= 0;
               return React.createElement("button", {
                 key: w.id,
@@ -1252,6 +1689,11 @@ function WallpaperPicker() {
               checked && React.createElement("span", { className: "we-picker__editor-check" }, "✓"),
               );
             }),
+      ),
+      !cdMode && editorPageView.pages > 1 && pagerRow(
+        playableInventory().length, editorPageView.page, editorPageView.pages,
+        () => { selection.editorPage--; emit(); },
+        () => { selection.editorPage++; emit(); },
       ),
       React.createElement("div", { className: "we-picker__row" },
         React.createElement("span", { className: "we-picker__hint" }, "已选 " + editing.wallpaperIds.length + " 个"),
@@ -1311,7 +1753,7 @@ function WallpaperPicker() {
       SliderRow("壁纸模糊", 0, 60, 1, sel.wallpaperBlur, onWallpaperBlur, sel.wallpaperBlur + "px"),
       SliderRow("暗化", 0, 90, 5, Math.round(sel.scrim * 100), onScrim, Math.round(sel.scrim * 100) + "%"),
       SliderRow("边框", 0, 90, 5, Math.round(sel.border * 100), onBorder, Math.round(sel.border * 100) + "%"),
-      SliderRow("玻璃", 0, 40, 1, sel.blur, onBlur, sel.blur + "px"),
+      SliderRow("玻璃", 0, 60, 1, sel.blur, onBlur, sel.blur + "px"),
       // Playback speed — free-sliding slider (0.25x–2x, step="any"), applied
       // via native playbackRate. Video wallpapers only (web/iframe have none).
       sel.type === "video" && SliderRow("播放速度", 0.25, 2, "any", sel.playbackRate, onPlaybackRate, (Math.round(sel.playbackRate * 100) / 100) + "x"),
@@ -1333,6 +1775,19 @@ function WallpaperPicker() {
           ? "列表「" + group.name + "」：" + group.wallpaperIds.length + " 项 · " + playableCount + " 可播放 · 每 " + group.interval + " 分钟 · " + (group.order === "random" ? "随机" : "顺序")
           : playableList.length + " 个可播放壁纸") +
         (sel.rotationEnabled ? " · 自动轮转中" : "")),
+    ),
+  );
+}
+
+// ── Settings section wrapper (first-level page) ─────────────────────────────
+// Mirrors the skin-center's sectionList > pluginCard structure: the picker is
+// rendered inside a liquid-glass card shell so the whole settings page reads
+// as one frosted surface over the wallpaper. Owner props ({ close }) are
+// intentionally ignored — this section never leaves settings.
+function WallpaperPickerSection() {
+  return React.createElement("ul", { className: "we-picker__section-list" },
+    React.createElement("li", { className: "we-picker__card-shell" },
+      React.createElement(WallpaperPicker, null),
     ),
   );
 }
@@ -1419,12 +1874,12 @@ const CSS = `
      attribute, so they fall back to the module-CSS suffix convention; if that
      ever stops matching the bubble stays translucent, just without the blur. */
   body[data-we-wallpaper] {
-    --dsw-specific-input-major: rgba(255, 255, 255, 0.15);
-    --dsw-specific-bubble: rgba(255, 255, 255, 0.12);
+    --dsw-specific-input-major: rgba(255, 255, 255, var(--we-glass-alpha, 0.15));
+    --dsw-specific-bubble: rgba(255, 255, 255, calc(var(--we-glass-alpha, 0.15) * 0.8));
   }
   body[data-ds-dark-theme][data-we-wallpaper] {
-    --dsw-specific-input-major: rgba(255, 255, 255, 0.06);
-    --dsw-specific-bubble: rgba(255, 255, 255, 0.05);
+    --dsw-specific-input-major: rgba(255, 255, 255, calc(var(--we-glass-alpha, 0.15) * 0.4));
+    --dsw-specific-bubble: rgba(255, 255, 255, calc(var(--we-glass-alpha, 0.15) * 0.33));
   }
   body[data-we-wallpaper] [data-composer-card],
   body[data-we-wallpaper] [class*="_bubble"] {
@@ -1453,7 +1908,7 @@ const CSS = `
      base too; the blur lives on the root panels (one blur per shell). */
   body[data-we-wallpaper] [data-dsh-better-sidebar] [class*="_boundaryError"],
   body[data-we-wallpaper] [data-dsh-better-sidebar] [class*="_panel"] {
-    background-color: rgba(255, 255, 255, 0.1) !important;
+    background-color: rgba(255, 255, 255, calc(var(--we-glass-alpha, 0.15) * 0.66)) !important;
     background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04) 38%, rgba(255, 255, 255, 0.01)) !important;
     -webkit-backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01) !important;
     backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01) !important;
@@ -1470,11 +1925,11 @@ const CSS = `
   body[data-we-wallpaper] [data-dsh-better-sidebar] [class*="_gitHeader"],
   body[data-we-wallpaper] [data-dsh-better-sidebar] [class*="_browserBar"],
   body[data-we-wallpaper] [data-dsh-better-sidebar] [class*="_terminalWrap"] {
-    background-color: rgba(255, 255, 255, 0.08) !important;
+    background-color: rgba(255, 255, 255, calc(var(--we-glass-alpha, 0.15) * 0.53)) !important;
   }
   body[data-ds-dark-theme][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_boundaryError"],
   body[data-ds-dark-theme][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_panel"] {
-    background-color: rgba(255, 255, 255, 0.05) !important;
+    background-color: rgba(255, 255, 255, calc(var(--we-glass-alpha, 0.15) * 0.33)) !important;
   }
   body[data-ds-dark-theme][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_pane"],
   body[data-ds-dark-theme][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_tabBar"],
@@ -1484,14 +1939,169 @@ const CSS = `
   body[data-ds-dark-theme][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_gitHeader"],
   body[data-ds-dark-theme][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_browserBar"],
   body[data-ds-dark-theme][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_terminalWrap"] {
-    background-color: rgba(255, 255, 255, 0.04) !important;
+    background-color: rgba(255, 255, 255, calc(var(--we-glass-alpha, 0.15) * 0.26)) !important;
   }
 
   /* Picker chrome. */
   .we-picker { display: flex; flex-direction: column; gap: 10px; }
   .we-picker__select { max-width: 100%; }
   .we-picker__row { display: flex; gap: 8px; align-items: center; }
+  /* First-level settings section wrapper (mirrors the skin-center's
+     sectionList): the ul/li carry no default list styling. */
+  .we-picker__section-list { margin: 0; padding: 0; list-style: none; }
+
+  /* ── WHOLE native settings window → liquid glass (master switch).
+     Keyed on body[data-we-glass-window] (set by applyEffects from the
+     glassWindow preference). The settings dialog is the shell's
+     div[role="dialog"] containing the settings.section outlet anchor
+     (data-slot="settings.section" — stamped by the slot renderer, same anchor
+     the skin-center's semantic layer uses). The dialog reads inherited shell
+     tokens (panel background = --dsw-alias-bg-layer-2, nav active/hover =
+     --dsw-specific-sidebar-nav-item-*, close hover = --dsw-alias-interactive-bg-hover,
+     accents = --dsw-alias-brand-primary), so overriding those tokens ON the
+     dialog element restyles the ENTIRE window — left nav, content header and
+     every native section (General / Models / Plugins / …) — in one shot:
+     translucent glass base + backdrop blur + specular sheen + inner highlight,
+     with the accent color remapped to --we-accent (配色) and all surface alphas
+     driven by --we-glass-alpha (玻璃透明度). Off = stock shell look. ── */
+  body[data-we-glass-window] [role="dialog"]:has([data-slot="settings.section"]) {
+    /* Glass surface alphas (light scheme): the base tint is --we-glass-color
+       (玻璃颜色) mixed with transparent at the 玻璃透明度-driven alpha, so the
+       whole window glass can be tinted to any color. Default (no custom color)
+       = white glass, the stock look. */
+    --dsw-alias-bg-layer-1: color-mix(in srgb, var(--we-glass-color, #ffffff) calc(var(--we-glass-alpha, 0.5) * 0.9 * 100%), transparent);
+    --dsw-alias-bg-layer-2: color-mix(in srgb, var(--we-glass-color, #ffffff) calc(var(--we-glass-alpha, 0.5) * 1.0 * 100%), transparent);
+    --dsw-alias-bg-layer-3: color-mix(in srgb, var(--we-glass-color, #ffffff) calc(var(--we-glass-alpha, 0.5) * 1.1 * 100%), transparent);
+    /* Nav + interactive states tinted with the accent. */
+    --dsw-specific-sidebar-nav-item-active: color-mix(in srgb, var(--we-accent, #4f8cff) 26%, rgba(255, 255, 255, 0.08));
+    --dsw-specific-sidebar-nav-item-hover: color-mix(in srgb, var(--we-accent, #4f8cff) 13%, rgba(255, 255, 255, 0.05));
+    --dsw-alias-interactive-bg-hover: color-mix(in srgb, var(--we-accent, #4f8cff) 14%, transparent);
+    --dsw-alias-interactive-bg-hover-accent: color-mix(in srgb, var(--we-accent, #4f8cff) 18%, transparent);
+    /* Whole-dialog accent remap: every native control (links, primary buttons,
+       switches, active tabs, slider fills) follows the 配色 control. */
+    --dsw-alias-brand-primary: var(--we-accent, #4f8cff);
+    --dsw-alias-brand-text: var(--we-accent, #4f8cff);
+    --dsw-alias-button-primary-fill: var(--we-accent, #4f8cff);
+    --dsw-alias-button-primary-hover: color-mix(in srgb, var(--we-accent, #4f8cff) 88%, #fff);
+    --dsw-alias-button-primary-dimmed: color-mix(in srgb, var(--we-accent, #4f8cff) 22%, transparent);
+    --dsw-alias-state-business-primary: var(--we-accent, #4f8cff);
+    /* Frosted finish — the SAME recipe as the conversation surfaces (composer
+       card / bubbles): the blur radius, saturation melt and brightness all
+       read the 玻璃 slider (--we-blur 0–60px, --we-saturate, --we-glass-brightness),
+       so the settings window glass tracks the conversation-bar adjustment range
+       exactly. Plus a specular sheen + inner edge highlight + diffuse shadow
+       (the shell already rounds the panel at 24px). */
+    -webkit-backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
+    backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
+    background-image: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.1) 0%,
+      rgba(255, 255, 255, 0.03) 38%,
+      rgba(255, 255, 255, 0.05) 100%
+    );
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.22),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+      0 24px 80px rgba(0, 7, 18, 0.35);
+  }
+  /* Dark scheme: deep translucent base instead of white. The default glass
+     color is deep navy; a user-picked 玻璃颜色 overrides it in both themes. */
+  body[data-ds-dark-theme][data-we-glass-window] [role="dialog"]:has([data-slot="settings.section"]) {
+    --dsw-alias-bg-layer-1: color-mix(in srgb, var(--we-glass-color, #0d1524) calc(var(--we-glass-alpha, 0.5) * 0.9 * 100%), transparent);
+    --dsw-alias-bg-layer-2: color-mix(in srgb, var(--we-glass-color, #0d1524) calc(var(--we-glass-alpha, 0.5) * 1.0 * 100%), transparent);
+    --dsw-alias-bg-layer-3: color-mix(in srgb, var(--we-glass-color, #0d1524) calc(var(--we-glass-alpha, 0.5) * 1.1 * 100%), transparent);
+    --dsw-specific-sidebar-nav-item-active: color-mix(in srgb, var(--we-accent, #4f8cff) 30%, rgba(255, 255, 255, 0.06));
+    --dsw-specific-sidebar-nav-item-hover: color-mix(in srgb, var(--we-accent, #4f8cff) 14%, rgba(255, 255, 255, 0.04));
+    background-image: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.07) 0%,
+      rgba(255, 255, 255, 0.02) 38%,
+      rgba(255, 255, 255, 0.03) 100%
+    );
+  }
+  /* No backdrop-filter support: fall back to near-opaque glass so text stays
+     readable (same policy as the skin's patches.css). */
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    body[data-we-glass-window] [role="dialog"]:has([data-slot="settings.section"]) {
+      --dsw-alias-bg-layer-1: var(--we-glass-color, #ffffff);
+      --dsw-alias-bg-layer-2: var(--we-glass-color, #ffffff);
+      --dsw-alias-bg-layer-3: var(--we-glass-color, #ffffff);
+    }
+    body[data-ds-dark-theme][data-we-glass-window] [role="dialog"]:has([data-slot="settings.section"]) {
+      --dsw-alias-bg-layer-1: var(--we-glass-color, #0d1524);
+      --dsw-alias-bg-layer-2: var(--we-glass-color, #0d1524);
+      --dsw-alias-bg-layer-3: var(--we-glass-color, #0d1524);
+    }
+  }
+
+  /* Section card (mirrors the skin-center's pluginCard): a quiet layer card —
+     translucent token background + hairline border + radius. NO own backdrop
+     blur: the whole settings window is the glass surface (see the
+     body[data-we-glass-window] dialog rules above), so a nested blur would
+     double-frost and look muddy. Without the master switch the card still
+     reads as a subtle layer over the stock panel. */
+  .we-picker__card-shell {
+    border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.28));
+    border-radius: 12px;
+    background: var(--dsw-alias-bg-layer-3, rgba(128, 128, 128, 0.08));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    padding: 14px 16px;
+    transition: border-color 0.16s ease, background-color 0.16s ease;
+  }
+  .we-picker__card-shell:hover { border-color: var(--dsw-alias-label-dimmed, rgba(128, 128, 128, 0.5)); }
+  /* Card header: name + count badge + description (mirrors skin-center). */
+  .we-picker__card-head {
+    display: flex; align-items: baseline; gap: 8px;
+    padding-bottom: 10px; border-bottom: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.22));
+  }
+  .we-picker__card-name {
+    font-size: 15px; font-weight: 600; color: var(--dsw-alias-label-primary, inherit);
+  }
+  .we-picker__card-badge {
+    font-size: 11px; font-weight: 500; color: var(--dsw-alias-label-secondary, #6b7280);
+  }
+  .we-picker__card-desc {
+    margin-left: auto; font-size: 12px; color: var(--dsw-alias-label-tertiary, #6b7280);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  /* 配色 swatches: circular preset buttons + native color picker. The active
+     swatch gets an accent ring so the current choice is obvious at a glance. */
+  .we-picker__accent-row { flex-wrap: wrap; }
+  .we-picker__swatch {
+    width: 20px; height: 20px; padding: 0; border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.7);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+    cursor: pointer;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+  }
+  .we-picker__swatch:hover { transform: scale(1.12); }
+  .we-picker__swatch--active {
+    box-shadow: 0 0 0 2px var(--we-accent, #4f8cff), 0 0 0 4px rgba(255, 255, 255, 0.5);
+  }
+  .we-picker__swatch-custom {
+    display: inline-flex; align-items: center; gap: 4px; cursor: pointer;
+  }
+  .we-picker__swatch-custom input[type="color"] {
+    width: 22px; height: 22px; padding: 0; border: 0; border-radius: 50%;
+    background: transparent; cursor: pointer;
+  }
+  .we-picker__swatch-custom input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+  .we-picker__swatch-custom input[type="color"]::-webkit-color-swatch { border: 1px solid rgba(255, 255, 255, 0.6); border-radius: 50%; }
+  /* Master-switch row (设置窗口液态玻璃) sits on its own line under the 透明度
+     slider so the switch and the hint read as one labelled control. */
+  .we-picker__window-toggle { font-size: 0.82em; }
+  .we-picker__window-toggle + .we-picker__hint { margin-left: 2px; }
+
+  /* Pagination bar under each paged grid (normal / hidden / group editor).
+     Horizontally centered; as a direct child of the flex modal body it sinks
+     to the bottom when the grid leaves free space (margin-top: auto). */
+  .we-picker__pager {
+    display: flex; gap: 10px; align-items: center; justify-content: center;
+    margin-top: auto; padding-top: 8px; flex-wrap: wrap;
+  }
   .we-picker__playlist-select { flex: 1; min-width: 0; }
+  .we-picker__filter-row { flex-wrap: wrap; flex-shrink: 0; }
+  .we-picker__filter-row .we-picker__playlist-select { flex: 1 1 130px; }
   .we-picker__rotation-toggle { display: inline-flex; align-items: center; gap: 6px; }
   .we-picker__rotation-interval { margin-left: auto; }
   /* Flat, uniform-height controls. Native <select> renders as a raised "3D"
@@ -1521,7 +2131,7 @@ const CSS = `
   .we-picker select:disabled { opacity: 0.45; cursor: default; }
   .we-picker__hint { font-size: 0.8em; opacity: 0.7; }
   .we-picker__error { font-size: 0.82em; opacity: 0.9; color: #e5534b; }
-  .we-picker__note { font-size: 0.8em; opacity: 0.85; color: var(--dsw-alias-brand-primary, #4f8cff); }
+  .we-picker__note { font-size: 0.8em; opacity: 0.85; color: var(--we-accent, var(--dsw-alias-brand-primary, #4f8cff)); }
 
   /* ── Visual grouping: sections with a hairline divider + quiet label. ── */
   .we-picker__section { display: flex; flex-direction: column; gap: 8px; }
@@ -1534,6 +2144,52 @@ const CSS = `
     font-size: 0.75em; font-weight: 500; opacity: 0.55;
     letter-spacing: 0.01em;
   }
+
+  /* ── Vinyl record (黑胶唱片): rotating disc with the selected wallpaper's
+     cover as the label. Spins while the wallpaper is playing; pauses
+     otherwise. Shown in both settings layouts and in the modal head. ── */
+  .we-vinyl {
+    position: relative; width: 128px; height: 128px; flex: 0 0 auto;
+    border-radius: 50%;
+    background:
+      repeating-radial-gradient(circle at center, #191920 0 2px, #23232c 2px 4px);
+    box-shadow:
+      0 6px 18px rgba(0, 0, 0, 0.55),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.07);
+    animation: we-vinyl-spin 8s linear infinite;
+    animation-play-state: paused;
+  }
+  .we-vinyl--playing { animation-play-state: running; }
+  .we-vinyl--sm { width: 56px; height: 56px; }
+  .we-vinyl__cover {
+    position: absolute; inset: 24%; border-radius: 50%; overflow: hidden;
+    background: rgba(128, 128, 128, 0.25);
+    border: 2px solid rgba(0, 0, 0, 0.85);
+    box-shadow:
+      0 0 0 2px rgba(255, 255, 255, 0.1),
+      inset 0 0 8px rgba(0, 0, 0, 0.6);
+  }
+  .we-vinyl__cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .we-vinyl__empty {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: rgba(255, 255, 255, 0.45); font-size: 1.3em;
+  }
+  .we-vinyl__hole {
+    position: absolute; left: 50%; top: 50%;
+    width: 12px; height: 12px; margin: -6px 0 0 -6px;
+    border-radius: 50%; background: #0b0b0e;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.9);
+  }
+  .we-vinyl--sm .we-vinyl__hole { width: 6px; height: 6px; margin: -3px 0 0 -3px; }
+  @keyframes we-vinyl-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .we-vinyl { animation: none; }
+  }
+  .we-picker__modal-head-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
 
   /* ── Current-wallpaper card: thumbnail + title + type + primary action. ── */
   .we-picker__current {
@@ -1562,11 +2218,11 @@ const CSS = `
   /* Primary action (选择壁纸): brand accent, restrained — accent is for the
      main action only, per the product register's "accent ≠ decoration". */
   .we-picker__btn--primary {
-    color: var(--dsw-alias-brand-primary, #4f8cff);
-    border-color: var(--dsw-alias-brand-primary, #4f8cff);
+    color: var(--we-accent, #4f8cff);
+    border-color: var(--we-accent, #4f8cff);
   }
   .we-picker__btn--primary:hover {
-    background: var(--dsw-alias-brand-primary, #4f8cff);
+    background: var(--we-accent, #4f8cff);
     color: #fff;
   }
 
@@ -1583,7 +2239,7 @@ const CSS = `
     -webkit-appearance: none; appearance: none;
     width: 14px; height: 14px; margin-top: -5px; border-radius: 50%;
     background: var(--dsw-alias-bg-layer-1, #fff);
-    border: 2px solid var(--dsw-alias-brand-primary, #4f8cff);
+    border: 2px solid var(--we-accent, #4f8cff);
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
   }
   .we-picker__slider::-moz-range-track {
@@ -1593,12 +2249,40 @@ const CSS = `
   .we-picker__slider::-moz-range-thumb {
     width: 14px; height: 14px; border-radius: 50%;
     background: var(--dsw-alias-bg-layer-1, #fff);
-    border: 2px solid var(--dsw-alias-brand-primary, #4f8cff);
+    border: 2px solid var(--we-accent, #4f8cff);
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
   }
   /* Native checkboxes tinted with the accent (自动轮转 / 水平翻转). */
-  .we-picker input[type="checkbox"] { accent-color: var(--dsw-alias-brand-primary, #4f8cff); }
+  .we-picker input[type="checkbox"] { accent-color: var(--we-accent, #4f8cff); }
   .we-picker__rotation-toggle { cursor: pointer; }
+
+  /* Sliding toggle switch (紧凑布局). Track + thumb slide left/right with a
+     snappy 120ms transition; pinned accent so light themes stay readable. */
+  .we-picker__switch {
+    position: relative; display: inline-flex; cursor: pointer;
+  }
+  .we-picker__switch input {
+    position: absolute; opacity: 0; width: 0; height: 0;
+  }
+  .we-picker__switch-track {
+    position: relative; width: 42px; height: 24px; border-radius: 12px;
+    background: rgba(128, 128, 128, 0.4);
+    transition: background-color 120ms ease;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3);
+  }
+  .we-picker__switch input:checked + .we-picker__switch-track {
+    background: #4f8cff;
+  }
+  .we-picker__switch-thumb {
+    position: absolute; left: 3px; top: 3px;
+    width: 18px; height: 18px; border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+    transition: transform 120ms ease;
+  }
+  .we-picker__switch input:checked + .we-picker__switch-track .we-picker__switch-thumb {
+    transform: translateX(18px);
+  }
 
   /* Custom chevron for the flat selects (appearance: none removed the native
      arrow; heights stay pinned at 26px so rows can never shift). */
@@ -1628,21 +2312,91 @@ const CSS = `
     border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));
     border-radius: 8px;
   }
-  /* Wallpaper thumbnail grid (main picker). */
+  /* Wallpaper thumbnail grid (main picker).
+     Cards use a FIXED height + absolutely-positioned filling <img>, never
+     aspect-ratio: some browsers (old Chromium/WebView) ignore aspect-ratio on
+     cards and let percentage-height images resolve to their intrinsic size,
+     which made previews bleed over the row above. inset:0 + overflow:hidden
+     pins the image inside the card in every engine. */
   .we-picker__grid {
     display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
     gap: 8px; max-height: 280px; overflow-y: auto; padding: 2px;
   }
   .we-picker__card {
-    position: relative; width: 100%; padding: 0; cursor: pointer;
-    aspect-ratio: 16 / 9; display: block; overflow: hidden;
+    position: relative; height: 92px; padding: 0; cursor: pointer;
+    display: block; overflow: hidden;
     border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));
     border-radius: 8px;
     background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.15));
   }
-  .we-picker__card img, .we-picker__card video { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .we-picker__card img, .we-picker__card video {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; display: block;
+  }
+  /* Classic — "CD 架" (CD-rack) card style: cards stack like CD jewel cases
+     on a rack. Each row strongly overlaps the row ABOVE it (the lower card's
+     top covers roughly half of the upper card's bottom — vertical only, never
+     horizontal), with a soft drop shadow for shelf depth. Hovering scales the
+     card up and brings it to the front. Opt-in via the 卡片样式 switch. The
+     modal is PORTALLED onto <body>, so the attribute is scoped on BOTH the
+     settings root and the modal element. The grid gets extra bottom padding
+     so the last row's overlap is not clipped. */
+  .we-picker[data-we-cards="classic"] .we-picker__grid,
+  .we-picker__modal[data-we-cards="classic"] .we-picker__grid {
+    /* Compact CD-rack columns: ~7 cards per row at modal width. */
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    padding-bottom: 42px;
+  }
+  .we-picker[data-we-cards="classic"] .we-picker__editor-grid,
+  .we-picker__modal[data-we-cards="classic"] .we-picker__editor-grid {
+    grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  }
+  .we-picker[data-we-cards="classic"] .we-picker__card,
+  .we-picker__modal[data-we-cards="classic"] .we-picker__card {
+    position: relative; width: 100%; padding: 0; cursor: pointer;
+    height: auto; aspect-ratio: 16 / 9; display: block; overflow: hidden;
+    margin-bottom: -36px;
+    border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));
+    border-radius: 8px;
+    background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.15));
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+    transition: transform 120ms ease, box-shadow 120ms ease;
+  }
+  .we-picker[data-we-cards="classic"] .we-picker__card:hover,
+  .we-picker__modal[data-we-cards="classic"] .we-picker__card:hover {
+    transform: scale(1.12);
+    z-index: 10;
+    box-shadow: 0 14px 28px rgba(0, 0, 0, 0.5);
+  }
+  .we-picker[data-we-cards="classic"] .we-picker__card img,
+  .we-picker__modal[data-we-cards="classic"] .we-picker__card img,
+  .we-picker[data-we-cards="classic"] .we-picker__card video,
+  .we-picker__modal[data-we-cards="classic"] .we-picker__card video {
+    position: static; width: 100%; height: 100%; object-fit: cover; display: block;
+  }
+  .we-picker[data-we-cards="classic"] .we-picker__editor-card,
+  .we-picker__modal[data-we-cards="classic"] .we-picker__editor-card {
+    position: relative; width: 100%; padding: 0; cursor: pointer;
+    height: auto; aspect-ratio: 16 / 10; display: block; overflow: hidden;
+    margin-bottom: -30px;
+    border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));
+    border-radius: 6px;
+    background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.15));
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+    transition: transform 120ms ease, box-shadow 120ms ease;
+  }
+  .we-picker[data-we-cards="classic"] .we-picker__editor-card:hover,
+  .we-picker__modal[data-we-cards="classic"] .we-picker__editor-card:hover {
+    transform: scale(1.1);
+    z-index: 10;
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.5);
+  }
+  .we-picker[data-we-cards="classic"] .we-picker__editor-card img,
+  .we-picker__modal[data-we-cards="classic"] .we-picker__editor-card img {
+    position: static; width: 100%; height: 100%; object-fit: cover; display: block;
+  }
   .we-picker__card--selected {
-    outline: 2px solid var(--dsw-alias-brand-primary, #4f8cff);
+    outline: 2px solid var(--we-accent, #4f8cff);
     outline-offset: -2px;
   }
   .we-picker__card-close {
@@ -1655,6 +2409,13 @@ const CSS = `
     font-size: 0.7em; line-height: 1.2; color: #fff;
     background: linear-gradient(transparent, rgba(0, 0, 0, 0.7));
     text-overflow: ellipsis; white-space: nowrap; overflow: hidden;
+  }
+  /* Scene-wallpaper "静态帧" badge — top-right under the hide button. */
+  .we-picker__card-badge {
+    position: absolute; top: 4px; right: 4px; z-index: 1;
+    padding: 1px 6px; font-size: 0.62em; line-height: 1.6;
+    border-radius: 4px; color: #fff;
+    background: rgba(30, 90, 160, 0.85);
   }
   .we-picker__card-placeholder {
     position: absolute; inset: 0;
@@ -1677,7 +2438,7 @@ const CSS = `
     font-size: 12px; line-height: 18px; text-align: center;
   }
   .we-picker__card--selected .we-picker__card-check {
-    background: var(--dsw-alias-brand-primary, #4f8cff);
+    background: var(--we-accent, #4f8cff);
   }
   /* Hidden wallpapers view: dimmed cards. */
   .we-picker__card--hidden { opacity: 0.78; }
@@ -1728,11 +2489,11 @@ const CSS = `
     color: var(--dsw-alias-label-secondary, #888);
   }
   .we-picker__tab--active {
-    background: var(--dsw-alias-brand-primary, #4f8cff);
-    border-color: var(--dsw-alias-brand-primary, #4f8cff); color: #fff;
+    background: var(--we-accent, #4f8cff);
+    border-color: var(--we-accent, #4f8cff); color: #fff;
   }
   .we-picker__modal-body {
-    overflow-y: auto; min-height: 0;
+    overflow-y: auto; min-height: 0; flex: 1;
     display: flex; flex-direction: column; gap: 8px;
   }
   /* The modal is tall enough: let the grid fill it instead of its own 280px
@@ -1765,7 +2526,9 @@ const CSS = `
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     font-size: 0.8em; opacity: 0.85;
   }
-  /* Playback-rate segmented control (video wallpapers only). */
+  /* Playback-rate segmented control (video wallpapers only). Also reused as
+     the 卡片样式 two-button switch (wrapped in .we-picker__seg). */
+  .we-picker__seg { display: flex; gap: 4px; flex: 1; min-width: 0; }
   .we-picker__rate {
     flex: 1; padding: 0; text-align: center; font-size: 0.78em;
     border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));
@@ -1774,8 +2537,8 @@ const CSS = `
   }
   .we-picker__rate + .we-picker__rate { margin-left: 0; }
   .we-picker__rate--active {
-    background: var(--dsw-alias-brand-primary, #4f8cff);
-    border-color: var(--dsw-alias-brand-primary, #4f8cff);
+    background: var(--we-accent, #4f8cff);
+    border-color: var(--we-accent, #4f8cff);
     color: #fff;
   }
   /* Rotation group editor thumbnail grid. */
@@ -1784,15 +2547,18 @@ const CSS = `
     gap: 6px; max-height: 220px; overflow-y: auto; padding: 2px;
   }
   .we-picker__editor-card {
-    position: relative; width: 100%; padding: 0; cursor: pointer;
-    aspect-ratio: 16 / 10; display: block; overflow: hidden;
+    position: relative; height: 80px; padding: 0; cursor: pointer;
+    display: block; overflow: hidden;
     border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));
     border-radius: 6px;
     background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.15));
   }
-  .we-picker__editor-card img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .we-picker__editor-card img {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; display: block;
+  }
   .we-picker__editor-card--checked {
-    outline: 2px solid var(--dsw-alias-brand-primary, #4f8cff);
+    outline: 2px solid var(--we-accent, #4f8cff);
     outline-offset: -2px;
   }
   .we-picker__editor-check {
@@ -1838,12 +2604,14 @@ function apply(ctx) {
     });
   }
 
-  // 2. Settings picker row (this slot is NOT the overlay; safe).
+  // 2. Settings page as a FIRST-LEVEL settings section (mirrors the skin-center
+  //    in dsh-web-ui-all: its own nav entry, rendered inside the panel content
+  //    column). The picker renders inside the liquid-glass card shell.
   if (ctx.slots) {
-    ctx.slots.inject("settings.general.item", () =>
+    ctx.slots.inject("settings.section", () =>
       ctx.slots.register(
-        { name: "settings.general.item", id: "wallpaper-engine", order: 500, label: "Wallpaper Engine" },
-        () => React.createElement(WallpaperPicker),
+        { name: "settings.section", id: "wallpaper-engine", order: 500, label: "Wallpaper Engine" },
+        () => React.createElement(WallpaperPickerSection),
       ),
     );
   }

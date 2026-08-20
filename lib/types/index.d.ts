@@ -23,6 +23,8 @@ export interface WallpaperDescriptor {
   media: string | null;
   /** Served preview URL (`/wallpaper-engine/preview/<token>`), or null. */
   preview: string | null;
+  /** Scene static-frame URL (`/wallpaper-engine/scene-frame/<token>`), or null. */
+  frameUrl: string | null;
 }
 
 /** A Wallpaper Engine playlist read from `config.json`. */
