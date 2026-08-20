@@ -1,78 +1,113 @@
 # dsh-plugin-wallpaper-engine
 
-[English](README.en.md) | [中文](README.md)
+[English](README.en.md) | [中文](README.md) | [🆕 小白上手版](README.beginner.md)
 
-一个 DSH bundle，把你电脑上的 **Wallpaper Engine** 壁纸变成 **DSH 网页界面（`dsh web`）的背景**。
+[![npm version](https://img.shields.io/npm/v/dsh-plugin-wallpaper-engine)](https://www.npmjs.com/package/dsh-plugin-wallpaper-engine)
+[![license](https://img.shields.io/badge/license-MIT-blue)](LICENSE)
+[![ci](https://github.com/elysia395/dsh-wallpaper-engine/actions/workflows/ci.yml/badge.svg)](https://github.com/elysia395/dsh-wallpaper-engine/actions/workflows/ci.yml)
 
-它会自动发现你本机的 Wallpaper Engine 安装，列出你的壁纸，并把*可移植*的类型渲染到 DSH 对话界面的后方，配以 **iOS 风格液态玻璃**效果：Video（`.mp4`）动态播放、Web/HTML 以 iframe 加载，**Scene（场景）提取主纹理作为静态帧**。v0.2 起还支持：
+一个 DSH bundle：把你电脑上的 **Wallpaper Engine** 壁纸变成 **DSH 网页界面（`dsh web`）的背景**，配以 iOS 风格液态玻璃效果。
 
-- **壁纸选择弹窗**：缩略图网格收纳进独立弹窗，设置页不再被长列表占满；
-- **隐藏 / 恢复**：不想看的壁纸一键隐藏（软删除），随时恢复，不碰源文件；
-- **视频倍速**：0.5x – 2x 六档原生调速，即时生效、不重载；
-- **水平翻转**：镜像画面（视频 / 网页 / 上传图片均适用）；
-- **自定义壁纸**：直接上传本地 JPG / PNG / MP4 当壁纸，可选存储位置与画面适配模式；
-- **场景壁纸静态帧**（v0.3）：Scene 壁纸提取主纹理作为静态背景，不再只是"不可播放"的占位。
-- **液态玻璃设置页**（v0.3.1）：设置页升级为**一级设置页**（参照 dsh-web-ui-all 皮肤中心的设计），整页是可自定义的液态玻璃卡片 —— **配色**（6 种预设 + 自定义取色）与**玻璃透明度**（0–60%）即时生效、持久保存。
-- **整个设置窗口液态玻璃化**（v0.3.2）：一键把 **DSH 原生设置窗口整体**（对话框 + 左侧导航 + General / 模型 / 插件等**全部原生分区**）换成液态玻璃 + 自定义配色 —— 开启「设置窗口液态玻璃」开关后，窗口背景、导航选中/悬停、按钮、开关、链接等全部跟随 **配色** 与 **玻璃透明度**，关闭则恢复原生样式。
-- **玻璃调节统一**（v0.3.3–v0.3.5）：设置窗口的玻璃模糊与**对话栏共用同一套调节参数**（「玻璃」滑动条 0–60 px 同时控制设置窗口与输入栏/气泡的模糊半径，饱和度/亮度/对比度配方一致）；新增「**玻璃颜色**」—— 设置窗口玻璃的**底色色调**可自定义（6 预设 + 自定义取色，默认浅色白 / 深色深夜蓝，选定后两种主题统一使用该色），与「配色」（交互元素）分工：**配色管控件、玻璃颜色管玻璃本身**。
+> **只想用起来？** 直接看 [小白上手版](README.beginner.md)，零术语、照着点就行。
 
-![基础效果展示](docs/images/showcase.png)
+## 功能总览
+
+- **Video / Web 壁纸**：`.mp4` 在 `<video>` 中播放，HTML 在沙箱 `<iframe>` 中加载；
+- **Scene 壁纸静态帧**（v0.3）：从 `scene.pkg` / `scene.json` 提取主纹理作为静态背景，带质量门与工坊预览图回退；
+- **液态玻璃**：整个 DSH 原生设置窗口 + 输入栏/气泡的毛玻璃化，配色 / 玻璃颜色 / 玻璃透明度 / 模糊统一调节；
+- **壁纸选择弹窗**：缩略图网格、分页或 CD 架紧凑布局、内容分级（G/PG13/R）与类型过滤；
+- **隐藏 / 恢复**（软删除，localStorage，不碰源文件）与**批量操作**；
+- **视频倍速**（0.5x–2x）、**水平翻转**、**暂停/播放**；
+- **自定义壁纸**：上传本地 JPG / PNG / MP4，可换存储盘符、适配模式（覆盖/填充/居中/拉伸）、SHA-256 去重；
+- **自动轮转**：自定义轮播列表（数量不限、独立间隔与顺序），可从 WE 播放列表一键导入。
+
+![基础效果展示](https://raw.githubusercontent.com/elysia395/dsh-wallpaper-engine/main/docs/images/showcase.png)
 
 > 壁纸 + 磨砂遮罩 + iOS 液态玻璃，渲染在 DSH 界面后方。
 
-## 支持哪些壁纸类型？
-
-Wallpaper Engine 的壁纸分四种类型：
+## 支持的壁纸类型
 
 | 类型 | 由谁渲染 | 能否搬到 DSH |
 |---|---|---|
-| **Scene（场景）** | Wallpaper Engine 自带的 3D 引擎 | ✅ 静态帧 — 提取主纹理（`.pkg`/`.json` 内的 .tex/JPEG），见下文 |
-| **Video（视频）** | 就是一个 `.mp4` 文件 | ✅ 能 — 在 `<video>` 标签里播放 |
-| **Web（网页）** | WE 内置的 Chromium 壳（`webwallpaper64.exe`）承载 HTML | ✅ 能 — 在 `<iframe>` 里加载 |
-| **Application（应用）** | 注入的外部窗口 | ❌ 不能 |
+| **Scene（场景）** | WE 自带 3D 引擎 | ✅ 静态帧 — 提取主纹理（`.pkg`/`.json` 内的 .tex / 内嵌 JPEG） |
+| **Video（视频）** | `.mp4` 文件 | ✅ `<video>` 播放（支持 Range seek） |
+| **Web（网页）** | WE 内置 Chromium 壳 | ✅ 沙箱 `<iframe>` 加载（见[安全模型](#安全模型)） |
+| **Application（应用）** | 注入的外部窗口 | ❌ 不支持 |
 
-Scene 壁纸的 3D 场景（shader/粒子/几何）本身无法在浏览器里重放，但它的**主纹理**（通常是背景艺术图）可以提取出来作为**静态帧**背景——对摄影类、插画类场景壁纸效果接近原图。选择器里场景卡片带有「静态帧」徽标，可与动态壁纸区分。
+## 架构
 
-> **展现效果**：**大部分场景壁纸都能有较好的静态帧展现**（本机实测约 80%+ 的 Scene 壁纸能提取出接近原图的彩色主图，尤其摄影、插画、动画截图类）；**少部分无法正常展示**，包括纯 shader 粒子/程序生成类场景（没有可提取的主纹理）、使用特殊纹理格式（如 BC7）的场景、以及以视频纹理驱动的动画场景——这类会自动回退显示工坊预览图（`preview.jpg`），属预期行为，不视为缺陷。
+### Host 端（`lib/index.js`，纯 ESM，无构建）
 
-### 场景静态帧：怎么工作的
+一个 Cordis 插件（`inject: ['webServer']` 硬依赖），职责：
 
-- **读取**：解析 `scene.pkg`（PKGV 容器 + LZ4 条目链）或松散 `scene.json` 目录，从 `scene.json` 的第一个 image 对象出发定位主纹理（material / instance 引用的 .tex），其余 .tex 按"艺术图可能性"评分兜底（内嵌 JPEG/PNG 最高分，mask/effect/depth/workshop 辅助纹理降权，R8/RG88 灰度格式几乎排除）。
-- **解码**：TEX 容器（TEXV0005/TEXI0001、TEXB0001-4 mipmap、LZ4 或原始数据）解码为静态图，支持 **RGBA8888 / R8 / RG88 / DXT1 / DXT3 / DXT5**，以及 **WE 内嵌 JPEG / PNG 纹理**（摄影类壁纸常见，原样直出、零解码、保真度最高）。
-- **质量门**：解码后抽样质检——灰度 >88% 或纯色（方差 <3）的帧会被拒绝并尝试下一候选；全部不通过时自动回退到项目 `preview.jpg`（灰度遮罩、深度图、纯色占位不会冒充壁纸）。
-- **视频纹理识别**：WE 的动画同步纹理（内嵌 MP4，如 `*_sync` 纹理）无法出静态帧，识别后直接回退预览图，不再输出乱码画面。
-- **缓存**：提取结果按 `<版本>_<路径>_<mtime>` 缓存到 `~/.dsh-wallpaper-engine/cache/frames/`（可用 `DSH_WE_CACHE_DIR` 覆盖），工坊更新后自动失效重建；提取管线升级会更换版本前缀使旧缓存失效重提。
-- **限制**：BC7 / RGB565 / 16 位浮点等纹理格式无法解码（回退到 preview.jpg）；静态帧≠3D 渲染，动画粒子/水波等动态效果不会出现。
+1. 读 Steam `libraryfolders.vdf` + 注册表定位 WE 安装目录（Steam 装在非默认盘也可用）；
+2. 枚举 `projects/defaultprojects`、`projects/myprojects`、`steamapps/workshop/content/431960/*` 下的壁纸；
+3. 在 DSH webserver 注册同源 HTTP 路由（见下文契约表）；
+4. 管理自定义上传目录（迁移、持久化）与场景静态帧磁盘缓存。
 
-## 工作原理
+库存计算带 **5 秒 TTL 缓存**（`?refresh=1` 强制重扫），注册表探测结果进程内只查一次。
 
-- **Host 端**（`lib/index.js`）：一个 Cordis 插件，负责
-  1. 通过读取 Steam 的 `libraryfolders.vdf` 定位 Wallpaper Engine 安装位置（所以 Steam 装在非默认盘也能用）；
-  2. 从 `projects/defaultprojects`、`projects/myprojects` 以及 `steamapps/workshop/content/431960/*` 枚举壁纸；
-  3. 在 DSH webserver 上注册同源 HTTP 路由，让浏览器端直接获取数据和流式加载媒体：
-     - `GET /wallpaper-engine/inventory` → 壁纸 JSON 列表
-     - `GET /wallpaper-engine/media/<token>` → 视频 / HTML（支持 Range）
-     - `GET /wallpaper-engine/preview/<token>` → 预览图
-     - `GET /wallpaper-engine/scene-frame/<token>` → 场景壁纸静态帧（提取主纹理，JPEG 直出或 PNG，磁盘缓存）
-     - `POST /wallpaper-engine/upload` → 上传自定义壁纸（JPG / PNG / MP4，原始字节流）
-     - `POST /wallpaper-engine/remove` → 移除已上传的壁纸
-     - `POST /wallpaper-engine/upload-dir` → 更改上传目录（持久化到 `~/.dsh-wallpaper-engine/config.json`，自动迁移已有文件）
-- **Client 端**（`lib/client.js`）：一个浏览器模块，拉取壁纸列表，把选中壁纸渲染到应用三列**后方**的固定图层，并在「设置」里注册一个**一级设置页**「Wallpaper Engine」（含液态玻璃卡片、选择弹窗、隐藏/恢复、倍速/翻转、配色/透明度与自定义壁纸管理）。
-- **自定义壁纸存储**：上传的文件写入插件管理的本地目录（默认 `~/.dsh-wallpaper-engine/uploads`，可在设置里改到任意盘符），经同一套 `/media`、`/preview` 路由服务——与 WE 媒体走完全相同的管道，天然跨重启持久、无浏览器配额限制。
+### Client 端（`src/client.js` → `lib/client.js`）
+
+浏览器模块（`window.__ModuleLoader__.load({ id, factory })` 外壳）。规范源文件是 `src/client.js` + `src/client.css`，由 `scripts/build-client.mjs` 拼接生成编译产物 `lib/client.js`。**不要手改 `lib/client.js`。**
+
+职责：拉取库存 → 把选中壁纸渲染到应用三列后方的固定图层（`position:fixed; z-index:-2`）+ 遮罩层 → 注册一级设置页「Wallpaper Engine」。全部用户偏好保存在浏览器 `localStorage`（键 `dsh-wallpaper-engine:selection`）。
+
+## HTTP 契约（Host ↔ Browser，同源）
+
+| Method | Path | 入参 | 响应 | 说明 |
+|---|---|---|---|---|
+| GET | `/wallpaper-engine/inventory` | `?refresh=1` 强制重扫 | JSON 库存 | 5s TTL 缓存；`no-store` |
+| GET | `/wallpaper-engine/media/<token>` | `Range` 头 | 视频 / HTML 流 | 206/416/304；`nosniff` |
+| GET | `/wallpaper-engine/preview/<token>` | `Range` 头 | 预览图流 | 同上 |
+| GET | `/wallpaper-engine/scene-frame/<token>` | — | JPEG / PNG | 按 `<版本>_<路径>_<mtime>` 磁盘缓存 |
+| POST | `/wallpaper-engine/upload` | `?title=`；body 原始字节；`Content-Type` 白名单 | 壁纸条目 | 512MB 上限；流式落盘；SHA-256 去重 |
+| POST | `/wallpaper-engine/remove` | JSON `{ id }` | `{ removed }` | 仅限 `up-*` 文件 |
+| POST | `/wallpaper-engine/upload-dir` | JSON `{ dir, migrate? }` | 迁移统计 | 绝对路径（支持 `~`）；配置写入失败会报错 |
+
+**Token 机制**：`<token>` 是绝对路径的 base64url，仅在库存枚举时写入进程内 `mediaMap`。路由只服务 `mediaMap` 中已登记的文件——浏览器无法通过猜测 token 读取任意文件。
+
+## 安全模型
+
+本插件服务的是**本机第三方内容**（Workshop 壁纸），默认按不可信输入对待：
+
+- **路径遏制**：`project.json` 的 `file` / `preview` 字段解析后必须落在项目目录内（`path.relative` 校验）。恶意 project.json 无法用绝对路径或 `..\..` 让 `/media`、`/preview` 枚举并服务项目目录之外的文件。
+- **Web 壁纸沙箱**：`<iframe sandbox="allow-scripts allow-forms">`（**不含** `allow-same-origin`）。壁纸脚本以 opaque origin 运行，**不能**访问 DSH 页面的 `localStorage` 或同源 API；相对路径的 `<img>`/`<script>` 子资源（no-cors）不受影响。
+  - 已知代价：少数依赖同源读取或指针锁定的交互型 Web 壁纸可能功能不全。这是有意取舍，已同步文档。
+- **上传白名单**：仅 JPG / PNG / MP4；浏览器与 host 双重校验；512MB 上限；服务时 `X-Content-Type-Options: nosniff`。
+- **不出网**：媒体只在本机 loopback 流动，不上传任何服务器。
+
+## 磁盘布局
+
+```
+~/.dsh-wallpaper-engine/
+├── config.json          # 记录上传目录（可被 DSH_WE_UPLOAD_DIR 环境变量覆盖）
+├── uploads/             # 自定义壁纸（默认位置，可在设置中迁移到任意盘符）
+│   └── .meta.json       # 上传元数据（标题 + sha256，用于去重）
+└── cache/frames/        # Scene 静态帧缓存（DSH_WE_CACHE_DIR 可覆盖）
+```
+
+除以上数据外，插件不写任何持久化 DSH 设置；对 agent 零 token 开销。
+
+## 场景静态帧：工作原理
+
+- **读取**：解析 `scene.pkg`（PKGV 容器 + LZ4 条目链）或松散 `scene.json` 目录；从第一个 image 对象出发定位主纹理，其余 .tex 按「艺术图可能性」评分兜底（内嵌 JPEG/PNG 最高分，mask/effect/depth 降权，R8/RG88 灰度几乎排除）。
+- **解码**：TEX 容器（TEXV0005/TEXI0001、TEXB0001-4）→ **RGBA8888 / R8 / RG88 / DXT1 / DXT3 / DXT5**，以及 **WE 内嵌 JPEG / PNG**（原样直出）。
+- **质量门**：灰度 >88% 或纯色（方差 <3）的帧被拒绝并尝试下一候选；全部失败回退项目 `preview.jpg`。
+- **缓存**：`<版本>_<路径>_<mtime>` 键控；工坊更新自动失效。
+- **限制**：BC7 / RGB565 / 16 位浮点无法解码（回退预览图）；静态帧 ≠ 3D 渲染。
 
 ## 安装
 
-### 普通用户（安装已发布版本，推荐）
-
-如果你只是想用这个插件，直接装 npm 上已发布的包即可：
+### 用户（发布版，推荐）
 
 ```sh
 dsh plugin --profile web add dsh-plugin-wallpaper-engine
 ```
 
-装完重启 `dsh web`，打开 **设置 → Wallpaper Engine** 就能用。
+重启 `dsh web` → 设置 → Wallpaper Engine。
 
-> **macOS 用户**：macOS 没有 Wallpaper Engine 客户端，本插件的 macOS 版（WaifuX + 散装媒体支持）由社区维护者 Jerry 维护，发布为独立 npm 包：
+> **macOS**：macOS 无 WE 客户端；本插件的 macOS 版（WaifuX + 散装媒体支持）由社区维护者 Jerry 维护，独立发布：
 >
 > ```sh
 > dsh plugin --profile web add dsh-plugin-wallpaper-engine-mac
@@ -80,170 +115,68 @@ dsh plugin --profile web add dsh-plugin-wallpaper-engine
 >
 > 仓库：https://github.com/ruijiaang-lab/dsh-wallpaper-engine
 
-### 开发者（运行你本地的一份代码）
-
-**大多数读者可以跳过本节。** 只有当你打算自己改这个插件的代码时才需要。下面的步骤假定你已了解命令行、以及「仓库 / repository」是什么（一份用 Git 做版本管理的代码文件夹）。
-
-**第 1 步：取得源码（checkout）**
-
-> 这里 *checkout* 的意思很简单：就是「把源代码下载/复制一份到你电脑的某个文件夹里」。通常在这个 GitHub 页面点 **Code → Download ZIP** 下载并解压，或用 Git 克隆：
->
-> ```sh
-> git clone https://github.com/elysia395/dsh-wallpaper-engine.git
-> ```
->
-> 完成后你会得到一个包含 `package.json`、`lib/`、`src/`、`cordis.patch.yml` 的文件夹。下文把这个文件夹称作**插件文件夹**。
-
-**第 2 步：用文件夹路径安装（link:）**
-
-> 这里的 *`link:`* 表示：告诉 `dsh`（它会把命令转发给 pnpm）去**连接你本地那个插件文件夹**，而不是从网上下载一个包。好处是：你改完代码并重新构建后，改动能直接生效，不用反复重装。
-
-把下面命令里的 `<插件文件夹绝对路径>` **替换成你插件文件夹的完整路径**（就是你在资源管理器/文件管理器里打开那个文件夹时，地址栏显示的那串路径）：
+### 开发者（本地源码运行）
 
 ```sh
+git clone https://github.com/elysia395/dsh-wallpaper-engine.git
 dsh plugin --profile web add link:<插件文件夹绝对路径>
 ```
 
-**具体示例**——假设你的插件文件夹路径像 `D:\dev\dsh-wallpaper-engine` 这样：
-
-```sh
-dsh plugin --profile web add link:D:\dev\dsh-wallpaper-engine
-```
-
-如果你已经用命令行 `cd` 到了插件文件夹的上一级，也可以用相对路径：
-
-```sh
-dsh plugin --profile web add link:./dsh-wallpaper-engine
-```
-
-> **该填哪个确切的路径？** 必须是**包含 `package.json` 的那个文件夹**——不是 `package.json` 文件本身的路径，也不是它里面任何单个文件的路径。它就是你在资源管理器地址栏里打开那个文件夹时显示的那串路径。
-
-> 为什么推荐 `link:` 而不用 `file:`？`link:` 是和你的源码文件夹**建立实时连接**，改完 `src/client.js` 并 `npm run build` 后直接生效，无需重装；`file:` 则是打包成一份静态快照，每次改动都要重新 add。首次安装两者都可以。
-
-然后重启 `dsh web`。host 端会成为 bundle 层，client 端会自动加载（`dsh.client.immediately: true`）。
-
-如果 Steam 装在非标准位置，host 会通过 `libraryfolders.vdf` 自动探测，无需额外配置。
+`link:` 与源码文件夹建立实时连接：改完 `src/client.js` 或 `src/client.css` 后 `npm run build` 并重启 `dsh web` 即生效。host 端是纯 ESM，改完重启 `dsh web` 即可。
 
 ## 使用
 
-1. 打开 `dsh web`，进入 DSH 界面。
-2. 打开 **设置**，左侧导航里找到 **Wallpaper Engine**（一级设置页，侧边栏独立入口）。
-3. 点击 **选择壁纸** 打开选择弹窗，在缩略图网格里点选一张 Video/Web 壁纸（或上传的图片/视频），它会出现在界面后方；点遮罩、按 ESC 或点「关闭」收起弹窗。Scene/Application 无法内嵌网页，不显示在网格中。
-4. 用 **暂停/播放** 暂停视频壁纸，用 **关闭** 清除壁纸。
-   选择会保存在浏览器的 `localStorage`（键 `dsh-wallpaper-engine:selection`）中。
+1. `dsh web` → 设置 → 左侧导航 **Wallpaper Engine**（一级设置页）。
+2. **选择壁纸** 打开弹窗，点选一张壁纸；ESC / 点遮罩关闭。
+3. 「壁纸效果」区四个滑动条：壁纸模糊 / 暗化 / 边框 / 玻璃（0–60px，与设置窗口玻璃共用一套配方）。
+4. 「外观」区：设置窗口液态玻璃总开关、配色（6 预设 + 取色器）、玻璃颜色、玻璃透明度。
 
-![设置界面功能展示](docs/images/features.png)
+所有选择保存在 `localStorage`，刷新 / 重启不丢。浅色 / 深色主题请来回切换找到适合当前壁纸的一种；文字看不清时调高 **暗化**、**边框**。
 
-> 设置界面：液态玻璃卡片（「外观」配色/透明度）、当前壁纸卡片、「自定义壁纸」「轮播列表」「壁纸效果」分区。
+## 配置与隐私
 
-![壁纸选择弹窗与壁纸仓库](docs/images/wallpaper-library.png)
+- 无 model-visible tool、无 prompt 文本——对 agent 零 token 开销。
+- 隐藏状态、轮播列表、过滤器等均在浏览器 `localStorage`；不写任何持久化 DSH 设置。
+- 唯一落盘数据：上传文件、`uploads/.meta.json`、`config.json`（约百字节）、场景帧缓存（见[磁盘布局](#磁盘布局)）。
+- 分级读取自 `project.json` 的 `contentrating` 字段，与 WE 客户端显示一致，但**不跟随** WE 客户端的成人内容开关（插件直接扫盘）。
 
-> 选择弹窗：浏览全部壁纸缩略图，支持批量隐藏与已隐藏恢复。
+## 与 dsh-better-sidebar 的兼容
 
-### 隐藏与恢复（软删除）
-
-每张壁纸卡片右上角有「隐藏」按钮——只是从列表移除，**不删除任何源文件**。需要时在弹窗的「已隐藏」标签里单张**恢复**或**全部恢复**；弹窗工具栏的「批量」进入多选模式，可一次隐藏多张。隐藏状态保存在浏览器 `localStorage`，刷新 / 重启不丢；隐藏当前正在播放的壁纸不会打断播放，自动轮转也会跳过被隐藏的壁纸。
-
-### 内容分级与类型过滤
-
-选择壁纸弹窗的网格上方有两个下拉框，复刻 Wallpaper Engine 自己的分类方式：
-
-- **内容分级** —— 读取每张壁纸 `project.json` 的 `contentrating` 字段（即 WE workshop 的 G / PG13 / R 三档标签）：**全部** / **Everyone（G，默认）** / **PG13（家长指导级）** / **Mature（R）** / **未分级**（没有该字段的壁纸，通常是本地项目或自上传内容）。
-- **类型** —— 按可内嵌类型筛选：**全部** / **视频** / **网页** / **图片**（自上传）。
-
-每个选项都带当前可播放壁纸数量；被过滤的壁纸会从网格、轮播编辑器和轮播候选中整体剔除，也不会被自动选中或轮换。选择保存在浏览器 `localStorage`；默认 Everyone 对应 WE 保守的首启立场。
-
-> 说明：分级读取自壁纸文件里的 `contentrating` 字段，与 WE 客户端界面显示的分级一致，但**不会**跟随 WE 客户端里成人内容开关的状态（插件直接扫描磁盘，不读 WE 的配置）。
-
-### 卡片样式与黑胶唱片
-
-- **紧凑布局**：设置页顶部有一个**滑动开关**。开启后为 **CD 架效果** —— 卡片像 CD 盒一样纵向层叠（下排上沿盖住上排下沿、左右不遮挡），鼠标悬停放大置顶；网格更紧凑（每行约 7 个）且**一页到底不翻页**。关闭则为常规网格（固定高度防重叠 + 分页，默认）。选择保存在浏览器 `localStorage`。
-- **黑胶唱片**：选择壁纸界面旁边有一个**旋转的黑胶唱片**，把当前选中壁纸的封面当作唱片标签展示 —— 播放时旋转、暂停即停（系统开启「减少动态效果」时停用动画）。弹窗头部也保留小号黑胶。该效果在**经典与新版两种卡片样式下都显示**。
-
-![紧凑布局壁纸仓库（CD 架效果）](docs/images/compact-wallpaper-library.png)
-
-> 紧凑布局：CD 架式层叠网格，悬停放大置顶，一页到底不翻页。
-
-![旋转的黑胶唱片（黑胶 CD 壁纸展示）](docs/images/vinyl-record.gif)
-
-> 黑胶唱片：当前选中壁纸的封面作为唱片标签，播放时旋转、暂停即停。
-
-### 视频倍速与水平翻转
-
-选中视频壁纸后，「壁纸效果」区出现 **倍速** 档位（0.5x / 0.75x / 1x / 1.25x / 1.5x / 2x）——基于浏览器原生 `playbackRate`，即时生效、不重载不黑屏（壁纸视频本就静音，无需担心音画同步）。**水平翻转** 开关对视频、网页与上传的图片/视频都生效，镜像通过 CSS `scaleX(-1)` 完成，零主线程开销。
-
-### 自定义壁纸
-
-在「自定义壁纸」区可以上传本地图片（JPG / PNG）或视频（MP4）作为壁纸：
-
-- **存储位置**：上传文件默认保存在 `~/.dsh-wallpaper-engine/uploads`（用户主目录，通常是 C 盘）。点「更改」可把存储位置改到任意盘符（绝对路径，支持 `~`），已有文件会自动迁移过去，选择会持久化、重启不丢——不想让壁纸数据占 C 盘的用户建议改到其他盘。
-- **格式限制**：仅 JPG / PNG / MP4；浏览器与宿主端双重校验，格式不符会给出明确提示。
-- **适配模式**：覆盖 / 填充 / 居中 / 拉伸 四种画面适配（仅对自定义壁纸生效，WE 壁纸保持原设计构图）。
-- **管理**：已上传列表可单独**移除**（二次确认后删除本地文件）；上传的壁纸同样支持隐藏 / 恢复、倍速与翻转。
-- **重复去重**：重复上传同一文件会自动识别（按内容校验），直接选择已有的那张，不会在仓库里堆积副本。
-
-### 自动轮转（轮播列表）
-
-轮转基于**自定义轮播列表**（轮播列表）。用 **新建** 可以创建任意多个列表，从库存里勾选 Video/Web 壁纸加入每个列表，并为每个列表单独设置**切换间隔**（1、5、10、30、60 或 120 分钟）和**播放顺序**（顺序/随机），勾选 **自动轮转** 后只在该列表内循环。列表保存在浏览器 `localStorage`，完全在客户端维护——轮转不再依赖 Wallpaper Engine 自己的 `config.json` 播放列表路径。
-
-每个列表至少需要 2 个可播放壁纸；手动切换壁纸会重新计算下一次轮转时间；不同列表可以有不同的间隔（比如一个每 5 分钟、一个每 30 分钟）。首次使用时，插件会自动把第一个可播放的 WE 播放列表导入成一个轮播列表，开箱即用；编辑列表时也可以用 **从 WE 播放列表导入** 把其它播放列表导入当前编辑的列表。Scene 和 Application 壁纸不能嵌入网页，会自动从轮转候选和选择器中剔除。
-
-### 液态玻璃外观（整个设置窗口 + 配色 + 透明度）
-
-设置页顶部「外观」区控制**整个 DSH 原生设置窗口**的观感（参照 dsh-web-ui-all 皮肤中心的设计）：
-
-| 控件 | 作用 | 范围 | 默认 |
-|---|---|---|---|
-| **设置窗口液态玻璃** | 总开关：把设置窗口整体（对话框 + 左导航 + 全部原生分区）换成液态玻璃 | 开 / 关 | 开 |
-| **配色** | 主题色：窗口内的按钮、开关、链接、导航选中、滑块与玻璃高光统一跟随 | 6 预设 + 自定义取色 | `#4f8cff` 经典蓝 |
-| **玻璃颜色** | 设置窗口玻璃的**底色色调**：玻璃本身的颜色（不只是透明度） | 6 预设 + 自定义取色 | 浅色白 / 深色深夜蓝 |
-| **玻璃透明度** | 玻璃面板（设置窗口、输入栏、气泡、侧边栏）的透明度 | 0–60 % | 12 % |
-
-> 开启「设置窗口液态玻璃」后，**General、模型、插件等所有原生分区**和左侧导航都会变成同一套液态玻璃 + 配色（通过覆盖设置对话框作用域内的 shell token 实现，不侵入其他界面）。设置窗口的玻璃模糊与**对话栏使用同一套调节参数**：「玻璃」滑动条（0–60 px）同时控制设置窗口与输入栏/气泡的模糊半径，饱和度/亮度/对比度配方完全一致；**玻璃颜色**决定玻璃底色本身的色调（默认浅色白/深色深夜蓝，选定后两种主题统一使用该色），**玻璃透明度**决定浓淡，越高越"透"（壁纸颜色更清晰地透过面板），越低越接近实色。不支持 `backdrop-filter` 的浏览器自动回退到高不透明实色，保证文字可读。所有控件即时生效并保存在浏览器 `localStorage`，刷新不丢。
-
-![液态玻璃全新设置窗口](docs/images/liquid-glass-window.png)
-
-> 液态玻璃：整个设置窗口统一玻璃质感，跟随「配色」「玻璃颜色」与「玻璃透明度」。
-
-### 四个滑动条
-
-壁纸激活后，四个滑动条可以微调它与界面的融合效果：
-
-| 滑动条 | 作用 | 范围 | 默认 |
-|---|---|---|---|
-| **壁纸模糊** | 模糊壁纸本身 | 0–60 px | 0 |
-| **暗化** | 加深壁纸与文字之间的遮罩 | 0–90 % | 25 % |
-| **边框** | 提高边框 / 分割线的对比度 | 0–90 % | 35 % |
-| **玻璃** | 玻璃面板（输入栏、气泡）的模糊半径 | 0–60 px | 24 |
-
-> **浅色 / 深色模式的适配提醒** — 每张壁纸的色系和明暗差异很大，**没有哪一种模式能适配所有壁纸**。请在 DSH 的「浅色 / 深色」主题之间来回切换，找到适合当前壁纸的那一种。如果在偏亮或花纹复杂的壁纸上 **文字或分割线看不清**，就把 **暗化**、**边框** 两个滑动条调高（必要时再稍微加一点 **壁纸模糊**），直到看着舒服为止。四个滑动条都是即时生效的，**无需刷新页面**。
-
-## 配置
-
-本插件不会向模型暴露任何工具或提示文本，对 agent 零 token 开销。选择、隐藏、轮播列表等状态都保存在浏览器 `localStorage`，不写入任何持久化 DSH 设置。唯一的本地落盘数据是**自定义壁纸文件**（存于你设置的上传目录）与记录该目录位置的 `~/.dsh-wallpaper-engine/config.json`（约百字节）。
-
-## 与 dsh-better-sidebar 的兼容适配
-
-本插件的液态玻璃效果对 dsh-better-sidebar 的侧边栏面板做了专门适配（毛玻璃、高光与层级统一），让侧边栏与对话区共享同一套「壁纸 + 遮罩」背景，三列视觉一致、不再割裂。
-
-![dsh-better-sidebar 兼容适配](docs/images/better-sidebar.png)
+液态玻璃效果对 dsh-better-sidebar 的侧边栏面板做了专门适配（毛玻璃、高光与层级统一），三列共享同一套「壁纸 + 遮罩」背景。
 
 ## 已知限制
 
-- Scene（原生 3D）和 Application 壁纸无法内嵌，不会显示在缩略图选择器和轮播候选中；它们的动态渲染仍是 Wallpaper Engine 在桌面上的工作。
-- 浏览器需能自动播放静音 `<video>`（DSH 跑在 loopback，现代浏览器允许静音自动播放）。
-- 媒体从你本机的 Wallpaper Engine 安装路径提供；host 只提供它已枚举过的文件，不会暴露任意文件系统。自定义上传的文件同样只存在于本机，不上传任何服务器。
-- 选择器文案为中英混合（本 bundle 尚未接入 DSH 的 locale 命名空间）。
+- Scene（原生 3D）与 Application 无法内嵌；动态渲染仍是 WE 桌面的工作。
+- 浏览器需允许静音 `<video>` 自动播放（DSH 跑在 loopback，现代浏览器默认允许）。
+- Web 壁纸运行在无同源权限的沙箱中（见[安全模型](#安全模型)）。
+- 选择器文案为中英混合（未接入 DSH locale 命名空间；文案已集中在 `src/client.js` 顶部 `STR` 表中，为 i18n 铺路）。
+- 纯 shader / 程序生成类场景、BC7 等特殊纹理、视频纹理驱动场景会回退工坊预览图——预期行为，非缺陷（本机实测约 80%+ 场景能提取出接近原图的静态帧）。
 
-## 开发 / 重建
-
-host 端（`lib/index.js`）是纯 ESM，无需构建。client 端（`lib/client.js`）是**编译产物**，由规范源文件 `src/client.js` 经 `scripts/build-client.mjs` 生成，输出 DSH 模块加载器要求的 `window.__ModuleLoader__.load({ id, factory })` 外壳（与盒内 client 包 `tsdown` 产出的形态一致）。
+## 开发
 
 ```sh
-npm run build      # 从 src/client.js 重新生成 lib/client.js
-npm run verify     # 物化生成的 bundle 并断言其导出
+npm run build             # 从 src/client.js + src/client.css 重新生成 lib/client.js
+npm test                  # = npm run verify && npm run verify:scene
+npm run diagnose:scenes   # 批量诊断本机场景壁纸，输出 scene-diagnosis.tsv
 ```
 
-编辑 `src/client.js` 后运行 `npm run build`，不要手改 `lib/client.js`。`npm install`/`pnpm install` 会自动触发 `prepare` → `build`，因此全新 checkout 总是带最新的 `lib/client.js`。
+- Host 端（`lib/index.js`、`lib/pkg-extract.js`）为纯 ESM，无构建步骤。
+- Client 端规范源文件是 `src/client.js`（逻辑 + React 树）与 `src/client.css`（全部样式）；`scripts/build-client.mjs` 在构建时把 CSS 注入模板字面量并生成 `window.__ModuleLoader__.load(...)` 外壳。**不要手改 `lib/client.js`。**
+- `npm install` / `pnpm install` 触发 `prepare` → `build`，全新 checkout 始终带最新产物。
+- 测试要求 Node ≥ 18（见 `package.json` `engines`）；CI 在 Node 18/20/22 上运行全部验证脚本。
+- 二进制解析器（PKG/LZ4/TEX/DXT/PNG）在 `lib/pkg-extract.js` 单一实现；`scripts/diagnose-scenes.mjs` 通过其导出复用，请勿在脚本中复制解析逻辑。
 
-host↔browser 的契约是同源 HTTP，两端可独立开发：改 host 后重启 `dsh web` 生效，改 client 则先 `npm run build` 再重启 `dsh web`。
+### 仓库体积说明
+
+`docs/images/` 目前约 47MB（其中 `vinyl-record.gif` 39MB）。如需压缩，建议：
+
+```sh
+# PNG（无损压缩）
+oxipng --opt max docs/images/*.png
+# GIF → 动图 WebP / MP4（体积可降 90%+）
+ffmpeg -i docs/images/vinyl-record.gif -c:v libwebp -lossless 0 docs/images/vinyl-record.webp
+```
+
+## 贡献
+
+改动请遵循：先改 `src/` 再 `npm run build`；提交前跑 `npm test`。MIT License（见 [LICENSE](LICENSE)）。

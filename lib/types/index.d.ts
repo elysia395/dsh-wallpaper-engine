@@ -2,9 +2,10 @@
  * dsh-wallpaper-engine — host half type surface.
  *
  * The host plugin contributes no public Cordis services and registers no model
- * tool. It exposes three same-origin HTTP routes through `ctx.webServer` (see
- * README) and unwinds them on unload. It treats `webServer` as optional, so the
- * bundle also composes into a headless/TUI profile (where it is a no-op).
+ * tool. It exposes the same-origin HTTP routes documented in the README
+ * through `ctx.webServer` and unwinds them on unload. It hard-depends on the
+ * webserver service (`inject: ['webServer']`); this bundle is web-only, so it
+ * is simply not added to headless/TUI profiles.
  */
 
 import type { Context } from '@deepseek-ai/cordis';
@@ -17,6 +18,8 @@ export interface WallpaperDescriptor {
   title: string;
   /** Wallpaper kind: 'video' | 'web' | 'scene' | 'application'. */
   type: string;
+  /** WE content rating ("Everyone" / "PG13" / "Mature"), or null. */
+  contentrating: string | null;
   /** Whether the wallpaper can be rendered by the browser (video/web). */
   playable: boolean;
   /** Served media URL (`/wallpaper-engine/media/<token>`), or null. */
@@ -51,6 +54,8 @@ export interface PlaylistDescriptor {
 export interface Inventory {
   /** Absolute Wallpaper Engine install dir, or null when not found. */
   installDir: string | null;
+  /** Directory custom uploads are stored in (plugin-managed). */
+  uploadDir: string | null;
   /** Total installed wallpapers. */
   total: number;
   /** Number of portable (video/web) wallpapers. */

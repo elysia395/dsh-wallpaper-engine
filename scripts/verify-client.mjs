@@ -47,7 +47,7 @@ const document = {
 
 const localStorage = {
   // Select a wallpaper and enable rotation over a user-defined group; omit
-  // effect knobs so the new DEFAULTS (scrim 0.25, border 0.35, blur 24) apply.
+  // effect knobs so the new DEFAULTS (scrim 0.25, border 0.35, blur 16) apply.
   _store: { 'dsh-wallpaper-engine:selection': JSON.stringify({
     id: 'a',
     rotationGroupId: 'g1',

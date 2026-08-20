@@ -15,6 +15,7 @@ import { spawnSync } from 'node:child_process';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const hasSource = existsSync(resolve(root, 'src', 'client.js')) &&
+  existsSync(resolve(root, 'src', 'client.css')) &&
   existsSync(resolve(root, 'scripts', 'build-client.mjs'));
 
 if (hasSource) {

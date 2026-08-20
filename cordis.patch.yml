@@ -15,5 +15,7 @@
     # browser half fetches directly (GET /wallpaper-engine/{inventory,media,preview}).
     - id: wallpaper-engine
       name: 'dsh-plugin-wallpaper-engine'
-      # webServer is optional so this bundle also loads in the headless/TUI
-      # profile without failing; the host half guards its absence with ctx.get.
+      # The host half hard-depends on the webserver service (`inject:
+      # ['webServer']` in lib/index.js); a ctx.get() at mount time would be
+      # racy. This bundle is web-only (its dsh.client declares platform
+      # "web"), so it is simply not added to headless/TUI profiles.

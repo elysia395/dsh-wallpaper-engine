@@ -1,0 +1,785 @@
+  /* Wallpaper layer: a fixed child of <body>, sunk BELOW the app frame. */
+  .we-layer { position: fixed; inset: 0; z-index: -2; overflow: hidden; pointer-events: none; }
+  /* Blurring via CSS filter darkens/thins the edges, so the layer is scaled up
+     (--we-wallpaper-scale tracks blur) to hide the transparent fringe the blur
+     would otherwise reveal at the viewport edges. */
+  .we-layer .we-media {
+    width: 100%; height: 100%; object-fit: cover; display: block;
+    background: transparent; border: 0;
+    filter: blur(var(--we-wallpaper-blur, 0px));
+    /* Flip composes with the blur-compensation scale on the SAME transform
+       (scaleX(-1) mirrors around the center; pure compositor work). */
+    transform: scale(var(--we-wallpaper-scale, 1)) scaleX(var(--we-wallpaper-flip, 1));
+    transform-origin: center;
+  }
+  /* Custom uploads: the user-chosen fit mode (覆盖/填充/居中/拉伸). WE media
+     keeps cover above; only .we-media--fit reads the variable. */
+  .we-layer .we-media--fit { object-fit: var(--we-object-fit, cover); }
+
+  /* Scrim: sits ABOVE the wallpaper (z-index -1 > -2, so it never depends on
+     DOM insertion order — the wallpaper element is re-appended on wallpaper
+     switch and could otherwise slide above the scrim). Below the UI. */
+  .we-scrim {
+    position: fixed; inset: 0; z-index: -1;
+    pointer-events: none;
+    background: var(--we-scrim-color, rgba(0, 0, 0, 0.25));
+  }
+
+  /* While a wallpaper is active: make the app frame AND sidebar transparent so
+     all columns share the same wallpaper+scrim background, raise border alpha
+     for visibility, and apply the frosted-glass effect to opaque surfaces. */
+  body[data-we-wallpaper] {
+    --dsw-alias-bg-base: transparent;
+    --dsw-specific-sidebar-fill: transparent;
+    /* Border emphasis: neutral gray so it reads on both light and dark themes;
+       alpha is driven by the "边框" slider through --we-border-alpha. */
+    --dsw-alias-border-l1: rgba(180, 180, 180, var(--we-border-alpha, 0.35));
+    --dsw-alias-border-l2: rgba(180, 180, 180, var(--we-border-alpha, 0.35));
+    --dsw-alias-border-l2-darkmode-thin: rgba(180, 180, 180, var(--we-border-alpha, 0.35));
+  }
+  /* DSH rc.7+ injects the theme palette (design-platform.css) as a plugin-owned
+     stylesheet appended to <head> AFTER this one, so in dark mode the shell's
+     body[data-ds-dark-theme] rules (equal specificity 0,1,1, later in the
+     document) win the cascade and repaint the app frame / sidebar / borders
+     with their opaque dark colors — hiding the wallpaper behind them. Repeat
+     the transparency + border-emphasis overrides under the higher-specificity
+     dark selector (0,2,1) so the wallpaper always wins regardless of stylesheet
+     order. */
+  body[data-ds-dark-theme][data-we-wallpaper] {
+    --dsw-alias-bg-base: transparent;
+    --dsw-specific-sidebar-fill: transparent;
+    --dsw-alias-border-l1: rgba(180, 180, 180, var(--we-border-alpha, 0.35));
+    --dsw-alias-border-l2: rgba(180, 180, 180, var(--we-border-alpha, 0.35));
+    --dsw-alias-border-l2-darkmode-thin: rgba(180, 180, 180, var(--we-border-alpha, 0.35));
+  }
+
+  /* ── Light-scheme text contrast boost ──────────────────────────────────────
+     In light mode the grays (tertiary/caption/secondary) were tuned against a
+     near-white page. Over a busy wallpaper + light scrim they lose contrast, so
+     push the whole gray ramp darker while a wallpaper is active. Primary text
+     is already near-black; we still pin it to pure black for max legibility.
+     (Dark mode is untouched: its white-on-dark text already reads fine.) */
+  body[data-we-wallpaper]:not([data-ds-dark-theme]) {
+    --dsw-alias-label-primary: rgb(0, 0, 0);
+    --dsw-alias-label-primary-dimmed: rgb(10, 10, 12);
+    --dsw-alias-label-secondary: rgb(40, 42, 46);
+    --dsw-alias-label-tertiary: rgb(70, 73, 79);
+    --dsw-alias-label-caption: rgb(110, 114, 120);
+    --dsw-alias-label-dimmed: rgb(50, 52, 56);
+  }
+
+  /* ── iOS liquid glass ──────────────────────────────────────────────────────
+     The opaque conversation surfaces become translucent glass. The recipe is
+     Apple-like, not a plain blur:
+       - LARGE-radius blur + HIGH saturation + brightness/contrast lift, so the
+         wallpaper colour melts into a soft glow instead of a gray smear
+         (saturation scales with blur in applyEffects: 0 blur → no melt);
+       - a top-weighted specular gradient (background-image) — the sheen is
+         what makes the surface read as "wet glass", not a flat tint;
+       - a light, low-alpha base (not a dark one) so the wallpaper shows through;
+       - a 1px top refraction highlight + 0.5px hairline + soft elevation
+         shadow for "thick glass";
+       - blur radius + saturation both scale off --we-blur / --we-saturate
+         (the 玻璃 slider drives both, so composer, bubbles AND the
+         better-sidebar shell stay in one uniform liquid look).
+
+     Transparency is driven through the design tokens the surfaces already read
+     (--dsw-specific-input-major on the composer card, --dsw-specific-bubble on
+     message bubbles) rather than through class selectors: CSS-module class
+     names are build hashes and change whenever the shell frontend is rebuilt,
+     which silently kills the effect. backdrop-filter cannot be expressed as a
+     token, so the blur itself still needs an element selector — [data-composer-card]
+     is authored in the shell source and survives rebuilds. Bubbles carry no such
+     attribute, so they fall back to the module-CSS suffix convention; if that
+     ever stops matching the bubble stays translucent, just without the blur. */
+  body[data-we-wallpaper] {
+    --dsw-specific-input-major: rgba(255, 255, 255, var(--we-glass-alpha, 0.15));
+    --dsw-specific-bubble: rgba(255, 255, 255, calc(var(--we-glass-alpha, 0.15) * 0.8));
+  }
+  body[data-ds-dark-theme][data-we-wallpaper] {
+    --dsw-specific-input-major: rgba(255, 255, 255, calc(var(--we-glass-alpha, 0.15) * 0.4));
+    --dsw-specific-bubble: rgba(255, 255, 255, calc(var(--we-glass-alpha, 0.15) * 0.33));
+  }
+  body[data-we-wallpaper] [data-composer-card],
+  body[data-we-wallpaper] [class*="_bubble"] {
+    /* Specular sheen: a top-weighted white gradient turns a flat translucent
+       tint into "wet glass" — kept faint so the wallpaper stays 通透 (clear)
+       instead of glaring. */
+    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.05) 38%, rgba(255, 255, 255, 0.02));
+    -webkit-backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
+    backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, var(--we-glass-highlight, 0.32)),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.08),
+      inset 0 0 0 0.5px rgba(255, 255, 255, 0.08),
+      0 12px 40px rgba(0, 0, 0, var(--we-glass-shadow, 0.12));
+  }
+
+  /* ── dsh-better-sidebar glass ──────────────────────────────────────────────
+     The sidebar shell is portalled onto <body> under a stable host attribute
+     "data-dsh-better-sidebar" (set by the plugin's own mount code), so we can
+     target the whole tree without depending on its CSS-module hashes. Its root
+     panels read the opaque --dsw-alias-bg-layer-1 token (hence the "black
+     frame") — give them the SAME clear liquid-glass recipe as the
+     composer/bubbles (faint specular sheen + gentle frosted melt), with blur
+     radius + saturation driven by the 玻璃 slider (--we-blur / --we-saturate).
+     Inner chrome surfaces that paint the same opaque tokens get a translucent
+     base too; the blur lives on the root panels (one blur per shell). */
+  body[data-we-wallpaper] [data-dsh-better-sidebar] [class*="_boundaryError"],
+  body[data-we-wallpaper] [data-dsh-better-sidebar] [class*="_panel"] {
+    background-color: rgba(255, 255, 255, calc(var(--we-glass-alpha, 0.15) * 0.66)) !important;
+    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04) 38%, rgba(255, 255, 255, 0.01)) !important;
+    -webkit-backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01) !important;
+    backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01) !important;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, var(--we-glass-highlight, 0.32)),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.08),
+      inset 0 0 0 0.5px rgba(255, 255, 255, 0.06);
+  }
+  body[data-we-wallpaper] [data-dsh-better-sidebar] [class*="_pane"],
+  body[data-we-wallpaper] [data-dsh-better-sidebar] [class*="_tabBar"],
+  body[data-we-wallpaper] [data-dsh-better-sidebar] [class*="_paneCard"],
+  body[data-we-wallpaper] [data-dsh-better-sidebar] [class*="_editorHeader"],
+  body[data-we-wallpaper] [data-dsh-better-sidebar] [class*="_explorerHeader"],
+  body[data-we-wallpaper] [data-dsh-better-sidebar] [class*="_gitHeader"],
+  body[data-we-wallpaper] [data-dsh-better-sidebar] [class*="_browserBar"],
+  body[data-we-wallpaper] [data-dsh-better-sidebar] [class*="_terminalWrap"] {
+    background-color: rgba(255, 255, 255, calc(var(--we-glass-alpha, 0.15) * 0.53)) !important;
+  }
+  body[data-ds-dark-theme][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_boundaryError"],
+  body[data-ds-dark-theme][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_panel"] {
+    background-color: rgba(255, 255, 255, calc(var(--we-glass-alpha, 0.15) * 0.33)) !important;
+  }
+  body[data-ds-dark-theme][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_pane"],
+  body[data-ds-dark-theme][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_tabBar"],
+  body[data-ds-dark-theme][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_paneCard"],
+  body[data-ds-dark-theme][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_editorHeader"],
+  body[data-ds-dark-theme][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_explorerHeader"],
+  body[data-ds-dark-theme][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_gitHeader"],
+  body[data-ds-dark-theme][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_browserBar"],
+  body[data-ds-dark-theme][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_terminalWrap"] {
+    background-color: rgba(255, 255, 255, calc(var(--we-glass-alpha, 0.15) * 0.26)) !important;
+  }
+
+  /* Picker chrome. */
+  .we-picker { display: flex; flex-direction: column; gap: 10px; }
+  .we-picker__select { max-width: 100%; }
+  .we-picker__row { display: flex; gap: 8px; align-items: center; }
+  /* First-level settings section wrapper (mirrors the skin-center's
+     sectionList): the ul/li carry no default list styling. */
+  .we-picker__section-list { margin: 0; padding: 0; list-style: none; }
+
+  /* ── WHOLE native settings window → liquid glass (master switch).
+     Keyed on body[data-we-glass-window] (set by applyEffects from the
+     glassWindow preference). The settings dialog is the shell's
+     div[role="dialog"] containing the settings.section outlet anchor
+     (data-slot="settings.section" — stamped by the slot renderer, same anchor
+     the skin-center's semantic layer uses). The dialog reads inherited shell
+     tokens (panel background = --dsw-alias-bg-layer-2, nav active/hover =
+     --dsw-specific-sidebar-nav-item-*, close hover = --dsw-alias-interactive-bg-hover,
+     accents = --dsw-alias-brand-primary), so overriding those tokens ON the
+     dialog element restyles the ENTIRE window — left nav, content header and
+     every native section (General / Models / Plugins / …) — in one shot:
+     translucent glass base + backdrop blur + specular sheen + inner highlight,
+     with the accent color remapped to --we-accent (配色) and all surface alphas
+     driven by --we-glass-alpha (玻璃透明度). Off = stock shell look. ── */
+  body[data-we-glass-window] [role="dialog"]:has([data-slot="settings.section"]) {
+    /* Glass surface alphas (light scheme): the base tint is --we-glass-color
+       (玻璃颜色) mixed with transparent at the 玻璃透明度-driven alpha, so the
+       whole window glass can be tinted to any color. Default (no custom color)
+       = white glass, the stock look. */
+    --dsw-alias-bg-layer-1: color-mix(in srgb, var(--we-glass-color, #ffffff) calc(var(--we-glass-alpha, 0.5) * 0.9 * 100%), transparent);
+    --dsw-alias-bg-layer-2: color-mix(in srgb, var(--we-glass-color, #ffffff) calc(var(--we-glass-alpha, 0.5) * 1.0 * 100%), transparent);
+    --dsw-alias-bg-layer-3: color-mix(in srgb, var(--we-glass-color, #ffffff) calc(var(--we-glass-alpha, 0.5) * 1.1 * 100%), transparent);
+    /* Nav + interactive states tinted with the accent. */
+    --dsw-specific-sidebar-nav-item-active: color-mix(in srgb, var(--we-accent, #4f8cff) 26%, rgba(255, 255, 255, 0.08));
+    --dsw-specific-sidebar-nav-item-hover: color-mix(in srgb, var(--we-accent, #4f8cff) 13%, rgba(255, 255, 255, 0.05));
+    --dsw-alias-interactive-bg-hover: color-mix(in srgb, var(--we-accent, #4f8cff) 14%, transparent);
+    --dsw-alias-interactive-bg-hover-accent: color-mix(in srgb, var(--we-accent, #4f8cff) 18%, transparent);
+    /* Whole-dialog accent remap: every native control (links, primary buttons,
+       switches, active tabs, slider fills) follows the 配色 control. */
+    --dsw-alias-brand-primary: var(--we-accent, #4f8cff);
+    --dsw-alias-brand-text: var(--we-accent, #4f8cff);
+    --dsw-alias-button-primary-fill: var(--we-accent, #4f8cff);
+    --dsw-alias-button-primary-hover: color-mix(in srgb, var(--we-accent, #4f8cff) 88%, #fff);
+    --dsw-alias-button-primary-dimmed: color-mix(in srgb, var(--we-accent, #4f8cff) 22%, transparent);
+    --dsw-alias-state-business-primary: var(--we-accent, #4f8cff);
+    /* Frosted finish — the SAME recipe as the conversation surfaces (composer
+       card / bubbles): the blur radius, saturation melt and brightness all
+       read the 玻璃 slider (--we-blur 0–60px, --we-saturate, --we-glass-brightness),
+       so the settings window glass tracks the conversation-bar adjustment range
+       exactly. Plus a specular sheen + inner edge highlight + diffuse shadow
+       (the shell already rounds the panel at 24px). */
+    -webkit-backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
+    backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
+    background-image: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.1) 0%,
+      rgba(255, 255, 255, 0.03) 38%,
+      rgba(255, 255, 255, 0.05) 100%
+    );
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, 0.22),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.06),
+      0 24px 80px rgba(0, 7, 18, 0.35);
+  }
+  /* Dark scheme: deep translucent base instead of white. The default glass
+     color is deep navy; a user-picked 玻璃颜色 overrides it in both themes. */
+  body[data-ds-dark-theme][data-we-glass-window] [role="dialog"]:has([data-slot="settings.section"]) {
+    --dsw-alias-bg-layer-1: color-mix(in srgb, var(--we-glass-color, #0d1524) calc(var(--we-glass-alpha, 0.5) * 0.9 * 100%), transparent);
+    --dsw-alias-bg-layer-2: color-mix(in srgb, var(--we-glass-color, #0d1524) calc(var(--we-glass-alpha, 0.5) * 1.0 * 100%), transparent);
+    --dsw-alias-bg-layer-3: color-mix(in srgb, var(--we-glass-color, #0d1524) calc(var(--we-glass-alpha, 0.5) * 1.1 * 100%), transparent);
+    --dsw-specific-sidebar-nav-item-active: color-mix(in srgb, var(--we-accent, #4f8cff) 30%, rgba(255, 255, 255, 0.06));
+    --dsw-specific-sidebar-nav-item-hover: color-mix(in srgb, var(--we-accent, #4f8cff) 14%, rgba(255, 255, 255, 0.04));
+    background-image: linear-gradient(
+      180deg,
+      rgba(255, 255, 255, 0.07) 0%,
+      rgba(255, 255, 255, 0.02) 38%,
+      rgba(255, 255, 255, 0.03) 100%
+    );
+  }
+  /* No backdrop-filter support: fall back to near-opaque glass so text stays
+     readable (same policy as the skin's patches.css). */
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    body[data-we-glass-window] [role="dialog"]:has([data-slot="settings.section"]) {
+      --dsw-alias-bg-layer-1: var(--we-glass-color, #ffffff);
+      --dsw-alias-bg-layer-2: var(--we-glass-color, #ffffff);
+      --dsw-alias-bg-layer-3: var(--we-glass-color, #ffffff);
+    }
+    body[data-ds-dark-theme][data-we-glass-window] [role="dialog"]:has([data-slot="settings.section"]) {
+      --dsw-alias-bg-layer-1: var(--we-glass-color, #0d1524);
+      --dsw-alias-bg-layer-2: var(--we-glass-color, #0d1524);
+      --dsw-alias-bg-layer-3: var(--we-glass-color, #0d1524);
+    }
+  }
+
+  /* Section card (mirrors the skin-center's pluginCard): a quiet layer card —
+     translucent token background + hairline border + radius. NO own backdrop
+     blur: the whole settings window is the glass surface (see the
+     body[data-we-glass-window] dialog rules above), so a nested blur would
+     double-frost and look muddy. Without the master switch the card still
+     reads as a subtle layer over the stock panel. */
+  .we-picker__card-shell {
+    border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.28));
+    border-radius: 12px;
+    background: var(--dsw-alias-bg-layer-3, rgba(128, 128, 128, 0.08));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
+    padding: 14px 16px;
+    transition: border-color 0.16s ease, background-color 0.16s ease;
+  }
+  .we-picker__card-shell:hover { border-color: var(--dsw-alias-label-dimmed, rgba(128, 128, 128, 0.5)); }
+  /* Card header: name + count badge + description (mirrors skin-center). */
+  .we-picker__card-head {
+    display: flex; align-items: baseline; gap: 8px;
+    padding-bottom: 10px; border-bottom: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.22));
+  }
+  .we-picker__card-name {
+    font-size: 15px; font-weight: 600; color: var(--dsw-alias-label-primary, inherit);
+  }
+  .we-picker__card-badge {
+    font-size: 11px; font-weight: 500; color: var(--dsw-alias-label-secondary, #6b7280);
+  }
+  .we-picker__card-desc {
+    margin-left: auto; font-size: 12px; color: var(--dsw-alias-label-tertiary, #6b7280);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  /* 配色 swatches: circular preset buttons + native color picker. The active
+     swatch gets an accent ring so the current choice is obvious at a glance. */
+  .we-picker__accent-row { flex-wrap: wrap; }
+  .we-picker__swatch {
+    width: 20px; height: 20px; padding: 0; border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.7);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+    cursor: pointer;
+    transition: transform 0.12s ease, box-shadow 0.12s ease;
+  }
+  .we-picker__swatch:hover { transform: scale(1.12); }
+  .we-picker__swatch--active {
+    box-shadow: 0 0 0 2px var(--we-accent, #4f8cff), 0 0 0 4px rgba(255, 255, 255, 0.5);
+  }
+  .we-picker__swatch-custom {
+    display: inline-flex; align-items: center; gap: 4px; cursor: pointer;
+  }
+  .we-picker__swatch-custom input[type="color"] {
+    width: 22px; height: 22px; padding: 0; border: 0; border-radius: 50%;
+    background: transparent; cursor: pointer;
+  }
+  .we-picker__swatch-custom input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
+  .we-picker__swatch-custom input[type="color"]::-webkit-color-swatch { border: 1px solid rgba(255, 255, 255, 0.6); border-radius: 50%; }
+  /* Master-switch row (设置窗口液态玻璃) sits on its own line under the 透明度
+     slider so the switch and the hint read as one labelled control. */
+  .we-picker__window-toggle { font-size: 0.82em; }
+  .we-picker__window-toggle + .we-picker__hint { margin-left: 2px; }
+
+  /* Pagination bar under each paged grid (normal / hidden / group editor).
+     Horizontally centered; as a direct child of the flex modal body it sinks
+     to the bottom when the grid leaves free space (margin-top: auto). */
+  .we-picker__pager {
+    display: flex; gap: 10px; align-items: center; justify-content: center;
+    margin-top: auto; padding-top: 8px; flex-wrap: wrap;
+  }
+  .we-picker__playlist-select { flex: 1; min-width: 0; }
+  .we-picker__filter-row { flex-wrap: wrap; flex-shrink: 0; }
+  .we-picker__filter-row .we-picker__playlist-select { flex: 1 1 130px; }
+  .we-picker__rotation-toggle { display: inline-flex; align-items: center; gap: 6px; }
+  .we-picker__rotation-interval { margin-left: auto; }
+  /* Flat, uniform-height controls. Native <select> renders as a raised "3D"
+     OS widget whose height can shift a pixel on hover; inside tightly packed
+     rows that squeezes the neighbours and, with the cursor near a row edge,
+     oscillates (hover → grow → shift → unhover → shrink → …). Strip the
+     native chrome and PIN the height so no control's intrinsic size can move
+     a row. */
+  .we-picker__btn {
+    cursor: pointer; height: 26px; line-height: 24px; padding: 0 10px;
+    border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));
+    border-radius: 6px; background: transparent;
+    color: var(--dsw-alias-label-secondary, #888); font-size: 0.82em;
+    white-space: nowrap;
+  }
+  .we-picker__btn:hover { background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.12)); }
+  .we-picker__btn:disabled { opacity: 0.45; cursor: default; }
+  .we-picker select {
+    appearance: none; -webkit-appearance: none;
+    height: 26px; padding: 0 8px;
+    border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));
+    border-radius: 6px; background: transparent;
+    color: var(--dsw-alias-label-secondary, #888); font-size: 0.82em;
+    cursor: pointer;
+  }
+  .we-picker select:hover { background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.12)); }
+  .we-picker select:disabled { opacity: 0.45; cursor: default; }
+  .we-picker__hint { font-size: 0.8em; opacity: 0.7; }
+  .we-picker__error { font-size: 0.82em; opacity: 0.9; color: #e5534b; }
+  .we-picker__note { font-size: 0.8em; opacity: 0.85; color: var(--we-accent, var(--dsw-alias-brand-primary, #4f8cff)); }
+
+  /* ── Visual grouping: sections with a hairline divider + quiet label. ── */
+  .we-picker__section { display: flex; flex-direction: column; gap: 8px; }
+  .we-picker__section + .we-picker__section {
+    border-top: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.22));
+    padding-top: 10px;
+  }
+  .we-picker__section-head { display: flex; align-items: center; }
+  .we-picker__section-label {
+    font-size: 0.75em; font-weight: 500; opacity: 0.55;
+    letter-spacing: 0.01em;
+  }
+
+  /* ── Vinyl record (黑胶唱片): rotating disc with the selected wallpaper's
+     cover as the label. Spins while the wallpaper is playing; pauses
+     otherwise. Shown in both settings layouts and in the modal head. ── */
+  .we-vinyl {
+    position: relative; width: 128px; height: 128px; flex: 0 0 auto;
+    border-radius: 50%;
+    background:
+      repeating-radial-gradient(circle at center, #191920 0 2px, #23232c 2px 4px);
+    box-shadow:
+      0 6px 18px rgba(0, 0, 0, 0.55),
+      inset 0 0 0 1px rgba(255, 255, 255, 0.07);
+    animation: we-vinyl-spin 8s linear infinite;
+    animation-play-state: paused;
+  }
+  .we-vinyl--playing { animation-play-state: running; }
+  .we-vinyl--sm { width: 56px; height: 56px; }
+  .we-vinyl__cover {
+    position: absolute; inset: 24%; border-radius: 50%; overflow: hidden;
+    background: rgba(128, 128, 128, 0.25);
+    border: 2px solid rgba(0, 0, 0, 0.85);
+    box-shadow:
+      0 0 0 2px rgba(255, 255, 255, 0.1),
+      inset 0 0 8px rgba(0, 0, 0, 0.6);
+  }
+  .we-vinyl__cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .we-vinyl__empty {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    color: rgba(255, 255, 255, 0.45); font-size: 1.3em;
+  }
+  .we-vinyl__hole {
+    position: absolute; left: 50%; top: 50%;
+    width: 12px; height: 12px; margin: -6px 0 0 -6px;
+    border-radius: 50%; background: #0b0b0e;
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.9);
+  }
+  .we-vinyl--sm .we-vinyl__hole { width: 6px; height: 6px; margin: -3px 0 0 -3px; }
+  @keyframes we-vinyl-spin {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .we-vinyl { animation: none; }
+  }
+  .we-picker__modal-head-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
+
+  /* ── Current-wallpaper card: thumbnail + title + type + primary action. ── */
+  .we-picker__current {
+    display: flex; align-items: center; gap: 10px;
+    padding: 10px; border-radius: 12px;
+    border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.28));
+    background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.06));
+  }
+  .we-picker__current-thumb {
+    width: 64px; height: 36px; flex: 0 0 auto;
+    object-fit: cover; border-radius: 8px;
+    border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));
+    background: rgba(128, 128, 128, 0.14);
+  }
+  .we-picker__current-thumb--empty {
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.85em; opacity: 0.4;
+  }
+  .we-picker__current-info { flex: 1; min-width: 0; }
+  .we-picker__current-title {
+    font-size: 0.9em; font-weight: 500;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .we-picker__current-meta { font-size: 0.75em; opacity: 0.55; margin-top: 2px; }
+
+  /* Primary action (选择壁纸): brand accent, restrained — accent is for the
+     main action only, per the product register's "accent ≠ decoration". */
+  .we-picker__btn--primary {
+    color: var(--we-accent, #4f8cff);
+    border-color: var(--we-accent, #4f8cff);
+  }
+  .we-picker__btn--primary:hover {
+    background: var(--we-accent, #4f8cff);
+    color: #fff;
+  }
+
+  /* Refined range sliders: thin track + circular brand ring thumb. */
+  .we-picker__slider {
+    -webkit-appearance: none; appearance: none;
+    flex: 1; height: 18px; background: transparent; cursor: pointer;
+  }
+  .we-picker__slider::-webkit-slider-runnable-track {
+    height: 4px; border-radius: 2px;
+    background: var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.4));
+  }
+  .we-picker__slider::-webkit-slider-thumb {
+    -webkit-appearance: none; appearance: none;
+    width: 14px; height: 14px; margin-top: -5px; border-radius: 50%;
+    background: var(--dsw-alias-bg-layer-1, #fff);
+    border: 2px solid var(--we-accent, #4f8cff);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  }
+  .we-picker__slider::-moz-range-track {
+    height: 4px; border-radius: 2px;
+    background: var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.4));
+  }
+  .we-picker__slider::-moz-range-thumb {
+    width: 14px; height: 14px; border-radius: 50%;
+    background: var(--dsw-alias-bg-layer-1, #fff);
+    border: 2px solid var(--we-accent, #4f8cff);
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+  }
+  /* Native checkboxes tinted with the accent (自动轮转 / 水平翻转). */
+  .we-picker input[type="checkbox"] { accent-color: var(--we-accent, #4f8cff); }
+  .we-picker__rotation-toggle { cursor: pointer; }
+
+  /* Sliding toggle switch (紧凑布局). Track + thumb slide left/right with a
+     snappy 120ms transition; pinned accent so light themes stay readable. */
+  .we-picker__switch {
+    position: relative; display: inline-flex; cursor: pointer;
+  }
+  .we-picker__switch input {
+    position: absolute; opacity: 0; width: 0; height: 0;
+  }
+  .we-picker__switch-track {
+    position: relative; width: 42px; height: 24px; border-radius: 12px;
+    background: rgba(128, 128, 128, 0.4);
+    transition: background-color 120ms ease;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3);
+  }
+  .we-picker__switch input:checked + .we-picker__switch-track {
+    background: #4f8cff;
+  }
+  .we-picker__switch-thumb {
+    position: absolute; left: 3px; top: 3px;
+    width: 18px; height: 18px; border-radius: 50%;
+    background: #fff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+    transition: transform 120ms ease;
+  }
+  .we-picker__switch input:checked + .we-picker__switch-track .we-picker__switch-thumb {
+    transform: translateX(18px);
+  }
+
+  /* Custom chevron for the flat selects (appearance: none removed the native
+     arrow; heights stay pinned at 26px so rows can never shift). */
+  .we-picker select {
+    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M1 1l3 3 3-3' fill='none' stroke='%23888' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E");
+    background-repeat: no-repeat; background-position: right 8px center;
+    padding-right: 24px;
+  }
+
+  /* Motion: state-only transitions (background/color/border — never layout),
+     150ms ease; disabled entirely under prefers-reduced-motion. */
+  .we-picker__btn, .we-picker select, .we-picker__card, .we-picker__editor-card,
+  .we-picker__tab, .we-picker__rate, .we-picker__card-hide {
+    transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .we-picker * { transition: none !important; }
+  }
+  .we-picker__slider { flex: 1; }
+  .we-picker__slider-row { display: flex; align-items: center; gap: 8px; }
+  .we-picker__label { min-width: 28px; }
+  .we-picker__value { min-width: 40px; text-align: right; }
+  .we-picker__text { flex: 1; min-width: 0; }
+  .we-picker__editor {
+    display: flex; flex-direction: column; gap: 6px;
+    padding: 8px;
+    border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));
+    border-radius: 8px;
+  }
+  /* Wallpaper thumbnail grid (main picker).
+     Cards use a FIXED height + absolutely-positioned filling <img>, never
+     aspect-ratio: some browsers (old Chromium/WebView) ignore aspect-ratio on
+     cards and let percentage-height images resolve to their intrinsic size,
+     which made previews bleed over the row above. inset:0 + overflow:hidden
+     pins the image inside the card in every engine. */
+  .we-picker__grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+    gap: 8px; max-height: 280px; overflow-y: auto; padding: 2px;
+  }
+  .we-picker__card {
+    position: relative; height: 92px; padding: 0; cursor: pointer;
+    display: block; overflow: hidden;
+    border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));
+    border-radius: 8px;
+    background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.15));
+  }
+  .we-picker__card img {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; display: block;
+  }
+  /* Classic — "CD 架" (CD-rack) card style: cards stack like CD jewel cases
+     on a rack. Each row strongly overlaps the row ABOVE it (the lower card's
+     top covers roughly half of the upper card's bottom — vertical only, never
+     horizontal), with a soft drop shadow for shelf depth. Hovering scales the
+     card up and brings it to the front. Opt-in via the 卡片样式 switch. The
+     modal is PORTALLED onto <body>, so the attribute is scoped on BOTH the
+     settings root and the modal element. The grid gets extra bottom padding
+     so the last row's overlap is not clipped. */
+  .we-picker[data-we-cards="classic"] .we-picker__grid,
+  .we-picker__modal[data-we-cards="classic"] .we-picker__grid {
+    /* Compact CD-rack columns: ~7 cards per row at modal width. */
+    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
+    padding-bottom: 42px;
+  }
+  .we-picker[data-we-cards="classic"] .we-picker__editor-grid,
+  .we-picker__modal[data-we-cards="classic"] .we-picker__editor-grid {
+    grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
+  }
+  .we-picker[data-we-cards="classic"] .we-picker__card,
+  .we-picker__modal[data-we-cards="classic"] .we-picker__card {
+    position: relative; width: 100%; padding: 0; cursor: pointer;
+    height: auto; aspect-ratio: 16 / 9; display: block; overflow: hidden;
+    margin-bottom: -36px;
+    border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));
+    border-radius: 8px;
+    background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.15));
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+    transition: transform 120ms ease, box-shadow 120ms ease;
+  }
+  .we-picker[data-we-cards="classic"] .we-picker__card:hover,
+  .we-picker__modal[data-we-cards="classic"] .we-picker__card:hover {
+    transform: scale(1.12);
+    z-index: 10;
+    box-shadow: 0 14px 28px rgba(0, 0, 0, 0.5);
+  }
+  .we-picker[data-we-cards="classic"] .we-picker__card img,
+  .we-picker__modal[data-we-cards="classic"] .we-picker__card img {
+    position: static; width: 100%; height: 100%; object-fit: cover; display: block;
+  }
+  .we-picker[data-we-cards="classic"] .we-picker__editor-card,
+  .we-picker__modal[data-we-cards="classic"] .we-picker__editor-card {
+    position: relative; width: 100%; padding: 0; cursor: pointer;
+    height: auto; aspect-ratio: 16 / 10; display: block; overflow: hidden;
+    margin-bottom: -30px;
+    border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));
+    border-radius: 6px;
+    background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.15));
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
+    transition: transform 120ms ease, box-shadow 120ms ease;
+  }
+  .we-picker[data-we-cards="classic"] .we-picker__editor-card:hover,
+  .we-picker__modal[data-we-cards="classic"] .we-picker__editor-card:hover {
+    transform: scale(1.1);
+    z-index: 10;
+    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.5);
+  }
+  .we-picker[data-we-cards="classic"] .we-picker__editor-card img,
+  .we-picker__modal[data-we-cards="classic"] .we-picker__editor-card img {
+    position: static; width: 100%; height: 100%; object-fit: cover; display: block;
+  }
+  .we-picker__card--selected {
+    outline: 2px solid var(--we-accent, #4f8cff);
+    outline-offset: -2px;
+  }
+  .we-picker__card-close {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.8em; color: var(--dsw-alias-label-secondary, #888);
+  }
+  .we-picker__card-title {
+    position: absolute; left: 0; right: 0; bottom: 0; padding: 3px 6px;
+    font-size: 0.7em; line-height: 1.2; color: #fff;
+    background: linear-gradient(transparent, rgba(0, 0, 0, 0.7));
+    text-overflow: ellipsis; white-space: nowrap; overflow: hidden;
+  }
+  /* Scene-wallpaper "静态帧" badge — top-right under the hide button. */
+  .we-picker__card-badge {
+    position: absolute; top: 4px; right: 4px; z-index: 1;
+    padding: 1px 6px; font-size: 0.62em; line-height: 1.6;
+    border-radius: 4px; color: #fff;
+    background: rgba(30, 90, 160, 0.85);
+  }
+  .we-picker__card-placeholder {
+    position: absolute; inset: 0;
+    display: flex; align-items: center; justify-content: center;
+    font-size: 0.72em; opacity: 0.55;
+  }
+  /* Per-card "hide" button (soft delete) — top-right overlay. */
+  .we-picker__card-hide {
+    position: absolute; top: 4px; right: 4px; z-index: 2;
+    padding: 2px 7px; font-size: 0.68em; line-height: 1.5;
+    border: 0; border-radius: 4px; cursor: pointer;
+    background: rgba(0, 0, 0, 0.6); color: #fff;
+  }
+  .we-picker__card-hide:hover { background: rgba(190, 50, 50, 0.9); }
+  /* Batch-mode selection check — top-left overlay. */
+  .we-picker__card-check {
+    position: absolute; top: 4px; left: 4px; z-index: 2;
+    width: 18px; height: 18px; border-radius: 4px;
+    background: rgba(0, 0, 0, 0.6); color: #fff;
+    font-size: 12px; line-height: 18px; text-align: center;
+  }
+  .we-picker__card--selected .we-picker__card-check {
+    background: var(--we-accent, #4f8cff);
+  }
+  /* Hidden wallpapers view: dimmed cards. */
+  .we-picker__card--hidden { opacity: 0.78; }
+  .we-picker__card--hidden .we-picker__card-title {
+    background: linear-gradient(transparent, rgba(0, 0, 0, 0.78));
+  }
+  /* Batch-action bar. */
+  .we-picker__batch-bar {
+    padding: 4px 6px; border-radius: 6px;
+    border: 1px dashed var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));
+  }
+  /* Current-wallpaper summary (replaces the inline grid in settings). */
+  .we-picker__summary {
+    flex: 1; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-size: 0.85em; opacity: 0.85;
+  }
+  /* ── Wallpaper picker modal (portalled onto <body>, z-index above the shell
+     overlays). Fixed positioning from a body child is immune to ancestor
+     transforms/backdrop-filters, which would otherwise trap it. ── */
+  .we-picker__modal-overlay {
+    position: fixed; inset: 0; z-index: 1000;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(0, 0, 0, 0.55);
+    -webkit-backdrop-filter: blur(3px);
+    backdrop-filter: blur(3px);
+  }
+  .we-picker__modal {
+    position: relative; z-index: 1001;
+    width: min(760px, 92vw); max-height: 86vh;
+    display: flex; flex-direction: column; gap: 10px;
+    padding: 16px; border-radius: 14px;
+    background: var(--dsw-alias-bg-layer-1, #202127);
+    border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));
+    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.25);
+  }
+  .we-picker__modal-head {
+    display: flex; align-items: center; justify-content: space-between;
+    padding-bottom: 10px;
+    border-bottom: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.22));
+  }
+  .we-picker__modal-title { font-weight: 600; font-size: 0.95em; }
+  .we-picker__modal-tabs { display: flex; gap: 6px; }
+  .we-picker__tab {
+    flex: 1; padding: 0; text-align: center; font-size: 0.82em; cursor: pointer;
+    border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));
+    border-radius: 6px; background: transparent;
+    color: var(--dsw-alias-label-secondary, #888);
+  }
+  .we-picker__tab--active {
+    background: var(--we-accent, #4f8cff);
+    border-color: var(--we-accent, #4f8cff); color: #fff;
+  }
+  .we-picker__modal-body {
+    overflow-y: auto; min-height: 0; flex: 1;
+    display: flex; flex-direction: column; gap: 8px;
+  }
+  /* The modal is tall enough: let the grid fill it instead of its own 280px
+     internal scroll (the modal body scrolls as a whole). */
+  .we-picker__modal-body .we-picker__grid { max-height: none; }
+  .we-picker__modal-foot { display: flex; align-items: center; justify-content: space-between; }
+  /* Custom-upload section. */
+  .we-picker__uploads {
+    display: flex; flex-direction: column; gap: 6px;
+    padding: 10px; border-radius: 10px;
+    border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.26));
+    background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.05));
+  }
+  .we-picker__file { flex: 1; min-width: 0; max-width: 260px; font-size: 0.8em; }
+  .we-picker__uploads-list {
+    display: flex; flex-direction: column; gap: 4px; max-height: 150px; overflow-y: auto;
+  }
+  .we-picker__uploads-item {
+    display: flex; align-items: center; gap: 8px;
+    padding: 3px 6px; border-radius: 6px;
+    background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.12));
+  }
+  .we-picker__uploads-name {
+    flex: 1; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-size: 0.82em;
+  }
+  .we-picker__uploads-path {
+    flex: 1; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    font-size: 0.8em; opacity: 0.85;
+  }
+  /* Playback-rate segmented control (video wallpapers only). Also reused as
+     the 卡片样式 two-button switch (wrapped in .we-picker__seg). */
+  .we-picker__seg { display: flex; gap: 4px; flex: 1; min-width: 0; }
+  .we-picker__rate {
+    flex: 1; padding: 0; text-align: center; font-size: 0.78em;
+    border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));
+    border-radius: 6px; background: transparent; cursor: pointer;
+    color: var(--dsw-alias-label-secondary, #888);
+  }
+  .we-picker__rate + .we-picker__rate { margin-left: 0; }
+  .we-picker__rate--active {
+    background: var(--we-accent, #4f8cff);
+    border-color: var(--we-accent, #4f8cff);
+    color: #fff;
+  }
+  /* Rotation group editor thumbnail grid. */
+  .we-picker__editor-grid {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
+    gap: 6px; max-height: 220px; overflow-y: auto; padding: 2px;
+  }
+  .we-picker__editor-card {
+    position: relative; height: 80px; padding: 0; cursor: pointer;
+    display: block; overflow: hidden;
+    border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));
+    border-radius: 6px;
+    background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.15));
+  }
+  .we-picker__editor-card img {
+    position: absolute; inset: 0; width: 100%; height: 100%;
+    object-fit: cover; display: block;
+  }
+  .we-picker__editor-card--checked {
+    outline: 2px solid var(--we-accent, #4f8cff);
+    outline-offset: -2px;
+  }
+  .we-picker__editor-check {
+    position: absolute; top: 4px; left: 4px; width: 18px; height: 18px;
+    border-radius: 4px; background: rgba(0, 0, 0, 0.55); color: #fff;
+    font-size: 12px; line-height: 18px; text-align: center;
+  }

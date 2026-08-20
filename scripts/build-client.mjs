@@ -31,7 +31,20 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
 const id = pkg.name;
 
-const src = readFileSync(resolve(root, 'src', 'client.js'), 'utf8');
+// The stylesheet lives in src/client.css (plain CSS, no bundler needed) and is
+// injected into the client source's CSS template literal at build time. The
+// source carries a `const CSS = "__DSH_WE_CLIENT_CSS__";` placeholder.
+const css = readFileSync(resolve(root, 'src', 'client.css'), 'utf8')
+  .replace(/\r\n/g, '\n')
+  .replace(/`/g, '\\`')
+  .replace(/\$\{/g, '\\${')
+  .replace(/\n+$/, '');
+
+const src = readFileSync(resolve(root, 'src', 'client.js'), 'utf8')
+  .replace(
+    'const CSS = "__DSH_WE_CLIENT_CSS__";',
+    'const CSS = `\n' + css + '\n`;',
+  );
 const body = stripHeader(src).replace(/\r\n/g, '\n').replace(/\n+$/, '');
 
 const outline = [

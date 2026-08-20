@@ -1,0 +1,19 @@
+# Normalize line endings: all text files are LF in the repository and in the
+# working tree. This keeps `npm install` (prepare → build) from producing a
+# spurious diff on a fresh checkout (the build script emits LF output).
+* text=auto eol=lf
+
+*.js   text eol=lf
+*.mjs  text eol=lf
+*.json text eol=lf
+*.yml  text eol=lf
+*.yaml text eol=lf
+*.md   text eol=lf
+*.css  text eol=lf
+*.ts   text eol=lf
+
+# Binary assets never go through text conversion.
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary

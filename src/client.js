@@ -131,6 +131,153 @@ const GLASS_COLOR_PRESETS = [
   "#F1717F", // 珊瑚红
 ];
 
+// ── UI strings ──────────────────────────────────────────────────────────────
+// All user-visible labels live in one table. Values are intentionally kept
+// byte-identical to the shipped UI (including the Chinese/English mix noted in
+// the README) so this refactor changes nothing visually; centralizing them is
+// the first step toward wiring the plugin into DSH's locale namespaces.
+const STR = {
+  loadingScan: "扫描 Wallpaper Engine…",
+  noWeDetected: "未检测到 Wallpaper Engine：",
+  retry: "重试",
+  refreshing: "刷新中…",
+  refresh: "刷新",
+  play: "播放",
+  pause: "暂停",
+  close: "关闭",
+  cardName: "Wallpaper Engine",
+  cardDesc: "本地 Wallpaper Engine 壁纸 · 液态玻璃主题",
+  sectionAppearance: "外观",
+  accent: "配色",
+  custom: "自定义",
+  customAccent: "自定义配色",
+  glassColor: "玻璃颜色",
+  customGlassColor: "自定义玻璃颜色",
+  glassTransparency: "玻璃透明度",
+  windowGlass: "设置窗口液态玻璃",
+  windowGlassHint: "整个设置窗口（含 General / 模型 / 插件等全部原生分区）跟随配色与透明度；关闭则恢复原生样式",
+  compactLayout: "紧凑布局",
+  compactLayoutHint: "紧凑 CD 架：层叠 + 一页到底",
+  compactOn: "CD 架：层叠 + 一页到底",
+  compactOff: "常规网格 · 分页",
+  noneSelected: "未选择壁纸",
+  notSelected: "尚未选择壁纸",
+  typeVideo: "视频壁纸",
+  typeWeb: "网页壁纸",
+  typeImage: "图片壁纸",
+  typeScene: "场景壁纸（静态帧）",
+  typeGeneric: "壁纸",
+  playingSuffix: " · 播放中",
+  pausedSuffix: " · 已暂停",
+  pickWallpaper: "选择壁纸",
+  normalTabPrefix: "正常列表（",
+  hiddenTabPrefix: "已隐藏（",
+  noHidden: "没有已隐藏的壁纸",
+  hiddenCount: "已隐藏 ", // + N + " 张（仅从列表隐藏，不删除源文件）"
+  hiddenCountTail: " 张（仅从列表隐藏，不删除源文件）",
+  restoreAll: "全部恢复",
+  restoreAllConfirm: "恢复全部 ", // + N + " 张已隐藏壁纸？"
+  restoreAllConfirmTail: " 张已隐藏壁纸？",
+  restore: "恢复",
+  restoreThis: "恢复此壁纸",
+  noPreview: "无预览",
+  staticFrameBadge: "静态帧",
+  playableCountHint: " 个可播放壁纸 · 点击卡片即应用",
+  exitBatch: "退出批量",
+  batch: "批量",
+  batchSelected: "已选 ", // + N + " 张"
+  batchSelectedTail: " 张",
+  batchHide: "批量隐藏",
+  batchHideConfirm: "隐藏选中的 ", // + N + " 张壁纸？可在「已隐藏」中随时恢复。"
+  batchHideConfirmTail: " 张壁纸？可在「已隐藏」中随时恢复。",
+  cancel: "取消",
+  contentRating: "内容分级",
+  typeFilter: "类型",
+  allCountPrefix: "全部（",
+  countSuffix: "）",
+  everyoneOption: "Everyone / G（",
+  pg13Option: "PG13（",
+  matureOption: "Mature / R（",
+  unratedOption: "未分级（",
+  videoOption: "视频（",
+  webOption: "网页（",
+  imageOption: "图片（",
+  sceneOption: "场景（",
+  closeWallpaper: "✕ 关闭",
+  closeWallpaperTitle: "关闭壁纸",
+  noPlayable: "没有可播放的壁纸",
+  hide: "隐藏",
+  hideThis: "隐藏此壁纸（可在「已隐藏」中恢复）",
+  escHint: "ESC / 点击遮罩关闭",
+  sectionUploads: "自定义壁纸",
+  storageLocation: "存储位置",
+  change: "更改",
+  uploadDirPlaceholder: "绝对路径，如 D:\\MyWallpapers",
+  save: "保存",
+  migrateHint: "已有文件会迁移到新位置",
+  tildeHint: "支持 ~ 表示用户主目录",
+  uploadLabel: "自定义",
+  uploading: "上传中…",
+  uploadedCount: "已上传 ", // + N + " 个"
+  uploadedCountTail: " 个",
+  formatHint: "格式仅限 JPG / PNG / MP4",
+  remove: "移除",
+  removeConfirm: "移除自定义壁纸「", // + T + "」？此操作会删除本地文件，且不可恢复。"
+  removeConfirmTail: "」？此操作会删除本地文件，且不可恢复。",
+  fitLabel: "适配",
+  fitCustomOnly: "仅自定义壁纸",
+  fitModes: { cover: "覆盖", contain: "填充", center: "居中", fill: "拉伸" },
+  sectionRotation: "轮播列表",
+  rotationEmpty: "— 暂无轮播列表 —",
+  rotationPick: "— 选择轮播列表 —",
+  rotationGroupMeta: " 可播放 · ", // name + N + this + M + " 分钟"
+  minutes: " 分钟",
+  newGroup: "新建",
+  edit: "编辑",
+  delete: "删除",
+  deleteGroupConfirm: "删除轮播列表「", // + N + "」？"
+  deleteGroupConfirmTail: "」？",
+  name: "名称",
+  interval: "间隔",
+  order: "顺序",
+  orderSequence: "顺序",
+  orderRandom: "随机",
+  selectedCount: "已选 ", // + N + " 个"
+  selectedCountTail: " 个",
+  importPlaylist: "从 WE 播放列表导入…",
+  importPlaylistMeta: " 可播放）",
+  autoRotate: "自动轮转",
+  pickGroupFirst: "请先选择或新建一个轮播列表",
+  needTwoPlayable: "当前列表至少需要 2 个可播放壁纸",
+  sectionEffects: "壁纸效果",
+  wallpaperBlur: "壁纸模糊",
+  scrim: "暗化",
+  border: "边框",
+  glass: "玻璃",
+  playbackRate: "倍速",
+  flip: "水平翻转",
+  groupMetaPrefix: "列表「", // + N + "」：" + M + " 项 · " + P + " 可播放 · 每 " + I + " 分钟 · "
+  groupMetaCount: " 项 · ", // M + this + P + " 可播放 · 每 "
+  groupMetaPlayable: " 可播放 · 每 ", // P + this + I + " 分钟 · "
+  groupMetaMinutes: " 分钟 · ",
+  rotatingSuffix: " · 自动轮转中",
+  groupNameDefault: "轮播列表",
+  groupNamePrefix: "轮播列表 ",
+  uploadErrorFormat: "仅支持 JPG / PNG 图片与 MP4 视频",
+  uploadErrorExt: "文件扩展名需为 .jpg / .png / .mp4",
+  uploadDupNote: "已存在相同内容的壁纸，已直接选择原有的那张",
+  uploadFailed: "上传失败：",
+  removeFailed: "移除失败：",
+  changeFailed: "更改失败：",
+  dirRequired: "请输入存储位置路径",
+  loadTimeout: "加载超时（host 无响应）",
+  pageInfoPrefix: "共 ", // + count + " 个 · 第 "
+  pageInfoMid: " 个 · 第 ", // page+1 + " / " + pages + " 页"
+  pageInfoTail: " 页",
+  prevPage: "‹ 上一页",
+  nextPage: "下一页 ›",
+};
+
 // ── Persisted selection ─────────────────────────────────────────────────────
 function clampNum(v, lo, hi, fallback) {
   return typeof v === "number" && v >= lo && v <= hi ? v : fallback;
@@ -149,7 +296,7 @@ function readRotationGroups(raw) {
     if (!id) continue;
     groups.push({
       id,
-      name: typeof g.name === "string" && g.name.trim() ? g.name.trim() : "轮播列表",
+      name: typeof g.name === "string" && g.name.trim() ? g.name.trim() : STR.groupNameDefault,
       interval: clampNum(g.interval, 1, 1440, DEFAULTS.rotationInterval),
       order: g.order === "random" ? "random" : "sequence",
       wallpaperIds: Array.isArray(g.wallpaperIds)
@@ -238,6 +385,24 @@ const listeners = new Set();
 function emit() { for (const fn of [...listeners]) fn(); }
 function subscribe(fn) { listeners.add(fn); return () => listeners.delete(fn); }
 
+// rAF-coalesced updates for high-frequency slider drags (P2): dragging a
+// range input fires one event per pixel — without coalescing every event
+// triggers a synchronous localStorage write, a full React re-render and a
+// forced reflow. Coalescing to one frame keeps the visual feedback instant
+// (CSS vars update next frame, ~16ms) while making the cost constant.
+let effectsRaf = null;
+function scheduleEffects() {
+  if (effectsRaf !== null) return;
+  if (typeof requestAnimationFrame !== "function") { applyEffects(); return; }
+  effectsRaf = requestAnimationFrame(() => { effectsRaf = null; applyEffects(); });
+}
+let renderRaf = null;
+function scheduleRender() {
+  if (renderRaf !== null) return;
+  if (typeof requestAnimationFrame !== "function") { emit(); return; }
+  renderRaf = requestAnimationFrame(() => { renderRaf = null; emit(); });
+}
+
 // ── React hook for the picker UI ────────────────────────────────────────────
 function useStore() {
   const [, setTick] = React.useState(0);
@@ -272,11 +437,17 @@ function persistSelection() {
   } catch { /* ignore */ }
 }
 
-async function loadInventory() {
+async function loadInventory(force) {
   selection.loading = true;
   emit();
+  // Timeout guard (P3): without one, a wedged host leaves the picker stuck on
+  // "扫描 Wallpaper Engine…" forever. `force` (the 刷新 button) also asks the
+  // host to bypass its inventory TTL cache.
+  const controller = typeof AbortController !== "undefined" ? new AbortController() : null;
+  const timer = controller ? setTimeout(() => controller.abort(), 15000) : null;
   try {
-    const res = await fetch(INVENTORY_URL, { cache: "no-store" });
+    const url = INVENTORY_URL + (force ? "?refresh=1" : "");
+    const res = await fetch(url, { cache: "no-store", signal: controller ? controller.signal : undefined });
     if (!res.ok) throw new Error("inventory HTTP " + res.status);
     const data = await res.json();
     selection.inventory = {
@@ -296,8 +467,12 @@ async function loadInventory() {
       total: 0,
       portableCount: 0,
       playlists: [],
-      error: String(err && err.message ? err.message : err),
+      error: err && err.name === "AbortError"
+        ? STR.loadTimeout
+        : String(err && err.message ? err.message : err),
     };
+  } finally {
+    if (timer) clearTimeout(timer);
   }
   selection.loading = false;
   selection.loaded = true;
@@ -446,7 +621,7 @@ function seedGroupsFromPlaylists() {
   if (!ids.length) return false;
   selection.rotationGroups.push({
     id: nextGroupId(),
-    name: typeof source.name === "string" && source.name.trim() ? source.name.trim() : "轮播列表",
+    name: typeof source.name === "string" && source.name.trim() ? source.name.trim() : STR.groupNameDefault,
     interval: DEFAULTS.rotationInterval,
     order: source.order === "random" ? "random" : "sequence",
     wallpaperIds: ids,
@@ -505,7 +680,7 @@ function startEditGroup(id) {
 function startCreateGroup() {
   selection.editing = {
     id: nextGroupId(),
-    name: "轮播列表 " + (selection.rotationGroups.length + 1),
+    name: STR.groupNamePrefix + (selection.rotationGroups.length + 1),
     interval: DEFAULTS.rotationInterval,
     order: "sequence",
     wallpaperIds: [],
@@ -519,7 +694,7 @@ function saveEditingGroup() {
   const idx = selection.rotationGroups.findIndex((g) => g.id === draft.id);
   const cleaned = {
     id: draft.id,
-    name: typeof draft.name === "string" && draft.name.trim() ? draft.name.trim() : "轮播列表",
+    name: typeof draft.name === "string" && draft.name.trim() ? draft.name.trim() : STR.groupNameDefault,
     interval: clampNum(draft.interval, 1, 1440, DEFAULTS.rotationInterval),
     order: draft.order === "random" ? "random" : "sequence",
     wallpaperIds: Array.isArray(draft.wallpaperIds)
@@ -644,12 +819,12 @@ function isUploadedWallpaper(w) {
 async function uploadWallpaperFile(file) {
   const ctype = (file.type || "").toLowerCase();
   if (!UPLOAD_TYPES.includes(ctype)) {
-    selection.uploadError = "仅支持 JPG / PNG 图片与 MP4 视频";
+    selection.uploadError = STR.uploadErrorFormat;
     emit();
     return;
   }
   if (!/\.(jpe?g|png|mp4)$/i.test(file.name)) {
-    selection.uploadError = "文件扩展名需为 .jpg / .png / .mp4";
+    selection.uploadError = STR.uploadErrorExt;
     emit();
     return;
   }
@@ -669,12 +844,12 @@ async function uploadWallpaperFile(file) {
     // Host dedup: uploading the same file again returns the existing entry
     // (data.duplicate) instead of storing a second copy.
     if (data.duplicate) {
-      selection.uploadNote = "已存在相同内容的壁纸，已直接选择原有的那张";
+      selection.uploadNote = STR.uploadDupNote;
     }
     await loadInventory();
     applySelection(data.id);
   } catch (err) {
-    selection.uploadError = "上传失败：" + (err && err.message ? err.message : err);
+    selection.uploadError = STR.uploadFailed + (err && err.message ? err.message : err);
   }
   selection.uploading = false;
   emit();
@@ -696,7 +871,7 @@ async function removeUploadWallpaper(id) {
     if (selection.id === id) applySelection("");
     await loadInventory();
   } catch (err) {
-    selection.uploadError = "移除失败：" + (err && err.message ? err.message : err);
+    selection.uploadError = STR.removeFailed + (err && err.message ? err.message : err);
   }
   selection.uploading = false;
   emit();
@@ -709,7 +884,7 @@ const UPLOAD_DIR_URL = "/wallpaper-engine/upload-dir";
 // users can point uploads at a non-system drive without touching config files.
 async function changeUploadDir(dir, migrate) {
   if (!dir || !String(dir).trim()) {
-    selection.uploadError = "请输入存储位置路径";
+    selection.uploadError = STR.dirRequired;
     emit();
     return;
   }
@@ -728,7 +903,7 @@ async function changeUploadDir(dir, migrate) {
     selection.uploadDirDraft = "";
     await loadInventory();
   } catch (err) {
-    selection.uploadError = "更改失败：" + (err && err.message ? err.message : err);
+    selection.uploadError = STR.changeFailed + (err && err.message ? err.message : err);
   }
   selection.uploading = false;
   emit();
@@ -773,6 +948,12 @@ function buildMedia(sel) {
     media.src = sel.url;
     media.setAttribute("frameborder", "0");
     media.setAttribute("scrolling", "no");
+    // SECURITY (S1): Web wallpapers are third-party Workshop content served
+    // same-origin. Sandbox them WITHOUT allow-same-origin so their scripts get
+    // an opaque origin — a malicious wallpaper can animate itself but cannot
+    // reach the DSH page's localStorage or same-origin APIs. Relative
+    // <img>/<script> subresources still load (no-cors requests).
+    media.setAttribute("sandbox", "allow-scripts allow-forms");
     media.className = "we-media we-iframe";
   }
   return media;
@@ -907,18 +1088,20 @@ function clearEffects() {
 }
 
 // ── Settings picker ─────────────────────────────────────────────────────────
-function SliderRow(label, min, max, step, value, onInput, suffix) {
+// `onInput` fires continuously while dragging a range input (onChange may only
+// fire on release in some engines) — that is what makes the knob feedback
+// instant; callers coalesce it with scheduleEffects/scheduleRender. `onCommit`
+// runs on release (the durable localStorage write + final apply).
+function SliderRow(label, min, max, step, value, onInput, suffix, onCommit) {
+  const commit = onCommit || onInput;
   return React.createElement("div", { className: "we-picker__row we-picker__slider-row" },
     React.createElement("span", { className: "we-picker__hint we-picker__label" }, label),
     React.createElement("input", {
       className: "we-picker__slider", type: "range",
       min: String(min), max: String(max), step: String(step),
       value: String(value),
-      // onInput fires continuously while dragging a range input (onChange may
-      // only fire on release in some engines) — this is what makes the knob
-      // feedback instant. onChange stays as a final commit fallback.
       onInput: (e) => onInput(Number(e.target.value)),
-      onChange: (e) => onInput(Number(e.target.value)),
+      onChange: (e) => commit(Number(e.target.value)),
     }),
     React.createElement("span", { className: "we-picker__hint we-picker__value" }, suffix),
   );
@@ -931,7 +1114,7 @@ function SliderRow(label, min, max, step, value, onInput, suffix) {
 // Shown in BOTH settings layouts and in the picker modal head.
 function VinylRecord(props) {
   const cover = props.cover;
-  const title = props.title || "未选择壁纸";
+  const title = props.title || STR.noneSelected;
   const playing = props.playing === true;
   const sm = props.sm === true;
   return React.createElement("div", {
@@ -956,7 +1139,8 @@ function WallpaperPicker() {
   const sel = useStore();
   const onTogglePlay = () => { selection.playing = !selection.playing; emit(); };
   const onClear = () => applySelection("");
-  const onRefresh = () => loadInventory();
+  // Manual refresh also bypasses the host's inventory TTL cache (?refresh=1).
+  const onRefresh = () => loadInventory(true);
   // Filter changes: persist + re-validate so wallpapers outside the selected
   // categories drop out of the grid/rotation immediately.
   const onRatingFilterChange = (e) => {
@@ -1020,19 +1204,25 @@ function WallpaperPicker() {
     const group = activeRotationGroup();
     if (!group) return;
     if (typeof window !== "undefined" && typeof window.confirm === "function") {
-      if (!window.confirm("删除轮播列表「" + group.name + "」？")) return;
+      if (!window.confirm(STR.deleteGroupConfirm + group.name + STR.deleteGroupConfirmTail)) return;
     }
     deleteGroup(group.id);
   };
 
-  // Slider callbacks: keep the stored value in its canonical unit, then apply
-  // the effect IMMEDIATELY (applyEffects writes the CSS var synchronously) so
-  // the visual feedback is instant even if a listener/emit path is lagging;
-  // emit() additionally re-renders the picker's numeric readouts.
-  const onScrim = (pct) => { selection.scrim = pct / 100; persistSelection(); applyEffects(); emit(); };
-  const onBorder = (pct) => { selection.border = pct / 100; persistSelection(); applyEffects(); emit(); };
-  const onBlur = (px) => { selection.blur = px; persistSelection(); applyEffects(); emit(); };
-  const onWallpaperBlur = (px) => { selection.wallpaperBlur = px; persistSelection(); applyEffects(); emit(); };
+  // Slider callbacks, split into input vs commit (P2): `onInput` fires once
+  // per pixel while dragging and only updates the value + schedules the CSS
+  // effect and re-render through rAF coalescing (scheduleEffects /
+  // scheduleRender — instant visual feedback at constant cost); `onChange`
+  // fires when the drag is released and does the one-off durable work
+  // (localStorage write + final apply + re-render).
+  const onScrim = (pct) => { selection.scrim = pct / 100; scheduleEffects(); scheduleRender(); };
+  const onScrimCommit = (pct) => { selection.scrim = pct / 100; persistSelection(); applyEffects(); emit(); };
+  const onBorder = (pct) => { selection.border = pct / 100; scheduleEffects(); scheduleRender(); };
+  const onBorderCommit = (pct) => { selection.border = pct / 100; persistSelection(); applyEffects(); emit(); };
+  const onBlur = (px) => { selection.blur = px; scheduleEffects(); scheduleRender(); };
+  const onBlurCommit = (px) => { selection.blur = px; persistSelection(); applyEffects(); emit(); };
+  const onWallpaperBlur = (px) => { selection.wallpaperBlur = px; scheduleEffects(); scheduleRender(); };
+  const onWallpaperBlurCommit = (px) => { selection.wallpaperBlur = px; persistSelection(); applyEffects(); emit(); };
   // 配色 (accent color) + 玻璃透明度 (glass transparency) + 玻璃颜色 (glass base
   // tint): applied instantly through applyEffects() (--we-accent /
   // --we-glass-alpha / --we-glass-color), persisted so the settings page keeps
@@ -1048,6 +1238,10 @@ function WallpaperPicker() {
     persistSelection(); applyEffects(); emit();
   };
   const onGlassAlpha = (pct) => {
+    selection.glassAlpha = clampNum(pct, 0, 60, DEFAULTS.glassAlpha);
+    scheduleEffects(); scheduleRender();
+  };
+  const onGlassAlphaCommit = (pct) => {
     selection.glassAlpha = clampNum(pct, 0, 60, DEFAULTS.glassAlpha);
     persistSelection(); applyEffects(); emit();
   };
@@ -1077,15 +1271,15 @@ function WallpaperPicker() {
 
   if (!sel.loaded) {
     return React.createElement("div", { className: "we-picker" },
-      React.createElement("span", { className: "we-picker__hint" }, "扫描 Wallpaper Engine…"));
+      React.createElement("span", { className: "we-picker__hint" }, STR.loadingScan));
   }
   if (sel.inventory.error) {
     return React.createElement("div", { className: "we-picker" },
       React.createElement("div", { className: "we-picker__error" },
-        "未检测到 Wallpaper Engine：" + sel.inventory.error),
+        STR.noWeDetected + sel.inventory.error),
       React.createElement("button", {
         className: "we-picker__btn", type: "button", onClick: onRefresh, disabled: sel.loading,
-      }, sel.loading ? "刷新中…" : "重试"));
+      }, sel.loading ? STR.refreshing : STR.retry));
   }
 
   const list = sel.inventory.wallpapers;
@@ -1127,36 +1321,36 @@ function WallpaperPicker() {
   const pagerRow = (count, page, pages, onPrev, onNext) =>
     React.createElement("div", { className: "we-picker__pager" },
       React.createElement("span", { className: "we-picker__hint" },
-        "共 " + count + " 个 · 第 " + (page + 1) + " / " + pages + " 页"),
+        STR.pageInfoPrefix + count + STR.pageInfoMid + (page + 1) + " / " + pages + STR.pageInfoTail),
       React.createElement("button", {
         className: "we-picker__btn", type: "button",
         disabled: page <= 0,
         onClick: onPrev,
-      }, "‹ 上一页"),
+      }, STR.prevPage),
       React.createElement("button", {
         className: "we-picker__btn", type: "button",
         disabled: page >= pages - 1,
         onClick: onNext,
-      }, "下一页 ›"),
+      }, STR.nextPage),
     );
 
   return React.createElement("div", { className: "we-picker", "data-we-cards": sel.pickerLayout },
     // ── Card header (mirrors the skin-center's pluginCard header): plugin
     //    name + live wallpaper count badge + description. ──
     React.createElement("div", { className: "we-picker__card-head" },
-      React.createElement("span", { className: "we-picker__card-name" }, "Wallpaper Engine"),
+      React.createElement("span", { className: "we-picker__card-name" }, STR.cardName),
       React.createElement("span", { className: "we-picker__card-badge" }, String(playableList.length)),
-      React.createElement("span", { className: "we-picker__card-desc" }, "本地 Wallpaper Engine 壁纸 · 液态玻璃主题"),
+      React.createElement("span", { className: "we-picker__card-desc" }, STR.cardDesc),
     ),
     // ── 外观 (liquid-glass theming): 配色 presets + custom color, and the
     //    glass 透明度 slider. Applied instantly via --we-accent /
     //    --we-glass-alpha (applyEffects), persisted in localStorage. ──
     React.createElement("div", { className: "we-picker__section" },
       React.createElement("div", { className: "we-picker__section-head" },
-        React.createElement("span", { className: "we-picker__section-label" }, "外观"),
+        React.createElement("span", { className: "we-picker__section-label" }, STR.sectionAppearance),
       ),
       React.createElement("div", { className: "we-picker__row we-picker__accent-row" },
-        React.createElement("span", { className: "we-picker__hint we-picker__label" }, "配色"),
+        React.createElement("span", { className: "we-picker__hint we-picker__label" }, STR.accent),
         ACCENT_PRESETS.map((hex) => React.createElement("button", {
           key: hex,
           className: "we-picker__swatch" + (sel.accent === hex ? " we-picker__swatch--active" : ""),
@@ -1164,7 +1358,7 @@ function WallpaperPicker() {
           style: { background: hex },
           title: hex,
           onClick: () => onAccent(hex),
-          "aria-label": "配色 " + hex,
+          "aria-label": STR.accent + " " + hex,
         })),
         React.createElement("label", { className: "we-picker__swatch-custom" },
           React.createElement("input", {
@@ -1172,16 +1366,16 @@ function WallpaperPicker() {
             value: sel.accent,
             onInput: (e) => onAccent(e.target.value),
             onChange: (e) => onAccent(e.target.value),
-            title: "自定义配色",
+            title: STR.customAccent,
           }),
-          React.createElement("span", { className: "we-picker__hint" }, "自定义"),
+          React.createElement("span", { className: "we-picker__hint" }, STR.custom),
         ),
       ),
       // 玻璃颜色: the settings-window glass BASE tint. Defaults keep the stock
       // look (white light / deep navy dark); picking any preset or a custom
       // color tints the whole window glass in BOTH themes.
       React.createElement("div", { className: "we-picker__row we-picker__accent-row" },
-        React.createElement("span", { className: "we-picker__hint we-picker__label" }, "玻璃颜色"),
+        React.createElement("span", { className: "we-picker__hint we-picker__label" }, STR.glassColor),
         GLASS_COLOR_PRESETS.map((hex) => React.createElement("button", {
           key: hex,
           className: "we-picker__swatch" + (sel.glassColor === hex ? " we-picker__swatch--active" : ""),
@@ -1189,7 +1383,7 @@ function WallpaperPicker() {
           style: { background: hex },
           title: hex,
           onClick: () => onGlassColor(hex),
-          "aria-label": "玻璃颜色 " + hex,
+          "aria-label": STR.glassColor + " " + hex,
         })),
         React.createElement("label", { className: "we-picker__swatch-custom" },
           React.createElement("input", {
@@ -1197,12 +1391,12 @@ function WallpaperPicker() {
             value: sel.glassColor,
             onInput: (e) => onGlassColor(e.target.value),
             onChange: (e) => onGlassColor(e.target.value),
-            title: "自定义玻璃颜色",
+            title: STR.customGlassColor,
           }),
-          React.createElement("span", { className: "we-picker__hint" }, "自定义"),
+          React.createElement("span", { className: "we-picker__hint" }, STR.custom),
         ),
       ),
-      SliderRow("玻璃透明度", 0, 60, 5, sel.glassAlpha, onGlassAlpha, sel.glassAlpha + "%"),
+      SliderRow(STR.glassTransparency, 0, 60, 5, sel.glassAlpha, onGlassAlpha, sel.glassAlpha + "%", onGlassAlphaCommit),
       // 设置窗口液态玻璃 master switch: turns the WHOLE native settings window
       // (nav + every native section, not just this page) into liquid glass with
       // the accent + transparency above; off restores the stock shell look.
@@ -1217,10 +1411,10 @@ function WallpaperPicker() {
             emit();
           },
         }),
-        "设置窗口液态玻璃",
+        STR.windowGlass,
       ),
       React.createElement("span", { className: "we-picker__hint" },
-        "整个设置窗口（含 General / 模型 / 插件等全部原生分区）跟随配色与透明度；关闭则恢复原生样式",
+        STR.windowGlassHint,
       ),
     ),
     // ── Card-style switch: classic (WE's original aspect-ratio 16/9 cards —
@@ -1228,8 +1422,8 @@ function WallpaperPicker() {
     //    cards that never overlap in older browsers. The vinyl record beside
     //    the selection stays in BOTH styles (here + modal head). ──
     React.createElement("div", { className: "we-picker__row" },
-      React.createElement("span", { className: "we-picker__hint we-picker__label" }, "紧凑布局"),
-      React.createElement("label", { className: "we-picker__switch", title: "紧凑 CD 架：层叠 + 一页到底" },
+      React.createElement("span", { className: "we-picker__hint we-picker__label" }, STR.compactLayout),
+      React.createElement("label", { className: "we-picker__switch", title: STR.compactLayoutHint },
         React.createElement("input", {
           type: "checkbox",
           checked: sel.pickerLayout === "classic",
@@ -1241,8 +1435,8 @@ function WallpaperPicker() {
       ),
       React.createElement("span", { className: "we-picker__hint" },
         sel.pickerLayout === "classic"
-          ? "CD 架：层叠 + 一页到底"
-          : "常规网格 · 分页"),
+          ? STR.compactOn
+          : STR.compactOff),
     ),
     // ── 当前壁纸: vinyl record beside the selection, in both card styles. ──
     React.createElement("div", { className: "we-picker__section" },
@@ -1253,16 +1447,16 @@ function WallpaperPicker() {
         }),
         React.createElement("div", { className: "we-picker__current-info" },
           React.createElement("div", { className: "we-picker__current-title", title: current ? current.title : "" },
-            sel.id && current ? current.title : "未选择壁纸"),
+            sel.id && current ? current.title : STR.noneSelected),
           React.createElement("div", { className: "we-picker__current-meta" },
             current
-              ? ({ video: "视频壁纸", web: "网页壁纸", image: "图片壁纸", scene: "场景壁纸（静态帧）" }[current.type] || "壁纸") + (sel.playing ? " · 播放中" : " · 已暂停")
-              : "尚未选择壁纸"),
+              ? ({ video: STR.typeVideo, web: STR.typeWeb, image: STR.typeImage, scene: STR.typeScene }[current.type] || STR.typeGeneric) + (sel.playing ? STR.playingSuffix : STR.pausedSuffix)
+              : STR.notSelected),
         ),
         React.createElement("button", {
           className: "we-picker__btn we-picker__btn--primary", type: "button",
           onClick: () => { selection.pickerOpen = true; selection.modalView = "normal"; emit(); },
-        }, "选择壁纸"),
+        }, STR.pickWallpaper),
       ),
     // ── Wallpaper picker modal. Portalled onto <body>: fixed positioning is
     //    immune to ancestor transforms/backdrop-filters (the shell's own glass
@@ -1281,39 +1475,39 @@ function WallpaperPicker() {
                 cover: current && current.preview, title: current ? current.title : "",
                 playing: sel.playing && Boolean(sel.url), sm: true,
               }),
-              React.createElement("span", { className: "we-picker__modal-title" }, "选择壁纸"),
+              React.createElement("span", { className: "we-picker__modal-title" }, STR.pickWallpaper),
             ),
             React.createElement("button", {
               className: "we-picker__btn", type: "button", onClick: closePicker,
-            }, "关闭"),
+            }, STR.close),
           ),
           React.createElement("div", { className: "we-picker__modal-tabs" },
             React.createElement("button", {
               className: "we-picker__btn we-picker__tab" + (sel.modalView === "hidden" ? "" : " we-picker__tab--active"),
               type: "button",
               onClick: () => { selection.modalView = "normal"; emit(); },
-            }, "正常列表（" + playableList.length + "）"),
+            }, STR.normalTabPrefix + playableList.length + STR.countSuffix),
             React.createElement("button", {
               className: "we-picker__btn we-picker__tab" + (sel.modalView === "hidden" ? " we-picker__tab--active" : ""),
               type: "button",
               onClick: () => { selection.modalView = "hidden"; selection.batchMode = false; selection.batchSelected = []; emit(); },
-            }, "已隐藏（" + hiddenList.length + "）"),
+            }, STR.hiddenTabPrefix + hiddenList.length + STR.countSuffix),
           ),
           sel.modalView === "hidden"
             ? React.createElement("div", { className: "we-picker__modal-body" },
                 hiddenList.length === 0
-                  ? React.createElement("span", { className: "we-picker__hint" }, "没有已隐藏的壁纸")
+                  ? React.createElement("span", { className: "we-picker__hint" }, STR.noHidden)
                   : React.createElement("div", { className: "we-picker__grid" },
                       React.createElement("div", { className: "we-picker__row" },
                         React.createElement("span", { className: "we-picker__hint" },
-                          "已隐藏 " + hiddenList.length + " 张（仅从列表隐藏，不删除源文件）"),
+                          STR.hiddenCount + hiddenList.length + STR.hiddenCountTail),
                         React.createElement("button", {
                           className: "we-picker__btn", type: "button",
                           onClick: () => {
-                            if (!window.confirm("恢复全部 " + hiddenList.length + " 张已隐藏壁纸？")) return;
+                            if (!window.confirm(STR.restoreAllConfirm + hiddenList.length + STR.restoreAllConfirmTail)) return;
                             restoreWallpapers(hiddenList.map((w) => w.id));
                           },
-                        }, "全部恢复"),
+                        }, STR.restoreAll),
                       ),
                       (cdMode ? hiddenList : hiddenPageView.items).map((w) => React.createElement("div", {
                         key: w.id,
@@ -1328,14 +1522,14 @@ function WallpaperPicker() {
                             src: w.preview, alt: w.title, loading: "lazy",
                             onError: (e) => { e.target.style.display = "none"; },
                           })
-                        : React.createElement("span", { className: "we-picker__card-placeholder" }, "无预览"),
+                        : React.createElement("span", { className: "we-picker__card-placeholder" }, STR.noPreview),
                       React.createElement("span", { className: "we-picker__card-title" }, w.title),
-                      w.type === "scene" && React.createElement("span", { className: "we-picker__card-badge" }, "静态帧"),
+                      w.type === "scene" && React.createElement("span", { className: "we-picker__card-badge" }, STR.staticFrameBadge),
                       React.createElement("button", {
                         className: "we-picker__card-hide", type: "button",
-                        title: "恢复此壁纸",
+                        title: STR.restoreThis,
                         onClick: (e) => { e.stopPropagation(); restoreWallpapers([w.id]); },
-                      }, "恢复"),
+                      }, STR.restore),
                       )),
                     ),
                     !cdMode && hiddenPageView.pages > 1 && pagerRow(
@@ -1347,59 +1541,59 @@ function WallpaperPicker() {
             : React.createElement("div", { className: "we-picker__modal-body" },
                 React.createElement("div", { className: "we-picker__row" },
                   React.createElement("span", { className: "we-picker__hint" },
-                    playableList.length + " 个可播放壁纸 · 点击卡片即应用"),
+                    playableList.length + STR.playableCountHint),
                   React.createElement("button", {
                     className: "we-picker__btn", type: "button",
                     onClick: () => { selection.batchMode = !selection.batchMode; selection.batchSelected = []; emit(); },
                     disabled: playableList.length === 0,
                     title: "多选后批量隐藏",
-                  }, selection.batchMode ? "退出批量" : "批量"),
+                  }, selection.batchMode ? STR.exitBatch : STR.batch),
                 ),
                 selection.batchMode && React.createElement("div", { className: "we-picker__row we-picker__batch-bar" },
-                  React.createElement("span", { className: "we-picker__hint" }, "已选 " + selection.batchSelected.length + " 张"),
+                  React.createElement("span", { className: "we-picker__hint" }, STR.batchSelected + selection.batchSelected.length + STR.batchSelectedTail),
                   React.createElement("button", {
                     className: "we-picker__btn", type: "button",
                     disabled: selection.batchSelected.length === 0,
                     onClick: () => {
                       const n = selection.batchSelected.length;
-                      if (!window.confirm("隐藏选中的 " + n + " 张壁纸？可在「已隐藏」中随时恢复。")) return;
+                      if (!window.confirm(STR.batchHideConfirm + n + STR.batchHideConfirmTail)) return;
                       hideWallpapers(selection.batchSelected.slice());
                       selection.batchMode = false;
                       selection.batchSelected = [];
                       emit();
                     },
-                  }, "批量隐藏"),
+                  }, STR.batchHide),
                   React.createElement("button", {
                     className: "we-picker__btn", type: "button",
                     onClick: () => { selection.batchMode = false; selection.batchSelected = []; emit(); },
-                  }, "取消"),
+                  }, STR.cancel),
                 ),
                 React.createElement("div", { className: "we-picker__row we-picker__filter-row" },
-                  React.createElement("span", { className: "we-picker__hint we-picker__label" }, "内容分级"),
+                  React.createElement("span", { className: "we-picker__hint we-picker__label" }, STR.contentRating),
                   React.createElement("select", {
                     className: "we-picker__playlist-select",
                     value: sel.contentRatingFilter,
                     onChange: onRatingFilterChange,
                     title: "对应 Wallpaper Engine 的内容分级（project.json contentrating）",
                   },
-                  React.createElement("option", { value: "all" }, "全部（" + basePlayable.length + "）"),
-                  React.createElement("option", { value: "everyone" }, "Everyone / G（" + ratingCount("everyone") + "）"),
-                  React.createElement("option", { value: "pg13" }, "PG13（" + ratingCount("pg13") + "）"),
-                  React.createElement("option", { value: "mature" }, "Mature / R（" + ratingCount("mature") + "）"),
-                  React.createElement("option", { value: "unrated" }, "未分级（" + ratingCount("unrated") + "）"),
+                  React.createElement("option", { value: "all" }, STR.allCountPrefix + basePlayable.length + STR.countSuffix),
+                  React.createElement("option", { value: "everyone" }, STR.everyoneOption + ratingCount("everyone") + STR.countSuffix),
+                  React.createElement("option", { value: "pg13" }, STR.pg13Option + ratingCount("pg13") + STR.countSuffix),
+                  React.createElement("option", { value: "mature" }, STR.matureOption + ratingCount("mature") + STR.countSuffix),
+                  React.createElement("option", { value: "unrated" }, STR.unratedOption + ratingCount("unrated") + STR.countSuffix),
                   ),
-                  React.createElement("span", { className: "we-picker__hint we-picker__label" }, "类型"),
+                  React.createElement("span", { className: "we-picker__hint we-picker__label" }, STR.typeFilter),
                   React.createElement("select", {
                     className: "we-picker__playlist-select",
                     value: sel.typeFilter,
                     onChange: onTypeFilterChange,
                     title: "按壁纸类型过滤",
                   },
-                  React.createElement("option", { value: "all" }, "全部（" + basePlayable.length + "）"),
-                  React.createElement("option", { value: "video" }, "视频（" + typeCount("video") + "）"),
-                  React.createElement("option", { value: "web" }, "网页（" + typeCount("web") + "）"),
-                  React.createElement("option", { value: "image" }, "图片（" + typeCount("image") + "）"),
-                  React.createElement("option", { value: "scene" }, "场景（" + typeCount("scene") + "）"),
+                  React.createElement("option", { value: "all" }, STR.allCountPrefix + basePlayable.length + STR.countSuffix),
+                  React.createElement("option", { value: "video" }, STR.videoOption + typeCount("video") + STR.countSuffix),
+                  React.createElement("option", { value: "web" }, STR.webOption + typeCount("web") + STR.countSuffix),
+                  React.createElement("option", { value: "image" }, STR.imageOption + typeCount("image") + STR.countSuffix),
+                  React.createElement("option", { value: "scene" }, STR.sceneOption + typeCount("scene") + STR.countSuffix),
                   ),
                 ),
                 React.createElement("div", { className: "we-picker__grid" },
@@ -1413,15 +1607,15 @@ function WallpaperPicker() {
                     role: "button",
                     tabIndex: 0,
                     onClick: onClear,
-                    title: "关闭壁纸",
+                    title: STR.closeWallpaperTitle,
                     onKeyDown: (e) => {
                       if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); }
                     },
                   },
-                  React.createElement("span", { className: "we-picker__card-close" }, "✕ 关闭"),
+                  React.createElement("span", { className: "we-picker__card-close" }, STR.closeWallpaper),
                   ),
                   playableList.length === 0
-                    ? React.createElement("span", { className: "we-picker__hint" }, "没有可播放的壁纸")
+                    ? React.createElement("span", { className: "we-picker__hint" }, STR.noPlayable)
                     : (cdMode ? playableList : normalPage.items).map((w) => React.createElement("div", {
                         key: w.id,
                         className: "we-picker__card" + (w.id === sel.id ? " we-picker__card--selected" : ""),
@@ -1447,17 +1641,17 @@ function WallpaperPicker() {
                             src: w.preview, alt: w.title, loading: "lazy",
                             onError: (e) => { e.target.style.display = "none"; },
                           })
-                        : React.createElement("span", { className: "we-picker__card-placeholder" }, "无预览"),
+                        : React.createElement("span", { className: "we-picker__card-placeholder" }, STR.noPreview),
                       React.createElement("span", { className: "we-picker__card-title" }, w.title),
-                      w.type === "scene" && React.createElement("span", { className: "we-picker__card-badge" }, "静态帧"),
+                      w.type === "scene" && React.createElement("span", { className: "we-picker__card-badge" }, STR.staticFrameBadge),
                       selection.batchMode
                         ? React.createElement("span", { className: "we-picker__card-check" },
                             selection.batchSelected.indexOf(w.id) >= 0 ? "✓" : "")
                         : React.createElement("button", {
                             className: "we-picker__card-hide", type: "button",
-                            title: "隐藏此壁纸（可在「已隐藏」中恢复）",
+                            title: STR.hideThis,
                             onClick: (e) => { e.stopPropagation(); hideWallpapers([w.id]); },
-                          }, "隐藏"),
+                          }, STR.hide),
                       )),
                 ),
                 !cdMode && normalPage.pages > 1 && pagerRow(
@@ -1467,10 +1661,10 @@ function WallpaperPicker() {
                 ),
               ),
           React.createElement("div", { className: "we-picker__modal-foot" },
-            React.createElement("span", { className: "we-picker__hint" }, "ESC / 点击遮罩关闭"),
+            React.createElement("span", { className: "we-picker__hint" }, STR.escHint),
             React.createElement("button", {
               className: "we-picker__btn", type: "button", onClick: closePicker,
-            }, "关闭"),
+            }, STR.close),
           ),
         ),
       ),
@@ -1482,15 +1676,15 @@ function WallpaperPicker() {
       React.createElement("button", {
         className: "we-picker__btn", type: "button",
         onClick: onTogglePlay, disabled: !sel.url,
-      }, sel.playing ? "暂停" : "播放"),
+      }, sel.playing ? STR.pause : STR.play),
       React.createElement("button", {
         className: "we-picker__btn", type: "button",
         onClick: onClear, disabled: !sel.id,
-      }, "关闭"),
+      }, STR.close),
       React.createElement("button", {
         className: "we-picker__btn", type: "button",
         onClick: onRefresh, disabled: sel.loading,
-      }, sel.loading ? "刷新中…" : "刷新"),
+      }, sel.loading ? STR.refreshing : STR.refresh),
     ),
     ),
     // ── 自定义壁纸: local JPG/PNG/MP4 as wallpapers. Files are written by the
@@ -1499,14 +1693,14 @@ function WallpaperPicker() {
     //    limits). Uploads merge into the inventory on the host side. ──
     React.createElement("div", { className: "we-picker__section" },
       React.createElement("div", { className: "we-picker__section-head" },
-        React.createElement("span", { className: "we-picker__section-label" }, "自定义壁纸"),
+        React.createElement("span", { className: "we-picker__section-label" }, STR.sectionUploads),
       ),
       React.createElement("div", { className: "we-picker__uploads" },
       // Storage location — users can point uploads at a non-system drive
       // (most people don't want wallpaper files piling up on C:). The host
       // persists the choice and migrates existing files on change.
       React.createElement("div", { className: "we-picker__row" },
-        React.createElement("span", { className: "we-picker__hint we-picker__label" }, "存储位置"),
+        React.createElement("span", { className: "we-picker__hint we-picker__label" }, STR.storageLocation),
         React.createElement("span", {
           className: "we-picker__uploads-path",
         }, sel.inventory.uploadDir || "—"),
@@ -1518,13 +1712,13 @@ function WallpaperPicker() {
             selection.uploadDirDraft = sel.inventory.uploadDir || "";
             emit();
           },
-        }, "更改"),
+        }, STR.change),
       ),
       sel.editingUploadDir && React.createElement("div", { className: "we-picker__row" },
         React.createElement("input", {
           className: "we-picker__text", type: "text",
           value: selection.uploadDirDraft,
-          placeholder: "绝对路径，如 D:\\MyWallpapers",
+          placeholder: STR.uploadDirPlaceholder,
           onInput: (e) => { selection.uploadDirDraft = e.target.value; emit(); },
           onKeyDown: (e) => {
             if (e.key === "Enter") changeUploadDir(selection.uploadDirDraft, true);
@@ -1535,20 +1729,20 @@ function WallpaperPicker() {
           className: "we-picker__btn", type: "button",
           disabled: sel.uploading,
           onClick: () => changeUploadDir(selection.uploadDirDraft, true),
-        }, "保存"),
+        }, STR.save),
         React.createElement("button", {
           className: "we-picker__btn", type: "button",
           onClick: () => { selection.editingUploadDir = false; emit(); },
-        }, "取消"),
+        }, STR.cancel),
       ),
       React.createElement("div", { className: "we-picker__row" },
         React.createElement("span", { className: "we-picker__hint" },
-          "已有文件会迁移到新位置"),
+          STR.migrateHint),
         React.createElement("span", { className: "we-picker__hint" },
-          "支持 ~ 表示用户主目录"),
+          STR.tildeHint),
       ),
       React.createElement("div", { className: "we-picker__row" },
-        React.createElement("span", { className: "we-picker__hint we-picker__label" }, "自定义"),
+        React.createElement("span", { className: "we-picker__hint we-picker__label" }, STR.uploadLabel),
         React.createElement("input", {
           className: "we-picker__file", type: "file",
           accept: ".jpg,.jpeg,.png,.mp4",
@@ -1559,13 +1753,13 @@ function WallpaperPicker() {
             e.target.value = "";
           },
         }),
-        sel.uploading && React.createElement("span", { className: "we-picker__hint" }, "上传中…"),
+        sel.uploading && React.createElement("span", { className: "we-picker__hint" }, STR.uploading),
       ),
       sel.uploadError && React.createElement("div", { className: "we-picker__error" }, sel.uploadError),
       sel.uploadNote && React.createElement("div", { className: "we-picker__note" }, sel.uploadNote),
       React.createElement("div", { className: "we-picker__row" },
-        React.createElement("span", { className: "we-picker__hint" }, "已上传 " + uploadedList.length + " 个"),
-        React.createElement("span", { className: "we-picker__hint" }, "格式仅限 JPG / PNG / MP4"),
+        React.createElement("span", { className: "we-picker__hint" }, STR.uploadedCount + uploadedList.length + STR.uploadedCountTail),
+        React.createElement("span", { className: "we-picker__hint" }, STR.formatHint),
       ),
       uploadedList.length > 0 && React.createElement("div", { className: "we-picker__uploads-list" },
         uploadedList.map((w) => React.createElement("div", { key: w.id, className: "we-picker__uploads-item" },
@@ -1575,18 +1769,18 @@ function WallpaperPicker() {
             className: "we-picker__btn", type: "button",
             disabled: sel.uploading,
             onClick: () => {
-              if (!window.confirm("移除自定义壁纸「" + w.title + "」？此操作会删除本地文件，且不可恢复。")) return;
+              if (!window.confirm(STR.removeConfirm + w.title + STR.removeConfirmTail)) return;
               removeUploadWallpaper(w.id);
             },
-          }, "移除"),
+          }, STR.remove),
         )),
       ),
       // Fit mode — applies to CUSTOM uploads only (WE media always keeps cover
       // to preserve its intended framing). 覆盖=cover 填充=contain 居中=center 拉伸=fill
       React.createElement("div", { className: "we-picker__row" },
-        React.createElement("span", { className: "we-picker__hint we-picker__label" }, "适配"),
+        React.createElement("span", { className: "we-picker__hint we-picker__label" }, STR.fitLabel),
         ["cover", "contain", "center", "fill"].map((mode) => {
-          const label = { cover: "覆盖", contain: "填充", center: "居中", fill: "拉伸" }[mode];
+          const label = STR.fitModes[mode];
           return React.createElement("button", {
             key: mode,
             className: "we-picker__btn we-picker__rate" + (sel.objectFit === mode ? " we-picker__rate--active" : ""),
@@ -1595,7 +1789,7 @@ function WallpaperPicker() {
             onClick: () => { selection.objectFit = mode; persistSelection(); applyEffects(); emit(); },
           }, label);
         }),
-        React.createElement("span", { className: "we-picker__hint" }, "仅自定义壁纸"),
+        React.createElement("span", { className: "we-picker__hint" }, STR.fitCustomOnly),
       ),
       ),
     ),
@@ -1603,7 +1797,7 @@ function WallpaperPicker() {
     //    set, interval and order. Fully client-side (localStorage). ──
     React.createElement("div", { className: "we-picker__section" },
       React.createElement("div", { className: "we-picker__section-head" },
-        React.createElement("span", { className: "we-picker__section-label" }, "轮播列表"),
+        React.createElement("span", { className: "we-picker__section-label" }, STR.sectionRotation),
       ),
       React.createElement("div", { className: "we-picker__row we-picker__playlist-row" },
       React.createElement("select", {
@@ -1612,29 +1806,29 @@ function WallpaperPicker() {
         onChange: onGroupChange,
         disabled: groups.length === 0,
       },
-      React.createElement("option", { value: "" }, groups.length ? "— 选择轮播列表 —" : "— 暂无轮播列表 —"),
+      React.createElement("option", { value: "" }, groups.length ? STR.rotationPick : STR.rotationEmpty),
       ...groups.map((g) => React.createElement("option", {
         key: g.id, value: g.id,
-      }, g.name + "（" + groupWallpapers(g).length + " 可播放 · " + g.interval + " 分钟）")),
+      }, g.name + "（" + groupWallpapers(g).length + STR.rotationGroupMeta + g.interval + STR.minutes + "）")),
       ),
       React.createElement("button", {
         className: "we-picker__btn", type: "button",
         onClick: startCreateGroup,
-      }, "新建"),
+      }, STR.newGroup),
       React.createElement("button", {
         className: "we-picker__btn", type: "button",
         onClick: () => startEditGroup(sel.rotationGroupId),
         disabled: !sel.rotationGroupId,
-      }, "编辑"),
+      }, STR.edit),
       React.createElement("button", {
         className: "we-picker__btn", type: "button",
         onClick: onDeleteGroup,
         disabled: !sel.rotationGroupId,
-      }, "删除"),
+      }, STR.delete),
     ),
     editing && React.createElement("div", { className: "we-picker__editor" },
       React.createElement("div", { className: "we-picker__row" },
-        React.createElement("span", { className: "we-picker__hint we-picker__label" }, "名称"),
+        React.createElement("span", { className: "we-picker__hint we-picker__label" }, STR.name),
         React.createElement("input", {
           className: "we-picker__text", type: "text",
           value: editing.name,
@@ -1642,28 +1836,28 @@ function WallpaperPicker() {
         }),
       ),
       React.createElement("div", { className: "we-picker__row" },
-        React.createElement("span", { className: "we-picker__hint we-picker__label" }, "间隔"),
+        React.createElement("span", { className: "we-picker__hint we-picker__label" }, STR.interval),
         React.createElement("select", {
           className: "we-picker__rotation-interval",
           value: String(editing.interval),
           onChange: (e) => { editing.interval = clampNum(Number(e.target.value), 1, 1440, DEFAULTS.rotationInterval); emit(); },
         },
         ...INTERVALS.map((minutes) =>
-          React.createElement("option", { key: minutes, value: String(minutes) }, minutes + " 分钟"),
+          React.createElement("option", { key: minutes, value: String(minutes) }, minutes + STR.minutes),
         )),
-        React.createElement("span", { className: "we-picker__hint we-picker__label" }, "顺序"),
+        React.createElement("span", { className: "we-picker__hint we-picker__label" }, STR.order),
         React.createElement("select", {
           className: "we-picker__playlist-select",
           value: editing.order,
           onChange: (e) => { editing.order = e.target.value; emit(); },
         },
-        React.createElement("option", { value: "sequence" }, "顺序"),
-        React.createElement("option", { value: "random" }, "随机"),
+        React.createElement("option", { value: "sequence" }, STR.orderSequence),
+        React.createElement("option", { value: "random" }, STR.orderRandom),
         ),
       ),
       React.createElement("div", { className: "we-picker__editor-grid" },
         playableInventory().length === 0
-          ? React.createElement("span", { className: "we-picker__hint" }, "没有可播放的壁纸")
+          ? React.createElement("span", { className: "we-picker__hint" }, STR.noPlayable)
           : (cdMode ? playableInventory() : editorPageView.items).map((w) => {
               const checked = editing.wallpaperIds.indexOf(w.id) >= 0;
               return React.createElement("button", {
@@ -1683,7 +1877,7 @@ function WallpaperPicker() {
                     src: w.preview, alt: w.title, loading: "lazy",
                     onError: (e) => { e.target.style.display = "none"; },
                   })
-                : React.createElement("span", { className: "we-picker__card-placeholder" }, "无预览"),
+                : React.createElement("span", { className: "we-picker__card-placeholder" }, STR.noPreview),
               checked && React.createElement("span", { className: "we-picker__editor-check" }, "✓"),
               );
             }),
@@ -1694,7 +1888,7 @@ function WallpaperPicker() {
         () => { selection.editorPage++; emit(); },
       ),
       React.createElement("div", { className: "we-picker__row" },
-        React.createElement("span", { className: "we-picker__hint" }, "已选 " + editing.wallpaperIds.length + " 个"),
+        React.createElement("span", { className: "we-picker__hint" }, STR.selectedCount + editing.wallpaperIds.length + STR.selectedCountTail),
         sel.inventory.playlists.length > 0 && React.createElement("select", {
           className: "we-picker__playlist-select",
           value: "",
@@ -1703,21 +1897,21 @@ function WallpaperPicker() {
             if (p) importPlaylistIntoDraft(p);
           },
         },
-        React.createElement("option", { value: "" }, "从 WE 播放列表导入…"),
+        React.createElement("option", { value: "" }, STR.importPlaylist),
         ...sel.inventory.playlists.map((p) => React.createElement("option", {
           key: p.id, value: p.id,
-        }, p.name + "（" + (p.portableCount || 0) + " 可播放）")),
+        }, p.name + "（" + (p.portableCount || 0) + STR.importPlaylistMeta)),
         ),
       ),
       React.createElement("div", { className: "we-picker__row" },
         React.createElement("button", {
           className: "we-picker__btn", type: "button",
           onClick: saveEditingGroup,
-        }, "保存"),
+        }, STR.save),
         React.createElement("button", {
           className: "we-picker__btn", type: "button",
           onClick: cancelEditGroup,
-        }, "取消"),
+        }, STR.cancel),
       ),
     ),
     React.createElement("div", { className: "we-picker__row we-picker__rotation-row" },
@@ -1728,7 +1922,7 @@ function WallpaperPicker() {
           onChange: onToggleRotation,
           disabled: !sel.rotationGroupId || playableCount < 2,
         }),
-        "自动轮转",
+        STR.autoRotate,
       ),
       React.createElement("select", {
         className: "we-picker__rotation-interval",
@@ -1737,25 +1931,25 @@ function WallpaperPicker() {
         disabled: !sel.rotationEnabled || !sel.rotationGroupId || playableCount < 2,
       },
       ...INTERVALS.map((minutes) =>
-        React.createElement("option", { key: minutes, value: String(minutes) }, minutes + " 分钟"),
+        React.createElement("option", { key: minutes, value: String(minutes) }, minutes + STR.minutes),
       )),
-      !sel.rotationGroupId && React.createElement("span", { className: "we-picker__hint" }, "请先选择或新建一个轮播列表"),
-      sel.rotationGroupId && playableCount < 2 && React.createElement("span", { className: "we-picker__hint" }, "当前列表至少需要 2 个可播放壁纸"),
+      !sel.rotationGroupId && React.createElement("span", { className: "we-picker__hint" }, STR.pickGroupFirst),
+      sel.rotationGroupId && playableCount < 2 && React.createElement("span", { className: "we-picker__hint" }, STR.needTwoPlayable),
     ),
     ),
     sel.id && React.createElement("div", { className: "we-picker__section" },
       React.createElement("div", { className: "we-picker__section-head" },
-        React.createElement("span", { className: "we-picker__section-label" }, "壁纸效果"),
+        React.createElement("span", { className: "we-picker__section-label" }, STR.sectionEffects),
       ),
       React.createElement(React.Fragment, null,
-      SliderRow("壁纸模糊", 0, 60, 1, sel.wallpaperBlur, onWallpaperBlur, sel.wallpaperBlur + "px"),
-      SliderRow("暗化", 0, 90, 5, Math.round(sel.scrim * 100), onScrim, Math.round(sel.scrim * 100) + "%"),
-      SliderRow("边框", 0, 90, 5, Math.round(sel.border * 100), onBorder, Math.round(sel.border * 100) + "%"),
-      SliderRow("玻璃", 0, 60, 1, sel.blur, onBlur, sel.blur + "px"),
+      SliderRow(STR.wallpaperBlur, 0, 60, 1, sel.wallpaperBlur, onWallpaperBlur, sel.wallpaperBlur + "px", onWallpaperBlurCommit),
+      SliderRow(STR.scrim, 0, 90, 5, Math.round(sel.scrim * 100), onScrim, Math.round(sel.scrim * 100) + "%", onScrimCommit),
+      SliderRow(STR.border, 0, 90, 5, Math.round(sel.border * 100), onBorder, Math.round(sel.border * 100) + "%", onBorderCommit),
+      SliderRow(STR.glass, 0, 60, 1, sel.blur, onBlur, sel.blur + "px", onBlurCommit),
       // Playback speed — native playbackRate, instant, no media reload. Video
       // wallpapers only (web/iframe wallpapers have no playbackRate).
       sel.type === "video" && React.createElement("div", { className: "we-picker__row" },
-        React.createElement("span", { className: "we-picker__hint we-picker__label" }, "倍速"),
+        React.createElement("span", { className: "we-picker__hint we-picker__label" }, STR.playbackRate),
         [0.5, 0.75, 1, 1.25, 1.5, 2].map((rate) =>
           React.createElement("button", {
             key: rate,
@@ -1773,16 +1967,16 @@ function WallpaperPicker() {
           checked: sel.flip,
           onChange: (e) => { selection.flip = e.target.checked; persistSelection(); applyEffects(); emit(); },
         }),
-        "水平翻转",
+        STR.flip,
       ),
       ),
     ),
     React.createElement("div", { className: "we-picker__row" },
       React.createElement("span", { className: "we-picker__hint" },
         (group
-          ? "列表「" + group.name + "」：" + group.wallpaperIds.length + " 项 · " + playableCount + " 可播放 · 每 " + group.interval + " 分钟 · " + (group.order === "random" ? "随机" : "顺序")
-          : playableList.length + " 个可播放壁纸") +
-        (sel.rotationEnabled ? " · 自动轮转中" : "")),
+          ? STR.groupMetaPrefix + group.name + "」：" + group.wallpaperIds.length + STR.groupMetaCount + playableCount + STR.groupMetaPlayable + group.interval + STR.groupMetaMinutes + (group.order === "random" ? STR.orderRandom : STR.orderSequence)
+          : playableList.length + STR.playableCountHint) +
+        (sel.rotationEnabled ? STR.rotatingSuffix : "")),
     ),
   );
 }
@@ -1801,793 +1995,8 @@ function WallpaperPickerSection() {
 }
 
 // ── Styles ──────────────────────────────────────────────────────────────────
-const CSS = `
-  /* Wallpaper layer: a fixed child of <body>, sunk BELOW the app frame. */
-  .we-layer { position: fixed; inset: 0; z-index: -2; overflow: hidden; pointer-events: none; }
-  /* Blurring via CSS filter darkens/thins the edges, so the layer is scaled up
-     (--we-wallpaper-scale tracks blur) to hide the transparent fringe the blur
-     would otherwise reveal at the viewport edges. */
-  .we-layer .we-media {
-    width: 100%; height: 100%; object-fit: cover; display: block;
-    background: transparent; border: 0;
-    filter: blur(var(--we-wallpaper-blur, 0px));
-    /* Flip composes with the blur-compensation scale on the SAME transform
-       (scaleX(-1) mirrors around the center; pure compositor work). */
-    transform: scale(var(--we-wallpaper-scale, 1)) scaleX(var(--we-wallpaper-flip, 1));
-    transform-origin: center;
-  }
-  /* Custom uploads: the user-chosen fit mode (覆盖/填充/居中/拉伸). WE media
-     keeps cover above; only .we-media--fit reads the variable. */
-  .we-layer .we-media--fit { object-fit: var(--we-object-fit, cover); }
-
-  /* Scrim: sits ABOVE the wallpaper (z-index -1 > -2, so it never depends on
-     DOM insertion order — the wallpaper element is re-appended on wallpaper
-     switch and could otherwise slide above the scrim). Below the UI. */
-  .we-scrim {
-    position: fixed; inset: 0; z-index: -1;
-    pointer-events: none;
-    background: var(--we-scrim-color, rgba(0, 0, 0, 0.25));
-  }
-
-  /* While a wallpaper is active: make the app frame AND sidebar transparent so
-     all columns share the same wallpaper+scrim background, raise border alpha
-     for visibility, and apply the frosted-glass effect to opaque surfaces. */
-  body[data-we-wallpaper] {
-    --dsw-alias-bg-base: transparent;
-    --dsw-specific-sidebar-fill: transparent;
-    /* Border emphasis: neutral gray so it reads on both light and dark themes;
-       alpha is driven by the "边框" slider through --we-border-alpha. */
-    --dsw-alias-border-l1: rgba(180, 180, 180, var(--we-border-alpha, 0.35));
-    --dsw-alias-border-l2: rgba(180, 180, 180, var(--we-border-alpha, 0.35));
-    --dsw-alias-border-l2-darkmode-thin: rgba(180, 180, 180, var(--we-border-alpha, 0.35));
-  }
-  /* DSH rc.7+ injects the theme palette (design-platform.css) as a plugin-owned
-     stylesheet appended to <head> AFTER this one, so in dark mode the shell's
-     body[data-ds-dark-theme] rules (equal specificity 0,1,1, later in the
-     document) win the cascade and repaint the app frame / sidebar / borders
-     with their opaque dark colors — hiding the wallpaper behind them. Repeat
-     the transparency + border-emphasis overrides under the higher-specificity
-     dark selector (0,2,1) so the wallpaper always wins regardless of stylesheet
-     order. */
-  body[data-ds-dark-theme][data-we-wallpaper] {
-    --dsw-alias-bg-base: transparent;
-    --dsw-specific-sidebar-fill: transparent;
-    --dsw-alias-border-l1: rgba(180, 180, 180, var(--we-border-alpha, 0.35));
-    --dsw-alias-border-l2: rgba(180, 180, 180, var(--we-border-alpha, 0.35));
-    --dsw-alias-border-l2-darkmode-thin: rgba(180, 180, 180, var(--we-border-alpha, 0.35));
-  }
-
-  /* ── Light-scheme text contrast boost ──────────────────────────────────────
-     In light mode the grays (tertiary/caption/secondary) were tuned against a
-     near-white page. Over a busy wallpaper + light scrim they lose contrast, so
-     push the whole gray ramp darker while a wallpaper is active. Primary text
-     is already near-black; we still pin it to pure black for max legibility.
-     (Dark mode is untouched: its white-on-dark text already reads fine.) */
-  body[data-we-wallpaper]:not([data-ds-dark-theme]) {
-    --dsw-alias-label-primary: rgb(0, 0, 0);
-    --dsw-alias-label-primary-dimmed: rgb(10, 10, 12);
-    --dsw-alias-label-secondary: rgb(40, 42, 46);
-    --dsw-alias-label-tertiary: rgb(70, 73, 79);
-    --dsw-alias-label-caption: rgb(110, 114, 120);
-    --dsw-alias-label-dimmed: rgb(50, 52, 56);
-  }
-
-  /* ── iOS liquid glass ──────────────────────────────────────────────────────
-     The opaque conversation surfaces become translucent glass. The recipe is
-     Apple-like, not a plain blur:
-       - LARGE-radius blur + HIGH saturation + brightness/contrast lift, so the
-         wallpaper colour melts into a soft glow instead of a gray smear
-         (saturation scales with blur in applyEffects: 0 blur → no melt);
-       - a top-weighted specular gradient (background-image) — the sheen is
-         what makes the surface read as "wet glass", not a flat tint;
-       - a light, low-alpha base (not a dark one) so the wallpaper shows through;
-       - a 1px top refraction highlight + 0.5px hairline + soft elevation
-         shadow for "thick glass";
-       - blur radius + saturation both scale off --we-blur / --we-saturate
-         (the 玻璃 slider drives both, so composer, bubbles AND the
-         better-sidebar shell stay in one uniform liquid look).
-
-     Transparency is driven through the design tokens the surfaces already read
-     (--dsw-specific-input-major on the composer card, --dsw-specific-bubble on
-     message bubbles) rather than through class selectors: CSS-module class
-     names are build hashes and change whenever the shell frontend is rebuilt,
-     which silently kills the effect. backdrop-filter cannot be expressed as a
-     token, so the blur itself still needs an element selector — [data-composer-card]
-     is authored in the shell source and survives rebuilds. Bubbles carry no such
-     attribute, so they fall back to the module-CSS suffix convention; if that
-     ever stops matching the bubble stays translucent, just without the blur. */
-  body[data-we-wallpaper] {
-    --dsw-specific-input-major: rgba(255, 255, 255, var(--we-glass-alpha, 0.15));
-    --dsw-specific-bubble: rgba(255, 255, 255, calc(var(--we-glass-alpha, 0.15) * 0.8));
-  }
-  body[data-ds-dark-theme][data-we-wallpaper] {
-    --dsw-specific-input-major: rgba(255, 255, 255, calc(var(--we-glass-alpha, 0.15) * 0.4));
-    --dsw-specific-bubble: rgba(255, 255, 255, calc(var(--we-glass-alpha, 0.15) * 0.33));
-  }
-  body[data-we-wallpaper] [data-composer-card],
-  body[data-we-wallpaper] [class*="_bubble"] {
-    /* Specular sheen: a top-weighted white gradient turns a flat translucent
-       tint into "wet glass" — kept faint so the wallpaper stays 通透 (clear)
-       instead of glaring. */
-    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.05) 38%, rgba(255, 255, 255, 0.02));
-    -webkit-backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
-    backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, var(--we-glass-highlight, 0.32)),
-      inset 0 -1px 0 rgba(255, 255, 255, 0.08),
-      inset 0 0 0 0.5px rgba(255, 255, 255, 0.08),
-      0 12px 40px rgba(0, 0, 0, var(--we-glass-shadow, 0.12));
-  }
-
-  /* ── dsh-better-sidebar glass ──────────────────────────────────────────────
-     The sidebar shell is portalled onto <body> under a stable host attribute
-     "data-dsh-better-sidebar" (set by the plugin's own mount code), so we can
-     target the whole tree without depending on its CSS-module hashes. Its root
-     panels read the opaque --dsw-alias-bg-layer-1 token (hence the "black
-     frame") — give them the SAME clear liquid-glass recipe as the
-     composer/bubbles (faint specular sheen + gentle frosted melt), with blur
-     radius + saturation driven by the 玻璃 slider (--we-blur / --we-saturate).
-     Inner chrome surfaces that paint the same opaque tokens get a translucent
-     base too; the blur lives on the root panels (one blur per shell). */
-  body[data-we-wallpaper] [data-dsh-better-sidebar] [class*="_boundaryError"],
-  body[data-we-wallpaper] [data-dsh-better-sidebar] [class*="_panel"] {
-    background-color: rgba(255, 255, 255, calc(var(--we-glass-alpha, 0.15) * 0.66)) !important;
-    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04) 38%, rgba(255, 255, 255, 0.01)) !important;
-    -webkit-backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01) !important;
-    backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01) !important;
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, var(--we-glass-highlight, 0.32)),
-      inset 0 -1px 0 rgba(255, 255, 255, 0.08),
-      inset 0 0 0 0.5px rgba(255, 255, 255, 0.06);
-  }
-  body[data-we-wallpaper] [data-dsh-better-sidebar] [class*="_pane"],
-  body[data-we-wallpaper] [data-dsh-better-sidebar] [class*="_tabBar"],
-  body[data-we-wallpaper] [data-dsh-better-sidebar] [class*="_paneCard"],
-  body[data-we-wallpaper] [data-dsh-better-sidebar] [class*="_editorHeader"],
-  body[data-we-wallpaper] [data-dsh-better-sidebar] [class*="_explorerHeader"],
-  body[data-we-wallpaper] [data-dsh-better-sidebar] [class*="_gitHeader"],
-  body[data-we-wallpaper] [data-dsh-better-sidebar] [class*="_browserBar"],
-  body[data-we-wallpaper] [data-dsh-better-sidebar] [class*="_terminalWrap"] {
-    background-color: rgba(255, 255, 255, calc(var(--we-glass-alpha, 0.15) * 0.53)) !important;
-  }
-  body[data-ds-dark-theme][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_boundaryError"],
-  body[data-ds-dark-theme][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_panel"] {
-    background-color: rgba(255, 255, 255, calc(var(--we-glass-alpha, 0.15) * 0.33)) !important;
-  }
-  body[data-ds-dark-theme][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_pane"],
-  body[data-ds-dark-theme][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_tabBar"],
-  body[data-ds-dark-theme][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_paneCard"],
-  body[data-ds-dark-theme][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_editorHeader"],
-  body[data-ds-dark-theme][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_explorerHeader"],
-  body[data-ds-dark-theme][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_gitHeader"],
-  body[data-ds-dark-theme][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_browserBar"],
-  body[data-ds-dark-theme][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_terminalWrap"] {
-    background-color: rgba(255, 255, 255, calc(var(--we-glass-alpha, 0.15) * 0.26)) !important;
-  }
-
-  /* Picker chrome. */
-  .we-picker { display: flex; flex-direction: column; gap: 10px; }
-  .we-picker__select { max-width: 100%; }
-  .we-picker__row { display: flex; gap: 8px; align-items: center; }
-  /* First-level settings section wrapper (mirrors the skin-center's
-     sectionList): the ul/li carry no default list styling. */
-  .we-picker__section-list { margin: 0; padding: 0; list-style: none; }
-
-  /* ── WHOLE native settings window → liquid glass (master switch).
-     Keyed on body[data-we-glass-window] (set by applyEffects from the
-     glassWindow preference). The settings dialog is the shell's
-     div[role="dialog"] containing the settings.section outlet anchor
-     (data-slot="settings.section" — stamped by the slot renderer, same anchor
-     the skin-center's semantic layer uses). The dialog reads inherited shell
-     tokens (panel background = --dsw-alias-bg-layer-2, nav active/hover =
-     --dsw-specific-sidebar-nav-item-*, close hover = --dsw-alias-interactive-bg-hover,
-     accents = --dsw-alias-brand-primary), so overriding those tokens ON the
-     dialog element restyles the ENTIRE window — left nav, content header and
-     every native section (General / Models / Plugins / …) — in one shot:
-     translucent glass base + backdrop blur + specular sheen + inner highlight,
-     with the accent color remapped to --we-accent (配色) and all surface alphas
-     driven by --we-glass-alpha (玻璃透明度). Off = stock shell look. ── */
-  body[data-we-glass-window] [role="dialog"]:has([data-slot="settings.section"]) {
-    /* Glass surface alphas (light scheme): the base tint is --we-glass-color
-       (玻璃颜色) mixed with transparent at the 玻璃透明度-driven alpha, so the
-       whole window glass can be tinted to any color. Default (no custom color)
-       = white glass, the stock look. */
-    --dsw-alias-bg-layer-1: color-mix(in srgb, var(--we-glass-color, #ffffff) calc(var(--we-glass-alpha, 0.5) * 0.9 * 100%), transparent);
-    --dsw-alias-bg-layer-2: color-mix(in srgb, var(--we-glass-color, #ffffff) calc(var(--we-glass-alpha, 0.5) * 1.0 * 100%), transparent);
-    --dsw-alias-bg-layer-3: color-mix(in srgb, var(--we-glass-color, #ffffff) calc(var(--we-glass-alpha, 0.5) * 1.1 * 100%), transparent);
-    /* Nav + interactive states tinted with the accent. */
-    --dsw-specific-sidebar-nav-item-active: color-mix(in srgb, var(--we-accent, #4f8cff) 26%, rgba(255, 255, 255, 0.08));
-    --dsw-specific-sidebar-nav-item-hover: color-mix(in srgb, var(--we-accent, #4f8cff) 13%, rgba(255, 255, 255, 0.05));
-    --dsw-alias-interactive-bg-hover: color-mix(in srgb, var(--we-accent, #4f8cff) 14%, transparent);
-    --dsw-alias-interactive-bg-hover-accent: color-mix(in srgb, var(--we-accent, #4f8cff) 18%, transparent);
-    /* Whole-dialog accent remap: every native control (links, primary buttons,
-       switches, active tabs, slider fills) follows the 配色 control. */
-    --dsw-alias-brand-primary: var(--we-accent, #4f8cff);
-    --dsw-alias-brand-text: var(--we-accent, #4f8cff);
-    --dsw-alias-button-primary-fill: var(--we-accent, #4f8cff);
-    --dsw-alias-button-primary-hover: color-mix(in srgb, var(--we-accent, #4f8cff) 88%, #fff);
-    --dsw-alias-button-primary-dimmed: color-mix(in srgb, var(--we-accent, #4f8cff) 22%, transparent);
-    --dsw-alias-state-business-primary: var(--we-accent, #4f8cff);
-    /* Frosted finish — the SAME recipe as the conversation surfaces (composer
-       card / bubbles): the blur radius, saturation melt and brightness all
-       read the 玻璃 slider (--we-blur 0–60px, --we-saturate, --we-glass-brightness),
-       so the settings window glass tracks the conversation-bar adjustment range
-       exactly. Plus a specular sheen + inner edge highlight + diffuse shadow
-       (the shell already rounds the panel at 24px). */
-    -webkit-backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
-    backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
-    background-image: linear-gradient(
-      180deg,
-      rgba(255, 255, 255, 0.1) 0%,
-      rgba(255, 255, 255, 0.03) 38%,
-      rgba(255, 255, 255, 0.05) 100%
-    );
-    box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, 0.22),
-      inset 0 0 0 1px rgba(255, 255, 255, 0.06),
-      0 24px 80px rgba(0, 7, 18, 0.35);
-  }
-  /* Dark scheme: deep translucent base instead of white. The default glass
-     color is deep navy; a user-picked 玻璃颜色 overrides it in both themes. */
-  body[data-ds-dark-theme][data-we-glass-window] [role="dialog"]:has([data-slot="settings.section"]) {
-    --dsw-alias-bg-layer-1: color-mix(in srgb, var(--we-glass-color, #0d1524) calc(var(--we-glass-alpha, 0.5) * 0.9 * 100%), transparent);
-    --dsw-alias-bg-layer-2: color-mix(in srgb, var(--we-glass-color, #0d1524) calc(var(--we-glass-alpha, 0.5) * 1.0 * 100%), transparent);
-    --dsw-alias-bg-layer-3: color-mix(in srgb, var(--we-glass-color, #0d1524) calc(var(--we-glass-alpha, 0.5) * 1.1 * 100%), transparent);
-    --dsw-specific-sidebar-nav-item-active: color-mix(in srgb, var(--we-accent, #4f8cff) 30%, rgba(255, 255, 255, 0.06));
-    --dsw-specific-sidebar-nav-item-hover: color-mix(in srgb, var(--we-accent, #4f8cff) 14%, rgba(255, 255, 255, 0.04));
-    background-image: linear-gradient(
-      180deg,
-      rgba(255, 255, 255, 0.07) 0%,
-      rgba(255, 255, 255, 0.02) 38%,
-      rgba(255, 255, 255, 0.03) 100%
-    );
-  }
-  /* No backdrop-filter support: fall back to near-opaque glass so text stays
-     readable (same policy as the skin's patches.css). */
-  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
-    body[data-we-glass-window] [role="dialog"]:has([data-slot="settings.section"]) {
-      --dsw-alias-bg-layer-1: var(--we-glass-color, #ffffff);
-      --dsw-alias-bg-layer-2: var(--we-glass-color, #ffffff);
-      --dsw-alias-bg-layer-3: var(--we-glass-color, #ffffff);
-    }
-    body[data-ds-dark-theme][data-we-glass-window] [role="dialog"]:has([data-slot="settings.section"]) {
-      --dsw-alias-bg-layer-1: var(--we-glass-color, #0d1524);
-      --dsw-alias-bg-layer-2: var(--we-glass-color, #0d1524);
-      --dsw-alias-bg-layer-3: var(--we-glass-color, #0d1524);
-    }
-  }
-
-  /* Section card (mirrors the skin-center's pluginCard): a quiet layer card —
-     translucent token background + hairline border + radius. NO own backdrop
-     blur: the whole settings window is the glass surface (see the
-     body[data-we-glass-window] dialog rules above), so a nested blur would
-     double-frost and look muddy. Without the master switch the card still
-     reads as a subtle layer over the stock panel. */
-  .we-picker__card-shell {
-    border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.28));
-    border-radius: 12px;
-    background: var(--dsw-alias-bg-layer-3, rgba(128, 128, 128, 0.08));
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.06);
-    padding: 14px 16px;
-    transition: border-color 0.16s ease, background-color 0.16s ease;
-  }
-  .we-picker__card-shell:hover { border-color: var(--dsw-alias-label-dimmed, rgba(128, 128, 128, 0.5)); }
-  /* Card header: name + count badge + description (mirrors skin-center). */
-  .we-picker__card-head {
-    display: flex; align-items: baseline; gap: 8px;
-    padding-bottom: 10px; border-bottom: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.22));
-  }
-  .we-picker__card-name {
-    font-size: 15px; font-weight: 600; color: var(--dsw-alias-label-primary, inherit);
-  }
-  .we-picker__card-badge {
-    font-size: 11px; font-weight: 500; color: var(--dsw-alias-label-secondary, #6b7280);
-  }
-  .we-picker__card-desc {
-    margin-left: auto; font-size: 12px; color: var(--dsw-alias-label-tertiary, #6b7280);
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-  /* 配色 swatches: circular preset buttons + native color picker. The active
-     swatch gets an accent ring so the current choice is obvious at a glance. */
-  .we-picker__accent-row { flex-wrap: wrap; }
-  .we-picker__swatch {
-    width: 20px; height: 20px; padding: 0; border-radius: 50%;
-    border: 2px solid rgba(255, 255, 255, 0.7);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
-    cursor: pointer;
-    transition: transform 0.12s ease, box-shadow 0.12s ease;
-  }
-  .we-picker__swatch:hover { transform: scale(1.12); }
-  .we-picker__swatch--active {
-    box-shadow: 0 0 0 2px var(--we-accent, #4f8cff), 0 0 0 4px rgba(255, 255, 255, 0.5);
-  }
-  .we-picker__swatch-custom {
-    display: inline-flex; align-items: center; gap: 4px; cursor: pointer;
-  }
-  .we-picker__swatch-custom input[type="color"] {
-    width: 22px; height: 22px; padding: 0; border: 0; border-radius: 50%;
-    background: transparent; cursor: pointer;
-  }
-  .we-picker__swatch-custom input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
-  .we-picker__swatch-custom input[type="color"]::-webkit-color-swatch { border: 1px solid rgba(255, 255, 255, 0.6); border-radius: 50%; }
-  /* Master-switch row (设置窗口液态玻璃) sits on its own line under the 透明度
-     slider so the switch and the hint read as one labelled control. */
-  .we-picker__window-toggle { font-size: 0.82em; }
-  .we-picker__window-toggle + .we-picker__hint { margin-left: 2px; }
-
-  /* Pagination bar under each paged grid (normal / hidden / group editor).
-     Horizontally centered; as a direct child of the flex modal body it sinks
-     to the bottom when the grid leaves free space (margin-top: auto). */
-  .we-picker__pager {
-    display: flex; gap: 10px; align-items: center; justify-content: center;
-    margin-top: auto; padding-top: 8px; flex-wrap: wrap;
-  }
-  .we-picker__playlist-select { flex: 1; min-width: 0; }
-  .we-picker__filter-row { flex-wrap: wrap; flex-shrink: 0; }
-  .we-picker__filter-row .we-picker__playlist-select { flex: 1 1 130px; }
-  .we-picker__rotation-toggle { display: inline-flex; align-items: center; gap: 6px; }
-  .we-picker__rotation-interval { margin-left: auto; }
-  /* Flat, uniform-height controls. Native <select> renders as a raised "3D"
-     OS widget whose height can shift a pixel on hover; inside tightly packed
-     rows that squeezes the neighbours and, with the cursor near a row edge,
-     oscillates (hover → grow → shift → unhover → shrink → …). Strip the
-     native chrome and PIN the height so no control's intrinsic size can move
-     a row. */
-  .we-picker__btn {
-    cursor: pointer; height: 26px; line-height: 24px; padding: 0 10px;
-    border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));
-    border-radius: 6px; background: transparent;
-    color: var(--dsw-alias-label-secondary, #888); font-size: 0.82em;
-    white-space: nowrap;
-  }
-  .we-picker__btn:hover { background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.12)); }
-  .we-picker__btn:disabled { opacity: 0.45; cursor: default; }
-  .we-picker select {
-    appearance: none; -webkit-appearance: none;
-    height: 26px; padding: 0 8px;
-    border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));
-    border-radius: 6px; background: transparent;
-    color: var(--dsw-alias-label-secondary, #888); font-size: 0.82em;
-    cursor: pointer;
-  }
-  .we-picker select:hover { background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.12)); }
-  .we-picker select:disabled { opacity: 0.45; cursor: default; }
-  .we-picker__hint { font-size: 0.8em; opacity: 0.7; }
-  .we-picker__error { font-size: 0.82em; opacity: 0.9; color: #e5534b; }
-  .we-picker__note { font-size: 0.8em; opacity: 0.85; color: var(--we-accent, var(--dsw-alias-brand-primary, #4f8cff)); }
-
-  /* ── Visual grouping: sections with a hairline divider + quiet label. ── */
-  .we-picker__section { display: flex; flex-direction: column; gap: 8px; }
-  .we-picker__section + .we-picker__section {
-    border-top: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.22));
-    padding-top: 10px;
-  }
-  .we-picker__section-head { display: flex; align-items: center; }
-  .we-picker__section-label {
-    font-size: 0.75em; font-weight: 500; opacity: 0.55;
-    letter-spacing: 0.01em;
-  }
-
-  /* ── Vinyl record (黑胶唱片): rotating disc with the selected wallpaper's
-     cover as the label. Spins while the wallpaper is playing; pauses
-     otherwise. Shown in both settings layouts and in the modal head. ── */
-  .we-vinyl {
-    position: relative; width: 128px; height: 128px; flex: 0 0 auto;
-    border-radius: 50%;
-    background:
-      repeating-radial-gradient(circle at center, #191920 0 2px, #23232c 2px 4px);
-    box-shadow:
-      0 6px 18px rgba(0, 0, 0, 0.55),
-      inset 0 0 0 1px rgba(255, 255, 255, 0.07);
-    animation: we-vinyl-spin 8s linear infinite;
-    animation-play-state: paused;
-  }
-  .we-vinyl--playing { animation-play-state: running; }
-  .we-vinyl--sm { width: 56px; height: 56px; }
-  .we-vinyl__cover {
-    position: absolute; inset: 24%; border-radius: 50%; overflow: hidden;
-    background: rgba(128, 128, 128, 0.25);
-    border: 2px solid rgba(0, 0, 0, 0.85);
-    box-shadow:
-      0 0 0 2px rgba(255, 255, 255, 0.1),
-      inset 0 0 8px rgba(0, 0, 0, 0.6);
-  }
-  .we-vinyl__cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
-  .we-vinyl__empty {
-    position: absolute; inset: 0;
-    display: flex; align-items: center; justify-content: center;
-    color: rgba(255, 255, 255, 0.45); font-size: 1.3em;
-  }
-  .we-vinyl__hole {
-    position: absolute; left: 50%; top: 50%;
-    width: 12px; height: 12px; margin: -6px 0 0 -6px;
-    border-radius: 50%; background: #0b0b0e;
-    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.9);
-  }
-  .we-vinyl--sm .we-vinyl__hole { width: 6px; height: 6px; margin: -3px 0 0 -3px; }
-  @keyframes we-vinyl-spin {
-    from { transform: rotate(0deg); }
-    to { transform: rotate(360deg); }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .we-vinyl { animation: none; }
-  }
-  .we-picker__modal-head-left { display: flex; align-items: center; gap: 8px; min-width: 0; }
-
-  /* ── Current-wallpaper card: thumbnail + title + type + primary action. ── */
-  .we-picker__current {
-    display: flex; align-items: center; gap: 10px;
-    padding: 10px; border-radius: 12px;
-    border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.28));
-    background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.06));
-  }
-  .we-picker__current-thumb {
-    width: 64px; height: 36px; flex: 0 0 auto;
-    object-fit: cover; border-radius: 8px;
-    border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));
-    background: rgba(128, 128, 128, 0.14);
-  }
-  .we-picker__current-thumb--empty {
-    display: flex; align-items: center; justify-content: center;
-    font-size: 0.85em; opacity: 0.4;
-  }
-  .we-picker__current-info { flex: 1; min-width: 0; }
-  .we-picker__current-title {
-    font-size: 0.9em; font-weight: 500;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
-  .we-picker__current-meta { font-size: 0.75em; opacity: 0.55; margin-top: 2px; }
-
-  /* Primary action (选择壁纸): brand accent, restrained — accent is for the
-     main action only, per the product register's "accent ≠ decoration". */
-  .we-picker__btn--primary {
-    color: var(--we-accent, #4f8cff);
-    border-color: var(--we-accent, #4f8cff);
-  }
-  .we-picker__btn--primary:hover {
-    background: var(--we-accent, #4f8cff);
-    color: #fff;
-  }
-
-  /* Refined range sliders: thin track + circular brand ring thumb. */
-  .we-picker__slider {
-    -webkit-appearance: none; appearance: none;
-    flex: 1; height: 18px; background: transparent; cursor: pointer;
-  }
-  .we-picker__slider::-webkit-slider-runnable-track {
-    height: 4px; border-radius: 2px;
-    background: var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.4));
-  }
-  .we-picker__slider::-webkit-slider-thumb {
-    -webkit-appearance: none; appearance: none;
-    width: 14px; height: 14px; margin-top: -5px; border-radius: 50%;
-    background: var(--dsw-alias-bg-layer-1, #fff);
-    border: 2px solid var(--we-accent, #4f8cff);
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
-  }
-  .we-picker__slider::-moz-range-track {
-    height: 4px; border-radius: 2px;
-    background: var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.4));
-  }
-  .we-picker__slider::-moz-range-thumb {
-    width: 14px; height: 14px; border-radius: 50%;
-    background: var(--dsw-alias-bg-layer-1, #fff);
-    border: 2px solid var(--we-accent, #4f8cff);
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
-  }
-  /* Native checkboxes tinted with the accent (自动轮转 / 水平翻转). */
-  .we-picker input[type="checkbox"] { accent-color: var(--we-accent, #4f8cff); }
-  .we-picker__rotation-toggle { cursor: pointer; }
-
-  /* Sliding toggle switch (紧凑布局). Track + thumb slide left/right with a
-     snappy 120ms transition; pinned accent so light themes stay readable. */
-  .we-picker__switch {
-    position: relative; display: inline-flex; cursor: pointer;
-  }
-  .we-picker__switch input {
-    position: absolute; opacity: 0; width: 0; height: 0;
-  }
-  .we-picker__switch-track {
-    position: relative; width: 42px; height: 24px; border-radius: 12px;
-    background: rgba(128, 128, 128, 0.4);
-    transition: background-color 120ms ease;
-    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3);
-  }
-  .we-picker__switch input:checked + .we-picker__switch-track {
-    background: #4f8cff;
-  }
-  .we-picker__switch-thumb {
-    position: absolute; left: 3px; top: 3px;
-    width: 18px; height: 18px; border-radius: 50%;
-    background: #fff;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
-    transition: transform 120ms ease;
-  }
-  .we-picker__switch input:checked + .we-picker__switch-track .we-picker__switch-thumb {
-    transform: translateX(18px);
-  }
-
-  /* Custom chevron for the flat selects (appearance: none removed the native
-     arrow; heights stay pinned at 26px so rows can never shift). */
-  .we-picker select {
-    background-image: url("data:image/svg+xml;charset=utf-8,%3Csvg xmlns='http://www.w3.org/2000/svg' width='8' height='5'%3E%3Cpath d='M1 1l3 3 3-3' fill='none' stroke='%23888' stroke-width='1.4' stroke-linecap='round'/%3E%3C/svg%3E");
-    background-repeat: no-repeat; background-position: right 8px center;
-    padding-right: 24px;
-  }
-
-  /* Motion: state-only transitions (background/color/border — never layout),
-     150ms ease; disabled entirely under prefers-reduced-motion. */
-  .we-picker__btn, .we-picker select, .we-picker__card, .we-picker__editor-card,
-  .we-picker__tab, .we-picker__rate, .we-picker__card-hide {
-    transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .we-picker * { transition: none !important; }
-  }
-  .we-picker__slider { flex: 1; }
-  .we-picker__slider-row { display: flex; align-items: center; gap: 8px; }
-  .we-picker__label { min-width: 28px; }
-  .we-picker__value { min-width: 40px; text-align: right; }
-  .we-picker__text { flex: 1; min-width: 0; }
-  .we-picker__editor {
-    display: flex; flex-direction: column; gap: 6px;
-    padding: 8px;
-    border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));
-    border-radius: 8px;
-  }
-  /* Wallpaper thumbnail grid (main picker).
-     Cards use a FIXED height + absolutely-positioned filling <img>, never
-     aspect-ratio: some browsers (old Chromium/WebView) ignore aspect-ratio on
-     cards and let percentage-height images resolve to their intrinsic size,
-     which made previews bleed over the row above. inset:0 + overflow:hidden
-     pins the image inside the card in every engine. */
-  .we-picker__grid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-    gap: 8px; max-height: 280px; overflow-y: auto; padding: 2px;
-  }
-  .we-picker__card {
-    position: relative; height: 92px; padding: 0; cursor: pointer;
-    display: block; overflow: hidden;
-    border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));
-    border-radius: 8px;
-    background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.15));
-  }
-  .we-picker__card img {
-    position: absolute; inset: 0; width: 100%; height: 100%;
-    object-fit: cover; display: block;
-  }
-  /* Classic — "CD 架" (CD-rack) card style: cards stack like CD jewel cases
-     on a rack. Each row strongly overlaps the row ABOVE it (the lower card's
-     top covers roughly half of the upper card's bottom — vertical only, never
-     horizontal), with a soft drop shadow for shelf depth. Hovering scales the
-     card up and brings it to the front. Opt-in via the 卡片样式 switch. The
-     modal is PORTALLED onto <body>, so the attribute is scoped on BOTH the
-     settings root and the modal element. The grid gets extra bottom padding
-     so the last row's overlap is not clipped. */
-  .we-picker[data-we-cards="classic"] .we-picker__grid,
-  .we-picker__modal[data-we-cards="classic"] .we-picker__grid {
-    /* Compact CD-rack columns: ~7 cards per row at modal width. */
-    grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-    padding-bottom: 42px;
-  }
-  .we-picker[data-we-cards="classic"] .we-picker__editor-grid,
-  .we-picker__modal[data-we-cards="classic"] .we-picker__editor-grid {
-    grid-template-columns: repeat(auto-fill, minmax(84px, 1fr));
-  }
-  .we-picker[data-we-cards="classic"] .we-picker__card,
-  .we-picker__modal[data-we-cards="classic"] .we-picker__card {
-    position: relative; width: 100%; padding: 0; cursor: pointer;
-    height: auto; aspect-ratio: 16 / 9; display: block; overflow: hidden;
-    margin-bottom: -36px;
-    border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));
-    border-radius: 8px;
-    background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.15));
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
-    transition: transform 120ms ease, box-shadow 120ms ease;
-  }
-  .we-picker[data-we-cards="classic"] .we-picker__card:hover,
-  .we-picker__modal[data-we-cards="classic"] .we-picker__card:hover {
-    transform: scale(1.12);
-    z-index: 10;
-    box-shadow: 0 14px 28px rgba(0, 0, 0, 0.5);
-  }
-  .we-picker[data-we-cards="classic"] .we-picker__card img,
-  .we-picker__modal[data-we-cards="classic"] .we-picker__card img {
-    position: static; width: 100%; height: 100%; object-fit: cover; display: block;
-  }
-  .we-picker[data-we-cards="classic"] .we-picker__editor-card,
-  .we-picker__modal[data-we-cards="classic"] .we-picker__editor-card {
-    position: relative; width: 100%; padding: 0; cursor: pointer;
-    height: auto; aspect-ratio: 16 / 10; display: block; overflow: hidden;
-    margin-bottom: -30px;
-    border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));
-    border-radius: 6px;
-    background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.15));
-    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.35);
-    transition: transform 120ms ease, box-shadow 120ms ease;
-  }
-  .we-picker[data-we-cards="classic"] .we-picker__editor-card:hover,
-  .we-picker__modal[data-we-cards="classic"] .we-picker__editor-card:hover {
-    transform: scale(1.1);
-    z-index: 10;
-    box-shadow: 0 12px 24px rgba(0, 0, 0, 0.5);
-  }
-  .we-picker[data-we-cards="classic"] .we-picker__editor-card img,
-  .we-picker__modal[data-we-cards="classic"] .we-picker__editor-card img {
-    position: static; width: 100%; height: 100%; object-fit: cover; display: block;
-  }
-  .we-picker__card--selected {
-    outline: 2px solid var(--we-accent, #4f8cff);
-    outline-offset: -2px;
-  }
-  .we-picker__card-close {
-    position: absolute; inset: 0;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 0.8em; color: var(--dsw-alias-label-secondary, #888);
-  }
-  .we-picker__card-title {
-    position: absolute; left: 0; right: 0; bottom: 0; padding: 3px 6px;
-    font-size: 0.7em; line-height: 1.2; color: #fff;
-    background: linear-gradient(transparent, rgba(0, 0, 0, 0.7));
-    text-overflow: ellipsis; white-space: nowrap; overflow: hidden;
-  }
-  /* Scene-wallpaper "静态帧" badge — top-right under the hide button. */
-  .we-picker__card-badge {
-    position: absolute; top: 4px; right: 4px; z-index: 1;
-    padding: 1px 6px; font-size: 0.62em; line-height: 1.6;
-    border-radius: 4px; color: #fff;
-    background: rgba(30, 90, 160, 0.85);
-  }
-  .we-picker__card-placeholder {
-    position: absolute; inset: 0;
-    display: flex; align-items: center; justify-content: center;
-    font-size: 0.72em; opacity: 0.55;
-  }
-  /* Per-card "hide" button (soft delete) — top-right overlay. */
-  .we-picker__card-hide {
-    position: absolute; top: 4px; right: 4px; z-index: 2;
-    padding: 2px 7px; font-size: 0.68em; line-height: 1.5;
-    border: 0; border-radius: 4px; cursor: pointer;
-    background: rgba(0, 0, 0, 0.6); color: #fff;
-  }
-  .we-picker__card-hide:hover { background: rgba(190, 50, 50, 0.9); }
-  /* Batch-mode selection check — top-left overlay. */
-  .we-picker__card-check {
-    position: absolute; top: 4px; left: 4px; z-index: 2;
-    width: 18px; height: 18px; border-radius: 4px;
-    background: rgba(0, 0, 0, 0.6); color: #fff;
-    font-size: 12px; line-height: 18px; text-align: center;
-  }
-  .we-picker__card--selected .we-picker__card-check {
-    background: var(--we-accent, #4f8cff);
-  }
-  /* Hidden wallpapers view: dimmed cards. */
-  .we-picker__card--hidden { opacity: 0.78; }
-  .we-picker__card--hidden .we-picker__card-title {
-    background: linear-gradient(transparent, rgba(0, 0, 0, 0.78));
-  }
-  /* Batch-action bar. */
-  .we-picker__batch-bar {
-    padding: 4px 6px; border-radius: 6px;
-    border: 1px dashed var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));
-  }
-  /* Current-wallpaper summary (replaces the inline grid in settings). */
-  .we-picker__summary {
-    flex: 1; min-width: 0;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    font-size: 0.85em; opacity: 0.85;
-  }
-  /* ── Wallpaper picker modal (portalled onto <body>, z-index above the shell
-     overlays). Fixed positioning from a body child is immune to ancestor
-     transforms/backdrop-filters, which would otherwise trap it. ── */
-  .we-picker__modal-overlay {
-    position: fixed; inset: 0; z-index: 1000;
-    display: flex; align-items: center; justify-content: center;
-    background: rgba(0, 0, 0, 0.55);
-    -webkit-backdrop-filter: blur(3px);
-    backdrop-filter: blur(3px);
-  }
-  .we-picker__modal {
-    position: relative; z-index: 1001;
-    width: min(760px, 92vw); max-height: 86vh;
-    display: flex; flex-direction: column; gap: 10px;
-    padding: 16px; border-radius: 14px;
-    background: var(--dsw-alias-bg-layer-1, #202127);
-    border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));
-    box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.25);
-  }
-  .we-picker__modal-head {
-    display: flex; align-items: center; justify-content: space-between;
-    padding-bottom: 10px;
-    border-bottom: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.22));
-  }
-  .we-picker__modal-title { font-weight: 600; font-size: 0.95em; }
-  .we-picker__modal-tabs { display: flex; gap: 6px; }
-  .we-picker__tab {
-    flex: 1; padding: 0; text-align: center; font-size: 0.82em; cursor: pointer;
-    border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));
-    border-radius: 6px; background: transparent;
-    color: var(--dsw-alias-label-secondary, #888);
-  }
-  .we-picker__tab--active {
-    background: var(--we-accent, #4f8cff);
-    border-color: var(--we-accent, #4f8cff); color: #fff;
-  }
-  .we-picker__modal-body {
-    overflow-y: auto; min-height: 0; flex: 1;
-    display: flex; flex-direction: column; gap: 8px;
-  }
-  /* The modal is tall enough: let the grid fill it instead of its own 280px
-     internal scroll (the modal body scrolls as a whole). */
-  .we-picker__modal-body .we-picker__grid { max-height: none; }
-  .we-picker__modal-foot { display: flex; align-items: center; justify-content: space-between; }
-  /* Custom-upload section. */
-  .we-picker__uploads {
-    display: flex; flex-direction: column; gap: 6px;
-    padding: 10px; border-radius: 10px;
-    border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.26));
-    background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.05));
-  }
-  .we-picker__file { flex: 1; min-width: 0; max-width: 260px; font-size: 0.8em; }
-  .we-picker__uploads-list {
-    display: flex; flex-direction: column; gap: 4px; max-height: 150px; overflow-y: auto;
-  }
-  .we-picker__uploads-item {
-    display: flex; align-items: center; gap: 8px;
-    padding: 3px 6px; border-radius: 6px;
-    background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.12));
-  }
-  .we-picker__uploads-name {
-    flex: 1; min-width: 0;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    font-size: 0.82em;
-  }
-  .we-picker__uploads-path {
-    flex: 1; min-width: 0;
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-    font-size: 0.8em; opacity: 0.85;
-  }
-  /* Playback-rate segmented control (video wallpapers only). Also reused as
-     the 卡片样式 two-button switch (wrapped in .we-picker__seg). */
-  .we-picker__seg { display: flex; gap: 4px; flex: 1; min-width: 0; }
-  .we-picker__rate {
-    flex: 1; padding: 0; text-align: center; font-size: 0.78em;
-    border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));
-    border-radius: 6px; background: transparent; cursor: pointer;
-    color: var(--dsw-alias-label-secondary, #888);
-  }
-  .we-picker__rate + .we-picker__rate { margin-left: 0; }
-  .we-picker__rate--active {
-    background: var(--we-accent, #4f8cff);
-    border-color: var(--we-accent, #4f8cff);
-    color: #fff;
-  }
-  /* Rotation group editor thumbnail grid. */
-  .we-picker__editor-grid {
-    display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
-    gap: 6px; max-height: 220px; overflow-y: auto; padding: 2px;
-  }
-  .we-picker__editor-card {
-    position: relative; height: 80px; padding: 0; cursor: pointer;
-    display: block; overflow: hidden;
-    border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));
-    border-radius: 6px;
-    background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.15));
-  }
-  .we-picker__editor-card img {
-    position: absolute; inset: 0; width: 100%; height: 100%;
-    object-fit: cover; display: block;
-  }
-  .we-picker__editor-card--checked {
-    outline: 2px solid var(--we-accent, #4f8cff);
-    outline-offset: -2px;
-  }
-  .we-picker__editor-check {
-    position: absolute; top: 4px; left: 4px; width: 18px; height: 18px;
-    border-radius: 4px; background: rgba(0, 0, 0, 0.55); color: #fff;
-    font-size: 12px; line-height: 18px; text-align: center;
-  }
-`;
+// Injected by scripts/build-client.mjs from src/client.css (see build script).
+const CSS = "__DSH_WE_CLIENT_CSS__";
 
 const TAG_ID = "dsh-wallpaper-engine/styles";
 if (typeof document !== "undefined" &&

@@ -41,7 +41,8 @@
     "lib/types/client.d.ts",
     "cordis.patch.yml",
     "README.md",
-    "README.en.md"
+    "README.en.md",
+    "README.beginner.md"
   ],
   "dsh": {
     "bundle": {
@@ -59,7 +60,13 @@
   "scripts": {
     "build": "node scripts/build-client.mjs",
     "verify": "node scripts/verify-client.mjs",
+    "verify:scene": "node scripts/verify-scene.mjs",
+    "diagnose:scenes": "node scripts/diagnose-scenes.mjs",
+    "test": "npm run verify && npm run verify:scene",
     "prepare": "node scripts/prepare.mjs"
+  },
+  "engines": {
+    "node": ">=18"
   },
   "peerDependencies": {
     "@deepseek-ai/cordis": "^4.0.1",
