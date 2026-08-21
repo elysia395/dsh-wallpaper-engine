@@ -1087,7 +1087,6 @@ async function refreshMediaInfo(force) {
 let upgradeAbort = null;
 let upgradeToken = "";
 let upgradePollTimer = null; // progress poller while the transcode fetch pends
-let lastTranscodedBlobUrl = null; // revoke on swap/switch to avoid leaks
 function clearUpgradePoll() {
   if (upgradePollTimer) { clearInterval(upgradePollTimer); upgradePollTimer = null; }
 }
@@ -1096,7 +1095,15 @@ function abortTranscodeUpgrade() {
   if (upgradeAbort) { upgradeAbort.abort(); upgradeAbort = null; }
   upgradeToken = "";
   selection.transcodeProgress = null;
-  if (lastTranscodedBlobUrl) { URL.revokeObjectURL(lastTranscodedBlobUrl); lastTranscodedBlobUrl = null; }
+}
+// Revert a video that was swapped to a capped-fps transcode back to the source.
+// NOTE: no emit() here — this runs inside syncLayers (already inside an emit
+// cycle); emitting synchronously from a subscriber re-enters the listener chain
+// and recurses until the stack overflows. UI updates ride the outer emit.
+function revertTranscodedVideo(video) {
+  if (!video || !video.dataset.weTranscoded) return;
+  delete video.dataset.weTranscoded;
+  try { video.src = selection.url; video.load(); } catch { /* ignore */ }
 }
 function maybeUpgradeToTranscoded(video, token) {
   if (!video || !video.isConnected) return;
@@ -1105,27 +1112,22 @@ function maybeUpgradeToTranscoded(video, token) {
   if (!cap || cap <= 0) {
     abortTranscodeUpgrade();
     if (video.dataset.weTranscoded) {
-      delete video.dataset.weTranscoded;
-      try { video.src = selection.url; video.load(); } catch { /* ignore */ }
+      revertTranscodedVideo(video);
       selection.transcodeState = "idle";
-      // NOTE: no emit() here — this runs inside syncLayers, which itself is
-      // driven by an emit() (the caller's onChange/refreshMediaInfo already
-      // re-renders). A synchronous emit() from inside a subscriber re-enters
-      // the listener chain BEFORE upgradeAbort is assigned below, defeating
-      // the in-flight guard and recursing until the stack overflows (which
-      // kills the render and leaves stale UI).
     }
     return;
   }
-  if (video.dataset.weTranscoded) return; // already swapped
-  if (upgradeToken === token && upgradeAbort) return; // already working on it
   const mi = selection.mediaInfo;
   if (mi && mi.fps && mi.fps > 0 && mi.fps <= cap) {
-    // Source already at/below the cap — no transcode needed. No in-flight
-    // reservation is made, so raising the cap later can still start one.
+    // Source already at/below the cap — no transcode needed; drop any previously
+    // swapped (lower-cap) version. No in-flight reservation is made, so raising
+    // the cap later can still start one.
+    if (video.dataset.weTranscoded) revertTranscodedVideo(video);
     selection.transcodeState = "skipped";
     return;
   }
+  if (video.dataset.weTranscoded === String(cap)) return; // already on this cap
+  if (!video.dataset.weTranscoded && upgradeToken === token && upgradeAbort) return; // working on it
   abortTranscodeUpgrade();
   upgradeToken = token;
   const ctrl = new AbortController();
@@ -1159,18 +1161,20 @@ function maybeUpgradeToTranscoded(video, token) {
   clearUpgradePoll();
   upgradePollTimer = setInterval(pollProgress, 500);
   pollProgress();
-  fetch("/wallpaper-engine/transcoded/" + encodeURIComponent(token) + "?fps=" + cap, { signal: ctrl.signal })
+  const transcodedUrl = "/wallpaper-engine/transcoded/" + encodeURIComponent(token) + "?fps=" + cap;
+  // Trigger + completion probe: a tiny Range request that blocks until the host
+  // has the transcode cached, then answers 206 with one byte (discarded). The
+  // <video> then streams the SAME url via range requests — no full-file blob is
+  // ever held in memory and playback starts as soon as the first bytes arrive.
+  fetch(transcodedUrl, { signal: ctrl.signal, headers: { Range: "bytes=0-0" } })
     .then(async (res) => {
       clearUpgradePoll();
       if (ctrl.signal.aborted) return;
       if (!res.ok) { selection.transcodeState = "fallback"; selection.transcodeProgress = null; emit(); return; }
-      const blob = await res.blob();
+      try { await res.arrayBuffer(); } catch { /* 1-byte body; discard */ }
       if (ctrl.signal.aborted) return;
-      if (lastTranscodedBlobUrl) { URL.revokeObjectURL(lastTranscodedBlobUrl); lastTranscodedBlobUrl = null; }
-      const objUrl = URL.createObjectURL(blob);
-      lastTranscodedBlobUrl = objUrl;
       if (video.isConnected && selection.url && token === selection.url.split("/").pop()) {
-        video.dataset.weTranscoded = "1";
+        video.dataset.weTranscoded = String(cap);
         const t = video.currentTime;
         const wasPlaying = isEffectivelyPlaying();
         const onErr = () => {
@@ -1182,7 +1186,7 @@ function maybeUpgradeToTranscoded(video, token) {
           }
         };
         video.addEventListener("error", onErr, { once: true });
-        video.src = objUrl;
+        video.src = transcodedUrl;
         video.load();
         const onMeta = () => {
           try { if (t > 0 && t < video.duration) video.currentTime = t; } catch { /* ignore */ }
@@ -1192,8 +1196,6 @@ function maybeUpgradeToTranscoded(video, token) {
           emit(); // syncLayers re-arms the Edge canvas + re-applies rate/play
         };
         video.addEventListener("loadedmetadata", onMeta, { once: true });
-      } else {
-        URL.revokeObjectURL(objUrl);
       }
     })
     .catch(() => {
