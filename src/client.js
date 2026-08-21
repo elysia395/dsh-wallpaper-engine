@@ -944,11 +944,19 @@ function SliderRow(label, min, max, step, value, onInput, suffix) {
 // the "CD player" presentation the author liked. Pure presentational: cover =
 // the current wallpaper's preview URL (or null), playing drives the spin.
 // Shown in BOTH settings layouts and in the picker modal head.
+//
+// Fallback chain for mac loose media (no sidecar preview):
+//   1. img with preview URL (WE projects with preview files)
+//   2. video with preload=metadata (mac loose videos → first frame)
+//   3. ▦ placeholder (nothing available)
 function VinylRecord(props) {
   const cover = props.cover;
+  const type = props.type;
+  const url = props.url;
   const title = props.title || "未选择壁纸";
   const playing = props.playing === true;
   const sm = props.sm === true;
+  const hasVideoFallback = type === "video" && url;
   return React.createElement("div", {
     className: "we-vinyl" +
       (playing ? " we-vinyl--playing" : "") +
@@ -959,9 +967,21 @@ function VinylRecord(props) {
       cover
         ? React.createElement("img", {
             src: cover, alt: "", loading: "lazy",
-            onError: (e) => { e.target.style.display = "none"; },
+            onError: (e) => {
+              // Preview failed → fall back to video first frame if available
+              if (hasVideoFallback) {
+                e.target.replaceWith(Object.assign(document.createElement("video"), {
+                  src: url, preload: "metadata", muted: true,
+                  style: "width:100%;height:100%;object-fit:cover;display:block",
+                }));
+              } else {
+                e.target.style.display = "none";
+              }
+            },
           })
-        : React.createElement("span", { className: "we-vinyl__empty" }, "▦"),
+        : (hasVideoFallback
+            ? React.createElement("video", { src: url, preload: "metadata", muted: true, playsInline: true })
+            : React.createElement("span", { className: "we-vinyl__empty" }, "▦")),
     ),
     React.createElement("span", { className: "we-vinyl__hole" }),
   );
@@ -1264,7 +1284,8 @@ function WallpaperPicker() {
     React.createElement("div", { className: "we-picker__section" },
       React.createElement("div", { className: "we-picker__current" },
         React.createElement(VinylRecord, {
-          cover: current && current.preview, title: current ? current.title : "",
+          cover: current && current.preview, type: current && current.type, url: current && current.url,
+          title: current ? current.title : "",
           playing: sel.playing && Boolean(sel.url),
         }),
         React.createElement("div", { className: "we-picker__current-info" },
@@ -1294,7 +1315,8 @@ function WallpaperPicker() {
           React.createElement("div", { className: "we-picker__modal-head" },
             React.createElement("div", { className: "we-picker__modal-head-left" },
               React.createElement(VinylRecord, {
-                cover: current && current.preview, title: current ? current.title : "",
+                cover: current && current.preview, type: current && current.type, url: current && current.url,
+                title: current ? current.title : "",
                 playing: sel.playing && Boolean(sel.url), sm: true,
               }),
               React.createElement("span", { className: "we-picker__modal-title" }, "选择壁纸"),
@@ -2173,7 +2195,7 @@ const CSS = `
       0 0 0 2px rgba(255, 255, 255, 0.1),
       inset 0 0 8px rgba(0, 0, 0, 0.6);
   }
-  .we-vinyl__cover img { width: 100%; height: 100%; object-fit: cover; display: block; }
+  .we-vinyl__cover img, .we-vinyl__cover video { width: 100%; height: 100%; object-fit: cover; display: block; }
   .we-vinyl__empty {
     position: absolute; inset: 0;
     display: flex; align-items: center; justify-content: center;
