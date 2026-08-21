@@ -18,6 +18,8 @@ It discovers the Wallpaper Engine install on your machine, lists its wallpapers,
 - **Settings persisted to a host file** (v0.4.0) — all settings (selected wallpaper, accent, transparency, layout, rotation, hidden, speed/flip, …) are now stored in `~/.dsh-wallpaper-engine/config.json` instead of browser localStorage, so they survive restarts, port changes (including DSH Desktop's random `--port 0` loopback port), browser-data clears and browser switches. Legacy localStorage config is migrated automatically on first launch.
 - **Edge-compatible rendering** — Edge (and only Edge) paints its built-in "download / cast" media-overlay toolbar over any *visible* `<video>` element, and there is no official switch to disable it. On Edge, video wallpapers are therefore rendered onto a `<canvas>` by default to keep that toolbar away. A new「Edge 兼容」toggle (right-aligned on the 紧凑布局 row, on by default) turns this off and falls back to the native `<video>` in every browser.
 - **Media-stream handle fix + async scan** (v0.4.1) — media/preview/scene-frame streams now release their file handles immediately when the client disconnects (fixes handles accumulating with every wallpaper switch/refresh, and Windows locking that prevented deleting/moving a wallpaper file). The wallpaper-library scan is fully async (fs.promises thread pool), so it no longer blocks the event loop (noticeably faster startup on WSL / big libraries). **WSL support**: Steam roots mounted under `/mnt/<drive>` are auto-detected, so a Harness running inside WSL can discover a Windows Wallpaper Engine install.
+- **Occlusion pause (battery-saving trio)** — like Wallpaper Engine's "pause when covered": pause the video wallpaper on minimize / tab-switch, on window focus loss, and/or on battery power, dropping the decoder engine to zero; it resumes automatically when you come back (web/iframe wallpapers are only throttled by the browser while hidden). Each toggle persists.
+- **Decode frame-rate cap (frame-skip transcode)** — high-fps sources (e.g. 4K120 H.264) are the dominant GPU cost (~60% Video Decode at 1.0x on a 4060). The **帧率上限** control (unlimited / 60 / 48 / 30 / 24 fps) has the host re-encode the wallpaper ONCE to the capped fps (timeline stays 1.0x normal speed, fully decoupled from 倍速) as **4K-preserving AV1**, with a **live download/transcode progress bar**; measured 4K120→24fps drops GPU from ~60% to **~15%**. ffmpeg is provisioned in three tiers: explicit path → **auto-download** (npmmirror + GitHub dual-source race, cross-platform asset table verified) → system PATH.
 
 ![Wallpaper showcase](docs/images/showcase.png)
 
@@ -92,6 +94,9 @@ the picker.
      - `POST /wallpaper-engine/upload-dir` → change the upload directory (persisted to `~/.dsh-wallpaper-engine/config.json`, migrates existing files)
      - `GET /wallpaper-engine/settings` → read plugin settings (v0.4.0)
      - `PUT /wallpaper-engine/settings` → save plugin settings (v0.4.0, written to `~/.dsh-wallpaper-engine/config.json`)
+     - `GET /wallpaper-engine/media-info/<token>` → media metadata (resolution / codec / fps / duration, from a moov probe)
+     - `GET /wallpaper-engine/transcoded/<token>?fps=N` → frame-skip transcode stream (one-time ffmpeg re-encode, disk-cached)
+     - `GET /wallpaper-engine/transcode-progress/<token>?fps=N` → download / transcode progress (progress-bar polling)
 - **Client half** (`lib/client.js`): a browser module that fetches the inventory
   and renders the selected wallpaper into a fixed layer *behind* the app columns,
   plus a **first-level settings page** "Wallpaper Engine" (liquid-glass card,
@@ -286,6 +291,37 @@ mirroring Wallpaper Engine's conservative first-run stance.
 
 With a video wallpaper selected, the **壁纸效果** area shows the **倍速** presets (0.5x / 0.75x / 1x / 1.25x / 1.5x / 2x) — driven by the browser's native `playbackRate`, instant, no reload or black flash (wallpaper videos are muted, so there is no audio to keep in sync). The **水平翻转** toggle mirrors the image via CSS `scaleX(-1)` — it works for video, web, and uploaded images/videos alike, with zero main-thread cost.
 
+### Occlusion pause (battery-saving trio)
+
+Like Wallpaper Engine's "pause when covered" — the main reason desktop WE is ~0 GPU most of the time. Browsers cannot detect window occlusion directly, so the plugin uses the three closest signals (toggles in the **壁纸效果** area, instant + persisted):
+
+| Toggle | Default | Behavior |
+|---|---|---|
+| **最小化/切页时暂停** (pause on minimize/tab-switch) | on | pauses the video when the page is hidden (minimized / tab switched away); the decoder drops to zero — explicit `pause`, since browser throttling alone does not guarantee stopped decoding |
+| **窗口失焦时暂停** (pause on focus loss) | off | pauses when another app takes focus (the wallpaper is likely covered) |
+| **使用电池时暂停** (pause on battery) | off | pauses while on battery via `navigator.getBattery` (no-op in browsers without it) |
+
+Playback resumes automatically when you come back / regain focus / plug in (unless you paused manually). Video wallpapers only — web (iframe) wallpapers cannot be paused from outside and are only throttled by the browser while the page is hidden.
+
+### Decode frame-rate cap (frame-skip transcode)
+
+High-fps sources (e.g. 4K120 H.264) dominate GPU decode (~60% Video Decode at 1.0x on a 4060). The **帧率上限** control (unlimited / 60 / 48 / 30 / 24 fps) has the host re-encode the wallpaper ONCE to the capped frame rate via ffmpeg — the timeline stays **1.0x normal speed** and stays fully decoupled from 倍速 — output is **4K-preserving AV1** (NVDEC decode throughput for AV1 is roughly 2× H.264), cached under `~/.dsh-wallpaper-engine/cache/transcodes/`.
+
+- The original plays **first**, and the app swaps to the transcoded file when ready; the settings page shows a **live progress bar** (downloading ffmpeg % → transcoding % with an estimated-seconds-readout → finalizing → switch). First run takes a few tens of seconds (including a possible one-time ffmpeg download); afterwards the same wallpaper opens instantly.
+- Sources at/below the cap are skipped; transcode failures transparently fall back to the original — nothing else is affected.
+- Measured: 4K120 → 24fps AV1 drops GPU from ~60% to **~15%**.
+- Cached per path+mtime+cap, so rotation pays the cost once per wallpaper.
+
+**ffmpeg provisioning (three tiers, auto-detected in order)**:
+
+| Tier | Notes |
+|---|---|
+| **Explicit** | `DSH_WE_FFMPEG` env var pointing at any ffmpeg binary, or drop one into the plugin dir as `./ffmpeg/ffmpeg(.exe)` — both take priority |
+| **Auto-download** | with no local ffmpeg, the first use downloads a pinned single-file build for the platform (Windows x64 / Linux x64·arm64 / macOS x64·arm64 etc., asset table verified) from a **dual-source race**: `npmmirror` (fast in CN) vs GitHub release (fast elsewhere), first success wins — streamed to disk, magic-byte/size verified, 5-minute per-source timeout, cached at `~/.dsh-wallpaper-engine/ffmpeg/`. `DSH_WE_FFMPEG_URL` overrides the source (self-hosted mirror / proxy). |
+| **System PATH** | falls back to a bare `ffmpeg`; if none exists the wallpaper silently stays on the original |
+
+> Transcoding uses **NVENC** (`av1_nvenc`, falling back to `h264_nvenc`) and requires an NVIDIA GPU + driver; without one the feature auto-disables (or falls back to slow software H.264). No ffmpeg or a failed transcode simply disables the feature — no side effects.
+
 ### Custom wallpapers
 
 The **自定义壁纸** section uploads local images (JPG / PNG) or videos (MP4) as wallpapers:
@@ -359,6 +395,14 @@ no durable DSH settings are written. The only on-disk data is the **custom-uploa
 files** (in the directory you chose) and `~/.dsh-wallpaper-engine/config.json`
 (~100 bytes) that remembers that directory.
 
+**Environment variables**:
+
+| Variable | Purpose |
+|---|---|
+| `DSH_WE_FFMPEG` | explicit ffmpeg executable path (highest priority in the resolution chain) |
+| `DSH_WE_FFMPEG_URL` | replaces the auto-download source (self-hosted mirror / proxy) |
+| `DSH_WE_CACHE_DIR` | overrides the cache root (transcode cache / scene-frame cache) |
+
 ## dsh-better-sidebar compatibility
 
 The liquid-glass effect is specifically adapted for dsh-better-sidebar's panels
@@ -378,6 +422,12 @@ continuous surface.
 - Media is served from your local Wallpaper Engine install paths; the host only
   serves files it has already enumerated (no arbitrary filesystem exposure).
   Custom uploads likewise stay on your machine — nothing is uploaded to any server.
+- **The frame-skip transcode depends on ffmpeg and NVIDIA NVENC** (`av1_nvenc` →
+  `h264_nvenc` fallback): without ffmpeg (including unavailable auto-download,
+  e.g. musl/Alpine or other uncovered platforms) or an NVIDIA GPU, the fps cap
+  auto-disables and wallpapers keep playing the original — nothing else is affected.
+- **Occlusion pause applies to video wallpapers only**: web (iframe) wallpapers
+  cannot be paused from outside and are only throttled by the browser when hidden.
 - The picker is English/Chinese mixed (this bundle is not yet wired into DSH's
   locale namespaces).
 
