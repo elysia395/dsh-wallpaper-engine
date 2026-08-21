@@ -69,6 +69,18 @@ const DEFAULTS = {
   hiddenIds: [],
   // Video playback speed (0.5x–2x, applied via native playbackRate).
   playbackRate: 1,
+  // 遮挡暂停（借鉴 Wallpaper Engine 的「被遮挡时暂停」——桌面端大部分时间
+  // GPU≈0 主因就是它）：
+  // - pauseOnHidden：页面隐藏（窗口最小化 / 切到其它标签页）时暂停视频。
+  //   浏览器对后台页的节流并不保证解码停止，显式 pause 让解码引擎直接归零。
+  // - pauseOnBlur：窗口失焦（切到其它应用，壁纸很可能被遮挡）时暂停。
+  //   浏览器无法直接探测"被窗口遮挡"，失焦是最接近的代理信号。
+  // 恢复可见 / 聚焦后，若用户未手动暂停则自动继续（同步 effective 播放态）。
+  pauseOnHidden: true,
+  pauseOnBlur: false,
+  // 使用电池供电时暂停（类似 WE 的电池优化）：navigator.getBattery 判定
+  // 是否在电池上（!charging），不支持的浏览器自动无操作。
+  pauseOnBattery: false,
   // Horizontal mirror (CSS scaleX(-1)) — pure compositor, no main-thread cost.
   flip: false,
   // Fit mode for CUSTOM-uploaded wallpapers only (WE wallpapers keep cover):
@@ -190,6 +202,9 @@ function sanitizeSettings(o) {
       ? o.hiddenIds.filter((x) => typeof x === "string" && x)
       : [],
     playbackRate: clampNum(o.playbackRate, 0.5, 2, DEFAULTS.playbackRate),
+    pauseOnHidden: o.pauseOnHidden !== false,
+    pauseOnBlur: o.pauseOnBlur === true,
+    pauseOnBattery: o.pauseOnBattery === true,
     flip: o.flip === true,
     objectFit: ["cover", "contain", "center", "fill"].includes(o.objectFit)
       ? o.objectFit : DEFAULTS.objectFit,
@@ -279,6 +294,9 @@ function serializeSelection() {
     rotationSeeded: selection.rotationSeeded,
     hiddenIds: selection.hiddenIds,
     playbackRate: selection.playbackRate,
+    pauseOnHidden: selection.pauseOnHidden,
+    pauseOnBlur: selection.pauseOnBlur,
+    pauseOnBattery: selection.pauseOnBattery,
     flip: selection.flip,
     objectFit: selection.objectFit,
     contentRatingFilter: selection.contentRatingFilter,
@@ -982,6 +1000,28 @@ function buildMedia(sel) {
   return media;
 }
 
+// ── Occlusion pause (遮挡暂停, WE-style) ────────────────────────────────────
+// Desktop Wallpaper Engine pauses rendering whenever the wallpaper is covered
+// — the main reason its GPU load is ~0 most of the time. Browsers cannot
+// detect window occlusion directly, so we use the two closest proxies:
+// document.hidden (minimized / tab switched away) and window focus loss
+// (another app took the foreground; the wallpaper is likely covered). Pausing
+// the <video> stops decode entirely (rVFC stops → decode engine → 0); on
+// restore, the effective playing state resumes automatically unless the user
+// manually paused. Web/iframe wallpapers cannot be paused from outside — they
+// are only throttled by the browser while the page is hidden.
+let weBattery = null; // BatteryManager from navigator.getBattery (if available)
+function occlusionActive() {
+  if (selection.pauseOnHidden && typeof document !== "undefined" && document.hidden) return true;
+  if (selection.pauseOnBlur && typeof document !== "undefined"
+    && typeof document.hasFocus === "function" && !document.hasFocus()) return true;
+  if (selection.pauseOnBattery && weBattery && !weBattery.charging) return true;
+  return false;
+}
+function isEffectivelyPlaying() {
+  return selection.playing && !occlusionActive();
+}
+
 function syncLayers() {
   // 1. Wallpaper element.
   const existing = document.getElementById(LAYER_ID);
@@ -1014,7 +1054,7 @@ function syncLayers() {
     // Edge-only: drive the canvas mirror from the hidden decoder video.
     if (canvas && video) weStartDraw(canvas, video, canvas.className.indexOf("we-media--fit") !== -1);
     if (video) {
-      if (selection.playing) { try { video.play().catch(() => {}); } catch {} }
+      if (isEffectivelyPlaying()) { try { video.play().catch(() => {}); } catch {} }
       else video.pause();
       // Keep the rate in sync on every layer sync (covers rate changes while
       // the same wallpaper keeps playing — instant, no media reload).
@@ -2021,6 +2061,38 @@ function WallpaperPicker() {
         }),
         "水平翻转",
       ),
+      // 遮挡暂停（借鉴 Wallpaper Engine 的「被遮挡时暂停」）：三个省电开关
+      // 并排一行，说明放下一行 —— 最小化/切页、窗口失焦、电池供电时视频暂停、
+      // 解码归零，回到界面 / 接通电源自动继续。
+      React.createElement("div", { className: "we-picker__row" },
+        React.createElement("label", { className: "we-picker__rotation-toggle" },
+          React.createElement("input", {
+            type: "checkbox",
+            checked: sel.pauseOnHidden,
+            onChange: (e) => { selection.pauseOnHidden = e.target.checked; persistSelection(); emit(); },
+          }),
+          "最小化/切页时暂停",
+        ),
+        React.createElement("label", { className: "we-picker__rotation-toggle" },
+          React.createElement("input", {
+            type: "checkbox",
+            checked: sel.pauseOnBlur,
+            onChange: (e) => { selection.pauseOnBlur = e.target.checked; persistSelection(); emit(); },
+          }),
+          "窗口失焦时暂停",
+        ),
+        React.createElement("label", { className: "we-picker__rotation-toggle" },
+          React.createElement("input", {
+            type: "checkbox",
+            checked: sel.pauseOnBattery,
+            onChange: (e) => { selection.pauseOnBattery = e.target.checked; persistSelection(); emit(); },
+          }),
+          "使用电池时暂停",
+        ),
+      ),
+      React.createElement("span", { className: "we-picker__hint" },
+        "类似 WE 的遮挡暂停：最小化、切到其它应用或使用电池供电时视频暂停、GPU 解码归零；回到界面 / 接通电源自动继续（网页壁纸仅随页面隐藏被浏览器节流）",
+      ),
       ),
     ),
     React.createElement("div", { className: "we-picker__row" },
@@ -2862,11 +2934,41 @@ function apply(ctx) {
     ctx.effect(() => {
       const unsub = subscribe(syncLayers);
       const unsubEffects = subscribe(applyEffects);
+      // Occlusion pause: re-apply the effective playing state whenever the
+      // page hides/shows or the window loses/gains focus (see occlusionActive).
+      // Fires syncLayers → play/pause on the video; decode drops to 0 while
+      // minimized / covered by another app, exactly like desktop WE.
+      const onOcclusionChange = () => emit();
+      let ocListeners = [];
+      if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+        for (const t of ["visibilitychange", "blur", "focus"]) {
+          window.addEventListener(t, onOcclusionChange);
+          ocListeners.push(t);
+        }
+      }
+      // Battery optimization (省电暂停): navigator.getBattery is deprecated but
+      // still functional in Chromium; feature-detected so other engines just
+      // no-op. 'chargingchange' covers plug/unplug; onOcclusionChange re-applies
+      // the effective playing state.
+      let batteryCleanup = null;
+      if (typeof navigator !== "undefined" && typeof navigator.getBattery === "function") {
+        navigator.getBattery().then((bm) => {
+          weBattery = bm;
+          bm.addEventListener("chargingchange", onOcclusionChange);
+          batteryCleanup = () => bm.removeEventListener("chargingchange", onOcclusionChange);
+          emit(); // already on battery → pause immediately
+        }).catch(() => { /* battery API unavailable: no-op */ });
+      }
       syncLayers();
       applyEffects();
       return () => {
         unsub();
         unsubEffects();
+        if (typeof window !== "undefined" && typeof window.removeEventListener === "function") {
+          for (const t of ocListeners) window.removeEventListener(t, onOcclusionChange);
+        }
+        if (batteryCleanup) { batteryCleanup(); batteryCleanup = null; }
+        weBattery = null;
         clearRotationTimer();
         weStopDraw();
         const node = document.getElementById(LAYER_ID);
