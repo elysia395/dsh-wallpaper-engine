@@ -947,7 +947,7 @@ function SliderRow(label, min, max, step, value, onInput, suffix) {
 //
 // Fallback chain for mac loose media (no sidecar preview):
 //   1. img with preview URL (WE projects with preview files)
-//   2. video with preload=metadata (mac loose videos → first frame)
+//   2. original media (mac loose images render directly; videos show first frame)
 //   3. ▦ placeholder (nothing available)
 function VinylRecord(props) {
   const cover = props.cover;
@@ -956,7 +956,12 @@ function VinylRecord(props) {
   const title = props.title || "未选择壁纸";
   const playing = props.playing === true;
   const sm = props.sm === true;
-  const hasVideoFallback = type === "video" && url;
+  const hasMediaFallback = (type === "video" || type === "image") && url;
+  const mediaFallback = type === "video" && hasMediaFallback
+    ? React.createElement("video", { src: url, preload: "metadata", muted: true, playsInline: true })
+    : (type === "image" && hasMediaFallback
+        ? React.createElement("img", { src: url, alt: "", loading: "lazy" })
+        : React.createElement("span", { className: "we-vinyl__empty" }, "▦"));
   return React.createElement("div", {
     className: "we-vinyl" +
       (playing ? " we-vinyl--playing" : "") +
@@ -968,20 +973,21 @@ function VinylRecord(props) {
         ? React.createElement("img", {
             src: cover, alt: "", loading: "lazy",
             onError: (e) => {
-              // Preview failed → fall back to video first frame if available
-              if (hasVideoFallback) {
-                e.target.replaceWith(Object.assign(document.createElement("video"), {
-                  src: url, preload: "metadata", muted: true,
-                  style: "width:100%;height:100%;object-fit:cover;display:block",
-                }));
+              // Preview failed → fall back to the original media if available
+              if (hasMediaFallback) {
+                const tag = type === "video" ? "video" : "img";
+                e.target.replaceWith(Object.assign(document.createElement(tag), type === "video"
+                  ? {
+                      src: url, preload: "metadata", muted: true, playsInline: true,
+                      style: "width:100%;height:100%;object-fit:cover;display:block",
+                    }
+                  : { src: url, alt: "", loading: "lazy", style: "width:100%;height:100%;object-fit:cover;display:block" }));
               } else {
                 e.target.style.display = "none";
               }
             },
           })
-        : (hasVideoFallback
-            ? React.createElement("video", { src: url, preload: "metadata", muted: true, playsInline: true })
-            : React.createElement("span", { className: "we-vinyl__empty" }, "▦")),
+        : mediaFallback
     ),
     React.createElement("span", { className: "we-vinyl__hole" }),
   );
@@ -1284,7 +1290,7 @@ function WallpaperPicker() {
     React.createElement("div", { className: "we-picker__section" },
       React.createElement("div", { className: "we-picker__current" },
         React.createElement(VinylRecord, {
-          cover: current && current.preview, type: current && current.type, url: current && current.url,
+          cover: current && current.preview, type: current && current.type, url: current && current.media,
           title: current ? current.title : "",
           playing: sel.playing && Boolean(sel.url),
         }),
@@ -1315,7 +1321,7 @@ function WallpaperPicker() {
           React.createElement("div", { className: "we-picker__modal-head" },
             React.createElement("div", { className: "we-picker__modal-head-left" },
               React.createElement(VinylRecord, {
-                cover: current && current.preview, type: current && current.type, url: current && current.url,
+                cover: current && current.preview, type: current && current.type, url: current && current.media,
                 title: current ? current.title : "",
                 playing: sel.playing && Boolean(sel.url), sm: true,
               }),
