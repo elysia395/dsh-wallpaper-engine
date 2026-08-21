@@ -86,6 +86,11 @@ const DEFAULTS = {
   // "fixed" (rewritten fixed-height cards that never overlap). The vinyl
   // record next to the selection is shown in BOTH styles (here + modal head).
   pickerLayout: "fixed",
+  // Edge 兼容渲染：Edge（且仅 Edge）会在任何"可见的 <video>"上绘制浏览器
+  // 自带的「下载 / 投屏」悬浮工具栏且无官方开关，故默认在 Edge 中把视频壁纸
+  // 改为 canvas 渲染（见 IS_EDGE / weStartDraw）；关闭后所有浏览器一律使用
+  // 原生 <video>（Edge 上悬浮栏会重新出现，属预期）。
+  edgeCompat: true,
   // Settings-page liquid-glass theming:
   // - accent: the plugin's own accent color (#rrggbb), written to --we-accent
   //   and consumed by buttons/sliders/selected cards/badges/glass highlights —
@@ -193,6 +198,7 @@ function sanitizeSettings(o) {
     typeFilter: TYPE_VALUES.includes(o.typeFilter)
       ? o.typeFilter : DEFAULTS.typeFilter,
     pickerLayout: o.pickerLayout === "classic" ? "classic" : "fixed",
+    edgeCompat: o.edgeCompat !== false,
     accent: typeof o.accent === "string" && /^#[0-9a-f]{6}$/i.test(o.accent)
       ? o.accent : DEFAULTS.accent,
     glassAlpha: clampNum(o.glassAlpha, 0, 60, DEFAULTS.glassAlpha),
@@ -278,6 +284,7 @@ function serializeSelection() {
     contentRatingFilter: selection.contentRatingFilter,
     typeFilter: selection.typeFilter,
     pickerLayout: selection.pickerLayout,
+    edgeCompat: selection.edgeCompat,
     accent: selection.accent,
     glassAlpha: selection.glassAlpha,
     glassColor: selection.glassColor,
@@ -829,6 +836,97 @@ async function changeUploadDir(dir, migrate) {
 }
 
 // ── Behind-body layer: wallpaper + scrim (plain DOM, NOT a slot) ───────────
+// Edge (and only Edge) paints its own floating "下载/投屏" media-overlay toolbar
+// over any VISIBLE <video> element, and it ignores pointer-events / controlsList /
+// disableRemotePlayback; there is no browser switch to turn it off. The only
+// reliable way to keep it off the wallpaper is to never paint a visible video
+// element, so on Edge video wallpapers are drawn onto a <canvas> instead:
+//   * Edge-only (UA-gated): Chrome/Firefox/other engines keep the native <video>
+//     path untouched — zero cost and zero behaviour change outside Edge.
+//   * Event-driven: requestVideoFrameCallback() redraws only when the video
+//     presents a NEW frame (video framerate, not display refresh rate; paused or
+//     background-tab → no callbacks → zero work). Falls back to rAF if absent.
+//   * The canvas bitmap is capped at the video's native resolution (never
+//     upscaled), then CSS scales it to the viewport — ~1/4 the pixels of a
+//     dpr-2 fullscreen canvas.
+// The <video> stays in the DOM (offscreen, invisible) purely as the decoder
+// source for drawImage; play/pause/playbackRate still work on it.
+const IS_EDGE = typeof navigator !== "undefined" && /Edg\//.test(navigator.userAgent);
+let weVfHandle = 0;     // requestVideoFrameCallback handle
+let weRafId = 0;        // requestAnimationFrame fallback handle
+let weResizeObs = null; // ResizeObserver (canvas size / DPR changes)
+let weDrawCtx = null;   // { canvas, video, fit }
+function weStopDraw() {
+  const v = weDrawCtx && weDrawCtx.video;
+  if (weVfHandle && v && v.cancelVideoFrameCallback) {
+    try { v.cancelVideoFrameCallback(weVfHandle); } catch { /* ignore */ }
+  }
+  weVfHandle = 0;
+  if (weRafId) { cancelAnimationFrame(weRafId); weRafId = 0; }
+  if (weResizeObs) { weResizeObs.disconnect(); weResizeObs = null; }
+  weDrawCtx = null;
+}
+function weDrawFrame() {
+  const ctx = weDrawCtx;
+  if (!ctx || !ctx.canvas.isConnected) return;
+  const video = ctx.video;
+  const vw = video.videoWidth, vh = video.videoHeight;
+  if (!vw || !vh) return;
+  const canvas = ctx.canvas;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  // Cap the bitmap at the video's native resolution; CSS does the upscaling.
+  const cw = Math.max(1, Math.min(vw, Math.round(canvas.clientWidth * dpr)));
+  const ch = Math.max(1, Math.min(vh, Math.round(canvas.clientHeight * dpr)));
+  if (canvas.width !== cw || canvas.height !== ch) { canvas.width = cw; canvas.height = ch; }
+  const g = canvas.getContext("2d");
+  g.clearRect(0, 0, cw, ch);
+  // Same semantics as CSS object-fit (cover / contain / center / fill).
+  const vr = vw / vh, cr = cw / ch;
+  let dx = 0, dy = 0, dw = cw, dh = ch, sx = 0, sy = 0, sw = vw, sh = vh;
+  if (ctx.fit === "cover") {
+    if (cr > vr) { sw = vh * cr; sx = (vw - sw) / 2; }
+    else { sh = vw / cr; sy = (vh - sh) / 2; }
+  } else if (ctx.fit === "contain") {
+    if (cr > vr) { dh = cw / vr; dy = (ch - dh) / 2; }
+    else { dw = ch * vr; dx = (cw - dw) / 2; }
+  } else if (ctx.fit === "center") {
+    sw = Math.min(vw, cw); sh = Math.min(vh, ch);
+    sx = (vw - sw) / 2; sy = (vh - sh) / 2;
+    dw = sw; dh = sh; dx = (cw - dw) / 2; dy = (ch - dh) / 2;
+  }
+  // "fill" stretches the full source over the full canvas (defaults above).
+  g.drawImage(video, sx, sy, sw, sh, dx, dy, dw, dh);
+}
+function weDrawTick() {
+  weDrawFrame();
+  const ctx = weDrawCtx;
+  if (!ctx || !ctx.canvas.isConnected) return;
+  const v = ctx.video;
+  if (v.requestVideoFrameCallback) weVfHandle = v.requestVideoFrameCallback(weDrawTick);
+  else weRafId = requestAnimationFrame(weDrawTick);
+}
+function weStartDraw(canvas, video, customFit) {
+  weStopDraw();
+  weDrawCtx = {
+    canvas,
+    video,
+    fit: customFit
+      ? (getComputedStyle(document.body).getPropertyValue("--we-object-fit").trim() || "cover")
+      : "cover",
+  };
+  weDrawFrame(); // first paint (a paused wallpaper never presents new frames)
+  // If the video is still loading while paused, neither the paint above nor
+  // rVFC covers it — draw once as soon as the first frame is available.
+  if (!video.dataset.weLoadedOnce) {
+    video.dataset.weLoadedOnce = "1";
+    video.addEventListener("loadeddata", () => weDrawFrame(), { once: true });
+  }
+  if (video.requestVideoFrameCallback) weVfHandle = video.requestVideoFrameCallback(weDrawTick);
+  else weRafId = requestAnimationFrame(weDrawTick);
+  weResizeObs = new ResizeObserver(() => weDrawFrame());
+  weResizeObs.observe(canvas);
+}
+
 function buildMedia(sel) {
   // Scene wallpapers render as a static frame image (extracted by the host),
   // exactly like an uploaded image — with a preview fallback on load failure.
@@ -847,10 +945,22 @@ function buildMedia(sel) {
     media.loop = true;
     media.muted = true;
     media.setAttribute("playsinline", "");
-    media.className = "we-media" + fitClass;
     // Native playbackRate — hardware-decoded, instant, no reload (and the
     // videos are muted anyway, so there is no audio to keep in sync).
     try { media.playbackRate = sel.playbackRate; } catch { /* ignore */ }
+    if (IS_EDGE && sel.edgeCompat !== false) {
+      // Edge: keep the decoder element out of sight (its floating 下载/投屏
+      // toolbar attaches to any VISIBLE <video>), render via <canvas> instead
+      // (see weStartDraw / weDrawFrame). Attributes are belt-and-suspenders.
+      media.setAttribute("disablepictureinpicture", "");
+      media.setAttribute("disableremoteplayback", "");
+      media.style.cssText = "position:absolute;left:-100000px;top:0;width:320px;height:180px;opacity:0.01;pointer-events:none;";
+      const canvas = document.createElement("canvas");
+      canvas.className = "we-media we-media--canvas" + fitClass;
+      canvas.style.background = "#000";
+      return [media, canvas];
+    }
+    media.className = "we-media" + fitClass;
   } else if (isStill) {
     media.src = sel.url;
     media.alt = "";
@@ -876,19 +986,33 @@ function syncLayers() {
   // 1. Wallpaper element.
   const existing = document.getElementById(LAYER_ID);
   if (selection.url) {
-    const wantKey = selection.type + "\u0000" + selection.url;
+    const wantKey = selection.type + "\u0000" + selection.url + "\u0000"
+      + (IS_EDGE && selection.edgeCompat !== false ? "canvas" : "video");
     const gotKey = existing && existing.dataset.weKey;
-    if (existing && gotKey !== wantKey) existing.remove();
+    if (existing && gotKey !== wantKey) {
+      existing.remove();
+      // Release the previous draw loop: without this, switching from an Edge
+      // canvas video to a non-canvas wallpaper (image/web/scene, or Edge 兼容
+      // turned off) would keep the old hidden <video> referenced and playing
+      // forever — CPU/GPU/battery + memory leak per switch (rotation mixes
+      // types). weStartDraw() re-initialises when a canvas exists again.
+      weStopDraw();
+    }
     let node = document.getElementById(LAYER_ID);
     if (!node) {
       node = document.createElement("div");
       node.id = LAYER_ID;
       node.className = "we-layer";
       node.dataset.weKey = wantKey;
-      node.appendChild(buildMedia(selection));
+      const built = buildMedia(selection);
+      if (Array.isArray(built)) for (const el of built) node.appendChild(el);
+      else node.appendChild(built);
       document.body.appendChild(node);
     }
+    const canvas = node.querySelector("canvas.we-media--canvas");
     const video = node.querySelector("video");
+    // Edge-only: drive the canvas mirror from the hidden decoder video.
+    if (canvas && video) weStartDraw(canvas, video, canvas.className.indexOf("we-media--fit") !== -1);
     if (video) {
       if (selection.playing) { try { video.play().catch(() => {}); } catch {} }
       else video.pause();
@@ -897,6 +1021,7 @@ function syncLayers() {
       try { if (video.playbackRate !== selection.playbackRate) video.playbackRate = selection.playbackRate; } catch { /* ignore */ }
     }
   } else if (existing) {
+    weStopDraw();
     existing.remove();
   }
 
@@ -1066,6 +1191,13 @@ function WallpaperPicker() {
   // Card style: classic (CD-rack) vs fixed (overlap-proof).
   const onLayoutChange = (value) => {
     selection.pickerLayout = value;
+    persistSelection();
+    emit();
+  };
+  // Edge 兼容渲染开关：关闭后任何浏览器都走原生 <video>。改的是渲染模式，
+  // syncLayers 的 wantKey 已并入模式，emit 会重建壁纸层并立即按新路径生效。
+  const onEdgeCompatChange = (checked) => {
+    selection.edgeCompat = checked;
     persistSelection();
     emit();
   };
@@ -1337,6 +1469,26 @@ function WallpaperPicker() {
         sel.pickerLayout === "classic"
           ? "CD 架：层叠 + 一页到底"
           : "常规网格 · 分页"),
+      // Edge 兼容渲染开关：与"紧凑布局"同一行、靠右。仅在 Edge 中生效
+      // （canvas 渲染，避免浏览器自带的「下载 / 投屏」悬浮工具栏）。
+      React.createElement("label", {
+        className: "we-picker__switch we-picker__switch--edge",
+        // 关键布局用内联样式而非插件 CSS：插件样式表按 TAG_ID 去重注入，
+        // 页面若残留旧样式表，新 CSS 规则不会生效（开关会靠左 / 不居中 /
+        // 字号不同）。内联样式始终生效，与样式表注入状态无关。
+        style: { marginLeft: "auto", alignItems: "center", gap: "6px", fontSize: "inherit" },
+        title: "Edge 兼容：视频壁纸改用 canvas 渲染，避免浏览器自带的「下载 / 投屏」悬浮工具栏；关闭则始终使用原生 <video>",
+      },
+        React.createElement("span", { className: "we-picker__hint we-picker__label" }, "Edge 兼容"),
+        React.createElement("input", {
+          type: "checkbox",
+          checked: sel.edgeCompat !== false,
+          onChange: (e) => onEdgeCompatChange(e.target.checked),
+        }),
+        React.createElement("span", { className: "we-picker__switch-track" },
+          React.createElement("span", { className: "we-picker__switch-thumb" }),
+        ),
+      ),
     ),
     // ── 当前壁纸: vinyl record beside the selection, in both card styles. ──
     React.createElement("div", { className: "we-picker__section" },
@@ -2400,6 +2552,10 @@ const CSS = `
   .we-picker__switch input:checked + .we-picker__switch-track .we-picker__switch-thumb {
     transform: translateX(18px);
   }
+  /* Edge 兼容渲染开关：塞在"紧凑布局"同一行，margin-left:auto 使其靠右。 */
+  .we-picker__switch--edge {
+    margin-left: auto; align-items: center; gap: 6px;
+  }
 
   /* Custom chevron for the flat selects (appearance: none removed the native
      arrow; heights stay pinned at 26px so rows can never shift). */
@@ -2683,7 +2839,10 @@ const CSS = `
   }
 `;
 
-const TAG_ID = "dsh-wallpaper-engine/styles";
+// Bumped v2: force a fresh <style> injection even when a page still carries the
+// old stylesheet tag from a previous bundle (TAG_ID dedupes the injection; a
+// static id would leave stale CSS rules active and new rules missing).
+const TAG_ID = "dsh-wallpaper-engine/styles-v2";
 if (typeof document !== "undefined" &&
     document.querySelector("style[data-plugin-css=" + JSON.stringify(TAG_ID) + "]") === null) {
   const tag = document.createElement("style");
@@ -2709,6 +2868,7 @@ function apply(ctx) {
         unsub();
         unsubEffects();
         clearRotationTimer();
+        weStopDraw();
         const node = document.getElementById(LAYER_ID);
         if (node) node.remove();
         const scrim = document.getElementById(SCRIM_ID);
