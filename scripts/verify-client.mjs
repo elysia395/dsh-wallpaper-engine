@@ -254,6 +254,59 @@ setTimeout(() => {
       })();
       const sliderMax = glassSlider ? JSON.stringify(glassSlider).match(/"max":"(\d+)"/)?.[1] : null;
       console.log('玻璃 slider max (expect 60):', sliderMax);
+      // Sidebar glass sliders: expanded ranges (侧栏模糊/侧栏透明度 0–100,
+      // 内容面透明度 0–80) — find each by label and assert its max.
+      const sidebarSliderMax = (label) => {
+        let hit = null;
+        (function walk(node) {
+          if (Array.isArray(node)) { node.forEach(walk); return; }
+          if (!node || typeof node !== 'object') return;
+          const cls = typeof node.props?.className === 'string' ? node.props.className : '';
+          const children = Array.isArray(node.children) ? node.children : [];
+          const labelChild = children.find((c) => c && typeof c === 'object' && Array.isArray(c.children) && c.children.includes(label));
+          if (cls.includes('we-picker__slider-row') && labelChild) hit = node;
+          if (Array.isArray(node.children)) node.children.forEach(walk);
+        })(tree);
+        return hit ? JSON.stringify(hit).match(/"max":"(\d+)"/)?.[1] : null;
+      };
+      console.log('侧栏模糊 slider max (expect 100):', sidebarSliderMax('侧栏模糊'));
+      console.log('侧栏透明度 slider max (expect 100):', sidebarSliderMax('侧栏透明度'));
+      console.log('内容面透明度 slider max (expect 80):', sidebarSliderMax('内容面透明度'));
+      // Regression: handler clamps must match the slider maxes — dragging
+      // 侧栏模糊 to 80 (beyond the OLD 60 bound) must PERSIST, not snap back to
+      // the default (a stale clampNum(px, 0, 60, 16) returns the fallback 16).
+      const dragSidebarSlider = (label, value) => {
+        let input = null;
+        (function walk(node) {
+          if (Array.isArray(node)) { node.forEach(walk); return; }
+          if (!node || typeof node !== 'object') return;
+          const children = Array.isArray(node.children) ? node.children : [];
+          const labelChild = children.find((c) => c && typeof c === 'object' && Array.isArray(c.children) && c.children.includes(label));
+          if (labelChild && typeof node.props?.className === 'string' && node.props.className.includes('we-picker__slider-row')) {
+            const inp = children.find((c) => c && typeof c === 'object' && c.type === 'input');
+            if (inp && typeof inp.props.onInput === 'function') input = inp;
+          }
+          if (Array.isArray(node.children)) node.children.forEach(walk);
+        })(tree);
+        if (!input) return null;
+        input.props.onInput({ target: { value: String(value) } });
+        tree = pickerRenders[0]();
+        let after = null;
+        (function walk(node) {
+          if (Array.isArray(node)) { node.forEach(walk); return; }
+          if (!node || typeof node !== 'object') return;
+          const children = Array.isArray(node.children) ? node.children : [];
+          const labelChild = children.find((c) => c && typeof c === 'object' && Array.isArray(c.children) && c.children.includes(label));
+          if (labelChild && typeof node.props?.className === 'string' && node.props.className.includes('we-picker__slider-row')) {
+            const inp = children.find((c) => c && typeof c === 'object' && c.type === 'input');
+            if (inp) after = inp;
+          }
+          if (Array.isArray(node.children)) node.children.forEach(walk);
+        })(tree);
+        return after ? after.props.value : null;
+      };
+      console.log('侧栏模糊 拖到 80 后保持 (expect 80):', dragSidebarSlider('侧栏模糊', 80));
+      console.log('内容面透明度 拖到 70 后保持 (expect 70):', dragSidebarSlider('内容面透明度', 70));
       console.log('whole-window glass master switch present:', treeText.includes('设置窗口液态玻璃'));
       console.log('window glass hint present:', treeText.includes('整个设置窗口'));
       // The thumbnail grid lives inside the picker MODAL now (settings page

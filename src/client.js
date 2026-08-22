@@ -141,7 +141,7 @@ const DEFAULTS = {
   // 内容面（编辑器/终端）近不透明玻璃底的细调——既有固定调色板（语法高亮/
   // ANSI）为不透明底设计，全透明毛玻璃下注释灰不可读，全不透明又失去玻璃感：
   // - sidebarContentAlpha：内容面透明度（%），越大越透（映射到底色不透明度
-  //   100%→50%；默认 30 → 70% 不透明，亮/暗主题实测显示均合理，玻璃感与
+  //   100%→20%；默认 30 → 70% 不透明，亮/暗主题实测显示均合理，玻璃感与
   //   注释可读性平衡）；
   // - sidebarContentColor：内容面底色（#rrggbb），空 = 跟随主题面板色
   //   (--dsw-alias-bg-layer-1)，选定后双主题统一使用该色。
@@ -248,11 +248,11 @@ function sanitizeSettings(o) {
       ? o.glassColor : DEFAULTS.glassColor,
     glassWindow: o.glassWindow !== false,
     sidebarGlass: o.sidebarGlass !== false,
-    sidebarBlur: clampNum(o.sidebarBlur, 0, 60, DEFAULTS.sidebarBlur),
-    sidebarAlpha: clampNum(o.sidebarAlpha, 0, 60, DEFAULTS.sidebarAlpha),
+    sidebarBlur: clampNum(o.sidebarBlur, 0, 100, DEFAULTS.sidebarBlur),
+    sidebarAlpha: clampNum(o.sidebarAlpha, 0, 100, DEFAULTS.sidebarAlpha),
     sidebarColor: typeof o.sidebarColor === "string" && /^#[0-9a-f]{6}$/i.test(o.sidebarColor)
       ? o.sidebarColor : DEFAULTS.sidebarColor,
-    sidebarContentAlpha: clampNum(o.sidebarContentAlpha, 0, 50, DEFAULTS.sidebarContentAlpha),
+    sidebarContentAlpha: clampNum(o.sidebarContentAlpha, 0, 80, DEFAULTS.sidebarContentAlpha),
     sidebarContentColor: typeof o.sidebarContentColor === "string" && /^#[0-9a-f]{6}$/i.test(o.sidebarContentColor)
       ? o.sidebarContentColor : DEFAULTS.sidebarContentColor,
   };
@@ -1437,17 +1437,20 @@ function applyEffects() {
   // 侧栏透明度 / 侧栏玻璃颜色 + 总开关）。变量只作用于 [data-dsh-better-sidebar]
   // 子树（CSS 见下），关闭总开关时侧栏恢复原生外观。
   s.setProperty("--we-sidebar-blur", selection.sidebarBlur + "px");
-  s.setProperty("--we-sidebar-saturate", String(1.15 + selection.sidebarBlur * 0.028));
-  const sidebarAlpha = Math.max(0.03, 0.25 - (selection.sidebarAlpha / 60) * 0.22);
+  // 饱和度随模糊增长但封顶（blur 最大 100px 时 1.15+2.8=3.95 过于夸张）。
+  s.setProperty("--we-sidebar-saturate", String(Math.min(3.2, 1.15 + selection.sidebarBlur * 0.028)));
+  // 透明度 0–100 全范围映射：0 → 0.25（近实色），100 → 0.03（接近全透）。
+  const sidebarAlpha = Math.max(0.03, 0.25 - (selection.sidebarAlpha / 100) * 0.22);
   s.setProperty("--we-sidebar-alpha", String(sidebarAlpha));
   s.setProperty("--we-sidebar-color", selection.sidebarColor);
   if (selection.sidebarGlass) document.body.setAttribute("data-we-sidebar-glass", "on");
   else document.body.removeAttribute("data-we-sidebar-glass");
-  // 内容面（编辑器/终端）近不透明玻璃底：透明度滑块 0–50 → 不透明度 100%–50%
-  // （越大越透，与玻璃透明度同语义）；底色空 = 跟随主题面板色，选定后自定义。
+  // 内容面（编辑器/终端）近不透明玻璃底：透明度滑块 0–80 → 不透明度 100%–20%
+  // （越大越透，与玻璃透明度同语义；低于 ~40% 不透明度注释可读性会再次变差，
+  // 留给用户自行权衡）；底色空 = 跟随主题面板色，选定后自定义。
   // 注意 color-mix 的百分比槽位要求带单位的 token —— 变量值必须含 "%"，
   // 否则整个 color-mix 失效、底色规则被丢弃（编辑器回退到纯透明毛玻璃）。
-  s.setProperty("--we-content-surface-alpha", Math.max(50, 100 - selection.sidebarContentAlpha) + "%");
+  s.setProperty("--we-content-surface-alpha", Math.max(20, 100 - selection.sidebarContentAlpha) + "%");
   if (selection.sidebarContentColor) s.setProperty("--we-content-surface-color", selection.sidebarContentColor);
   else s.removeProperty("--we-content-surface-color");
 
@@ -1647,11 +1650,11 @@ function WallpaperPicker() {
   // 侧栏玻璃（dsh-better-sidebar）：独立于会话玻璃的一套细粒度控制，各自立即
   // 生效并持久化（--we-sidebar-blur / --we-sidebar-alpha / --we-sidebar-color）。
   const onSidebarBlur = (px) => {
-    selection.sidebarBlur = clampNum(px, 0, 60, DEFAULTS.sidebarBlur);
+    selection.sidebarBlur = clampNum(px, 0, 100, DEFAULTS.sidebarBlur);
     persistSelection(); applyEffects(); emit();
   };
   const onSidebarAlpha = (pct) => {
-    selection.sidebarAlpha = clampNum(pct, 0, 60, DEFAULTS.sidebarAlpha);
+    selection.sidebarAlpha = clampNum(pct, 0, 100, DEFAULTS.sidebarAlpha);
     persistSelection(); applyEffects(); emit();
   };
   const onSidebarColor = (hex) => {
@@ -1661,7 +1664,7 @@ function WallpaperPicker() {
   };
   // 内容面（编辑器/终端）近不透明玻璃底：透明度滑块 + 底色（空 = 跟随主题）。
   const onSidebarContentAlpha = (pct) => {
-    selection.sidebarContentAlpha = clampNum(pct, 0, 50, DEFAULTS.sidebarContentAlpha);
+    selection.sidebarContentAlpha = clampNum(pct, 0, 80, DEFAULTS.sidebarContentAlpha);
     persistSelection(); applyEffects(); emit();
   };
   const onSidebarContentColor = (hex) => {
@@ -1871,8 +1874,8 @@ function WallpaperPicker() {
       ),
       ],
       sel.sidebarPresent && sel.sidebarGlass && [
-      SliderRow("侧栏模糊", 0, 60, 1, sel.sidebarBlur, onSidebarBlur, sel.sidebarBlur + "px"),
-      SliderRow("侧栏透明度", 0, 60, 5, sel.sidebarAlpha, onSidebarAlpha, sel.sidebarAlpha + "%"),
+      SliderRow("侧栏模糊", 0, 100, 1, sel.sidebarBlur, onSidebarBlur, sel.sidebarBlur + "px"),
+      SliderRow("侧栏透明度", 0, 100, 5, sel.sidebarAlpha, onSidebarAlpha, sel.sidebarAlpha + "%"),
       React.createElement("div", { className: "we-picker__row we-picker__accent-row" },
         React.createElement("span", { className: "we-picker__hint we-picker__label" }, "侧栏玻璃颜色"),
         GLASS_COLOR_PRESETS.map((hex) => React.createElement("button", {
@@ -1898,7 +1901,7 @@ function WallpaperPicker() {
       // 内容面（编辑器 / 终端）近不透明玻璃底：透明度 + 底色。固定调色板
       // （语法高亮 / ANSI）为不透明底设计，全透毛玻璃下注释灰不可读；这里
       // 在"玻璃感"与"可读性"之间取平衡——透明度越大越透，底色空 = 跟随主题。
-      SliderRow("内容面透明度", 0, 50, 5, sel.sidebarContentAlpha, onSidebarContentAlpha, sel.sidebarContentAlpha + "%"),
+      SliderRow("内容面透明度", 0, 80, 5, sel.sidebarContentAlpha, onSidebarContentAlpha, sel.sidebarContentAlpha + "%"),
       React.createElement("div", { className: "we-picker__row we-picker__accent-row" },
         React.createElement("span", { className: "we-picker__hint we-picker__label" }, "内容面底色"),
         React.createElement("button", {
