@@ -58,7 +58,7 @@
   "license": "MIT",
   "scripts": {
     "build": "node scripts/build-client.mjs",
-    "verify": "node scripts/verify-client.mjs",
+    "verify": "node scripts/verify-client.mjs && node scripts/verify-transcode-state.mjs",
     "prepare": "node scripts/prepare.mjs"
   },
   "peerDependencies": {
