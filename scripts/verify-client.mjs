@@ -152,6 +152,9 @@ setTimeout(() => {
   console.log('--we-scrim-color:', JSON.stringify(p['--we-scrim-color']));
   console.log('--we-border-alpha:', JSON.stringify(p['--we-border-alpha']));
   console.log('--we-blur:', JSON.stringify(p['--we-blur']));
+  // color-mix 的百分比槽位要求带单位的 token：内容面不透明度变量必须以 "%"
+  // 结尾，否则整条 background-color 规则失效（回归防护，见 applyEffects）。
+  console.log('--we-content-surface-alpha ends with %:', String(p['--we-content-surface-alpha'] || '').endsWith('%'));
   console.log('--we-wallpaper-blur:', JSON.stringify(p['--we-wallpaper-blur']));
   console.log('--we-wallpaper-scale:', JSON.stringify(p['--we-wallpaper-scale']));
   console.log('--we-accent:', JSON.stringify(p['--we-accent']));
@@ -196,9 +199,13 @@ setTimeout(() => {
       console.log('sidebar alpha slider present:', treeText.includes('侧栏透明度'));
       console.log('sidebar glass-color swatches (expect 6):', (treeText.match(/"aria-label":"侧栏玻璃颜色 /g) || []).length);
       console.log('sidebar glass color custom input present:', treeText.includes('自定义侧栏玻璃颜色'));
-      // The three detail knobs (侧栏模糊 / 侧栏透明度 / 侧栏玻璃颜色) are
-      // conditional on the 侧栏液态玻璃 master switch: off → hidden, on →
-      // restored, in the SAME render pass (the toggle re-emits synchronously).
+      console.log('sidebar content-alpha slider present:', treeText.includes('内容面透明度'));
+      console.log('sidebar content auto swatch present:', treeText.includes('内容面底色 跟随主题'));
+      console.log('sidebar content color swatches (expect 7 = 6 presets + auto):', (treeText.match(/"aria-label":"内容面底色 /g) || []).length);
+      console.log('sidebar content color custom input present:', treeText.includes('自定义内容面底色'));
+      // The detail knobs (侧栏模糊 / 侧栏透明度 / 侧栏玻璃颜色 / 内容面透明度 /
+      // 内容面底色) are conditional on the 侧栏液态玻璃 master switch: off →
+      // hidden, on → restored, in the SAME render pass (toggle re-emits sync).
       const sidebarSwitch = (() => {
         let hit = null;
         (function walk(node) {
@@ -217,15 +224,18 @@ setTimeout(() => {
         sidebarSwitch.props.onChange({ target: { checked: false } });
         tree = pickerRenders[0]();
         const offText = JSON.stringify(tree);
-        console.log('switch off hides the three detail knobs:',
-          !offText.includes('侧栏模糊') && !offText.includes('侧栏透明度') && !offText.includes('侧栏玻璃颜色'));
+        console.log('switch off hides the detail knobs:',
+          !offText.includes('侧栏模糊') && !offText.includes('侧栏透明度') && !offText.includes('侧栏玻璃颜色')
+          && !offText.includes('内容面透明度') && !offText.includes('内容面底色'));
         console.log('switch itself stays visible when off:', offText.includes('侧栏液态玻璃'));
         sidebarSwitch.props.onChange({ target: { checked: true } });
         tree = pickerRenders[0]();
         console.log('switch back on restores the detail knobs:',
-          JSON.stringify(tree).includes('侧栏模糊') && JSON.stringify(tree).includes('侧栏透明度') && JSON.stringify(tree).includes('侧栏玻璃颜色'));
+          JSON.stringify(tree).includes('侧栏模糊') && JSON.stringify(tree).includes('侧栏透明度')
+          && JSON.stringify(tree).includes('侧栏玻璃颜色') && JSON.stringify(tree).includes('内容面透明度')
+          && JSON.stringify(tree).includes('内容面底色'));
       } else {
-        console.log('switch off hides the three detail knobs: false (switch not found)');
+        console.log('switch off hides the detail knobs: false (switch not found)');
       }
       // 玻璃 slider now spans 0–60 px (was 0–40): assert the raised max on the
       // 玻璃 range input (label "玻璃", max 60) so the range stays in sync.
@@ -244,6 +254,59 @@ setTimeout(() => {
       })();
       const sliderMax = glassSlider ? JSON.stringify(glassSlider).match(/"max":"(\d+)"/)?.[1] : null;
       console.log('玻璃 slider max (expect 60):', sliderMax);
+      // Sidebar glass sliders: expanded ranges (侧栏模糊/侧栏透明度 0–100,
+      // 内容面透明度 0–80) — find each by label and assert its max.
+      const sidebarSliderMax = (label) => {
+        let hit = null;
+        (function walk(node) {
+          if (Array.isArray(node)) { node.forEach(walk); return; }
+          if (!node || typeof node !== 'object') return;
+          const cls = typeof node.props?.className === 'string' ? node.props.className : '';
+          const children = Array.isArray(node.children) ? node.children : [];
+          const labelChild = children.find((c) => c && typeof c === 'object' && Array.isArray(c.children) && c.children.includes(label));
+          if (cls.includes('we-picker__slider-row') && labelChild) hit = node;
+          if (Array.isArray(node.children)) node.children.forEach(walk);
+        })(tree);
+        return hit ? JSON.stringify(hit).match(/"max":"(\d+)"/)?.[1] : null;
+      };
+      console.log('侧栏模糊 slider max (expect 100):', sidebarSliderMax('侧栏模糊'));
+      console.log('侧栏透明度 slider max (expect 100):', sidebarSliderMax('侧栏透明度'));
+      console.log('内容面透明度 slider max (expect 80):', sidebarSliderMax('内容面透明度'));
+      // Regression: handler clamps must match the slider maxes — dragging
+      // 侧栏模糊 to 80 (beyond the OLD 60 bound) must PERSIST, not snap back to
+      // the default (a stale clampNum(px, 0, 60, 16) returns the fallback 16).
+      const dragSidebarSlider = (label, value) => {
+        let input = null;
+        (function walk(node) {
+          if (Array.isArray(node)) { node.forEach(walk); return; }
+          if (!node || typeof node !== 'object') return;
+          const children = Array.isArray(node.children) ? node.children : [];
+          const labelChild = children.find((c) => c && typeof c === 'object' && Array.isArray(c.children) && c.children.includes(label));
+          if (labelChild && typeof node.props?.className === 'string' && node.props.className.includes('we-picker__slider-row')) {
+            const inp = children.find((c) => c && typeof c === 'object' && c.type === 'input');
+            if (inp && typeof inp.props.onInput === 'function') input = inp;
+          }
+          if (Array.isArray(node.children)) node.children.forEach(walk);
+        })(tree);
+        if (!input) return null;
+        input.props.onInput({ target: { value: String(value) } });
+        tree = pickerRenders[0]();
+        let after = null;
+        (function walk(node) {
+          if (Array.isArray(node)) { node.forEach(walk); return; }
+          if (!node || typeof node !== 'object') return;
+          const children = Array.isArray(node.children) ? node.children : [];
+          const labelChild = children.find((c) => c && typeof c === 'object' && Array.isArray(c.children) && c.children.includes(label));
+          if (labelChild && typeof node.props?.className === 'string' && node.props.className.includes('we-picker__slider-row')) {
+            const inp = children.find((c) => c && typeof c === 'object' && c.type === 'input');
+            if (inp) after = inp;
+          }
+          if (Array.isArray(node.children)) node.children.forEach(walk);
+        })(tree);
+        return after ? after.props.value : null;
+      };
+      console.log('侧栏模糊 拖到 80 后保持 (expect 80):', dragSidebarSlider('侧栏模糊', 80));
+      console.log('内容面透明度 拖到 70 后保持 (expect 70):', dragSidebarSlider('内容面透明度', 70));
       console.log('whole-window glass master switch present:', treeText.includes('设置窗口液态玻璃'));
       console.log('window glass hint present:', treeText.includes('整个设置窗口'));
       // The thumbnail grid lives inside the picker MODAL now (settings page
