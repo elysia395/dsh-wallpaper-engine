@@ -128,6 +128,16 @@ const DEFAULTS = {
   glassAlpha: 12,
   glassColor: "#ffffff",
   glassWindow: true,
+  // dsh-better-sidebar 液态玻璃：与设置窗口玻璃同级的一套「细节自由」控制，
+  // 独立于会话玻璃（玻璃 / 玻璃透明度）——侧栏想多透 / 多糊 / 换个底色都行：
+  // - sidebarGlass：总开关，关闭后侧栏恢复原生外观（不再透明 / 不再模糊）；
+  // - sidebarBlur：侧栏专用 backdrop 模糊半径（px，0 = 关闭毛玻璃）；
+  // - sidebarAlpha：侧栏玻璃透明度（%），语义与玻璃透明度一致（越大越透）；
+  // - sidebarColor：侧栏玻璃基底色调（#rrggbb），默认白色，双主题统一生效。
+  sidebarGlass: true,
+  sidebarBlur: 16,
+  sidebarAlpha: 12,
+  sidebarColor: "#ffffff",
 };
 
 // Selectable values for the two filters. Declared up top because
@@ -228,6 +238,11 @@ function sanitizeSettings(o) {
     glassColor: typeof o.glassColor === "string" && /^#[0-9a-f]{6}$/i.test(o.glassColor)
       ? o.glassColor : DEFAULTS.glassColor,
     glassWindow: o.glassWindow !== false,
+    sidebarGlass: o.sidebarGlass !== false,
+    sidebarBlur: clampNum(o.sidebarBlur, 0, 60, DEFAULTS.sidebarBlur),
+    sidebarAlpha: clampNum(o.sidebarAlpha, 0, 60, DEFAULTS.sidebarAlpha),
+    sidebarColor: typeof o.sidebarColor === "string" && /^#[0-9a-f]{6}$/i.test(o.sidebarColor)
+      ? o.sidebarColor : DEFAULTS.sidebarColor,
   };
 }
 
@@ -250,6 +265,11 @@ const selection = {
   // Transient: source media metadata ({ width, height, codec, fps }) from
   // /media-info (host moov probe, cached).
   mediaInfo: null,
+  // Transient: whether dsh-better-sidebar is installed & enabled (host reports
+  // it via the settings GET response). Gates the 侧栏玻璃 control group in the
+  // picker — the knobs are meaningless without the sidebar, so they only show
+  // when it is actually there.
+  sidebarPresent: false,
   // Transient: 抽帧转码 lifecycle — "idle" | "working" | "ready" | "fallback"
   // | "skipped" (see maybeUpgradeToTranscoded).
   transcodeState: "idle",
@@ -325,6 +345,10 @@ function serializeSelection() {
     glassAlpha: selection.glassAlpha,
     glassColor: selection.glassColor,
     glassWindow: selection.glassWindow,
+    sidebarGlass: selection.sidebarGlass,
+    sidebarBlur: selection.sidebarBlur,
+    sidebarAlpha: selection.sidebarAlpha,
+    sidebarColor: selection.sidebarColor,
   };
 }
 
@@ -387,6 +411,8 @@ async function loadPersisted() {
     if (res.ok) {
       const data = await res.json();
       hostSettings = data && data.settings;
+      // 侧栏玻璃控制组只在 dsh-better-sidebar 已安装且启用时显示（host 检测）。
+      selection.sidebarPresent = !!(data && data.betterSidebar);
       hostOk = true;
     }
   } catch { /* host unreachable */ }
@@ -1326,6 +1352,17 @@ function applyEffects() {
   if (selection.glassWindow) document.body.setAttribute("data-we-glass-window", "on");
   else document.body.removeAttribute("data-we-glass-window");
 
+  // dsh-better-sidebar 液态玻璃：一套独立于会话玻璃的细粒度控制（侧栏模糊 /
+  // 侧栏透明度 / 侧栏玻璃颜色 + 总开关）。变量只作用于 [data-dsh-better-sidebar]
+  // 子树（CSS 见下），关闭总开关时侧栏恢复原生外观。
+  s.setProperty("--we-sidebar-blur", selection.sidebarBlur + "px");
+  s.setProperty("--we-sidebar-saturate", String(1.15 + selection.sidebarBlur * 0.028));
+  const sidebarAlpha = Math.max(0.03, 0.25 - (selection.sidebarAlpha / 60) * 0.22);
+  s.setProperty("--we-sidebar-alpha", String(sidebarAlpha));
+  s.setProperty("--we-sidebar-color", selection.sidebarColor);
+  if (selection.sidebarGlass) document.body.setAttribute("data-we-sidebar-glass", "on");
+  else document.body.removeAttribute("data-we-sidebar-glass");
+
   // Scrim immediacy: some composited/kiosk environments do not repaint a
   // z-index:-1 layer promptly when only an inherited CSS variable changes.
   // Write the resolved color DIRECTLY onto the scrim element's inline style and
@@ -1356,6 +1393,11 @@ function clearEffects() {
   s.removeProperty("--we-glass-alpha");
   s.removeProperty("--we-glass-color");
   document.body.removeAttribute("data-we-glass-window");
+  s.removeProperty("--we-sidebar-blur");
+  s.removeProperty("--we-sidebar-saturate");
+  s.removeProperty("--we-sidebar-alpha");
+  s.removeProperty("--we-sidebar-color");
+  document.body.removeAttribute("data-we-sidebar-glass");
   const scrim = document.getElementById(SCRIM_ID);
   if (scrim) scrim.style.background = "";
 }
@@ -1510,6 +1552,21 @@ function WallpaperPicker() {
   };
   const onGlassAlpha = (pct) => {
     selection.glassAlpha = clampNum(pct, 0, 60, DEFAULTS.glassAlpha);
+    persistSelection(); applyEffects(); emit();
+  };
+  // 侧栏玻璃（dsh-better-sidebar）：独立于会话玻璃的一套细粒度控制，各自立即
+  // 生效并持久化（--we-sidebar-blur / --we-sidebar-alpha / --we-sidebar-color）。
+  const onSidebarBlur = (px) => {
+    selection.sidebarBlur = clampNum(px, 0, 60, DEFAULTS.sidebarBlur);
+    persistSelection(); applyEffects(); emit();
+  };
+  const onSidebarAlpha = (pct) => {
+    selection.sidebarAlpha = clampNum(pct, 0, 60, DEFAULTS.sidebarAlpha);
+    persistSelection(); applyEffects(); emit();
+  };
+  const onSidebarColor = (hex) => {
+    if (!/^#[0-9a-f]{6}$/i.test(hex)) return;
+    selection.sidebarColor = hex;
     persistSelection(); applyEffects(); emit();
   };
 
@@ -1683,6 +1740,57 @@ function WallpaperPicker() {
       React.createElement("span", { className: "we-picker__hint" },
         "整个设置窗口（含 General / 模型 / 插件等全部原生分区）跟随配色与透明度；关闭则恢复原生样式",
       ),
+      // 侧栏玻璃（dsh-better-sidebar 适配）：与设置窗口玻璃同级的一套独立细粒度
+      // 控制 —— 总开关 + 专用模糊 + 专用透明度 + 玻璃基底色调，全部只作用于
+      // dsh-better-sidebar 子树，不动会话玻璃（玻璃 / 玻璃透明度）的设置。
+      // 仅在 host 检测到 dsh-better-sidebar 已安装且启用时显示（sidebarPresent）。
+      // 开关本体 + 说明始终显示；三个细节滑块（侧栏模糊 / 侧栏透明度 / 侧栏玻璃
+      // 颜色）以「侧栏液态玻璃」开关为前提 —— 关闭时隐藏，开启后随 emit 重渲染
+      // 实时出现（滑块只在毛玻璃生效时有意义）。
+      sel.sidebarPresent && [
+      React.createElement("label", { className: "we-picker__rotation-toggle we-picker__window-toggle" },
+        React.createElement("input", {
+          type: "checkbox",
+          checked: sel.sidebarGlass,
+          onChange: (e) => {
+            selection.sidebarGlass = e.target.checked;
+            persistSelection();
+            applyEffects();
+            emit();
+          },
+        }),
+        "侧栏液态玻璃",
+      ),
+      React.createElement("span", { className: "we-picker__hint" },
+        "dsh-better-sidebar 侧栏（文件 / 终端 / Git 等面板）的毛玻璃适配；关闭则恢复其原生外观",
+      ),
+      ],
+      sel.sidebarPresent && sel.sidebarGlass && [
+      SliderRow("侧栏模糊", 0, 60, 1, sel.sidebarBlur, onSidebarBlur, sel.sidebarBlur + "px"),
+      SliderRow("侧栏透明度", 0, 60, 5, sel.sidebarAlpha, onSidebarAlpha, sel.sidebarAlpha + "%"),
+      React.createElement("div", { className: "we-picker__row we-picker__accent-row" },
+        React.createElement("span", { className: "we-picker__hint we-picker__label" }, "侧栏玻璃颜色"),
+        GLASS_COLOR_PRESETS.map((hex) => React.createElement("button", {
+          key: hex,
+          className: "we-picker__swatch" + (sel.sidebarColor === hex ? " we-picker__swatch--active" : ""),
+          type: "button",
+          style: { background: hex },
+          title: hex,
+          onClick: () => onSidebarColor(hex),
+          "aria-label": "侧栏玻璃颜色 " + hex,
+        })),
+        React.createElement("label", { className: "we-picker__swatch-custom" },
+          React.createElement("input", {
+            type: "color",
+            value: sel.sidebarColor,
+            onInput: (e) => onSidebarColor(e.target.value),
+            onChange: (e) => onSidebarColor(e.target.value),
+            title: "自定义侧栏玻璃颜色",
+          }),
+          React.createElement("span", { className: "we-picker__hint" }, "自定义"),
+        ),
+      ),
+      ],
     ),
     // ── Card-style switch: classic (WE's original aspect-ratio 16/9 cards —
     //    the CD-like look the author liked) vs the rewritten fixed-height
@@ -2483,44 +2591,69 @@ const CSS = `
      target the whole tree without depending on its CSS-module hashes. Its root
      panels read the opaque --dsw-alias-bg-layer-1 token (hence the "black
      frame") — give them the SAME clear liquid-glass recipe as the
-     composer/bubbles (faint specular sheen + gentle frosted melt), with blur
-     radius + saturation driven by the 玻璃 slider (--we-blur / --we-saturate).
+     composer/bubbles (faint specular sheen + gentle frosted melt).
+     Unlike the conversation surfaces, the sidebar glass is FULLY independent:
+     the master switch body[data-we-sidebar-glass] (侧栏液态玻璃) gates the whole
+     adaptation, and blur / saturation / transparency / base tint each have
+     their own knob (--we-sidebar-blur / --we-sidebar-saturate /
+     --we-sidebar-alpha / --we-sidebar-color, from 侧栏模糊 / 侧栏透明度 /
+     侧栏玻璃颜色), so the sidebar can be blurrier, clearer, more transparent
+     or tinted however you like without touching the 玻璃 / 玻璃透明度 sliders.
      Inner chrome surfaces that paint the same opaque tokens get a translucent
      base too; the blur lives on the root panels (one blur per shell). */
-  body[data-we-wallpaper] [data-dsh-better-sidebar] [class*="_boundaryError"],
-  body[data-we-wallpaper] [data-dsh-better-sidebar] [class*="_panel"] {
-    background-color: rgba(255, 255, 255, calc(var(--we-glass-alpha, 0.15) * 0.66)) !important;
+  body[data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_boundaryError"],
+  body[data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_panel"] {
+    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) calc(var(--we-sidebar-alpha, 0.15) * 0.66 * 100%), transparent) !important;
     background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04) 38%, rgba(255, 255, 255, 0.01)) !important;
-    -webkit-backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01) !important;
-    backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01) !important;
+    -webkit-backdrop-filter: blur(var(--we-sidebar-blur, 16px)) saturate(var(--we-sidebar-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01) !important;
+    backdrop-filter: blur(var(--we-sidebar-blur, 16px)) saturate(var(--we-sidebar-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01) !important;
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, var(--we-glass-highlight, 0.32)),
       inset 0 -1px 0 rgba(255, 255, 255, 0.08),
       inset 0 0 0 0.5px rgba(255, 255, 255, 0.06);
   }
-  body[data-we-wallpaper] [data-dsh-better-sidebar] [class*="_pane"],
-  body[data-we-wallpaper] [data-dsh-better-sidebar] [class*="_tabBar"],
-  body[data-we-wallpaper] [data-dsh-better-sidebar] [class*="_paneCard"],
-  body[data-we-wallpaper] [data-dsh-better-sidebar] [class*="_editorHeader"],
-  body[data-we-wallpaper] [data-dsh-better-sidebar] [class*="_explorerHeader"],
-  body[data-we-wallpaper] [data-dsh-better-sidebar] [class*="_gitHeader"],
-  body[data-we-wallpaper] [data-dsh-better-sidebar] [class*="_browserBar"],
-  body[data-we-wallpaper] [data-dsh-better-sidebar] [class*="_terminalWrap"] {
-    background-color: rgba(255, 255, 255, calc(var(--we-glass-alpha, 0.15) * 0.53)) !important;
+  body[data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_pane"],
+  body[data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_tabBar"],
+  body[data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_paneCard"],
+  body[data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_editorHeader"],
+  body[data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_explorerHeader"],
+  body[data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_gitHeader"],
+  body[data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_browserBar"],
+  body[data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_terminalWrap"] {
+    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) calc(var(--we-sidebar-alpha, 0.15) * 0.53 * 100%), transparent) !important;
   }
-  body[data-ds-dark-theme][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_boundaryError"],
-  body[data-ds-dark-theme][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_panel"] {
-    background-color: rgba(255, 255, 255, calc(var(--we-glass-alpha, 0.15) * 0.33)) !important;
+  body[data-ds-dark-theme][data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_boundaryError"],
+  body[data-ds-dark-theme][data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_panel"] {
+    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) calc(var(--we-sidebar-alpha, 0.15) * 0.33 * 100%), transparent) !important;
   }
-  body[data-ds-dark-theme][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_pane"],
-  body[data-ds-dark-theme][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_tabBar"],
-  body[data-ds-dark-theme][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_paneCard"],
-  body[data-ds-dark-theme][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_editorHeader"],
-  body[data-ds-dark-theme][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_explorerHeader"],
-  body[data-ds-dark-theme][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_gitHeader"],
-  body[data-ds-dark-theme][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_browserBar"],
-  body[data-ds-dark-theme][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_terminalWrap"] {
-    background-color: rgba(255, 255, 255, calc(var(--we-glass-alpha, 0.15) * 0.26)) !important;
+  body[data-ds-dark-theme][data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_pane"],
+  body[data-ds-dark-theme][data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_tabBar"],
+  body[data-ds-dark-theme][data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_paneCard"],
+  body[data-ds-dark-theme][data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_editorHeader"],
+  body[data-ds-dark-theme][data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_explorerHeader"],
+  body[data-ds-dark-theme][data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_gitHeader"],
+  body[data-ds-dark-theme][data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_browserBar"],
+  body[data-ds-dark-theme][data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_terminalWrap"] {
+    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) calc(var(--we-sidebar-alpha, 0.15) * 0.26 * 100%), transparent) !important;
+  }
+  /* No backdrop-filter support: fall back to near-opaque tinted surfaces so
+     sidebar text never sits directly on a busy wallpaper (same policy as the
+     settings-window glass). The tint still applies. */
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    body[data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_boundaryError"],
+    body[data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_panel"],
+    body[data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_pane"],
+    body[data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_tabBar"],
+    body[data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_paneCard"],
+    body[data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_editorHeader"],
+    body[data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_explorerHeader"],
+    body[data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_gitHeader"],
+    body[data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_browserBar"],
+    body[data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_terminalWrap"] {
+      background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) 92%, transparent) !important;
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+    }
   }
 
   /* Picker chrome. */

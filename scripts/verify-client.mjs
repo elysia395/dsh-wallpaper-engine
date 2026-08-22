@@ -59,7 +59,15 @@ const localStorage = {
   getItem(k) { return this._store[k] ?? null; },
   setItem(k, v) { this._store[k] = v; },
 };
-const fetch = () => Promise.resolve({
+const fetch = (url) => {
+  // Route the settings GET: host reports dsh-better-sidebar as installed +
+  // enabled (→ the 侧栏玻璃 control group must render), while keeping settings
+  // empty so loadPersisted takes the "host has nothing yet → migrate the
+  // localStorage seed" path the rest of the harness relies on.
+  if (String(url).includes('/wallpaper-engine/settings')) {
+    return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ ok: true, betterSidebar: true }) });
+  }
+  return Promise.resolve({
   ok: true, status: 200,
   json: () => Promise.resolve({
     installDir: "D:/we", total: 34, portableCount: 33,
@@ -82,7 +90,8 @@ const fetch = () => Promise.resolve({
       { id: "e", title: "PG13 E", type: "web", playable: true, media: "/wallpaper-engine/media/pg", preview: null, contentrating: "PG13" },
     ],
   }),
-});
+  });
+};
 
 const code = readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8');
 const cap = { handoff: null };
@@ -182,6 +191,42 @@ setTimeout(() => {
       console.log('glass color custom input present:', treeText.includes('自定义玻璃颜色'));
       console.log('custom color input present:', treeText.includes('type":"color"'));
       console.log('glass transparency slider row present:', treeText.includes('玻璃透明度'));
+      console.log('sidebar-glass master switch present:', treeText.includes('侧栏液态玻璃'));
+      console.log('sidebar blur slider present:', treeText.includes('侧栏模糊'));
+      console.log('sidebar alpha slider present:', treeText.includes('侧栏透明度'));
+      console.log('sidebar glass-color swatches (expect 6):', (treeText.match(/"aria-label":"侧栏玻璃颜色 /g) || []).length);
+      console.log('sidebar glass color custom input present:', treeText.includes('自定义侧栏玻璃颜色'));
+      // The three detail knobs (侧栏模糊 / 侧栏透明度 / 侧栏玻璃颜色) are
+      // conditional on the 侧栏液态玻璃 master switch: off → hidden, on →
+      // restored, in the SAME render pass (the toggle re-emits synchronously).
+      const sidebarSwitch = (() => {
+        let hit = null;
+        (function walk(node) {
+          if (Array.isArray(node)) { node.forEach(walk); return; }
+          if (!node || typeof node !== 'object') return;
+          const children = Array.isArray(node.children) ? node.children : [];
+          if (children.includes('侧栏液态玻璃')) {
+            const input = children.find((c) => c && typeof c === 'object' && c.type === 'input');
+            if (input && typeof input.props.onChange === 'function') hit = input;
+          }
+          if (Array.isArray(node.children)) node.children.forEach(walk);
+        })(tree);
+        return hit;
+      })();
+      if (sidebarSwitch) {
+        sidebarSwitch.props.onChange({ target: { checked: false } });
+        tree = pickerRenders[0]();
+        const offText = JSON.stringify(tree);
+        console.log('switch off hides the three detail knobs:',
+          !offText.includes('侧栏模糊') && !offText.includes('侧栏透明度') && !offText.includes('侧栏玻璃颜色'));
+        console.log('switch itself stays visible when off:', offText.includes('侧栏液态玻璃'));
+        sidebarSwitch.props.onChange({ target: { checked: true } });
+        tree = pickerRenders[0]();
+        console.log('switch back on restores the detail knobs:',
+          JSON.stringify(tree).includes('侧栏模糊') && JSON.stringify(tree).includes('侧栏透明度') && JSON.stringify(tree).includes('侧栏玻璃颜色'));
+      } else {
+        console.log('switch off hides the three detail knobs: false (switch not found)');
+      }
       // 玻璃 slider now spans 0–60 px (was 0–40): assert the raised max on the
       // 玻璃 range input (label "玻璃", max 60) so the range stays in sync.
       const glassSlider = (() => {
