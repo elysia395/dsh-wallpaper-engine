@@ -1216,6 +1216,13 @@ function maybeUpgradeToTranscoded(video, token) {
           } else {
             maybeUpgradeToTranscoded(video, token);
           }
+        } else {
+          // The layer/video was rebuilt while this request was in flight (e.g.
+          // Edge 兼容 render-mode toggle, or a wallpaper switch that raced the
+          // abort): re-run syncLayers so the CURRENT video gets its own fresh
+          // upgrade decision — otherwise it would sit on the original (full
+          // decode) until some unrelated emit happened to re-trigger it.
+          emit();
         }
         return;
       }
