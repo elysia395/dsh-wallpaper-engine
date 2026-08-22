@@ -152,6 +152,9 @@ setTimeout(() => {
   console.log('--we-scrim-color:', JSON.stringify(p['--we-scrim-color']));
   console.log('--we-border-alpha:', JSON.stringify(p['--we-border-alpha']));
   console.log('--we-blur:', JSON.stringify(p['--we-blur']));
+  // color-mix 的百分比槽位要求带单位的 token：内容面不透明度变量必须以 "%"
+  // 结尾，否则整条 background-color 规则失效（回归防护，见 applyEffects）。
+  console.log('--we-content-surface-alpha ends with %:', String(p['--we-content-surface-alpha'] || '').endsWith('%'));
   console.log('--we-wallpaper-blur:', JSON.stringify(p['--we-wallpaper-blur']));
   console.log('--we-wallpaper-scale:', JSON.stringify(p['--we-wallpaper-scale']));
   console.log('--we-accent:', JSON.stringify(p['--we-accent']));
@@ -196,9 +199,13 @@ setTimeout(() => {
       console.log('sidebar alpha slider present:', treeText.includes('侧栏透明度'));
       console.log('sidebar glass-color swatches (expect 6):', (treeText.match(/"aria-label":"侧栏玻璃颜色 /g) || []).length);
       console.log('sidebar glass color custom input present:', treeText.includes('自定义侧栏玻璃颜色'));
-      // The three detail knobs (侧栏模糊 / 侧栏透明度 / 侧栏玻璃颜色) are
-      // conditional on the 侧栏液态玻璃 master switch: off → hidden, on →
-      // restored, in the SAME render pass (the toggle re-emits synchronously).
+      console.log('sidebar content-alpha slider present:', treeText.includes('内容面透明度'));
+      console.log('sidebar content auto swatch present:', treeText.includes('内容面底色 跟随主题'));
+      console.log('sidebar content color swatches (expect 7 = 6 presets + auto):', (treeText.match(/"aria-label":"内容面底色 /g) || []).length);
+      console.log('sidebar content color custom input present:', treeText.includes('自定义内容面底色'));
+      // The detail knobs (侧栏模糊 / 侧栏透明度 / 侧栏玻璃颜色 / 内容面透明度 /
+      // 内容面底色) are conditional on the 侧栏液态玻璃 master switch: off →
+      // hidden, on → restored, in the SAME render pass (toggle re-emits sync).
       const sidebarSwitch = (() => {
         let hit = null;
         (function walk(node) {
@@ -217,15 +224,18 @@ setTimeout(() => {
         sidebarSwitch.props.onChange({ target: { checked: false } });
         tree = pickerRenders[0]();
         const offText = JSON.stringify(tree);
-        console.log('switch off hides the three detail knobs:',
-          !offText.includes('侧栏模糊') && !offText.includes('侧栏透明度') && !offText.includes('侧栏玻璃颜色'));
+        console.log('switch off hides the detail knobs:',
+          !offText.includes('侧栏模糊') && !offText.includes('侧栏透明度') && !offText.includes('侧栏玻璃颜色')
+          && !offText.includes('内容面透明度') && !offText.includes('内容面底色'));
         console.log('switch itself stays visible when off:', offText.includes('侧栏液态玻璃'));
         sidebarSwitch.props.onChange({ target: { checked: true } });
         tree = pickerRenders[0]();
         console.log('switch back on restores the detail knobs:',
-          JSON.stringify(tree).includes('侧栏模糊') && JSON.stringify(tree).includes('侧栏透明度') && JSON.stringify(tree).includes('侧栏玻璃颜色'));
+          JSON.stringify(tree).includes('侧栏模糊') && JSON.stringify(tree).includes('侧栏透明度')
+          && JSON.stringify(tree).includes('侧栏玻璃颜色') && JSON.stringify(tree).includes('内容面透明度')
+          && JSON.stringify(tree).includes('内容面底色'));
       } else {
-        console.log('switch off hides the three detail knobs: false (switch not found)');
+        console.log('switch off hides the detail knobs: false (switch not found)');
       }
       // 玻璃 slider now spans 0–60 px (was 0–40): assert the raised max on the
       // 玻璃 range input (label "玻璃", max 60) so the range stays in sync.
