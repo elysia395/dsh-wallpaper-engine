@@ -2745,13 +2745,20 @@ const CSS = `
   body[data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_boundaryError"],
   body[data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_panel"] {
     background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) calc(var(--we-sidebar-alpha, 0.15) * 0.66 * 100%), transparent) !important;
-    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04) 38%, rgba(255, 255, 255, 0.01)) !important;
+    /* Specular sheen + refraction highlights SCALE with --we-sidebar-alpha
+       (coefficients keep the 12% default look identical: 0.626*0.2236≈0.14,
+       1.43*0.2236≈0.32 …). At 100% transparency the white glaze fades out too,
+       so the sidebar is truly near-transparent instead of pale white. */
+    background-image: linear-gradient(180deg,
+      rgba(255, 255, 255, calc(var(--we-sidebar-alpha, 0.15) * 0.626)),
+      rgba(255, 255, 255, calc(var(--we-sidebar-alpha, 0.15) * 0.179)) 38%,
+      rgba(255, 255, 255, calc(var(--we-sidebar-alpha, 0.15) * 0.045))) !important;
     -webkit-backdrop-filter: blur(var(--we-sidebar-blur, 16px)) saturate(var(--we-sidebar-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01) !important;
     backdrop-filter: blur(var(--we-sidebar-blur, 16px)) saturate(var(--we-sidebar-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01) !important;
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, var(--we-glass-highlight, 0.32)),
-      inset 0 -1px 0 rgba(255, 255, 255, 0.08),
-      inset 0 0 0 0.5px rgba(255, 255, 255, 0.06);
+      inset 0 1px 0 rgba(255, 255, 255, calc(var(--we-sidebar-alpha, 0.15) * 1.43)),
+      inset 0 -1px 0 rgba(255, 255, 255, calc(var(--we-sidebar-alpha, 0.15) * 0.358)),
+      inset 0 0 0 0.5px rgba(255, 255, 255, calc(var(--we-sidebar-alpha, 0.15) * 0.268));
   }
   body[data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_pane"],
   body[data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_tabBar"],
