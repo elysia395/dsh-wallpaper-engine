@@ -90,9 +90,10 @@
 - [x] **TODO-3 多帧/视频动画**：`/scene-anim` 路由 + worker times 数组 +
       APNG 编码（`lib/apng-encode.js`，acTL/fcTL/fdAT）；粒子 starttime
       延迟语义（dust motes=50 等）已修复，t=55 粒子正确显示。
-- [ ] **TODO-4 text 对象**：TTF/OTF 解析（sfnt/cmap/glyf 轮廓 + 扫描线光栅化），
-      支持 color/pointsize/origin/scale/horizontalalign/anchor（dino_run label）。
-      字体源：全局 `assets/fonts/`。
+- [x] **TODO-4 text 对象**：`lib/font-render.js` CFF 字体引擎（sfnt→CFF→
+      CharStrings→charstring 解释器→扫描线光栅化，含 Local/Global Subrs、
+      width/hint 处理）；`renderTextObject` 集成（dino_run 计分 "00000"
+      数码管清晰渲染）。
 
 ### 中期
 - [x] **camera paths**：`_resolveCameraPose` 多 path 顺序循环 + 关键帧插值
