@@ -87,9 +87,9 @@
       差异（运行时基于 scene.json camera 正确），非渲染 bug。
 - [x] **TODO-2 `arsenal` lightmap 第 2 UV 通道**：stride 56 uv2@stride-16 提取 +
       透视校正插值 + combo 大小写兼容 + skylight ambient。
-- [ ] **TODO-3 多帧/视频动画**：worker 支持 time 数组输出帧序列（或视频编码），
-      使 `shimmering_particles`、scroll/粒子动画可评判；index.js 路由 +
-      client 播放层。
+- [x] **TODO-3 多帧/视频动画**：`/scene-anim` 路由 + worker times 数组 +
+      APNG 编码（`lib/apng-encode.js`，acTL/fcTL/fdAT）；粒子 starttime
+      延迟语义（dust motes=50 等）已修复，t=55 粒子正确显示。
 - [ ] **TODO-4 text 对象**：TTF/OTF 解析（sfnt/cmap/glyf 轮廓 + 扫描线光栅化），
       支持 color/pointsize/origin/scale/horizontalalign/anchor（dino_run label）。
       字体源：全局 `assets/fonts/`。
