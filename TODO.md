@@ -103,6 +103,16 @@
 - [x] **workshop 交叉验证**：创意工坊 17 壁纸（14 场景 + 3 视频）全部 scene.pkg
       解析+渲染；新变体 **PKGV0024**（3774904326）确认格式统一；
       2 个 Elaina 壁纸（3470764447/3660962877）背景为 MP4 视频纹理（待视频解码组件）。
+- [x] **MDL 新段逆向**（wallpaper64.exe 魔数扫描 + workshop 验证）：
+      MDL 段序列 = MDLV0023 + MDLS0004 + **MDAT0001**（骨骼附加: 骨骼名+64B 矩阵）+
+      **MDMP0001**（blend shapes, 含 "Shape NNNN" 名）+ **MDLE0002**（骨骼扩展矩阵,
+      每骨骼 64B, IK/约束相关, 与 MDLS 绑定不同）+ MDLA0006；
+      骨骼 JSON 完整键集含 IK 参数 (ik/ikrd/ikse/ikfe/ikd/ikg/ikr/ikrminl/ikrmaxl/
+      blendtime) + 物理/约束 (gd/m/tf/se/re/ti/la/rs/ts/rf/ri/ray/raz/tax/tay/lamax/
+      ltmax/rax)。
+      **MDLE 已集成解析**（b.extend）；MDAT/MDMP 静态帧默认形态正确（权重 0），
+      动画/IK 精度待后续。TEXV0004 仅引擎内部 shadowAtlas（场景 tex 全 TEXV0005，
+      409 个验证）；tex-json 为资源编译器内部产物（场景不含）。
 - [x] **camera paths**：`_resolveCameraPose` 多 path 顺序循环 + 关键帧插值
       （eye/center/up/zoom）。
 - [x] **scene scripts**：`lib/scene-scripts.js` vm 沙箱执行 {script,value}
