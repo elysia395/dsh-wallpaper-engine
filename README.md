@@ -13,7 +13,7 @@
 - **视频倍速**：0.5x – 2x 六档原生调速，即时生效、不重载；
 - **水平翻转**：镜像画面（视频 / 网页 / 上传图片均适用）；
 - **自定义壁纸**：直接上传本地 JPG / PNG / MP4 当壁纸，可选存储位置与画面适配模式；
-- **场景壁纸静态帧**（v0.3）：Scene 壁纸提取主纹理作为静态背景，不再只是"不可播放"的占位。
+- **场景壁纸完整场景帧**（v0.6）：Scene 壁纸由纯 JS 场景渲染器完整重放（对象树/纹理/粒子/shader 效果），不再是主纹理静态帧。
 - **液态玻璃设置页**（v0.3.1）：设置页升级为**一级设置页**（参照 dsh-web-ui-all 皮肤中心的设计），整页是可自定义的液态玻璃卡片 —— **配色**（6 种预设 + 自定义取色）与**玻璃透明度**（0–60%）即时生效、持久保存。
 - **整个设置窗口液态玻璃化**（v0.3.2）：一键把 **DSH 原生设置窗口整体**（对话框 + 左侧导航 + General / 模型 / 插件等**全部原生分区**）换成液态玻璃 + 自定义配色 —— 开启「设置窗口液态玻璃」开关后，窗口背景、导航选中/悬停、按钮、开关、链接等全部跟随 **配色** 与 **玻璃透明度**，关闭则恢复原生样式。
 - **玻璃调节统一**（v0.3.3–v0.3.5）：设置窗口的玻璃模糊与**对话栏共用同一套调节参数**（「玻璃」滑动条 0–60 px 同时控制设置窗口与输入栏/气泡的模糊半径，饱和度/亮度/对比度配方一致）；新增「**玻璃颜色**」—— 设置窗口玻璃的**底色色调**可自定义（6 预设 + 自定义取色，默认浅色白 / 深色深夜蓝，选定后两种主题统一使用该色），与「配色」（交互元素）分工：**配色管控件、玻璃颜色管玻璃本身**。
@@ -33,23 +33,20 @@ Wallpaper Engine 的壁纸分四种类型：
 
 | 类型 | 由谁渲染 | 能否搬到 DSH |
 |---|---|---|
-| **Scene（场景）** | Wallpaper Engine 自带的 3D 引擎 | ✅ 静态帧 — 提取主纹理（`.pkg`/`.json` 内的 .tex/JPEG），见下文 |
-| **Video（视频）** | 就是一个 `.mp4` 文件 | ✅ 能 — 在 `<video>` 标签里播放 |
-| **Web（网页）** | WE 内置的 Chromium 壳（`webwallpaper64.exe`）承载 HTML | ✅ 能 — 在 `<iframe>` 里加载 |
-| **Application（应用）** | 注入的外部窗口 | ❌ 不能 |
+| **Scene（场景）** | Wallpaper Engine 自带的 3D 引擎 | ✅ 完整场景帧 — 纯 JS 场景渲染器（对象树/纹理/粒子/shader 效果），见下文 |
 
-Scene 壁纸的 3D 场景（shader/粒子/几何）本身无法在浏览器里重放，但它的**主纹理**（通常是背景艺术图）可以提取出来作为**静态帧**背景——对摄影类、插画类场景壁纸效果接近原图。选择器里场景卡片带有「静态帧」徽标，可与动态壁纸区分。
+Scene 壁纸的 3D 场景由本插件内置的**纯 JS 场景渲染器**（`lib/scene-renderer.js`，参考 linux-wallpaperengine / repkg 逆向成果）完整重放：解析 `scene.pkg` 的对象树，渲染全部 image 层（含 waterwaves/waterripple/shake 等 shader 效果的 CPU 实现）、puppet 骨骼网格（绑定姿态）、以及粒子系统（发射器/初始化器/运算符/精灵绘制）。选择器里场景卡片带有「静态帧」徽标，可与动态壁纸区分。
 
-> **展现效果**：**大部分场景壁纸都能有较好的静态帧展现**（本机实测约 80%+ 的 Scene 壁纸能提取出接近原图的彩色主图，尤其摄影、插画、动画截图类）；**少部分无法正常展示**，包括纯 shader 粒子/程序生成类场景（没有可提取的主纹理）、使用特殊纹理格式（如 BC7）的场景、以及以视频纹理驱动的动画场景——这类会自动回退显示工坊预览图（`preview.jpg`），属预期行为，不视为缺陷。
+> **展现效果**：渲染器输出 3840×2160 完整场景帧（背景+水+后发+人物+伞+粒子），对摄影、插画、动画截图类场景壁纸效果接近原版；渲染失败（纯 shader 生成类/特殊纹理格式）时自动回退旧的主纹理提取，再失败回退工坊预览图（`preview.jpg`），属预期行为，不视为缺陷。
 
-### 场景静态帧：怎么工作的
+### 场景渲染：怎么工作的
 
-- **读取**：解析 `scene.pkg`（PKGV 容器 + LZ4 条目链）或松散 `scene.json` 目录，从 `scene.json` 的第一个 image 对象出发定位主纹理（material / instance 引用的 .tex），其余 .tex 按"艺术图可能性"评分兜底（内嵌 JPEG/PNG 最高分，mask/effect/depth/workshop 辅助纹理降权，R8/RG88 灰度格式几乎排除）。
-- **解码**：TEX 容器（TEXV0005/TEXI0001、TEXB0001-4 mipmap、LZ4 或原始数据）解码为静态图，支持 **RGBA8888 / R8 / RG88 / DXT1 / DXT3 / DXT5**，以及 **WE 内嵌 JPEG / PNG 纹理**（摄影类壁纸常见，原样直出、零解码、保真度最高）。
-- **质量门**：解码后抽样质检——灰度 >88% 或纯色（方差 <3）的帧会被拒绝并尝试下一候选；全部不通过时自动回退到项目 `preview.jpg`（灰度遮罩、深度图、纯色占位不会冒充壁纸）。
-- **视频纹理识别**：WE 的动画同步纹理（内嵌 MP4，如 `*_sync` 纹理）无法出静态帧，识别后直接回退预览图，不再输出乱码画面。
-- **缓存**：提取结果按 `<版本>_<路径>_<mtime>` 缓存到 `~/.dsh-wallpaper-engine/cache/frames/`（可用 `DSH_WE_CACHE_DIR` 覆盖），工坊更新后自动失效重建；提取管线升级会更换版本前缀使旧缓存失效重提。
-- **限制**：BC7 / RGB565 / 16 位浮点等纹理格式无法解码（回退到 preview.jpg）；静态帧≠3D 渲染，动画粒子/水波等动态效果不会出现。
+- **对象树**：解析 `scene.pkg`（PKGV 容器 + LZ4 条目链）或松散 `scene.json` 目录，按 dependencies/parent 拓扑排序全部对象（image / particle / text / sound）。
+- **image 层**：加载材质主纹理（RGBA8888 / DXT1/3/5 等），按 scene 坐标定位（origin/scale/angle 父链累积），应用 alpha/brightness。
+- **puppet 网格**：MDL（MDLV）网格 + 绑定姿态光栅化（软件光栅 + 双线性 UV 采样 + 透明合成），人物/后发等骨骼模型正确显示。
+- **shader 效果链**：waterwaves（含 DUALWAVES 双波乘积）/ waterripple / shake 按 shader 精确数学在 CPU 实现；mask 纹理支持。
+- **粒子系统**：boxrandom/sphererandom 发射器、color/size/alpha/lifetime/velocity/rotation 等初始化器、movement/alphafade/sizechange/turbulence/oscillate* 等运算符、sprite 精灵绘制。
+- **缓存**：渲染结果按 `<版本>_<路径>_<mtime>` 缓存到 `~/.dsh-wallpaper-engine/cache/frames/`（可用 `DSH_WE_CACHE_DIR` 覆盖），工坊更新后自动失效重建；首次渲染约 3-4 秒，之后秒级命中。
 
 ## 工作原理
 
@@ -60,7 +57,7 @@ Scene 壁纸的 3D 场景（shader/粒子/几何）本身无法在浏览器里�
      - `GET /wallpaper-engine/inventory` → 壁纸 JSON 列表
      - `GET /wallpaper-engine/media/<token>` → 视频 / HTML（支持 Range）
      - `GET /wallpaper-engine/preview/<token>` → 预览图
-     - `GET /wallpaper-engine/scene-frame/<token>` → 场景壁纸静态帧（提取主纹理，JPEG 直出或 PNG，磁盘缓存）
+     - `GET /wallpaper-engine/scene-frame/<token>` → 场景壁纸完整场景帧（纯 JS 渲染器输出 3840×2160，失败回退主纹理提取，PNG 磁盘缓存）
      - `POST /wallpaper-engine/upload` → 上传自定义壁纸（JPG / PNG / MP4，原始字节流）
      - `POST /wallpaper-engine/remove` → 移除已上传的壁纸
      - `POST /wallpaper-engine/upload-dir` → 更改上传目录（持久化到 `~/.dsh-wallpaper-engine/config.json`，自动迁移已有文件）

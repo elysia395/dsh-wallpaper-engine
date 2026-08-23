@@ -7,3 +7,21 @@ scene-diagnosis.tsv
 # Local ffmpeg (Windows static build, ~370MB) â€” used for transcode experiments;
 # never commit binaries (platform-specific + huge).
 /ffmpeg/
+# æ¸²æŸ“éªŒè¯äº§ç‰© (å¯å†ç”Ÿ): å¸§åºåˆ—/å¯¹æ¯”å›¾ä¸å…¥åº“
+scene-layers-out/
+# è§†è§‰å·¥å…·å·¥ä»¶
+.dsh-vision-router/
+
+# ¾É .git ±¸·İ (ÖØ½¨Ç°).git.bak-broken/
+
+# ÄæÏò²Î¿¼Ô´Âë¸±±¾ (µÚÈı·½, ±¾µØÑĞ¾¿ÓÃ, ²»Èë¿â)
+/_refs/
+# ÎŞÒıÓÃµÄ¾ÉÎÄµµÅäÍ¼
+/docs/images/
+# ¾É .git ±¸·İ
+/.git.bak-broken/
+
+
+# ÄæÏò²Î¿¼Ô´Âë (²»Ìá½»)
+/scripts/lwe-ref/
+
