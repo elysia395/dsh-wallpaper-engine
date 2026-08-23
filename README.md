@@ -285,6 +285,7 @@ dsh plugin --profile web add link:./dsh-wallpaper-engine
 | `DSH_WE_FFMPEG` | 指定 ffmpeg 可执行文件（解析链最高优先） |
 | `DSH_WE_FFMPEG_URL` | 替换自动下载源（自建镜像 / 代理加速） |
 | `DSH_WE_CACHE_DIR` | 覆盖缓存根目录（抽帧转码缓存 / 场景静态帧缓存） |
+| `DSH_WE_STEAM_ROOT` | 显式指定 Steam 根目录（逗号/分号分隔，Windows 或 `/mnt` 路径；注册表/自动探测失效时的兜底） |
 
 ## 与 dsh-better-sidebar 的兼容适配
 
