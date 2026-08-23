@@ -410,7 +410,7 @@ if (token) {
   check('scene-frame mime', /image\/(jpeg|png)/.test(ctype), ctype);
   // cache file written under the plugin data dir (env-overridden for tests)
   const cacheDir = TEST_CACHE_DIR;
-  const cached = existsSync(cacheDir) ? readdirSync(cacheDir).filter((f) => f.startsWith('sf2_' + token + '_')) : [];
+  const cached = existsSync(cacheDir) ? readdirSync(cacheDir).filter((f) => f.startsWith('sf3_' + token + '_')) : [];
   check('frame cached on disk', cached.length >= 1, cacheDir + ' [' + cached.join(', ') + ']');
 
   // Second call must hit the cache (handler still returns the payload).
