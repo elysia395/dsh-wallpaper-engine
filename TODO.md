@@ -52,6 +52,16 @@
 - **worker 非阻塞渲染**：`scene-render-worker.mjs`（600s 超时、空帧门禁、
   ArrayBuffer 零拷贝回传）。
 - **静态帧缓存**：cache key `sf10`（当前）。
+- **camera paths**：`_resolveCameraPose` 多 path 顺序循环（总时长 = duration 和），
+  path 内关键帧线性插值 eye/center/up/zoom（demon_core 4 镜头验证）。
+- **粒子确定性**：mulberry32 种子 RNG（场景路径+对象 id hash），同 time 帧可复现，
+  不同 time 驱动动画（shimmering_particles 两次渲染 diff=0）。
+- **模型欧拉角**：`mat4FromTRS` 按引擎约定 Rz(-z)·Ry(y)·Rx(-x)（lwe-CParticle.cpp:1836），
+  X/Z 取负；`resolveTransform` 保留完整 XYZ angles。
+- **generic LIGHTMAP**：第 2 UV 通道（stride 56: uv2@stride-16），透视校正插值，
+  combo 大小写兼容（引擎材质小写），lightmap 乘 light/spec（引擎 v_TexCoord.zw 语义）。
+- **skylight 环境光**：`_shadeGeneric` ambient = skylight·(n·up) mix（引擎
+  v_LightAmbientColor + skylight）。
 
 ---
 
@@ -59,13 +69,13 @@
 
 | 场景 | 状态 | 备注 |
 |---|---|---|
-| `demon_core` | ✅ 正确 | 用户确认 |
-| `neon_sunset` | ✅ 正确 | stride 48 修复后；filmgrain 已生效 |
+| `demon_core` | ✅ 正确 | camera paths 4 镜头动画 |
+| `neon_sunset` | ✅ 正确 | 欧拉角修复 + filmgrain |
 | `deep_space` | ✅ 正确 | flowimage 流光正确 |
 | `dino_run` | ✅ | scroll×5 + godrays 后处理 |
-| `dna_fragment` | ⚠️ DNA 可见，背景中区偏暗 | 未解决（见 TODO-1） |
-| `arsenal` | ⚠️ 手枪 ~0.7%，暗 | 需 lightmap 第 2 UV 通道（见 TODO-2） |
-| `shimmering_particles` | ⏸ 需动画帧评判 | 静态帧不可判 |
+| `dna_fragment` | ✅ 正确 | 背景已验证正确（preview 编辑器相机差异） |
+| `arsenal` | ✅ 手枪可见 | lightmap 第 2 UV + skylight 已实现 |
+| `shimmering_particles` | ✅ 确定性渲染 | 同 time 帧可复现，动画需多帧评判 |
 | `beach`/`retro`/`razer_bedroom`/`razer_vortex`/`eagleflag` | ✅ 渲染成功 | — |
 
 ---
@@ -73,13 +83,10 @@
 ## 三、TODO（按优先级）
 
 ### 短期（引擎一致性优先）
-- [ ] **TODO-1 修复 `dna_fragment` 背景中区亮度/色相**：preview 中区 (41,95,89) vs
-      我方 (39,75,65)。上/下边缘已精确匹配，中区差异在 DNA 螺旋区域。
-      疑点：clouds 纹理 alpha 中区值、bgfade 混合链、skybox 光照 mix。
-      用引擎 shader（cloudsbg/bgfade）逐行对比 preview 像素定位。
-- [ ] **TODO-2 `arsenal` lightmap 第 2 UV 通道**：`_shadeGeneric` 的 LIGHTMAP 需要
-      MDL 第 2 组 UV（stride 大布局）。扩展 `_parseMdlStatic` 提取 multi-UV，
-      与 OBJ/UV 数据对照验证。
+- [x] **TODO-1 `dna_fragment` 背景中区**：已定位为 preview 编辑器方形相机
+      差异（运行时基于 scene.json camera 正确），非渲染 bug。
+- [x] **TODO-2 `arsenal` lightmap 第 2 UV 通道**：stride 56 uv2@stride-16 提取 +
+      透视校正插值 + combo 大小写兼容 + skylight ambient。
 - [ ] **TODO-3 多帧/视频动画**：worker 支持 time 数组输出帧序列（或视频编码），
       使 `shimmering_particles`、scroll/粒子动画可评判；index.js 路由 +
       client 播放层。
@@ -88,7 +95,8 @@
       字体源：全局 `assets/fonts/`。
 
 ### 中期
-- [ ] **camera paths**：`camera.animation` 关键帧插值（位置/朝向/fov）。
+- [x] **camera paths**：`_resolveCameraPose` 多 path 顺序循环 + 关键帧插值
+      （eye/center/up/zoom）。
 - [ ] **scene scripts**：`{script, value}` 的 JS 运行时（userProps/update 钩子），
       支撑 razer 彩虹色、dino_run 计分等动态行为。
 - [ ] **粒子完整 renderer 扩展**：rope/trail/control points 类 emitter。
