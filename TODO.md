@@ -98,8 +98,8 @@
 ### 中期
 - [x] **camera paths**：`_resolveCameraPose` 多 path 顺序循环 + 关键帧插值
       （eye/center/up/zoom）。
-- [ ] **scene scripts**：`{script, value}` 的 JS 运行时（userProps/update 钩子），
-      支撑 razer 彩虹色、dino_run 计分等动态行为。
+- [x] **scene scripts**：`lib/scene-scripts.js` vm 沙箱执行 {script,value}
+      （update/applyUserProperties 导出 + WEColor API）；razer 彩虹色生效。
 - [ ] **粒子完整 renderer 扩展**：rope/trail/control points 类 emitter。
 - [ ] **其余 effects/ 系列**（62 个）：blur、blurradial、waterflow、watercaustics、
       swing、spin、skew、twirl、fisheye、perspective、vhs、glitter、shine、
@@ -109,7 +109,8 @@
 - [ ] **HDR/bloom 完整链**：HDR 阈值/散射/up-sampling 组合（`combine_hdr_*`）。
 - [ ] **音频响应**：`g_AudioSpectrum*` uniform（pulse 的 AUDIOPROCESSING 分支）。
 - [ ] **sound 对象**：无渲染影响（跳过即可，但需在场景图中正确归类）。
-- [ ] **视差（parallax）**：`parallaxDepth` + 相机位移。
+- [x] **视差（parallax）**：camera.parallax + mouse 驱动位移（opts.mouse），
+      `(depth+amount)·disp·referenceSize`（lwe 公式）。
 
 ### 工程
 - [ ] **缓存键管理**：渲染管线变更后 bump `lib/index.js` 的 `sf*` 前缀（当前 sf10）。
