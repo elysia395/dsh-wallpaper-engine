@@ -119,14 +119,31 @@
       （mario_walk_1 等 9 处）。
 - [x] **项目 shader（本地使用）**：swayimage（beach 棕榈摆动）、flag
       （eagleflag 旗帜，preview 匹配）、retro（HSV 霓虹）。
-- [ ] **puppet 骨骼动画**：本地/workshop 无 puppet 场景可验证（研究脚本在
-      scripts/mdla-*），需 workshop 样例。
+- [ ] **puppet 骨骼动画**：✅ workshop 样例已获得（3461168300 人物_puppet.mdl /
+      3486806915 多个 puppet 部件）— 静态帧渲染通过，动画（绑定姿态→关键帧蒙皮）
+      待实现。
+- [x] **audio bar 效果对象**：solidlayer + simple_gradient_audio_bar 等（未实现时
+      跳过，避免白色占位覆盖画面）。
 
 ### 工程
 - [ ] **缓存键管理**：渲染管线变更后 bump `lib/index.js` 的 `sf*` 前缀（当前 sf10）。
 - [x] **重构**：WE 渲染引擎提取为 `lib/we-renderer/` 独立子目录（core 主体 +
       math/canvas/textures/mdl/bloom/camera 工具模块），`lib/scene-renderer.js`
       变兼容 re-export 入口。
+- [x] **scene.pkg 容器（PKGV）**：`readPkg` 双头部支持（旧 PKGV@0 / 新 PKGV0018-0023@4）,
+      条目 = u32 nameLen + name + u32 offset + u32 size（不 4 对齐, 无 u64,
+      offset 相对 dataStart）; 4 个 workshop scene.pkg 全部解析通过。
+- [x] **JPEG 纹理解码**：`lib/we-renderer/jpeg.js` baseline SOF0/SOF1（4:4:4/4:2:2/4:2:0,
+      Huffman + 反量化 + 浮点 IDCT + YCbCr, RST restart, FF00 填充）;
+      TEX 内嵌照片纹理 → loadTexImage jpeg 分支。
+- [x] **TTF 字体**：`parseCffFont` 扩展 glyf 表路径（cmap fmt4/12 → 字符映射,
+      glyf/loca 简单+复合字形, 二次贝塞尔细分折线, hmtx advance）;
+      renderText 统一 CFF/TTF 接口。
+- [x] **solidlayer 纯色层**：`models/util/solidlayer.json` → 对象 color 填充矩形
+      （flat shader）; 带音频条类效果（未实现）时跳过避免白色占位块。
+- [ ] **workshop 场景验证**：4 个 scene.pkg 壁纸（2934788040 花 ✓ 完整渲染 /
+      3461168300 普拉娜 ✓ / 3470764447 Elaina ⚠ 主纹理为 MP4 视频 / 3486806915
+      Amiya ✓ 148 对象 puppet+文本+纯色）; 剩余小角度旋转未实现（直接绘制近似）。
 - [ ] **清理**：`scene-layers-out/`（726MB 渲染产物）仅保留少量验证图；
       `docs/images/`（47MB）、`_refs/linux-wallpaperengine`（21MB）按需裁剪。
 - [ ] **Git 修复**：`.git` 缺 HEAD/config（objects 仅 43 个，历史截断）；
