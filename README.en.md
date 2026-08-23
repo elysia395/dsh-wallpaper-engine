@@ -410,6 +410,7 @@ files** (in the directory you chose) and `~/.dsh-wallpaper-engine/config.json`
 | `DSH_WE_FFMPEG` | explicit ffmpeg executable path (highest priority in the resolution chain) |
 | `DSH_WE_FFMPEG_URL` | replaces the auto-download source (self-hosted mirror / proxy) |
 | `DSH_WE_CACHE_DIR` | overrides the cache root (transcode cache / scene-frame cache) |
+| `DSH_WE_STEAM_ROOT` | explicit Steam root(s) (comma/semicolon separated, Windows or /mnt paths; fallback when registry/auto-detection misses) |
 
 ## dsh-better-sidebar compatibility
 
