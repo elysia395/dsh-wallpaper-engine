@@ -262,6 +262,10 @@ const selection = {
   url: null,
   type: null,
   previewUrl: null,
+  // Transient: scene wallpaper animation MP4 URL (host /scene-video route).
+  // When present the scene plays as a hardware-decoded <video>; on load error
+  // it is nulled and the layer rebuilds as the extracted static frame.
+  sceneVideo: null,
   // Transient: source media metadata ({ width, height, codec, fps }) from
   // /media-info (host moov probe, cached).
   mediaInfo: null,
@@ -812,6 +816,7 @@ function applySelection(id) {
     selection.url = null;
     selection.type = null;
     selection.previewUrl = null;
+    selection.sceneVideo = null;
     selection.mediaInfo = null;
     selection.transcodeState = "idle";
     mediaInfoToken = "";
@@ -825,6 +830,7 @@ function applySelection(id) {
     selection.url = null;
     selection.type = null;
     selection.previewUrl = null;
+    selection.sceneVideo = null;
     selection.mediaInfo = null;
     selection.transcodeState = "idle";
     mediaInfoToken = "";
@@ -837,6 +843,9 @@ function applySelection(id) {
   selection.type = w.type;
   // Keep the preview around so a failed static frame can fall back to it.
   selection.previewUrl = w.preview || null;
+  // Scene wallpapers with an embedded animation (host-extracted MP4) play it
+  // as a hardware-decoded <video>; scenes without one stay on the static frame.
+  selection.sceneVideo = w.type === "scene" ? (w.sceneVideo || null) : null;
   selection.transcodeState = "idle";
   // The previous wallpaper's media info must not leak into the new one: a stale
   // fps would make the sync "源帧率 ≤ 上限" check wrongly skip the transcode
@@ -1093,14 +1102,18 @@ function weStartDraw(canvas, video, customFit) {
 }
 
 function buildMedia(sel) {
-  // Scene wallpapers render as a static frame image (extracted by the host),
-  // exactly like an uploaded image — with a preview fallback on load failure.
-  const isStill = sel.type === "image" || sel.type === "scene";
+  // Scene wallpapers: prefer the scene animation exposed as an MP4 <video>
+  // (hardware-decoded, smooth, no WebGL context). Scenes without an embedded
+  // video fall back to the extracted static frame.
+  const isSceneVideo = sel.type === "scene" && Boolean(sel.sceneVideo);
+  const isStill = sel.type === "image" || (sel.type === "scene" && !isSceneVideo);
   const media = sel.type === "video"
     ? document.createElement("video")
-    : isStill
-      ? document.createElement("img")
-      : document.createElement("iframe");
+    : isSceneVideo
+      ? document.createElement("video")
+      : isStill
+        ? document.createElement("img")
+        : document.createElement("iframe");
   // Custom uploads (id prefix "up-") get the user-chosen object-fit mode;
   // Wallpaper Engine media always keeps cover (its intended framing).
   const fitClass = sel.id && sel.id.indexOf("up-") === 0 ? " we-media--fit" : "";
@@ -1126,6 +1139,24 @@ function buildMedia(sel) {
       return [media, canvas];
     }
     media.className = "we-media" + fitClass;
+  } else if (isSceneVideo) {
+    // Scene animation as <video>: autoplay/loop/muted, poster = the extracted
+    // static frame (shown while the video loads). Hardware-decoded → smooth,
+    // no WebGL context → no freeze.
+    media.src = sel.sceneVideo;
+    media.autoplay = true;
+    media.loop = true;
+    media.muted = true;
+    media.setAttribute("playsinline", "");
+    media.poster = sel.url;   // frameUrl as poster
+    media.className = "we-media" + fitClass;
+    // No embedded video (404) or codec failure → degrade to the static frame.
+    media.addEventListener("error", () => {
+      if (selection.sceneVideo) {
+        selection.sceneVideo = null;
+        try { syncLayers(); emit(); } catch { /* ignore */ }
+      }
+    });
   } else if (isStill) {
     media.src = sel.url;
     media.alt = "";
@@ -1437,7 +1468,11 @@ function syncLayers() {
   const existing = document.getElementById(LAYER_ID);
   if (selection.url) {
     const wantKey = selection.type + "\u0000" + selection.url + "\u0000"
-      + (IS_EDGE && selection.edgeCompat !== false ? "canvas" : "video");
+      + (IS_EDGE && selection.edgeCompat !== false ? "canvas" : "video")
+      // Scene wallpapers: the media kind depends on sceneVideo (MP4 <video> vs
+      // static-frame <img>), and the 404 fallback nulls sceneVideo — the key
+      // must reflect it so the fallback rebuilds the layer.
+      + "\u0000" + (selection.sceneVideo || "");
     const gotKey = existing && existing.dataset.weKey;
     if (existing && gotKey !== wantKey) {
       releaseLayerMedia(existing);

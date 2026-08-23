@@ -37,6 +37,8 @@
     "lib/index.js",
     "lib/client.js",
     "lib/pkg-extract.js",
+    "lib/scene-manifest.js",
+    "lib/scene-player.js",
     "lib/types/index.d.ts",
     "lib/types/client.d.ts",
     "cordis.patch.yml",
@@ -72,5 +74,8 @@
     "@deepseek-ai/dsh-host-webserver": {
       "optional": true
     }
+  },
+  "dependencies": {
+    "jpeg-js": "^0.4.4"
   }
 }
