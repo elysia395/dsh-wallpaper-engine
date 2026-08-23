@@ -106,11 +106,15 @@
       shimmer、fire、foliagesway、chromaticaberration、lightshafts、localcontrast、
       motionblur、reflection、refraction、xray、colorkey、cursorripple、depthparallax、
       edgedetection、fluidsimulation、clouds、cloudmotion、nitro、iris、blend*…
-- [ ] **HDR/bloom 完整链**：HDR 阈值/散射/up-sampling 组合（`combine_hdr_*`）。
-- [ ] **音频响应**：`g_AudioSpectrum*` uniform（pulse 的 AUDIOPROCESSING 分支）。
+- [ ] **HDR/bloom 完整链**：✅ 已实现（downsample_quarter_bloom 4 角采样 +
+      saturate(scale-threshold) + 饱和度 + lin gamma + LDR/HDR 合成）。
+- [ ] **音频响应**：`g_AudioSpectrum*` uniform（pulse 的 AUDIOPROCESSING 分支）；
+      本地无场景使用，需 opts.audioSpectrum 输入。
 - [ ] **sound 对象**：无渲染影响（跳过即可，但需在场景图中正确归类）。
 - [x] **视差（parallax）**：camera.parallax + mouse 驱动位移（opts.mouse），
       `(depth+amount)·disp·referenceSize`（lwe 公式）。
+- [x] **genericimage2 spritesheet**：TEXS 帧元数据 → 时间驱动精灵帧动画
+      （mario_walk_1 等 9 处）。
 
 ### 工程
 - [ ] **缓存键管理**：渲染管线变更后 bump `lib/index.js` 的 `sf*` 前缀（当前 sf10）。
