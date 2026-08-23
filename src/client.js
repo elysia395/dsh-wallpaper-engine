@@ -3049,12 +3049,15 @@ function RopeDock() {
     return () => window.removeEventListener("resize", onResize);
   }, []);
 
-  // Claim modal ownership for the panel's WallpaperPicker copy (see note above).
+  // Claim modal ownership ONLY while the panel is open (its picker is mounted).
+  // When closed the picker is unmounted, so the settings copy must own the modal
+  // again — otherwise 选择壁纸 from settings would open nothing. Flipping the
+  // flag triggers emit() so the settings copy re-renders immediately.
   React.useEffect(() => {
-    repoPanelOwnsModal = true;
+    repoPanelOwnsModal = open;
     emit();
     return () => { repoPanelOwnsModal = false; emit(); };
-  }, []);
+  }, [open]);
 
   return React.createElement(React.Fragment, null,
     React.createElement("div", {
@@ -3093,7 +3096,11 @@ function RopeDock() {
         }, "收起"),
       ),
       React.createElement("div", { className: "we-repo-panel__body" },
-        React.createElement(WallpaperPicker, { repoPanel: true }),
+        // Lazy-mount the picker only while the drawer is open: keeping the
+        // whole WallpaperPicker (spinning vinyl etc.) mounted behind a hidden
+        // full-viewport fixed panel was the biggest new compositing footprint
+        // the rope update added — a driver of the kiosk-window white flash.
+        open ? React.createElement(WallpaperPicker, { repoPanel: true }) : null,
       ),
     ),
     React.createElement(UpdateNotice, null),
@@ -3122,16 +3129,16 @@ function UpdateNotice() {
   };
   if (!visible) return null;
   return React.createElement("div", { className: "we-update-notice", role: "alert" },
-    React.createElement("div", { className: "we-update-notice__title" }, "⚠ 两种窗口分开看：沉浸式窗口偶尔全屏白闪"),
+    React.createElement("div", { className: "we-update-notice__title" }, "✅ 已修复：沉浸式窗口偶尔全屏白闪"),
     React.createElement("div", { className: "we-update-notice__body" },
       React.createElement("p", null,
-        "「桌面快捷方式打开的沉浸式全屏窗口」里点击/输入可能全屏闪白；普通浏览器标签页不会闪白。"),
+        "v0.6.2 已修复「桌面快捷方式打开的沉浸式全屏窗口」里，点击/输入可能整屏白闪的问题。"),
       React.createElement("p", null,
-        "插件已自动区分：在沉浸式窗口里降低了合成（去掉模糊、保留半透明玻璃）；普通标签页保持完整毛玻璃。"),
+        "原因：该更新新增的浮动仓库面板/拉绳等在 kiosk/全屏窗口 + 硬件加速下，让 Chromium 合成器偶发把背景画白。"),
       React.createElement("p", null,
-        "若沉浸式窗口仍闪白：仅在该窗口的浏览器里关闭「使用硬件加速」再重启（它软件渲染也很顺滑）。"),
+        "修复：插件现在会在仓库面板关闭时不再挂载其内容（懒加载），大幅减少不必要的合成层。普通浏览器标签页不受影响，保持原有毛玻璃效果。"),
       React.createElement("p", null,
-        "注意：硬件加速是「每个浏览器实例」的全局设置。若你要同时用普通标签页，请保持其「使用硬件加速开启」以免变卡——可给沉浸式窗口用独立配置，或直接用普通标签页（无闪白、硬件加速正常开）。"),
+        "若在极少数环境下仍遇到闪白，可在该窗口的浏览器里关闭「使用硬件加速」作为兜底（该窗口软件渲染也顺滑）。"),
       React.createElement("p", { className: "we-update-notice__hint" },
         "本提示每个新版本只出现一次，点下方按钮即可关闭。"),
     ),
@@ -3265,22 +3272,6 @@ const CSS = `
      glass. Extra always-on layers (transform/will-change/contain) were removed —
      they did not stop the white flash and instead added compositing layers. The
      flash was traced to the rope's permanent CSS filter, which is now gone. */
-
-  /* Immersive app-window fallback: a desktop-shortcut standalone/fullscreen
-     window composites on a different path than a tab and can flash the WHOLE
-     window white when backdrop-filter re-rasterises over the wallpaper on
-     interaction. Detect that mode (body[data-we-appwindow]) and drop the frosted
-     blur there — keeping the translucent tint + specular sheen (still reads as
-     glass) but with no backdrop sampling to glitch. Normal tabs keep the blur. */
-  body[data-we-appwindow][data-we-wallpaper] [data-composer-card],
-  body[data-we-appwindow][data-we-wallpaper] [class*="_bubble"],
-  body[data-we-appwindow] .we-repo-panel--open,
-  body[data-we-appwindow] .we-picker__modal--panel,
-  body[data-we-appwindow][data-we-glass-window] [data-slot="settings.section"],
-  body[data-we-appwindow][data-we-sidebar-glass] [data-dsh-better-sidebar] {
-    -webkit-backdrop-filter: none !important;
-    backdrop-filter: none !important;
-  }
 
   /* ── dsh-better-sidebar glass ──────────────────────────────────────────────
      The sidebar shell is portalled onto <body> under a stable host attribute

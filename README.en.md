@@ -6,18 +6,11 @@
 
 A DSH bundle that turns your **Wallpaper Engine** wallpapers into the **background of the DSH web GUI** (`dsh web`).
 
-> ⚠️ **Troubleshooting · occasional full-screen white flash in immersive windows**
-> **Treat the two window types separately:**
-> - **Immersive fullscreen window** (desktop shortcut → standalone / kiosk): the UI may flash the **whole window white** when you click the dialog or type. This is a Chromium compositor bug in standalone/fullscreen windows when **hardware acceleration** is enabled, interacting with the animated wallpaper.
-> - **Normal browser tabs**: they do **not** flash, and they **need hardware acceleration ON** to stay smooth.
->
-> The plugin **already detects** which window it is in: in the immersive window it **reduces compositing** (drops the frosted blur, keeps translucent glass); normal tabs keep the full frosted glass.
->
-> If the immersive window still flashes after that downgrade: in **that window's own browser configuration**, turn OFF “Use hardware acceleration when available” and restart — the immersive window stays smooth even with hardware acceleration off.
->
-> ⚠️ **Note**: hardware acceleration is a **global setting per browser instance**. If you also use normal browser tabs, **keep “Use hardware acceleration when available” ON for them** so they don't lag (normal tabs never flash). If both share one instance, either give the immersive window its own configuration (separate `--user-data-dir`), or **just use normal tabs** (no flash, hardware acceleration on, best performance).
->
-> The plugin shows a one-time notice (once per version) about this issue and its fix.
+> ✅ **Fixed: occasional full-screen white flash in immersive windows** (v0.6.2)
+> Older builds could flash the **whole window white** when you clicked the dialog or typed in an **immersive fullscreen window** opened via a **desktop shortcut** (standalone / kiosk) — the floating repo-panel / rope compositing layers added by that update caused Chromium to occasionally paint the backdrop white under **hardware acceleration**.
+> **Fixed in v0.6.2**: the plugin now **lazy-mounts the repo panel content** (keeps it out of the DOM while closed), which removes a lot of unnecessary compositing layers; normal browser tabs are unaffected and keep the full frosted-glass look.
+> If the flash still occurs in a rare environment, turning OFF “Use hardware acceleration when available” for that window's own browser config is a solid fallback (the immersive window stays smooth even with it off — keep it ON for normal tabs so they don't lag).
+> The plugin shows a one-time notice (once per version) about this fix.
 
 It discovers the Wallpaper Engine install on your machine, lists its wallpapers, and renders them behind the DSH chat interface with an iOS-style **liquid glass** effect: Video (`.mp4`) plays live, Web/HTML loads in an iframe, and **Scene wallpapers appear as extracted static frames**. Since v0.2 it also adds:
 
