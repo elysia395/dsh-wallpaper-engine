@@ -100,11 +100,13 @@
       （eye/center/up/zoom）。
 - [x] **scene scripts**：`lib/scene-scripts.js` vm 沙箱执行 {script,value}
       （update/applyUserProperties 导出 + WEColor API）；razer 彩虹色生效。
+- [x] **generic REFLECTION combo**：`_rt_` 渲染目标（画布快照）+
+      screenUV + normal.xy*0.01 采样 ×0.35（planks 4 纹理验证）。
 - [ ] **粒子完整 renderer 扩展**：rope/trail/control points 类 emitter。
 - [ ] **其余 effects/ 系列**（62 个）：blur、blurradial、waterflow、watercaustics、
       swing、spin、skew、twirl、fisheye、perspective、vhs、glitter、shine、
       shimmer、fire、foliagesway、chromaticaberration、lightshafts、localcontrast、
-      motionblur、reflection、refraction、xray、colorkey、cursorripple、depthparallax、
+      motionblur、refraction、xray、colorkey、cursorripple、depthparallax、
       edgedetection、fluidsimulation、clouds、cloudmotion、nitro、iris、blend*…
 - [ ] **HDR/bloom 完整链**：✅ 已实现（downsample_quarter_bloom 4 角采样 +
       saturate(scale-threshold) + 饱和度 + lin gamma + LDR/HDR 合成）。
