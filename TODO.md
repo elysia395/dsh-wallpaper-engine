@@ -115,6 +115,10 @@
       `(depth+amount)·disp·referenceSize`（lwe 公式）。
 - [x] **genericimage2 spritesheet**：TEXS 帧元数据 → 时间驱动精灵帧动画
       （mario_walk_1 等 9 处）。
+- [x] **项目 shader（本地使用）**：swayimage（beach 棕榈摆动）、flag
+      （eagleflag 旗帜，preview 匹配）、retro（HSV 霓虹）。
+- [ ] **puppet 骨骼动画**：本地/workshop 无 puppet 场景可验证（研究脚本在
+      scripts/mdla-*），需 workshop 样例。
 
 ### 工程
 - [ ] **缓存键管理**：渲染管线变更后 bump `lib/index.js` 的 `sf*` 前缀（当前 sf10）。
