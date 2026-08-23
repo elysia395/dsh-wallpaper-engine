@@ -67,7 +67,9 @@ const fetch = () => Promise.resolve({
       { id: "p1", name: "Test playlist", order: "sequence", wallpaperIds: ["a", "b", "c"], total: 3, portableCount: 2 },
     ],
     wallpapers: [
-      // 30 synthetic videos force pagination (33 playable cards → 2 pages at 24/page).
+      { id: "img", title: "Image C", type: "image", playable: true, media: "/wallpaper-engine/media/image", preview: null, contentrating: "Everyone" },
+      // 30 synthetic videos plus one image force pagination (34 visible cards
+      // → 2 pages at 24/page).
       // All carry contentrating "Everyone" so they stay visible under the
       // default Everyone filter.
       ...Array.from({ length: 30 }, (_, i) => ({
@@ -201,6 +203,24 @@ setTimeout(() => {
       console.log('玻璃 slider max (expect 60):', sliderMax);
       console.log('whole-window glass master switch present:', treeText.includes('设置窗口液态玻璃'));
       console.log('window glass hint present:', treeText.includes('整个设置窗口'));
+
+      // Regression: a selected mac loose video has no sidecar preview. The
+      // current vinyl must therefore render the wallpaper's media URL as a
+      // video fallback, not an empty placeholder.
+      const vinyls = [];
+      (function walkVinyl(node) {
+        if (Array.isArray(node)) { node.forEach(walkVinyl); return; }
+        if (!node || typeof node !== 'object') return;
+        const cls = typeof node.props?.className === 'string' ? node.props.className : '';
+        if (cls.includes('we-vinyl')) vinyls.push(node);
+        if (Array.isArray(node.children)) node.children.forEach(walkVinyl);
+      })(tree);
+      const currentVinylVideo = vinyls[0] && vinyls[0].children?.[0]?.children?.find((node) => node && node.type === 'video');
+      console.log('selected previewless video has vinyl video fallback:', !!currentVinylVideo);
+      if (!currentVinylVideo || currentVinylVideo.props?.src !== '/wallpaper-engine/media/xyz') {
+        throw new Error('vinyl video fallback regression: expected selected wallpaper media URL');
+      }
+
       // The thumbnail grid lives inside the picker MODAL now (settings page
       // shows only the summary + "选择壁纸" trigger). Open the modal by
       // invoking the trigger button's onClick, re-render, then count cards.
@@ -216,6 +236,30 @@ setTimeout(() => {
         try { openBtn[0].props.onClick(); } catch (e) { console.log('open modal onClick threw:', e && e.message); }
       }
       try { tree = pickerRenders[0](); } catch (e) { renderError = e && e.message; }
+      const imageCard = [];
+      (function findImageCard(node) {
+        if (Array.isArray(node)) { node.forEach(findImageCard); return; }
+        if (!node || typeof node !== 'object') return;
+        const cls = typeof node.props?.className === 'string' ? node.props.className : '';
+        if ((cls === 'we-picker__card' || cls === 'we-picker__card we-picker__card--selected') && Array.isArray(node.children) && node.children.some((child) => child && Array.isArray(child.children) && child.children.includes('Image C'))) imageCard.push(node);
+        if (Array.isArray(node.children)) node.children.forEach(findImageCard);
+      })(tree);
+      if (imageCard[0] && typeof imageCard[0].props?.onClick === 'function') imageCard[0].props.onClick();
+      try { tree = pickerRenders[0](); } catch (e) { renderError = e && e.message; }
+      const imageVinyls = [];
+      (function walkImageVinyl(node) {
+        if (Array.isArray(node)) { node.forEach(walkImageVinyl); return; }
+        if (!node || typeof node !== 'object') return;
+        const cls = typeof node.props?.className === 'string' ? node.props.className : '';
+        if (cls.includes('we-vinyl')) imageVinyls.push(node);
+        if (Array.isArray(node.children)) node.children.forEach(walkImageVinyl);
+      })(tree);
+      const currentVinylImage = imageVinyls[0] && imageVinyls[0].children?.[0]?.children?.find((node) => node && node.type === 'img');
+      console.log('selected previewless image has vinyl image fallback:', !!currentVinylImage);
+      if (!currentVinylImage || currentVinylImage.props?.src !== '/wallpaper-engine/media/image') {
+        throw new Error('vinyl image fallback regression: expected selected wallpaper media URL');
+      }
+
       const collectCards = (root) => {
         const cards = [];
         (function walk2(node) {
@@ -252,7 +296,7 @@ setTimeout(() => {
       clickPager(tree, '下一页 ›');
       try { tree = pickerRenders[0](); } catch (e) { renderError = e && e.message; }
       cards = collectCards(tree);
-      console.log('page 2 cards (expect 10: close + 9):', cards.length);
+      console.log('page 2 cards (expect 11: close + 10):', cards.length);
       const page2Text = JSON.stringify(cards);
       console.log('page 2 shows last wallpaper (Wall 29):', page2Text.includes('Wall 29'));
       console.log('page 2 no longer shows page-1 item (Wall 0):', !page2Text.includes('Wall 0'));
