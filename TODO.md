@@ -119,9 +119,14 @@
       （mario_walk_1 等 9 处）。
 - [x] **项目 shader（本地使用）**：swayimage（beach 棕榈摆动）、flag
       （eagleflag 旗帜，preview 匹配）、retro（HSV 霓虹）。
-- [ ] **puppet 骨骼动画**：✅ workshop 样例已获得（3461168300 人物_puppet.mdl /
-      3486806915 多个 puppet 部件）— 静态帧渲染通过，动画（绑定姿态→关键帧蒙皮）
-      待实现。
+- [ ] **puppet 骨骼动画**：✅ 蒙皮基础已实现 — MDLV 顶点 (blendindices@40+blendweight@56) +
+      MDLS 骨骼 (9B头+父索引+4x4局部矩阵) + MDLA 动画 (元数据 [u32时长][u32 0][name\0]
+      [mode\0][00 00][f0 41][u16帧数][u16 0][u32 0][u32骨骼数][u32 0][u32段字节] +
+      骨骼段×N, 段块 36B = 3骨骼 pos.xy 交错布局) + _skinPuppet 时间驱动蒙皮
+      (t→30fps帧→层级世界→animWorld×bindInv→顶点 Σw×g_Bones)；
+      验证 t=0=绑定姿态 ✓, t 变化平移动画 (眉毛眨眼) ✓。
+      **待解明**: 骨骼 rot.z 动画布局 — 头 bone1 段 col7 平滑 -0.2rad 确认为 rot.z,
+      但 bone0 段 col6=1 为占位 (非旋转), 段内字段交错布局需更多样例/引擎参考。
 - [x] **audio bar 效果对象**：solidlayer + simple_gradient_audio_bar 等（未实现时
       跳过，避免白色占位覆盖画面）。
 
