@@ -294,6 +294,8 @@ const selection = {
   hiddenOpen: false,
   pickerOpen: false,
   modalView: "normal",
+  // Transient: picker-modal title search (not persisted).
+  search: "",
   // Custom-upload UI state (transient): in-flight flag + last error message.
   uploading: false,
   uploadError: "",
@@ -354,46 +356,69 @@ function serializeSelection() {
 
 // Host persistence: debounced PUT to /wallpaper-engine/settings (same origin;
 // the host writes ~/.dsh-wallpaper-engine/config.json — port-independent).
-// localStorage stays a synchronous cache + migration source + rollback, never
-// the source of truth. Timers go through window.* (guarded) like the rotation
-// timer below, so headless verify environments without a timer facility fall
-// back to an immediate write.
+// localStorage stays a synchronous-read cache + migration source + rollback,
+// never the source of truth — and its WRITE is debounced together with the
+// PUT: slider drags used to trigger a full JSON.stringify + synchronous
+// localStorage write on every input tick (dozens per drag). Timers go through
+// window.* (guarded) like the rotation timer below, so headless verify
+// environments without a timer facility fall back to an immediate write.
 let persistTimer = null;
-function schedulePersist() {
-  if (persistTimer) return;
-  if (typeof window === "undefined" || typeof window.setTimeout !== "function") {
-    pushPersisted();
-    return;
-  }
-  persistTimer = window.setTimeout(() => { persistTimer = null; pushPersisted(); }, 200);
+// Dirty flag: a failed/非-2xx PUT must not be silently dropped — the host file
+// would go stale and the NEXT load (host = source of truth) would roll the
+// user's settings back. Retried on the next persistSelection or when the page
+// becomes visible again.
+let persistDirty = false;
+// Write counter: loadPersisted() snapshots it before its GET and skips the
+// host→selection merge when the user edited settings while the GET was in
+// flight (the user's pending PUT is newer than the host's answer).
+let persistWrites = 0;
+function writeLocalCache() {
+  try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(serializeSelection())); } catch { /* ignore */ }
 }
-
 async function pushPersisted() {
   try {
-    await fetch(SETTINGS_URL, {
+    const res = await fetch(SETTINGS_URL, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify(serializeSelection()),
       keepalive: true, // let a pending flush survive pagehide/close
     });
-  } catch { /* host unreachable: the localStorage cache remains the fallback */ }
+    persistDirty = !res.ok;
+  } catch {
+    // Host unreachable: the localStorage cache remains the fallback.
+    persistDirty = true;
+  }
+}
+function flushPersist() {
+  persistTimer = null;
+  writeLocalCache();
+  pushPersisted();
+}
+function schedulePersist() {
+  if (persistTimer) return;
+  if (typeof window === "undefined" || typeof window.setTimeout !== "function") {
+    flushPersist();
+    return;
+  }
+  persistTimer = window.setTimeout(flushPersist, 200);
 }
 
-// Flush a pending write when the page goes away (tab close / navigate).
+// Flush a pending write when the page goes away (tab close / navigate), and
+// retry a failed PUT when the page becomes visible again.
 if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
   window.addEventListener("pagehide", () => {
     if (persistTimer && typeof window.clearTimeout === "function") {
       window.clearTimeout(persistTimer);
-      persistTimer = null;
-      pushPersisted();
+      flushPersist();
     }
+  });
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden && persistDirty && !persistTimer) schedulePersist();
   });
 }
 
 function persistSelection() {
-  try {
-    localStorage.setItem(SETTINGS_KEY, JSON.stringify(serializeSelection()));
-  } catch { /* ignore */ }
+  persistWrites++;
   schedulePersist();
 }
 
@@ -406,6 +431,10 @@ function persistSelection() {
 async function loadPersisted() {
   let hostSettings = null;
   let hostOk = false;
+  // Race guard: if the user edits settings while this GET is in flight, the
+  // response is STALE (their pending PUT is newer) and must not overwrite the
+  // live selection.
+  const writesAtStart = persistWrites;
   try {
     const res = await fetch(SETTINGS_URL, { cache: "no-store" });
     if (res.ok) {
@@ -417,32 +446,48 @@ async function loadPersisted() {
     }
   } catch { /* host unreachable */ }
 
+  const stale = persistWrites !== writesAtStart;
   if (hostOk && hostSettings && typeof hostSettings === "object") {
-    // Host is the truth: apply it and refresh the local cache copy.
-    Object.assign(selection, sanitizeSettings(hostSettings));
-    try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(serializeSelection())); } catch { /* ignore */ }
+    // Host is the truth: apply it and refresh the local cache copy — unless the
+    // user edited settings during the fetch (their write wins).
+    if (!stale) {
+      Object.assign(selection, sanitizeSettings(hostSettings));
+      writeLocalCache();
+    }
   } else if (hostOk) {
     // Host has nothing saved yet: migrate any existing localStorage data once.
+    // JSON.parse MUST be guarded here: a corrupted localStorage payload used to
+    // reject loadPersisted(), which broke the loadPersisted().then(loadInventory)
+    // boot chain and left the picker stuck on "扫描 Wallpaper Engine…" forever.
     const local = localStorage.getItem(SETTINGS_KEY);
-    Object.assign(selection, local ? sanitizeSettings(JSON.parse(local)) : { id: "", ...DEFAULTS });
-    if (local) pushPersisted();
+    let parsedLocal = null;
+    try { parsedLocal = local ? JSON.parse(local) : null; } catch { /* corrupted cache: treat as absent */ }
+    if (!stale) Object.assign(selection, parsedLocal ? sanitizeSettings(parsedLocal) : { id: "", ...DEFAULTS });
+    if (parsedLocal) pushPersisted();
   } else {
     // Host unreachable (route missing / static load): localStorage fallback.
-    Object.assign(selection, readPersisted());
+    if (!stale) Object.assign(selection, readPersisted());
   }
 
   applyEffects();
   emit();
 }
 
+// Concurrency guard: 刷新 / 上传完成 / 移除 / 改目录 all call loadInventory(),
+// and two overlapping requests used to resolve in arbitrary order — an older,
+// slower response could clobber a newer inventory. The last caller wins;
+// superseded requests drop their result entirely.
+let inventorySeq = 0;
 async function loadInventory() {
+  const seq = ++inventorySeq;
   selection.loading = true;
   emit();
+  let next;
   try {
     const res = await fetch(INVENTORY_URL, { cache: "no-store" });
     if (!res.ok) throw new Error("inventory HTTP " + res.status);
     const data = await res.json();
-    selection.inventory = {
+    next = {
       installDir: data.installDir,
       uploadDir: data.uploadDir || null,
       wallpapers: data.wallpapers || [],
@@ -452,7 +497,7 @@ async function loadInventory() {
       error: null,
     };
   } catch (err) {
-    selection.inventory = {
+    next = {
       installDir: null,
       uploadDir: null,
       wallpapers: [],
@@ -462,12 +507,21 @@ async function loadInventory() {
       error: String(err && err.message ? err.message : err),
     };
   }
+  if (seq !== inventorySeq) return; // superseded by a newer loadInventory()
+  selection.inventory = next;
   selection.loading = false;
   selection.loaded = true;
-  // Fresh inventory → reset pagination (the list changed under the user).
-  selection.page = 0;
-  selection.hiddenPage = 0;
-  selection.editorPage = 0;
+  // Fresh inventory → reset pagination, but ONLY when the wallpaper id set
+  // actually changed: an upload/remove/refresh that keeps the same list must
+  // not kick the user back to page 1.
+  const prevIds = selection._invIds || "";
+  const nextIds = next.wallpapers.map((w) => w.id).join("\u0001");
+  if (prevIds !== nextIds) {
+    selection._invIds = nextIds;
+    selection.page = 0;
+    selection.hiddenPage = 0;
+    selection.editorPage = 0;
+  }
 
   // Rotation groups: validate the active one and seed a first group from a
   // playable Wallpaper Engine playlist when the user has none yet (so the
@@ -582,9 +636,24 @@ function activeRotationGroup() {
   return selection.rotationGroups.find((g) => g.id === selection.rotationGroupId) || null;
 }
 
+// byId lookup cache: groupWallpapers() is called from render, revalidate,
+// rotation scheduling and firstUsableGroup() — rebuilding a full Map per call
+// was O(N) × O(calls) on every emit. Keyed by the inventory ARRAY REFERENCE,
+// so a fresh loadInventory() (which replaces the array) invalidates it.
+let byIdCache = null;
+let byIdRef = null;
+function wallpaperById() {
+  const list = selection.inventory.wallpapers;
+  if (byIdRef !== list) {
+    byIdRef = list;
+    byIdCache = new Map(list.map((w) => [w.id, w]));
+  }
+  return byIdCache;
+}
+
 function groupWallpapers(group) {
   if (!group || !Array.isArray(group.wallpaperIds)) return [];
-  const byId = new Map(selection.inventory.wallpapers.map((w) => [w.id, w]));
+  const byId = wallpaperById();
   return group.wallpaperIds
     .map((id) => byId.get(id))
     .filter((w) => w && isRotatableWallpaper(w) && !isHiddenWallpaper(w.id));
@@ -654,6 +723,10 @@ function syncRotationTimer() {
     if (!selection.rotationEnabled || !selection.id) return;
     const next = nextRotationWallpaper();
     if (next) applySelection(next.id);
+    // 静默停摆修复：候选在 armed 期间被隐藏到不足 2 个时 next 为 null，
+    // 不重建定时器轮播就无声停止。re-arm（候选仍 <2 时 syncRotationTimer
+    // 自身不会 arm；恢复 ≥2 由 hide/restore 里的补 arm 接管）。
+    else syncRotationTimer();
   }, minutes * 60 * 1000);
 }
 
@@ -793,6 +866,7 @@ function hideWallpapers(ids) {
   if (!added.length) return;
   for (const id of added) selection.hiddenIds.push(id);
   persistSelection();
+  syncRotationTimer(); // 候选可能跌破 2 个 → 停表；恢复时重新 arm
   emit();
 }
 
@@ -803,6 +877,7 @@ function restoreWallpapers(ids) {
   selection.hiddenIds = selection.hiddenIds.filter((id) => !set.has(id));
   if (selection.hiddenIds.length !== before) {
     persistSelection();
+    syncRotationTimer(); // 候选恢复到 ≥2 → 重新 arm 轮播
     emit();
   }
 }
@@ -943,6 +1018,15 @@ function weStopDraw() {
   if (weResizeObs) { weResizeObs.disconnect(); weResizeObs = null; }
   weDrawCtx = null;
 }
+// Detach is NOT enough: a playing <video> is a GC root and keeps decoding in
+// the background after removal — every rotation switch used to accumulate one
+// more background decoder. Pause + clear src BEFORE dropping the node.
+function releaseLayerMedia(node) {
+  const v = node && node.querySelector("video");
+  if (v) {
+    try { v.pause(); v.removeAttribute("src"); v.load(); } catch { /* ignore */ }
+  }
+}
 function weDrawFrame() {
   const ctx = weDrawCtx;
   if (!ctx || !ctx.canvas.isConnected) return;
@@ -979,8 +1063,12 @@ function weDrawTick() {
   const ctx = weDrawCtx;
   if (!ctx || !ctx.canvas.isConnected) return;
   const v = ctx.video;
-  if (v.requestVideoFrameCallback) weVfHandle = v.requestVideoFrameCallback(weDrawTick);
-  else weRafId = requestAnimationFrame(weDrawTick);
+  if (v.requestVideoFrameCallback) { weVfHandle = v.requestVideoFrameCallback(weDrawTick); return; }
+  // rAF fallback: a PAUSED wallpaper must not redraw the same frame 60–120
+  // times per second. Stop the loop while paused; a one-shot play listener
+  // resumes it (identity-guarded so a stale listener can't re-arm after stop).
+  if (!v.paused && !v.ended) { weRafId = requestAnimationFrame(weDrawTick); return; }
+  v.addEventListener("play", () => { if (weDrawCtx === ctx) weDrawTick(); }, { once: true });
 }
 function weStartDraw(canvas, video, customFit) {
   weStopDraw();
@@ -1054,6 +1142,11 @@ function buildMedia(sel) {
     media.src = sel.url;
     media.setAttribute("frameborder", "0");
     media.setAttribute("scrolling", "no");
+    // 安全隔离：WE web 壁纸是 workshop 第三方 HTML/JS，而 media 路由与宿主
+    // 同源 —— 不 sandbox 的话壁纸脚本可以 DSH 宿主 origin 身份调用宿主全部
+    // API。allow-scripts 保留动态壁纸能力，但拿到 opaque origin（无
+    // allow-same-origin），无法再冒用宿主身份。
+    media.setAttribute("sandbox", "allow-scripts");
     media.className = "we-media we-iframe";
   }
   return media;
@@ -1090,12 +1183,18 @@ function isEffectivelyPlaying() {
 // one-time transcode, swap to the capped-fps file when it is ready — normal
 // speed + halved decode. 倍速 (playbackRate) keeps working on top of either.
 let mediaInfoToken = "";
+// In-flight marker: while the /media-info probe for this token is pending,
+// maybeUpgradeToTranscoded must NOT fire a transcode request — the probe may
+// come back with fps ≤ cap (no transcode needed). Without this guard every
+// wallpaper selection used to trigger a throwaway host-side ffmpeg run.
+let mediaInfoInFlight = "";
 async function refreshMediaInfo(force) {
   const token = selection.type === "video" && selection.url
     ? selection.url.split("/").pop()
     : null;
   if (!token || (!force && token === mediaInfoToken)) return;
   mediaInfoToken = token;
+  mediaInfoInFlight = token;
   try {
     const res = await fetch("/wallpaper-engine/media-info/" + encodeURIComponent(token), { cache: "no-store" });
     const data = await res.json().catch(() => ({}));
@@ -1112,11 +1211,14 @@ async function refreshMediaInfo(force) {
         if (video && video.dataset.weTranscoded) revertTranscodedVideo(video);
         selection.transcodeState = "skipped";
       }
-      emit();
     }
   } catch {
     if (mediaInfoToken === token) selection.mediaInfo = null;
   }
+  if (mediaInfoInFlight === token) mediaInfoInFlight = "";
+  // Settle → single re-emit so a deferred transcode decision (see
+  // mediaInfoInFlight) runs against the final mediaInfo, success or failure.
+  if (mediaInfoToken === token) emit();
 }
 
 let upgradeAbort = null;
@@ -1169,6 +1271,10 @@ function maybeUpgradeToTranscoded(video, token) {
     selection.transcodeState = "skipped";
     return;
   }
+  // mediaInfo probe still in flight for THIS token: defer the decision — the
+  // probe may come back with fps ≤ cap (transcode unnecessary). The settle
+  // emit in refreshMediaInfo re-runs syncLayers and brings us back here.
+  if (!mi && mediaInfoInFlight === token) return;
   if (video.dataset.weTranscoded === String(cap)) return; // already on this cap
   // Only an in-flight request for THIS cap counts as "working on it": a request
   // for a different cap would complete and swap in a stale-fps re-encode while
@@ -1256,7 +1362,18 @@ function maybeUpgradeToTranscoded(video, token) {
         video.dataset.weTranscoded = String(cap);
         const t = video.currentTime;
         const wasPlaying = isEffectivelyPlaying();
+        // 兜底超时：转码文件损坏 / 元数据异常时 loadedmetadata 可能永远不来，
+        // UI 会永停「转码中」——15s 未就绪按失败回退原片。定时器走 window.*
+        //（headless 验证环境无计时器设施时直接跳过超时兜底）。
+        let metaTimer = null;
+        const clearMetaTimer = () => {
+          if (metaTimer && typeof window !== "undefined" && typeof window.clearTimeout === "function") {
+            window.clearTimeout(metaTimer);
+          }
+          metaTimer = null;
+        };
         const onErr = () => {
+          clearMetaTimer();
           if (video.dataset.weTranscoded) {
             delete video.dataset.weTranscoded;
             try { video.src = selection.url; video.load(); } catch { /* ignore */ }
@@ -1268,13 +1385,23 @@ function maybeUpgradeToTranscoded(video, token) {
         video.src = transcodedUrl;
         video.load();
         const onMeta = () => {
+          clearMetaTimer();
           try { if (t > 0 && t < video.duration) video.currentTime = t; } catch { /* ignore */ }
           if (wasPlaying) { try { video.play().catch(() => {}); } catch { /* ignore */ } }
+          // Edge canvas：转码 swap 复用同一 <video>，weLoadedOnce 已置位，
+          // 暂停态下补一帧避免画布停在旧画面。
+          weDrawFrame();
           selection.transcodeState = "ready";
           selection.transcodeProgress = null;
           emit(); // syncLayers re-arms the Edge canvas + re-applies rate/play
         };
         video.addEventListener("loadedmetadata", onMeta, { once: true });
+        if (typeof window !== "undefined" && typeof window.setTimeout === "function") {
+          metaTimer = window.setTimeout(() => {
+            video.removeEventListener("loadedmetadata", onMeta);
+            onErr();
+          }, 15000);
+        }
       }
     })
     .catch(() => {
@@ -1313,6 +1440,7 @@ function syncLayers() {
       + (IS_EDGE && selection.edgeCompat !== false ? "canvas" : "video");
     const gotKey = existing && existing.dataset.weKey;
     if (existing && gotKey !== wantKey) {
+      releaseLayerMedia(existing);
       existing.remove();
       // Release the previous draw loop: without this, switching from an Edge
       // canvas video to a non-canvas wallpaper (image/web/scene, or Edge 兼容
@@ -1335,7 +1463,15 @@ function syncLayers() {
     const canvas = node.querySelector("canvas.we-media--canvas");
     const video = node.querySelector("video");
     // Edge-only: drive the canvas mirror from the hidden decoder video.
-    if (canvas && video) weStartDraw(canvas, video, canvas.className.indexOf("we-media--fit") !== -1);
+    // Incremental guard: every emit (including the 500ms transcode poll) used
+    // to run a FULL weStopDraw + weStartDraw — rebuilding the ResizeObserver,
+    // re-registering rVFC and forcing a getComputedStyle read each time.
+    // Same canvas + same video → the draw loop is already running; skip it.
+    // (自定义壁纸的 objectFit 变更由「适配」按钮直接写 weDrawCtx.fit。)
+    if (canvas && video) {
+      const sameDraw = weDrawCtx && weDrawCtx.canvas === canvas && weDrawCtx.video === video;
+      if (!sameDraw) weStartDraw(canvas, video, canvas.className.indexOf("we-media--fit") !== -1);
+    }
     if (video) {
       if (isEffectivelyPlaying()) { try { video.play().catch(() => {}); } catch {} }
       else video.pause();
@@ -1350,6 +1486,7 @@ function syncLayers() {
     }
   } else if (existing) {
     weStopDraw();
+    releaseLayerMedia(existing);
     existing.remove();
   }
 
@@ -1370,6 +1507,11 @@ function syncLayers() {
 }
 
 // ── Effect application: push the knobs into CSS variables ───────────────────
+// Scrim immediacy tracking: the inline-write + forced reflow below only runs
+// when the scrim value ACTUALLY changed. It used to run unconditionally on
+// every emit — i.e. twice per slider tick (handler + subscribed applyEffects)
+// and on every 500ms transcode poll — a forced synchronous layout storm.
+let lastScrimCss = "";
 function applyEffects() {
   const s = document.body.style;
   s.setProperty("--we-scrim-color", "rgba(0,0,0," + selection.scrim + ")");
@@ -1433,15 +1575,19 @@ function applyEffects() {
   // Scrim immediacy: some composited/kiosk environments do not repaint a
   // z-index:-1 layer promptly when only an inherited CSS variable changes.
   // Write the resolved color DIRECTLY onto the scrim element's inline style and
-  // then force a synchronous layout, so the change is visible on this frame no
-  // matter how the browser layers the page.
-  const scrim = document.getElementById(SCRIM_ID);
-  if (scrim) {
-    scrim.style.background = "rgba(0,0,0," + selection.scrim + ")";
-  }
-  // Force reflow so a stalled compositor picks up the new value immediately.
-  if (document.body && document.body.offsetHeight !== undefined) {
-    void document.body.offsetHeight;
+  // then force a synchronous layout — but ONLY when the value changed (see
+  // lastScrimCss above).
+  const scrimCss = "rgba(0,0,0," + selection.scrim + ")";
+  if (scrimCss !== lastScrimCss) {
+    lastScrimCss = scrimCss;
+    const scrim = document.getElementById(SCRIM_ID);
+    if (scrim) {
+      scrim.style.background = scrimCss;
+    }
+    // Force reflow so a stalled compositor picks up the new value immediately.
+    if (document.body) {
+      void document.body.offsetHeight;
+    }
   }
 }
 
@@ -1467,20 +1613,27 @@ function clearEffects() {
   document.body.removeAttribute("data-we-sidebar-glass");
   const scrim = document.getElementById(SCRIM_ID);
   if (scrim) scrim.style.background = "";
+  lastScrimCss = "";
 }
 
 // ── Settings picker ─────────────────────────────────────────────────────────
-function SliderRow(label, min, max, step, value, onInput, suffix) {
-  return React.createElement("div", { className: "we-picker__row we-picker__slider-row" },
+// `key` is only needed when a SliderRow sits inside a conditionally-rendered
+// ARRAY (the sidebar-glass group) — React requires keys there.
+function SliderRow(label, min, max, step, value, onInput, suffix, key) {
+  return React.createElement("div", { className: "we-picker__row we-picker__slider-row", key: key },
     React.createElement("span", { className: "we-picker__hint we-picker__label" }, label),
     React.createElement("input", {
       className: "we-picker__slider", type: "range",
       min: String(min), max: String(max), step: String(step),
       value: String(value),
-      // onInput fires continuously while dragging a range input (onChange may
-      // only fire on release in some engines) — this is what makes the knob
-      // feedback instant. onChange stays as a final commit fallback.
+      // accent 填充进度：track 左段着 accent 色（macOS/Linear 式滑块质感），
+      // --we-fill 由当前值算出，emit 重渲染时同步更新。
+      style: { "--we-fill": Math.max(0, Math.min(100, ((Number(value) - min) / (max - min)) * 100)) + "%" },
+      // The visible label is a <span> (not a <label>), so expose it to AT.
+      "aria-label": label,
       onInput: (e) => onInput(Number(e.target.value)),
+      // onChange stays as a final commit fallback (some engines only fire it
+      // on release); onInput above is what makes the knob feedback instant.
       onChange: (e) => onInput(Number(e.target.value)),
     }),
     React.createElement("span", { className: "we-picker__hint we-picker__value" }, suffix),
@@ -1508,11 +1661,44 @@ function VinylRecord(props) {
         ? React.createElement("img", {
             src: cover, alt: "", loading: "lazy",
             onError: (e) => { e.target.style.display = "none"; },
+                            onLoad: (e) => { e.target.style.opacity = "1"; },
           })
         : React.createElement("span", { className: "we-vinyl__empty" }, "▦"),
     ),
     React.createElement("span", { className: "we-vinyl__hole" }),
   );
+}
+
+// ── Modal a11y helpers ─────────────────────────────────────────────────────
+// pickerOpener: the「选择壁纸」button — focus returns here when the modal
+// closes. pickerFocusPending: one-shot flag so the modal's initial focus lands
+// exactly once on open (an inline ref callback would re-fire every render).
+let pickerOpener = null;
+let pickerFocusPending = false;
+function modalInitialFocus(el) {
+  if (el && pickerFocusPending) {
+    pickerFocusPending = false;
+    try { el.focus(); } catch { /* ignore */ }
+  }
+}
+// Minimal Tab trap for the picker modal: wraps focus at both ends. Attached as
+// the modal's onKeyDown; ESC is handled separately (capture-phase, global).
+const FOCUSABLE_SEL = "button, select, input, [tabindex]";
+function trapModalTab(e) {
+  if (e.key !== "Tab") return;
+  const nodes = e.currentTarget.querySelectorAll(FOCUSABLE_SEL);
+  const list = Array.prototype.filter.call(nodes, (n) =>
+    !n.disabled && n.tabIndex >= 0 && n.getClientRects().length > 0);
+  if (!list.length) return;
+  const first = list[0];
+  const last = list[list.length - 1];
+  if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+  else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+}
+// Keyboard activation for the div[role="button"] wallpaper cards
+// (Enter / Space → click), shared by the normal / hidden / close cards.
+function cardKeyDown(e) {
+  if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); }
 }
 
 function WallpaperPicker() {
@@ -1595,14 +1781,14 @@ function WallpaperPicker() {
     deleteGroup(group.id);
   };
 
-  // Slider callbacks: keep the stored value in its canonical unit, then apply
-  // the effect IMMEDIATELY (applyEffects writes the CSS var synchronously) so
-  // the visual feedback is instant even if a listener/emit path is lagging;
-  // emit() additionally re-renders the picker's numeric readouts.
-  const onScrim = (pct) => { selection.scrim = pct / 100; persistSelection(); applyEffects(); emit(); };
-  const onBorder = (pct) => { selection.border = pct / 100; persistSelection(); applyEffects(); emit(); };
-  const onBlur = (px) => { selection.blur = px; persistSelection(); applyEffects(); emit(); };
-  const onWallpaperBlur = (px) => { selection.wallpaperBlur = px; persistSelection(); applyEffects(); emit(); };
+  // Slider callbacks: keep the stored value in its canonical unit, then emit —
+  // applyEffects is a subscribed listener (see apply()), so emit() applies the
+  // CSS vars synchronously AND re-renders the numeric readouts in one pass.
+  // (Calling applyEffects directly here too used to double-apply every tick.)
+  const onScrim = (pct) => { selection.scrim = pct / 100; persistSelection(); emit(); };
+  const onBorder = (pct) => { selection.border = pct / 100; persistSelection(); emit(); };
+  const onBlur = (px) => { selection.blur = px; persistSelection(); emit(); };
+  const onWallpaperBlur = (px) => { selection.wallpaperBlur = px; persistSelection(); emit(); };
   // 配色 (accent color) + 玻璃透明度 (glass transparency) + 玻璃颜色 (glass base
   // tint): applied instantly through applyEffects() (--we-accent /
   // --we-glass-alpha / --we-glass-color), persisted so the settings page keeps
@@ -1610,31 +1796,31 @@ function WallpaperPicker() {
   const onAccent = (hex) => {
     if (!/^#[0-9a-f]{6}$/i.test(hex)) return;
     selection.accent = hex;
-    persistSelection(); applyEffects(); emit();
+    persistSelection(); emit();
   };
   const onGlassColor = (hex) => {
     if (!/^#[0-9a-f]{6}$/i.test(hex)) return;
     selection.glassColor = hex;
-    persistSelection(); applyEffects(); emit();
+    persistSelection(); emit();
   };
   const onGlassAlpha = (pct) => {
     selection.glassAlpha = clampNum(pct, 0, 60, DEFAULTS.glassAlpha);
-    persistSelection(); applyEffects(); emit();
+    persistSelection(); emit();
   };
   // 侧栏玻璃（dsh-better-sidebar）：独立于会话玻璃的一套细粒度控制，各自立即
   // 生效并持久化（--we-sidebar-blur / --we-sidebar-alpha / --we-sidebar-color）。
   const onSidebarBlur = (px) => {
     selection.sidebarBlur = clampNum(px, 0, 60, DEFAULTS.sidebarBlur);
-    persistSelection(); applyEffects(); emit();
+    persistSelection(); emit();
   };
   const onSidebarAlpha = (pct) => {
     selection.sidebarAlpha = clampNum(pct, 0, 60, DEFAULTS.sidebarAlpha);
-    persistSelection(); applyEffects(); emit();
+    persistSelection(); emit();
   };
   const onSidebarColor = (hex) => {
     if (!/^#[0-9a-f]{6}$/i.test(hex)) return;
     selection.sidebarColor = hex;
-    persistSelection(); applyEffects(); emit();
+    persistSelection(); emit();
   };
 
   // Close the picker modal (ESC / backdrop / close buttons share this path).
@@ -1643,6 +1829,11 @@ function WallpaperPicker() {
     selection.batchMode = false;
     selection.batchSelected = [];
     emit();
+    // Focus restore: return focus to the「选择壁纸」button that opened the
+    // modal (WCAG focus management for dialogs).
+    if (pickerOpener && pickerOpener.isConnected) {
+      try { pickerOpener.focus(); } catch { /* ignore */ }
+    }
   };
   // ESC anywhere closes the modal. Capture phase + stopPropagation so the
   // shell's own ESC handling (which may close the whole settings panel) never
@@ -1659,6 +1850,14 @@ function WallpaperPicker() {
       return () => { window.removeEventListener("keydown", onKey, true); };
     }
   }, []);
+  // Scroll lock: while the modal is open the settings page behind it must not
+  // scroll (wheel over the modal would otherwise move the background).
+  React.useEffect(() => {
+    if (!sel.pickerOpen || typeof document === "undefined") return undefined;
+    const prev = document.body.style.overflow;
+    document.body.style.overflow = "hidden";
+    return () => { document.body.style.overflow = prev; };
+  }, [sel.pickerOpen]);
 
   if (!sel.loaded) {
     return React.createElement("div", { className: "we-picker" },
@@ -1674,16 +1873,28 @@ function WallpaperPicker() {
   }
 
   const list = sel.inventory.wallpapers;
+  // Title search (picker modal): narrows the playable grid on top of the
+  // rating/type filters. Case-insensitive substring match.
+  const query = (sel.search || "").trim().toLowerCase();
   // Only playable Video/Web/Image wallpapers are shown — Scene/Application
   // cannot be embedded in the web UI, so hiding them keeps the grid useful.
   // Hidden (soft-deleted) wallpapers leave this list and move to the 已隐藏
   // section. The rating/type filters further narrow playableList.
-  const playableList = list.filter((w) => isRotatableWallpaper(w) && !isHiddenWallpaper(w.id));
+  const playableList = list.filter((w) =>
+    isRotatableWallpaper(w) && !isHiddenWallpaper(w.id)
+    && (!query || String(w.title || "").toLowerCase().indexOf(query) !== -1));
   // Per-category counts for the two filter dropdowns (playable, non-hidden):
   // they reflect what is actually available, independent of the active filters.
   const basePlayable = list.filter((w) => isPlayableType(w) && !isHiddenWallpaper(w.id));
-  const ratingCount = (r) => basePlayable.filter((w) => ratingOf(w) === r).length;
-  const typeCount = (t) => basePlayable.filter((w) => w.type === t).length;
+  // Single-pass aggregation — used to be 10 separate O(n) filters per render
+  // (5 rating options + 5 type options, each a full basePlayable scan).
+  const ratingCounts = { everyone: 0, pg13: 0, mature: 0, unrated: 0 };
+  const typeCounts = { video: 0, web: 0, image: 0, scene: 0 };
+  for (const w of basePlayable) {
+    const r = ratingOf(w);
+    ratingCounts[r] = (ratingCounts[r] || 0) + 1;
+    typeCounts[w.type] = (typeCounts[w.type] || 0) + 1;
+  }
   // CD-rack mode: compact one-page grid (no pagination) + stronger overlap.
   const cdMode = sel.pickerLayout === "classic";
   const hiddenList = hiddenInventoryList();
@@ -1798,7 +2009,6 @@ function WallpaperPicker() {
           onChange: (e) => {
             selection.glassWindow = e.target.checked;
             persistSelection();
-            applyEffects();
             emit();
           },
         }),
@@ -1815,27 +2025,26 @@ function WallpaperPicker() {
       // 颜色）以「侧栏液态玻璃」开关为前提 —— 关闭时隐藏，开启后随 emit 重渲染
       // 实时出现（滑块只在毛玻璃生效时有意义）。
       sel.sidebarPresent && [
-      React.createElement("label", { className: "we-picker__rotation-toggle we-picker__window-toggle" },
+      React.createElement("label", { key: "sidebar-glass-toggle", className: "we-picker__rotation-toggle we-picker__window-toggle" },
         React.createElement("input", {
           type: "checkbox",
           checked: sel.sidebarGlass,
           onChange: (e) => {
             selection.sidebarGlass = e.target.checked;
             persistSelection();
-            applyEffects();
             emit();
           },
         }),
         "侧栏液态玻璃",
       ),
-      React.createElement("span", { className: "we-picker__hint" },
+      React.createElement("span", { key: "sidebar-glass-hint", className: "we-picker__hint" },
         "dsh-better-sidebar 侧栏（文件 / 终端 / Git 等面板）的毛玻璃适配；关闭则恢复其原生外观",
       ),
       ],
       sel.sidebarPresent && sel.sidebarGlass && [
-      SliderRow("侧栏模糊", 0, 60, 1, sel.sidebarBlur, onSidebarBlur, sel.sidebarBlur + "px"),
-      SliderRow("侧栏透明度", 0, 60, 5, sel.sidebarAlpha, onSidebarAlpha, sel.sidebarAlpha + "%"),
-      React.createElement("div", { className: "we-picker__row we-picker__accent-row" },
+      SliderRow("侧栏模糊", 0, 60, 1, sel.sidebarBlur, onSidebarBlur, sel.sidebarBlur + "px", "sb-blur"),
+      SliderRow("侧栏透明度", 0, 60, 5, sel.sidebarAlpha, onSidebarAlpha, sel.sidebarAlpha + "%", "sb-alpha"),
+      React.createElement("div", { key: "sb-color", className: "we-picker__row we-picker__accent-row" },
         React.createElement("span", { className: "we-picker__hint we-picker__label" }, "侧栏玻璃颜色"),
         GLASS_COLOR_PRESETS.map((hex) => React.createElement("button", {
           key: hex,
@@ -1917,7 +2126,13 @@ function WallpaperPicker() {
         ),
         React.createElement("button", {
           className: "we-picker__btn we-picker__btn--primary", type: "button",
-          onClick: () => { selection.pickerOpen = true; selection.modalView = "normal"; emit(); },
+          ref: (el) => { pickerOpener = el; },
+          onClick: () => {
+            selection.pickerOpen = true;
+            selection.modalView = "normal";
+            pickerFocusPending = true; // 打开后焦点落入模态框（见 modalInitialFocus）
+            emit();
+          },
         }, "选择壁纸"),
       ),
     // ── Wallpaper picker modal. Portalled onto <body>: fixed positioning is
@@ -1929,7 +2144,11 @@ function WallpaperPicker() {
         React.createElement("div", {
           className: "we-picker__modal",
           "data-we-cards": sel.pickerLayout,
+          role: "dialog",
+          "aria-modal": "true",
+          "aria-label": "选择壁纸",
           onClick: (e) => e.stopPropagation(),
+          onKeyDown: trapModalTab,
         },
           React.createElement("div", { className: "we-picker__modal-head" },
             React.createElement("div", { className: "we-picker__modal-head-left" },
@@ -1941,17 +2160,23 @@ function WallpaperPicker() {
             ),
             React.createElement("button", {
               className: "we-picker__btn", type: "button", onClick: closePicker,
+              // 打开模态框时焦点落在这里（一次性，见 modalInitialFocus）。
+              ref: modalInitialFocus,
             }, "关闭"),
           ),
-          React.createElement("div", { className: "we-picker__modal-tabs" },
+          React.createElement("div", { className: "we-picker__modal-tabs", role: "tablist" },
             React.createElement("button", {
               className: "we-picker__btn we-picker__tab" + (sel.modalView === "hidden" ? "" : " we-picker__tab--active"),
               type: "button",
+              role: "tab",
+              "aria-selected": sel.modalView !== "hidden",
               onClick: () => { selection.modalView = "normal"; emit(); },
             }, "正常列表（" + playableList.length + "）"),
             React.createElement("button", {
               className: "we-picker__btn we-picker__tab" + (sel.modalView === "hidden" ? " we-picker__tab--active" : ""),
               type: "button",
+              role: "tab",
+              "aria-selected": sel.modalView === "hidden",
               onClick: () => { selection.modalView = "hidden"; selection.batchMode = false; selection.batchSelected = []; emit(); },
             }, "已隐藏（" + hiddenList.length + "）"),
           ),
@@ -1977,12 +2202,17 @@ function WallpaperPicker() {
                         role: "button",
                         tabIndex: 0,
                         title: w.title,
+                        "aria-label": "恢复并应用 " + w.title,
                         onClick: () => applySelection(w.id),
+                        // 键盘可达性：正常列表卡片一直有 Enter/Space 处理，
+                        // 已隐藏卡片漏了 —— 补上（共享 cardKeyDown）。
+                        onKeyDown: cardKeyDown,
                       },
                       w.preview
                         ? React.createElement("img", {
                             src: w.preview, alt: w.title, loading: "lazy",
                             onError: (e) => { e.target.style.display = "none"; },
+                            onLoad: (e) => { e.target.style.opacity = "1"; },
                           })
                         : React.createElement("span", { className: "we-picker__card-placeholder" }, "无预览"),
                       React.createElement("span", { className: "we-picker__card-title" }, w.title),
@@ -2031,31 +2261,42 @@ function WallpaperPicker() {
                   }, "取消"),
                 ),
                 React.createElement("div", { className: "we-picker__row we-picker__filter-row" },
+                  // 标题搜索：几百上千张壁纸时最快的定位方式。输入即过滤
+                  // （重置到第 1 页），与分级/类型过滤叠加。
+                  React.createElement("input", {
+                    className: "we-picker__text we-picker__search", type: "text",
+                    value: sel.search,
+                    placeholder: "搜索壁纸标题…",
+                    "aria-label": "搜索壁纸标题",
+                    onInput: (e) => { selection.search = e.target.value; selection.page = 0; emit(); },
+                  }),
                   React.createElement("span", { className: "we-picker__hint we-picker__label" }, "内容分级"),
                   React.createElement("select", {
                     className: "we-picker__playlist-select",
                     value: sel.contentRatingFilter,
                     onChange: onRatingFilterChange,
+                    "aria-label": "内容分级",
                     title: "对应 Wallpaper Engine 的内容分级（project.json contentrating）",
                   },
                   React.createElement("option", { value: "all" }, "全部（" + basePlayable.length + "）"),
-                  React.createElement("option", { value: "everyone" }, "Everyone / G（" + ratingCount("everyone") + "）"),
-                  React.createElement("option", { value: "pg13" }, "PG13（" + ratingCount("pg13") + "）"),
-                  React.createElement("option", { value: "mature" }, "Mature / R（" + ratingCount("mature") + "）"),
-                  React.createElement("option", { value: "unrated" }, "未分级（" + ratingCount("unrated") + "）"),
+                  React.createElement("option", { value: "everyone" }, "Everyone / G（" + ratingCounts.everyone + "）"),
+                  React.createElement("option", { value: "pg13" }, "PG13（" + ratingCounts.pg13 + "）"),
+                  React.createElement("option", { value: "mature" }, "Mature / R（" + ratingCounts.mature + "）"),
+                  React.createElement("option", { value: "unrated" }, "未分级（" + ratingCounts.unrated + "）"),
                   ),
                   React.createElement("span", { className: "we-picker__hint we-picker__label" }, "类型"),
                   React.createElement("select", {
                     className: "we-picker__playlist-select",
                     value: sel.typeFilter,
                     onChange: onTypeFilterChange,
+                    "aria-label": "类型",
                     title: "按壁纸类型过滤",
                   },
                   React.createElement("option", { value: "all" }, "全部（" + basePlayable.length + "）"),
-                  React.createElement("option", { value: "video" }, "视频（" + typeCount("video") + "）"),
-                  React.createElement("option", { value: "web" }, "网页（" + typeCount("web") + "）"),
-                  React.createElement("option", { value: "image" }, "图片（" + typeCount("image") + "）"),
-                  React.createElement("option", { value: "scene" }, "场景（" + typeCount("scene") + "）"),
+                  React.createElement("option", { value: "video" }, "视频（" + (typeCounts.video || 0) + "）"),
+                  React.createElement("option", { value: "web" }, "网页（" + (typeCounts.web || 0) + "）"),
+                  React.createElement("option", { value: "image" }, "图片（" + (typeCounts.image || 0) + "）"),
+                  React.createElement("option", { value: "scene" }, "场景（" + (typeCounts.scene || 0) + "）"),
                   ),
                 ),
                 React.createElement("div", { className: "we-picker__grid" },
@@ -2070,17 +2311,21 @@ function WallpaperPicker() {
                     tabIndex: 0,
                     onClick: onClear,
                     title: "关闭壁纸",
-                    onKeyDown: (e) => {
-                      if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); }
-                    },
+                    onKeyDown: cardKeyDown,
                   },
                   React.createElement("span", { className: "we-picker__card-close" }, "✕ 关闭"),
                   ),
                   playableList.length === 0
-                    ? React.createElement("span", { className: "we-picker__hint" }, "没有可播放的壁纸")
+                    ? React.createElement("span", { className: "we-picker__hint" },
+                        query
+                          ? "没有匹配「" + sel.search + "」的壁纸 · 试试缩短关键词或清除过滤"
+                          : "没有可播放的壁纸")
                     : (cdMode ? playableList : normalPage.items).map((w) => React.createElement("div", {
                         key: w.id,
-                        className: "we-picker__card" + (w.id === sel.id ? " we-picker__card--selected" : ""),
+                        className: "we-picker__card" + (w.id === sel.id ? " we-picker__card--selected" : "")
+                          // 批量勾选高亮：此前勾选态只进了 batchSelected，高亮 CSS
+                          // 却挂在 --selected（=当前播放）上，勾了永远不亮。
+                          + (selection.batchMode && selection.batchSelected.indexOf(w.id) >= 0 ? " we-picker__card--checked" : ""),
                         role: "button",
                         tabIndex: 0,
                         title: w.title,
@@ -2094,14 +2339,13 @@ function WallpaperPicker() {
                             applySelection(w.id);
                           }
                         },
-                        onKeyDown: (e) => {
-                          if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); }
-                        },
+                        onKeyDown: cardKeyDown,
                       },
                       w.preview
                         ? React.createElement("img", {
                             src: w.preview, alt: w.title, loading: "lazy",
                             onError: (e) => { e.target.style.display = "none"; },
+                            onLoad: (e) => { e.target.style.opacity = "1"; },
                           })
                         : React.createElement("span", { className: "we-picker__card-placeholder" }, "无预览"),
                       React.createElement("span", { className: "we-picker__card-title" }, w.title),
@@ -2248,7 +2492,17 @@ function WallpaperPicker() {
             className: "we-picker__btn we-picker__rate" + (sel.objectFit === mode ? " we-picker__rate--active" : ""),
             type: "button",
             title: mode,
-            onClick: () => { selection.objectFit = mode; persistSelection(); applyEffects(); emit(); },
+            onClick: () => {
+              selection.objectFit = mode;
+              persistSelection();
+              emit();
+              // Edge canvas 渲染路径的 fit 存在 weDrawCtx 上（syncLayers 的
+              // same-canvas 守卫不会重建 draw loop），自定义壁纸直接更新并重绘。
+              if (weDrawCtx && selection.id && selection.id.indexOf("up-") === 0) {
+                weDrawCtx.fit = mode;
+                weDrawFrame();
+              }
+            },
           }, label);
         }),
         React.createElement("span", { className: "we-picker__hint" }, "仅自定义壁纸"),
@@ -2267,6 +2521,7 @@ function WallpaperPicker() {
         value: sel.rotationGroupId,
         onChange: onGroupChange,
         disabled: groups.length === 0,
+        "aria-label": "轮播列表",
       },
       React.createElement("option", { value: "" }, groups.length ? "— 选择轮播列表 —" : "— 暂无轮播列表 —"),
       ...groups.map((g) => React.createElement("option", {
@@ -2294,6 +2549,7 @@ function WallpaperPicker() {
         React.createElement("input", {
           className: "we-picker__text", type: "text",
           value: editing.name,
+          "aria-label": "轮播列表名称",
           onInput: (e) => { editing.name = e.target.value; emit(); },
         }),
       ),
@@ -2303,6 +2559,7 @@ function WallpaperPicker() {
           className: "we-picker__rotation-interval",
           value: String(editing.interval),
           onChange: (e) => { editing.interval = clampNum(Number(e.target.value), 1, 1440, DEFAULTS.rotationInterval); emit(); },
+          "aria-label": "轮播间隔",
         },
         ...INTERVALS.map((minutes) =>
           React.createElement("option", { key: minutes, value: String(minutes) }, minutes + " 分钟"),
@@ -2312,6 +2569,7 @@ function WallpaperPicker() {
           className: "we-picker__playlist-select",
           value: editing.order,
           onChange: (e) => { editing.order = e.target.value; emit(); },
+          "aria-label": "轮播顺序",
         },
         React.createElement("option", { value: "sequence" }, "顺序"),
         React.createElement("option", { value: "random" }, "随机"),
@@ -2327,6 +2585,8 @@ function WallpaperPicker() {
                 className: "we-picker__editor-card" + (checked ? " we-picker__editor-card--checked" : ""),
                 type: "button",
                 title: w.title,
+                "aria-pressed": checked,
+                "aria-label": w.title,
                 onClick: () => {
                   const i = editing.wallpaperIds.indexOf(w.id);
                   if (i >= 0) editing.wallpaperIds.splice(i, 1);
@@ -2338,6 +2598,7 @@ function WallpaperPicker() {
                 ? React.createElement("img", {
                     src: w.preview, alt: w.title, loading: "lazy",
                     onError: (e) => { e.target.style.display = "none"; },
+                            onLoad: (e) => { e.target.style.opacity = "1"; },
                   })
                 : React.createElement("span", { className: "we-picker__card-placeholder" }, "无预览"),
               checked && React.createElement("span", { className: "we-picker__editor-check" }, "✓"),
@@ -2391,6 +2652,7 @@ function WallpaperPicker() {
         value: String(group ? group.interval : DEFAULTS.rotationInterval),
         onChange: onGroupInterval,
         disabled: !sel.rotationEnabled || !sel.rotationGroupId || playableCount < 2,
+        "aria-label": "轮转间隔",
       },
       ...INTERVALS.map((minutes) =>
         React.createElement("option", { key: minutes, value: String(minutes) }, minutes + " 分钟"),
@@ -2449,7 +2711,14 @@ function WallpaperPicker() {
       // Download / transcode progress bar (polled from /transcode-progress).
       sel.type === "video" && sel.transcodeState === "working" && sel.transcodeProgress
         && React.createElement("div", { className: "we-picker__row we-picker__prog" },
-          React.createElement("div", { className: "we-picker__prog-track" },
+          React.createElement("div", {
+            className: "we-picker__prog-track",
+            role: "progressbar",
+            "aria-label": "转码进度",
+            "aria-valuemin": 0,
+            "aria-valuemax": 100,
+            "aria-valuenow": Math.max(0, Math.min(100, sel.transcodeProgress.percent || 0)),
+          },
             React.createElement("div", {
               className: "we-picker__prog-bar",
               style: { width: Math.max(2, Math.min(100, sel.transcodeProgress.percent || 0)) + "%" },
@@ -2472,7 +2741,7 @@ function WallpaperPicker() {
         React.createElement("input", {
           type: "checkbox",
           checked: sel.flip,
-          onChange: (e) => { selection.flip = e.target.checked; persistSelection(); applyEffects(); emit(); },
+          onChange: (e) => { selection.flip = e.target.checked; persistSelection(); emit(); },
         }),
         "水平翻转",
       ),
@@ -2865,7 +3134,7 @@ const CSS = `
     border: 2px solid rgba(255, 255, 255, 0.7);
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
     cursor: pointer;
-    transition: transform 0.12s ease, box-shadow 0.12s ease;
+    transition: transform var(--we-dur-fast, 120ms) var(--we-ease, ease), box-shadow var(--we-dur-fast, 120ms) var(--we-ease, ease);
   }
   .we-picker__swatch:hover { transform: scale(1.12); }
   .we-picker__swatch--active {
@@ -2922,7 +3191,27 @@ const CSS = `
   }
   .we-picker select:hover { background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.12)); }
   .we-picker select:disabled { opacity: 0.45; cursor: default; }
-  .we-picker__hint { font-size: 0.8em; opacity: 0.7; }
+  .we-picker__hint { font-size: 0.8em; opacity: 0.78; }
+  /* 数字读数等宽：页码 / 计数 / fps / 百分比切换时不再跳动。 */
+  .we-picker__pager .we-picker__hint, .we-picker__card-badge, .we-picker__value {
+    font-variant-numeric: tabular-nums;
+  }
+  /* 统一焦点环：accent 色、2px、外偏移（a11y + 跟随配色）。 */
+  .we-picker button:focus-visible, .we-picker select:focus-visible,
+  .we-picker input:focus-visible, .we-picker [role="button"]:focus-visible,
+  .we-picker__modal button:focus-visible, .we-picker__modal select:focus-visible,
+  .we-picker__modal input:focus-visible, .we-picker__modal [role="button"]:focus-visible {
+    outline: 2px solid var(--we-accent, #4f8cff);
+    outline-offset: 2px;
+  }
+  /* Text inputs (搜索 / 路径 / 列表名称): match the flat 26px control style. */
+  .we-picker__text {
+    height: 26px; padding: 0 8px;
+    border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));
+    border-radius: 6px; background: transparent;
+    color: var(--dsw-alias-label-secondary, #888); font-size: 0.82em;
+  }
+  .we-picker__search { flex: 1 1 150px; min-width: 0; }
   .we-picker__error { font-size: 0.82em; opacity: 0.9; color: #e5534b; }
   .we-picker__note { font-size: 0.8em; opacity: 0.85; color: var(--we-accent, var(--dsw-alias-brand-primary, #4f8cff)); }
 
@@ -3026,7 +3315,10 @@ const CSS = `
   }
   .we-picker__slider::-webkit-slider-runnable-track {
     height: 4px; border-radius: 2px;
-    background: var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.4));
+    /* accent 填充段（0 → --we-fill）+ 灰色剩余段 */
+    background: linear-gradient(to right,
+      var(--we-accent, #4f8cff) var(--we-fill, 0%),
+      var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.4)) var(--we-fill, 0%));
   }
   .we-picker__slider::-webkit-slider-thumb {
     -webkit-appearance: none; appearance: none;
@@ -3034,10 +3326,17 @@ const CSS = `
     background: var(--dsw-alias-bg-layer-1, #fff);
     border: 2px solid var(--we-accent, #4f8cff);
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
+    transition: transform var(--we-dur-fast, 120ms) var(--we-ease, ease);
   }
+  .we-picker__slider:hover::-webkit-slider-thumb { transform: scale(1.15); }
   .we-picker__slider::-moz-range-track {
     height: 4px; border-radius: 2px;
     background: var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.4));
+  }
+  /* Firefox 的填充段走专用伪元素（不认 webkit 的渐变轨道方案）。 */
+  .we-picker__slider::-moz-range-progress {
+    height: 4px; border-radius: 2px;
+    background: var(--we-accent, #4f8cff);
   }
   .we-picker__slider::-moz-range-thumb {
     width: 14px; height: 14px; border-radius: 50%;
@@ -3060,18 +3359,23 @@ const CSS = `
   .we-picker__switch-track {
     position: relative; width: 42px; height: 24px; border-radius: 12px;
     background: rgba(128, 128, 128, 0.4);
-    transition: background-color 120ms ease;
+    transition: background-color var(--we-dur-fast, 120ms) var(--we-ease, ease);
     box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3);
   }
+  /* 键盘焦点环：input 视觉隐藏但可聚焦，焦点环落在 track 上。 */
+  .we-picker__switch input:focus-visible + .we-picker__switch-track {
+    outline: 2px solid var(--we-accent, #4f8cff);
+    outline-offset: 2px;
+  }
   .we-picker__switch input:checked + .we-picker__switch-track {
-    background: #4f8cff;
+    background: var(--we-accent, #4f8cff); /* 跟随「配色」设置，不再硬编码 */
   }
   .we-picker__switch-thumb {
     position: absolute; left: 3px; top: 3px;
     width: 18px; height: 18px; border-radius: 50%;
     background: #fff;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
-    transition: transform 120ms ease;
+    transition: transform var(--we-dur-fast, 120ms) var(--we-ease, ease);
   }
   .we-picker__switch input:checked + .we-picker__switch-track .we-picker__switch-thumb {
     transform: translateX(18px);
@@ -3089,16 +3393,35 @@ const CSS = `
     padding-right: 24px;
   }
 
-  /* Motion: state-only transitions (background/color/border — never layout),
-     150ms ease; disabled entirely under prefers-reduced-motion. */
+  /* Motion tokens: one shared ease (expo-out) + two durations. Modal is
+     portalled onto <body> (outside .we-picker), so the token scope covers both
+     roots. */
+  .we-picker, .we-picker__modal, .we-picker__modal-overlay {
+    --we-ease: cubic-bezier(0.16, 1, 0.3, 1);
+    --we-dur-fast: 120ms;
+    --we-dur: 200ms;
+  }
+  /* Motion: state-only transitions (background/color/border/transform — never
+     layout), token-driven; disabled entirely under prefers-reduced-motion. */
   .we-picker__btn, .we-picker select, .we-picker__card, .we-picker__editor-card,
   .we-picker__tab, .we-picker__rate, .we-picker__card-hide {
-    transition: background-color 150ms ease, border-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
+    transition:
+      background-color var(--we-dur-fast, 120ms) var(--we-ease, ease),
+      border-color var(--we-dur-fast, 120ms) var(--we-ease, ease),
+      color var(--we-dur-fast, 120ms) var(--we-ease, ease),
+      box-shadow var(--we-dur-fast, 120ms) var(--we-ease, ease),
+      transform var(--we-dur-fast, 120ms) var(--we-ease, ease);
+  }
+  /* 按压反馈：点击即缩，松手回弹（transform = 合成器属性，不引发布局）。 */
+  .we-picker__btn:active, .we-picker__rate:active, .we-picker__tab:active {
+    transform: scale(0.96);
   }
   @media (prefers-reduced-motion: reduce) {
-    .we-picker * { transition: none !important; }
+    .we-picker *, .we-picker__modal, .we-picker__modal *, .we-picker__modal-overlay {
+      transition: none !important;
+      animation: none !important;
+    }
   }
-  .we-picker__slider { flex: 1; }
   .we-picker__slider-row { display: flex; align-items: center; gap: 8px; }
   .we-picker__label { min-width: 28px; }
   .we-picker__value { min-width: 40px; text-align: right; }
@@ -3118,6 +3441,13 @@ const CSS = `
   .we-picker__grid {
     display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
     gap: 8px; max-height: 280px; overflow-y: auto; padding: 2px;
+    /* hover 放大（CD 架 scale 1.12）不得撑出水平滚动条：clip 裁掉溢出且不
+       产生滚动条（hidden 仍可被程序滚动，clip 才是纯裁剪），scrollbar-gutter
+       让垂直滚动条的出现/消失也不再挤压内容 —— 两者一起消除「hover 最后一列
+       → 溢出 → 滚动条 → 宽度变化 → unhover → 回缩」的震荡循环。 */
+    overflow-x: hidden; /* fallback：老旧内核不认识 clip 时的平替 */
+    overflow-x: clip;
+    scrollbar-gutter: stable;
   }
   .we-picker__card {
     position: relative; height: 92px; padding: 0; cursor: pointer;
@@ -3129,6 +3459,21 @@ const CSS = `
   .we-picker__card img {
     position: absolute; inset: 0; width: 100%; height: 100%;
     object-fit: cover; display: block;
+    /* 加载淡入（onLoad 置 opacity:1）+ hover 微放大（合成器属性）。 */
+    opacity: 0;
+    transition:
+      opacity var(--we-dur, 200ms) ease,
+      transform 300ms var(--we-ease, ease);
+  }
+  /* hover 缩略图缓放大 —— 仅非 CD 架模式（CD 架是卡片整体 scale，叠加会双重放大）。 */
+  .we-picker:not([data-we-cards="classic"]) .we-picker__card:hover img,
+  .we-picker__modal:not([data-we-cards="classic"]) .we-picker__card:hover img {
+    transform: scale(1.06);
+  }
+  /* 编辑器卡片 / 黑胶封面同样加载淡入。 */
+  .we-picker__editor-card img, .we-vinyl__cover img {
+    opacity: 0;
+    transition: opacity var(--we-dur, 200ms) ease;
   }
   /* Classic — "CD 架" (CD-rack) card style: cards stack like CD jewel cases
      on a rack. Each row strongly overlaps the row ABOVE it (the lower card's
@@ -3140,9 +3485,11 @@ const CSS = `
      so the last row's overlap is not clipped. */
   .we-picker[data-we-cards="classic"] .we-picker__grid,
   .we-picker__modal[data-we-cards="classic"] .we-picker__grid {
-    /* Compact CD-rack columns: ~7 cards per row at modal width. */
+    /* Compact CD-rack columns: ~7 cards per row at modal width. 两侧留出
+       8px 让位列：最左/最右列 hover 放大 12%（≈6px/侧）时在让位区内展开，
+       不触碰溢出边界、不被 clip 裁掉。 */
     grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
-    padding-bottom: 42px;
+    padding: 2px 8px 42px;
   }
   .we-picker[data-we-cards="classic"] .we-picker__editor-grid,
   .we-picker__modal[data-we-cards="classic"] .we-picker__editor-grid {
@@ -3193,6 +3540,10 @@ const CSS = `
   .we-picker__card--selected {
     outline: 2px solid var(--we-accent, #4f8cff);
     outline-offset: -2px;
+    /* 选中即"发光"：accent 色柔光晕，比裸描边更读得出"当前"。 */
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--we-accent, #4f8cff) 45%, transparent),
+      0 4px 16px color-mix(in srgb, var(--we-accent, #4f8cff) 30%, transparent);
   }
   .we-picker__card-close {
     position: absolute; inset: 0;
@@ -3217,13 +3568,17 @@ const CSS = `
     display: flex; align-items: center; justify-content: center;
     font-size: 0.72em; opacity: 0.55;
   }
-  /* Per-card "hide" button (soft delete) — top-right overlay. */
+  /* Per-card "hide" button (soft delete) — top-right overlay. 默认隐去，
+     hover / 键盘聚焦（focus-within）时浮现：网格不常驻一层噪声按钮。 */
   .we-picker__card-hide {
     position: absolute; top: 4px; right: 4px; z-index: 2;
     padding: 2px 7px; font-size: 0.68em; line-height: 1.5;
     border: 0; border-radius: 4px; cursor: pointer;
     background: rgba(0, 0, 0, 0.6); color: #fff;
+    opacity: 0;
   }
+  .we-picker__card:hover .we-picker__card-hide,
+  .we-picker__card:focus-within .we-picker__card-hide { opacity: 1; }
   .we-picker__card-hide:hover { background: rgba(190, 50, 50, 0.9); }
   /* Batch-mode selection check — top-left overlay. */
   .we-picker__card-check {
@@ -3232,7 +3587,15 @@ const CSS = `
     background: rgba(0, 0, 0, 0.6); color: #fff;
     font-size: 12px; line-height: 18px; text-align: center;
   }
-  .we-picker__card--selected .we-picker__card-check {
+  /* 批量勾选高亮：独立的 --checked class（勾选 ≠ 当前播放的 --selected）。 */
+  .we-picker__card--checked {
+    outline: 2px solid var(--we-accent, #4f8cff);
+    outline-offset: -2px;
+    box-shadow:
+      0 0 0 1px color-mix(in srgb, var(--we-accent, #4f8cff) 45%, transparent),
+      0 4px 16px color-mix(in srgb, var(--we-accent, #4f8cff) 30%, transparent);
+  }
+  .we-picker__card--checked .we-picker__card-check {
     background: var(--we-accent, #4f8cff);
   }
   /* Hidden wallpapers view: dimmed cards. */
@@ -3260,6 +3623,7 @@ const CSS = `
     background: rgba(0, 0, 0, 0.55);
     -webkit-backdrop-filter: blur(3px);
     backdrop-filter: blur(3px);
+    animation: we-overlay-in var(--we-dur, 200ms) var(--we-ease, ease-out);
   }
   .we-picker__modal {
     position: relative; z-index: 1001;
@@ -3269,6 +3633,13 @@ const CSS = `
     background: var(--dsw-alias-bg-layer-1, #202127);
     border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));
     box-shadow: 0 24px 80px rgba(0, 0, 0, 0.5), 0 2px 8px rgba(0, 0, 0, 0.25);
+    /* 入场：轻微上浮 + 缩放 settle，expo-out；reduced-motion 由上面的
+       媒体查询统一静止为瞬现。 */
+    animation: we-modal-in 240ms var(--we-ease, ease-out);
+  }
+  @keyframes we-overlay-in { from { opacity: 0; } }
+  @keyframes we-modal-in {
+    from { opacity: 0; transform: translateY(10px) scale(0.98); }
   }
   .we-picker__modal-head {
     display: flex; align-items: center; justify-content: space-between;
@@ -3290,6 +3661,12 @@ const CSS = `
   .we-picker__modal-body {
     overflow-y: auto; min-height: 0; flex: 1;
     display: flex; flex-direction: column; gap: 8px;
+    overscroll-behavior: contain; /* 滚轮不穿透到背后的设置页 */
+    /* modal 里 grid 的 max-height 被放开（见下），真正的滚动容器是这里 ——
+       同样的 hover 放大震荡防护也要落在这层。 */
+    overflow-x: hidden; /* fallback：老旧内核不认识 clip 时的平替 */
+    overflow-x: clip;
+    scrollbar-gutter: stable;
   }
   /* The modal is tall enough: let the grid fill it instead of its own 280px
      internal scroll (the modal body scrolls as a whole). */
@@ -3340,6 +3717,10 @@ const CSS = `
   .we-picker__editor-grid {
     display: grid; grid-template-columns: repeat(auto-fill, minmax(96px, 1fr));
     gap: 6px; max-height: 220px; overflow-y: auto; padding: 2px;
+    /* 同主网格：CD 架 hover 放大不得撑出水平滚动条（防震荡）。 */
+    overflow-x: hidden; /* fallback：老旧内核不认识 clip 时的平替 */
+    overflow-x: clip;
+    scrollbar-gutter: stable;
   }
   .we-picker__editor-card {
     position: relative; height: 80px; padding: 0; cursor: pointer;
@@ -3403,8 +3784,12 @@ function apply(ctx) {
       // no-op. 'chargingchange' covers plug/unplug; onOcclusionChange re-applies
       // the effective playing state.
       let batteryCleanup = null;
+      let disposed = false;
       if (typeof navigator !== "undefined" && typeof navigator.getBattery === "function") {
         navigator.getBattery().then((bm) => {
+          // The plugin effect may have been torn down (disable / HMR) while
+          // this promise was pending — registering listeners then would leak.
+          if (disposed) return;
           weBattery = bm;
           bm.addEventListener("chargingchange", onOcclusionChange);
           batteryCleanup = () => bm.removeEventListener("chargingchange", onOcclusionChange);
@@ -3414,6 +3799,7 @@ function apply(ctx) {
       syncLayers();
       applyEffects();
       return () => {
+        disposed = true;
         unsub();
         unsubEffects();
         if (typeof window !== "undefined" && typeof window.removeEventListener === "function") {
@@ -3422,9 +3808,10 @@ function apply(ctx) {
         if (batteryCleanup) { batteryCleanup(); batteryCleanup = null; }
         weBattery = null;
         clearRotationTimer();
+        abortTranscodeUpgrade(); // 含 clearUpgradePoll + AbortController.abort（否则卸载后 500ms 轮询永久泄漏）
         weStopDraw();
         const node = document.getElementById(LAYER_ID);
-        if (node) node.remove();
+        if (node) { releaseLayerMedia(node); node.remove(); }
         const scrim = document.getElementById(SCRIM_ID);
         if (scrim) scrim.remove();
         clearEffects();
