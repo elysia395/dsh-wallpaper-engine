@@ -122,6 +122,9 @@
 
 ### 工程
 - [ ] **缓存键管理**：渲染管线变更后 bump `lib/index.js` 的 `sf*` 前缀（当前 sf10）。
+- [x] **重构**：WE 渲染引擎提取为 `lib/we-renderer/` 独立子目录（core 主体 +
+      math/canvas/textures/mdl/bloom/camera 工具模块），`lib/scene-renderer.js`
+      变兼容 re-export 入口。
 - [ ] **清理**：`scene-layers-out/`（726MB 渲染产物）仅保留少量验证图；
       `docs/images/`（47MB）、`_refs/linux-wallpaperengine`（21MB）按需裁剪。
 - [ ] **Git 修复**：`.git` 缺 HEAD/config（objects 仅 43 个，历史截断）；
