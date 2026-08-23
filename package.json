@@ -40,6 +40,7 @@
     "lib/scene-renderer.js",
     "lib/scene-render-worker.mjs",
     "lib/apng-encode.js",
+    "lib/font-render.js",
     "lib/types/index.d.ts",
     "lib/types/client.d.ts",
     "cordis.patch.yml",
