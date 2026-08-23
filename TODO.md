@@ -96,6 +96,13 @@
       数码管清晰渲染）。
 
 ### 中期
+- [x] **属性动画 {animation}**：WE 属性动画（`{animation: {c0: 关键帧, options: {fps/length/mode}}}`）
+      按 t 线性插值烘焙（alpha/scale/origin/angles/visible/color/size 等）；验证
+      3629379075 若叶睦开场黑幕淡出（关键帧 83@30fps=2.77s 完全显现吻合）。
+- [x] **依赖循环防护**：`_resolveObjects` visiting 集合防 A↔B 循环栈溢出。
+- [x] **workshop 交叉验证**：创意工坊 17 壁纸（14 场景 + 3 视频）全部 scene.pkg
+      解析+渲染；新变体 **PKGV0024**（3774904326）确认格式统一；
+      2 个 Elaina 壁纸（3470764447/3660962877）背景为 MP4 视频纹理（待视频解码组件）。
 - [x] **camera paths**：`_resolveCameraPose` 多 path 顺序循环 + 关键帧插值
       （eye/center/up/zoom）。
 - [x] **scene scripts**：`lib/scene-scripts.js` vm 沙箱执行 {script,value}
