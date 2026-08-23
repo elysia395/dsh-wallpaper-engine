@@ -3096,6 +3096,46 @@ function RopeDock() {
         React.createElement(WallpaperPicker, { repoPanel: true }),
       ),
     ),
+    React.createElement(UpdateNotice, null),
+  );
+}
+
+// ── One-time "what's new / fix" notice ──────────────────────────────────────
+// Users running the plugin in a desktop-shortcut immersive (standalone / kiosk /
+// fullscreen) window can hit a full-screen white flash on click/typing — a
+// Chromium compositor bug with hardware acceleration, not fixable by the plugin.
+// Show a one-time notice (keyed per version) telling them how to fix it. On
+// dismiss we record the version; bump NOTICE_VERSION next release to show again.
+const NOTICE_KEY = "dsh-wallpaper-engine:notice-version";
+const NOTICE_VERSION = "0.6.2";
+
+function UpdateNotice() {
+  const [visible, setVisible] = React.useState(() => {
+    try {
+      if (typeof localStorage === "undefined") return true;
+      return (localStorage.getItem(NOTICE_KEY) || "") !== NOTICE_VERSION;
+    } catch { return true; }
+  });
+  const dismiss = () => {
+    try { localStorage.setItem(NOTICE_KEY, NOTICE_VERSION); } catch { /* ignore */ }
+    setVisible(false);
+  };
+  if (!visible) return null;
+  return React.createElement("div", { className: "we-update-notice", role: "alert" },
+    React.createElement("div", { className: "we-update-notice__title" }, "⚠ 两种窗口分开看：沉浸式窗口偶尔全屏白闪"),
+    React.createElement("div", { className: "we-update-notice__body" },
+      React.createElement("p", null,
+        "「桌面快捷方式打开的沉浸式全屏窗口」里点击/输入可能全屏闪白；普通浏览器标签页不会闪白。"),
+      React.createElement("p", null,
+        "插件已自动区分：在沉浸式窗口里降低了合成（去掉模糊、保留半透明玻璃）；普通标签页保持完整毛玻璃。"),
+      React.createElement("p", null,
+        "若沉浸式窗口仍闪白：仅在该窗口的浏览器里关闭「使用硬件加速」再重启（它软件渲染也很顺滑）。"),
+      React.createElement("p", null,
+        "注意：硬件加速是「每个浏览器实例」的全局设置。若你要同时用普通标签页，请保持其「使用硬件加速开启」以免变卡——可给沉浸式窗口用独立配置，或直接用普通标签页（无闪白、硬件加速正常开）。"),
+      React.createElement("p", { className: "we-update-notice__hint" },
+        "本提示每个新版本只出现一次，点下方按钮即可关闭。"),
+    ),
+    React.createElement("button", { className: "we-update-notice__btn we-picker__btn", type: "button", onClick: dismiss }, "知道了"),
   );
 }
 
@@ -3225,6 +3265,22 @@ const CSS = `
      glass. Extra always-on layers (transform/will-change/contain) were removed —
      they did not stop the white flash and instead added compositing layers. The
      flash was traced to the rope's permanent CSS filter, which is now gone. */
+
+  /* Immersive app-window fallback: a desktop-shortcut standalone/fullscreen
+     window composites on a different path than a tab and can flash the WHOLE
+     window white when backdrop-filter re-rasterises over the wallpaper on
+     interaction. Detect that mode (body[data-we-appwindow]) and drop the frosted
+     blur there — keeping the translucent tint + specular sheen (still reads as
+     glass) but with no backdrop sampling to glitch. Normal tabs keep the blur. */
+  body[data-we-appwindow][data-we-wallpaper] [data-composer-card],
+  body[data-we-appwindow][data-we-wallpaper] [class*="_bubble"],
+  body[data-we-appwindow] .we-repo-panel--open,
+  body[data-we-appwindow] .we-picker__modal--panel,
+  body[data-we-appwindow][data-we-glass-window] [data-slot="settings.section"],
+  body[data-we-appwindow][data-we-sidebar-glass] [data-dsh-better-sidebar] {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
 
   /* ── dsh-better-sidebar glass ──────────────────────────────────────────────
      The sidebar shell is portalled onto <body> under a stable host attribute
@@ -4094,6 +4150,33 @@ const CSS = `
     pointer-events: none; /* drag/capture stays on the .we-rope box */
   }
 
+  /* One-time update notice — a floating glass toast (bottom-center) that tells
+     immersive/kiosk-window users about the white flash and its one fix. High
+     z-index so it sits above the chat; buttons reuse the flat picker style. */
+  .we-update-notice {
+    position: fixed; left: 50%; bottom: 26px; z-index: 1100;
+    transform: translateX(-50%);
+    width: min(600px, 92vw);
+    box-sizing: border-box;
+    display: flex; flex-direction: column; gap: 10px;
+    padding: 16px 18px; border-radius: 14px;
+    background-color: color-mix(in srgb, var(--we-glass-color, #ffffff) calc(var(--we-glass-alpha, 0.5) * 90%), rgba(24, 28, 40, 0.82));
+    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.03) 40%, rgba(255, 255, 255, 0.01));
+    -webkit-backdrop-filter: blur(var(--we-blur, 16px)) saturate(1.2);
+    backdrop-filter: blur(var(--we-blur, 16px)) saturate(1.2);
+    border: 1px solid rgba(255, 255, 255, 0.22);
+    box-shadow: 0 18px 48px rgba(0, 0, 0, 0.4), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+    color: inherit;
+    animation: we-notice-in 240ms var(--we-ease, cubic-bezier(0.16, 1, 0.3, 1));
+  }
+  @keyframes we-notice-in { from { opacity: 0; transform: translate(-50%, 12px); } }
+  .we-update-notice__title { font-weight: 600; font-size: 0.95em; }
+  .we-update-notice__body { font-size: 0.82em; line-height: 1.5; opacity: 0.92; }
+  .we-update-notice__body p { margin: 0 0 6px; }
+  .we-update-notice__hint { font-size: 0.78em; opacity: 0.6; }
+  .we-update-notice__btn { align-self: flex-end; }
+  @media (prefers-reduced-motion: reduce) { .we-update-notice { animation: none !important; } }
+
   /* Glass repo side panel — docked right, locked to 1/4 of the viewport,
      full height, inner body scrolls. Same liquid-glass recipe as the settings
      window: reads the very same --we-blur / --we-saturate / --we-glass-alpha /
@@ -4173,6 +4256,11 @@ const CSS = `
       inset 0 0 0 1px rgba(255, 255, 255, 0.07);
   }
   .we-repo-panel .we-vinyl__hole { width: 16px; height: 16px; margin: -8px 0 0 -8px; }
+  /* While the drawer is closed it is hidden but the picker stays mounted, so
+     the vinyl's spin animation would keep running unseen — constant hidden
+     compositor work that can contend with chat repaints and flash white.
+     Freeze the disc until the drawer actually opens. */
+  .we-repo-panel:not(.we-repo-panel--open) .we-vinyl { animation-play-state: paused; }
   /* Req: the CD-adjacent current-wallpaper card and the custom-wallpaper
      partition render as transparent glass instead of the dark surface layer,
      so the blur behind shows through. */
@@ -4242,7 +4330,38 @@ if (typeof document !== "undefined" &&
 // ── Plugin exports ──────────────────────────────────────────────────────────
 const inject = ["slots"];
 
+// Immersive app-window (desktop shortcut → standalone / fullscreen / minimal-ui)
+// windows composite on a different path than a normal tab, and Chromium can
+// flash the WHOLE window white when a backdrop-filter surface re-rasterises
+// over the wallpaper on interaction (click/typing). Detect that mode once and
+// tag <body>; the CSS then drops the frosted blur there (translucent glass),
+// while normal tabs keep the full frosted look.
+function detectAppWindow() {
+  try {
+    if (typeof navigator !== "undefined" && navigator.standalone) return true; // iOS PWA
+    if (typeof window === "undefined") return false;
+    if (typeof window.matchMedia === "function"
+        && (window.matchMedia("(display-mode: standalone)").matches
+          || window.matchMedia("(display-mode: fullscreen)").matches
+          || window.matchMedia("(display-mode: minimal-ui)").matches)) return true;
+    // Desktop-shortcut / kiosk app window: it has NO browser chrome (tabs,
+    // address bar), so the window's outer dimensions equal the inner viewport.
+    // A normal tab's window is always larger than its viewport. This reliably
+    // catches managed/kiosk/--app windows even when display-mode misreports.
+    if (window.outerWidth === window.innerWidth && window.outerHeight === window.innerHeight) return true;
+  } catch { /* ignore */ }
+  return false;
+}
+
 function apply(ctx) {
+  // Mark immersive/app-window mode so the CSS can stabilise the compositor there.
+  try {
+    if (typeof document !== "undefined" && document.body) {
+      if (detectAppWindow()) document.body.setAttribute("data-we-appwindow", "on");
+      else document.body.removeAttribute("data-we-appwindow");
+    }
+  } catch { /* ignore */ }
+
   // 1. Mount the behind-body wallpaper + scrim layers and keep them in sync
   //    with the selection store. ctx.effect gives fiber-lifetime cleanup.
   if (ctx.effect) {
