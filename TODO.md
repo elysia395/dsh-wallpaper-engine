@@ -133,12 +133,23 @@
 - [x] **scene.pkg 容器（PKGV）**：`readPkg` 双头部支持（旧 PKGV@0 / 新 PKGV0018-0023@4）,
       条目 = u32 nameLen + name + u32 offset + u32 size（不 4 对齐, 无 u64,
       offset 相对 dataStart）; 4 个 workshop scene.pkg 全部解析通过。
+      **格式调研结论**（repkg/lwe 源码 + 实测三方一致）：PKGV 全版本（0004-0023）
+      为**单一布局** — sized-string 头部（u32 len + "PKGVxxxx"）+ u32 count +
+      条目 (u32 len name + u32 offset + u32 length)，offset 相对 dataStart；
+      不存在第二种主流布局（旧 PKGV@0 分支仅为防御）。
 - [x] **JPEG 纹理解码**：`lib/we-renderer/jpeg.js` baseline SOF0/SOF1（4:4:4/4:2:2/4:2:0,
       Huffman + 反量化 + 浮点 IDCT + YCbCr, RST restart, FF00 填充）;
       TEX 内嵌照片纹理 → loadTexImage jpeg 分支。
+- [x] **TEX 容器变体**：`lib/pkg-extract.js` 已覆盖全部 TEXB0001-4（含 V4 JSON 头 +
+      param 校验）、LZ4 压缩、TEXS0001-3 帧表、FIF 格式枚举 — 与 repkg/lwe 源码逐字段一致。
 - [x] **TTF 字体**：`parseCffFont` 扩展 glyf 表路径（cmap fmt4/12 → 字符映射,
       glyf/loca 简单+复合字形, 二次贝塞尔细分折线, hmtx advance）;
       renderText 统一 CFF/TTF 接口。
+- [x] **MDL 骨骼格式逆向**（puppet 动画输入，无社区实现）：MDLV0023 顶点
+      （80B stride, pos@0 uv@72, 与 lwe CImage 一致）+ MDLS0004 骨骼（BONEENTRY =
+      9B 头 + u32 len + 4x4 矩阵 64B + JSON 属性, 父骨骼索引）+ MDLA0006 动画
+      （可选段; 动画条目 = u32 时长/数据 + 骨骼 TRS 流, 每骨骼 36B = pos+rot+scale,
+      按骨骼分组 601 帧/骨 实测）。
 - [x] **solidlayer 纯色层**：`models/util/solidlayer.json` → 对象 color 填充矩形
       （flat shader）; 带音频条类效果（未实现）时跳过避免白色占位块。
 - [ ] **workshop 场景验证**：4 个 scene.pkg 壁纸（2934788040 花 ✓ 完整渲染 /
@@ -147,7 +158,9 @@
 - [ ] **清理**：`scene-layers-out/`（726MB 渲染产物）仅保留少量验证图；
       `docs/images/`（47MB）、`_refs/linux-wallpaperengine`（21MB）按需裁剪。
 - [ ] **Git 修复**：`.git` 缺 HEAD/config（objects 仅 43 个，历史截断）；
-      重建仓库 + 新分支推送（当前网络不可达 github.com）。
+      重建仓库 + 新分支推送。**网络已恢复**（沙箱外 `git -c http.sslVerify=false`
+      或 curl `--ssl-no-revoke` 可访问 github，ls-remote 验证通过）；用户要求
+      完成大部分工作后再推送/创建 PR。
 
 ---
 
