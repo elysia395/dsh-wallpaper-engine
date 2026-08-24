@@ -12,19 +12,24 @@ scene-layers-out/
 # è§†è§‰å·¥å…·å·¥ä»¶
 .dsh-vision-router/
 
-# ¾É .git ±¸·İ (ÖØ½¨Ç°).git.bak-broken/
 
-# ÄæÏò²Î¿¼Ô´Âë¸±±¾ (µÚÈı·½, ±¾µØÑĞ¾¿ÓÃ, ²»Èë¿â)
+
+
 /_refs/
-# ÎŞÒıÓÃµÄ¾ÉÎÄµµÅäÍ¼
+
 /docs/images/
-# ¾É .git ±¸·İ
+
 /.git.bak-broken/
 
 
-# ÄæÏò²Î¿¼Ô´Âë (²»Ìá½»)
+
 /scripts/lwe-ref/
 
 
 # æ¸²æŸ“è¾“å‡º (å›å½’/è°ƒè¯•ç”¨, ä¸å…¥åº“)
 /scripts/out/
+
+# é€†å‘ç›¸å…³å·¥å…·ä¸è¯Šæ–­è„šæœ¬ (æœ¬åœ°ç ”ç©¶ç”¨, ä¸å…¥ GitHub ä»“åº“)
+/scripts/reverse/
+/scripts/core/
+/scripts/anim/
