@@ -1,5 +1,5 @@
-// godrays 5-pass 链验证: dino_run postprocess
-import { SceneRenderer, encodePng } from '../lib/scene-renderer.js';
+﻿// godrays 5-pass 閾鹃獙璇? dino_run postprocess
+import { SceneRenderer, encodePng } from '../../lib/scene-renderer.js';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -27,10 +27,10 @@ function stats(rgba, w, h) {
 const dinoDir = path.join(WE, 'projects', 'defaultprojects', 'dino_run');
 const t0 = Date.now();
 const { canvas } = renderScene(dinoDir);
-console.log(`dino_run (godrays on): avgRGB=${stats(canvas.data, canvas.w, canvas.h)} 耗时=${((Date.now() - t0) / 1000).toFixed(1)}s`);
+console.log(`dino_run (godrays on): avgRGB=${stats(canvas.data, canvas.w, canvas.h)} 鑰楁椂=${((Date.now() - t0) / 1000).toFixed(1)}s`);
 fs.writeFileSync(path.join(OUT, 'dino_run_godrays.png'), encodePng(canvas.w, canvas.h, canvas.data));
 
-// 对照: 禁用 postprocess 的 godrays (保留 scroll)
+// 瀵圭収: 绂佺敤 postprocess 鐨?godrays (淇濈暀 scroll)
 {
   const r = new SceneRenderer(dinoDir, { width: 1920, height: 1080, time: 2.5, weAssetsDir: WE, log: () => {} });
   const pp = r.objects.find((o) => o.name === 'postprocess');
@@ -38,7 +38,7 @@ fs.writeFileSync(path.join(OUT, 'dino_run_godrays.png'), encodePng(canvas.w, can
   const c = r.render();
   fs.writeFileSync(path.join(OUT, 'dino_run_nogodrays.png'), encodePng(c.w, c.h, c.data));
   console.log(`dino_run (no godrays): avgRGB=${stats(c.data, c.w, c.h)}`);
-  // 差异统计
+  // 宸紓缁熻
   let diff = 0, n = 0, brightGain = 0;
   for (let y = 0; y < c.h; y += 8) {
     for (let x = 0; x < c.w; x += 8) {
@@ -49,5 +49,5 @@ fs.writeFileSync(path.join(OUT, 'dino_run_godrays.png'), encodePng(canvas.w, can
       n++;
     }
   }
-  console.log(`godrays 差异像素: ${diff}/${n} (${(diff / n * 100).toFixed(1)}%), 平均亮度增益=${(brightGain / n / 3).toFixed(2)} (add 模式应 ≥0)`);
+  console.log(`godrays 宸紓鍍忕礌: ${diff}/${n} (${(diff / n * 100).toFixed(1)}%), 骞冲潎浜害澧炵泭=${(brightGain / n / 3).toFixed(2)} (add 妯″紡搴?鈮?)`);
 }

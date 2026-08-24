@@ -1,5 +1,5 @@
-// dino_run scroll 时间卷动验证 + 回归检查
-import { SceneRenderer, encodePng } from '../lib/scene-renderer.js';
+﻿// dino_run scroll 鏃堕棿鍗峰姩楠岃瘉 + 鍥炲綊妫€鏌?
+import { SceneRenderer, encodePng } from '../../lib/scene-renderer.js';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -24,25 +24,25 @@ function frameDiff(a, b, w, h, step = 8) {
   return { diff, n };
 }
 
-// dino_run: scroll 是时间动画 → t=2.5 与 t=3.5 帧应有差异 (来自 scroll 卷动)
+// dino_run: scroll 鏄椂闂村姩鐢?鈫?t=2.5 涓?t=3.5 甯у簲鏈夊樊寮?(鏉ヨ嚜 scroll 鍗峰姩)
 const dinoDir = path.join(WE, 'projects', 'defaultprojects', 'dino_run');
 const a = renderScene(dinoDir, { t: 2.5 });
 const b = renderScene(dinoDir, { t: 3.5 });
 const d = frameDiff(a.canvas.data, b.canvas.data, a.canvas.w, a.canvas.h);
 console.log(`dino_run t=2.5 vs t=3.5: ${d.diff}/${d.n} (${(d.diff / d.n * 100).toFixed(1)}%)`);
 
-// 与无 scroll 对比: 禁用 bg1_*/grass_ground 的 effects 后帧应接近 t=2.5 无卷动?
+// 涓庢棤 scroll 瀵规瘮: 绂佺敤 bg1_*/grass_ground 鐨?effects 鍚庡抚搴旀帴杩?t=2.5 鏃犲嵎鍔?
 {
   const r = new SceneRenderer(dinoDir, { width: 1920, height: 1080, time: 2.5, weAssetsDir: WE, log: () => {} });
   for (const o of r.objects) if (o.effects) o.effects = [];
   const c = r.render();
   const dd = frameDiff(a.canvas.data, c.data, a.canvas.w, a.canvas.h);
-  console.log(`dino_run 有scroll(t2.5) vs 无scroll: ${dd.diff}/${dd.n} (${(dd.diff / dd.n * 100).toFixed(1)}%)`);
+  console.log(`dino_run 鏈塻croll(t2.5) vs 鏃爏croll: ${dd.diff}/${dd.n} (${(dd.diff / dd.n * 100).toFixed(1)}%)`);
   fs.writeFileSync(path.join(OUT, 'dino_run_noscroll.png'), encodePng(c.w, c.h, c.data));
 }
 
-// 回归: demon_core (应保持正确)
+// 鍥炲綊: demon_core (搴斾繚鎸佹纭?
 const demonDir = path.join(WE, 'projects', 'defaultprojects', 'demon_core');
 const dc = renderScene(demonDir);
 fs.writeFileSync(path.join(OUT, 'demon_core_regression.png'), encodePng(dc.canvas.w, dc.canvas.h, dc.canvas.data));
-console.log('demon_core 渲染完成 (回归)');
+console.log('demon_core 娓叉煋瀹屾垚 (鍥炲綊)');

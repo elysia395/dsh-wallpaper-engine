@@ -1,9 +1,9 @@
-// 测试: image 层(大衣/躯干)不用 cropoffset, puppet 层(头/眼)用 cropoffset
-// 生成完整人物渲染
+﻿// 娴嬭瘯: image 灞?澶ц。/韬共)涓嶇敤 cropoffset, puppet 灞?澶?鐪?鐢?cropoffset
+// 鐢熸垚瀹屾暣浜虹墿娓叉煋
 import { createRequire } from 'module';
 const require = createRequire('file:///D:/dsh-wallpaper-engine/scripts/');
 const sharp = require('C:/Users/Kai/.dsh/profiles/node_modules/sharp');
-import { SceneRenderer, encodePng, getVal, Canvas } from '../lib/scene-renderer.js';
+import { SceneRenderer, encodePng, getVal, Canvas } from '../../lib/scene-renderer.js';
 import fs from 'fs';
 
 const PKG = 'C:/Program Files (x86)/Steam/steamapps/workshop/content/431960/3486806915/scene.pkg';
@@ -38,7 +38,7 @@ function render(cropPuppet, cropImage) {
       if (!size[0] || !size[1]) size = [tex.width, tex.height];
       if (model.fullscreen) size = [3840, 2160];
       const dw = size[0], dh = size[1];
-      // image 层: cropoffset 是否应用?
+      // image 灞? cropoffset 鏄惁搴旂敤?
       let ox = 0, oy = 0;
       if (cropImage && model.cropoffset) {
         const c = model.cropoffset.trim().split(/\s+/).map(Number);
@@ -51,18 +51,18 @@ function render(cropPuppet, cropImage) {
   return canvas;
 }
 
-// 组合测试
+// 缁勫悎娴嬭瘯
 const combos = [
-  { id: 'H1', cropPuppet: false, cropImage: false, desc: '全部无crop' },
-  { id: 'H2', cropPuppet: true, cropImage: false, desc: '仅puppet用crop' },
-  { id: 'H3', cropPuppet: false, cropImage: true, desc: '仅image用crop' },
-  { id: 'H4', cropPuppet: true, cropImage: true, desc: '全部用crop' },
+  { id: 'H1', cropPuppet: false, cropImage: false, desc: '鍏ㄩ儴鏃燾rop' },
+  { id: 'H2', cropPuppet: true, cropImage: false, desc: '浠卲uppet鐢╟rop' },
+  { id: 'H3', cropPuppet: false, cropImage: true, desc: '浠卛mage鐢╟rop' },
+  { id: 'H4', cropPuppet: true, cropImage: true, desc: '鍏ㄩ儴鐢╟rop' },
 ];
 
 for (const c of combos) {
   const canvas = render(c.cropPuppet, c.cropImage);
   const buf = await sharp(Buffer.from(encodePng(canvas.w, canvas.h, canvas.data))).resize(1600, 900).png().toBuffer();
   fs.writeFileSync(OUT + 'combo_' + c.id + '_' + c.desc + '.png', buf);
-  console.log('生成 combo_' + c.id, c.desc);
+  console.log('鐢熸垚 combo_' + c.id, c.desc);
 }
-console.log('完成');
+console.log('瀹屾垚');

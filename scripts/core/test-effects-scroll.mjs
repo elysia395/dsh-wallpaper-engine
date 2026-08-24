@@ -1,7 +1,7 @@
-// 验证 effects/ scroll + tint + filmgrain CPU 实现
-// dino_run: bg1_* + grass_ground 5 个可见对象用 effects/scroll (repeat/speedx/speedy)
-// neon_sunset: Fullscreen 对象用 effects/filmgrain
-import { SceneRenderer, encodePng } from '../lib/scene-renderer.js';
+﻿// 楠岃瘉 effects/ scroll + tint + filmgrain CPU 瀹炵幇
+// dino_run: bg1_* + grass_ground 5 涓彲瑙佸璞＄敤 effects/scroll (repeat/speedx/speedy)
+// neon_sunset: Fullscreen 瀵硅薄鐢?effects/filmgrain
+import { SceneRenderer, encodePng } from '../../lib/scene-renderer.js';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -29,27 +29,27 @@ async function renderScene(name, src, opts = {}) {
   const png = encodePng(canvas.w, canvas.h, canvas.data);
   const f = path.join(OUT, name + '.png');
   fs.writeFileSync(f, png);
-  console.log(`${name}: ${canvas.w}x${canvas.h} ${(Date.now() - t0) / 1000}s avgRGB=${pngStats(canvas.data, canvas.w, canvas.h)} → ${f}`);
+  console.log(`${name}: ${canvas.w}x${canvas.h} ${(Date.now() - t0) / 1000}s avgRGB=${pngStats(canvas.data, canvas.w, canvas.h)} 鈫?${f}`);
   return { r, canvas };
 }
 
-// ── dino_run (scroll effects) ──
+// 鈹€鈹€ dino_run (scroll effects) 鈹€鈹€
 const dinoDir = path.join(WE, 'projects', 'defaultprojects', 'dino_run');
 await renderScene('dino_run_effects', dinoDir, { w: 1920, h: 1080 });
 
-// 单独验证 scroll 对单纹理的效果: 对 bg1_0 的纹理跑 effectScroll, 对比前后
+// 鍗曠嫭楠岃瘉 scroll 瀵瑰崟绾圭悊鐨勬晥鏋? 瀵?bg1_0 鐨勭汗鐞嗚窇 effectScroll, 瀵规瘮鍓嶅悗
 {
   const r = new SceneRenderer(dinoDir, { width: 1920, height: 1080, time: 2.5, weAssetsDir: WE, log: () => {} });
   const o = r.objects.find((x) => x.name === 'bg1_0');
   const tex = r.loadModelTexture(o.image);
-  console.log('bg1_0 纹理尺寸:', tex && tex.width, 'x', tex && tex.height);
-  // 场景中 bg1_0 的 scroll 参数
+  console.log('bg1_0 绾圭悊灏哄:', tex && tex.width, 'x', tex && tex.height);
+  // 鍦烘櫙涓?bg1_0 鐨?scroll 鍙傛暟
   const ef = o.effects[0];
   console.log('bg1_0 scroll csv:', JSON.stringify(ef.passes[0].constantshadervalues));
-  // 渲染前后对比: 直接调用 effectScroll
+  // 娓叉煋鍓嶅悗瀵规瘮: 鐩存帴璋冪敤 effectScroll
   const img = r.effectScroll(tex, ef.passes[0].constantshadervalues || {}, 2.5);
-  console.log('effectScroll 输出尺寸:', img.width, 'x', img.height);
-  // 对比中心区域像素: 计算两张图差异
+  console.log('effectScroll 杈撳嚭灏哄:', img.width, 'x', img.height);
+  // 瀵规瘮涓績鍖哄煙鍍忕礌: 璁＄畻涓ゅ紶鍥惧樊寮?
   const w = tex.width, h = tex.height;
   let diff = 0, n = 0;
   for (let y = 0; y < h; y += 1) {
@@ -60,15 +60,15 @@ await renderScene('dino_run_effects', dinoDir, { w: 1920, h: 1080 });
       n++;
     }
   }
-  console.log(`bg1_0 scroll 前后差异像素: ${diff}/${n} (${(diff / n * 100).toFixed(2)}%)  t=2.5s`);
+  console.log(`bg1_0 scroll 鍓嶅悗宸紓鍍忕礌: ${diff}/${n} (${(diff / n * 100).toFixed(2)}%)  t=2.5s`);
 }
 
-// ── neon_sunset (filmgrain effect) ──
+// 鈹€鈹€ neon_sunset (filmgrain effect) 鈹€鈹€
 const neonDir = path.join(WE, 'projects', 'defaultprojects', 'neon_sunset');
 await renderScene('neon_sunset_effects', neonDir, { w: 1920, h: 1080 });
 
-// ── razer_bedroom (scroll+tint, 可见对象) ──
+// 鈹€鈹€ razer_bedroom (scroll+tint, 鍙瀵硅薄) 鈹€鈹€
 const razerDir = path.join(WE, 'projects', 'defaultprojects', 'razer_bedroom');
 await renderScene('razer_bedroom_effects', razerDir, { w: 1920, h: 1080 });
 
-console.log('\n完成');
+console.log('\n瀹屾垚');

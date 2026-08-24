@@ -1,5 +1,5 @@
-// 全量回归: 渲染所有 defaultprojects 场景, 记录成功/失败/avgRGB
-import { SceneRenderer, encodePng } from '../lib/scene-renderer.js';
+﻿// 鍏ㄩ噺鍥炲綊: 娓叉煋鎵€鏈?defaultprojects 鍦烘櫙, 璁板綍鎴愬姛/澶辫触/avgRGB
+import { SceneRenderer, encodePng } from '../../lib/scene-renderer.js';
 import fs from 'node:fs';
 import path from 'node:path';
 

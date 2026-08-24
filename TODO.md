@@ -2,8 +2,8 @@
 
 > 目标：将 `lib/scene-renderer.js` 发展为与 Wallpaper Engine 原生渲染高度一致、
 > 可在多平台（Windows/Linux/macOS 的 Node/浏览器）运行的 WE 场景渲染引擎。
-> 以引擎自带 shader 源码、OBJ 源几何、场景数据与 preview 渲染为**事实基准**，
-> 优先引擎事实而非参数猜测。
+> 以 wallpaper64.exe（官方引擎逆向）为**事实基准**逐组件复刻，辅以引擎 shader
+> 源码、OBJ 源几何、场景数据与 preview 渲染验证。
 > 渲染保持 worker 非阻塞 + 静态帧缓存。
 
 ---
@@ -51,7 +51,7 @@
 - **效果多 pass 链**：`applyEffects` 传入完整 `passes`，godrays 走 5-pass + 半分辨率 fbo。
 - **worker 非阻塞渲染**：`scene-render-worker.mjs`（600s 超时、空帧门禁、
   ArrayBuffer 零拷贝回传）。
-- **静态帧缓存**：cache key `sf10`（当前）。
+- **静态帧缓存**：cache key `sf27`（当前，含官方视图平移 T(-eye) 前景 x 分量）。
 - **camera paths**：`_resolveCameraPose` 多 path 顺序循环（总时长 = duration 和），
   path 内关键帧线性插值 eye/center/up/zoom（demon_core 4 镜头验证）。
 - **粒子确定性**：mulberry32 种子 RNG（场景路径+对象 id hash），同 time 帧可复现，
@@ -77,6 +77,7 @@
 | `arsenal` | ✅ 手枪可见 | lightmap 第 2 UV + skylight 已实现 |
 | `shimmering_particles` | ✅ 确定性渲染 | 同 time 帧可复现，动画需多帧评判 |
 | `beach`/`retro`/`razer_bedroom`/`razer_vortex`/`eagleflag` | ✅ 渲染成功 | — |
+| Amiya 3486806915 | ⚠ 定位待确认 | sf27 官方视图平移 T(-eye) 待实机验证 |
 
 ---
 
@@ -125,9 +126,9 @@
       shimmer、fire、foliagesway、chromaticaberration、lightshafts、localcontrast、
       motionblur、refraction、xray、colorkey、cursorripple、depthparallax、
       edgedetection、fluidsimulation、clouds、cloudmotion、nitro、iris、blend*…
-- [ ] **HDR/bloom 完整链**：✅ 已实现（downsample_quarter_bloom 4 角采样 +
+- [x] **HDR/bloom 完整链**：✅ 已实现（downsample_quarter_bloom 4 角采样 +
       saturate(scale-threshold) + 饱和度 + lin gamma + LDR/HDR 合成）。
-- [ ] **音频响应**：✅ 已实现（g_AudioSpectrum 驱动 pulse，引擎 CreateAudioResponse
+- [x] **音频响应**：✅ 已实现（g_AudioSpectrum 驱动 pulse，引擎 CreateAudioResponse
       公式验证）；需 opts.audioSpectrum 输入（本地场景未用）。
 - [x] **sound 对象**：已正确归类（scene 图 'sound' 类型，渲染时静默跳过——无渲染）。
 - [x] **视差（parallax）**：camera.parallax + mouse 驱动位移（opts.mouse），
@@ -148,7 +149,8 @@
       跳过，避免白色占位覆盖画面）。
 
 ### 工程
-- [ ] **缓存键管理**：渲染管线变更后 bump `lib/index.js` 的 `sf*` 前缀（当前 sf10）。
+- [x] **缓存键管理**：渲染管线变更后 bump `lib/index.js` 的 `sf*` 前缀
+      （**当前 sf27** = 官方视图平移 T(-eye) 前景 x 分量）。
 - [x] **重构**：WE 渲染引擎提取为 `lib/we-renderer/` 独立子目录（core 主体 +
       math/canvas/textures/mdl/bloom/camera 工具模块），`lib/scene-renderer.js`
       变兼容 re-export 入口。
@@ -186,7 +188,55 @@
 
 ---
 
-## 四、关键事实备忘（避免回归）
+## 四、当前逆向主线：官方定位数学（Amiya 头部错位）
+
+### 已确认（wallpaper64.exe 逆向，详见 `docs/WE-REVERSE.md`）
+- **官方定位 = origin×0.5×M**（0.5 = 常量 0x1404926C0，固定场景→画布缩放；
+  0x1401EC338 数学，DSH 3840 渲染用 ps=1 等价）。
+- **M = 0x30(世界) × 0x38 × 0x40**（0x1400D4200：0x8f0 = 0x30×(0x38×0x40)）。
+- **0x38/0x40 = 0x1160/0x11a0 相机矩阵缓存**（渲染压栈 0x1401EC936/0x1401EC96C，
+  从 rsi+0x48/0x50 复制，0x1401800B8；0x14017FCFC 构造）。
+- **puppet origin（0x2f0）参与骨骼矩阵链乘法**（0x140147F31 读、0x140147FC4 写回），
+  image 无此路径 → **puppet 与 image 定位差异的结构性来源**。
+- **0x384 矩阵B**（image 路径 origin×0.5×矩阵B → 0x970；r15b==0 分支）。
+- **结果矩阵 0x9f0-0xa2f**（完整 4×4，第4行 = M 第4行 0x374 原样）被复制到输出
+  顶点矩阵数组（0x1400D9537），用于渲染。
+- **背景跳过视图**：0x304 的 0x1100 标志区分路径（用户最初"头相对背景偏移
+  182px@1920 = eye.x×0.5"证实背景不经 -eye）。
+- **sf27 已实现**：前景 `_viewShift` = (-camEye.x, 0)×ps = (+360, 0) @3840；
+  背景（size 达场景尺寸）跳过。**y 分量归零**（用户实测栏杆/花束上移异常）。
+
+### 待确认问题（需要继续逆向 / 实机验证）
+- [ ] **Q1 官方 view 平移的 y 分量**：0x1160（view 缓存）是否含 -eye.y？
+      当前 y=0 是保守选择；用户实测 y 上移异常（+269.56 错）。待从
+      0x14017FCFC 构造（0.5 常量参与）或 0x1401ED27F（0x178/0x17c 字段）
+      确认官方 y 平移确切符号（0 / -269.56 / +269.56）。
+- [ ] **Q2 puppet origin 骨骼链变换公式**：0x140147F31 origin 槽 × 骨骼矩阵——
+      哪级骨骼（根？末？）、animWorld 还是 bindWorld / bindInv、乘还是加、
+      方向。Amiya 头骨0 bind T=(-51.83,-250.55) 与用户"头应右移"方向存疑，
+      需官方渲染帧对照（壁纸文件数据不足以定方向）。
+- [ ] **Q3 M 的 0x30（世界矩阵）内容**：0x1401EC799 单位阵 vs 0x1401EC878
+      rdi 复制——rdi 来源（对象世界矩阵？锚点？）待确认；DSH 是否需在
+      origin×ps 之外乘 0x30。
+- [ ] **Q4 0.5 与 DSH 分辨率关系**：官方固定 0.5（1920 画布 = 场景 3840/2），
+      DSH 3840 渲染 ps=1 是否在全部对象/视差/粒子路径等价（当前主路径已等价，
+      粒子 `projScale` 待核对）。
+- [ ] **Q5 sf27 实机验证**：栏杆/花束高度（y 修正是否正确）、头相对背景 x 对齐
+      （+360 右移 vs -360 左移）。用户实机反馈后定符号。
+- [ ] **Q6 0x384 矩阵B 用途**：image 路径 origin×0.5×矩阵B → 0x970（0x1401EC3F1），
+      0x970 区域如何进入渲染（0x1400D94E6 复制 0x9dc-0x9ec）——是 image 特有
+      定位矩阵还是锚点/排序用。
+- [ ] **Q7 0x9f0 结果矩阵消费**：0x1400D9537 复制到输出顶点矩阵数组（rdi+rdx），
+      之后顶点变换如何用它（与蒙皮 gBones 组合顺序）——决定 DSH 蒙皮顶点
+      与定位矩阵的最终乘法形式。
+- [ ] **Q8 官方引擎动态参照**：wallpaper64.exe 支持 `-control openWallpaper
+      -file <scene.pkg>` / `workshopid -id` / `-preview`，可自跑官方渲染截屏
+      提取头/发/耳/眼像素坐标做确定性对照（已获用户许可；视觉工具预算
+      恢复后可继续）。
+
+---
+
+## 五、关键事实备忘（避免回归）
 
 - **FOV 是垂直的**（50° 默认）；正交由 `projScale` 换算场景单位→像素。
 - **MDL UV 在 stride-8**（stride 64 时 36）；模型双面渲染 + 背面法线翻转
@@ -202,3 +252,5 @@
   `Set-Content -Encoding UTF8` 会写 BOM 导致 JSON.parse 崩溃）。
 - **DSH 安装恢复规则**：CLI `dsh plugin add` 会被 startup-recovery 回滚；
   手动编辑 profile package.json（link: 说明符）避免事务回滚。
+- **视图平移（sf27）**：前景 `(-camEye.x, 0)×ps`；背景（size 达场景尺寸）
+  跳过——`_viewShift()` 单一入口，改符号前先读 `scripts/reverse/NOTES-M-matrix.md`。
