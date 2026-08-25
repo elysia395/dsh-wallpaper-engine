@@ -6,11 +6,10 @@
 
 A DSH bundle that turns your **Wallpaper Engine** wallpapers into the **background of the DSH web GUI** (`dsh web`).
 
-> ✅ **Fixed: occasional full-screen white flash in immersive windows** (v0.6.2)
-> Older builds could flash the **whole window white** when you clicked the dialog or typed in an **immersive fullscreen window** opened via a **desktop shortcut** (standalone / kiosk) — the floating repo-panel / rope compositing layers added by that update caused Chromium to occasionally paint the backdrop white under **hardware acceleration**.
-> **Fixed in v0.6.2**: the plugin now **lazy-mounts the repo panel content** (keeps it out of the DOM while closed), which removes a lot of unnecessary compositing layers; normal browser tabs are unaffected and keep the full frosted-glass look.
-> If the flash still occurs in a rare environment, turning OFF “Use hardware acceleration when available” for that window's own browser config is a solid fallback (the immersive window stays smooth even with it off — keep it ON for normal tabs so they don't lag).
-> The plugin shows a one-time notice (once per version) about this fix.
+> ✅ **Improved: occasional full-screen white flash in immersive windows** (v0.6.4, keeps full frosted glass)
+> Older builds could flash the **whole window white** when you clicked the dialog or typed in an **immersive fullscreen window** opened via a **desktop shortcut** (standalone / kiosk) — under **hardware acceleration**, Chromium's compositor occasionally paints the backdrop white while it re-composites over the wallpaper.
+> **v0.6.4 keeps reducing the compositing layers**: the repo panel is lazy-mounted when closed, the rope has no permanent filter, and the wallpaper media no longer forces a transform compositing layer by default — whilst **keeping the full frosted glass**. Normal browser tabs are unaffected and keep the full frosted glass + hardware acceleration.
+> The plugin shows a one-time notice (once per version) about this.
 
 It discovers the Wallpaper Engine install on your machine, lists its wallpapers, and renders them behind the DSH chat interface with an iOS-style **liquid glass** effect: Video (`.mp4`) plays live, Web/HTML loads in an iframe, and **Scene wallpapers appear as extracted static frames**. Since v0.2 it also adds:
 
@@ -155,14 +154,24 @@ dsh plugin --profile web add dsh-plugin-wallpaper-engine
 Then restart `dsh web` and open **Settings → Wallpaper Engine**.
 
 > **macOS users**: Wallpaper Engine has no macOS client. The macOS line of this
-> plugin (WaifuX + loose-media support) is maintained by Jerry and published as
+> plugin (WaifuX + loose-media support) is maintained by [Jerry
+> (@ruijiaang-lab)](https://github.com/ruijiaang-lab) and published as
 > a separate npm package:
 >
 > ```sh
 > dsh plugin --profile web add dsh-plugin-wallpaper-engine-mac
 > ```
 >
-> Repo: https://github.com/ruijiaang-lab/dsh-wallpaper-engine
+> Upstream mac branch: <https://github.com/elysia395/dsh-wallpaper-engine/tree/dsh-wallpaper-engine-mac>
+>
+> Distribution repo: <https://github.com/ruijiaang-lab/dsh-wallpaper-engine>
+
+#### macOS line notes
+
+- Automatically scans WaifuX's `~/Library/Application Support/WaifuX/Wallpapers/` and `Media/`, plus `~/Documents/dsh/we-content/` and `DSH_WALLPAPER_ENGINE_CONTENT` roots.
+- Supports WaifuX steamcmd's nested Workshop layout and loose `.mp4`, `.webm`, `.png`, `.jpg`, `.gif`, and `.webp` media files.
+- Keeps the macOS free playback-speed slider (0.25x–2x) and falls back to original media when a wallpaper has no preview.
+- Target macOS pull requests at `dsh-wallpaper-engine-mac`; target Windows, WSL, and shared cross-platform work at `main`.
 
 ### For developers (running your own copy)
 
@@ -377,6 +386,18 @@ skin-center design):
 
 > Liquid glass: the whole settings window unified as glass, following accent, glass color and glass transparency.
 
+### Mascot (chat pull-cord)
+
+At the bottom of the **外观** (appearance) area is a mascot control group for the chat **pull-cord** (a draggable rope pinned to the top edge; pulling it down slides out the **wallpaper repo** drawer):
+
+| Control | What it does | Range | Default |
+|---|---|---|---|
+| **显示吉祥物** (show mascot) | Whether the pull-cord mascot and its wallpaper-repo drawer render | on / off | on |
+| **吉祥物形态** (mascot form) | Switch artwork: default **小女仆** (near-square chibi) or **鲸御姐** (portrait 2:3 full-body) | 小女仆 / 鲸御姐 | 小女仆 |
+| **吉祥物大小** (mascot size) | Scale the mascot (the rope box follows the ratio; drag / snap geometry adapts automatically) | 0.5×–2.5× | 1× |
+
+> Both artworks are inlined as base64 (transparent background) at build time, so the single-file client bundle stays self-contained. **Size** changes only the rope's own box; the wallpaper-repo drawer below is unaffected. Settings apply instantly and persist to the host-side config file.
+
 ### The four sliders
 
 While a wallpaper is active, four sliders let you tune how it blends with the UI:
@@ -461,3 +482,7 @@ The host↔browser contract is plain same-origin HTTP, so the two halves are
 developed independently: rebuild the host by restarting `dsh web`, and rebuild
 the client with `npm run build` before re-running `dsh web`.
 
+`scripts/npm-publish.mjs` assembles the macOS distribution under the separate
+`dsh-plugin-wallpaper-engine-mac` name without claiming the upstream Windows
+package. Use `node scripts/npm-publish.mjs --dry-run` to inspect the package;
+perform a real publish only as a separately approved release step.

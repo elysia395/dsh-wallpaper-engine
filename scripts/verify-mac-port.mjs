@@ -9,6 +9,7 @@ const read = (relativePath) =>
 const clientSource = read('src/client.js');
 const clientBundle = read('lib/client.js');
 const hostSource = read('lib/index.js');
+const publishScript = read('scripts/npm-publish.mjs');
 
 function expectPattern(label, source, pattern) {
   assert.ok(pattern.test(source), `${label}: expected ${pattern}`);
@@ -45,10 +46,15 @@ for (const [label, source] of [
   expectPattern(`${label} keeps the free playback slider`, source, /SliderRow\("播放速度", 0\.25, 2, "any"/);
   expectPattern(`${label} passes current.media to vinyl fallback`, source, /current\s*&&\s*current\.media/);
   expectPattern(`${label} keeps thumbnail load reveal`, source, /onLoad:\s*\(e\)\s*=>\s*\{\s*e\.target\.style\.opacity\s*=\s*"1"/);
+  expectPattern(`${label} keeps saved selection while inventory is empty`, source, /if \(selection\.inventory\.wallpapers\.length === 0\) return/);
+  expectPattern(`${label} keeps the no-transform default`, source, /--we-wallpaper-transform[\s\S]{0,260}: "none"/);
 }
 
 // The host persists shared settings. Its clamp must match the mac client's
 // 0.25x lower bound or a saved 0.25x–0.49x value silently returns as 0.5x.
 expectPattern('host preserves 0.25x playback settings', hostSource, /playbackRate:\s*clampNum\(o\.playbackRate, 0\.25, 2, 1\)/);
+expectPattern('mac publish script decodes non-ASCII paths', publishScript, /fileURLToPath/);
+expectPattern('mac publish script keeps the Node engine', publishScript, /engines:\s*pkg\.engines/);
+expectPattern('mac publish script keeps runtime dependencies', publishScript, /dependencies:\s*pkg\.dependencies/);
 
 console.log('\nALL MAC PORT CHECKS PASSED');

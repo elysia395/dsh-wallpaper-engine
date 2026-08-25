@@ -1,63 +1,62 @@
 # dsh-plugin-wallpaper-engine
 
-[English](README.md) | [中文](README.zh.md)
+[English](README.en.md) | [中文](README.md)
 
-A DSH bundle that turns your **Wallpaper Engine** wallpapers into the **background of the DSH web GUI** (`dsh web`).
+> 🆕 **没用过命令行？先看这里：[小白向使用指南（新手快速上手）→](README.beginner.md)** —— 给完全没接触过命令行的用户准备的简化说明。
 
-It discovers the wallpapers on your machine (WaifuX on macOS, Wallpaper Engine on Windows), lists them, and renders video/still wallpapers behind the DSH chat interface with an iOS-style **liquid glass** effect. You pick the wallpaper from a settings row, fine-tune it with four sliders, and pause/clear it anytime.
+一个 DSH bundle，把你电脑上的 **Wallpaper Engine** 壁纸变成 **DSH 网页界面（`dsh web`）的背景**。
 
-## Quick start (no command line needed)
+> ✅ **已优化：沉浸式全屏窗口偶尔全屏闪白**（v0.6.4，保留完整毛玻璃）
+> 早期版本在**桌面快捷方式打开的沉浸式全屏窗口**（独立应用 / kiosk 窗口）里，点击对话或输入文字时**可能整屏闪白一下**——这是该窗口 + 硬件加速下，Chromium 合成器对壁纸重绘时偶发把整屏画白。
+> **v0.6.4 继续按「减少合成层」处理**：仓库面板关闭时懒加载、拉绳无永久滤镜、壁纸媒体默认下不再强制一个变换合成层——同时**完整保留毛玻璃**；普通浏览器标签页完全不受影响，保持完整毛玻璃与硬件加速。
+> 插件更新后会弹一次提示，告知此优化（每个新版本仅出现一次）。
 
-**macOS (WaifuX wallpapers)**
+它会自动发现你本机的 Wallpaper Engine 安装，列出你的壁纸，并把*可移植*的类型渲染到 DSH 对话界面的后方，配以 **iOS 风格液态玻璃**效果：Video（`.mp4`）动态播放、Web/HTML 以 iframe 加载，**Scene（场景）提取主纹理作为静态帧**。v0.2 起还支持：
 
-1. Install **WaifuX**, log in (Steam account), download wallpapers you like — videos and stills both work
-2. In DSH, open **Plugin Market**, search `wallpaper`, install this plugin (the mac build includes WaifuX support)
-3. Open **Settings → General → Wallpaper Engine**, pick a wallpaper — the chat background updates immediately
+- **壁纸选择弹窗**：缩略图网格收纳进独立弹窗，设置页不再被长列表占满；
+- **隐藏 / 恢复**：不想看的壁纸一键隐藏（软删除），随时恢复，不碰源文件；
+- **视频倍速**：0.5x – 2x 六档原生调速，即时生效、不重载；
+- **水平翻转**：镜像画面（视频 / 网页 / 上传图片均适用）；
+- **自定义壁纸**：直接上传本地 JPG / PNG / MP4 当壁纸，可选存储位置与画面适配模式；
+- **场景壁纸静态帧**（v0.3）：Scene 壁纸提取主纹理作为静态背景，不再只是"不可播放"的占位。
+- **液态玻璃设置页**（v0.3.1）：设置页升级为**一级设置页**（参照 dsh-web-ui-all 皮肤中心的设计），整页是可自定义的液态玻璃卡片 —— **配色**（6 种预设 + 自定义取色）与**玻璃透明度**（0–60%）即时生效、持久保存。
+- **整个设置窗口液态玻璃化**（v0.3.2）：一键把 **DSH 原生设置窗口整体**（对话框 + 左侧导航 + General / 模型 / 插件等**全部原生分区**）换成液态玻璃 + 自定义配色 —— 开启「设置窗口液态玻璃」开关后，窗口背景、导航选中/悬停、按钮、开关、链接等全部跟随 **配色** 与 **玻璃透明度**，关闭则恢复原生样式。
+- **玻璃调节统一**（v0.3.3–v0.3.5）：设置窗口的玻璃模糊与**对话栏共用同一套调节参数**（「玻璃」滑动条 0–60 px 同时控制设置窗口与输入栏/气泡的模糊半径，饱和度/亮度/对比度配方一致）；新增「**玻璃颜色**」—— 设置窗口玻璃的**底色色调**可自定义（6 预设 + 自定义取色，默认浅色白 / 深色深夜蓝，选定后两种主题统一使用该色），与「配色」（交互元素）分工：**配色管控件、玻璃颜色管玻璃本身**。
+- **设置持久化到宿主端文件**（v0.4.0）：全部设置（已选壁纸、配色、透明度、布局、轮播、隐藏、倍速/翻转等）改存 `~/.dsh-wallpaper-engine/config.json`，不再依赖浏览器 localStorage —— **重启、换端口（含 DSH Desktop 的随机端口）、清浏览器数据、换浏览器都不再丢失**；旧版 localStorage 配置首次启动自动迁移。
+- **Edge 兼容渲染**：Edge（且仅 Edge）会在页面里任何"可见的 `<video>`"上绘制浏览器自带的「下载 / 投屏」悬浮工具栏，且没有官方开关可以关闭；插件因此在 Edge 中默认把视频壁纸改为 **canvas 渲染**来规避。「紧凑布局」同一行右侧新增「**Edge 兼容**」开关（默认开启），关闭后所有浏览器一律回退到原生 `<video>`。
+- **媒体流句柄修复 + 扫描提速**（v0.4.1）：媒体/预览/场景帧流在客户端断开时**立即释放文件句柄**（修复反复切壁纸/刷新累积句柄、Windows 上壁纸文件被锁无法删除/移动的问题）；壁纸库扫描改**全异步**（fs.promises 线程池），不再阻塞事件循环（WSL / 大壁纸库下启动明显更快）；**WSL 支持**：自动探测 `/mnt/<盘符>` 挂载的 Windows Steam 库，WSL 里也能发现壁纸。
+- **遮挡暂停（省电三档）**：类似 Wallpaper Engine 的「被遮挡时暂停」——最小化 / 切页、窗口失焦、使用电池供电时自动暂停视频壁纸，**解码引擎直接归零**；回到界面 / 接通电源自动继续（网页壁纸仅随页面隐藏被浏览器节流）。三档开关均持久保存。
+- **解码帧率上限（抽帧转码）**：高帧率源（如 4K120 H.264）的硬解是 GPU 占用大头（4060 实测 1.0x 达 ~60% Video Decode）。「壁纸效果」区设置 **帧率上限**（无限制 / 60 / 48 / 30 / 24 fps），宿主端用 ffmpeg 一次性重编码为上限帧率（时间线保持 1.0x **正常速度**、与倍速完全解耦），输出 **4K 保留 + AV1**，带**下载 / 转码实时进度条**；实测 4K120→24fps 后占用从 ~60% 降至 **~15%**。ffmpeg 三档供给：显式指定 → **自动下载**（npmmirror + GitHub 双源竞速，跨平台资产表已验证）→ 系统 PATH。
 
-No configuration needed: the plugin reads WaifuX's download folder automatically, and wallpapers you download later appear on their own. If text is hard to read, raise the **Dim** and **Border** sliders (instant effect). Wallpaper not showing? Restart DSH once after downloading, and make sure WaifuX uses its default download location.
+![基础效果展示](docs/images/showcase.png)
 
-**Windows (Wallpaper Engine wallpapers)**
+> 壁纸 + 磨砂遮罩 + iOS 液态玻璃，渲染在 DSH 界面后方。
 
-1. Install **Wallpaper Engine** in Steam and subscribe to wallpapers (video / web)
-2. Install this plugin from the DSH plugin market, then Settings → General → Wallpaper Engine → pick one
+## 支持哪些壁纸类型？
 
-The plugin finds the Steam library automatically, on any drive.
+Wallpaper Engine 的壁纸分四种类型：
 
-## Why only Video and Web wallpapers?
-
-Wallpaper Engine wallpapers come in four types:
-
-| Type | Rendered by | Portable to DSH? |
+| 类型 | 由谁渲染 | 能否搬到 DSH |
 |---|---|---|
-| **Scene** | Wallpaper Engine's own 3D engine | ❌ No — native 3D (`.obj`/shaders), only WE can render it |
-| **Video** | a plain `.mp4` file | ✅ Yes — plays in a `<video>` tag |
-| **Web** | a Chromium (`webwallpaper64.exe`) host for HTML | ✅ Yes — loads in an `<iframe>` |
-| **Application** | an injected external window | ❌ No |
+| **Scene（场景）** | Wallpaper Engine 自带的 3D 引擎 | ✅ 静态帧 — 提取主纹理（`.pkg`/`.json` 内的 .tex/JPEG），见下文 |
+| **Video（视频）** | 就是一个 `.mp4` 文件 | ✅ 能 — 在 `<video>` 标签里播放 |
+| **Web（网页）** | WE 内置的 Chromium 壳（`webwallpaper64.exe`）承载 HTML | ✅ 能 — 在 `<iframe>` 里加载 |
+| **Application（应用）** | 注入的外部窗口 | ❌ 不能 |
 
-This is the same fundamental limit that applies to **mineradio** and every other
-third-party Wallpaper Engine integration: only *Video* and *Web* wallpapers are
-portable. Scene wallpapers are therefore hidden from the thumbnail picker and
-rotation candidates — they cannot be used as a live background here.
+Scene 壁纸的 3D 场景（shader/粒子/几何）本身无法在浏览器里重放，但它的**主纹理**（通常是背景艺术图）可以提取出来作为**静态帧**背景——对摄影类、插画类场景壁纸效果接近原图。选择器里场景卡片带有「静态帧」徽标，可与动态壁纸区分。
 
-## How it works
+> **展现效果**：**大部分场景壁纸都能有较好的静态帧展现**（本机实测约 80%+ 的 Scene 壁纸能提取出接近原图的彩色主图，尤其摄影、插画、动画截图类）；**少部分无法正常展示**，包括纯 shader 粒子/程序生成类场景（没有可提取的主纹理）、使用特殊纹理格式（如 BC7）的场景、以及以视频纹理驱动的动画场景——这类会自动回退显示工坊预览图（`preview.jpg`），属预期行为，不视为缺陷。
 
-- **Host half** (`lib/index.js`): a Cordis plugin that
-  1. locates the Wallpaper Engine install by reading Steam's `libraryfolders.vdf`
-     (so it works even when Steam is on a non-default drive),
-  2. enumerates wallpapers from `projects/defaultprojects`, `projects/myprojects`,
-     and `steamapps/workshop/content/431960/*`,
-  3. registers same-origin HTTP routes on the DSH webserver so the browser half
-     can fetch data and stream media directly:
-     - `GET /wallpaper-engine/inventory` → JSON list of wallpapers
-     - `GET /wallpaper-engine/media/<token>` → video / HTML (Range supported)
-     - `GET /wallpaper-engine/preview/<token>` → preview image
-- **Client half** (`lib/client.js`): a browser module that fetches the inventory
-  and renders the selected wallpaper into a fixed layer *behind* the app columns,
-  plus a "Wallpaper Engine" row in General settings with a picker.
+### 场景静态帧：怎么工作的
 
-## Install
+- **读取**：解析 `scene.pkg`（PKGV 容器 + LZ4 条目链）或松散 `scene.json` 目录，从 `scene.json` 的第一个 image 对象出发定位主纹理（material / instance 引用的 .tex），其余 .tex 按"艺术图可能性"评分兜底（内嵌 JPEG/PNG 最高分，mask/effect/depth/workshop 辅助纹理降权，R8/RG88 灰度格式几乎排除）。
+- **解码**：TEX 容器（TEXV0005/TEXI0001、TEXB0001-4 mipmap、LZ4 或原始数据）解码为静态图，支持 **RGBA8888 / R8 / RG88 / DXT1 / DXT3 / DXT5**，以及 **WE 内嵌 JPEG / PNG 纹理**（摄影类壁纸常见，原样直出、零解码、保真度最高）。
+- **质量门**：解码后抽样质检——灰度 >88% 或纯色（方差 <3）的帧会被拒绝并尝试下一候选；全部不通过时自动回退到项目 `preview.jpg`（灰度遮罩、深度图、纯色占位不会冒充壁纸）。
+- **视频纹理识别**：WE 的动画同步纹理（内嵌 MP4，如 `*_sync` 纹理）无法出静态帧，识别后直接回退预览图，不再输出乱码画面。
+- **缓存**：提取结果按 `<版本>_<路径>_<mtime>` 缓存到 `~/.dsh-wallpaper-engine/cache/frames/`（可用 `DSH_WE_CACHE_DIR` 覆盖），工坊更新后自动失效重建；提取管线升级会更换版本前缀使旧缓存失效重提。
+- **限制**：BC7 / RGB565 / 16 位浮点等纹理格式无法解码（回退到 preview.jpg）；静态帧≠3D 渲染，动画粒子/水波等动态效果不会出现。
 
-### For users (published version, recommended)
+## 工作原理
 
 - **Host 端**（`lib/index.js`）：一个 Cordis 插件，负责
   1. 通过读取 Steam 的 `libraryfolders.vdf` 定位 Wallpaper Engine 安装位置（所以 Steam 装在非默认盘也能用）；
@@ -101,89 +100,86 @@ rotation candidates — they cannot be used as a live background here.
 dsh plugin --profile web add dsh-plugin-wallpaper-engine
 ```
 
-Then restart `dsh web` and open **Settings → General → Wallpaper Engine**.
+装完重启 `dsh web`，打开 **设置 → Wallpaper Engine** 就能用。
 
-### For developers (running your own copy)
+> **macOS 用户**：macOS 没有 Wallpaper Engine 客户端，本插件的 macOS 版（WaifuX + 散装媒体支持）由社区维护者 [Jerry（@ruijiaang-lab）](https://github.com/ruijiaang-lab)维护，发布为独立 npm 包：
+>
+> ```sh
+> dsh plugin --profile web add dsh-plugin-wallpaper-engine-mac
+> ```
+>
+> 上游 mac 分支：<https://github.com/elysia395/dsh-wallpaper-engine/tree/dsh-wallpaper-engine-mac>
+>
+> 发布仓库：<https://github.com/ruijiaang-lab/dsh-wallpaper-engine>
 
-**For most people you can skip this section.** You only need it if you want to
-work on the plugin's code yourself. The steps below assume you know what a command
-line and a *repository* (a code folder that is under Git version control) are.
+#### macOS 版说明
 
-**1. Get the code (`checkout`)**
+- 自动扫描 WaifuX 的 `~/Library/Application Support/WaifuX/Wallpapers/` 与 `Media/`，也支持 `~/Documents/dsh/we-content/` 和环境变量 `DSH_WALLPAPER_ENGINE_CONTENT`。
+- 支持 WaifuX 内置 steamcmd 的嵌套工坊目录，以及直接放入目录的 `.mp4`、`.webm`、`.png`、`.jpg`、`.gif`、`.webp` 松散媒体。
+- 视频倍速保留 macOS 版自由滑块（0.25x–2x），缩略图缺失时回退到原媒体首帧/原图。
+- macOS 代码 PR 以 `dsh-wallpaper-engine-mac` 为目标分支；Windows、WSL 与跨平台公共功能仍以 `main` 为目标分支。
 
-> *What "checkout" means:* it just means "download/get a copy of the source code
-> into a folder on your machine." Typically you click **Code → Download ZIP** on
-> this GitHub page and unzip it, or clone it with Git:
+### 开发者（运行你本地的一份代码）
+
+**大多数读者可以跳过本节。** 只有当你打算自己改这个插件的代码时才需要。下面的步骤假定你已了解命令行、以及「仓库 / repository」是什么（一份用 Git 做版本管理的代码文件夹）。
+
+**第 1 步：取得源码（checkout）**
+
+> 这里 *checkout* 的意思很简单：就是「把源代码下载/复制一份到你电脑的某个文件夹里」。通常在这个 GitHub 页面点 **Code → Download ZIP** 下载并解压，或用 Git 克隆：
 >
 > ```sh
 > git clone https://github.com/elysia395/dsh-wallpaper-engine.git
 > ```
 >
-> After this you have a folder that contains `package.json`, `lib/`, `src/`, and
-> `cordis.patch.yml`. That folder is what the rest of this section calls
-> **the plugin folder**.
+> 完成后你会得到一个包含 `package.json`、`lib/`、`src/`、`cordis.patch.yml` 的文件夹。下文把这个文件夹称作**插件文件夹**。
 
-**2. Install it using its folder path (`link:`)**
+**第 2 步：用文件夹路径安装（link:）**
 
-> *What `link:` means here:* it tells `dsh` (which forwards the command to `pnpm`)
-> to make a *link* to your local plugin folder instead of downloading a package
-> from the internet. The benefit: when you edit the code and rebuild, the change
-> shows up without reinstalling.
+> 这里的 *`link:`* 表示：告诉 `dsh`（它会把命令转发给 pnpm）去**连接你本地那个插件文件夹**，而不是从网上下载一个包。好处是：你改完代码并重新构建后，改动能直接生效，不用反复重装。
 
-Replace `<插件文件夹绝对路径>` below with the **full path of your plugin folder**
-(the "address bar" path you see when you open that folder in Explorer / your file
-manager):
+把下面命令里的 `<插件文件夹绝对路径>` **替换成你插件文件夹的完整路径**（就是你在资源管理器/文件管理器里打开那个文件夹时，地址栏显示的那串路径）：
 
 ```sh
 dsh plugin --profile web add link:<插件文件夹绝对路径>
 ```
 
-**Concrete example** — if your plugin folder is at a path like `D:\dev\dsh-wallpaper-engine`:
+**具体示例**——假设你的插件文件夹路径像 `D:\dev\dsh-wallpaper-engine` 这样：
 
 ```sh
 dsh plugin --profile web add link:D:\dev\dsh-wallpaper-engine
 ```
 
-You can also use a relative path if your shell's current directory is already the
-folder's parent:
+如果你已经用命令行 `cd` 到了插件文件夹的上一级，也可以用相对路径：
 
 ```sh
 dsh plugin --profile web add link:./dsh-wallpaper-engine
 ```
 
-> **Which exact path to fill in?** It must be the **folder that contains
-> `package.json`** — not the path to `package.json` itself, and not any file inside.
-> It is the same value you would paste into Explorer's address bar to open that folder.
+> **该填哪个确切的路径？** 必须是**包含 `package.json` 的那个文件夹**——不是 `package.json` 文件本身的路径，也不是它里面任何单个文件的路径。它就是你在资源管理器地址栏里打开那个文件夹时显示的那串路径。
 
-> Why prefer `link:` over `file:`? `link:` creates a live link to your source
-> folder, so edits to `src/client.js` + `npm run build` take effect without
-> reinstalling; `file:` packs a static snapshot, which needs a re-add after every
-> change. Both work for a first install.
+> 为什么推荐 `link:` 而不用 `file:`？`link:` 是和你的源码文件夹**建立实时连接**，改完 `src/client.js` 并 `npm run build` 后直接生效，无需重装；`file:` 则是打包成一份静态快照，每次改动都要重新 add。首次安装两者都可以。
 
-Then restart `dsh web`. The host plugin becomes a bundle layer and the client
-plugin auto-loads (`dsh.client.immediately: true`).
+然后重启 `dsh web`。host 端会成为 bundle 层，client 端会自动加载（`dsh.client.immediately: true`）。
 
-If your machine has Steam installed in a non-standard location, the host auto-detects
-via `libraryfolders.vdf`. Nothing further is required.
+如果 Steam 装在非标准位置，host 会通过 `libraryfolders.vdf` 自动探测，无需额外配置。
 
-## Usage
+## 使用
 
-1. Open `dsh web` → the DSH GUI.
-2. Open **Settings → General** and find the **Wallpaper Engine** row.
-3. Pick a Video or Web wallpaper from the thumbnail grid. It appears behind the app (Scene/Application wallpapers cannot be embedded in the web UI and are hidden from the grid).
-4. Use **暂停/播放** to pause a video wallpaper, and **关闭** to clear it.
-   The choice is remembered in your browser's `localStorage` (key
-   `dsh-wallpaper-engine:selection`).
+1. 打开 `dsh web`，进入 DSH 界面。
+2. 打开 **设置**，左侧导航里找到 **Wallpaper Engine**（一级设置页，侧边栏独立入口）。
+3. 点击 **选择壁纸** 打开选择弹窗，在缩略图网格里点选一张 Video/Web 壁纸（或上传的图片/视频），它会出现在界面后方；点遮罩、按 ESC 或点「关闭」收起弹窗。Scene/Application 无法内嵌网页，不显示在网格中。
+4. 用 **暂停/播放** 暂停视频壁纸，用 **关闭** 清除壁纸。
+   选择会保存在浏览器的 `localStorage`（键 `dsh-wallpaper-engine:selection`）中。
 
-### Automatic rotation (轮播列表)
+![设置界面功能展示](docs/images/features.png)
 
-Rotation runs over **user-defined carousel lists** (轮播列表). Create any number of lists with **新建**, pick Video/Web wallpapers into each from the inventory, give each list its own switch interval (1, 5, 10, 30, 60 or 120 minutes) and order (顺序/随机), then enable **自动轮转** on the list you want active. Lists are persisted in your browser's `localStorage` and are fully client-side — rotation never depends on Wallpaper Engine's own `config.json` playlist paths.
+> 设置界面：液态玻璃卡片（「外观」配色/透明度）、当前壁纸卡片、「自定义壁纸」「轮播列表」「壁纸效果」分区。
 
-At least two playable Video/Web wallpapers per list are required; manual changes reset the next timer; each list keeps its own cadence, so you can have one list switching every 5 minutes and another every 30. On first run, the first playable Wallpaper Engine playlist is imported automatically as a list so the feature works out of the box; **从 WE 播放列表导入** inside the editor imports any other playlist into the list being edited. Scene and Application wallpapers cannot be embedded in the web UI, so they are automatically excluded from rotation and hidden from the picker.
+![壁纸选择弹窗与壁纸仓库](docs/images/wallpaper-library.png)
 
-### The four sliders
+> 选择弹窗：浏览全部壁纸缩略图，支持批量隐藏与已隐藏恢复。
 
-While a wallpaper is active, four sliders let you tune how it blends with the UI:
+### 隐藏与恢复（软删除）
 
 每张壁纸卡片右上角有「隐藏」按钮——只是从列表移除，**不删除任何源文件**。需要时在弹窗的「已隐藏」标签里单张**恢复**或**全部恢复**；弹窗工具栏的「批量」进入多选模式，可一次隐藏多张。隐藏状态保存在浏览器 `localStorage`，刷新 / 重启不丢；隐藏当前正在播放的壁纸不会打断播放，自动轮转也会跳过被隐藏的壁纸。
 
@@ -268,55 +264,45 @@ While a wallpaper is active, four sliders let you tune how it blends with the UI
 
 | 控件 | 作用 | 范围 | 默认 |
 |---|---|---|---|
-| **壁纸模糊** (wallpaper blur) | Blurs the wallpaper itself | 0–60 px | 0 |
-| **暗化** (scrim) | Darkens the overlay between wallpaper and text | 0–90 % | 25 % |
-| **边框** (border) | Raises border/divider contrast | 0–90 % | 35 % |
-| **玻璃** (glass) | Blur radius of the frosted-glass panels (composer, bubbles) | 0–40 px | 24 |
+| **设置窗口液态玻璃** | 总开关：把设置窗口整体（对话框 + 左导航 + 全部原生分区）换成液态玻璃 | 开 / 关 | 开 |
+| **配色** | 主题色：窗口内的按钮、开关、链接、导航选中、滑块与玻璃高光统一跟随 | 6 预设 + 自定义取色 | `#4f8cff` 经典蓝 |
+| **玻璃颜色** | 设置窗口玻璃的**底色色调**：玻璃本身的颜色（不只是透明度） | 6 预设 + 自定义取色 | 浅色白 / 深色深夜蓝 |
+| **玻璃透明度** | 玻璃面板（设置窗口、输入栏、气泡、侧边栏）的透明度 | 0–60 % | 12 % |
 
-> **Light vs. dark mode** — Wallpapers differ wildly in colour and brightness, so
-> there is no one mode that fits every wallpaper. Switch DSH's theme between
-> **light** and **dark** to find which suits the current wallpaper. If text or
-> hairlines become hard to read on a bright or busy wallpaper, raise the
-> **暗化 / 边框** sliders (and optionally add a little **壁纸模糊**) until it is
-> comfortable. All four sliders apply instantly — no page refresh needed.
+> 开启「设置窗口液态玻璃」后，**General、模型、插件等所有原生分区**和左侧导航都会变成同一套液态玻璃 + 配色（通过覆盖设置对话框作用域内的 shell token 实现，不侵入其他界面）。设置窗口的玻璃模糊与**对话栏使用同一套调节参数**：「玻璃」滑动条（0–60 px）同时控制设置窗口与输入栏/气泡的模糊半径，饱和度/亮度/对比度配方完全一致；**玻璃颜色**决定玻璃底色本身的色调（默认浅色白/深色深夜蓝，选定后两种主题统一使用该色），**玻璃透明度**决定浓淡，越高越"透"（壁纸颜色更清晰地透过面板），越低越接近实色。不支持 `backdrop-filter` 的浏览器自动回退到高不透明实色，保证文字可读。所有控件即时生效并保存在浏览器 `localStorage`，刷新不丢。
 
 ![液态玻璃全新设置窗口](docs/images/liquid-glass-window.png)
 
 > 液态玻璃：整个设置窗口统一玻璃质感，跟随「配色」「玻璃颜色」与「玻璃透明度」。
 
+### 吉祥物（聊天顶部拉绳）
+
+「外观」区底部还有一组吉祥物控件，控制聊天的**拉绳吉祥物**（一条可拖拽的拉绳，沿顶部吸附，向下拉即拉出**壁纸仓库**抽屉）：
+
+| 控件 | 作用 | 范围 | 默认 |
+|---|---|---|---|
+| **显示吉祥物** | 是否显示拉绳吉祥物与其壁纸仓库抽屉 | 开 / 关 | 开 |
+| **吉祥物形态** | 切换吉祥物立绘：默认**小女仆**（近方形 chibi）或**鲸御姐**（竖版 2:3 全身体） | 小女仆 / 鲸御姐 | 小女仆 |
+| **吉祥物大小** | 缩放吉祥物（拉绳盒尺寸随比例变化，拖拽 / 吸附几何自动适配） | 0.5×–2.5× | 1× |
+
+> 两幅立绘在打包时都已内联为 base64（透明背景），单文件客户端资源依然自包含。**大小**只改变拉绳自身的盒尺寸，不影响下方的壁纸仓库抽屉。设置即时生效并保存在宿主端配置文件里。
+
 ### 四个滑动条
 
-There is no model-visible tool or prompt text. The bundle adds zero tokens to the
-agent. All state is process-local/browser-local; no durable DSH settings are written.
+壁纸激活后，四个滑动条可以微调它与界面的融合效果：
 
-## macOS
+| 滑动条 | 作用 | 范围 | 默认 |
+|---|---|---|---|
+| **壁纸模糊** | 模糊壁纸本身 | 0–60 px | 0 |
+| **暗化** | 加深壁纸与文字之间的遮罩 | 0–90 % | 25 % |
+| **边框** | 提高边框 / 分割线的对比度 | 0–90 % | 35 % |
+| **玻璃** | 玻璃面板（输入栏、气泡）的模糊半径 | 0–60 px | 24 |
 
-Wallpaper Engine has no macOS client, so on macOS the plugin is **directory-driven**
-instead of Steam-driven. It scans content folders and treats every `.mp4`/`.webm`
-(video) and `.png`/`.jpg`/`.gif`/`.webp` (image) file in them as a wallpaper:
+> **浅色 / 深色模式的适配提醒** — 每张壁纸的色系和明暗差异很大，**没有哪一种模式能适配所有壁纸**。请在 DSH 的「浅色 / 深色」主题之间来回切换，找到适合当前壁纸的那一种。如果在偏亮或花纹复杂的壁纸上 **文字或分割线看不清**，就把 **暗化**、**边框** 两个滑动条调高（必要时再稍微加一点 **壁纸模糊**），直到看着舒服为止。四个滑动条都是即时生效的，**无需刷新页面**。
 
-- **WaifuX** (the popular macOS wallpaper app) — its download folders are
-  scanned by default (`Wallpapers/` for static images, `Media/` for motion
-  videos), and so are the **Wallpaper Engine workshop items WaifuX downloads
-  via its bundled steamcmd** (standard Steam directory, no setup), so anything
-  you save in WaifuX becomes a DSH background with no setup.
-- `~/Documents/dsh/we-content/` — drop loose files here to use them as backgrounds.
-- Any folders listed in `DSH_WALLPAPER_ENGINE_CONTENT` (colon-separated), or a
-  copied Wallpaper Engine install/projects tree.
+## 配置
 
-## Branch convention
-
-- Upstream `main` (elysia395) — the Windows-first upstream line.
-- `dsh-wallpaper-engine-mac` — the macOS branch in the upstream repo (WaifuX
-  integration). Push / open PRs for macOS work against this branch.
-- In the [ruijiaang-lab fork](https://github.com/ruijiaang-lab/dsh-wallpaper-engine):
-  - `main` — the full distribution branch: the upstream Windows implementation
-    with the macOS adaptations merged in. This is what the DSH plugin market installs.
-  - `mac` — the maintained macOS development branch (source of the upstream PR).
-- **npm** — the macOS line publishes under its own package name
-  `dsh-plugin-wallpaper-engine-mac` (the upstream `dsh-plugin-wallpaper-engine`
-  name stays with elysia395). Release: bump `package.json` version, then
-  `node scripts/npm-publish.mjs`.
+本插件不会向模型暴露任何工具或提示文本，对 agent 零 token 开销。选择、隐藏、轮播列表等状态都保存在浏览器 `localStorage`，不写入任何持久化 DSH 设置。唯一的本地落盘数据是**自定义壁纸文件**（存于你设置的上传目录）与记录该目录位置的 `~/.dsh-wallpaper-engine/config.json`（约百字节）。
 
 **环境变量**：
 
@@ -329,50 +315,30 @@ instead of Steam-driven. It scans content folders and treats every `.mp4`/`.webm
 
 ## 与 dsh-better-sidebar 的兼容适配
 
-## Limitations
+本插件的液态玻璃效果对 dsh-better-sidebar 的侧边栏面板做了专门适配（毛玻璃、高光与层级统一），让侧边栏与对话区共享同一套「壁纸 + 遮罩」背景，三列视觉一致、不再割裂。
 
-- Scene (native 3D) and Application wallpapers cannot be embedded; they are hidden
-  from the thumbnail picker and rotation candidates. Their live render remains
-  Wallpaper Engine's desktop job.
-- The browser must be able to autoplay muted `<video>` (DSH runs on loopback; muted
-  autoplay is allowed by modern browsers).
-- Media is served from your local Wallpaper Engine install paths; the host only
-  serves files it has already enumerated (no arbitrary filesystem exposure).
-- The picker is English/Chinese mixed (this bundle is not yet wired into DSH's
-  locale namespaces).
+![dsh-better-sidebar 兼容适配](docs/images/better-sidebar.png)
 
-## Acknowledgements
+## 已知限制
 
-This plugin is a macOS-focused extension of
-[elysia395/dsh-wallpaper-engine](https://github.com/elysia395/dsh-wallpaper-engine),
-the Windows (Wallpaper Engine) implementation. The macOS support (WaifuX
-integration, directory-based discovery) is maintained in this fork; the
-original Windows code and its upstream features remain authored and
-maintained by **elysia395**.
+- Scene（原生 3D）和 Application 壁纸无法内嵌，不会显示在缩略图选择器和轮播候选中；它们的动态渲染仍是 Wallpaper Engine 在桌面上的工作。
+- 浏览器需能自动播放静音 `<video>`（DSH 跑在 loopback，现代浏览器允许静音自动播放）。
+- 媒体从你本机的 Wallpaper Engine 安装路径提供；host 只提供它已枚举过的文件，不会暴露任意文件系统。自定义上传的文件同样只存在于本机，不上传任何服务器。
+- **抽帧转码依赖 ffmpeg 与 NVIDIA NVENC**（`av1_nvenc` → `h264_nvenc` 回退）：无 ffmpeg（含自动下载不可用，如 musl/Alpine 等未覆盖平台）或无 NVIDIA 显卡时，帧率上限功能自动关闭，壁纸保持原片播放，不影响其它任何功能。
+- **遮挡暂停仅对视频壁纸生效**：网页（iframe）壁纸无法从外部暂停，只能随页面隐藏被浏览器节流。
+- 选择器文案为中英混合（本 bundle 尚未接入 DSH 的 locale 命名空间）。
 
-## Development / rebuild
+## 开发 / 重建
 
-The host half (`lib/index.js`) is plain ESM with no build step. The client half
-(`lib/client.js`) is a **compiled artifact** produced from the canonical source
-`src/client.js` by `scripts/build-client.mjs`, which emits the exact
-`window.__ModuleLoader__.load({ id, factory })` envelope the DSH module loader
-consumes (the same shape `tsdown` emits for in-box client packages).
-
-> **Requires Node.js 24 or newer** (the same floor as the plugin market CI).
-> Declared via the `engines` field in `package.json`, with `engine-strict`
-> enabled in `.npmrc` — installs fail loudly on older Node instead of
-> silently running in a mismatched environment.
+host 端（`lib/index.js`）是纯 ESM，无需构建。client 端（`lib/client.js`）是**编译产物**，由规范源文件 `src/client.js` 经 `scripts/build-client.mjs` 生成，输出 DSH 模块加载器要求的 `window.__ModuleLoader__.load({ id, factory })` 外壳（与盒内 client 包 `tsdown` 产出的形态一致）。
 
 ```sh
-npm run build      # regenerate lib/client.js from src/client.js
-npm run verify     # materialize the emitted bundle and assert its exports
+npm run build      # 从 src/client.js 重新生成 lib/client.js
+npm run verify     # 物化生成的 bundle 并断言其导出
 ```
 
-Edit `src/client.js`, then `npm run build`. Do not hand-edit `lib/client.js`.
-`npm install`/`pnpm install` runs `prepare` → `build` automatically, so a
-fresh checkout always ships a current `lib/client.js`.
+编辑 `src/client.js` 后运行 `npm run build`，不要手改 `lib/client.js`。`npm install`/`pnpm install` 会自动触发 `prepare` → `build`，因此全新 checkout 总是带最新的 `lib/client.js`。
 
-The host↔browser contract is plain same-origin HTTP, so the two halves are
-developed independently: rebuild the host by restarting `dsh web`, and rebuild
-the client with `npm run build` before re-running `dsh web`.
+host↔browser 的契约是同源 HTTP，两端可独立开发：改 host 后重启 `dsh web` 生效，改 client 则先 `npm run build` 再重启 `dsh web`。
 
+macOS 分发包由 `scripts/npm-publish.mjs` 在临时目录中组装为 `dsh-plugin-wallpaper-engine-mac`，不会占用上游 Windows 包名。提交发布前可用 `node scripts/npm-publish.mjs --dry-run` 检查包内容；真实发布需单独确认。
