@@ -321,6 +321,8 @@ dsh plugin --profile web add link:./dsh-wallpaper-engine
 
 ## 开发 / 重建
 
+准备提交代码前，请先阅读 [贡献指南](CONTRIBUTING.md)。Windows、WSL 与跨平台公共功能提交到 `main`；macOS、WaifuX 与松散媒体相关改动提交到 `dsh-wallpaper-engine-mac`，由 [Jerry（@ruijiaang-lab）](https://github.com/ruijiaang-lab)维护。
+
 host 端（`lib/index.js`）是纯 ESM，无需构建。client 端（`lib/client.js`）是**编译产物**，由规范源文件 `src/client.js` 经 `scripts/build-client.mjs` 生成，输出 DSH 模块加载器要求的 `window.__ModuleLoader__.load({ id, factory })` 外壳（与盒内 client 包 `tsdown` 产出的形态一致）。
 
 ```sh
