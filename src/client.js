@@ -398,6 +398,7 @@ function serializeSelection() {
     hiddenIds: selection.hiddenIds,
     playbackRate: selection.playbackRate,
     fpsCap: selection.fpsCap,
+    betaSceneAnim: selection.betaSceneAnim,
     pauseOnHidden: selection.pauseOnHidden,
     pauseOnBlur: selection.pauseOnBlur,
     pauseOnBattery: selection.pauseOnBattery,
@@ -3003,8 +3004,9 @@ function WallpaperPicker(props) {
             checked: sel.betaSceneAnim === true,
             onChange: (e) => {
               selection.betaSceneAnim = e.target.checked;
+              const enable = e.target.checked;
               persistSelection();
-              if (!e.target.checked) {
+              if (!enable) {
                 // 关闭: 取消动画升级 (渲染任务随 probe abort 取消), 回退静态帧
                 cancelSceneAnimUpgrade();
                 if (sel.type === "scene" && sel.sceneFrameUrl
@@ -3013,8 +3015,15 @@ function WallpaperPicker(props) {
                   syncLayers();
                 }
               } else if (sel.type === "scene" && sel.sceneFrameUrl && !sel.sceneVideo) {
-                // 开启: 从静态帧开始动画化升级 (sceneVideo 内嵌 MP4 已硬件解码, 不升级)
-                queueSceneAnimUpgrade(sel.sceneFrameUrl);
+                // 开启: 先把 beta 持久化到宿主端 (宿主 /scene-anim 路由按 config.json
+                // 门控 — 防抖的 PUT 落地前渲染请求会先到宿主 → 403 → 进度卡 0)。
+                // 跳过防抖立即冲刷, 等 PUT 落盘完成 (宿主「响应即已持久化」) 再触发升级。
+                if (persistTimer) { clearTimeout(persistTimer); persistTimer = null; }
+                writeLocalCache();
+                const p = pushPersisted();
+                (p && typeof p.then === "function" ? p : Promise.resolve())
+                  .then(() => { if (selection.betaSceneAnim && sel.sceneFrameUrl && !sel.sceneVideo) queueSceneAnimUpgrade(sel.sceneFrameUrl); })
+                  .catch(() => { if (selection.betaSceneAnim && sel.sceneFrameUrl && !sel.sceneVideo) queueSceneAnimUpgrade(sel.sceneFrameUrl); });
               }
               emit();
             },
