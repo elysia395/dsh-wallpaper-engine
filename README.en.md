@@ -453,6 +453,8 @@ continuous surface.
 
 ## Development / rebuild
 
+Before contributing code, read the [contribution guide](CONTRIBUTING.md). Send Windows, WSL, and shared cross-platform changes to `main`; send macOS, WaifuX, and loose-media changes to `dsh-wallpaper-engine-mac`, maintained by [Jerry (@ruijiaang-lab)](https://github.com/ruijiaang-lab).
+
 The host half (`lib/index.js`) is plain ESM with no build step. The client half
 (`lib/client.js`) is a **compiled artifact** produced from the canonical source
 `src/client.js` by `scripts/build-client.mjs`, which emits the exact
@@ -471,4 +473,3 @@ fresh checkout always ships a current `lib/client.js`.
 The host↔browser contract is plain same-origin HTTP, so the two halves are
 developed independently: rebuild the host by restarting `dsh web`, and rebuild
 the client with `npm run build` before re-running `dsh web`.
-
