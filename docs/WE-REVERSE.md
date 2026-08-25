@@ -103,6 +103,23 @@ _viewShift(o, size, ps) {
 - **Q6** 0x384 矩阵B 用途（image 路径 origin×0.5×矩阵B → 0x970）。
 - **Q8** 多 `camera:"default"` 对象的选择/叠加语义（官方实机渲染确认）。
 
+  **对象分类逆向（0x140190180-0x140190820，场景对象创建分派）**：
+  | 对象属性 | 分配大小 | vtable | 备注 |
+  |---|---|---|---|
+  | `sound` | 0x320 | 0x140490ae8 | 声音对象（不渲染） |
+  | `camera:"point"` | 0x360 | 0x140490980 | 注视点/光源点类 |
+  | `shape:"light"` | 0x460 | 0x140491d10 | 光源（0x304 \|= 0x2000） |
+  | `sprite` | 0x270 | — | — |
+  | **`camera:"default"`** | 默认通用 | **0x140491c38** | **无专用分支**，类型码 0x2c0=5，无渲染内容 → 仅 origin/zoom 动画被相机系统读取（消费处未定位） |
+
+  **Mutsumi Dock（3629379075）多相机证据**：两个 `camera:"default"` 对象
+  （id 216 无名 / id 1297271 "入场镜头"），各自 origin/zoom/scale 动画 +
+  `path` 字段（引用 `scripts/camera_paths_<id>.json`，实测均为空 `{"paths":[]}`）+
+  `visible` = 用户属性 `hrbrbbrentryanimation`（scene.json scriptproperties 默认
+  true，NSL 脚本开关"enableAnimation"控制）。preview.gif（31 帧 207×207）前
+  22 帧完全静止 → 官方 preview 渲染相机固定，无法反推运镜。相机对象消费
+  /多相机选择代码未定位（相机矩阵构造 0x14017FCFC 读内部相机结构，来源待确认）。
+
 ---
 
 ## 5. 动画语义实证（官方 preview.gif 为事实源）
