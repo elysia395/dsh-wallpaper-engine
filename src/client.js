@@ -148,6 +148,9 @@ const DEFAULTS = {
   sidebarBlur: 16,
   sidebarAlpha: 12,
   sidebarColor: "#ffffff",
+  // 侧栏玻璃亮度：独立于「背景亮度」（壁纸乘区）的另一个乘区，乘法叠加。
+  // 调低可让侧栏玻璃更暗/更实（利于深色主题白字可读）；<1 更暗，>1 更亮。
+  sidebarBrightness: 1,
   // Persisted: show the chat-interface mascot pull-cord (rope dock).
   ropeShown: true,
   // Persisted: which mascot artwork + how big. ropeForm ∈ {maid, whale};
@@ -271,6 +274,7 @@ function sanitizeSettings(o) {
     sidebarAlpha: clampNum(o.sidebarAlpha, 0, 60, DEFAULTS.sidebarAlpha),
     sidebarColor: typeof o.sidebarColor === "string" && /^#[0-9a-f]{6}$/i.test(o.sidebarColor)
       ? o.sidebarColor : DEFAULTS.sidebarColor,
+    sidebarBrightness: clampNum(o.sidebarBrightness, 0.5, 1.5, DEFAULTS.sidebarBrightness),
     ropeShown: o.ropeShown !== false,
     ropeForm: ROPE_FORM_VALUES.includes(o.ropeForm) ? o.ropeForm : DEFAULTS.ropeForm,
     ropeScale: clampNum(o.ropeScale, ROPE_SCALE_MIN, ROPE_SCALE_MAX, DEFAULTS.ropeScale),
@@ -394,6 +398,7 @@ function serializeSelection() {
     sidebarBlur: selection.sidebarBlur,
     sidebarAlpha: selection.sidebarAlpha,
     sidebarColor: selection.sidebarColor,
+    sidebarBrightness: selection.sidebarBrightness,
     ropeShown: selection.ropeShown,
     ropeForm: selection.ropeForm,
     ropeScale: selection.ropeScale,
@@ -1669,6 +1674,7 @@ function applyEffects() {
   const sidebarAlpha = Math.max(0.03, 0.25 - (selection.sidebarAlpha / 60) * 0.22);
   s.setProperty("--we-sidebar-alpha", String(sidebarAlpha));
   s.setProperty("--we-sidebar-color", selection.sidebarColor);
+  s.setProperty("--we-sidebar-brightness", String(selection.sidebarBrightness));
   if (selection.sidebarGlass) document.body.setAttribute("data-we-sidebar-glass", "on");
   else document.body.removeAttribute("data-we-sidebar-glass");
 
@@ -1711,6 +1717,7 @@ function clearEffects() {
   s.removeProperty("--we-sidebar-saturate");
   s.removeProperty("--we-sidebar-alpha");
   s.removeProperty("--we-sidebar-color");
+  s.removeProperty("--we-sidebar-brightness");
   document.body.removeAttribute("data-we-sidebar-glass");
   const scrim = document.getElementById(SCRIM_ID);
   if (scrim) scrim.style.background = "";
@@ -1928,6 +1935,10 @@ function WallpaperPicker(props) {
   const onSidebarColor = (hex) => {
     if (!/^#[0-9a-f]{6}$/i.test(hex)) return;
     selection.sidebarColor = hex;
+    persistSelection(); emit();
+  };
+  const onSidebarBrightness = (val) => {
+    selection.sidebarBrightness = clampNum(val, 0.5, 1.5, DEFAULTS.sidebarBrightness);
     persistSelection(); emit();
   };
   // Mascot pull-cord show/hide, persisted with the other toggles.
@@ -2167,6 +2178,7 @@ function WallpaperPicker(props) {
       sel.sidebarPresent && sel.sidebarGlass && [
       SliderRow("侧栏模糊", 0, 60, 1, sel.sidebarBlur, onSidebarBlur, sel.sidebarBlur + "px", "sb-blur"),
       SliderRow("侧栏透明度", 0, 60, 5, sel.sidebarAlpha, onSidebarAlpha, sel.sidebarAlpha + "%", "sb-alpha"),
+      SliderRow("侧栏玻璃亮度", 0.5, 1.5, 0.05, sel.sidebarBrightness, onSidebarBrightness, Math.round(sel.sidebarBrightness * 100) + "%", "sb-brightness"),
       React.createElement("div", { key: "sb-color", className: "we-picker__row we-picker__accent-row" },
         React.createElement("span", { className: "we-picker__hint we-picker__label" }, "侧栏玻璃颜色"),
         GLASS_COLOR_PRESETS.map((hex) => React.createElement("button", {
@@ -3454,13 +3466,22 @@ const CSS = `
      侧栏玻璃颜色), so the sidebar can be blurrier, clearer, more transparent
      or tinted however you like without touching the 玻璃 / 玻璃透明度 sliders.
      Inner chrome surfaces that paint the same opaque tokens get a translucent
-     base too; the blur lives on the root panels (one blur per shell). */
+     base too; the blur lives on the root panels (one blur per shell).
+     Readability (issue #35 / #56): the content surfaces (_pane/_tabBar/…/
+     _terminalWrap) used to stack a SECOND translucent white tint on the root,
+     making panels too bright and washing out code/comment text. They are now a
+     THEME-ADAPTIVE near-opaque "ink well" (light→near-white, dark→near-dark)
+     so long text/terminal stays readable, while the chrome root keeps the
+     glass. --we-sidebar-brightness (侧栏玻璃亮度, 0.5–1.5) is a SEPARATE
+     multiplier region than the wallpaper 亮度: it scales the chrome tint/backdrop
+     brightness AND the ink-well opacity (lower → more solid/darker, better for
+     white text; higher → glassier). */
   body[data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_boundaryError"],
   body[data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_panel"] {
-    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) calc(var(--we-sidebar-alpha, 0.15) * 0.66 * 100%), transparent) !important;
+    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) calc(var(--we-sidebar-alpha, 0.15) * 0.66 * var(--we-sidebar-brightness, 1) * 100%), transparent) !important;
     background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04) 38%, rgba(255, 255, 255, 0.01)) !important;
-    -webkit-backdrop-filter: blur(var(--we-sidebar-blur, 16px)) saturate(var(--we-sidebar-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01) !important;
-    backdrop-filter: blur(var(--we-sidebar-blur, 16px)) saturate(var(--we-sidebar-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01) !important;
+    -webkit-backdrop-filter: blur(var(--we-sidebar-blur, 16px)) saturate(var(--we-sidebar-saturate, 1.8)) brightness(calc(var(--we-glass-brightness, 1.04) * var(--we-sidebar-brightness, 1))) contrast(1.01) !important;
+    backdrop-filter: blur(var(--we-sidebar-blur, 16px)) saturate(var(--we-sidebar-saturate, 1.8)) brightness(calc(var(--we-glass-brightness, 1.04) * var(--we-sidebar-brightness, 1))) contrast(1.01) !important;
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, var(--we-glass-highlight, 0.32)),
       inset 0 -1px 0 rgba(255, 255, 255, 0.08),
@@ -3474,11 +3495,11 @@ const CSS = `
   body[data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_gitHeader"],
   body[data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_browserBar"],
   body[data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_terminalWrap"] {
-    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) calc(var(--we-sidebar-alpha, 0.15) * 0.53 * 100%), transparent) !important;
+    background-color: rgba(253, 254, 255, calc(1.05 - 0.13 * var(--we-sidebar-brightness, 1))) !important;
   }
   body[data-ds-dark-theme][data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_boundaryError"],
   body[data-ds-dark-theme][data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_panel"] {
-    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) calc(var(--we-sidebar-alpha, 0.15) * 0.33 * 100%), transparent) !important;
+    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) calc(var(--we-sidebar-alpha, 0.15) * 0.33 * var(--we-sidebar-brightness, 1) * 100%), transparent) !important;
   }
   body[data-ds-dark-theme][data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_pane"],
   body[data-ds-dark-theme][data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_tabBar"],
@@ -3488,7 +3509,7 @@ const CSS = `
   body[data-ds-dark-theme][data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_gitHeader"],
   body[data-ds-dark-theme][data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_browserBar"],
   body[data-ds-dark-theme][data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_terminalWrap"] {
-    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) calc(var(--we-sidebar-alpha, 0.15) * 0.26 * 100%), transparent) !important;
+    background-color: rgba(16, 18, 24, calc(1.05 - 0.13 * var(--we-sidebar-brightness, 1))) !important;
   }
   /* No backdrop-filter support: fall back to near-opaque tinted surfaces so
      sidebar text never sits directly on a busy wallpaper (same policy as the
