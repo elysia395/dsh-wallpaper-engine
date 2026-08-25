@@ -3232,11 +3232,12 @@ function RopeDock() {
 // ── One-time "what's new / fix" notice ──────────────────────────────────────
 // Users running the plugin in a desktop-shortcut immersive (standalone / kiosk /
 // fullscreen) window can hit a full-screen white flash on click/typing — a
-// Chromium compositor bug with hardware acceleration, not fixable by the plugin.
-// Show a one-time notice (keyed per version) telling them how to fix it. On
-// dismiss we record the version; bump NOTICE_VERSION next release to show again.
+// Chromium compositor bug with hardware acceleration. The plugin now handles it
+// AUTOMATICALLY (drops the frosted blur in that window while keeping translucent
+// glass), so the user never has to touch hardware-acceleration. Show a one-time
+// notice (keyed per version). Bump NOTICE_VERSION next release to show again.
 const NOTICE_KEY = "dsh-wallpaper-engine:notice-version";
-const NOTICE_VERSION = "0.6.2";
+const NOTICE_VERSION = "0.6.4";
 
 function UpdateNotice() {
   const [visible, setVisible] = React.useState(() => {
@@ -3251,16 +3252,14 @@ function UpdateNotice() {
   };
   if (!visible) return null;
   return React.createElement("div", { className: "we-update-notice", role: "alert" },
-    React.createElement("div", { className: "we-update-notice__title" }, "✅ 已修复：沉浸式窗口偶尔全屏白闪"),
+    React.createElement("div", { className: "we-update-notice__title" }, "✅ 已修复：沉浸式窗口白闪（自动方案，无需关闭硬件加速）"),
     React.createElement("div", { className: "we-update-notice__body" },
       React.createElement("p", null,
-        "v0.6.2 已修复「桌面快捷方式打开的沉浸式全屏窗口」里，点击/输入可能整屏白闪的问题。"),
+        "v0.6.4 已自动修复「桌面快捷方式打开的沉浸式全屏窗口」里，点击/输入可能整屏白闪的问题，无需你手动改任何浏览器设置。"),
       React.createElement("p", null,
-        "原因：该更新新增的浮动仓库面板/拉绳等在 kiosk/全屏窗口 + 硬件加速下，让 Chromium 合成器偶发把背景画白。"),
+        "原因：该窗口 + 硬件加速下，Chromium 合成器在毛玻璃（backdrop-filter）对壁纸重采样时偶发把整屏画白。"),
       React.createElement("p", null,
-        "修复：插件现在会在仓库面板关闭时不再挂载其内容（懒加载），大幅减少不必要的合成层。普通浏览器标签页不受影响，保持原有毛玻璃效果。"),
-      React.createElement("p", null,
-        "若在极少数环境下仍遇到闪白，可在该窗口的浏览器里关闭「使用硬件加速」作为兜底（该窗口软件渲染也顺滑）。"),
+        "修复：插件现在会自动识别这种窗口，并仅在其中把毛玻璃降为半透明玻璃（保留光泽与色调，只是不再模糊）；普通浏览器标签页完全不受影响，仍保持完整毛玻璃与硬件加速。"),
       React.createElement("p", { className: "we-update-notice__hint" },
         "本提示每个新版本只出现一次，点下方按钮即可关闭。"),
     ),
@@ -3394,6 +3393,25 @@ const CSS = `
      glass. Extra always-on layers (transform/will-change/contain) were removed —
      they did not stop the white flash and instead added compositing layers. The
      flash was traced to the rope's permanent CSS filter, which is now gone. */
+
+  /* Immersive app-window (desktop shortcut → standalone/fullscreen/kiosk) fix:
+     that window composites on a different path than a normal tab, and Chromium
+     can flash the WHOLE window white when a backdrop-filter surface re-rasterises
+     over the wallpaper on interaction (click/typing). The rope's permanent filter
+     and the repo panel's always-on layer are already gone; the last always-on
+     re-rasterising surface is this frosted backdrop-filter. In the app window
+     ONLY we drop the blur — keeping the translucent tint + specular sheen (still
+     reads as glass) with no backdrop sampling to glitch. Normal tabs keep the
+     full frosted blur AND hardware acceleration. */
+  body[data-we-appwindow][data-we-wallpaper] [data-composer-card],
+  body[data-we-appwindow][data-we-wallpaper] [class*="_bubble"],
+  body[data-we-appwindow] .we-repo-panel--open,
+  body[data-we-appwindow] .we-picker__modal--panel,
+  body[data-we-appwindow][data-we-glass-window] [data-slot="settings.section"],
+  body[data-we-appwindow][data-we-sidebar-glass] [data-dsh-better-sidebar] {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
 
   /* ── dsh-better-sidebar glass ──────────────────────────────────────────────
      The sidebar shell is portalled onto <body> under a stable host attribute

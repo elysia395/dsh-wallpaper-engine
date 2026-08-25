@@ -6,10 +6,9 @@
 
 A DSH bundle that turns your **Wallpaper Engine** wallpapers into the **background of the DSH web GUI** (`dsh web`).
 
-> ✅ **Fixed: occasional full-screen white flash in immersive windows** (v0.6.2)
-> Older builds could flash the **whole window white** when you clicked the dialog or typed in an **immersive fullscreen window** opened via a **desktop shortcut** (standalone / kiosk) — the floating repo-panel / rope compositing layers added by that update caused Chromium to occasionally paint the backdrop white under **hardware acceleration**.
-> **Fixed in v0.6.2**: the plugin now **lazy-mounts the repo panel content** (keeps it out of the DOM while closed), which removes a lot of unnecessary compositing layers; normal browser tabs are unaffected and keep the full frosted-glass look.
-> If the flash still occurs in a rare environment, turning OFF “Use hardware acceleration when available” for that window's own browser config is a solid fallback (the immersive window stays smooth even with it off — keep it ON for normal tabs so they don't lag).
+> ✅ **Fixed: occasional full-screen white flash in immersive windows** (v0.6.4, automatic)
+> Older builds could flash the **whole window white** when you clicked the dialog or typed in an **immersive fullscreen window** opened via a **desktop shortcut** (standalone / kiosk) — under **hardware acceleration**, Chromium's compositor occasionally paints the backdrop white while the frosted glass re-samples the wallpaper.
+> **Fixed automatically in v0.6.4**: the plugin now detects that window and, **only there**, lowers the frosted glass to translucent glass (keeps the tint + sheen, just no blur) — **no need to touch hardware acceleration**; normal browser tabs are unaffected and keep the full frosted glass + hardware acceleration.
 > The plugin shows a one-time notice (once per version) about this fix.
 
 It discovers the Wallpaper Engine install on your machine, lists its wallpapers, and renders them behind the DSH chat interface with an iOS-style **liquid glass** effect: Video (`.mp4`) plays live, Web/HTML loads in an iframe, and **Scene wallpapers appear as extracted static frames**. Since v0.2 it also adds:
