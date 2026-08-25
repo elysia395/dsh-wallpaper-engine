@@ -56,7 +56,7 @@
 | `blur` | `effects/blur` 4-pass（downsample4→gauss_x→gauss_y→combine，13/7/3-tap 核） | ✅ 已实现（sf39l；blurprecise 仍跳过） |
 | `watercaustics` | `effects/caustics`（perlin/uniform/voronoi 4 噪声 + 色差 + MODE 0/1） | ✅ 已实现（sf39l） |
 | `blend` | `effects/blend`（PerformBlend WRITEALPHA / BLENDMODE + GetUVBlend） | ✅ 已实现（sf39l；NUMBLENDTEXTURES=1 主路径） |
-| **第三方 workshop 效果**（34 种，300 次使用；`custom_user_texture` 家族 144 次含 Mutsumi/Elaina） | 壁纸 pkg 内 `shaders/workshop/<id>/effects/*.frag` | ⏳ 后期：GLSL 解释器 |
+| **第三方 workshop 效果**（34 种，300 次使用；`custom_user_texture` 家族 144 次含 Mutsumi/Elaina） | 壁纸 pkg 内 `shaders/workshop/<id>/effects/*.frag` → **GLSL 解释器**（sf40） | ✅ 通用执行（fade/shadow/custom_user_texture 验证 PASS；复杂 shader 解析失败回退原图） |
 
 ### 4. 基础设施
 - **ApplyBlending 全 32 模式** CPU 复刻（`common_blending.h` 逐宏翻译，含 HSL 系列）。
@@ -137,10 +137,6 @@ workshop 场景：scene.pkg 解析 + 渲染全通过（含 puppet/文本/纯色/
 - [x] **camera paths**：多 path 顺序循环 + 关键帧插值。
 - [x] **generic REFLECTION combo**：`_rt_` 渲染目标（画布快照）采样。
 - [ ] **粒子完整 renderer 扩展**：rope/trail/control points 类 emitter。
-- [ ] **其余 effects/ 系列**（62 个）：blur、waterflow、swing、spin、skew、twirl、
-      fisheye、vhs、glitter、shine、fire、foliagesway、chromaticaberration、
-      lightshafts、localcontrast、motionblur、refraction、xray、colorkey、
-      cursorripple、depthparallax、edgedetection、fluidsimulation、clouds、iris…
 - [x] **HDR/bloom 完整链**：downsample_quarter_bloom + saturate + lin gamma 合成。
 - [x] **音频响应**：g_AudioSpectrum 驱动 pulse。
 - [x] **视差（parallax）**：camera.parallax + mouse 驱动位移。
@@ -155,15 +151,13 @@ workshop 场景：scene.pkg 解析 + 渲染全通过（含 puppet/文本/纯色/
 - [ ] **小角度旋转精确化**：`blitRotated` 逆映射双线性数学正确（绕中心，
       90° 已验证）；非 90° 旋转的**符号/矩阵一致性**需官方实机渲染核对
       （lwe 非事实源）→ 保持待确认。
-- [ ] **GLSL 效果解释器（后期）**：运行时读取壁纸 pkg 内
-      `shaders/workshop/<id>/effects/*.frag/.vert` 直接执行，覆盖任意第三方效果。
-      复杂度评估：需词法/语法解析 + AST 求值 + 预处理器（#if/#include/COMBO）+
-      内置函数库（texSample2D/mul/rotateVec2/squareToQuad/CAST/ApplyBlending 等
-      ~30 个）+ varying 逐像素语义 ≈ 2500-5000 行。本地库实测 34 种第三方效果
-      仅 1 种含循环（textoutline7x7），多数为表达式+if → 可先支持无循环子集。
-      纯 JS 实现跨平台一致；验证需 34 种×combo 组合数值对比。**逐个移植无法
-      覆盖全部创意工坊壁纸**，解释器是最终覆盖方案；当前优先人工移植高频标准
-      效果与 `custom_user_texture` 家族（Mutsumi/Elaina 在用）。
+- [x] **GLSL 效果解释器（sf40，通用第三方效果覆盖）**：运行时读取壁纸 pkg 内
+      `shaders/workshop/<id>/effects/*.frag/.vert` 直接执行，覆盖任意第三方
+      效果。技术栈：**@shaderfrog/glsl-parser 7.x**（PEG 解析 + 自带预处理器，
+      #if/#ifdef/#define + combo 宏注入）+ **自写 AST→JS 转译器**（glsl-transpiler
+      老库 swizzle 左值等语法不兼容，弃用）+ 宿主运行时（texSample2D/mul/CAST/
+      saturate/M_PI + 30+ 内置函数 + vert 4 角 varying 双线性插值 + 逐像素 main）。
+      详见下方 sf40 记录。
 
 ### 工程
 - [x] **模块拆分（we-renderer 子目录）**：`core.js` 骨架 + 方法 mixin 模块
@@ -502,7 +496,62 @@ workshop 场景：scene.pkg 解析 + 渲染全通过（含 puppet/文本/纯色/
     GetUVBlend 裁剪；blend 纹理 = textures[1]（_rt_ 引用 → canvas 近似）。
     验证：WRITEALPHA 输出 (0,255,0,128) 与官方数学一致。
   批量回归 14/14（与基线一致；3470764447/3660962877 视频纹理为既有问题）。
-  未提交 git（用户此前要求暂不提交）。
+  已提交 bea7b03（含 sf39e-l）。
+
+- [x] **第九轮：GLSL 效果解释器（sf40）**：通用第三方效果执行（替代逐个手写）：
+  - **技术栈调研**：@shaderfrog/glsl-parser 7.x（2026 活跃，PEG 解析 + 自带
+    预处理器）可装可跑；glsl-transpiler 3.x 能转译简单 shader 但 swizzle 左值
+    （`albedo.rgb =`）等语法直接报错（老 stack.gl 生态）→ **弃用，自写转译器**。
+  - **模块**（lib/we-renderer/glsl/）：
+    - `preprocess.js`：`#include` 递归展开（WE 全局 assets/shaders + pkg）+
+      `// [COMBO]` 注释默认值 + 场景 combos 注入 → shaderfrog `preprocess()`；
+      `uniform <t> <n>; // {"material":"xxx"}` 提取 material→uniform 映射
+    - `transpile.js`：AST→JS（vec→数组、swizzle 读写、构造广播、运算符重载、
+      if/for/while/return、函数参数按值复制、mat `m[i][j]` → subarray 列向量、
+      `group` 括号、`type_specifier`/`type_name` callee、else-if 数组结构）
+    - `runtime.js`：30+ GLSL 内置（mix/step/smoothstep/clamp/dot/cross…）
+      + WE intrinsic（texSample2D/mul 行向量×列主序/CAST2-4/saturate/M_PI）
+    - `executor.js`：vert 4 角跑 varying → 双线性插值 → 逐像素 `main()` →
+      RGBA；uniform 引擎注入（g_Time/g_TextureNResolution xy=objRes zw=texRes/
+      g_LayerModelMatrix 单位阵/parallaxPosition）
+    - `integration.js`：applyEffects else 分支（第三方/官方未实现效果走 GLSL），
+      pkg shader 读取 + 编译缓存（实例级）+ g_Texture0=当前纹理绑定 + 失败回退原图
+  - **验证**：fade（vert 变换 + smoothstep 链）、shadow（if/else-if 链 +
+    ApplyBlending + vert 反射坐标）、custom_user_texture（PerformBlend WRITEALPHA +
+    common_blending.h include）三个真实效果**端到端 PASS**（对照官方 shader
+    手写数学，偏差 ≤0.5）；14 壁纸批量回归与基线逐位一致。
+  - **性能优化**：
+    - **vec 运算转译期内联**：`v*2.0 + CAST2(0.5)` → 数组字面量
+      `[v[0]*2.0, v[1]*2.0]`（expr 加 simple 标记，简单操作数安全内联），
+      消除 __rt._vadd/_vmul 函数调用 + Float32Array 分配
+    - **mix 内联**：vec 混合逐分量展开
+    - **bilinear 缓冲复用**：像素循环预分配 varying 插值缓冲
+    - **大对象降采样**：>65536 像素对象在小分辨率（≤256²）执行 + 最近邻放大 —
+      **3840×2160 全屏效果 ~30s → 159ms**
+    - 基准（128×128）：custom_user_texture 59ms/帧（3.6μs/px）、shadow 8ms、
+      fade 6ms
+  - **限制**：复杂 shader 超出解析器（如 18KB audio_responsive_oscilloscope
+    parse 失败）→ 回退原图；音频效果（enhanced_simple_audio_bars）无 shader
+    文件 → 回退；后续可加编译结果磁盘缓存、step/smoothstep/clamp vec 内联。
+  未提交 git（用户要求本轮不提交）。
+
+- [x] **第十轮：父级可见性级联（sf40a，Mutsumi 用户栏组件误渲染）**：用户反馈
+  Mutsumi（3629379075）渲染了 App Launcher Dock 用户栏组件（该组件官方默认
+  关闭 `appdockenabled=false`，且属实时组件）。诊断（diag-dock2/3）：
+  - renderOrder 中 Dock 相关 25 个对象：id=714 "App Launcher Dock"
+    `visible:{user:"appdockenabled",value:false}`（自身已正确跳过），
+    **Launcher 1-6（id 726-769）无 visible 字段且 `parent:714`** →
+    旧 `_isVisible` 对 `visible==null` 返回 true，脱离父 Dock 独立渲染；
+    Launcher 7-24 为 `visible:false`（作者显式关闭）。
+  - **修复（core.js）**：`_isVisible` 拆出 `_isVisibleSelf`（原自身判定），
+    外层沿 parent 链（≤32 层，与 `resolveTransform` 同模式）检查祖先
+    可见性 — 任一祖先不可见 → 本对象不可见。官方场景图语义：组/容器
+    对象隐藏时子对象一并隐藏（App Launcher Dock 用父对象 visible 绑定
+    用户属性开关，父隐藏后 Launcher 不得独立渲染）。
+  - **验证**：Mutsumi 渲染循环实际渲染 37 个对象，Dock/Launcher 数 = 0
+    （修复前 Launcher 1-6 渲染）；14 壁纸批量回归与基线一致（无破坏；
+    3470764447/3660962877 为既有视频纹理问题）。
+  未提交 git（用户要求本轮不提交）。
 
 ---
 
