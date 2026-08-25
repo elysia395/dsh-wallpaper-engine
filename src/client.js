@@ -149,6 +149,10 @@ const DEFAULTS = {
   // ropeScale multiplies the form's base box (0.5×–2.5×).
   ropeForm: "maid",
   ropeScale: 1,
+  // Persisted "what's new" notice: the last version the user dismissed. Stored
+  // with the other settings (host file, port-independent) so it survives DSH
+  // Desktop's random --port restarts and never re-shows after being closed.
+  noticeSeen: "",
 };
 
 // Selectable values for the two filters. Declared up top because
@@ -262,6 +266,7 @@ function sanitizeSettings(o) {
     ropeShown: o.ropeShown !== false,
     ropeForm: ROPE_FORM_VALUES.includes(o.ropeForm) ? o.ropeForm : DEFAULTS.ropeForm,
     ropeScale: clampNum(o.ropeScale, ROPE_SCALE_MIN, ROPE_SCALE_MAX, DEFAULTS.ropeScale),
+    noticeSeen: typeof o.noticeSeen === "string" ? o.noticeSeen : "",
   };
 }
 
@@ -377,6 +382,7 @@ function serializeSelection() {
     ropeShown: selection.ropeShown,
     ropeForm: selection.ropeForm,
     ropeScale: selection.ropeScale,
+    noticeSeen: selection.noticeSeen,
   };
 }
 
@@ -3237,40 +3243,34 @@ function RopeDock() {
   );
 }
 
-// ── One-time "what's new / fix" notice ──────────────────────────────────────
-// Users running the plugin in a desktop-shortcut immersive (standalone / kiosk /
-// fullscreen) window can hit a full-screen white flash on click/typing — a
-// Chromium compositor bug with hardware acceleration. The plugin now reduces the
-// compositing layers it adds (the repo panel is lazy-mounted, the rope has no
-// permanent filter, and the wallpaper media uses no transform layer at default)
-// while KEEPING the full frosted glass everywhere. Show a one-time notice
-// (keyed per version). Bump NOTICE_VERSION next release to show again.
-const NOTICE_KEY = "dsh-wallpaper-engine:notice-version";
-const NOTICE_VERSION = "0.6.4";
+// ── One-time "what's new" notice ─────────────────────────────────────────────
+// Tells the user about the mascot feature once per version: 小女仆 can be shown
+// or hidden, and a second form 鲸御姐 is now selectable. The dismissal version is
+// stored WITH the settings (host file, port-independent) so it survives DSH
+// Desktop's random --port restarts and never re-shows after being closed. Bump
+// NOTICE_VERSION next release to announce something new again.
+const NOTICE_VERSION = "0.6.5";
 
 function UpdateNotice() {
-  const [visible, setVisible] = React.useState(() => {
-    try {
-      if (typeof localStorage === "undefined") return true;
-      return (localStorage.getItem(NOTICE_KEY) || "") !== NOTICE_VERSION;
-    } catch { return true; }
-  });
+  const sel = useStore();
+  const show = sel.noticeSeen !== NOTICE_VERSION;
   const dismiss = () => {
-    try { localStorage.setItem(NOTICE_KEY, NOTICE_VERSION); } catch { /* ignore */ }
-    setVisible(false);
+    // Persist the dismissed version through the settings pipeline (localStorage
+    // cache + host file). emit() re-renders this component (useStore) to hide it.
+    selection.noticeSeen = NOTICE_VERSION;
+    persistSelection();
+    emit();
   };
-  if (!visible) return null;
+  if (!show) return null;
   return React.createElement("div", { className: "we-update-notice", role: "alert" },
-    React.createElement("div", { className: "we-update-notice__title" }, "✅ 已优化：沉浸式窗口白闪（保留完整毛玻璃，只需减少合成层）"),
+    React.createElement("div", { className: "we-update-notice__title" }, "🎉 吉祥物更新：小女仆可开关，新增鲸御姐形态"),
     React.createElement("div", { className: "we-update-notice__body" },
       React.createElement("p", null,
-        "针对「桌面快捷方式打开的沉浸式全屏窗口」里点击/输入可能整屏白闪的问题，插件继续采用「保留毛玻璃、只削减合成层」的做法，全程自动，无需你手动改任何浏览器设置。"),
+        "聊天顶部的吉祥物「小女仆」现在可以一键开启或隐藏；并新增了第二个形态「鲸御姐」可选。"),
       React.createElement("p", null,
-        "本次再优化：仓库面板关闭时懒加载、拉绳无永久滤镜、壁纸媒体在默认下不再强制一个变换合成层——让该窗口的合成器重绘尽量不触发整屏刷白。"),
-      React.createElement("p", null,
-        "普通浏览器标签页完全不受影响，保持完整毛玻璃与硬件加速。若在极少数环境下仍偶发闪白，可持续告知，我会继续按此方向收敛合成层。"),
+        "在 设置 → Wallpaper Engine → 外观 里：「显示吉祥物」控制开启 / 隐藏，「吉祥物形态」在小女仆 / 鲸御姐之间切换，「吉祥物大小」调节尺寸。"),
       React.createElement("p", { className: "we-update-notice__hint" },
-        "本提示每个新版本只出现一次，点下方按钮即可关闭。"),
+        "本提示每个新版本只出现一次，点下方按钮关闭后不再弹出。"),
     ),
     React.createElement("button", { className: "we-update-notice__btn we-picker__btn", type: "button", onClick: dismiss }, "知道了"),
   );
