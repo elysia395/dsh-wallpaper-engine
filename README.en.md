@@ -11,14 +11,14 @@ A DSH bundle that turns your **Wallpaper Engine** wallpapers into the **backgrou
 > **v0.6.4 keeps reducing the compositing layers**: the repo panel is lazy-mounted when closed, the rope has no permanent filter, and the wallpaper media no longer forces a transform compositing layer by default — whilst **keeping the full frosted glass**. Normal browser tabs are unaffected and keep the full frosted glass + hardware acceleration.
 > The plugin shows a one-time notice (once per version) about this.
 
-It discovers the Wallpaper Engine install on your machine, lists its wallpapers, and renders them behind the DSH chat interface with an iOS-style **liquid glass** effect: Video (`.mp4`) plays live, Web/HTML loads in an iframe, and **Scene wallpapers appear as extracted static frames**. Since v0.2 it also adds:
+It discovers the Wallpaper Engine install on your machine, lists its wallpapers, and renders them behind the DSH chat interface with an iOS-style **liquid glass** effect: Video (`.mp4`) plays live, Web/HTML loads in an iframe, and **Scene wallpapers are re-rendered as full-scene frames by the built-in renderer (object tree / textures / particles / shader effects)**. Since v0.2 it also adds:
 
 - **Modal wallpaper picker** — the thumbnail grid lives in a popup modal, so the settings page stays compact;
 - **Hide / restore (soft delete)** — hide wallpapers you don't want, restore them anytime; no source files are touched;
 - **Playback speed** — six native presets from 0.5x to 2x, instant, no media reload;
 - **Horizontal flip** — mirror the image (video / web / uploaded images);
 - **Custom uploads** — use your own local JPG / PNG / MP4 as a wallpaper, with a configurable storage location and fit modes;
-- **Scene static frames** (v0.3) — Scene wallpapers extract their main texture as a static background instead of being an unusable "not playable" entry.
+- **Scene full-scene frames** (v0.6) — Scene wallpapers are fully replayed by a pure-JS scene renderer (object tree / textures / particles / shader effects) instead of being an unusable "not playable" entry.
 - **Liquid-glass settings page** (v0.3.1) — the settings UI is now a **first-level settings page** (following the dsh-web-ui-all skin-center design): the whole page is a customizable liquid-glass card with **accent color** (6 presets + a custom color picker) and **glass transparency** (0–60%). Both apply instantly and persist.
 - **Whole-settings-window liquid glass** (v0.3.2) — one click turns the **entire native DSH settings window** (dialog + left nav + ALL native sections: General / Models / Plugins / …) into liquid glass with your custom accent + transparency. With the「设置窗口液态玻璃」master switch on, the window background, nav active/hover, buttons, switches and links all follow the chosen accent and transparency; off restores the stock look.
 - **Unified glass tuning** (v0.3.3–v0.3.5) — the settings-window glass blur shares the SAME adjustment as the conversation bar: the **玻璃** (glass) slider (0–60 px) drives the blur radius of both the settings window and the composer/bubbles, with an identical saturation/brightness/contrast recipe. A new **玻璃颜色** (glass color) control lets you tint the glass BASE itself (6 presets + custom picker; defaults white in light / deep navy in dark; once picked, both themes use that color) — **配色** styles the interactive elements, **玻璃颜色** styles the glass itself.
@@ -38,50 +38,47 @@ Wallpaper Engine wallpapers come in four types:
 
 | Type | Rendered by | Portable to DSH? |
 |---|---|---|
-| **Scene** | Wallpaper Engine's own 3D engine | ✅ Static frame — its main texture is extracted (`.pkg`/`.json` .tex or embedded JPEG) |
+| **Scene** | Wallpaper Engine's own 3D engine | ✅ Full-scene frame — a pure-JS scene renderer (object tree / textures / particles / shader effects), see below |
 | **Video** | a plain `.mp4` file | ✅ Yes — plays in a `<video>` tag |
 | **Web** | a Chromium (`webwallpaper64.exe`) host for HTML | ✅ Yes — loads in an `<iframe>` |
 | **Application** | an injected external window | ❌ No |
 
-A Scene wallpaper's 3D scene (shaders/particles/geometry) cannot be replayed in a
-browser, but its **main texture** (usually the background artwork) can be
-extracted as a **static frame** — for photographic and illustration-style scenes
-the result is close to the original image. Scene cards carry a「静态帧」badge in
-the picker.
+A Scene wallpaper's 3D scene is fully replayed by the plugin's **pure-JS scene
+renderer** (`lib/scene-renderer.js`, built from linux-wallpaperengine / repkg
+reverse-engineering): it parses `scene.pkg`'s object tree and renders every
+image layer (with CPU implementations of shader effects like waterwaves /
+waterripple / shake), the puppet skeletal meshes (bind pose), and the particle
+systems (emitters / initializers / operators / sprite drawing). Scene cards carry
+a 「静态帧」 badge in the picker.
 
-> **Expected coverage**: **most Scene wallpapers produce a good static frame**
-> (measured ~80%+ on a real library — especially photographic, illustration and
-> animation-screenshot scenes); **a small portion cannot display properly**:
-> pure shader/particle/procedural scenes (no extractable main texture), scenes
-> using exotic texture formats (e.g. BC7), and video-texture-driven animated
-> scenes. Those automatically fall back to the workshop preview image
+> **Expected result**: the renderer outputs a 3840×2160 full-scene frame
+> (background + water + back hair + character + umbrella + particles), close to
+> the original for photographic, illustration and animation-screenshot scenes.
+> On failure (pure shader/procedural scenes, exotic texture formats) it falls
+> back to the older main-texture extractor, then to the workshop preview image
 > (`preview.jpg`) — expected behaviour, not a defect.
 
-### Scene static frames: how it works
+### Scene rendering: how it works
 
-- **Reading**: parses `scene.pkg` (PKGV container + LZ4 entry chains) or a loose
-  `scene.json` directory, locates the main texture starting from the first
-  `image` object in `scene.json` (material / instance texture references), with
-  all remaining `.tex` files ranked by an art-likelihood score (embedded
-  JPEG/PNG payloads score highest; mask/effect/depth/workshop helpers are
-  penalized, R8/RG88 grayscale formats nearly excluded).
-- **Decoding**: TEX containers (TEXV0005/TEXI0001, TEXB0001-4 mipmaps, LZ4 or
-  raw) decode to a static image — **RGBA8888 / R8 / RG88 / DXT1 / DXT3 / DXT5**
-  plus **WE embedded JPEG / PNG textures** (common for photographic scenes;
-  passed through untouched, zero decode, best fidelity).
-- **Quality gate**: decoded frames are sampled — grayscale (>88% gray) or flat
-  (near-zero variance) frames are rejected and the next candidate is tried;
-  when nothing passes the extractor falls back to the project `preview.jpg`,
-  so gray masks/depth maps/solid fills never masquerade as the wallpaper.
-- **Video-texture detection**: WE animation-sync textures (embedded MP4, e.g.
-  `*_sync`) cannot produce a static frame; they are detected and fall back to
-  the preview instead of emitting garbage pixels.
+- **Object tree**: parses `scene.pkg` (PKGV container + LZ4 entry chains) or a
+  loose `scene.json` directory, topologically sorts every object (image /
+  particle / text / sound) by dependencies / parent.
+- **image layers**: loads the material main textures (RGBA8888 / DXT1/3/5 …),
+  positions them in scene coordinates (origin / scale / angle accumulated down
+  the parent chain), and applies alpha / brightness.
+- **puppet meshes**: MDL (MDLV) mesh + bind-pose rasterization (software
+  raster + bilinear UV sampling + alpha compositing), so skeletal models like
+  the character / back hair display correctly.
+- **shader effect chain**: waterwaves (incl. the dual-wave DUALWAVES product) /
+  waterripple / shake are implemented in the CPU with the exact shader math;
+  mask textures are supported.
+- **particle systems**: boxrandom / sphererandom emitters, color / size / alpha /
+  lifetime / velocity / rotation initializers, movement / alphafade / sizechange /
+  turbulence / oscillate* operators, and sprite drawing.
 - **Cache**: results are cached at `~/.dsh-wallpaper-engine/cache/frames/`
   keyed by `<version>_<path>_<mtime>` (override with `DSH_WE_CACHE_DIR`);
-  workshop updates and extractor upgrades invalidate the frame automatically.
-- **Limits**: BC7 / RGB565 / 16-bit-float textures cannot be decoded (falls
-  back to the project `preview.jpg`); a static frame is not a 3D render —
-  animated particles/water ripples won't appear.
+  workshop updates and renderer upgrades invalidate the frame automatically.
+  First render takes ~3–4s, then near-instant on cache hit.
 
 ## How it works
 
@@ -95,7 +92,7 @@ the picker.
      - `GET /wallpaper-engine/inventory` → JSON list of wallpapers
      - `GET /wallpaper-engine/media/<token>` → video / HTML (Range supported)
      - `GET /wallpaper-engine/preview/<token>` → preview image
-     - `GET /wallpaper-engine/scene-frame/<token>` → scene static frame (main texture, JPEG passthrough or PNG, disk-cached)
+     - `GET /wallpaper-engine/scene-frame/<token>` → scene full-scene frame (pure-JS renderer output 3840×2160, falls back to main-texture extraction, PNG disk-cached)
      - `POST /wallpaper-engine/upload` → upload a custom wallpaper (JPG / PNG / MP4, raw bytes)
      - `POST /wallpaper-engine/remove` → remove an uploaded wallpaper
      - `POST /wallpaper-engine/upload-dir` → change the upload directory (persisted to `~/.dsh-wallpaper-engine/config.json`, migrates existing files)
@@ -230,7 +227,7 @@ via `libraryfolders.vdf`. Nothing further is required.
 
 1. Open `dsh web` → the DSH GUI.
 2. Open **Settings** and pick **Wallpaper Engine** from the left navigation (a first-level settings page, its own nav entry).
-3. Click **选择壁纸** to open the picker modal, then click a Video/Web wallpaper (or an uploaded image/video) in the thumbnail grid. It appears behind the app; close the modal via the backdrop, ESC, or the close button. Scene/Application wallpapers cannot be embedded in the web UI and are hidden from the grid.
+3. Click **选择壁纸** to open the picker modal, then click a Video/Web/Scene wallpaper (or an uploaded image/video) in the thumbnail grid. It appears behind the app; close the modal via the backdrop, ESC, or the close button. Application wallpapers cannot be embedded in the web UI and are hidden from the grid.
 4. Use **暂停/播放** to pause a video wallpaper, and **关闭** to clear it.
    The choice is remembered in your browser's `localStorage` (key
    `dsh-wallpaper-engine:selection`).
@@ -343,7 +340,7 @@ The **自定义壁纸** section uploads local images (JPG / PNG) or videos (MP4)
 
 Rotation runs over **user-defined carousel lists** (轮播列表). Create any number of lists with **新建**, pick Video/Web wallpapers into each from the inventory, give each list its own switch interval (1, 5, 10, 30, 60 or 120 minutes) and order (顺序/随机), then enable **自动轮转** on the list you want active. Lists are persisted in your browser's `localStorage` and are fully client-side — rotation never depends on Wallpaper Engine's own `config.json` playlist paths.
 
-At least two playable Video/Web wallpapers per list are required; manual changes reset the next timer; each list keeps its own cadence, so you can have one list switching every 5 minutes and another every 30. On first run, the first playable Wallpaper Engine playlist is imported automatically as a list so the feature works out of the box; **从 WE 播放列表导入** inside the editor imports any other playlist into the list being edited. Scene and Application wallpapers cannot be embedded in the web UI, so they are automatically excluded from rotation and hidden from the picker.
+At least two playable Video/Web wallpapers per list are required; manual changes reset the next timer; each list keeps its own cadence, so you can have one list switching every 5 minutes and another every 30. On first run, the first playable Wallpaper Engine playlist is imported automatically as a list so the feature works out of the box; **从 WE 播放列表导入** inside the editor imports any other playlist into the list being edited. Application wallpapers cannot be embedded in the web UI, so they are automatically excluded from rotation and hidden from the picker.
 
 ### Liquid-glass appearance (whole settings window + accent + transparency)
 
@@ -430,13 +427,31 @@ The liquid-glass effect is specifically adapted for dsh-better-sidebar's panels
 the conversation area share the same wallpaper + scrim background and read as one
 continuous surface.
 
+The **外观** section exposes a set of **sidebar glass** controls independent of the
+conversation glass (they target only the dsh-better-sidebar subtree; browsers
+without `backdrop-filter` fall back to a near-opaque fill):
+
+| Control | What it controls | Range | Default |
+|---|---|---|---|
+| **侧栏液态玻璃** | Master switch: frost the sidebar panels | On / off | On |
+| **侧栏模糊** | Blur radius of the sidebar frost | 0–200 px | 16 |
+| **侧栏透明度** | Sidebar glass density (**higher = clearer**: 0 densest / 200 clearest) | 0–200 % | 12 % |
+| **侧栏玻璃颜色** | Sidebar glass **base tint** | 6 presets + custom picker | `#ffffff` white |
+
+> Sidebar glass is a separate set of knobs from the settings-window glass: the
+> conversation「玻璃」slider only drives the composer/bubbles, while the sidebar
+> sliders drive the sidebar. The default sidebar glass is slightly denser than the
+> settings window so file/tree/terminal text stays readable in the narrow panels.
+
 ![dsh-better-sidebar compatibility](docs/images/better-sidebar.png)
 
 ## Limitations
 
-- Scene (native 3D) and Application wallpapers cannot be embedded; they are hidden
-  from the thumbnail picker and rotation candidates. Their live render remains
-  Wallpaper Engine's desktop job.
+- Application wallpapers cannot be embedded and are hidden from the thumbnail
+  picker and rotation candidates. Their live render remains Wallpaper Engine's
+  desktop job. Scene wallpapers are re-rendered to a full-scene static frame
+  (see above) — the only dynamic (animated particle / water) effects are frozen
+  in that frame.
 - The browser must be able to autoplay muted `<video>` (DSH runs on loopback; muted
   autoplay is allowed by modern browsers).
 - Media is served from your local Wallpaper Engine install paths; the host only
@@ -462,8 +477,9 @@ The host half (`lib/index.js`) is plain ESM with no build step. The client half
 consumes (the same shape `tsdown` emits for in-box client packages).
 
 ```sh
-npm run build      # regenerate lib/client.js from src/client.js
-npm run verify     # materialize the emitted bundle and assert its exports
+npm run build                  # regenerate lib/client.js from src/client.js
+npm run verify                 # materialize the emitted bundle and assert its exports
+node scripts/verify-scene.mjs  # scene static-frame extraction / scene-frame route self-test (incl. synthetic fixtures)
 ```
 
 Edit `src/client.js`, then `npm run build`. Do not hand-edit `lib/client.js`.

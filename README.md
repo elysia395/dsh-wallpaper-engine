@@ -11,7 +11,7 @@
 > **v0.6.4 继续按「减少合成层」处理**：仓库面板关闭时懒加载、拉绳无永久滤镜、壁纸媒体默认下不再强制一个变换合成层——同时**完整保留毛玻璃**；普通浏览器标签页完全不受影响，保持完整毛玻璃与硬件加速。
 > 插件更新后会弹一次提示，告知此优化（每个新版本仅出现一次）。
 
-它会自动发现你本机的 Wallpaper Engine 安装，列出你的壁纸，并把*可移植*的类型渲染到 DSH 对话界面的后方，配以 **iOS 风格液态玻璃**效果：Video（`.mp4`）动态播放、Web/HTML 以 iframe 加载，**Scene（场景）提取主纹理作为静态帧**。v0.2 起还支持：
+它会自动发现你本机的 Wallpaper Engine 安装，列出你的壁纸，并把*可移植*的类型渲染到 DSH 对话界面的后方，配以 **iOS 风格液态玻璃**效果：Video（`.mp4`）动态播放、Web/HTML 以 iframe 加载，**Scene（场景）由内置渲染器输出完整场景帧（对象树/纹理/粒子/shader 效果）**。v0.2 起还支持：
 
 - **壁纸选择弹窗**：缩略图网格收纳进独立弹窗，设置页不再被长列表占满；
 - **隐藏 / 恢复**：不想看的壁纸一键隐藏（软删除），随时恢复，不碰源文件；
@@ -305,6 +305,17 @@ dsh plugin --profile web add link:./dsh-wallpaper-engine
 
 本插件的液态玻璃效果对 dsh-better-sidebar 的侧边栏面板做了专门适配（毛玻璃、高光与层级统一），让侧边栏与对话区共享同一套「壁纸 + 遮罩」背景，三列视觉一致、不再割裂。
 
+「外观」区提供一组独立于会话玻璃的**侧栏玻璃**细粒度控制（只作用于 dsh-better-sidebar 的侧边栏子树，不支持 `backdrop-filter` 的浏览器自动回退高不透明实色）：
+
+| 控件 | 作用 | 范围 | 默认 |
+|---|---|---|---|
+| **侧栏液态玻璃** | 总开关：把侧边栏面板换成液态毛玻璃 | 开 / 关 | 开 |
+| **侧栏模糊** | 侧边栏毛玻璃的模糊半径 | 0–200 px | 16 |
+| **侧栏透明度** | 侧边栏玻璃的浓淡（**越大越透**：0 最实 / 200 最透） | 0–200 % | 12 % |
+| **侧栏玻璃颜色** | 侧边栏玻璃的**底色色调** | 6 预设 + 自定义取色 | `#ffffff` 白 |
+
+> 侧栏玻璃与设置窗口玻璃是两套独立参数：会话玻璃的「玻璃」滑杆只管输入栏/气泡，侧栏玻璃滑杆管侧边栏；侧边栏默认玻璃比设置窗口稍密（保证窄面板里目录/终端的文字可读）。
+
 ![dsh-better-sidebar 兼容适配](docs/images/better-sidebar.png)
 
 ## 已知限制
@@ -323,8 +334,9 @@ dsh plugin --profile web add link:./dsh-wallpaper-engine
 host 端（`lib/index.js`）是纯 ESM，无需构建。client 端（`lib/client.js`）是**编译产物**，由规范源文件 `src/client.js` 经 `scripts/build-client.mjs` 生成，输出 DSH 模块加载器要求的 `window.__ModuleLoader__.load({ id, factory })` 外壳（与盒内 client 包 `tsdown` 产出的形态一致）。
 
 ```sh
-npm run build      # 从 src/client.js 重新生成 lib/client.js
-npm run verify     # 物化生成的 bundle 并断言其导出
+npm run build                  # 从 src/client.js 重新生成 lib/client.js
+npm run verify                 # 物化生成的 bundle 并断言其导出
+node scripts/verify-scene.mjs  # 场景静态帧提取 / scene-frame 路由自检（含合成 fixture）
 ```
 
 编辑 `src/client.js` 后运行 `npm run build`，不要手改 `lib/client.js`。`npm install`/`pnpm install` 会自动触发 `prepare` → `build`，因此全新 checkout 总是带最新的 `lib/client.js`。
