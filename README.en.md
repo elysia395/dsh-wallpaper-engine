@@ -6,6 +6,11 @@
 
 A DSH bundle that turns your **Wallpaper Engine** wallpapers into the **background of the DSH web GUI** (`dsh web`).
 
+> ✅ **Improved: occasional full-screen white flash in immersive windows** (v0.6.4, keeps full frosted glass)
+> Older builds could flash the **whole window white** when you clicked the dialog or typed in an **immersive fullscreen window** opened via a **desktop shortcut** (standalone / kiosk) — under **hardware acceleration**, Chromium's compositor occasionally paints the backdrop white while it re-composites over the wallpaper.
+> **v0.6.4 keeps reducing the compositing layers**: the repo panel is lazy-mounted when closed, the rope has no permanent filter, and the wallpaper media no longer forces a transform compositing layer by default — whilst **keeping the full frosted glass**. Normal browser tabs are unaffected and keep the full frosted glass + hardware acceleration.
+> The plugin shows a one-time notice (once per version) about this.
+
 It discovers the Wallpaper Engine install on your machine, lists its wallpapers, and renders them behind the DSH chat interface with an iOS-style **liquid glass** effect: Video (`.mp4`) plays live, Web/HTML loads in an iframe, and **Scene wallpapers appear as extracted static frames**. Since v0.2 it also adds:
 
 - **Modal wallpaper picker** — the thumbnail grid lives in a popup modal, so the settings page stays compact;
@@ -371,6 +376,18 @@ skin-center design):
 
 > Liquid glass: the whole settings window unified as glass, following accent, glass color and glass transparency.
 
+### Mascot (chat pull-cord)
+
+At the bottom of the **外观** (appearance) area is a mascot control group for the chat **pull-cord** (a draggable rope pinned to the top edge; pulling it down slides out the **wallpaper repo** drawer):
+
+| Control | What it does | Range | Default |
+|---|---|---|---|
+| **显示吉祥物** (show mascot) | Whether the pull-cord mascot and its wallpaper-repo drawer render | on / off | on |
+| **吉祥物形态** (mascot form) | Switch artwork: default **小女仆** (near-square chibi) or **鲸御姐** (portrait 2:3 full-body) | 小女仆 / 鲸御姐 | 小女仆 |
+| **吉祥物大小** (mascot size) | Scale the mascot (the rope box follows the ratio; drag / snap geometry adapts automatically) | 0.5×–2.5× | 1× |
+
+> Both artworks are inlined as base64 (transparent background) at build time, so the single-file client bundle stays self-contained. **Size** changes only the rope's own box; the wallpaper-repo drawer below is unaffected. Settings apply instantly and persist to the host-side config file.
+
 ### The four sliders
 
 While a wallpaper is active, four sliders let you tune how it blends with the UI:
@@ -404,6 +421,7 @@ files** (in the directory you chose) and `~/.dsh-wallpaper-engine/config.json`
 | `DSH_WE_FFMPEG` | explicit ffmpeg executable path (highest priority in the resolution chain) |
 | `DSH_WE_FFMPEG_URL` | replaces the auto-download source (self-hosted mirror / proxy) |
 | `DSH_WE_CACHE_DIR` | overrides the cache root (transcode cache / scene-frame cache) |
+| `DSH_WE_STEAM_ROOT` | explicit Steam root(s) (comma/semicolon separated, Windows or /mnt paths; fallback when registry/auto-detection misses) |
 
 ## dsh-better-sidebar compatibility
 
@@ -435,6 +453,8 @@ continuous surface.
 
 ## Development / rebuild
 
+Before contributing code, read the [contribution guide](CONTRIBUTING.md). Send Windows, WSL, and shared cross-platform changes to `main`; send macOS, WaifuX, and loose-media changes to `dsh-wallpaper-engine-mac`, maintained by [Jerry (@ruijiaang-lab)](https://github.com/ruijiaang-lab).
+
 The host half (`lib/index.js`) is plain ESM with no build step. The client half
 (`lib/client.js`) is a **compiled artifact** produced from the canonical source
 `src/client.js` by `scripts/build-client.mjs`, which emits the exact
@@ -453,4 +473,3 @@ fresh checkout always ships a current `lib/client.js`.
 The host↔browser contract is plain same-origin HTTP, so the two halves are
 developed independently: rebuild the host by restarting `dsh web`, and rebuild
 the client with `npm run build` before re-running `dsh web`.
-

@@ -6,6 +6,11 @@
 
 一个 DSH bundle，把你电脑上的 **Wallpaper Engine** 壁纸变成 **DSH 网页界面（`dsh web`）的背景**。
 
+> ✅ **已优化：沉浸式全屏窗口偶尔全屏闪白**（v0.6.4，保留完整毛玻璃）
+> 早期版本在**桌面快捷方式打开的沉浸式全屏窗口**（独立应用 / kiosk 窗口）里，点击对话或输入文字时**可能整屏闪白一下**——这是该窗口 + 硬件加速下，Chromium 合成器对壁纸重绘时偶发把整屏画白。
+> **v0.6.4 继续按「减少合成层」处理**：仓库面板关闭时懒加载、拉绳无永久滤镜、壁纸媒体默认下不再强制一个变换合成层——同时**完整保留毛玻璃**；普通浏览器标签页完全不受影响，保持完整毛玻璃与硬件加速。
+> 插件更新后会弹一次提示，告知此优化（每个新版本仅出现一次）。
+
 它会自动发现你本机的 Wallpaper Engine 安装，列出你的壁纸，并把*可移植*的类型渲染到 DSH 对话界面的后方，配以 **iOS 风格液态玻璃**效果：Video（`.mp4`）动态播放、Web/HTML 以 iframe 加载，**Scene（场景）提取主纹理作为静态帧**。v0.2 起还支持：
 
 - **壁纸选择弹窗**：缩略图网格收纳进独立弹窗，设置页不再被长列表占满；
@@ -258,6 +263,18 @@ dsh plugin --profile web add link:./dsh-wallpaper-engine
 
 > 液态玻璃：整个设置窗口统一玻璃质感，跟随「配色」「玻璃颜色」与「玻璃透明度」。
 
+### 吉祥物（聊天顶部拉绳）
+
+「外观」区底部还有一组吉祥物控件，控制聊天的**拉绳吉祥物**（一条可拖拽的拉绳，沿顶部吸附，向下拉即拉出**壁纸仓库**抽屉）：
+
+| 控件 | 作用 | 范围 | 默认 |
+|---|---|---|---|
+| **显示吉祥物** | 是否显示拉绳吉祥物与其壁纸仓库抽屉 | 开 / 关 | 开 |
+| **吉祥物形态** | 切换吉祥物立绘：默认**小女仆**（近方形 chibi）或**鲸御姐**（竖版 2:3 全身体） | 小女仆 / 鲸御姐 | 小女仆 |
+| **吉祥物大小** | 缩放吉祥物（拉绳盒尺寸随比例变化，拖拽 / 吸附几何自动适配） | 0.5×–2.5× | 1× |
+
+> 两幅立绘在打包时都已内联为 base64（透明背景），单文件客户端资源依然自包含。**大小**只改变拉绳自身的盒尺寸，不影响下方的壁纸仓库抽屉。设置即时生效并保存在宿主端配置文件里。
+
 ### 四个滑动条
 
 壁纸激活后，四个滑动条可以微调它与界面的融合效果：
@@ -282,6 +299,7 @@ dsh plugin --profile web add link:./dsh-wallpaper-engine
 | `DSH_WE_FFMPEG` | 指定 ffmpeg 可执行文件（解析链最高优先） |
 | `DSH_WE_FFMPEG_URL` | 替换自动下载源（自建镜像 / 代理加速） |
 | `DSH_WE_CACHE_DIR` | 覆盖缓存根目录（抽帧转码缓存 / 场景静态帧缓存） |
+| `DSH_WE_STEAM_ROOT` | 显式指定 Steam 根目录（逗号/分号分隔，Windows 或 `/mnt` 路径；注册表/自动探测失效时的兜底） |
 
 ## 与 dsh-better-sidebar 的兼容适配
 
@@ -299,6 +317,8 @@ dsh plugin --profile web add link:./dsh-wallpaper-engine
 - 选择器文案为中英混合（本 bundle 尚未接入 DSH 的 locale 命名空间）。
 
 ## 开发 / 重建
+
+准备提交代码前，请先阅读 [贡献指南](CONTRIBUTING.md)。Windows、WSL 与跨平台公共功能提交到 `main`；macOS、WaifuX 与松散媒体相关改动提交到 `dsh-wallpaper-engine-mac`，由 [Jerry（@ruijiaang-lab）](https://github.com/ruijiaang-lab)维护。
 
 host 端（`lib/index.js`）是纯 ESM，无需构建。client 端（`lib/client.js`）是**编译产物**，由规范源文件 `src/client.js` 经 `scripts/build-client.mjs` 生成，输出 DSH 模块加载器要求的 `window.__ModuleLoader__.load({ id, factory })` 外壳（与盒内 client 包 `tsdown` 产出的形态一致）。
 
