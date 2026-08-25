@@ -368,6 +368,41 @@ workshop 场景：scene.pkg 解析 + 渲染全通过（含 puppet/文本/纯色/
   3660962877 水印全部跳过（4 壁纸 × 2 组）；其他壁纸无水印不受影响；
   保留的 stay 文本（歌词/符号/媒体信息）正常。
 - [ ] **小角度旋转**：image 对象非零角度旋转（blitRotated 近似，待精确）。
+- [x] **blitRotated 负尺寸空白修复（sf39a）**：全库位置审计发现 image 组件
+  负 scale（镜像）+ 旋转组合完全空白。根因（纯数学）：`blitRotated` 用
+  `invDw = img.width / dw`（dw 负 → invDw 负）且 `sx = (ux + halfW) * invDw`
+  （halfW 负）→ 源 UV 符号翻转 → `sx < 0 || sx >= img.width` 全部 continue
+  → 不渲染。修复：负 dw/dh 归一化为正 + flipX/flipY 标记，旋转前翻转
+  `sux = -sux`（绕中心镜像，与 blitScaled flip 语义一致）。验证：4×4
+  单元测试镜像+旋转内容正确、方向正确；正 scale 旋转无回归（45°/90°/0°
+  全通过）；批量渲染 14/14 壁纸 OK。涉及对象：3486806915 栏杆509/左垂发
+  组2 593（负 scale+rot）、3774904326 音频线 419（负 scale）。
+- [x] **attachment 锚点语义确认（sf39b）**：审计发现 3486806915 面部组件
+  resolveTransform 与 lwe 差异巨大（恒定 +384/+434）。纯数学验证：
+  - 差异对象全部经 attachment（五官494→头697→身体467 骨骼锚点），lwe
+    无 attachment 支持（其 resolveTransform 无锚点分支）→ 差异是 lwe
+    缺失功能，非我们 bug
+  - 锚点数学验证：MDAT0001 锚点 = 骨骼最终世界位姿 + 锚点矩阵（官方语义
+    已确认）；蒙皮绑定姿态 = 原始网格（bindInv 抵消 bind 平移，数学自洽）
+  - 3629379075（后发/书/头 3 锚点）、3640755971（十字架）锚点全部 ✓ 在
+    父网格内；3486806915 的 467 是"骨架根"设计（小网格 75×85 + 骨骼延伸
+    定义身体骨架，子对象经 attachment 挂骨骼）——官方正常行为
+  - 14 个壁纸无 attachment 父链 resolveTransform 与 lwe 公式 100% 一致
+- [x] **复杂组件 4 处不一致修复（sf39c-d）**：用户反馈复杂组件壁纸大量问题，
+  系统性审计发现：
+  - **sf39c：attachment 锚点动画层门控不一致**（core.js `_attachmentOffset` vs
+    puppet.js renderPuppet）：renderPuppet 的 animLayers 构建有
+    `animations.length > 1` 门控，_attachmentOffset 无 → 单动画 + animationlayers
+    时锚点跟随错误动画 → 子对象挂载错位。修复：_attachmentOffset 加同款门控。
+  - **sf39d：puppet scale≠1 定位偏移**（puppet.js renderPuppet）：官方模型矩阵
+    scale 同时缩放位置与尺寸，旧实现 `dx = origin + rawBounds.minX` 未乘 scale
+    （scale 只进 blit 尺寸）→ scale≠1 时网格整体偏移 scale×minX。修复：
+    `leftX = origin + rawBounds.minX×scale`。验证：scale=1 壁纸（3460/3655）位置
+    不变（用户实测基线），scale=0.98（3640755971）渲染正常。
+  - 已确认非 bug：particles 无 viewShift（官方 2D 相机在原点，粒子仅受
+    parallax，lwe CParticle.cpp:1901 确认）；model 用完整 camVP（3D 透视路径，
+    与 image 2D 平移语义各自正确）；`_sampleAnimRT`/`_matMulRow` 单份实现无
+    重复。批量回归 14/14 壁纸全通过。
 
 ---
 
