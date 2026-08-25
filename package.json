@@ -82,6 +82,7 @@
     }
   },
   "dependencies": {
-    "jpeg-js": "^0.4.4"
+    "jpeg-js": "^0.4.4",
+    "@shaderfrog/glsl-parser": "^7.0.1"
   }
 }
