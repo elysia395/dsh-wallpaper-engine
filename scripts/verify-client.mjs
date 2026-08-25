@@ -227,6 +227,38 @@ setTimeout(() => {
       } else {
         console.log('switch off hides the three detail knobs: false (switch not found)');
       }
+      // Mascot rope-dock visibility toggle: present by default (checked),
+      // unchecking flips the persisted flag (checkbox off), re-checking
+      // restores it — re-renders read the live `selection`.
+      const findRopeToggle = (root) => {
+        let hit = null;
+        (function walk(node) {
+          if (Array.isArray(node)) { node.forEach(walk); return; }
+          if (!node || typeof node !== 'object') return;
+          const children = Array.isArray(node.children) ? node.children : [];
+          if (children.includes('显示吉祥物（聊天顶部拉绳）')) {
+            const input = children.find((c) => c && typeof c === 'object' && c.type === 'input');
+            if (input && typeof input.props.onChange === 'function') hit = input;
+          }
+          if (Array.isArray(node.children)) node.children.forEach(walk);
+        })(root);
+        return hit;
+      };
+      const ropeToggle = findRopeToggle(tree);
+      console.log('mascot rope toggle present:', !!ropeToggle);
+      if (ropeToggle) {
+        console.log('rope toggle checked by default:', ropeToggle.props.checked === true);
+        ropeToggle.props.onChange({ target: { checked: false } });
+        tree = pickerRenders[0]();
+        const ropeOff = findRopeToggle(tree);
+        console.log('unchecking hides the rope (checkbox off):', !!ropeOff && ropeOff.props.checked === false);
+        ropeToggle.props.onChange({ target: { checked: true } });
+        tree = pickerRenders[0]();
+        const ropeOn = findRopeToggle(tree);
+        console.log('re-checking restores the rope (checkbox on):', !!ropeOn && ropeOn.props.checked === true);
+      } else {
+        console.log('mascot rope toggle: false (not found)');
+      }
       // 玻璃 slider now spans 0–60 px (was 0–40): assert the raised max on the
       // 玻璃 range input (label "玻璃", max 60) so the range stays in sync.
       const glassSlider = (() => {
