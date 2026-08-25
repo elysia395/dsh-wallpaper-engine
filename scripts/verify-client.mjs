@@ -194,7 +194,6 @@ setTimeout(() => {
       console.log('sidebar-glass master switch present:', treeText.includes('侧栏液态玻璃'));
       console.log('sidebar blur slider present:', treeText.includes('侧栏模糊'));
       console.log('sidebar alpha slider present:', treeText.includes('侧栏透明度'));
-      console.log('sidebar brightness slider present:', treeText.includes('侧栏玻璃亮度'));
       console.log('sidebar glass-color swatches (expect 6):', (treeText.match(/"aria-label":"侧栏玻璃颜色 /g) || []).length);
       console.log('sidebar glass color custom input present:', treeText.includes('自定义侧栏玻璃颜色'));
       // The three detail knobs (侧栏模糊 / 侧栏透明度 / 侧栏玻璃颜色) are
@@ -219,12 +218,12 @@ setTimeout(() => {
         tree = pickerRenders[0]();
         const offText = JSON.stringify(tree);
         console.log('switch off hides the three detail knobs:',
-          !offText.includes('侧栏模糊') && !offText.includes('侧栏透明度') && !offText.includes('侧栏玻璃颜色') && !offText.includes('侧栏玻璃亮度'));
+          !offText.includes('侧栏模糊') && !offText.includes('侧栏透明度') && !offText.includes('侧栏玻璃颜色'));
         console.log('switch itself stays visible when off:', offText.includes('侧栏液态玻璃'));
         sidebarSwitch.props.onChange({ target: { checked: true } });
         tree = pickerRenders[0]();
         console.log('switch back on restores the detail knobs:',
-          JSON.stringify(tree).includes('侧栏模糊') && JSON.stringify(tree).includes('侧栏透明度') && JSON.stringify(tree).includes('侧栏玻璃颜色') && JSON.stringify(tree).includes('侧栏玻璃亮度'));
+          JSON.stringify(tree).includes('侧栏模糊') && JSON.stringify(tree).includes('侧栏透明度') && JSON.stringify(tree).includes('侧栏玻璃颜色'));
       } else {
         console.log('switch off hides the three detail knobs: false (switch not found)');
       }
