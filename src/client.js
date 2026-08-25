@@ -267,8 +267,8 @@ function sanitizeSettings(o) {
       ? o.glassColor : DEFAULTS.glassColor,
     glassWindow: o.glassWindow !== false,
     sidebarGlass: o.sidebarGlass !== false,
-    sidebarBlur: clampNum(o.sidebarBlur, 0, 60, DEFAULTS.sidebarBlur),
-    sidebarAlpha: clampNum(o.sidebarAlpha, 0, 60, DEFAULTS.sidebarAlpha),
+    sidebarBlur: clampNum(o.sidebarBlur, 0, 100, DEFAULTS.sidebarBlur),
+    sidebarAlpha: clampNum(o.sidebarAlpha, 0, 100, DEFAULTS.sidebarAlpha),
     sidebarColor: typeof o.sidebarColor === "string" && /^#[0-9a-f]{6}$/i.test(o.sidebarColor)
       ? o.sidebarColor : DEFAULTS.sidebarColor,
     ropeShown: o.ropeShown !== false,
@@ -1665,8 +1665,9 @@ function applyEffects() {
   // 侧栏透明度 / 侧栏玻璃颜色 + 总开关）。变量只作用于 [data-dsh-better-sidebar]
   // 子树（CSS 见下），关闭总开关时侧栏恢复原生外观。
   s.setProperty("--we-sidebar-blur", selection.sidebarBlur + "px");
-  s.setProperty("--we-sidebar-saturate", String(1.15 + selection.sidebarBlur * 0.028));
-  const sidebarAlpha = Math.max(0.03, 0.25 - (selection.sidebarAlpha / 60) * 0.22);
+  s.setProperty("--we-sidebar-saturate", String(1.15 + Math.min(selection.sidebarBlur, 60) * 0.028));
+  // 透明度语义：越大越透。0 → alpha 0.25（最实），100 → alpha 0.02（最透）。
+  const sidebarAlpha = Math.max(0.02, 0.25 - (selection.sidebarAlpha / 100) * 0.23);
   s.setProperty("--we-sidebar-alpha", String(sidebarAlpha));
   s.setProperty("--we-sidebar-color", selection.sidebarColor);
   if (selection.sidebarGlass) document.body.setAttribute("data-we-sidebar-glass", "on");
@@ -1918,11 +1919,11 @@ function WallpaperPicker(props) {
   // 侧栏玻璃（dsh-better-sidebar）：独立于会话玻璃的一套细粒度控制，各自立即
   // 生效并持久化（--we-sidebar-blur / --we-sidebar-alpha / --we-sidebar-color）。
   const onSidebarBlur = (px) => {
-    selection.sidebarBlur = clampNum(px, 0, 60, DEFAULTS.sidebarBlur);
+    selection.sidebarBlur = clampNum(px, 0, 100, DEFAULTS.sidebarBlur);
     persistSelection(); emit();
   };
   const onSidebarAlpha = (pct) => {
-    selection.sidebarAlpha = clampNum(pct, 0, 60, DEFAULTS.sidebarAlpha);
+    selection.sidebarAlpha = clampNum(pct, 0, 100, DEFAULTS.sidebarAlpha);
     persistSelection(); emit();
   };
   const onSidebarColor = (hex) => {
@@ -2165,8 +2166,8 @@ function WallpaperPicker(props) {
       ),
       ],
       sel.sidebarPresent && sel.sidebarGlass && [
-      SliderRow("侧栏模糊", 0, 60, 1, sel.sidebarBlur, onSidebarBlur, sel.sidebarBlur + "px", "sb-blur"),
-      SliderRow("侧栏透明度", 0, 60, 5, sel.sidebarAlpha, onSidebarAlpha, sel.sidebarAlpha + "%", "sb-alpha"),
+      SliderRow("侧栏模糊", 0, 100, 1, sel.sidebarBlur, onSidebarBlur, sel.sidebarBlur + "px", "sb-blur"),
+      SliderRow("侧栏透明度", 0, 100, 1, sel.sidebarAlpha, onSidebarAlpha, sel.sidebarAlpha + "%", "sb-alpha"),
       React.createElement("div", { key: "sb-color", className: "we-picker__row we-picker__accent-row" },
         React.createElement("span", { className: "we-picker__hint we-picker__label" }, "侧栏玻璃颜色"),
         GLASS_COLOR_PRESETS.map((hex) => React.createElement("button", {

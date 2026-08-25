@@ -333,6 +333,22 @@ setTimeout(() => {
       })();
       const sliderMax = glassSlider ? JSON.stringify(glassSlider).match(/"max":"(\d+)"/)?.[1] : null;
       console.log('玻璃 slider max (expect 60):', sliderMax);
+      // 侧栏模糊 / 侧栏透明度 ranges widened to 0–100 (was 0–60): assert max 100.
+      const findSliderMax = (label) => {
+        let hit = null;
+        (function walk(node) {
+          if (Array.isArray(node)) { node.forEach(walk); return; }
+          if (!node || typeof node !== 'object') return;
+          const cls = typeof node.props?.className === 'string' ? node.props.className : '';
+          const children = Array.isArray(node.children) ? node.children : [];
+          const lbl = children.find((c) => c && typeof c === 'object' && Array.isArray(c.children) && c.children.includes(label));
+          if (cls.includes('we-picker__slider-row') && lbl) hit = node;
+          if (Array.isArray(node.children)) node.children.forEach(walk);
+        })(tree);
+        return hit ? JSON.stringify(hit).match(/"max":"(\d+)"/)?.[1] : null;
+      };
+      console.log('sidebar blur slider max (expect 100):', findSliderMax('侧栏模糊'));
+      console.log('sidebar alpha slider max (expect 100):', findSliderMax('侧栏透明度'));
       console.log('whole-window glass master switch present:', treeText.includes('设置窗口液态玻璃'));
       console.log('window glass hint present:', treeText.includes('整个设置窗口'));
       // The thumbnail grid lives inside the picker MODAL now (settings page
