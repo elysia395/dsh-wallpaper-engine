@@ -5,3 +5,6 @@ node_modules/
 .npm/
 .test-cache/
 scene-diagnosis.tsv
+# Local ffmpeg (Windows static build, ~370MB) — used for transcode experiments;
+# never commit binaries (platform-specific + huge).
+/ffmpeg/
