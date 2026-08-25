@@ -347,8 +347,8 @@ setTimeout(() => {
         })(tree);
         return hit ? JSON.stringify(hit).match(/"max":"(\d+)"/)?.[1] : null;
       };
-      console.log('sidebar blur slider max (expect 100):', findSliderMax('侧栏模糊'));
-      console.log('sidebar alpha slider max (expect 100):', findSliderMax('侧栏透明度'));
+      console.log('sidebar blur slider max (expect 200):', findSliderMax('侧栏模糊'));
+      console.log('sidebar alpha slider max (expect 200):', findSliderMax('侧栏透明度'));
       console.log('whole-window glass master switch present:', treeText.includes('设置窗口液态玻璃'));
       console.log('window glass hint present:', treeText.includes('整个设置窗口'));
       // The thumbnail grid lives inside the picker MODAL now (settings page
