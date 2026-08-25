@@ -377,6 +377,18 @@ skin-center design):
 
 > Liquid glass: the whole settings window unified as glass, following accent, glass color and glass transparency.
 
+### Mascot (chat pull-cord)
+
+At the bottom of the **外观** (appearance) area is a mascot control group for the chat **pull-cord** (a draggable rope pinned to the top edge; pulling it down slides out the **wallpaper repo** drawer):
+
+| Control | What it does | Range | Default |
+|---|---|---|---|
+| **显示吉祥物** (show mascot) | Whether the pull-cord mascot and its wallpaper-repo drawer render | on / off | on |
+| **吉祥物形态** (mascot form) | Switch artwork: default **小女仆** (near-square chibi) or **鲸御姐** (portrait 2:3 full-body) | 小女仆 / 鲸御姐 | 小女仆 |
+| **吉祥物大小** (mascot size) | Scale the mascot (the rope box follows the ratio; drag / snap geometry adapts automatically) | 0.5×–2.5× | 1× |
+
+> Both artworks are inlined as base64 (transparent background) at build time, so the single-file client bundle stays self-contained. **Size** changes only the rope's own box; the wallpaper-repo drawer below is unaffected. Settings apply instantly and persist to the host-side config file.
+
 ### The four sliders
 
 While a wallpaper is active, four sliders let you tune how it blends with the UI:

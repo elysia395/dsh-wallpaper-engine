@@ -259,6 +259,63 @@ setTimeout(() => {
       } else {
         console.log('mascot rope toggle: false (not found)');
       }
+      // Mascot rope form (maid/whale) + size slider: both present by default;
+      // changing them flips the persisted selection live.
+      const findRopeFormSelect = (root) => {
+        let hit = null;
+        (function walk(node) {
+          if (Array.isArray(node)) { node.forEach(walk); return; }
+          if (!node || typeof node !== 'object') return;
+          if (node.type === 'select' && node.props && node.props['aria-label'] === '吉祥物形态') hit = node;
+          if (Array.isArray(node.children)) node.children.forEach(walk);
+        })(root);
+        return hit;
+      };
+      const findRopeScaleSlider = (root) => {
+        let hit = null;
+        (function walk(node) {
+          if (Array.isArray(node)) { node.forEach(walk); return; }
+          if (!node || typeof node !== 'object') return;
+          const cls = typeof node.props?.className === 'string' ? node.props.className : '';
+          const children = Array.isArray(node.children) ? node.children : [];
+          const label = children.find((c) => c && typeof c === 'object' && Array.isArray(c.children) && c.children.includes('吉祥物大小'));
+          if (cls.includes('we-picker__slider-row') && label) hit = node;
+          if (Array.isArray(node.children)) node.children.forEach(walk);
+        })(root);
+        return hit;
+      };
+      const findRangeInput = (row) =>
+        (Array.isArray(row?.children) ? row.children : [])
+          .find((c) => c && typeof c === 'object' && c.type === 'input');
+      const ropeFormSelect = findRopeFormSelect(tree);
+      console.log('mascot rope form select present:', !!ropeFormSelect);
+      if (ropeFormSelect) {
+        console.log('rope form default (maid):', ropeFormSelect.props.value === 'maid');
+        ropeFormSelect.props.onChange({ target: { value: 'whale' } });
+        tree = pickerRenders[0]();
+        const selWhale = findRopeFormSelect(tree);
+        console.log('rope form switches to whale:', !!selWhale && selWhale.props.value === 'whale');
+        if (selWhale) selWhale.props.onChange({ target: { value: 'maid' } });
+        tree = pickerRenders[0]();
+      } else {
+        console.log('mascot rope form select: false (not found)');
+      }
+      const ropeScaleSlider = findRopeScaleSlider(tree);
+      console.log('mascot rope size slider present:', !!ropeScaleSlider);
+      if (ropeScaleSlider) {
+        const ri = findRangeInput(ropeScaleSlider);
+        console.log('rope size slider min/max (0.5/2.5):',
+          ri && String(ri.props.min) === '0.5' && String(ri.props.max) === '2.5');
+        console.log('rope size default scale (1):', ri && String(ri.props.value) === '1');
+        if (ri) ri.props.onInput({ target: { value: '1.5' } });
+        tree = pickerRenders[0]();
+        const ri2 = findRangeInput(findRopeScaleSlider(tree));
+        console.log('rope size slider updates to 1.5:', ri2 && String(ri2.props.value) === '1.5');
+        if (ri2) ri2.props.onInput({ target: { value: '1' } });
+        tree = pickerRenders[0]();
+      } else {
+        console.log('mascot rope size slider: false (not found)');
+      }
       // 玻璃 slider now spans 0–60 px (was 0–40): assert the raised max on the
       // 玻璃 range input (label "玻璃", max 60) so the range stays in sync.
       const glassSlider = (() => {
