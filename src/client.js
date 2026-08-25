@@ -910,12 +910,14 @@ function applySelection(id) {
   // (scene-anim 路由 ?fmt=mp4, 首次分钟级) 完成后无缝切换 — video 元素提供
   // 播放/暂停/倍速 控制, 与视频壁纸同款。sceneFrameUrl 供 fpsCap 变更时重渲染。
   selection.sceneFrameUrl = w.type === "scene" ? (w.frameUrl || null) : null;
-  if (w.type === "scene" && w.frameUrl) queueSceneAnimUpgrade(w.frameUrl);
-  // Keep the preview around so a failed static frame can fall back to it.
-  selection.previewUrl = w.preview || null;
   // Scene wallpapers with an embedded animation (host-extracted MP4) play it
   // as a hardware-decoded <video>; scenes without one stay on the static frame.
+  // 有内嵌 MP4 (sceneVideo) 的场景直接用硬件解码播放 — 不再触发 CPU scene-anim
+  // 升级 (避免重复动画 + 浪费 CPU, 且 scene-anim 完成后会覆盖 sceneVideo)。
   selection.sceneVideo = w.type === "scene" ? (w.sceneVideo || null) : null;
+  if (w.type === "scene" && w.frameUrl && !selection.sceneVideo) queueSceneAnimUpgrade(w.frameUrl);
+  // Keep the preview around so a failed static frame can fall back to it.
+  selection.previewUrl = w.preview || null;
   selection.transcodeState = "idle";
   // The previous wallpaper's media info must not leak into the new one: a stale
   // fps would make the sync "源帧率 ≤ 上限" check wrongly skip the transcode
@@ -3011,8 +3013,8 @@ function WallpaperPicker(props) {
                   selection.url = sel.sceneFrameUrl;
                   syncLayers();
                 }
-              } else if (sel.type === "scene" && sel.sceneFrameUrl) {
-                // 开启: 从静态帧开始动画化升级
+              } else if (sel.type === "scene" && sel.sceneFrameUrl && !sel.sceneVideo) {
+                // 开启: 从静态帧开始动画化升级 (sceneVideo 内嵌 MP4 已硬件解码, 不升级)
                 queueSceneAnimUpgrade(sel.sceneFrameUrl);
               }
               emit();
@@ -3053,7 +3055,8 @@ function WallpaperPicker(props) {
             onClick: () => {
               selection.fpsCap = cap; persistSelection(); refreshMediaInfo(true); emit();
               // scene 动画: fpsCap 变更 → 以新帧率重新渲染动画视频
-              if (sel.type === "scene" && sel.sceneFrameUrl) queueSceneAnimUpgrade(sel.sceneFrameUrl);
+              // (sceneVideo 内嵌 MP4 的场景不重渲染 — 硬件解码不受 fpsCap 影响)
+              if (sel.type === "scene" && sel.sceneFrameUrl && !sel.sceneVideo) queueSceneAnimUpgrade(sel.sceneFrameUrl);
             },
           }, cap === 0 ? "无限制" : cap + "fps"),
         ),
