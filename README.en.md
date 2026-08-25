@@ -6,10 +6,10 @@
 
 A DSH bundle that turns your **Wallpaper Engine** wallpapers into the **background of the DSH web GUI** (`dsh web`).
 
-> ✅ **Fixed: occasional full-screen white flash in immersive windows** (v0.6.4, automatic)
-> Older builds could flash the **whole window white** when you clicked the dialog or typed in an **immersive fullscreen window** opened via a **desktop shortcut** (standalone / kiosk) — under **hardware acceleration**, Chromium's compositor occasionally paints the backdrop white while the frosted glass re-samples the wallpaper.
-> **Fixed automatically in v0.6.4**: the plugin now detects that window and, **only there**, lowers the frosted glass to translucent glass (keeps the tint + sheen, just no blur) — **no need to touch hardware acceleration**; normal browser tabs are unaffected and keep the full frosted glass + hardware acceleration.
-> The plugin shows a one-time notice (once per version) about this fix.
+> ✅ **Improved: occasional full-screen white flash in immersive windows** (v0.6.4, keeps full frosted glass)
+> Older builds could flash the **whole window white** when you clicked the dialog or typed in an **immersive fullscreen window** opened via a **desktop shortcut** (standalone / kiosk) — under **hardware acceleration**, Chromium's compositor occasionally paints the backdrop white while it re-composites over the wallpaper.
+> **v0.6.4 keeps reducing the compositing layers**: the repo panel is lazy-mounted when closed, the rope has no permanent filter, and the wallpaper media no longer forces a transform compositing layer by default — whilst **keeping the full frosted glass**. Normal browser tabs are unaffected and keep the full frosted glass + hardware acceleration.
+> The plugin shows a one-time notice (once per version) about this.
 
 It discovers the Wallpaper Engine install on your machine, lists its wallpapers, and renders them behind the DSH chat interface with an iOS-style **liquid glass** effect: Video (`.mp4`) plays live, Web/HTML loads in an iframe, and **Scene wallpapers appear as extracted static frames**. Since v0.2 it also adds:
 
