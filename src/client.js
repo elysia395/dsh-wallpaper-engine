@@ -84,6 +84,14 @@ const DEFAULTS = {
   // 解码占用随帧率线性下降）。与倍速完全解耦 —— 倍速照常叠加在抽帧版上。
   // 无 ffmpeg 或转码失败时自动回退原片（transcodeState: "fallback"）。
   fpsCap: 0,
+  // Scene 壁纸动画化: 静态帧的 frameUrl (供 fpsCap 变更时重渲染动画) + 渲染进度
+  // (0-100; 后台渲染 scene-anim 视频期间轮询, 完成置 null)。
+  sceneFrameUrl: null,
+  sceneAnimProgress: null,
+  // beta场景动画: 默认关闭 — 关闭时 scene 壁纸只渲染静态帧 (稳定), 不启动
+  // scene-anim 视频后台渲染; 开启后才走动画化升级 (CPU 渲染试验性, 可能有
+  // 组件错误), 渲染期间进度条 + 完成自动切换视频。
+  betaSceneAnim: false,
   // 遮挡暂停（借鉴 Wallpaper Engine 的「被遮挡时暂停」——桌面端大部分时间
   // GPU≈0 主因就是它）：
   // - pauseOnHidden：页面隐藏（窗口最小化 / 切到其它标签页）时暂停视频。
@@ -148,6 +156,15 @@ const DEFAULTS = {
   sidebarBlur: 16,
   sidebarAlpha: 12,
   sidebarColor: "#ffffff",
+  // 内容面（编辑器/终端）近不透明玻璃底的细调——既有固定调色板（语法高亮/
+  // ANSI）为不透明底设计，全透明毛玻璃下注释灰不可读，全不透明又失去玻璃感：
+  // - sidebarContentAlpha：内容面透明度（%），越大越透（映射到底色不透明度
+  //   100%→20%；默认 30 → 70% 不透明，亮/暗主题实测显示均合理，玻璃感与
+  //   注释可读性平衡）；
+  // - sidebarContentColor：内容面底色（#rrggbb），空 = 跟随主题面板色
+  //   (--dsw-alias-bg-layer-1)，选定后双主题统一使用该色。
+  sidebarContentAlpha: 30,
+  sidebarContentColor: "",
   // Persisted: show the chat-interface mascot pull-cord (rope dock).
   ropeShown: true,
   // Persisted: which mascot artwork + how big. ropeForm ∈ {maid, whale};
@@ -248,6 +265,7 @@ function sanitizeSettings(o) {
       : [],
     playbackRate: clampNum(o.playbackRate, 0.5, 2, DEFAULTS.playbackRate),
     fpsCap: FPS_CAP_VALUES.includes(o.fpsCap) ? o.fpsCap : DEFAULTS.fpsCap,
+    betaSceneAnim: o.betaSceneAnim === true,
     pauseOnHidden: o.pauseOnHidden !== false,
     pauseOnBlur: o.pauseOnBlur === true,
     pauseOnBattery: o.pauseOnBattery === true,
@@ -271,6 +289,9 @@ function sanitizeSettings(o) {
     sidebarAlpha: clampNum(o.sidebarAlpha, 0, 200, DEFAULTS.sidebarAlpha),
     sidebarColor: typeof o.sidebarColor === "string" && /^#[0-9a-f]{6}$/i.test(o.sidebarColor)
       ? o.sidebarColor : DEFAULTS.sidebarColor,
+    sidebarContentAlpha: clampNum(o.sidebarContentAlpha, 0, 80, DEFAULTS.sidebarContentAlpha),
+    sidebarContentColor: typeof o.sidebarContentColor === "string" && /^#[0-9a-f]{6}$/i.test(o.sidebarContentColor)
+      ? o.sidebarContentColor : DEFAULTS.sidebarContentColor,
     ropeShown: o.ropeShown !== false,
     ropeForm: ROPE_FORM_VALUES.includes(o.ropeForm) ? o.ropeForm : DEFAULTS.ropeForm,
     ropeScale: clampNum(o.ropeScale, ROPE_SCALE_MIN, ROPE_SCALE_MAX, DEFAULTS.ropeScale),
@@ -394,6 +415,8 @@ function serializeSelection() {
     sidebarBlur: selection.sidebarBlur,
     sidebarAlpha: selection.sidebarAlpha,
     sidebarColor: selection.sidebarColor,
+    sidebarContentAlpha: selection.sidebarContentAlpha,
+    sidebarContentColor: selection.sidebarContentColor,
     ropeShown: selection.ropeShown,
     ropeForm: selection.ropeForm,
     ropeScale: selection.ropeScale,
@@ -856,6 +879,9 @@ function importPlaylistIntoDraft(playlist) {
 }
 
 function applySelection(id) {
+  // 切换壁纸 (任意类型): 终止旧的 scene 动画升级 — 旧轮询 timer 停止写进度,
+  // 旧 probe 下载断开 → 服务端 res close → 取消渲染 (worker/ffmpeg 释放 CPU)。
+  cancelSceneAnimUpgrade();
   selection.id = id || "";
   persistSelection();
   if (!selection.id) {
@@ -887,11 +913,18 @@ function applySelection(id) {
   }
   selection.url = w.type === "scene" ? w.frameUrl : w.media;
   selection.type = w.type;
-  // Keep the preview around so a failed static frame can fall back to it.
-  selection.previewUrl = w.preview || null;
+  // Scene 壁纸动画化: 先显示静态帧 (frameUrl, 立即), 后台预渲染动画视频
+  // (scene-anim 路由 ?fmt=mp4, 首次分钟级) 完成后无缝切换 — video 元素提供
+  // 播放/暂停/倍速 控制, 与视频壁纸同款。sceneFrameUrl 供 fpsCap 变更时重渲染。
+  selection.sceneFrameUrl = w.type === "scene" ? (w.frameUrl || null) : null;
   // Scene wallpapers with an embedded animation (host-extracted MP4) play it
   // as a hardware-decoded <video>; scenes without one stay on the static frame.
+  // 有内嵌 MP4 (sceneVideo) 的场景直接用硬件解码播放 — 不再触发 CPU scene-anim
+  // 升级 (避免重复动画 + 浪费 CPU, 且 scene-anim 完成后会覆盖 sceneVideo)。
   selection.sceneVideo = w.type === "scene" ? (w.sceneVideo || null) : null;
+  if (w.type === "scene" && w.frameUrl && !selection.sceneVideo) queueSceneAnimUpgrade(w.frameUrl);
+  // Keep the preview around so a failed static frame can fall back to it.
+  selection.previewUrl = w.preview || null;
   selection.transcodeState = "idle";
   // The previous wallpaper's media info must not leak into the new one: a stale
   // fps would make the sync "源帧率 ≤ 上限" check wrongly skip the transcode
@@ -1147,24 +1180,119 @@ function weStartDraw(canvas, video, customFit) {
   weResizeObs.observe(canvas);
 }
 
+// ── Scene 壁纸动画化: 静态帧 → 后台预渲染视频 → 无缝切换 ──────
+// scene-anim 路由 (?fmt=mp4) 有落盘缓存 + 并发去重; 首次渲染分钟级, 故先显示
+// 静态帧 (frameUrl), 用隐藏 <video> 预加载动画视频 (触发宿主渲染), 完成后
+// 替换当前壁纸 URL — video 元素原生提供 播放/暂停/倍速/进度 控制,
+// 与视频壁纸同款配置。渲染期间轮询 /scene-anim-progress 显示进度条。
+// 切换壁纸 / fpsCap 变更会调用本函数: 必须终止旧升级 (轮询 timer + probe
+// 下载) — 否则旧 timer 继续把旧壁纸进度写进共享 selection (进度条跳变),
+// 且旧 probe 的下载保持服务端渲染任务活跃 (worker + ffmpeg 占满 CPU)。
+let sceneAnimUpgrade = null; // {pollTimer, probe, frameUrl, maxWait} — 当前活跃的升级
+function cancelSceneAnimUpgrade() {
+  const u = sceneAnimUpgrade;
+  sceneAnimUpgrade = null;
+  if (!u) return;
+  if (u.pollTimer) { clearInterval(u.pollTimer); }
+  if (u.maxWait) { clearTimeout(u.maxWait); }
+  if (u.probe) {
+    // 清 src 触发浏览器 abort 下载 → 服务端 res close → 渲染任务取消
+    try { u.probe.removeAttribute("src"); u.probe.load(); } catch { /* ignore */ }
+    try { u.probe.remove(); } catch { /* ignore */ }
+  }
+  if (selection.sceneAnimProgress != null) selection.sceneAnimProgress = null;
+}
+function queueSceneAnimUpgrade(frameUrl) {
+  cancelSceneAnimUpgrade(); // 旧升级终止 (旧壁纸渲染随服务端 res close 取消)
+  // beta场景动画开关: 默认关闭 → scene 壁纸只显示静态帧, 不进入动画化升级。
+  // 关闭状态下即使 sceneFrameUrl 变更 (fpsCap 点击) 也不启动后台渲染。
+  if (selection.betaSceneAnim !== true) return;
+  // fps 取帧率上限 (fpsCap>0 时重渲染对应帧率, 与视频抽帧同款语义)
+  const fps = selection.fpsCap > 0 ? Math.min(30, Math.max(2, selection.fpsCap)) : 12;
+  // 分辨率按屏幕 + devicePixelRatio (上限 1920×1080, CPU 渲染成本受限) —
+  // 提高分辨率避免动画放大模糊 (对比静态帧 3840 全分辨率)
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const vw = Math.min(1920, Math.max(320, Math.round((window.innerWidth || 1920) * dpr)));
+  const vh = Math.min(1080, Math.max(180, Math.round((window.innerHeight || 1080) * dpr)));
+  const q = "?fps=" + fps + "&fmt=mp4&w=" + vw + "&h=" + vh;
+  const animUrl = frameUrl.replace("/scene-frame/", "/scene-anim/") + q;
+  // 渲染进度轮询 (首次分钟级; 缓存命中时第一次轮询即 100)
+  const token = frameUrl.split("/").pop();
+  const progUrl = "/wallpaper-engine/scene-anim-progress/" + token + q;
+  selection.sceneAnimProgress = 0;
+  emit(); // 立即反映新进度 (fpsCap 变更路径的调用方 emit 在前, 这里补一次)
+  let pollTimer = null, maxWait = null;
+  const stopPoll = () => {
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    if (maxWait) { clearTimeout(maxWait); maxWait = null; }
+    if (sceneAnimUpgrade && sceneAnimUpgrade.pollTimer === pollTimer) sceneAnimUpgrade = null;
+    if (selection.sceneAnimProgress != null) { selection.sceneAnimProgress = null; emit(); }
+  };
+  // 渲染完成切换的主动路径: 轮询到 100% 直接切换 — 不依赖 probe 的
+  // onloadeddata (渲染分钟级时浏览器 video 请求长时间挂起, onloadeddata
+  // 可能不触发/被中断 → 之前"渲染后仍显示静态帧")。
+  const trySwitch = () => {
+    if (selection.url && selection.url === frameUrl) {
+      selection.url = animUrl;
+      syncLayers();
+    }
+  };
+  pollTimer = setInterval(async () => {
+    try {
+      const r = await fetch(progUrl, { cache: "no-store" });
+      const j = await r.json();
+      const pct = Number(j && j.percent);
+      selection.sceneAnimProgress = Number.isFinite(pct) ? pct : 100;
+      emit();
+      if (pct >= 100) {
+        clearInterval(pollTimer);
+        if (maxWait) { clearTimeout(maxWait); maxWait = null; }
+        trySwitch();
+        if (selection.sceneAnimProgress != null) { selection.sceneAnimProgress = null; emit(); }
+      }
+    } catch { /* 网络错误: 保持上次进度 */ }
+  }, 1500);
+  // 渲染超时兜底: 8 分钟未完成 → 停止轮询 (进度条消失, 保持静态帧)
+  maxWait = setTimeout(() => {
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    if (selection.sceneAnimProgress != null) { selection.sceneAnimProgress = null; emit(); }
+  }, 8 * 60 * 1000);
+  // probe video: 触发服务端渲染 (probe.src 请求)。必须挂 DOM + load(),
+  // detached video 设 src 不保证加载 → onloadeddata 不触发 (静止根因)。
+  // onloadeddata 是快路径 (渲染快时提前切换); 慢渲染由轮询 100% 兜底。
+  const probe = document.createElement("video");
+  probe.muted = true;
+  probe.preload = "auto";
+  probe.style.cssText = "position:absolute;left:-100000px;top:0;width:1px;height:1px;opacity:0;pointer-events:none;";
+  probe.onloadeddata = () => {
+    trySwitch();
+    stopPoll();
+  };
+  probe.onerror = () => { /* 渲染慢挂起超时 → 保持轮询, 由进度 100 主动切换 */ };
+  probe.src = animUrl;
+  try { document.body.appendChild(probe); probe.load(); } catch { /* ignore */ }
+  sceneAnimUpgrade = { pollTimer, probe, frameUrl, maxWait };
+}
+
 function buildMedia(sel) {
-  // Scene wallpapers: prefer the scene animation exposed as an MP4 <video>
-  // (hardware-decoded, smooth, no WebGL context). Scenes without an embedded
-  // video fall back to the extracted static frame.
+  // Scene 壁纸播放形态优先级:
+  //   1. sceneVideo — 场景内嵌 MP4 (作者主分支, 硬件解码 <video>, poster=静态帧)
+  //   2. scene-anim — beta 动画升级 (本分支 CPU 渲染视频, URL 含 /scene-anim/)
+  //   3. 静态帧 img (frameUrl)
+  // 未升级时仍是静态帧 img。
   const isSceneVideo = sel.type === "scene" && Boolean(sel.sceneVideo);
-  const isStill = sel.type === "image" || (sel.type === "scene" && !isSceneVideo);
-  const media = sel.type === "video"
+  const isSceneAnim = sel.type === "scene" && sel.url && sel.url.indexOf("/scene-anim/") !== -1;
+  const isStill = sel.type === "image" || (sel.type === "scene" && !isSceneVideo && !isSceneAnim);
+  const media = sel.type === "video" || isSceneVideo || isSceneAnim
     ? document.createElement("video")
-    : isSceneVideo
-      ? document.createElement("video")
-      : isStill
-        ? document.createElement("img")
-        : document.createElement("iframe");
+    : isStill
+      ? document.createElement("img")
+      : document.createElement("iframe");
   // The user-chosen fit mode (覆盖/填充/居中/拉伸) applies to every wallpaper
   // type — WE media included (the 适配 control used to be uploads-only).
   // iframes (web wallpapers) don't read object-fit, so they skip the class.
   const fitClass = " we-media--fit";
-  if (sel.type === "video") {
+  if (sel.type === "video" || isSceneAnim) {
     media.src = sel.url;
     media.autoplay = true;
     media.loop = true;
@@ -1669,9 +1797,18 @@ function applyEffects() {
   // 透明度语义：越大越透。0 → alpha 0.32（最实/最密），200 → alpha 0.015（最透）。
   const sidebarAlpha = Math.max(0.015, 0.32 - (selection.sidebarAlpha / 200) * 0.305);
   s.setProperty("--we-sidebar-alpha", String(sidebarAlpha));
+  s.setProperty("--we-sidebar-sheen", String(Math.min(1, sidebarAlpha / 0.2236)));
   s.setProperty("--we-sidebar-color", selection.sidebarColor);
   if (selection.sidebarGlass) document.body.setAttribute("data-we-sidebar-glass", "on");
   else document.body.removeAttribute("data-we-sidebar-glass");
+  // 内容面（编辑器/终端）近不透明玻璃底：透明度滑块 0–80 → 不透明度 100%–20%
+  // （越大越透，与玻璃透明度同语义；低于 ~40% 不透明度注释可读性会再次变差，
+  // 留给用户自行权衡）；底色空 = 跟随主题面板色，选定后自定义。
+  // 注意 color-mix 的百分比槽位要求带单位的 token —— 变量值必须含 "%"，
+  // 否则整个 color-mix 失效、底色规则被丢弃（编辑器回退到纯透明毛玻璃）。
+  s.setProperty("--we-content-surface-alpha", Math.max(20, 100 - selection.sidebarContentAlpha) + "%");
+  if (selection.sidebarContentColor) s.setProperty("--we-content-surface-color", selection.sidebarContentColor);
+  else s.removeProperty("--we-content-surface-color");
 
   // Scrim immediacy: some composited/kiosk environments do not repaint a
   // z-index:-1 layer promptly when only an inherited CSS variable changes.
@@ -1711,8 +1848,11 @@ function clearEffects() {
   s.removeProperty("--we-sidebar-blur");
   s.removeProperty("--we-sidebar-saturate");
   s.removeProperty("--we-sidebar-alpha");
+  s.removeProperty("--we-sidebar-sheen");
   s.removeProperty("--we-sidebar-color");
   document.body.removeAttribute("data-we-sidebar-glass");
+  s.removeProperty("--we-content-surface-alpha");
+  s.removeProperty("--we-content-surface-color");
   const scrim = document.getElementById(SCRIM_ID);
   if (scrim) scrim.style.background = "";
   lastScrimCss = "";
@@ -1945,6 +2085,21 @@ function WallpaperPicker(props) {
   const onRopeScaleChange = (scale) => {
     selection.ropeScale = clampNum(scale, ROPE_SCALE_MIN, ROPE_SCALE_MAX, DEFAULTS.ropeScale);
     persistSelection(); emit();
+  };
+  // 内容面（编辑器/终端）近不透明玻璃底：透明度滑块 + 底色（空 = 跟随主题）。
+  const onSidebarContentAlpha = (pct) => {
+    selection.sidebarContentAlpha = clampNum(pct, 0, 80, DEFAULTS.sidebarContentAlpha);
+    persistSelection(); applyEffects(); emit();
+  };
+  const onSidebarContentColor = (hex) => {
+    if (hex === "") {
+      selection.sidebarContentColor = ""; // 跟随主题面板色
+      persistSelection(); applyEffects(); emit();
+      return;
+    }
+    if (!/^#[0-9a-f]{6}$/i.test(hex)) return;
+    selection.sidebarContentColor = hex;
+    persistSelection(); applyEffects(); emit();
   };
 
   // Close the picker modal (ESC / backdrop / close buttons share this path).
@@ -2186,6 +2341,39 @@ function WallpaperPicker(props) {
             onInput: (e) => onSidebarColor(e.target.value),
             onChange: (e) => onSidebarColor(e.target.value),
             title: "自定义侧栏玻璃颜色",
+          }),
+          React.createElement("span", { className: "we-picker__hint" }, "自定义"),
+        ),
+      ),
+      // 内容面（编辑器 / 终端）近不透明玻璃底：透明度 + 底色。固定调色板
+      // （语法高亮 / ANSI）为不透明底设计，全透毛玻璃下注释灰不可读；这里
+      // 在"玻璃感"与"可读性"之间取平衡——透明度越大越透，底色空 = 跟随主题。
+      SliderRow("内容面透明度", 0, 80, 5, sel.sidebarContentAlpha, onSidebarContentAlpha, sel.sidebarContentAlpha + "%"),
+      React.createElement("div", { className: "we-picker__row we-picker__accent-row" },
+        React.createElement("span", { className: "we-picker__hint we-picker__label" }, "内容面底色"),
+        React.createElement("button", {
+          className: "we-picker__swatch we-picker__swatch--auto" + (sel.sidebarContentColor === "" ? " we-picker__swatch--active" : ""),
+          type: "button",
+          title: "跟随主题面板色",
+          onClick: () => onSidebarContentColor(""),
+          "aria-label": "内容面底色 跟随主题",
+        }, "主题"),
+        GLASS_COLOR_PRESETS.map((hex) => React.createElement("button", {
+          key: hex,
+          className: "we-picker__swatch" + (sel.sidebarContentColor === hex ? " we-picker__swatch--active" : ""),
+          type: "button",
+          style: { background: hex },
+          title: hex,
+          onClick: () => onSidebarContentColor(hex),
+          "aria-label": "内容面底色 " + hex,
+        })),
+        React.createElement("label", { className: "we-picker__swatch-custom" },
+          React.createElement("input", {
+            type: "color",
+            value: sel.sidebarContentColor || "#1e1f26",
+            onInput: (e) => onSidebarContentColor(e.target.value),
+            onChange: (e) => onSidebarContentColor(e.target.value),
+            title: "自定义内容面底色",
           }),
           React.createElement("span", { className: "we-picker__hint" }, "自定义"),
         ),
@@ -2805,9 +2993,42 @@ function WallpaperPicker(props) {
       SliderRow("暗化", 0, 90, 5, Math.round(sel.scrim * 100), onScrim, Math.round(sel.scrim * 100) + "%"),
       SliderRow("边框", 0, 90, 5, Math.round(sel.border * 100), onBorder, Math.round(sel.border * 100) + "%"),
       SliderRow("玻璃", 0, 60, 1, sel.blur, onBlur, sel.blur + "px"),
+      // beta场景动画: 默认关闭 → scene 壁纸只渲染静态帧 (稳定, 与官方静态帧
+      // 一致); 开启后才启动 scene-anim 视频后台渲染 (CPU 渲染试验性, 可能有
+      // 组件错误)。关闭时若已在播放动画视频 → 回退静态帧并取消进行中的渲染。
+      sel.type === "scene" && React.createElement("div", { className: "we-picker__row" },
+        React.createElement("label", { className: "we-picker__rotation-toggle" },
+          React.createElement("input", {
+            type: "checkbox",
+            checked: sel.betaSceneAnim === true,
+            onChange: (e) => {
+              selection.betaSceneAnim = e.target.checked;
+              persistSelection();
+              if (!e.target.checked) {
+                // 关闭: 取消动画升级 (渲染任务随 probe abort 取消), 回退静态帧
+                cancelSceneAnimUpgrade();
+                if (sel.type === "scene" && sel.sceneFrameUrl
+                  && selection.url && selection.url.indexOf("/scene-anim/") !== -1) {
+                  selection.url = sel.sceneFrameUrl;
+                  syncLayers();
+                }
+              } else if (sel.type === "scene" && sel.sceneFrameUrl && !sel.sceneVideo) {
+                // 开启: 从静态帧开始动画化升级 (sceneVideo 内嵌 MP4 已硬件解码, 不升级)
+                queueSceneAnimUpgrade(sel.sceneFrameUrl);
+              }
+              emit();
+            },
+          }),
+          "beta场景动画",
+        ),
+        React.createElement("span", { className: "we-picker__hint" },
+          "实验性场景壁纸渲染引擎，不要开启（除非你知道自己在干什么）",
+        ),
+      ),
       // Playback speed — native playbackRate, instant, no media reload. Video
-      // wallpapers only (web/iframe wallpapers have no playbackRate).
-      sel.type === "video" && React.createElement("div", { className: "we-picker__row" },
+      // and scene-animation wallpapers (web/iframe wallpapers have no playbackRate).
+      (sel.type === "video" || (sel.type === "scene" && sel.url && sel.url.indexOf("/scene-anim/") !== -1))
+        && React.createElement("div", { className: "we-picker__row" },
         React.createElement("span", { className: "we-picker__hint we-picker__label" }, "倍速"),
         [0.5, 0.75, 1, 1.25, 1.5, 2].map((rate) =>
           React.createElement("button", {
@@ -2821,17 +3042,38 @@ function WallpaperPicker(props) {
       // 解码帧率上限（抽帧转码）：host 一次性把源视频重编码为上限帧率（时间线
       // 1.0x 正常速度，解码占用随帧率线性下降），与倍速解耦。首次转码需等待，
       // 播放中原片、转好自动切换；无 ffmpeg 自动回退原片。
-      sel.type === "video" && React.createElement("div", { className: "we-picker__row" },
+      // scene 动画: fps 参数在渲染时决定 (scene-anim ?fps=..), 变更后重渲染。
+      (sel.type === "video" || (sel.type === "scene" && sel.url && sel.url.indexOf("/scene-anim/") !== -1))
+        && React.createElement("div", { className: "we-picker__row" },
         React.createElement("span", { className: "we-picker__hint we-picker__label" }, "帧率上限"),
         FPS_CAP_VALUES.map((cap) =>
           React.createElement("button", {
             key: cap,
             className: "we-picker__btn we-picker__rate" + (sel.fpsCap === cap ? " we-picker__rate--active" : ""),
             type: "button",
-            onClick: () => { selection.fpsCap = cap; persistSelection(); refreshMediaInfo(true); emit(); },
+            onClick: () => {
+              selection.fpsCap = cap; persistSelection(); refreshMediaInfo(true); emit();
+              // scene 动画: fpsCap 变更 → 以新帧率重新渲染动画视频
+              // (sceneVideo 内嵌 MP4 的场景不重渲染 — 硬件解码不受 fpsCap 影响)
+              if (sel.type === "scene" && sel.sceneFrameUrl && !sel.sceneVideo) queueSceneAnimUpgrade(sel.sceneFrameUrl);
+            },
           }, cap === 0 ? "无限制" : cap + "fps"),
         ),
       ),
+      // Scene 动画渲染进度: 首次渲染分钟级, 后台渲染期间显示进度条
+      // (轮询 /scene-anim-progress; 完成或切换壁纸后置 null)。
+      sel.type === "scene" && sel.sceneAnimProgress != null && sel.sceneAnimProgress < 100
+        && React.createElement("div", { className: "we-picker__row we-picker__prog" },
+          React.createElement("div", { className: "we-picker__prog-track" },
+            React.createElement("div", {
+              className: "we-picker__prog-bar",
+              style: { width: Math.max(2, Math.min(100, sel.sceneAnimProgress || 0)) + "%" },
+            }),
+          ),
+          React.createElement("span", { className: "we-picker__hint" },
+            "场景动画渲染中 " + (sel.sceneAnimProgress || 0) + "%",
+          ),
+        ),
       // Source metadata + transcode status (host moov probe / transcode lifecycle).
       sel.type === "video" && sel.mediaInfo && React.createElement("span", { className: "we-picker__hint" },
         "源 " + sel.mediaInfo.width + "×" + sel.mediaInfo.height
@@ -3459,13 +3701,21 @@ const CSS = `
   body[data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_boundaryError"],
   body[data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_panel"] {
     background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) calc(var(--we-sidebar-alpha, 0.15) * 0.66 * 100%), transparent) !important;
-    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.04) 38%, rgba(255, 255, 255, 0.01)) !important;
+    /* Specular sheen + refraction highlights follow --we-sidebar-sheen
+       (= min(1, alpha/0.2236)): at default (12%) and any MORE solid setting
+       the sheen keeps the ORIGINAL design strength (0.14/0.04/0.01,
+       0.32/0.08/0.06); only toward transparency does the white glaze fade,
+       so 100% is truly near-transparent instead of pale white. */
+    background-image: linear-gradient(180deg,
+      rgba(255, 255, 255, calc(var(--we-sidebar-sheen, 1) * 0.14)),
+      rgba(255, 255, 255, calc(var(--we-sidebar-sheen, 1) * 0.04)) 38%,
+      rgba(255, 255, 255, calc(var(--we-sidebar-sheen, 1) * 0.01))) !important;
     -webkit-backdrop-filter: blur(var(--we-sidebar-blur, 16px)) saturate(var(--we-sidebar-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01) !important;
     backdrop-filter: blur(var(--we-sidebar-blur, 16px)) saturate(var(--we-sidebar-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01) !important;
     box-shadow:
-      inset 0 1px 0 rgba(255, 255, 255, var(--we-glass-highlight, 0.32)),
-      inset 0 -1px 0 rgba(255, 255, 255, 0.08),
-      inset 0 0 0 0.5px rgba(255, 255, 255, 0.06);
+      inset 0 1px 0 rgba(255, 255, 255, calc(var(--we-sidebar-sheen, 1) * 0.32)),
+      inset 0 -1px 0 rgba(255, 255, 255, calc(var(--we-sidebar-sheen, 1) * 0.08)),
+      inset 0 0 0 0.5px rgba(255, 255, 255, calc(var(--we-sidebar-sheen, 1) * 0.06));
   }
   body[data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_pane"],
   body[data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar] [class*="_tabBar"],
@@ -3509,6 +3759,28 @@ const CSS = `
       backdrop-filter: none !important;
       -webkit-backdrop-filter: none !important;
     }
+  }
+
+  /* ── dsh-better-sidebar CONTENT surfaces: near-opaque tinted glass ─────────
+     The editor (CodeMirror) surface is transparent by design, and the terminal
+     background reads --dsw-alias-bg-base — which we must keep transparent so
+     the wallpaper shows through. Their fixed content palettes (syntax
+     highlighting / ANSI colors) are designed for an OPAQUE backdrop (One
+     Dark/Light, xterm themes): on the fully frosted composite the mid-gray
+     comments etc. lose all contrast (实测注释灰 1.7–2.3:1，看不清).
+     Fully opaque surfaces fix readability but kill the glass look. Balance:
+     a NEAR-OPAQUE TINTED glass plate — the theme's opaque panel color
+     (--dsw-alias-bg-layer-1) at 88% keeps the wallpaper glow bleeding through
+     (still reads as glass) while the composite stays dark/light enough for the
+     the designed content palettes. Tune via the 内容面透明度 / 内容面底色 controls
+     (--we-content-surface-alpha / --we-content-surface-color; color empty =
+     follow the theme panel color). Gated on data-we-wallpaper, NOT the
+     sidebar-glass switch — the terminal turns transparent even with the switch
+     off. .cm-editor / .xterm are library-global class names (stable across the
+     sidebar's builds). */
+  body[data-we-wallpaper] [data-dsh-better-sidebar] .cm-editor,
+  body[data-we-wallpaper] [data-dsh-better-sidebar] .xterm {
+    background-color: color-mix(in srgb, var(--we-content-surface-color, var(--dsw-alias-bg-layer-1, #1e1f26)) var(--we-content-surface-alpha, 88%), transparent) !important;
   }
 
   /* Picker chrome. */
@@ -3658,6 +3930,14 @@ const CSS = `
   .we-picker__swatch:hover { transform: scale(1.12); }
   .we-picker__swatch--active {
     box-shadow: 0 0 0 2px var(--we-accent, #4f8cff), 0 0 0 4px rgba(255, 255, 255, 0.5);
+  }
+  /* "跟随主题" auto swatch (内容面底色): no fill, split ring showing both
+     themes so it reads as "use the theme panel color". */
+  .we-picker__swatch--auto {
+    font-size: 10px; line-height: 1; font-weight: 600;
+    color: var(--dsw-alias-label-secondary, #666);
+    background: linear-gradient(135deg, #2a2d35 0 50%, #f2f3f5 50% 100%);
+    display: inline-flex; align-items: center; justify-content: center;
   }
   .we-picker__swatch-custom {
     display: inline-flex; align-items: center; gap: 4px; cursor: pointer;

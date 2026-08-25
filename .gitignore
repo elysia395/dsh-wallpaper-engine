@@ -7,3 +7,29 @@ scene-diagnosis.tsv
 # Local ffmpeg (Windows static build, ~370MB) — used for transcode experiments;
 # never commit binaries (platform-specific + huge).
 /ffmpeg/
+# 渲染验证产物 (可再生): 帧序列/对比图不入库
+scene-layers-out/
+# 视觉工具工件
+.dsh-vision-router/
+
+
+
+
+/_refs/
+
+/docs/images/
+
+/.git.bak-broken/
+
+
+
+/scripts/lwe-ref/
+
+
+# 渲染输出 (回归/调试用, 不入库)
+/scripts/out/
+
+# 逆向相关工具与诊断脚本 (本地研究用, 不入 GitHub 仓库)
+/scripts/reverse/
+/scripts/core/
+/scripts/anim/
