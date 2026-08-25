@@ -52,10 +52,10 @@
 | `glitter` | `effects/glitter`（双 pass: 256² 闪光图案 → ApplyBlending 混合） | ✅ 已实现 |
 | `clouds` | `effects/clouds`（双云纹理采样 + 阈值混合 + SHADING） | ✅ 已实现 |
 | `swing` | `effects/swing`（p0-p1 轴翻页旋转 + UV 扭曲 + DOUBLESIDED/MASK/NOISE） | ✅ 已实现 |
-| `depthparallax` | `effects/depthparallax`（深度视差 24/64 层循环采样） | ⏸ 跳过（CPU 循环不可行；静态帧视差≈0） |
-| `blurprecise` / `blur` | — | ⏸ 跳过（全屏模糊 CPU 性能） |
-| `watercaustics` | `effects/caustics`（5 纹理 + 色差 + 双 MODE 焦散） | ⏸ 跳过（复杂低频） |
-| `blend` | `effects/blend`（1-6 纹理 PerformBlend 链 + GetUVBlend + TRANSFORMUV） | ⏸ 跳过（多纹理链复杂，低频） |
+| `depthparallax` | `effects/depthparallax`（QUALITY 0 线性 / 1/2 层 ray march 24/64 层） | ✅ 已实现（sf39l；指针默认屏幕中心，静态帧仍有透视位移） |
+| `blur` | `effects/blur` 4-pass（downsample4→gauss_x→gauss_y→combine，13/7/3-tap 核） | ✅ 已实现（sf39l；blurprecise 仍跳过） |
+| `watercaustics` | `effects/caustics`（perlin/uniform/voronoi 4 噪声 + 色差 + MODE 0/1） | ✅ 已实现（sf39l） |
+| `blend` | `effects/blend`（PerformBlend WRITEALPHA / BLENDMODE + GetUVBlend） | ✅ 已实现（sf39l；NUMBLENDTEXTURES=1 主路径） |
 | **第三方 workshop 效果**（34 种，300 次使用；`custom_user_texture` 家族 144 次含 Mutsumi/Elaina） | 壁纸 pkg 内 `shaders/workshop/<id>/effects/*.frag` | ⏳ 后期：GLSL 解释器 |
 
 ### 4. 基础设施
@@ -403,6 +403,106 @@ workshop 场景：scene.pkg 解析 + 渲染全通过（含 puppet/文本/纯色/
     parallax，lwe CParticle.cpp:1901 确认）；model 用完整 camVP（3D 透视路径，
     与 image 2D 平移语义各自正确）；`_sampleAnimRT`/`_matMulRow` 单份实现无
     重复。批量回归 14/14 壁纸全通过。
+- [x] **第二轮不一致审计（sf39e-f）**：继续系统性排查（用户指出大量不一致
+  不会一轮解决），发现并修复：
+  - **sf39e：文本 verticalalign 忽略**（text.js）：场景 232 文本中 1 个
+    verticalalign=bottom 被居中显示（位置错误）。修复：verticalalign 支持
+    top/bottom/center（与 image alignment 同锚定语义）。另排查确认文本
+    Y-up 正确（3655429099 音频壁纸布局推断：音频条 y=275 → 画布底部、
+    时钟 y≈2000 → 画布顶部，Y-up 合理；lwe CText 的 Y-down 是 Linux 移植
+    转置，官方 WE 文本与 image 同约定）。
+  - **sf39f：puppet 缺 brightness**（puppet.js）：官方 CImage 有 brightness
+    （lwe CImage.cpp:952），puppet 是 image 子类，旧实现 blit 只传 alpha →
+    暗色/过曝 puppet 颜色不对。修复：`alpha × brightness`。已确认 image/
+    solidlayer 已有 brightness（正确），model 用材质 uniform（非对象级，
+    不同对象类型非不一致）。
+  - 已确认一致：particle 发射率 flags&2 = limitOnePerFrame（官方同语义）、
+    instantaneous 官方支持、粒子角度 -em.angle 与 blitRotated -angle 同约定、
+    位置 +angle 与 lwe L160 一致。批量回归 14/14。
+- [x] **第三轮：以官方 shader 源码为真相（sf39g，粒子 4 bug）**：用户指出
+  lwe 非官方 + 实测可能巧合，改用官方 assets/shaders/ 源码为唯一真相源，
+  发现并修复粒子渲染 4 处不一致：
+  - **textureRatio 缺失**：官方 genericparticle.vert `textureRatio =
+    g_Texture0Resolution.y/x`，ComputeParticlePosition 垂直尺寸乘 ratio。
+    旧实现 halfY=sz/2 忽略 → 12 个非正方形粒子纹理（流星 256×794/drop
+    32×128/花瓣 512×128 等）被拉伸成正方形。
+  - **smoothstep 二次削边**：官方 frag `color = v_Color × tex.r`（直接采样
+    red，chromaticdot red 渐变软点 中心175→边缘0）。旧实现加
+    smoothstep(0.2,0.7) → 68% 像素被削成硬边。
+  - **多余 0.5 alpha**：官方 v_Color = a_Color（无衰减）。旧实现乘 0.5 →
+    粒子普遍偏淡。
+  - **SPRITESHEET 缺失**：官方 vert ComputeSpriteFrame 帧选择+blend，旧实现
+    无 → 精灵表粒子（notes_sprite_sheet 41 帧 1690×1032，3554161528/
+    3641860575）显示整张表。已实现按 TEXS 帧元数据选帧采样。
+  验证：官方 font.vert 无 Y-flip + 与 image 同 MVP → 文本 Y-up 结论获官方
+  佐证。批量回归 14/14。
+- [x] **第四轮：官方 shader 源码审计效果链（sf39h）**：逐效果对比官方
+  assets/effects/<name>/shaders/effects/*.frag/.vert 源码，修复 3 处：
+  - **waterripple 缺 mask**：官方 `texCoord += normal.xy×strength²×mask`
+    (MASK combo)，旧实现忽略 pt[1] mask → 有 mask 水面全图波纹。
+  - **waterwaves 缺 mask**：官方 `texCoord += val×offset×strength²×mask`，
+    旧实现无 pass 参数忽略 mask。
+  - **pulse phase 换算错**：官方 `sin(time×speed + (phase−π/2))`，
+    g_PulsePhase range [0,6.282] 弧度；旧实现 `(phase−0.25)×2π` 把 phase 当
+    0-1 → phase=3(弧度) 错算 17.3。
+  已确认精确一致（逐项核对官方源码）：foliagesway（aspect/噪声/双正弦全对）、
+  waterwaves 主数学（vd/off/dist/DUALWAVES）、shimmer（rotate/frac/mix 全对）、
+  iris（vert 位移 + frag 替换 + BACKGROUND）、pulse 主流程（noise/pow/blend）、
+  waterripple 主数学（n1/n2/normalize）。批量回归 14/14。
+- [x] **第五轮：效果 mask UV 缩放系统性修复（sf39i）**：审计发现 3461168300
+  等壁纸大量效果 mask 是对象纹理的 **1/2 尺寸**（3840×1741 对象 → 1920×870
+  mask，3550×3750 → 1775×1875）。官方 vert 统一 `v_TexCoord.zw` mask UV
+  缩放（waterwaves/waterripple/shake/foliagesway 等 vert 确认：
+  `z *= maskRes.z/x, w *= maskRes.w/y`）。旧实现所有效果用对象 uv 采样 mask
+  → mask 只覆盖 1/4 区域 → 效果区域错误。修复：waterwaves/waterripple/
+  foliagesway 的 mask 采样 + shake 的 flow 方向图采样，统一乘
+  `maskTex.width/tex.width` 缩放（降采样等比，比例不变）。批量回归 14/14。
+  已确认精确（本轮核对官方源码）：waterflow（cycles/blend/mix）、cloudmotion
+  （噪声坐标/旋转/MASK mix）、clouds（aspect/旋转/双云/SHADING/MASK）。
+- [x] **第六轮：效果链审计（sf39j）**：对照官方 shader 源码修复 3 处：
+  - **tint 默认 blend mode 错 + 缺 mask**：官方 BLENDMODE 默认 30（注释），
+    旧实现默认 2(multiply) → 着色错误；官方 mask = alpha×maskTex.r，旧实现
+    只乘 alpha。修复：默认 30 + mask 支持 + mask UV 缩放。
+  - **filmgrain 噪声时间未 frac**：官方 vert `t = frac(g_Time)`，旧实现用
+    原始 t → 大时间噪声坐标错位；补 mask UV 缩放。
+  - **swing mask UV 未缩放**（sf39i 遗漏）：补 mask 缩放。
+  已确认精确：swing 主数学（anim/轴/扭曲/mask 区域/NOISE）、skew（top/bottom
+  改 x、left/right 改 y 交叉语义）、scroll（sign×speed²×time + frac×rep）。
+  批量回归 14/14。
+- [x] **第七轮：效果链审计（sf39k）**：对照官方 shader 源码修复 3 处：
+  - **godrays downsample2 mask UV 未缩放**（sf39i 遗漏）：补缩放。
+  - **glitter combine mask UV 未缩放**：补缩放。prepare 噪声坐标 ×5 已确认
+    精确（官方 vert 同 ×5）。
+  - **opacity 缺 g_UserAlpha + mask UV 缩放**：官方 `albedo.a *= mask ×
+    g_UserAlpha`（alpha 参数默认 1.0），旧实现只乘 mask 且未缩放。
+  已确认精确：godrays cast（dist×length/30 采样/i·weight）、downsample2 噪声
+  （mix/step/smoothstep/噪声坐标 n2=(v·0.633−t·0.5s, −u·0.633+t·0.5s)·scale）、
+  glitter prepare（density²/timer0/glitter0²）。批量回归 14/14。
+
+- [x] **第八轮：实现未实现效果（sf39l）**：按使用量逐个实现官方效果：
+  - **blur（3629379075/3774904326）**：官方 4-pass 链完整复刻 —
+    downsample4（目标像素中心 ±1 源texel 4 角采样，rgb=Σ(s·a)/Σa、
+    a=Σ(a²)/4）→ gaussian_x → gaussian_y（KERNEL 0/1/2 = 13/7/3-tap 固定权重
+    `[0.006299…0.171834]` 对称；offset = g_Scale.x/y ÷ 纹理分辨率；VERTICAL
+    combo 决定方向）→ combine（ApplyCompositeOffset = 像素offset ÷ blurred
+    分辨率；div = a>0?a:1 反预乘；ApplyComposite COMPOSITE 0/1/2/3 +
+    COMPOSITEMONO + compositecolor；mix(原, 效果, mask)；BLURALPHA=0 还原 a）。
+    mask UV = uv·(maskRes/objRes)（blur_combine.vert zw 约定）。
+  - **depthparallax（3629379075/3641860575）**：QUALITY 0 线性指针偏移 +
+    QUALITY 1/2 ray march（24/64 层）完整复刻；sens<0 正交模式、sens≥0 透视
+    模式（ctrlSign/ctrlPerspOrtho）；g_ParallaxPosition 参数化（静态帧默认
+    屏幕中心 0.5,0.5）。验证：深度=1.0 区无位移、全黑深度图全量位移
+    （=P=viewDir·scale·0.1）均符合官方算法。
+  - **watercaustics（3582367840）**：4 噪声纹理（perlin/uniform/voronoi）
+    按时间卷动 + distortion 扰动 + chromatic 3 通道 voronoi_local 采样；
+    MODE 0 realistic（smoothstep 阈值）/ MODE 1 illustrative（粒子阈值）；
+    ApplyBlending BLENDMODE 默认 32。验证：图案非恒定 + alpha 保持。
+  - **blend（3554161528）**：PerformBlend WRITEALPHA（premultiplied 合成
+    数学）/ 非 WRITEALPHA（blendAlpha·=blend.a + ApplyBlending）；
+    GetUVBlend 裁剪；blend 纹理 = textures[1]（_rt_ 引用 → canvas 近似）。
+    验证：WRITEALPHA 输出 (0,255,0,128) 与官方数学一致。
+  批量回归 14/14（与基线一致；3470764447/3660962877 视频纹理为既有问题）。
+  未提交 git（用户此前要求暂不提交）。
 
 ---
 
