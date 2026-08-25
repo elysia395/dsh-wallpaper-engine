@@ -25,6 +25,10 @@ export interface WallpaperDescriptor {
   preview: string | null;
   /** Scene static-frame URL (`/wallpaper-engine/scene-frame/<token>`), or null. */
   frameUrl: string | null;
+  /** Live WebGL scene player URL (`/wallpaper-engine/scene-runtime/<token>`), or null. */
+  sceneUrl?: string | null;
+  /** Scene embedded-animation MP4 URL (`/wallpaper-engine/scene-video/<token>`), or null. */
+  sceneVideo?: string | null;
 }
 
 /** A Wallpaper Engine playlist read from `config.json`. */

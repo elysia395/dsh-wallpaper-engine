@@ -59,7 +59,15 @@ const localStorage = {
   getItem(k) { return this._store[k] ?? null; },
   setItem(k, v) { this._store[k] = v; },
 };
-const fetch = () => Promise.resolve({
+const fetch = (url) => {
+  // Route the settings GET: host reports dsh-better-sidebar as installed +
+  // enabled (→ the 侧栏玻璃 control group must render), while keeping settings
+  // empty so loadPersisted takes the "host has nothing yet → migrate the
+  // localStorage seed" path the rest of the harness relies on.
+  if (String(url).includes('/wallpaper-engine/settings')) {
+    return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ ok: true, betterSidebar: true }) });
+  }
+  return Promise.resolve({
   ok: true, status: 200,
   json: () => Promise.resolve({
     installDir: "D:/we", total: 34, portableCount: 33,
@@ -84,7 +92,8 @@ const fetch = () => Promise.resolve({
       { id: "e", title: "PG13 E", type: "web", playable: true, media: "/wallpaper-engine/media/pg", preview: null, contentrating: "PG13" },
     ],
   }),
-});
+  });
+};
 
 const code = readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8');
 const cap = { handoff: null };
@@ -184,6 +193,131 @@ setTimeout(() => {
       console.log('glass color custom input present:', treeText.includes('自定义玻璃颜色'));
       console.log('custom color input present:', treeText.includes('type":"color"'));
       console.log('glass transparency slider row present:', treeText.includes('玻璃透明度'));
+      console.log('sidebar-glass master switch present:', treeText.includes('侧栏液态玻璃'));
+      console.log('sidebar blur slider present:', treeText.includes('侧栏模糊'));
+      console.log('sidebar alpha slider present:', treeText.includes('侧栏透明度'));
+      console.log('sidebar glass-color swatches (expect 6):', (treeText.match(/"aria-label":"侧栏玻璃颜色 /g) || []).length);
+      console.log('sidebar glass color custom input present:', treeText.includes('自定义侧栏玻璃颜色'));
+      // The three detail knobs (侧栏模糊 / 侧栏透明度 / 侧栏玻璃颜色) are
+      // conditional on the 侧栏液态玻璃 master switch: off → hidden, on →
+      // restored, in the SAME render pass (the toggle re-emits synchronously).
+      const sidebarSwitch = (() => {
+        let hit = null;
+        (function walk(node) {
+          if (Array.isArray(node)) { node.forEach(walk); return; }
+          if (!node || typeof node !== 'object') return;
+          const children = Array.isArray(node.children) ? node.children : [];
+          if (children.includes('侧栏液态玻璃')) {
+            const input = children.find((c) => c && typeof c === 'object' && c.type === 'input');
+            if (input && typeof input.props.onChange === 'function') hit = input;
+          }
+          if (Array.isArray(node.children)) node.children.forEach(walk);
+        })(tree);
+        return hit;
+      })();
+      if (sidebarSwitch) {
+        sidebarSwitch.props.onChange({ target: { checked: false } });
+        tree = pickerRenders[0]();
+        const offText = JSON.stringify(tree);
+        console.log('switch off hides the three detail knobs:',
+          !offText.includes('侧栏模糊') && !offText.includes('侧栏透明度') && !offText.includes('侧栏玻璃颜色'));
+        console.log('switch itself stays visible when off:', offText.includes('侧栏液态玻璃'));
+        sidebarSwitch.props.onChange({ target: { checked: true } });
+        tree = pickerRenders[0]();
+        console.log('switch back on restores the detail knobs:',
+          JSON.stringify(tree).includes('侧栏模糊') && JSON.stringify(tree).includes('侧栏透明度') && JSON.stringify(tree).includes('侧栏玻璃颜色'));
+      } else {
+        console.log('switch off hides the three detail knobs: false (switch not found)');
+      }
+      // Mascot rope-dock visibility toggle: present by default (checked),
+      // unchecking flips the persisted flag (checkbox off), re-checking
+      // restores it — re-renders read the live `selection`.
+      const findRopeToggle = (root) => {
+        let hit = null;
+        (function walk(node) {
+          if (Array.isArray(node)) { node.forEach(walk); return; }
+          if (!node || typeof node !== 'object') return;
+          const children = Array.isArray(node.children) ? node.children : [];
+          if (children.includes('显示吉祥物（聊天顶部拉绳）')) {
+            const input = children.find((c) => c && typeof c === 'object' && c.type === 'input');
+            if (input && typeof input.props.onChange === 'function') hit = input;
+          }
+          if (Array.isArray(node.children)) node.children.forEach(walk);
+        })(root);
+        return hit;
+      };
+      const ropeToggle = findRopeToggle(tree);
+      console.log('mascot rope toggle present:', !!ropeToggle);
+      if (ropeToggle) {
+        console.log('rope toggle checked by default:', ropeToggle.props.checked === true);
+        ropeToggle.props.onChange({ target: { checked: false } });
+        tree = pickerRenders[0]();
+        const ropeOff = findRopeToggle(tree);
+        console.log('unchecking hides the rope (checkbox off):', !!ropeOff && ropeOff.props.checked === false);
+        ropeToggle.props.onChange({ target: { checked: true } });
+        tree = pickerRenders[0]();
+        const ropeOn = findRopeToggle(tree);
+        console.log('re-checking restores the rope (checkbox on):', !!ropeOn && ropeOn.props.checked === true);
+      } else {
+        console.log('mascot rope toggle: false (not found)');
+      }
+      // Mascot rope form (maid/whale) + size slider: both present by default;
+      // changing them flips the persisted selection live.
+      const findRopeFormSelect = (root) => {
+        let hit = null;
+        (function walk(node) {
+          if (Array.isArray(node)) { node.forEach(walk); return; }
+          if (!node || typeof node !== 'object') return;
+          if (node.type === 'select' && node.props && node.props['aria-label'] === '吉祥物形态') hit = node;
+          if (Array.isArray(node.children)) node.children.forEach(walk);
+        })(root);
+        return hit;
+      };
+      const findRopeScaleSlider = (root) => {
+        let hit = null;
+        (function walk(node) {
+          if (Array.isArray(node)) { node.forEach(walk); return; }
+          if (!node || typeof node !== 'object') return;
+          const cls = typeof node.props?.className === 'string' ? node.props.className : '';
+          const children = Array.isArray(node.children) ? node.children : [];
+          const label = children.find((c) => c && typeof c === 'object' && Array.isArray(c.children) && c.children.includes('吉祥物大小'));
+          if (cls.includes('we-picker__slider-row') && label) hit = node;
+          if (Array.isArray(node.children)) node.children.forEach(walk);
+        })(root);
+        return hit;
+      };
+      const findRangeInput = (row) =>
+        (Array.isArray(row?.children) ? row.children : [])
+          .find((c) => c && typeof c === 'object' && c.type === 'input');
+      const ropeFormSelect = findRopeFormSelect(tree);
+      console.log('mascot rope form select present:', !!ropeFormSelect);
+      if (ropeFormSelect) {
+        console.log('rope form default (maid):', ropeFormSelect.props.value === 'maid');
+        ropeFormSelect.props.onChange({ target: { value: 'whale' } });
+        tree = pickerRenders[0]();
+        const selWhale = findRopeFormSelect(tree);
+        console.log('rope form switches to whale:', !!selWhale && selWhale.props.value === 'whale');
+        if (selWhale) selWhale.props.onChange({ target: { value: 'maid' } });
+        tree = pickerRenders[0]();
+      } else {
+        console.log('mascot rope form select: false (not found)');
+      }
+      const ropeScaleSlider = findRopeScaleSlider(tree);
+      console.log('mascot rope size slider present:', !!ropeScaleSlider);
+      if (ropeScaleSlider) {
+        const ri = findRangeInput(ropeScaleSlider);
+        console.log('rope size slider min/max (0.5/2.5):',
+          ri && String(ri.props.min) === '0.5' && String(ri.props.max) === '2.5');
+        console.log('rope size default scale (1):', ri && String(ri.props.value) === '1');
+        if (ri) ri.props.onInput({ target: { value: '1.5' } });
+        tree = pickerRenders[0]();
+        const ri2 = findRangeInput(findRopeScaleSlider(tree));
+        console.log('rope size slider updates to 1.5:', ri2 && String(ri2.props.value) === '1.5');
+        if (ri2) ri2.props.onInput({ target: { value: '1' } });
+        tree = pickerRenders[0]();
+      } else {
+        console.log('mascot rope size slider: false (not found)');
+      }
       // 玻璃 slider now spans 0–60 px (was 0–40): assert the raised max on the
       // 玻璃 range input (label "玻璃", max 60) so the range stays in sync.
       const glassSlider = (() => {
