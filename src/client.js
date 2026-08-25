@@ -291,6 +291,10 @@ function readPersisted() {
 // ── Shared selection store (React + DOM layer share it) ────────────────────
 const selection = {
   ...readPersisted(),
+  // Transient: becomes true once loadPersisted() has applied the host-side
+  // settings (the port-independent source of truth). The one-time notice waits
+  // for it so it never flashes before the persisted noticeSeen is known.
+  hostLoaded: false,
   url: null,
   type: null,
   previewUrl: null,
@@ -512,6 +516,9 @@ async function loadPersisted() {
     if (!stale) Object.assign(selection, readPersisted());
   }
 
+  // Settings applied (host or fallback). Mark loaded so gated UI — the one-time
+  // notice — knows the persisted noticeSeen is final before it renders.
+  selection.hostLoaded = true;
   applyEffects();
   emit();
 }
@@ -3277,7 +3284,11 @@ const NOTICE_VERSION = "0.6.5";
 
 function UpdateNotice() {
   const sel = useStore();
-  const show = sel.noticeSeen !== NOTICE_VERSION;
+  // Only render once the host settings (source of truth) are applied, so the
+  // persisted noticeSeen is final. On a fresh port/restart the localStorage
+  // origin is empty (noticeSeen == "") and would briefly flash the notice before
+  // the host GET merges the real value — wait for hostLoaded to avoid that.
+  const show = sel.hostLoaded && sel.noticeSeen !== NOTICE_VERSION;
   const dismiss = () => {
     // Persist the dismissed version through the settings pipeline (localStorage
     // cache + host file). emit() re-renders this component (useStore) to hide it.
