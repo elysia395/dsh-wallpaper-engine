@@ -1791,11 +1791,31 @@ function applyFontStyles() {
       (document.head || document.documentElement).appendChild(st);
     }
     st.textContent = [
-      /* 普通文本：排除错误/危险/警告语义，避免盖掉报错红字 */
-      'body *:not(:has([class*="error" i])):not(:has([class*="danger" i])):not(:has([class*="invalid" i])):not(:has([class*="destructive" i])):not(:has([class*="warning" i])):not([class*="error" i]):not([class*="danger" i]):not([class*="invalid" i]):not([class*="destructive" i]):not([class*="warning" i]):not([data-variant="error"]):not([data-variant="destructive"]):not([data-variant="danger"]) {',
+      /* ── 白闪回归红线（v0.6.4 方案A 教训）────────────────────────────────
+         旧写法用六连 :not(:has(...)) 做「含报错祖先整体排除」——:has() 的
+         祖先失效集把每次点击/输入的样式重算扩大到近乎整棵 DOM，所有
+         backdrop-filter 面板随之重采样壁纸重绘，正是 kiosk 沉浸式窗口
+         整屏刷白的点火条件（这次更新后闪白复现的直接原因）。
+         等价语义改为两层零 :has() 规则：失效范围回到元素自身局部。 */
+      /* 1) 全局字体三项 */
+      'body * {',
       '  color:var(--we-font-color, #000) !important;',
       '  font-weight:var(--we-font-weight, 400) !important;',
       '  font-family:var(--we-font-family, inherit) !important;',
+      '}',
+      /* 2) 语义色还原：特异性 (0,1,1)/(0,1,2) 高于规则1 的 (0,0,1)，同为
+            !important 时按级联特异性胜出。revert 让该元素表现得像没有本表
+            声明 —— DSH 自身的错误配色样式正常生效，等价于旧 :has() 排除，
+            连报错元素的后代也一并还原。 */
+      'body :is([class*="error" i],[class*="danger" i],[class*="invalid" i],'
+        + '[class*="destructive" i],[class*="warning" i],'
+        + '[data-variant="error"],[data-variant="destructive"],[data-variant="danger"]),',
+      'body :is([class*="error" i],[class*="danger" i],[class*="invalid" i],'
+        + '[class*="destructive" i],[class*="warning" i],'
+        + '[data-variant="error"],[data-variant="destructive"],[data-variant="danger"]) * {',
+      '  color: revert !important;',
+      '  font-weight: revert !important;',
+      '  font-family: revert !important;',
       '}',
     ].join('\n');
   } catch { /* ignore */ }
@@ -3700,13 +3720,16 @@ function RopeDock() {
 }
 
 // ── One-time "what's new" notice ─────────────────────────────────────────────
-// Tells the user what's new once per version — this round: the 字体 custom
-// typography group (master switch + color/weight/family incl. 行楷) and the
-// new 壁纸效果 tuning sliders (亮度/对比度/饱和度). The dismissal version is
-// stored WITH the settings (host file, port-independent) so it survives DSH
-// Desktop's random --port restarts and never re-shows after being closed. Bump
-// NOTICE_VERSION next release to announce something new again.
-const NOTICE_VERSION = "0.6.7";
+// This round: the immersive-window white-flash regression — the font-custom
+// patch shipped in #57-redo matched `body *` through six :not(:has(...))
+// clauses, blowing every click/keystroke's style invalidation up to nearly the
+// whole DOM and re-rasterising all backdrop-filter panels over the wallpaper
+// (the exact trigger class the v0.6.4 方案A fix had removed). Rewritten as two
+// cascade layers with zero :has(). The dismissal version is stored WITH the
+// settings (host file, port-independent) so it survives DSH Desktop's random
+// --port restarts and never re-shows after being closed. Bump NOTICE_VERSION
+// next release to announce something new again.
+const NOTICE_VERSION = "0.6.8";
 
 function UpdateNotice() {
   const sel = useStore();
@@ -3724,12 +3747,14 @@ function UpdateNotice() {
   };
   if (!show) return null;
   return React.createElement("div", { className: "we-update-notice", role: "alert" },
-    React.createElement("div", { className: "we-update-notice__title" }, "🎉 新版更新：字体自定义 + 壁纸效果调节条"),
+    React.createElement("div", { className: "we-update-notice__title" }, "✅ 已修复：沉浸式窗口白闪回归（字体自定义的实现已优化）"),
     React.createElement("div", { className: "we-update-notice__body" },
-      React.createElement("p", null,
-        "设置新增「字体」分区：总开关默认关闭（即原生外观），开启后可调字体颜色、字重与字体族（含雅黑 / 楷体 / 宋体 / 黑体 / 行楷 / 等宽，按钮以各自字体实时预览）。报错红字不受染色影响；点关闭开关即可一键恢复默认。"),
-      React.createElement("p", null,
-        "「壁纸效果」区新增三个调节条：「亮度」「对比度」「饱和度」，配合已有的壁纸模糊 / 暗化等，可让任意壁纸与界面融合得更舒服——全部即时生效、持久保存。"),
+      React.createElement("p",
+        null,
+        "上一版为「字体自定义」注入的全局样式用了 :has() 祖先选择器——每次点击/输入都会把样式重算扩大到近乎整棵 DOM，全部毛玻璃面板随之对壁纸重采样重绘，在沉浸式全屏窗口里重新触发了 v0.6.4 修复过的整屏白闪。"),
+      React.createElement("p",
+        null,
+        "本版以等价的两层级联规则重写（零 :has()）：字体颜色 / 字重 / 字体族功能与报错红字保护完全保留，但样式失效范围回到元素自身局部，交互时的全窗重绘风暴消除。若仍偶发闪白，可先关闭「字体」总开关验证并反馈。"),
       React.createElement("p", { className: "we-update-notice__hint" },
         "本提示每个新版本只出现一次，点下方按钮关闭后不再弹出。"),
     ),
