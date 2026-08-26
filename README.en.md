@@ -435,13 +435,15 @@ without `backdrop-filter` fall back to a near-opaque fill):
 |---|---|---|---|
 | **侧栏液态玻璃** | Master switch: frost the sidebar panels | On / off | On |
 | **侧栏模糊** | Blur radius of the sidebar frost | 0–200 px | 16 |
-| **侧栏透明度** | Sidebar glass density (**higher = clearer**: 0 densest / 200 clearest) | 0–200 % | 12 % |
+| **侧栏透明度** | Sidebar glass density (**higher = clearer**: 0 densest / 200 clearest) | 0–200 % | 120 % |
 | **侧栏玻璃颜色** | Sidebar glass **base tint** | 6 presets + custom picker | `#ffffff` white |
 
 > Sidebar glass is a separate set of knobs from the settings-window glass: the
 > conversation「玻璃」slider only drives the composer/bubbles, while the sidebar
-> sliders drive the sidebar. The default sidebar glass is slightly denser than the
-> settings window so file/tree/terminal text stays readable in the narrow panels.
+> sliders drive the sidebar. The sidebar defaults to a fairly clear glass (so it
+> matches the wallpaper instead of glowing white); editor/terminal content
+> surfaces have their own near-opaque fill + transparency controls to keep text
+> readable in the narrow panels.
 
 ![dsh-better-sidebar compatibility](docs/images/better-sidebar.png)
 
