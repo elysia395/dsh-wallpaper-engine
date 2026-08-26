@@ -3706,7 +3706,7 @@ function RopeDock() {
 // stored WITH the settings (host file, port-independent) so it survives DSH
 // Desktop's random --port restarts and never re-shows after being closed. Bump
 // NOTICE_VERSION next release to announce something new again.
-const NOTICE_VERSION = "0.6.6";
+const NOTICE_VERSION = "0.6.7";
 
 function UpdateNotice() {
   const sel = useStore();
