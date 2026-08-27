@@ -27,6 +27,8 @@ It discovers the Wallpaper Engine install on your machine, lists its wallpapers,
 - **Media-stream handle fix + async scan** (v0.4.1) — media/preview/scene-frame streams now release their file handles immediately when the client disconnects (fixes handles accumulating with every wallpaper switch/refresh, and Windows locking that prevented deleting/moving a wallpaper file). The wallpaper-library scan is fully async (fs.promises thread pool), so it no longer blocks the event loop (noticeably faster startup on WSL / big libraries). **WSL support**: Steam roots mounted under `/mnt/<drive>` are auto-detected, so a Harness running inside WSL can discover a Windows Wallpaper Engine install.
 - **Occlusion pause (battery-saving trio)** — like Wallpaper Engine's "pause when covered": pause the video wallpaper on minimize / tab-switch, on window focus loss, and/or on battery power, dropping the decoder engine to zero; it resumes automatically when you come back (web/iframe wallpapers are only throttled by the browser while hidden). Each toggle persists.
 - **Decode frame-rate cap (frame-skip transcode)** — high-fps sources (e.g. 4K120 H.264) are the dominant GPU cost (~60% Video Decode at 1.0x on a 4060). The **帧率上限** control (unlimited / 60 / 48 / 30 / 24 fps) has the host re-encode the wallpaper ONCE to the capped fps (timeline stays 1.0x normal speed, fully decoupled from 倍速) as **4K-preserving AV1**, with a **live download/transcode progress bar**; measured 4K120→24fps drops GPU from ~60% to **~15%**. ffmpeg is provisioned in three tiers: explicit path → **auto-download** (npmmirror + GitHub dual-source race, cross-platform asset table verified) → system PATH.
+- **Wallpaper-effect tuning sliders** (v0.6.x) — the **壁纸效果** area gains three new sliders: **亮度 / 对比度 / 饱和度** (wallpaper media filter), alongside wallpaper blur / scrim etc., so any wallpaper can be blended comfortably with the UI. All apply instantly and persist.
+- **Custom typography** (v0.6.7) — a new **字体** section in settings. The master switch defaults to off (stock dsh look); once enabled you can tune **font color / weight (100–900) / family** (default · YaHei · KaiTi · SimSun · SimHei · 行楷 Xingkai · monospace, each chip previewed in its own font). Error/danger/warning text keeps its system red; toggling the switch off restores defaults in one click.
 
 ![Wallpaper showcase](docs/images/showcase.png)
 
@@ -386,13 +388,29 @@ At the bottom of the **外观** (appearance) area is a mascot control group for 
 
 > Both artworks are inlined as base64 (transparent background) at build time, so the single-file client bundle stays self-contained. **Size** changes only the rope's own box; the wallpaper-repo drawer below is unaffected. Settings apply instantly and persist to the host-side config file.
 
-### The four sliders
+### Custom typography
 
-While a wallpaper is active, four sliders let you tune how it blends with the UI:
+The settings page has a dedicated **字体** (typography) section placed before **外观**. The **master switch defaults to off** — the UI keeps the stock dsh typography with zero injected styling; turn it on to apply the three knobs below. Every change applies instantly and persists:
+
+| Control | What it does | Range / options | Default |
+|---|---|---|---|
+| **字体自定义** | Master switch: off = fully restore the stock dsh fonts (one-click reset) | on / off | off |
+| **字体颜色** | Global text tint | custom color picker | `#000000` |
+| **字重** | Global font weight | 100–900 (step 50) | 400 |
+| **字体** | Font family switch | default · YaHei · KaiTi · SimSun · SimHei · 行楷 (Xingkai) · monospace | default |
+
+> Each **字体** chip renders in its own font (WYSIWYG preview); 行楷 maps to `STXingkai` (falls back to KaiTi when not installed, `Xingkai SC` on macOS). Error / danger / warning elements keep their system red color — global tinting never overrides them.
+
+### The seven sliders
+
+While a wallpaper is active, seven sliders let you tune how it blends with the UI:
 
 | Slider | What it controls | Range | Default |
 |---|---|---|---|
 | **壁纸模糊** (wallpaper blur) | Blurs the wallpaper itself | 0–60 px | 0 |
+| **亮度** (brightness) | Wallpaper brightness (media filter) | 40–160 % | 100 % |
+| **对比度** (contrast) | Wallpaper contrast (media filter) | 40–200 % | 100 % |
+| **饱和度** (saturate) | Wallpaper saturation (media filter) | 0–200 % | 100 % |
 | **暗化** (scrim) | Darkens the overlay between wallpaper and text | 0–90 % | 25 % |
 | **边框** (border) | Raises border/divider contrast | 0–90 % | 35 % |
 | **玻璃** (glass) | Blur radius of the frosted-glass panels (composer, bubbles) | 0–60 px | 24 |
@@ -401,8 +419,9 @@ While a wallpaper is active, four sliders let you tune how it blends with the UI
 > there is no one mode that fits every wallpaper. Switch DSH's theme between
 > **light** and **dark** to find which suits the current wallpaper. If text or
 > hairlines become hard to read on a bright or busy wallpaper, raise the
-> **暗化 / 边框** sliders (and optionally add a little **壁纸模糊**) until it is
-> comfortable. All four sliders apply instantly — no page refresh needed.
+> **暗化 / 边框** sliders, or use **亮度** to tame an overly bright wallpaper
+> (and optionally add a little **壁纸模糊**) until it is comfortable. All seven
+> sliders apply instantly — no page refresh needed.
 
 ## Configuration
 
@@ -436,13 +455,15 @@ without `backdrop-filter` fall back to a near-opaque fill):
 |---|---|---|---|
 | **侧栏液态玻璃** | Master switch: frost the sidebar panels | On / off | On |
 | **侧栏模糊** | Blur radius of the sidebar frost | 0–200 px | 16 |
-| **侧栏透明度** | Sidebar glass density (**higher = clearer**: 0 densest / 200 clearest) | 0–200 % | 12 % |
+| **侧栏透明度** | Sidebar glass density (**higher = clearer**: 0 densest / 200 clearest) | 0–200 % | 120 % |
 | **侧栏玻璃颜色** | Sidebar glass **base tint** | 6 presets + custom picker | `#ffffff` white |
 
 > Sidebar glass is a separate set of knobs from the settings-window glass: the
 > conversation「玻璃」slider only drives the composer/bubbles, while the sidebar
-> sliders drive the sidebar. The default sidebar glass is slightly denser than the
-> settings window so file/tree/terminal text stays readable in the narrow panels.
+> sliders drive the sidebar. The sidebar defaults to a fairly clear glass (so it
+> matches the wallpaper instead of glowing white); editor/terminal content
+> surfaces have their own near-opaque fill + transparency controls to keep text
+> readable in the narrow panels.
 
 ![dsh-better-sidebar compatibility](docs/images/better-sidebar.png)
 
