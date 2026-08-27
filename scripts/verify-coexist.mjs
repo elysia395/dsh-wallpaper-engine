@@ -158,25 +158,24 @@ function findDescendant(root, pred) {
   check('层已挂载(url 已解析)', !!byId['dsh-wallpaper-engine-layer']);
 }
 
-// ── 场景 2: yielding ─────────────────────────────────────────────────────────
+// ── 场景 2: 皮肤在场 + owner=plugin → 仍全量 owning（v0.7.1 口径）────────────
 {
   const h = await bootHarness({ seed: { ...baseSeed, fontCustom: true, fontColor: '#123456' } });
   h.htmlEl.setAttribute('data-dsh-skin', 'blue-fantasy');
   MutationObserver.fireAll();
   await settle(60);
   const p = h.bodyEl.style._props;
-  check('T3/yielding 状态位', h.htmlEl.attributes['data-we-state'] === 'yielding');
-  check('T12 yielding 摘除 glass-window', !h.bodyEl.hasAttribute('data-we-glass-window'));
-  check('T12 yielding 摘除 sidebar-glass', !h.bodyEl.hasAttribute('data-we-sidebar-glass'));
-  check('T13 yielding 字体样式节点被门控摘除', !byId['we-font-patch']);
-  check('yielding 壁纸视觉保留(--we-scrim-color)', typeof p['--we-scrim-color'] === 'string');
-  check('yielding 层仍在屏', !!byId['dsh-wallpaper-engine-layer']);
+  check('T3/皮肤在场仍 owning', h.htmlEl.attributes['data-we-state'] === 'owning');
+  check('T12 液态玻璃主题通道保持(glass-window)', !!h.bodyEl.hasAttribute('data-we-glass-window'));
+  check('T12 侧栏玻璃通道保持(sidebar-glass)', !!h.bodyEl.hasAttribute('data-we-sidebar-glass'));
+  check('T13 字体补丁正常注入(fontCustom=true)', !!byId['we-font-patch']);
+  check('配色/玻璃变量在位(--we-accent/--we-glass-alpha)', typeof p['--we-accent'] === 'string' && typeof p['--we-glass-alpha'] === 'string');
+  check('层仍在屏', !!byId['dsh-wallpaper-engine-layer']);
+  // 显式关闭皮肤不影响本插件（无翻转回归）
   h.htmlEl.removeAttribute('data-dsh-skin');
   MutationObserver.fireAll();
   await settle(40);
-  check('T4/关皮肤自动回 owning', h.htmlEl.attributes['data-we-state'] === 'owning');
-  check('T4 主题通道恢复', h.bodyEl.hasAttribute('data-we-glass-window'));
-  check('T4 字体样式恢复(fontCustom=true 种子)', !!byId['we-font-patch']);
+  check('皮肤移除后仍 owning（无状态抖动）', h.htmlEl.attributes['data-we-state'] === 'owning');
 }
 
 // ── 场景 3: owner=skin → idle；皮肤被关 → 自动接管 ────────────────────────────
@@ -246,7 +245,7 @@ function findDescendant(root, pred) {
   h.htmlEl.setAttribute('data-dsh-skin', 'dark-pro');
   MutationObserver.fireAll();
   await settle(30);
-  check('前置: 先处于 yielding', h.htmlEl.attributes['data-we-state'] === 'yielding');
+  check('前置: 皮肤在场默认仍 owning', h.htmlEl.attributes['data-we-state'] === 'owning');
   const next = JSON.parse(h.store.getItem('dsh-wallpaper-engine:selection'));
   next.appearanceOwner = 'skin';
   h.store.setItem('dsh-wallpaper-engine:selection', JSON.stringify(next));

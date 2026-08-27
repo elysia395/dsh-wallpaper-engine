@@ -2050,17 +2050,19 @@ function skinEffectiveNow() {
 function currentCoexPhase() {
   if (!coexEnabled()) return "owning";
   if ((selection.appearanceOwner || "plugin") === "skin") {
-    // owner=skin 的两个例外（转移表 idle↔owning 边界）：
-    // - 皮肤未激活且没有其它壁纸来源在播 → 页面不能没有外观源 → 临时接管；
-    // - 用户刚在双引擎卡里选了「改用皮肤中心」（另一引擎正在播）→ 尊重其二选一
-    //   决策，保持 idle，不因皮肤缺席而回弹——否则等于替用户反悔。
+    // 仅当用户在归属卡里显式选择「由皮肤中心负责」时才走待机路径。两个边界：
+    // - 另一壁纸引擎在播 → 保持 idle，不因皮肤缺席回弹（尊重二选一决策）；
+    // - 否则无外观源时临时接管（页面不能裸奔）。
     if (!skinEffectiveNow()) {
       readForeignWallpaperFlags();
       if (coexBuiltinPlaying || coexForeignWallpaper) return "idle";
     }
     return skinEffectiveNow() ? "idle" : "owning";
   }
-  return skinEffectiveNow() ? "yielding" : "owning";
+  // 默认（owner=plugin）：无条件全量生效 —— 液态玻璃/配色/侧栏玻璃/字体不受
+  // 皮肤是否在场影响（v0.7.1 口径：本插件是外观全权方；不想看到皮肤观感请在
+  // 皮肤中心关闭当前皮肤）。自动让位过渡态已移除。
+  return "owning";
 }
 
 function writeCoexStateAttr(phase) {
@@ -2385,10 +2387,13 @@ function OwnershipCard() {
         "外观归属（与 dsh-web-ui-all 二选一）"),
       React.createElement("span", { className: "we-picker__hint" },
         "皮肤中心：", skinTxt, ctOn ? "｜自定义主题：开启" : "",
-        phase === "yielding" ? "｜当前：让位过渡态（仅显示壁纸，配色交给皮肤）" : "",
-        phase === "idle" ? "｜当前：完全待机（由皮肤中心负责外观）" : "",
-        phase === "owning" && (sel.appearanceOwner === "skin")
-          ? "｜皮肤未激活期间由本插件临时接管外观" : ""),
+        (sel.appearanceOwner === "skin")
+          ? (phase === "idle"
+              ? "｜当前：完全待机（由皮肤中心负责外观）"
+              : "｜皮肤未激活期间由本插件临时接管外观")
+          : (sel.coexSkinActive
+              ? "｜本插件外观全量优先；不想看到皮肤观感可在皮肤中心关闭当前皮肤"
+              : "｜当前：本插件负责外观")),
       (sel.appearanceOwner === "skin" && !sel.coexSkinActive)
         ? React.createElement("span", { className: "we-picker__hint", style: { opacity: 0.85 } },
             "你选择了「皮肤中心负责」，但当前没有激活的皮肤 —— 关闭期间页面由本插件临时接管。")
