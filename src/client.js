@@ -54,6 +54,30 @@ const SCRIM_ID = "dsh-wallpaper-engine-scrim";
 const ROPE_DOCK_ID = "dsh-wallpaper-engine-rope-dock";
 const ROPE_POS_KEY = "dsh-wallpaper-engine:rope-pos";
 
+// ── Coexistence v1（与 dsh-web-ui-all / skin-center 的「二选一」互斥）─────────
+// 设计与实测证据见仓库外计划文档《WE插件与dsh-web-ui-all兼容计划》v4 §一/§三。
+// skin-center v0.3.5 的契约事实（解包复核行号）：
+// - html[data-dsh-skin]        值=皮肤 id；激活即设、清除即删（client.js:4241）
+// - html[data-dsh-custom-theme]字面 "true"；(applied||previewing)&&!suspended
+//   才在位（:4737-4739），可与 data-dsh-skin 共存 → 判定必须镜像其门控语义
+//   customThemeEffective := has(ct) && !has(skin)（:4602 先例）
+// - body/html[data-dsh-backdrop-active] 字面 "true"，多来源折叠进 WeakMap Set，
+//   来源不外露（:370-415）；皮肤装饰层只在其属性在位时挂载 ⇒ 「无皮肤却有
+//   backdrop」= 其内置 WE 壁纸控制器在播 —— 这就是归因判据。
+// - html[data-dsh-wallpaper-active] 上游从不写入（只读 :3126 / 监听 :3167 /
+//   配套中和 CSS :975-1006）→ 这是留给第三方壁纸插件的公开契约位。
+const COEX_ENABLED = true; // 总开关：false = 完整还原 v0.6 行为（无观察器/上报/归属）
+const SKIN_ATTR = "data-dsh-skin";
+const CUSTOM_THEME_ATTR = "data-dsh-custom-theme";
+const WP_ACTIVE_REPORT_ATTR = "data-dsh-wallpaper-active";
+const BACKDROP_REPORT_ATTR = "data-dsh-backdrop-active";
+// 三态标记写到 <html> 上：调试/快照断言用；真正的互斥门控是
+// applyEffects 按 phase 决定“是否写入主题类 body 属性”（见 applyEffectsFull）。
+const COEX_STATE_ATTR = "data-we-state";
+const PLUGIN_ROOT_MARK = "data-dsh-plugin"; // 对方表面打标的豁免位（skin-center:525）
+const PLUGIN_ROOT_ID = "dsh-plugin-wallpaper-engine";
+const OWNER_DISMISS_KEY = "we.ownerPrompt.dismissed";
+
 // ── Defaults ─────────────────────────────────────────────────────────────────
 // scrim default is intentionally LOW now: iOS liquid glass needs the wallpaper
 // colour to pass through the glass, so we no longer crush it behind a near-black
@@ -188,6 +212,15 @@ const DEFAULTS = {
   fontColor: "#000000",
   fontWeight: 400,
   fontFamily: "inherit",
+  // ── Coexistence v1（二选一互斥）──
+  // appearanceOwner："plugin" = 本插件负责外观+壁纸；"skin" = 让位给皮肤中心
+  // （本插件完全待机）。注意转移表：owner=skin 但皮肤当前未激活时回落 owning
+  // （页面不能没有外观源），见 computePhase()。
+  appearanceOwner: "plugin",
+  // 契约上报逃生口：false 时不再向 html/body 写 data-dsh-wallpaper-active /
+  // data-dsh-backdrop-active（skin-center 据此开启 composer 中和与表面半透明；
+  // 行为不符预期的场景可一键退回不可见状态）。
+  reportBackdropCompat: true,
 };
 
 // Selectable values for the two filters. Declared up top because
@@ -344,6 +377,9 @@ function sanitizeSettings(o) {
       ? o.fontColor : DEFAULTS.fontColor,
     fontWeight: clampNum(o.fontWeight, 100, 900, DEFAULTS.fontWeight),
     fontFamily: FONT_FAMILY_VALUES.includes(o.fontFamily) ? o.fontFamily : DEFAULTS.fontFamily,
+    // Coexistence v1（镜像字段，host 侧 sanitizeSettings 同步见 lib/index.js）
+    appearanceOwner: o.appearanceOwner === "skin" ? "skin" : DEFAULTS.appearanceOwner,
+    reportBackdropCompat: o.reportBackdropCompat !== false,
   };
 }
 
@@ -474,6 +510,9 @@ function serializeSelection() {
     fontColor: selection.fontColor,
     fontWeight: selection.fontWeight,
     fontFamily: selection.fontFamily,
+    // Coexistence v1（镜像字段）
+    appearanceOwner: selection.appearanceOwner || "plugin",
+    reportBackdropCompat: selection.reportBackdropCompat !== false,
   };
 }
 
@@ -595,7 +634,7 @@ async function loadPersisted() {
   // Settings applied (host or fallback). Mark loaded so gated UI — the one-time
   // notice — knows the persisted noticeSeen is final before it renders.
   selection.hostLoaded = true;
-  applyEffects();
+  updateCoex("persisted"); // 替代原 applyEffects()：含相位分发 + 契约上报 + 卡片刷新
   emit();
 }
 
@@ -1692,9 +1731,12 @@ function codecLabel(codec) {
 }
 
 function syncLayers() {
+  // Coexistence v1: idle 相位（外观归属=皮肤中心）暂停“渲染输出”，但绝不
+  // 改写用户已持久化的 selection.url —— 切回 owning 时原壁纸原样恢复。
+  const wantWallpaper = !!selection.url && currentCoexPhase() !== "idle";
   // 1. Wallpaper element.
   const existing = document.getElementById(LAYER_ID);
-  if (selection.url) {
+  if (wantWallpaper) {
     const wantKey = selection.type + "\u0000" + selection.url + "\u0000"
       + (IS_EDGE && selection.edgeCompat !== false ? "canvas" : "video")
       // Scene wallpapers: the media kind depends on sceneVideo (MP4 <video> vs
@@ -1717,6 +1759,7 @@ function syncLayers() {
       node = document.createElement("div");
       node.id = LAYER_ID;
       node.className = "we-layer";
+      stampPluginRoot(node);
       node.dataset.weKey = wantKey;
       const built = buildMedia(selection);
       if (Array.isArray(built)) for (const el of built) node.appendChild(el);
@@ -1755,11 +1798,12 @@ function syncLayers() {
 
   // 2. Scrim element (always present while a wallpaper is active).
   const scrim = document.getElementById(SCRIM_ID);
-  if (selection.url) {
+  if (wantWallpaper) {
     if (!scrim) {
       const s = document.createElement("div");
       s.id = SCRIM_ID;
       s.className = "we-scrim";
+      stampPluginRoot(s);
       document.body.appendChild(s);
     }
     document.body.setAttribute(ACTIVE_ATTR, "on");
@@ -1826,7 +1870,10 @@ function removeFontStyles() {
   if (st) st.remove();
 }
 
-function applyEffects() {
+// FULL pipeline: the v0.6 behavior — writes ALL knobs including the THEME
+// channels (glass-window / sidebar-glass body attrs, --dsw-* overrides, font
+// patch). Only called in the "owning" coexistence phase; see applyEffects().
+function applyEffectsFull() {
   const s = document.body.style;
   s.setProperty("--we-scrim-color", "rgba(0,0,0," + selection.scrim + ")");
   // Border emphasis: the border tokens are low-alpha hairlines; raise their
@@ -1979,10 +2026,406 @@ function clearEffects() {
   lastScrimCss = "";
 }
 
+// ═════════════════════ Coexistence v1 core ═══════════════════════════════
+// 三态外观归属状态机（评审修订版，转移表见计划 §3.1）：
+//   owning   — 全量生效（v0.6 行为 + 契约上报）
+//   yielding — 皮肤在场：壁纸画面保留、主题通道全部停用（单一配色源硬保证）
+//   idle     — 外观归属=skin：渲染输出全停（卸层清残留），其余功能照常
+// 门控实现 = “phase 决定 applyEffects 写不写主题类 body 属性”（根级单点），
+// 不逐条改写规则选择器 —— 快照测试锚定各 phase 的属性集合（T12/T13）。
+
+function coexEnabled() { return COEX_ENABLED === true; }
+
+// 镜像 skin-center 的让位语义（其 custom-theme CSS 键 :not([data-dsh-skin])，
+// 两属性可同时存在）：has(skin) || (has(ct) && !has(skin))。显式写出而非化简，
+// 上游若调整两者优先级时判定点只有这一处。
+function skinEffectiveNow() {
+  try {
+    const de = document.documentElement;
+    if (de.hasAttribute(SKIN_ATTR)) return true;
+    return de.hasAttribute(CUSTOM_THEME_ATTR) && !de.hasAttribute(SKIN_ATTR);
+  } catch { return false; }
+}
+
+function currentCoexPhase() {
+  if (!coexEnabled()) return "owning";
+  if ((selection.appearanceOwner || "plugin") === "skin") {
+    // owner=skin 的两个例外（转移表 idle↔owning 边界）：
+    // - 皮肤未激活且没有其它壁纸来源在播 → 页面不能没有外观源 → 临时接管；
+    // - 用户刚在双引擎卡里选了「改用皮肤中心」（另一引擎正在播）→ 尊重其二选一
+    //   决策，保持 idle，不因皮肤缺席而回弹——否则等于替用户反悔。
+    if (!skinEffectiveNow()) {
+      readForeignWallpaperFlags();
+      if (coexBuiltinPlaying || coexForeignWallpaper) return "idle";
+    }
+    return skinEffectiveNow() ? "idle" : "owning";
+  }
+  return skinEffectiveNow() ? "yielding" : "owning";
+}
+
+function writeCoexStateAttr(phase) {
+  try {
+    if (coexEnabled() && phase) document.documentElement.setAttribute(COEX_STATE_ATTR, phase);
+    else document.documentElement.removeAttribute(COEX_STATE_ATTR);
+  } catch { /* ignore */ }
+}
+
+// ── 契约上报（所有权受控：只撤除自己置位的标记）─────────────────────────────
+let htmlReportOwnedByUs = false;
+let backdropSetByUs = false;
+function setContractReports(on) {
+  if (!coexEnabled()) return;
+  const want = on && selection.reportBackdropCompat !== false;
+  try {
+    const de = document.documentElement;
+    const bd = document.body;
+    if (want) {
+      // data-dsh-wallpaper-active 是上游留给第三方壁纸插件的契约位（上游自身
+      // 从不写入）；若启动基线已被其它插件占用，则绝不触碰。
+      if (!de.hasAttribute(WP_ACTIVE_REPORT_ATTR)) {
+        de.setAttribute(WP_ACTIVE_REPORT_ATTR, "");
+        htmlReportOwnedByUs = true;
+      }
+      // backdrop 多来源折叠：在位时可能是皮肤背景/对方内置壁纸的来源贡献，
+      // 只在我们是唯一来源时才拥有它（否则借用对方的置位，撤除权归对方）。
+      if (!bd.hasAttribute(BACKDROP_REPORT_ATTR)) {
+        bd.setAttribute(BACKDROP_REPORT_ATTR, "true");
+        de.setAttribute(BACKDROP_REPORT_ATTR, "true");
+        backdropSetByUs = true;
+      }
+    } else {
+      if (htmlReportOwnedByUs) { de.removeAttribute(WP_ACTIVE_REPORT_ATTR); htmlReportOwnedByUs = false; }
+      if (backdropSetByUs) {
+        bd.removeAttribute(BACKDROP_REPORT_ATTR);
+        de.removeAttribute(BACKDROP_REPORT_ATTR);
+        backdropSetByUs = false;
+      }
+    }
+  } catch { /* ignore */ }
+}
+
+// 「无皮肤却有 backdrop」⇒ skin-center 内置 WE 壁纸控制器在播（P0 归因判据）；
+// 我们自己上报占用的场景不算（backdropSetByUs 排除自指）。
+let coexBuiltinPlaying = false;
+let coexForeignWallpaper = false;
+
+function readForeignWallpaperFlags() {
+  try {
+    const de = document.documentElement;
+    const bd = document.body;
+    coexBuiltinPlaying = coexEnabled()
+      && !skinEffectiveNow()
+      && bd.hasAttribute(BACKDROP_REPORT_ATTR)
+      && !backdropSetByUs;
+    // 第三方壁纸插件的契约位被他人占用（基线差分）
+    coexForeignWallpaper = coexEnabled()
+      && de.hasAttribute(WP_ACTIVE_REPORT_ATTR)
+      && !htmlReportOwnedByUs;
+  } catch {
+    coexBuiltinPlaying = false;
+    coexForeignWallpaper = false;
+  }
+}
+
+// ── portal 工厂：插入即带标（TDD 断言 T11 锚定）─────────────────────────────
+// 所有 body 级动态根一律经由本工厂创建；data-dsh-plugin 在 appendChild 之前
+// 同步写入，使对方 surface-tagging 的 closest("[data-dsh-plugin]") 永远命中。
+function stampPluginRoot(el) {
+  try { el.setAttribute(PLUGIN_ROOT_MARK, PLUGIN_ROOT_ID); } catch { /* ignore */ }
+  return el;
+}
+
+// ── 让位相位的输出管线：壁纸视觉保留、主题通道停用 ────────────────────────────
+function stripThemeChannels() {
+  // owning→yielding 迁移可能发生在属性已写入之后：把主题类输出全部摘除。
+  try {
+    const s = document.body.style;
+    s.removeProperty("--we-border-alpha");
+    s.removeProperty("--we-blur");
+    s.removeProperty("--we-glass-brightness");
+    s.removeProperty("--we-accent");
+    s.removeProperty("--we-glass-alpha");
+    s.removeProperty("--we-glass-color");
+    s.removeProperty("--we-sidebar-blur");
+    s.removeProperty("--we-sidebar-saturate");
+    s.removeProperty("--we-sidebar-alpha");
+    s.removeProperty("--we-sidebar-sheen");
+    s.removeProperty("--we-sidebar-color");
+    s.removeProperty("--we-content-surface-alpha");
+    s.removeProperty("--we-content-surface-color");
+    document.body.removeAttribute("data-we-glass-window");
+    document.body.removeAttribute("data-we-sidebar-glass");
+  } catch { /* ignore */ }
+  removeFontStyles();
+}
+
+function applyEffectsYielded() {
+  // 壁纸视觉子集（.we-layer/.we-scrim 自身与 THEME 覆写解耦——body 属性不在位，
+  // 3783+/3842+ 的 --dsw-* 覆写天然失效）：
+  const s = document.body.style;
+  s.setProperty("--we-scrim-color", "rgba(0,0,0," + selection.scrim + ")");
+  s.setProperty("--we-wallpaper-blur", selection.wallpaperBlur + "px");
+  const filterTerms = [];
+  if (selection.wallpaperBlur > 0) filterTerms.push("blur(" + selection.wallpaperBlur + "px)");
+  if (selection.backgroundBrightness !== 100) filterTerms.push("brightness(" + selection.backgroundBrightness + "%)");
+  if (selection.backgroundContrast !== 100) filterTerms.push("contrast(" + selection.backgroundContrast + "%)");
+  if (selection.backgroundSaturate !== 100) filterTerms.push("saturate(" + selection.backgroundSaturate + "%)");
+  s.setProperty("--we-media-filter", filterTerms.length ? filterTerms.join(" ") : "none");
+  const scale = (1 + selection.wallpaperBlur * 0.006).toFixed(4);
+  s.setProperty("--we-wallpaper-scale", scale);
+  s.setProperty("--we-wallpaper-flip", selection.flip ? "-1" : "1");
+  s.setProperty("--we-wallpaper-transform",
+    (selection.wallpaperBlur > 0 || selection.flip)
+      ? ("scale(" + scale + ") scaleX(" + (selection.flip ? "-1" : "1") + ")")
+      : "none");
+  s.setProperty("--we-object-fit", selection.objectFit);
+  s.setProperty("--we-accent", selection.accent); // 插件自有 chrome（picker 卡片等）仍需品牌色
+  writeScrimImmediacy();
+}
+
+// owning/yielding 共用的 scrim 直写去抖（自 applyEffectsFull 原逻辑提取）。
+function writeScrimImmediacy() {
+  const scrimCss = "rgba(0,0,0," + selection.scrim + ")";
+  if (scrimCss === lastScrimCss) return;
+  lastScrimCss = scrimCss;
+  const scrim = document.getElementById(SCRIM_ID);
+  if (scrim) scrim.style.background = scrimCss;
+  if (document.body) void document.body.offsetHeight; // 强制合成器立即拾取（kiosk 白闪红线，勿删）
+}
+
+// ── idle 相位：渲染输出全停（对称于 ctx.effect 卸载清理，但保留订阅与配置）───
+function teardownVisualPipeline() {
+  clearEffects(); // 清全部内联变量/主题 attrs/字体样式/scrim inline
+  weStopDraw();
+  const node = document.getElementById(LAYER_ID);
+  if (node) { releaseLayerMedia(node); node.remove(); }
+  const scrim = document.getElementById(SCRIM_ID);
+  if (scrim) scrim.remove();
+  document.body.removeAttribute(ACTIVE_ATTR);
+}
+
+// ── 分发器：订阅者入口保持原名 applyEffects（subscribe/loadPersisted/handlers）
+function applyEffects() {
+  const phase = currentCoexPhase();
+  if (!coexEnabled() || phase === "owning") {
+    setContractReports(true);
+    applyEffectsFull();
+    return;
+  }
+  if (phase === "yielding") {
+    setContractReports(true);
+    stripThemeChannels(); // 先摘除 FULL 相位可能留下的主题输出，再写视觉子集
+    applyEffectsYielded();
+    return;
+  }
+  // idle
+  setContractReports(false);
+  teardownVisualPipeline();
+}
+
+// ── 状态机求值与边沿通知 ─────────────────────────────────────────────────────
+let lastNotifiedPhase = null;
+let coexEvalQueued = false;
+function queueCoexEval() {
+  if (coexEvalQueued || typeof window === "undefined" || typeof window.requestAnimationFrame !== "function") {
+    updateCoex("obs");
+    return;
+  }
+  coexEvalQueued = true; // rAF 合帧：皮肤切换常伴随整树重建引发的属性抖动
+  window.requestAnimationFrame(() => { coexEvalQueued = false; updateCoex("obs"); });
+}
+
+function updateCoex(reason) {
+  const phase = currentCoexPhase();
+  readForeignWallpaperFlags();
+  selection.coexSkinActive = coexEnabled() && skinEffectiveNow();
+  selection.coexBuiltinPlaying = !!coexBuiltinPlaying;
+  selection.coexForeignWallpaper = !!coexForeignWallpaper;
+  selection.coexPhase = phase;
+  writeCoexStateAttr(phase);
+  const changed = phase !== lastNotifiedPhase || reason === "owner" || reason === "flag";
+  lastNotifiedPhase = phase;
+  if (changed) emit(); // 订阅者同步执行 syncLayers()+applyEffects()，单一传播路径
+  else { applyEffects(); syncLayers(); } // 无边沿也保证输出收敛（如 storage 同值覆写）
+  refreshDualEngineCard();
+}
+
+function commitAppearanceOwner(next) {
+  const v = next === "skin" ? "skin" : "plugin";
+  if (selection.appearanceOwner === v) return;
+  selection.appearanceOwner = v;
+  persistSelection();
+  updateCoex("owner");
+}
+
+// ── 双引擎阻塞选择卡（评审必须修复项 #5：承诺强度对齐——未决期间必须二选一）──
+// 命中强信号才弹：对方内置壁纸控制器在播（coexBuiltinPlaying，P0 归因判据）
+// 或 html[data-dsh-wallpaper-active] 被第三方占用（foreignReport，基线差分）。
+// 弱信号（皮肤自身背景艺术等）不打扰。
+function coexDismissedPayload() {
+  try { return JSON.parse(localStorage.getItem(OWNER_DISMISS_KEY) || "{}"); }
+  catch { return {}; }
+}
+function setDualDismissed(ownerAtDismiss) {
+  try { localStorage.setItem(OWNER_DISMISS_KEY, JSON.stringify({ dual: true, owner: ownerAtDismiss })); }
+  catch { /* ignore */ }
+}
+// 选择「保留本插件」的持久性以“当时归属”为锚：用户日后改回另一侧再回造成新冲突时重弹。
+function dualDismissStillValid() {
+  const p = coexDismissedPayload();
+  return p.dual === true && (p.owner || "plugin") === (selection.appearanceOwner || "plugin");
+}
+
+function ensureCoexCardStyle() {
+  let st = document.getElementById("we-coex-card-style");
+  if (st) return st;
+  st = document.createElement("style");
+  st.id = "we-coex-card-style";
+  (document.head || document.documentElement).appendChild(st);
+  st.textContent = [
+    '[data-dsh-plugin="' + PLUGIN_ROOT_ID + '"].we-coex-scrim {',
+    '  position: fixed; inset: 0; z-index: 2000; display: flex;',
+    '  align-items: center; justify-content: center; padding: 24px;',
+    '  background: rgba(0,0,0,.45); backdrop-filter: blur(3px); -webkit-backdrop-filter: blur(3px);',
+    '}',
+    '[data-dsh-plugin="' + PLUGIN_ROOT_ID + '"] .we-coex-card {',
+    '  max-width: 420px; width: 100%; border-radius: 14px; padding: 20px 22px;',
+    '  background: var(--dsw-alias-bg-layer-1, #fff); color: var(--dsw-alias-label-primary, #111);',
+    '  box-shadow: 0 18px 60px rgba(0,0,0,.28); font-size: 14px; line-height: 1.6;',
+    '}',
+    '[data-dsh-plugin="' + PLUGIN_ROOT_ID + '"] .we-coex-card h3 { margin: 0 0 8px; font-size: 15px; }',
+    '[data-dsh-plugin="' + PLUGIN_ROOT_ID + '"] .we-coex-card__actions { display:flex; gap:10px; justify-content:flex-end; margin-top:16px; flex-wrap:wrap; }',
+    '[data-dsh-plugin="' + PLUGIN_ROOT_ID + '"] .we-coex-btn {',
+    '  border: 1px solid var(--dsw-alias-border-l2, rgba(128,128,128,.4)); border-radius: 8px;',
+    '  padding: 7px 14px; cursor: pointer; background: transparent; color: inherit; font-size: 13px;',
+    '}',
+    '[data-dsh-plugin="' + PLUGIN_ROOT_ID + '"] .we-coex-btn--primary {',
+    '  background: var(--we-accent, #4f8cff); border-color: transparent; color: #fff;',
+    '}',
+  ].join("\n");
+  return st;
+}
+
+function removeDualEngineCard() {
+  const el = document.getElementById("we-coex-dual-card");
+  if (el) el.remove();
+}
+
+function showDualEngineCard(foreignReport) {
+  ensureCoexCardStyle();
+  if (document.getElementById("we-coex-dual-card")) return;
+  const scrim = document.createElement("div");
+  stampPluginRoot(scrim);
+  scrim.className = "we-coex-scrim";
+  scrim.id = "we-coex-dual-card";
+  const who = coexBuiltinPlaying ? "皮肤中心的内置壁纸"
+    : (foreignReport ? "另一个壁纸插件" : "其它壁纸来源");
+  scrim.innerHTML =
+    '<div class="we-coex-card" role="alertdialog" aria-modal="true" aria-label="壁纸引擎冲突">'
+    + '<h3>两个壁纸引擎同时在运行</h3>'
+    + '<div>检测到 <b>' + who + '</b> 与本插件的壁纸同时挂载。为避免性能叠加与行为混乱，请选择保留哪一个。</div>'
+    + '<div class="we-coex-card__actions">'
+    + '<button type="button" class="we-coex-btn" data-act="keep-skin">改用' + who + '</button>'
+    + '<button type="button" class="we-coex-btn we-coex-btn--primary" data-act="keep-we">保留本插件壁纸</button>'
+    + '</div></div>';
+  scrim.addEventListener("click", (e) => {
+    const act = e.target && e.target.getAttribute && e.target.getAttribute("data-act");
+    if (!act) return;
+    if (act === "keep-we") {
+      // 保留本插件：指引去关闭对方的内置壁纸（我们无法编程操作对方设置）。
+      setDualDismissed(selection.appearanceOwner || "plugin");
+      removeDualEngineCard();
+      queueCoexEval();
+    } else {
+      // 改用对方：本插件进入 idle（渲染输出全停），可随时在设置页切回。
+      commitAppearanceOwner("skin");
+    }
+  });
+  document.body.appendChild(scrim);
+}
+
+function refreshDualEngineCard() {
+  if (!coexEnabled()) { removeDualEngineCard(); return; }
+  const foreignReport = !!coexForeignWallpaper;
+  const shouldPrompt = !!selection.url
+    && currentCoexPhase() !== "idle"
+    && (coexBuiltinPlaying || foreignReport)
+    && !dualDismissStillValid();
+  if (shouldPrompt) showDualEngineCard(foreignReport);
+  else removeDualEngineCard();
+}
+
+// ── 归属卡（设置页 · 外观分区顶部的 React 卡片）──────────────────────────────
+// 读 selection.coex* 瞬态字段（updateCoex 每次 emit 前刷新），全量订阅模型下
+// 无需额外 store —— 设置页任何交互引发的 emit 都会带来最新探测结果。
+function OwnershipCard() {
+  const sel = selection;
+  const phase = currentCoexPhase();
+  const skinId = (() => {
+    try { return document.documentElement.getAttribute(SKIN_ATTR) || ""; }
+    catch { return ""; }
+  })();
+  const skinTxt = sel.coexSkinActive ? (skinId ? ("已激活：" + skinId) : "已激活") : "未检测到";
+  const ctOn = (() => {
+    try { return document.documentElement.hasAttribute(CUSTOM_THEME_ATTR); } catch { return false; }
+  })();
+  const ownerBtn = (value, label, primary) => React.createElement("button", {
+    key: value,
+    type: "button",
+    className: "we-picker__font-chip" + ((sel.appearanceOwner || "plugin") === value ? " we-picker__font-chip--active" : "") + (primary ? " we-coex-owner-primary" : ""),
+    onClick: () => commitAppearanceOwner(value),
+    "aria-pressed": String((sel.appearanceOwner || "plugin") === value),
+    title: value === "plugin"
+      ? "本插件负责背景与主题外观（当前选择即此则维持现状）"
+      : "让位给皮肤中心：本插件停止渲染输出与全部主题覆写",
+  }, label);
+  return React.createElement("div", { className: "we-coex-owner", "data-we-coex": phase },
+    React.createElement("div", { className: "we-picker__row", style: { flexDirection: "column", alignItems: "stretch", gap: "6px" } },
+      React.createElement("span", { className: "we-picker__hint we-picker__label", style: { fontWeight: 600 } },
+        "外观归属（与 dsh-web-ui-all 二选一）"),
+      React.createElement("span", { className: "we-picker__hint" },
+        "皮肤中心：", skinTxt, ctOn ? "｜自定义主题：开启" : "",
+        phase === "yielding" ? "｜当前：让位过渡态（仅显示壁纸，配色交给皮肤）" : "",
+        phase === "idle" ? "｜当前：完全待机（由皮肤中心负责外观）" : "",
+        phase === "owning" && (sel.appearanceOwner === "skin")
+          ? "｜皮肤未激活期间由本插件临时接管外观" : ""),
+      (sel.appearanceOwner === "skin" && !sel.coexSkinActive)
+        ? React.createElement("span", { className: "we-picker__hint", style: { opacity: 0.85 } },
+            "你选择了「皮肤中心负责」，但当前没有激活的皮肤 —— 关闭期间页面由本插件临时接管。")
+        : null,
+      React.createElement("div", { style: { display: "flex", gap: "8px", flexWrap: "wrap", marginTop: "2px" } },
+        ownerBtn("plugin", "由本插件负责", true),
+        ownerBtn("skin", "由皮肤中心负责", false)),
+      React.createElement("label", { className: "we-picker__hint", style: { display: "flex", gap: "6px", alignItems: "center", marginTop: "4px", cursor: "pointer" } },
+        React.createElement("input", {
+          type: "checkbox",
+          checked: sel.reportBackdropCompat !== false,
+          onChange: (e) => { sel.reportBackdropCompat = e.target.checked; persistSelection(); updateCoex("flag"); },
+        }),
+        "向皮肤中心上报背景可见性契约（关掉可退回不可见状态）"),
+    ),
+  );
+}
+
 // ── Settings picker ─────────────────────────────────────────────────────────
 // `key` is only needed when a SliderRow sits inside a conditionally-rendered
 // ARRAY (the sidebar-glass group) — React requires keys there.
 function SliderRow(label, min, max, step, value, onInput, suffix, key) {
+  // rAF 合帧（C5，组合观察器场景加固）：拖动期间每帧只提交一次最新值。
+  // 此前 onInput 每 tick 都会 persistSelection + applyEffects + 全树 emit ×2；
+  // onChange（松手）总是同步收尾一次，保证最终值必然落盘/生效。
+  let coalescedVal = null;
+  let coalesceRaf = 0;
+  const commit = (v) => { coalesceRaf = 0; try { onInput(v); } catch { /* ignore */ } };
+  const scheduleCommit = (v) => {
+    coalescedVal = v;
+    if (coalesceRaf) return;
+    if (typeof window !== "undefined" && typeof window.requestAnimationFrame === "function") {
+      coalesceRaf = window.requestAnimationFrame(() => commit(coalescedVal));
+    } else {
+      commit(coalescedVal); // headless / 无计时器环境：保持原语义
+    }
+  };
   return React.createElement("div", { className: "we-picker__row we-picker__slider-row", key: key },
     React.createElement("span", { className: "we-picker__hint we-picker__label" }, label),
     React.createElement("input", {
@@ -1994,10 +2437,16 @@ function SliderRow(label, min, max, step, value, onInput, suffix, key) {
       style: { "--we-fill": Math.max(0, Math.min(100, ((Number(value) - min) / (max - min)) * 100)) + "%" },
       // The visible label is a <span> (not a <label>), so expose it to AT.
       "aria-label": label,
-      onInput: (e) => onInput(Number(e.target.value)),
+      onInput: (e) => scheduleCommit(Number(e.target.value)),
       // onChange stays as a final commit fallback (some engines only fire it
       // on release); onInput above is what makes the knob feedback instant.
-      onChange: (e) => onInput(Number(e.target.value)),
+      onChange: (e) => {
+        if (coalesceRaf && typeof window !== "undefined" && typeof window.cancelAnimationFrame === "function") {
+          window.cancelAnimationFrame(coalesceRaf);
+        }
+        coalesceRaf = 0;
+        commit(Number(e.target.value));
+      },
     }),
     React.createElement("span", { className: "we-picker__hint we-picker__value" }, suffix),
   );
@@ -2424,6 +2873,8 @@ function WallpaperPicker(props) {
       React.createElement("div", { className: "we-picker__section-head" },
         React.createElement("span", { className: "we-picker__section-label" }, "外观"),
       ),
+      // Coexistence v1：外观归属卡（二选一互斥的用户入口，见计划 §3.3）
+      React.createElement(OwnershipCard),
       React.createElement("div", { className: "we-picker__row we-picker__accent-row" },
         React.createElement("span", { className: "we-picker__hint we-picker__label" }, "配色"),
         ACCENT_PRESETS.map((hex) => React.createElement("button", {
@@ -2680,7 +3131,13 @@ function WallpaperPicker(props) {
       // window (same recipe as the repo panel), NOT the centred dark dialog that
       // the settings copy uses. The scrim is a transparent full-screen click
       // catcher (no dark dim/blur) so picking stays visually continuous.
-      React.createElement("div", { className: isRepoPanelCopy ? "we-repo-panel__modal-scrim" : "we-picker__modal-overlay", onClick: closePicker },
+      React.createElement("div", {
+        className: isRepoPanelCopy ? "we-repo-panel__modal-scrim" : "we-picker__modal-overlay",
+        onClick: closePicker,
+        // 插入即带标（T11 不变量）：portal 根挂进 body 的瞬间必须已带
+        // data-dsh-plugin，让 skin-center 的 surface-tagging 永远豁免本插件 UI。
+        ref: (el) => { if (el) stampPluginRoot(el); },
+      },
         React.createElement("div", {
           className: isRepoPanelCopy ? "we-picker__modal we-picker__modal--panel" : "we-picker__modal",
           "data-we-cards": sel.pickerLayout,
@@ -2689,6 +3146,7 @@ function WallpaperPicker(props) {
           "aria-label": "选择壁纸",
           onClick: (e) => e.stopPropagation(),
           onKeyDown: trapModalTab,
+          ref: (el) => { if (el) stampPluginRoot(el); },
         },
           React.createElement("div", { className: "we-picker__modal-head" },
             React.createElement("div", { className: "we-picker__modal-head-left" },
@@ -4649,7 +5107,8 @@ const CSS = `
      overlays). Fixed positioning from a body child is immune to ancestor
      transforms/backdrop-filters, which would otherwise trap it. ── */
   .we-picker__modal-overlay {
-    position: fixed; inset: 0; z-index: 1000;
+    position: fixed; inset: 0; z-index: 1005;
+    /* C4：原 1000 与 web-ui-all 详情覆盖层(1000)平手，+5 错开 */
     display: flex; align-items: center; justify-content: center;
     background: rgba(0, 0, 0, 0.55);
     -webkit-backdrop-filter: blur(3px);
@@ -4657,7 +5116,7 @@ const CSS = `
     animation: we-overlay-in var(--we-dur, 200ms) var(--we-ease, ease-out);
   }
   .we-picker__modal {
-    position: relative; z-index: 1001;
+    position: relative; z-index: 1006;
     width: min(760px, 92vw); max-height: 86vh;
     display: flex; flex-direction: column; gap: 10px;
     padding: 16px; border-radius: 14px;
@@ -4797,6 +5256,30 @@ const CSS = `
     outline: 2px solid var(--we-accent, #4f8cff);
     border-radius: 12px;
   }
+  /* Coexistence C4（移动端）：web-ui-all 的 compat shim 在 ≤768px 把侧栏做成
+     抽屉 —— 抽屉展开期间拉绳藏起，避免与抽屉/遮罩争夺注意力。上游不在场时
+     [data-dsh-frame] 永不命中，本规则自然失活（零成本兼容探测）。 */
+  @media (max-width: 768px) {
+    html[data-dsh-frame]:not([data-sidebar-collapsed]) .we-rope,
+    html[data-dsh-frame]:not([data-sidebar-collapsed]) .we-update-notice {
+      opacity: 0;
+      pointer-events: none;
+    }
+  }
+  /* Coexistence v1：外观归属卡（设置页 · 外观分区顶部，二选一互斥入口）。 */
+  .we-coex-owner {
+    border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));
+    border-radius: 10px;
+    padding: 10px 12px;
+    margin: 0 0 10px;
+    background: color-mix(in srgb, var(--we-accent, #4f8cff) 6%, transparent);
+  }
+  .we-coex-owner[data-we-coex="yielding"] {
+    border-color: color-mix(in srgb, #e6a23c 55%, var(--dsw-alias-border-l2, transparent));
+  }
+  .we-coex-owner[data-we-coex="idle"] {
+    opacity: 0.85;
+  }
   .we-rope--dragging { cursor: grabbing; }
   .we-rope--settle {
     transition:
@@ -4824,7 +5307,9 @@ const CSS = `
      immersive/kiosk-window users about the white flash and its one fix. High
      z-index so it sits above the chat; buttons reuse the flat picker style. */
   .we-update-notice {
-    position: fixed; left: 50%; bottom: 26px; z-index: 1100;
+    position: fixed; left: 50%; bottom: 26px; z-index: 1090;
+    /* Coexistence C4：原 1100 与 web-ui-all 移动端侧栏抽屉平手 —— 让位到
+       抽屉(1100)之下、其全屏遮罩(1050)之上，层序恒定不再依赖注入顺序。 */
     transform: translateX(-50%);
     width: min(600px, 92vw);
     box-sizing: border-box;
@@ -5038,6 +5523,8 @@ function apply(ctx) {
     ctx.effect(() => {
       const unsub = subscribe(syncLayers);
       const unsubEffects = subscribe(applyEffects);
+      // 双引擎卡跟随每次 emit 重估（url 由 loadInventory 异步解析后也要立即判定）
+      const unsubCoexCard = coexEnabled() ? subscribe(refreshDualEngineCard) : () => {};
       // Occlusion pause: re-apply the effective playing state whenever the
       // page hides/shows or the window loses/gains focus (see occlusionActive).
       // Fires syncLayers → play/pause on the video; decode drops to 0 while
@@ -5073,6 +5560,7 @@ function apply(ctx) {
         disposed = true;
         unsub();
         unsubEffects();
+        try { unsubCoexCard(); } catch { /* ignore */ }
         if (typeof window !== "undefined" && typeof window.removeEventListener === "function") {
           for (const t of ocListeners) window.removeEventListener(t, onOcclusionChange);
         }
@@ -5114,6 +5602,7 @@ function apply(ctx) {
       if (!host && document.body && typeof document.createElement === "function") {
         host = document.createElement("div");
         host.id = ROPE_DOCK_ID;
+        stampPluginRoot(host); // 插入即带标（T11 不变量）
         document.body.appendChild(host);
       }
       if (!host) return undefined;
@@ -5122,6 +5611,49 @@ function apply(ctx) {
       return () => {
         try { root.unmount(); } catch { /* already gone */ }
         if (host.parentNode) host.parentNode.removeChild(host);
+      };
+    });
+  }
+
+  // 4. Coexistence v1 observers（评审 §3.4 检测层）：属性级 MutationObserver
+  //    监听 skin-center 的三个状态位；storage 事件做同端多窗的 owner 最终一致。
+  if (ctx.effect && typeof document !== "undefined" &&
+      typeof MutationObserver === "function") {
+    ctx.effect(() => {
+      if (!coexEnabled()) return undefined;
+      updateCoex("boot");
+      const htmlObs = new MutationObserver(queueCoexEval);
+      const bodyObs = new MutationObserver(queueCoexEval);
+      try {
+        htmlObs.observe(document.documentElement, {
+          attributes: true,
+          attributeFilter: [SKIN_ATTR, CUSTOM_THEME_ATTR, WP_ACTIVE_REPORT_ATTR],
+        });
+        bodyObs.observe(document.body, { attributes: true, attributeFilter: [BACKDROP_REPORT_ATTR] });
+      } catch { /* document 未就绪等极端时序：退化为仅启动期一次求值 */ }
+      const onStorage = (e) => {
+        if (!e || e.key !== SETTINGS_KEY || e.storageArea !== localStorage) return;
+        try {
+          Object.assign(selection, sanitizeSettings(JSON.parse(e.newValue || "{}")));
+        } catch { /* 损坏缓存：忽略，保持现状 */ }
+        selection.hostLoaded = true;
+        updateCoex("storage");
+      };
+      let storageAdded = false;
+      if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+        window.addEventListener("storage", onStorage);
+        storageAdded = true;
+      }
+      return () => {
+        try { htmlObs.disconnect(); } catch { /* ignore */ }
+        try { bodyObs.disconnect(); } catch { /* ignore */ }
+        if (storageAdded && typeof window !== "undefined" && typeof window.removeEventListener === "function") {
+          window.removeEventListener("storage", onStorage);
+        }
+        writeCoexStateAttr(null);
+        setContractReports(false); // 只撤除自己置位的标记（所有权受控）
+        removeDualEngineCard();
+        lastNotifiedPhase = null;
       };
     });
   }

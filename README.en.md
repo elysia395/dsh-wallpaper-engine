@@ -466,6 +466,23 @@ without `backdrop-filter` fall back to a near-opaque fill):
 
 ![dsh-better-sidebar compatibility](docs/images/better-sidebar.png)
 
+## Coexistence with dsh-web-ui-all / skin-center (v0.7.0)
+
+Running alongside [`@linxin666/dsh-web-ui-all`](https://github.com/zhu1090093659/dsh-web-ui), everything keeps working — but **theming + wallpaper are exclusive**: exactly one owner is active at a time, chosen in the new **Appearance ownership card** (top of the plugin's 外观 section):
+
+| Owner | Behavior |
+|---|---|
+| **This plugin** (default) | Full experience: wallpaper + liquid glass + accent + sidebar glass + typography. If a skin-center skin is currently active, this plugin automatically enters a **yielding phase**: your wallpaper stays visible while ALL theming yields to the skin; a two-step guide helps you turn the skin off, after which takeover is automatic. |
+| **Skin center** | This plugin goes **fully idle**: the wallpaper layer unmounts and every style override is stripped. Switch back anytime from the same card. |
+
+Notes:
+
+- The exclusivity is **continuously enforced** by an attribute-driven state machine (`html[data-dsh-skin]` / `data-dsh-custom-theme` detection) — no manual babysitting;
+- All other dsh-web-ui-all features (task board, git graph, pet, remote mobile UI, SSH, perf stats, market) are untouched;
+- If both wallpaper engines would run at once, a **blocking choice dialog** forces picking one;
+- The "report backdrop contract" checkbox (default on) is a one-click escape hatch that stops writing `data-dsh-wallpaper-active` / `data-dsh-backdrop-active`;
+- Non-goals: skin decoration layers/gallery replacements, and programmatic control of the other plugin (its hooks expose no API) — closing a skin always happens in skin-center's own settings.
+
 ## Limitations
 
 - Application wallpapers cannot be embedded and are hidden from the thumbnail

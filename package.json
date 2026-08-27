@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-wallpaper-engine",
-  "version": "0.6.8",
+  "version": "0.7.0",
   "description": "Wallpaper Engine backgrounds for the DSH web GUI: render your local Wallpaper Engine Video/Web wallpapers behind the chat, Scene wallpapers as extracted static frames, with iOS-style liquid glass, adjustable scrim/border/blur, and a customizable accent color + glass transparency for the whole settings window.",
   "type": "module",
   "main": "lib/index.js",
@@ -36,6 +36,7 @@
   "files": [
     "lib/index.js",
     "lib/client.js",
+    "CHANGELOG.md",
     "lib/pkg-extract.js",
     "lib/scene-renderer.js",
     "lib/scene-render-worker.mjs",
@@ -66,7 +67,7 @@
   "license": "MIT",
   "scripts": {
     "build": "node scripts/build-client.mjs",
-    "verify": "node scripts/verify-client.mjs && node scripts/verify-transcode-state.mjs",
+    "verify": "node scripts/verify-client.mjs && node scripts/verify-transcode-state.mjs && node scripts/verify-coexist.mjs",
     "prepare": "node scripts/prepare.mjs"
   },
   "peerDependencies": {
