@@ -222,3 +222,67 @@ scene.json 对象 {image, origin, size, parent, scale, angles}
   锚点矩阵平移（按骨骼旋角旋转）+ 自身 origin。
 - **逆向方法**：exe 字符串搜索（MDAT/attachment）→ 反汇编解析函数 →
   文件名匹配 MDL 锚点名字 → 渲染覆盖比例数值实验选语义变体。
+
+---
+
+## 9. 官方"10 秒内看到动画"的架构答案（性能差距根因）
+
+**结论：官方不做任何预渲染。场景动画是 GPU 实时渲染（D3D11，vsync 驱动，
+每帧 ~16ms），首帧即动；DSH 是 CPU 逐像素串行，预渲染 240 帧（960×540 实测
+~1s/帧 → 4 分钟）才有 APNG/MP4。差距 = GPU 并行 vs CPU 串行，不是算法可补。**
+
+- **官方渲染宿主**：wallpaper64.exe 导入 `d3d11.dll`/`dcomp`/`dwmapi`
+  （DirectX 11 + Desktop Window Manager 合成），字符串 `D3DCompile`/
+  `vs_5_0`/`ps_5_0`/`cbuffer`/`float4x4`/`Bone`/`Morph`/`Bloom`。
+- **实时帧循环**（官方目录 `scene-renderer-analysis.md` §4.9 时序推演）：
+  ```
+  V8 update()（脚本，engine.frametime）→ 场景图 TRS/动画/粒子 CPU 更新
+  → 相机（路径插值+视差+抖动）→ MVP 常量更新
+  → 阴影 pass（_rt_shadowAtlas）→ 主 pass（各物体按材质渲染，含粒子）
+  → 特效 pass 链（FBO 图，bloom/模糊等）→ combine（色调映射+伽马）
+  → Present（交换链）
+  ```
+  每帧完整渲染并呈现，无"先渲染完再播放"概念。
+- **启动加速 = 预编译 shader blob**：每个壁纸 pkg 自带
+  `shaders/blobsSM40/*.dxs`（SHA-1 命名，1-8KB/个，DX SM40 字节码），
+  引擎字符串 `#define HLSL_SM40 1`/`blobsSM40/`/`.dxs` + 错误串
+  `d3dcompiler_47.dll is missing` → **运行时加载预编译 blob 直接
+  CreateVertexShader/CreatePixelShader，D3DCompile 仅作缺失时的 fallback**。
+  启动不编译 shader，只读盘 + D3D 设备初始化 → 首帧秒级。
+- **DSH 差距量化**：官方 GPU 每帧 16ms（3840×2160 全分辨率）；
+  DSH CPU 960×540 ~1s/帧（3554161528 实测）→ 相同 30s 动画
+  官方实时播放 30s 完成，DSH 预渲染 240 帧需 4 分钟才开始播。
+  优化方向（若需接近）：CPU 多线程分块光栅化 / WASM SIMD / 降采样
+  / 关键帧稀疏采样，无法达到 GPU 量级。
+
+---
+
+## 10. GPU 加速可行性 spike（webgpu@0.4.0 / Dawn，实测通过）
+
+**结论：跨平台 GPU 渲染可行且已验证。Node 用 `webgpu` npm 包（Dawn 实现），
+RTX 4060 上 D3D12 后端 960×540 计算着色器 0.31ms/帧 vs CPU 逐像素 6.58ms/帧
+= 21.1x 加速（内容验证正确：渐变+正弦扰动像素级正确）。**
+
+- **部署**：`webgpu@0.4.0` tarball 自带全平台 `dist/<platform>-<arch>.dawn.node`
+  预编译二进制（win32-x64/linux-x64/linux-arm64/darwin-universal + d3dcompiler_47.dll），
+  postinstall 仅处理 macOS quarantine（xattr），**Windows/Linux 无需脚本** →
+  可走插件现有 ffmpeg 三档资产供给模式（显式/自动下载/PATH）跨平台分发。
+- **初始化**：`import { create, globals } from 'webgpu'; Object.assign(globalThis, globals);
+  const navigator = { gpu: create(['backend=d3d12']) };` —— backend 可显式
+  d3d12/metal/vulkan/opengl，自动选择时 Windows→D3D12、macOS→Metal、Linux→Vulkan。
+  本机实测适配器：`nvidia-geforce-rtx-4060-laptop-gpu`（D3D12 driver 32.0.15.9579），
+  maxTextureDimension2D=8192，maxComputeInvocationsPerWorkgroup=256。
+- **性能（960×540, 30 帧均值）**：
+  - 渐变+正弦（模拟逐像素光栅化）：GPU 0.31ms/帧 vs CPU 6.58ms/帧 = **21.1x**
+  - 模拟效果负载（mix/hash/clamp，接近 custom_user_texture）：隔离脚本单 pipeline
+    正常（像素内容丰富），同 device 双 pipeline 亦正常 → 生产形态（单实例多 pipeline）
+    可用。
+- **已知边界（Dawn 0.4.0）**：同一进程二次 `create()`（第二 GPU 实例）native 崩溃
+  （Dawn 单例限制 → 生产每进程一个实例即可）；主测试 unmap 后立即建新 pipeline
+  有 native 崩溃（dual-pipeline 无 unmap 则正常 → 生产避免 unmap 后重建，用
+  独立 buffer 或延迟销毁）。这些是 Dawn 边界，非用法错误。
+- **落地路径**（若实施）：`lib/we-renderer/glsl/transpile.js` 增加 GLSL→WGSL
+  输出分支（现转 JS，改目标语言）；`canvas.js`→GPU 纹理+readback；core render
+  循环→逐对象 draw call；无 GPU 完整回退 CPU（现有管线保留）。
+
+---

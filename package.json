@@ -82,7 +82,8 @@
     }
   },
   "dependencies": {
+    "@shaderfrog/glsl-parser": "^7.0.1",
     "jpeg-js": "^0.4.4",
-    "@shaderfrog/glsl-parser": "^7.0.1"
+    "supreium-headless-gl": "^8.3.0"
   }
 }
