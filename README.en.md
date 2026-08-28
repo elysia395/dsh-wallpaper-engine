@@ -338,6 +338,17 @@ The **自定义壁纸** section uploads local images (JPG / PNG) or videos (MP4)
 - **Management**: each upload can be **移除** (confirm dialog, deletes the local file); uploaded wallpapers also support hide/restore, playback speed, and flip.
 - **Deduplication**: re-uploading an identical file is detected by content (SHA-256) and returns the existing entry — no duplicate copies pile up in the library.
 
+### Loose wallpaper source (Linux default: `~/Pictures/WallpaperEngine`)
+
+Wallpaper Engine is Windows-only, so a native Linux host has no Steam/WE install to scan. The plugin therefore defaults, on Linux, to treating **`$HOME/Pictures/WallpaperEngine`** as a **read-only loose wallpaper source**, recognizing two kinds of content:
+
+- **Images / videos** (listed directly): JPG / JPEG / PNG / GIF / WebP / APNG and MP4 / WebM / MKV / AVI / MOV, served through the same `/media` + `/preview` pipeline as custom uploads;
+- **WE scene-project folders** (the whole folder counts as one scene wallpaper): a directory containing `project.json` plus `scene.pkg` / `scene.json` (i.e. a raw Steam-workshop scene directory) is recognized as a scene — its title / content rating / preview are read from `project.json`, and it renders through the existing `scene-frame` / `scene-video` / `scene-runtime` pipeline, the same chain installed WE scenes use.
+
+- **Read-only**: nothing is ever written to or deleted from that directory, and the picker shows no **移除** button — loose wallpapers use the `ls-` id prefix (distinct from uploads' `up-`), so the client's upload-management/deletion logic never touches them.
+- **Configuration**: override with the `DSH_WE_LOOSE_DIR` env var (comma/semicolon-separated dirs, `~` allowed) on any platform; once set, Linux no longer falls back to `~/Pictures/WallpaperEngine`. Point it at a nonexistent directory to disable the source entirely.
+- **Scanning**: bounded recursion into subfolders (max depth 4), skips hidden files/dirs and symlinks, capped at 3000 entries; a recognized scene project counts as a single entry (its textures / preview / shaders are not enumerated apart); ids are path-derived SHA-256 (`ls-<hash>`), stable across restarts.
+
 ### Automatic rotation (轮播列表)
 
 Rotation runs over **user-defined carousel lists** (轮播列表). Create any number of lists with **新建**, pick Video/Web wallpapers into each from the inventory, give each list its own switch interval (1, 5, 10, 30, 60 or 120 minutes) and order (顺序/随机), then enable **自动轮转** on the list you want active. Lists are persisted in your browser's `localStorage` and are fully client-side — rotation never depends on Wallpaper Engine's own `config.json` playlist paths.
@@ -438,6 +449,7 @@ files** (in the directory you chose) and `~/.dsh-wallpaper-engine/config.json`
 | `DSH_WE_FFMPEG_URL` | replaces the auto-download source (self-hosted mirror / proxy) |
 | `DSH_WE_CACHE_DIR` | overrides the cache root (transcode cache / scene-frame cache) |
 | `DSH_WE_STEAM_ROOT` | explicit Steam root(s) (comma/semicolon separated, Windows or /mnt paths; fallback when registry/auto-detection misses) |
+| `DSH_WE_LOOSE_DIR` | loose wallpaper source dir(s) (comma/semicolon separated, `~` allowed); Linux defaults to `$HOME/Pictures/WallpaperEngine` when unset, point at a nonexistent dir to disable |
 
 ## dsh-better-sidebar compatibility
 

@@ -242,6 +242,17 @@ dsh plugin --profile web add link:./dsh-wallpaper-engine
 - **管理**：已上传列表可单独**移除**（二次确认后删除本地文件）；上传的壁纸同样支持隐藏 / 恢复、倍速与翻转。
 - **重复去重**：重复上传同一文件会自动识别（按内容校验），直接选择已有的那张，不会在仓库里堆积副本。
 
+### 松散壁纸源（Linux 默认 `~/Pictures`）
+
+Wallpaper Engine 是 Windows 独占软件，原生 Linux 主机没有 Steam/WE 安装可供扫描。为此插件在 Linux 上默认把 **`$HOME/Pictures/WallpaperEngine`** 作为**只读的松散壁纸源**，识别两种内容：
+
+- **图片 / 视频**（直接列出）：JPG / JPEG / PNG / GIF / WebP / APNG，MP4 / WebM / MKV / AVI / MOV，走与自定义壁纸相同的 `/media`、`/preview` 管道；
+- **WE 场景项目文件夹**（整体识别为一个场景壁纸）：目录含 `project.json` 且带 `scene.pkg` / `scene.json`（即从 Steam 工坊下载的原始场景目录）→ 读取 `project.json` 的标题 / 分级 / 预览，并通过现有的 `scene-frame` / `scene-video` / `scene-runtime` 管线输出完整场景帧，与安装版 WE 场景同一套渲染链路。
+
+- **只读**：插件不会往该目录写入或删除任何文件，选择器里也没有「移除」按钮——松散壁纸的 id 使用 `ls-` 前缀，与上传的 `up-` 前缀区分，客户端的管理/删除逻辑不会触碰它们。
+- **配置**：`DSH_WE_LOOSE_DIR` 环境变量可覆盖（逗号 / 分号分隔多个目录，支持 `~`），在任意平台生效；一旦设置，Linux 不再使用 `~/Pictures/WallpaperEngine` 默认值。把该变量指向一个不存在的目录即可完全关闭此功能。
+- **扫描**：有界递归子目录（最多 4 层），跳过隐藏文件 / 目录与符号链接，单次上限 3000 个条目；被识别的场景项目整个目录计为 1 个条目（不会把内部的纹理 / preview / shaders 单独散列）；id 按路径 SHA-256 生成（`ls-<hash>`），稳定、重启不重复。
+
 ### 自动轮转（轮播列表）
 
 轮转基于**自定义轮播列表**（轮播列表）。用 **新建** 可以创建任意多个列表，从库存里勾选 Video/Web 壁纸加入每个列表，并为每个列表单独设置**切换间隔**（1、5、10、30、60 或 120 分钟）和**播放顺序**（顺序/随机），勾选 **自动轮转** 后只在该列表内循环。列表保存在浏览器 `localStorage`，完全在客户端维护——轮转不再依赖 Wallpaper Engine 自己的 `config.json` 播放列表路径。
@@ -318,6 +329,7 @@ dsh plugin --profile web add link:./dsh-wallpaper-engine
 | `DSH_WE_FFMPEG_URL` | 替换自动下载源（自建镜像 / 代理加速） |
 | `DSH_WE_CACHE_DIR` | 覆盖缓存根目录（抽帧转码缓存 / 场景静态帧缓存） |
 | `DSH_WE_STEAM_ROOT` | 显式指定 Steam 根目录（逗号/分号分隔，Windows 或 `/mnt` 路径；注册表/自动探测失效时的兜底） |
+| `DSH_WE_LOOSE_DIR` | 松散壁纸源目录（逗号/分号分隔，支持 `~`）；未设置时 Linux 默认 `$HOME/Pictures/WallpaperEngine`，指向不存在的目录可关闭 |
 
 ## 与 dsh-better-sidebar 的兼容适配
 

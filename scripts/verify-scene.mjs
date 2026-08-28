@@ -28,6 +28,10 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 // such restriction).
 const TEST_CACHE_DIR = join(root, '.test-cache', 'frames');
 process.env.DSH_WE_CACHE_DIR = TEST_CACHE_DIR;
+// Keep the loose-source default (~/Pictures on Linux) out of this hermetic
+// suite: point it at a directory that cannot exist, so no host Pictures folder
+// is ever scanned during tests.
+process.env.DSH_WE_LOOSE_DIR = join(root, '.test-cache', 'no-such-loose-dir');
 const pkgExtract = await import(pathToFileURL(resolve(root, 'lib', 'pkg-extract.js')).href);
 
 let passed = 0;
