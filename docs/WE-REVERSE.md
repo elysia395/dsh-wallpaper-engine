@@ -222,3 +222,56 @@ scene.json 对象 {image, origin, size, parent, scale, angles}
   锚点矩阵平移（按骨骼旋角旋转）+ 自身 origin。
 - **逆向方法**：exe 字符串搜索（MDAT/attachment）→ 反汇编解析函数 →
   文件名匹配 MDL 锚点名字 → 渲染覆盖比例数值实验选语义变体。
+
+---
+
+## 9. GL 移植 spike 实证（test/scene-gl-spike，3295448069 全效果场景）
+
+以 GL（WebGL2，无预处理直接编译 pkg 官方 ES 1.00 shader）与 CPU 渲染器逐点对
+比（MAD 指标 + 效果隔离变体目录判别法）得出的官方语义裁决：
+
+### 9.1 v 轴方向 = D3D y-down（spike 最大坑）
+- 官方 shader 血统是 HLSL/D3D（`mul(v,m)` 行向量、`texSample2D` 宏）→ **v=0
+  在图顶、纹理行 0 = 图顶**（与 GL 默认 flipY 约定相反）。
+- GL 全链路 y-down 做法：纹理**不翻转**上传（tex 行 0 = PNG 行 0 = 图顶）；
+  quad UV 顶边 v=0；效果 pass 的 MVP **y 行取负**（图顶 → NDC−1 → FBO tex 行 0，
+  链内一致）；present pass MVP 正常（图顶 → NDC+1 = 屏幕上）。
+- 反例：flipY 上传会让 waterripple.frag 的 `frac(v + g_Time·…)` 时间相位镜像，
+  位移场整体翻倒（MAD 11+ 无法收敛）。
+
+### 9.2 g_TextureNResolution 语义（lwe 可考 + 实测排除其余约定）
+- **lwe（Almamu/linux-wallpaperengine）`CTexture::setupResolution` =
+  (mip0.w, mip0.h, header.w, header.h)**。绝大多数纹理 header==mip0 → zw/xy=1。
+- 判别实验①（效果隔离 MAD）：约定 (a) (w,h,1/w,1/h) 与 (b) (objW,objH,texW,texH)
+  都会让 iris mask 缩放变成近似 no-op（违背作者画眼部 mask 的意图）→ 排除；
+  lwe 约定下 GL vs 修正后 CPU MAD 2.88@960×540 / **1.25@1920×1080**（≈滤波地板）。
+- **waterripple.vert 的 MASK UV 用 g_Texture2Resolution（normal 槽分辨率）缩放**
+  ——lwe 约定下该缩放=1 → mask UV=纯 uv（作者意图：mask 与内容同坐标系，头部
+  黑团=保护区）。旧 CPU 实现 maskW/texW(=0.5) 是近似错误（已修，见 9.5）。
+
+### 9.3 ES 1.00 严格性：官方 shader 需 int 字面量修正
+- 严格 GLSL ES 1.00 禁 int→float 隐式转换，ANGLE/SwiftShader 拒绝官方文本两处：
+  `* 2 - 1`（waterripple.frag n1/n2 解码）、`smoothstep(1 - g_Rough, 1,`（iris.vert）。
+  WE 官方编译器宽松放行 → **assembleGLSL 需定向 regex fixup**（`* 2 - 1` →
+  `* 2.0 - 1.0` 等）。"唯一必需宏是 texSample2D" 的论断不成立。
+
+### 9.4 angles：弧度直读 + 屏幕空间旋转语义
+- **scene.json `angles` 是弧度**（lwe CImage.cpp:1097 注释明示 + glm::rotate(−angle,z)；
+  CPU 渲染器一致按弧度用）。
+- **正角 = 屏幕逆时针**（反旋拟合实测：GL 顶点空间需 r=−rad）。
+- **旋转必须像素空间刚体**：NDC/本地坐标各向异性（16:9 画布），直接 rotZ 会把
+  30° 压成 17.6°（tan⁻¹((h/w)·tanθ) 实测吻合）。正确做法 S⁻¹·RotZ·S（S=diag(dw,dh)）。
+- lwe 未做像素空间修正（其正交投影处理不同），此点为 DSH 特有需求。
+
+### 9.5 spike 顺带实锤的 CPU 渲染器 bug（均已修）
+1. **Canvas.clear 无视参数**（canvas.js）——恒填 (0,0,0,0)，scene.json clearcolor
+   从未生效；未覆盖区域透明黑而非场景底色（全幅场景无感，旋转/留边场景出错）。
+2. **waterripple mask UV u·0.5**——见 9.2（修后头部不再被波纹穿透，符合作者意图）。
+3. **waterripple 法线 z 未解码**——`nz = n1[2]` 原始 [0,1] 通道当 [-1,1] 用；
+   官方为 `n1.z = n1.z×2−1`（本场景 z≈1 数值影响≈0，但语义修正）。
+4. **iris mask 未采样**（更早会话已修）：官方 iris.vert 用 mask 纹理圈定生效区。
+
+### 9.6 纹理环绕模式
+- 官方 waterripple/normal/mask 均为 REPEAT（位移采样坐标本就跨 [0,1]）。
+- 主图（g_Texture0）：CPU 对位移后 UV clamp；判别实验⑤实测 REPEAT vs CLAMP
+  差异仅上下边缘 1-2px 带 → **跟 CPU 用 CLAMP**（无可考官方证据时跟已验收视觉）。
