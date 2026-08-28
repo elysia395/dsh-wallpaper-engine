@@ -387,3 +387,50 @@ mad.mjs：零依赖复用 decodePngBuffer，16 行分段 MAD 定位差异区。
 
 **E2E 修出的 client 接线 bug（详见主计划 Phase 1 回填）**：ready 类幂等重挂 /
 trySceneGL 补 emit / onError 清诊断钩子。
+
+## §16 sf35：卡提希亚 shake 锯齿跳变 + 真机 FBO 反馈环（0.7.1 候选）
+
+用户报告（鸣潮-卡提希亚 3478544779，GL 实时路径）：人物应上下缓慢浮动，实际每
+~1.6s 跳变一次（"快速闪动"）；两侧植物应缓慢左右变形，实际完全不动。headless
+SwiftShader 上逐帧分析复现前者（每 π/2/speed 一帧 17-21% 像素突变）但后者正常
+——真机 GPU（Intel iGPU）症状与 headless 相反。
+
+**根因 1 — shake.frag 旧版锯齿数学**：pkg 捆绑的 2023 快照 NOISE=0 路径
+`offset = sin(frac(time/π/2)·π/2)`，相位被裁到 [0,π/2)，每个 π/2 段边界 sin 从
+~1 跳回 0（数值模拟：归一化跳变 1.13 ≈ 1080p 屏 ~2.7px 瞬移）。官方后续版本已
+修复（Steam 讨论帖 "Shake shader jittering"，WE 作者 Biohazard 确认的最终形态：
+`frac(T·speed/6.28)·6.28` 时间切片 + 完整正弦 —— sin(0)=sin(2π) 回绕连续）；
+官方翻译文件新增 ui_editor_properties_shake_phase 亦证实现行 shader ≠ 旧快照。
+修复：`patchShakeFrag`（preprocess.js）检测旧特征 → scene-shader 路由对 shake
+应用 2π 连续公式；CPU shake.js 同步同款公式（6.28s 周期平滑往返，振幅
+0.996·amp²·flowMask ≈ ±3px@1080p）。
+
+**根因 2 — CPU shake 单位/舍入**（§13 仲裁项闭环）：UV 位移被当像素加（缺
+×w/×h）→ round 恒等 → shake 从不生效；且 u·w = x+0.5 恰在 Math.round 边界，
+offset 符号翻转（t≈0.123s）时被 flow-mask 区域整块 0↔1px 跳变 = 每循环闪一帧
+（实测 1080p 48 帧中 f003 单帧 13.8%）。修复：UV 位移 + `_texSample` 双线性
+采样（与其他位移效果一致，连续无跳变）。
+
+**根因 3 — FBO 反馈环（真机专属）**：renderObjectChain 的
+`target = i===n-1 ? fboB : fboA` 在 3 效果链时中间 pass（foliagesway）读写同一
+FBO 纹理 = GL 规范禁止的 feedback loop。SwiftShader 读改写容错掩盖了它（全部
+E2E 均在 headless 跑，从未暴露）；真机 tile GPU 上未定义行为 → 植物摆动失效。
+卡提希亚是唯一单对象 3 效果链场景（waterwaves→foliagesway→shake）。修复：
+`target = (i % 2 === 0) ? fboA : fboB` 逐 pass 交替（n=1/2 与旧逻辑等价）。
+
+**配套**：效果 mask UV 缩放统一改为纹理自身 header/mip0 比（≡1 全幅；旧
+mask/object 尺寸比在渲染尺寸 ≠ mask 尺寸时平铺采样错区域 —— §13 仲裁项闭环，
+涉及 foliagesway/waterwaves/shake/swing/opacity/filmgrain/blur/depthparallax）。
+缓存版本 san_sf34→sf35 / sf34→sf35（输出变化全量失效重渲）；SCENE_GL_ENGINE
+/dsh-we-scene-gl/3 + _WE_GL_VERSION=3（旧客户端自动回退 mp4）。
+
+**验证**（scripts/verify-shake-fix.mjs + test/scene-gl-e2e/dbg-motion*.html）：
+- 公式断言：新公式 40s 最大相邻跳变 0.0036（视觉 ≈0.06px）vs 旧 1.128（2.7px）；
+- CPU 1080p 24fps 48 帧：最大帧间变化 0.92%（旧 13.8% 闪帧消失）、植物区 2s
+  变化 27.15%（摆动恢复）；
+- GL headless（engine/3）：100 帧零孤立脉冲、人物 mean 11.3% 连续、植物 mean
+  10-11%（修复前 <1.5%）；质心轨迹人物 ±1.6px/6.28s、植物 ±4.7px 左右摆动；
+- GL headed 真机 GPU（Intel iGPU, DISPLAY=:1）：page.screenshot 序列人物
+  14-18% + 植物 6-25% 持续运动，250ms 细间隔 6-16% 平滑渐变无跳变。
+- 陷阱记录：真机 GPU 上 canvas getImageData/drawImage 回读会让 rAF 循环在 ~2s
+  后停摆（分析页伪影，非渲染器 bug）——真机验证必须用 page.screenshot。

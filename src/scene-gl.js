@@ -79,7 +79,7 @@ void main(){ vec4 c = texture2D(u_Tex, v_UV); gl_FragColor = vec4(c.rgb, c.a * u
 `;
 
 const _WE_GL_ENGINE = 'dsh-we-scene-gl/1';
-const _WE_GL_VERSION = 1;
+const _WE_GL_VERSION = 3; // sf35: shake 2π 数学 + FBO 交替 (与 host SCENE_GL_ENGINE 同步)
 
 /**
  * 创建场景 GL 渲染器。
@@ -394,9 +394,12 @@ function createSceneGLRenderer(opts) {
     if (!res) return;
     const mvpFx = _weGLQuadMVP(geo.FW, geo.FH, 0, 0, geo.FW, geo.FH, true);
     let input = res.mainTexEntry;
-    const n = res.programs.length;
     res.programs.forEach((p, i) => {
-      const target = i === n - 1 ? res.fboB : res.fboA;
+      // sf35: FBO 逐 pass 交替（ping-pong）。旧逻辑 i===n-1?fboB:fboA 在 n≥3 时
+      // 中间 pass 读写同一 FBO 纹理 = GL 规范禁止的 feedback loop（真机 tile GPU
+      // 上未定义行为 → 3 效果链的中间效果错乱; SwiftShader 读改写容错掩盖了它,
+      // E2E 从未暴露）。n=1/2 时与旧逻辑逐位等价（02 场景回归不受影响）。
+      const target = (i % 2 === 0) ? res.fboA : res.fboB;
       gl.bindFramebuffer(gl.FRAMEBUFFER, target.fbo);
       gl.viewport(0, 0, target.w, target.h);
       gl.disable(gl.BLEND); // 效果 FBO pass 禁 BLEND（附录 §3）
