@@ -388,6 +388,124 @@ mad.mjs：零依赖复用 decodePngBuffer，16 行分段 MAD 定位差异区。
 **E2E 修出的 client 接线 bug（详见主计划 Phase 1 回填）**：ready 类幂等重挂 /
 trySceneGL 补 emit / onError 清诊断钩子。
 
+## 13. Phase 1.5 纪要：gate 放宽 + 三新效果（waterwaves/foliagesway/shake）
+
+触发：用户新增 6 张场景壁纸全部回退 mp4。逐张 gate 判定结论：**5 张正确回退**
+（堂主美如画 3264258426 = 粒子发射器；胡桃-窗前 3427824116 = 5 个 workshop 粒子对象；
+卡提希娅 3593194513 = Simple_Audio_Bars/blurprecise/solid 19 对象；达妮娅 3735447194 =
+lens_flare_sun/blurprecise/solid/cameraparallax 42 对象；窗旁の伊蕾娜 3113554287 =
+workshop 自定义效果）；**1 张可解锁**：鸣潮-卡提希亚 3478544779（单 image 对象 +
+waterwaves/foliagesway/shake 全默认常量）。
+
+**gate 放宽（CPU parity 依据，均已读码确认）**：
+- `general.hdr` 单独出现不再拒绝：hdr 仅 bloom 管线读取，bloom 已先行拒绝 → no-op。
+- `cameraparallax` 不再拒绝：仅鼠标驱动（parallaxDisp≠0 才位移），CPU mp4/静态帧恒
+  静止 → GL 忽略即 parity。
+- `eye` 透传（meta camera.static/eye）：image-only 场景 = _viewShift x 平移
+  （-eye.x×ps，y 恒忽略，满幅背景 size≥ortho−1 豁免，CPU camera.js:276）。
+- combo 门禁泛化：全效果 PERSPECTIVE=1 拒；waterwaves DUALWAVES≠1 拒；
+  foliagesway MODE≠1 拒（顶点模式需网格细分）；shake AUDIOPROCESSING≠0 拒。
+- objects:N 保持拒绝（N>1 场景全部另有粒子/workshop/solid 阻塞，本轮无收益）。
+
+**修出的真 bug**：
+1. **parseMetaGL 嵌套花括号截断**（lib/we-renderer/glsl/preprocess.js）：combo 元注释
+   可含嵌套对象（`"options":{"Vertex":1,"UV":0}`），非贪婪正则首个 `}` 截断 →
+   JSON.parse 静默失败 → MODE/NOISE/DIRECTION 等 combo 丢失 → 客户端 #define 缺失 →
+   `#if MODE` 编译错。修复 = readBalancedJson 平衡扫描（字符串字面量感知）。
+   CPU parseMeta 同源 bug 未修（stock 效果走手写 JS 不受影响，最小改动）。
+2. **uniformsFrag 跨阶段语义冲突**：同名 uniform 跨阶段 material/default 可不同
+   （foliagesway g_Speed：vert=speed/1，frag=speeduv/5；g_Phase：vert=0，frag=0.5）。
+   GL 链接器同名合一位置 → 喂值必须按片元语义。路由加 `uniformsFrag`（片元自有表），
+   运行时 uniformsFrag 优先。waterripple/iris 无冲突（已验证 02 不受影响）。
+3. **FBO hw/hh 缺失**：makeFBO 未带 hw/hh → 链式效果 slot0 resolution =
+   [w,h,undefined,undefined] → uniform4fv NaN（foliagesway.vert aspect 崩坏）。
+   02 未踩中只因 waterripple/iris 不读 slot0 resolution。修复 = hw:w, hh:h。
+4. **flowmask 空槽回退中灰非白**：官方默认 util/noflow = 中心灰（(0.498−0.498)×2≈0
+   无位移）；CPU 无 flow 纹理时 fmx=fmy=0；白回退会被解读为 +1.004 全图位移。
+   回退按 textures 表 mode 分发：flowmask→(127,127,255)，其余→白。
+5. **shake.vert 隐式 common.h**：官方引擎隐式注入 mul 等公共函数；scene-shader 路由
+   在缺 WE_COMMON_H_MIN 守卫标记时前置补 common.h stub。
+
+**E2E 验收（headless SwiftShader 4K 链，rAF 同帧取 (像素,lastT)）**：
+- 基座（无效果）4K MAD **0.000**（1:1 采样逐像素一致，过滤差异假设排除）。
+- 单效果 4K MAD：waterwaves 0.744 / foliagesway 0.828 / shake 2.154（vs 官方语义 CPU，
+  见下）——亚像素 sin/pow 相位 + NEAREST(CPU)vsLINEAR(GL) 残差，边缘局部化（热图确认）。
+- 全链 4K MAD **2.58**（vs 官方语义 CPU）；GUI 真机 GL_RUN/无 mp4/0 scene-anim 请求。
+- 02 场景回归 1080p MAD 1.367（基线 1.266 同档，阈值 ≤2）；回归三件套与基线一致。
+
+**CPU 渲染器新发现的官方语义偏差（已回滚，待用户仲裁，不在本轮改动）**：
+- **shake 位移单位**：CPU 把 UV 空间 offset（amp²≤0.0064）直接当像素加（缺 ×w/×h），
+  任何分辨率下 round 后 = 恒等 → mp4 里 shake 从未生效。官方 shader = UV 空间位移
+  （strength 0.08 → 4K 下 ±14px）。修复后 CPU 与 GL MAD 5.17→2.15。
+- **shake/waterripple 等 mask UV 缩放**：CPU mSx=mask.w/object.w（采样 mask 左半），
+  官方 = mask 自身 header/mip0 比（无 mip → 1 全幅）。02 未暴露因 mask 内容平缓。
+- 与既有两项（canvas.clear / waterripple mask 纯 u）合并为同一仲裁清单。
+
+**遗留不一致（文档承诺）**：本机无 WE 安装 → util 全局纹理（noise/noflow 等）走
+白/中灰兜底，与 CPU 已验收 mp4 语义一致；Windows 有 WE 安装时 CPU 用真 noise，
+GL 暂不一致（host scene-resource 未服务 WE 全局 assets 目录）。
+
+## 14. 0.6.8 发布事故：漏打包 scene-script-apis.js（生产三症状根因）
+
+症状（生产 0.6.8）：多对象木偶场景静态帧图层错乱 / scene-anim 卡 0% / 应用后静止。
+根因：`package.json` files 白名单漏 `lib/scene-script-apis.js`（scene-scripts.js 的依赖）
+→ tarball 安装后 `SceneRenderer` import 链 ERR_MODULE_NOT_FOUND → scene-frame 回退
+extractSceneMainImage 近似合成（cropoffset 处理与官方"忽略"语义相反，木偶部件错位）、
+scene-anim worker 启动即崩（422 + 残留 0/N 进度文件 → 客户端永远显示 0%）。
+dev 全程无感因为 link: 直挂源码树，文件物理存在——**打包完整性只有 tarball 安装才暴露**。
+
+修复（0.6.9）：files 补 `lib/scene-script-apis.js`；新增 `scripts/verify-package-files.mjs`
+（import 图 vs files 白名单，54 文件全覆盖断言）接入 `npm run verify`；scene-frame 缓存键
+sf33→sf34 使事故期坏帧一次性失效。验证：tarball 解包 + 链接依赖后直接渲染达妮娅 OK；
+dev 实例 sf34 路由实测图层正确。
+
+附带发现（未改，记录备查）：插件 config/cache 目录是 homedir 固定的 `~/.dsh-wallpaper-engine/`
+——dev 与生产 profile 共享，dev 渲染的 scene-anim 产物会出现在生产缓存（本次"有一个视频
+渲染出来了"的来源）。隔离与否待用户定夺。
+
+## §15 GL 降级渲染（0.7.0，2026-08-28）
+
+**政策（用户拍板）**：默认开启、一视同仁。gate 从"整场二元拒绝"改为分层：
+
+- render：白名单效果的 image 对象完整渲染；
+- render-degraded：不支持的效果（blurprecise/lens_flare/workshop 自定义/结构
+  combo 变体）**跳过效果、对象保留**；
+- skip：粒子/文字/音频/纯色/视频纹理对象**跳过并记清单**；
+- hard-reject：只剩零个可渲染对象（no-renderable）、zoom≠1 等结构性情况。
+- 属性动画（origin/angles/…）→ 静态首帧 + 标记；puppet → 静态贴图 + 标记；
+  bloom/camera-paths → 忽略 + 标记（不再整场拒绝）。
+
+**多对象合成渲染器**（Phase 2 前置）：每对象独立效果链（对象纹理空间 FBO 对，
+仅带效果者分配）→ 合成 pass 按场景对象顺序直 alpha src-over 上屏。program 按
+(dir+combos) 缓存跨对象共享；纹理按路径去重并发加载；watchdog 12s→120s（多对象
+4K 解码）。engine 版本 bump 1→2（meta 协议变了：objects 数组 + degraded 清单），
+旧 client/新 host 握手失败即干净回退。几何公式同 CPU image.js:133-145，新增
+alignment 锚点（left/right/top/bottom 中心偏移）与 alpha/brightness（present
+shader u_Brightness 乘算）。
+
+**视频纹理嗅探**：glTexInfo 增加 ftyp 扫描（extractSceneVideoVia 同款，前 200
+字节）——TEXI 未标记但 mip0 是 mp4 的"伪图像"纹理（伊蕾娜 morning/day/dusk/
+night.tex 时辰切换场景）被识别为 video → 对象跳过；全场景皆视频对象 →
+no-renderable → 客户端 sceneVideo 路径接管（实测提取 20s 4K h264 可播）。
+此前伊蕾娜在新 gate 下会 supported:true 然后纹理 decode 失败才回退，现为干净拒绝。
+
+**客户端**：新设置 `sceneGLDegrade`（默认 true；config.json 持久化，host 水合
+`!== false`）。关闭时 trySceneGL 先预取 meta，凡 degraded 非空即落 CPU mp4
+（标记 sessionStorage glFailed:degrade-disabled）。设置面板 beta 开关下新增
+"GL 降级渲染"复选框；GL 运行且 degraded 非空时显示
+"⚠ 部分特效未支持，已降级渲染：粒子×2、效果 lens_flare_sun×1 …"
+（summarizeSceneGLDegraded 按 feature 聚合计数，超 6 类折叠）。
+
+**验收**（headless SwiftShader 1920×1080）：
+- 达妮娅（42 对象→30 可渲染/31 降级项）GL_RUN 构图完整；
+- 堂主美如画/胡桃-窗前/卡提希娅 GL_RUN 构图完整（粒子缺失符合降级预期）；
+- 伊蕾娜 no-renderable ✓；
+- 回归 wait-matched MAD：02 = 1.641（Phase 1.5 基带 1.367）、
+  卡提希亚 = 2.557（基带 2.58）——多对象改写对单对象场景零回归；
+- 时间相位噪声证实：02 同代码 wait=8 vs wait=6 MAD 7.5→1.6，wait 是主要变量；
+- 三件套：verify-client PASS / verify-transcode-state PASS /
+  verify-scene 8过1失败（环境断言基线同款）/ verify-package-files 54 文件 PASS。
+
 ## §16 sf35：卡提希亚 shake 锯齿跳变 + 真机 FBO 反馈环（0.7.1 候选）
 
 用户报告（鸣潮-卡提希亚 3478544779，GL 实时路径）：人物应上下缓慢浮动，实际每

@@ -92,6 +92,10 @@ const DEFAULTS = {
   // scene-anim 视频后台渲染; 开启后才走动画化升级 (CPU 渲染试验性, 可能有
   // 组件错误), 渲染期间进度条 + 完成自动切换视频。
   betaSceneAnim: false,
+  // GL 降级渲染（默认开，用户拍板）：场景含不支持的效果/对象时只渲染可用部分
+  // （粒子/文字/音频跳过、未支持效果跳过对象保留），设置面板列出缺失项；
+  // 关闭则这类场景回退 CPU mp4 渲染（完整但有接缝/限时长/等待）。
+  sceneGLDegrade: true,
   // 遮挡暂停（借鉴 Wallpaper Engine 的「被遮挡时暂停」——桌面端大部分时间
   // GPU≈0 主因就是它）：
   // - pauseOnHidden：页面隐藏（窗口最小化 / 切到其它标签页）时暂停视频。
@@ -308,6 +312,7 @@ function sanitizeSettings(o) {
     playbackRate: clampNum(o.playbackRate, 0.5, 2, DEFAULTS.playbackRate),
     fpsCap: FPS_CAP_VALUES.includes(o.fpsCap) ? o.fpsCap : DEFAULTS.fpsCap,
     betaSceneAnim: o.betaSceneAnim === true,
+    sceneGLDegrade: o.sceneGLDegrade !== false,
     pauseOnHidden: o.pauseOnHidden !== false,
     pauseOnBlur: o.pauseOnBlur === true,
     pauseOnBattery: o.pauseOnBattery === true,
@@ -447,6 +452,7 @@ function serializeSelection() {
     playbackRate: selection.playbackRate,
     fpsCap: selection.fpsCap,
     betaSceneAnim: selection.betaSceneAnim,
+    sceneGLDegrade: selection.sceneGLDegrade,
     pauseOnHidden: selection.pauseOnHidden,
     pauseOnBlur: selection.pauseOnBlur,
     pauseOnBattery: selection.pauseOnBattery,
@@ -1258,6 +1264,37 @@ function sceneGLFailedReason(token) {
 function markSceneGLFailed(token, reason) {
   try { sessionStorage.setItem("weSceneGLFailed:" + token, String(reason)); } catch { /* ignore */ }
 }
+// 降级清单 → 设置面板一行汇总（按 feature 聚合计数，中文标签）
+function summarizeSceneGLDegraded(list) {
+  const LABEL = {
+    particle: "粒子",
+    "no-image": "文字/纯色",
+    puppet: "骨骼蒙皮",
+    "video-texture": "视频纹理",
+    "camera-object": "相机对象",
+    model: "模型",
+    passes: "多pass材质",
+    texture: "纹理缺失",
+    cbm: "颜色混合",
+    bloom: "泛光",
+    "camera-paths": "相机路径",
+  };
+  const counts = new Map();
+  for (const d of list) {
+    const f = String((d && d.feature) || "?");
+    let key = f;
+    if (f.startsWith("effect:")) key = "效果 " + f.slice(7);
+    else if (f.startsWith("anim:")) key = "属性动画";
+    else if (f.startsWith("blending:")) key = "混合模式";
+    else if (f.startsWith("shader:")) key = "材质shader";
+    else key = LABEL[f] || f;
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  const parts = [];
+  for (const [k, n] of counts) parts.push(k + (n > 1 ? "×" + n : ""));
+  const shown = parts.slice(0, 6).join("、");
+  return shown + (parts.length > 6 ? " 等" + parts.length + "类" : "");
+}
 function trySceneGL(frameUrl) {
   // 门控：beta 总开关 + localStorage weSceneGL=0 调试强制 mp4 + per-wallpaper
   // glFailed + 模块可用性 + 版本 handshake（__WESceneGL.version vs meta.engine
@@ -1269,6 +1306,35 @@ function trySceneGL(frameUrl) {
   const token = frameUrl.split("/").pop();
   if (sceneGLFailedReason(token)) return false;
   if (typeof __WESceneGL === "undefined" || !__WESceneGL || typeof __WESceneGL.createSceneGLRenderer !== "function") return false;
+  // 降级开关关闭：预取 meta，凡是有降级缺失项的场景不走 GL（回退 CPU mp4 完整渲染）。
+  // 异步判定——GL 挂起前先把请求发出去，meta 返回后再决定；期间页面显示静态帧。
+  if (selection.sceneGLDegrade === false) {
+    const metaUrl = frameUrl.replace("/scene-frame/", "/scene-gl-meta/");
+    const stillCurrent = () => selection.type === "scene" && selection.sceneFrameUrl === frameUrl;
+    const toMp4 = (reason) => {
+      markSceneGLFailed(token, reason);
+      if (stillCurrent()) {
+        try { queueSceneAnimUpgrade(selection.sceneFrameUrl); } catch { /* ignore */ }
+        emit();
+      }
+    };
+    fetch(metaUrl, { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : null))
+      .then((meta) => {
+        if (!stillCurrent()) return; // 用户已切走
+        if (!meta) { trySceneGLNow(frameUrl); return; } // 网络异常 → 交给 renderer 失败链
+        if (meta.supported !== true) { toMp4("unsupported:" + (meta.reason || "?")); return; }
+        if (Array.isArray(meta.degraded) && meta.degraded.length > 0) { toMp4("degrade-disabled"); return; }
+        trySceneGLNow(frameUrl); // 无缺失项 → 正常 GL
+      })
+      .catch(() => { if (stillCurrent()) trySceneGLNow(frameUrl); });
+    return true; // 挂起态（阻止立即排 mp4；判定后自行分流）
+  }
+  return trySceneGLNow(frameUrl);
+}
+// trySceneGL 主体（降级预检通过或开关默认开后直达）
+function trySceneGLNow(frameUrl) {
+  const token = frameUrl.split("/").pop();
   disposeSceneGL();
   const { vw, vh } = sceneViewportSize();
   const renderer = __WESceneGL.createSceneGLRenderer({
@@ -1279,6 +1345,8 @@ function trySceneGL(frameUrl) {
     onReady: () => {
       if (!sceneGL || sceneGL.renderer !== renderer) return;
       sceneGL.ready = true;
+      // 降级清单（host gate 分层产物）：设置面板提示用户哪些特效缺失
+      try { sceneGL.degraded = renderer.degraded ? renderer.degraded() : []; } catch { sceneGL.degraded = []; }
       // 首帧完成 → canvas 300ms 淡入覆盖底图 img（canvas 不透明 = 等价 img 淡出）
       renderer.canvas.classList.add("we-media--gl-ready");
       emit();
@@ -3343,6 +3411,42 @@ function WallpaperPicker(props) {
           "实验性场景壁纸渲染引擎，不要开启（除非你知道自己在干什么）",
         ),
       ),
+      // GL 降级渲染开关（默认开）：场景含未支持效果/对象时只渲染可用部分并在此
+      // 列出缺失项；关闭则这类场景回退 CPU mp4（完整但有接缝/限时长/分钟级等待）。
+      sel.type === "scene" && sel.betaSceneAnim === true && React.createElement("div", { className: "we-picker__row" },
+        React.createElement("label", { className: "we-picker__rotation-toggle" },
+          React.createElement("input", {
+            type: "checkbox",
+            checked: sel.sceneGLDegrade !== false,
+            onChange: (e) => {
+              selection.sceneGLDegrade = e.target.checked;
+              persistSelection();
+              // 立即对当前壁纸重新分流（GL 中/已标记失败均按新开关重评估）
+              try { sessionStorage.removeItem("weSceneGLFailed:" + (sel.sceneFrameUrl || "").split("/").pop()); } catch { /* ignore */ }
+              if (sel.sceneFrameUrl && !sel.sceneVideo) {
+                cancelSceneAnimUpgrade(); // 停掉进行中的 mp4 渲染/轮询
+                disposeSceneGL();
+                if (selection.url && selection.url.indexOf("/scene-anim/") !== -1) {
+                  selection.url = sel.sceneFrameUrl;
+                }
+                if (!trySceneGL(sel.sceneFrameUrl)) queueSceneAnimUpgrade(sel.sceneFrameUrl);
+              }
+              emit();
+            },
+          }),
+          "GL 降级渲染",
+        ),
+        React.createElement("span", { className: "we-picker__hint" },
+          "未支持的特效自动跳过并标注（无缝/无限时长）；关闭则回退视频完整渲染",
+        ),
+      ),
+      // 当前壁纸降级提示：GL 运行中且有缺失项 → 汇总列出（粒子×N、效果×N…）
+      sel.type === "scene" && sceneGL && sceneGL.ready && Array.isArray(sceneGL.degraded) && sceneGL.degraded.length > 0
+        && React.createElement("div", { className: "we-picker__row" },
+          React.createElement("span", { className: "we-picker__hint we-picker__label" },
+            "⚠ 部分特效未支持，已降级渲染：" + summarizeSceneGLDegraded(sceneGL.degraded),
+          ),
+        ),
       // Playback speed — native playbackRate, instant, no media reload. Video
       // and scene-animation wallpapers (web/iframe wallpapers have no playbackRate).
       (sel.type === "video" || (sel.type === "scene" && sel.url && sel.url.indexOf("/scene-anim/") !== -1))

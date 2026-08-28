@@ -108,6 +108,17 @@
 
 **E2E 修出的三个真实 bug（已修）**：① buildMedia 重建重赋 className 会抹掉已火的 `we-media--gl-ready`（按 `sceneGL.ready` 幂等重挂）；② sceneVideo 404 回退路径里 syncLayers 先于 trySceneGL 跑（sceneGL 仍 null 建成纯 img），canvas 永远不进层 → trySceneGL 成功路径补 `emit()` 触发重建挂载；③ onError 不清 `window.__weSceneGL` 诊断钩子（补清理）。**E2E 顺带验证的特性**：pauseOnBattery 电池放电 → GL 暂停（initStage='done' frames=0）= WE 对齐遮挡暂停语义正确生效。
 
+### Phase 1.5 — gate 放宽 + 三新效果（waterwaves/foliagesway/shake）✅ 已完成
+
+触发：用户新增 6 张场景壁纸全回退 mp4。逐张判定：**5 张正确回退**（粒子发射器/workshop 粒子/audio_bars/lens_flare/workshop 自定义效果，见 details §13）；**鸣潮-卡提希亚（3478544779）解锁**：单 image 对象 + 三效果全默认常量。gate 放宽：hdr 单独（仅 bloom 读取，bloom 先拒）与 cameraparallax（仅鼠标驱动，CPU 恒静止）不再拒绝；eye 透传为 viewShift；combo 门禁泛化（PERSPECTIVE/DUALWAVES/MODE/AUDIOPROCESSING）。
+
+验收（headless 4K 链 + headed GUI）：
+1. ✅ 基座 4K MAD 0.000；单效果 waterwaves 0.744 / foliagesway 0.828 / shake 2.154（vs 官方语义 CPU）；全链 4K MAD 2.58（仲裁带内，热图确认边缘亚像素残差——LINEAR vs CPU NEAREST + float 相位，非结构差异）；
+2. ✅ GUI 真机：GL_RUN + canvas ready + 无 mp4 + 0 scene-anim 请求；
+3. ✅ 02 回归 MAD 1.367（基线 1.266 同档）；回归三件套与基线一致。
+
+修出的真 bug（details §13 全录）：parseMetaGL 嵌套花括号截断（combo 静默丢失→编译错，readBalancedJson 平衡扫描修复）；uniformsFrag 跨阶段语义冲突（foliagesway speeduv 5 被 speed 1 覆盖）；FBO hw/hh 缺失（链式 resolution NaN）；flowmask 空槽回退中灰（对齐官方 util/noflow 零位移，白回退会全图位移）；shake.vert 隐式 common.h 前置补 stub。**CPU 新发现两处官方语义偏差**（shake 位移单位缺 ×w/×h → mp4 从未生效；mask UV 缩放用 mask/object 比而非官方 header/mip0 比）——已回滚，与既有两项合并入用户仲裁清单。
+
 ### Phase 2（后续，不在本 plan）
 
 bloom/hdr、相机 paths/zoom/视差、多对象与混合模式（扩多对象前 gate 先加 `blending ∈ {translucent, normal}`——材质级 blending 现未查，单对象 alpha=1 时 src-over 与 opaque 等价故 Phase 1 无风险）、更多效果白名单（按三档分层排期：简单 ~10 个纯 UV/颜色数学直接可放；中等 ~8 个多纹理+resolution uniform 需纹理派生 combo 覆盖；难 ~6 个 blur 多 tap/composite-mask/godrays/depthparallax/blend 需逐个补 gate 条件——gate 的"pass 数==1"挡不住 blur 型组合语义）。

@@ -54,7 +54,10 @@ function _weGLAssemble(expandedSrc, combosTable, comboValues) {
   head += '#define texSample2D texture2D\nprecision highp float;\nprecision highp int;\n';
   const body = expandedSrc
     .replace(/\* 2 - 1\b/g, '* 2.0 - 1.0')            // waterripple.frag n1/n2（官方编译器宽松放行）
-    .replace(/smoothstep\(1 - g_Rough, 1,/, 'smoothstep(1.0 - g_Rough, 1.0,'); // iris.vert
+    .replace(/smoothstep\(1 - g_Rough, 1,/, 'smoothstep(1.0 - g_Rough, 1.0,') // iris.vert
+    .replace(/M_PI \* 2 \+/, 'M_PI * 2.0 +')          // foliagesway.frag phase
+    .replace(/v_Params\.x \* 10 \+/, 'v_Params.x * 10.0 +') // foliagesway.frag phase
+    .replace(/v_Params\.y \* 5\)/, 'v_Params.y * 5.0)');   // foliagesway.frag phase
   return head + body + '\n';
 }
 
@@ -74,11 +77,11 @@ void main(){ v_UV = a_TexCoord.xy; gl_Position = u_MVP * vec4(a_Position, 1.0); 
 `;
 const _WE_GL_PRESENT_FRAG = `
 precision highp float;
-varying vec2 v_UV; uniform sampler2D u_Tex; uniform float u_ObjectAlpha;
-void main(){ vec4 c = texture2D(u_Tex, v_UV); gl_FragColor = vec4(c.rgb, c.a * u_ObjectAlpha); }
+varying vec2 v_UV; uniform sampler2D u_Tex; uniform float u_ObjectAlpha; uniform float u_Brightness;
+void main(){ vec4 c = texture2D(u_Tex, v_UV); gl_FragColor = vec4(c.rgb * u_Brightness, c.a * u_ObjectAlpha); }
 `;
 
-const _WE_GL_ENGINE = 'dsh-we-scene-gl/1';
+const _WE_GL_ENGINE = 'dsh-we-scene-gl/2';
 const _WE_GL_VERSION = 3; // sf35: shake 2π 数学 + FBO 交替 (与 host SCENE_GL_ENGINE 同步)
 
 /**
@@ -198,7 +201,11 @@ function createSceneGLRenderer(opts) {
     gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
     if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) throw new Error('FBO incomplete');
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
-    return { fbo, tex, w, h };
+    // hw/hh = w/h：lwe 约定 FBO 的 g_TextureNResolution 视为 (w,h,w,h)。
+    // 缺了它，链式效果的 slot0 resolution = [w,h,undefined,undefined] → NaN
+    // （foliagesway.vert aspect 计算 NaN → 位移方向崩坏；02 场景没踩中只因
+    //  waterripple/iris 不读 slot0 resolution）。
+    return { fbo, tex, w, h, hw: w, hh: h };
   }
   function uploadTex(bmp, { repeat, mip }) {
     const tex = gl.createTexture();
@@ -218,13 +225,31 @@ function createSceneGLRenderer(opts) {
     return tex;
   }
 
+  // 空槽位回退（CPU _texSample(null) = [1,1,1,1] 语义扩展）：
+  //  - 默认（opacitymask/noise 等）→ 1×1 白：与 CPU null→白逐位一致
+  //  - mode:"flowmask" → 1×1 中灰 (127,127)：官方默认 util/noflow 即中心灰
+  //    (0.498→(c-0.498)*2≈0 无位移)，CPU 无 flow 纹理时 fmx=fmy=0 —— 两者
+  //    在"缺失"语义下一致；白色会被解读为 +1.004 全图位移（shake MAD 4.2 主因）
+  function makeSolidTex(r, g, b) {
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([r, g, b, 255]));
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    return tex;
+  }
+
   function destroyResources() {
     if (!res) return;
     try {
-      for (const p of res.programs) gl.deleteProgram(p.prog);
+      if (res.progCache) for (const e of res.progCache.values()) gl.deleteProgram(e.prog);
       if (res.presentProg) gl.deleteProgram(res.presentProg);
-      for (const f of [res.fboA, res.fboB]) {
-        if (f) { gl.deleteFramebuffer(f.fbo); gl.deleteTexture(f.tex); }
+      for (const o of res.objects || []) {
+        for (const f of [o.fboA, o.fboB]) {
+          if (f) { gl.deleteFramebuffer(f.fbo); gl.deleteTexture(f.tex); }
+        }
       }
       for (const t of res.textures) gl.deleteTexture(t);
       if (res.vbo) gl.deleteBuffer(res.vbo);
@@ -264,7 +289,7 @@ function createSceneGLRenderer(opts) {
   async function buildResources() {
     stats.initStage = 'build';
     const scene = meta.scene;
-    const obj = scene.objects[0];
+    const sceneObjects = Array.isArray(scene.objects) ? scene.objects : [];
     const orthoW = scene.general.ortho.width || CW;
     const orthoH = scene.general.ortho.height || CH;
     // sar fix：背板按场景 ortho 比例（视口比例 ≠ 场景比例 → CSS letterbox，
@@ -291,23 +316,30 @@ function createSceneGLRenderer(opts) {
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, _WE_GL_IDX, gl.STATIC_DRAW);
 
     // ① shader 编译链接（失败快速退出，不下载纹理 — 附录 §8）
+    // 多对象：program 按 (dir + combos) 缓存共享（同一效果多对象复用，uniform 按绘制时喂）
     stats.initStage = 'compile';
-    const programs = [];
-    for (const ef of obj.effects) {
+    const progCache = new Map(); // key → { prog, locs, sm }
+    const programFor = (ef) => {
       const sm = shaderMeta[ef.dir];
       const comboValues = resolveCombos(ef, sm);
-      const vsrc = _weGLAssemble(sm.vert, sm.combos, comboValues);
-      const fsrc = _weGLAssemble(sm.frag, sm.combos, comboValues);
-      const vs = compileShader(gl.VERTEX_SHADER, vsrc, ef.dir + '.vert');
-      const fs = compileShader(gl.FRAGMENT_SHADER, fsrc, ef.dir + '.frag');
-      const prog = linkProgram(vs, fs, ef.dir);
-      // 预取全部 uniform 位置（被 #if 裁掉的返回 null，uniformX(null) 规范 no-op）
-      const locs = {};
-      for (const name of Object.keys(sm.uniforms || {})) locs[name] = gl.getUniformLocation(prog, name);
-      locs.g_Time = gl.getUniformLocation(prog, 'g_Time');
-      locs.g_ModelViewProjectionMatrix = gl.getUniformLocation(prog, 'g_ModelViewProjectionMatrix');
-      programs.push({ ef, sm, prog, locs });
-    }
+      const key = ef.dir + '|' + JSON.stringify(comboValues);
+      let entry = progCache.get(key);
+      if (!entry) {
+        const vsrc = _weGLAssemble(sm.vert, sm.combos, comboValues);
+        const fsrc = _weGLAssemble(sm.frag, sm.combos, comboValues);
+        const vs = compileShader(gl.VERTEX_SHADER, vsrc, ef.dir + '.vert');
+        const fs = compileShader(gl.FRAGMENT_SHADER, fsrc, ef.dir + '.frag');
+        const prog = linkProgram(vs, fs, ef.dir);
+        // 预取全部 uniform 位置（被 #if 裁掉的返回 null，uniformX(null) 规范 no-op）
+        const locs = {};
+        for (const name of Object.keys(sm.uniforms || {})) locs[name] = gl.getUniformLocation(prog, name);
+        locs.g_Time = gl.getUniformLocation(prog, 'g_Time');
+        locs.g_ModelViewProjectionMatrix = gl.getUniformLocation(prog, 'g_ModelViewProjectionMatrix');
+        entry = { prog, locs, sm };
+        progCache.set(key, entry);
+      }
+      return entry;
+    };
     const presentProg = linkProgram(
       compileShader(gl.VERTEX_SHADER, _WE_GL_PRESENT_VERT, 'present.vert'),
       compileShader(gl.FRAGMENT_SHADER, _WE_GL_PRESENT_FRAG, 'present.frag'),
@@ -317,52 +349,82 @@ function createSceneGLRenderer(opts) {
       u_MVP: gl.getUniformLocation(presentProg, 'u_MVP'),
       u_Tex: gl.getUniformLocation(presentProg, 'u_Tex'),
       u_ObjectAlpha: gl.getUniformLocation(presentProg, 'u_ObjectAlpha'),
+      u_Brightness: gl.getUniformLocation(presentProg, 'u_Brightness'),
     };
 
-    // ② 纹理 fetch（各 10s；y-down 不翻转上传）
+    // ② 纹理 fetch（y-down 不翻转上传；多对象并发加载，路径去重共享）
     stats.initStage = 'textures';
     const textures = [];
-    const texByKey = new Map(); // path → { tex, w, h }
-    const loadOne = async (info, repeat, mip) => {
-      if (texByKey.has(info.path)) return texByKey.get(info.path);
+    const texByKey = new Map(); // path → Promise<{ tex, w, h }>
+    const loadOne = (info, repeat, mip) => {
+      const k = info.path + '|' + (mip ? 'm' : '');
+      if (texByKey.has(k)) return texByKey.get(k);
       stats.initStage = 'tex:' + info.path;
-      const blob = await fetchBlob(resUrl(info.path), 10000);
-      const bmp = await createImageBitmap(blob, { premultiplyAlpha: 'none' });
-      const w = bmp.width, h = bmp.height; // close() 后 width/height 归零，先取
-      const tex = uploadTex(bmp, { repeat, mip });
-      bmp.close();
-      const entry = { tex, w, h, hw: info.headerWidth || w, hh: info.headerHeight || h };
-      textures.push(tex);
-      texByKey.set(info.path, entry);
-      return entry;
+      const p = (async () => {
+        const blob = await fetchBlob(resUrl(info.path), 10000);
+        const bmp = await createImageBitmap(blob, { premultiplyAlpha: 'none' });
+        const w = bmp.width, h = bmp.height; // close() 后 width/height 归零，先取
+        const tex = uploadTex(bmp, { repeat, mip });
+        bmp.close();
+        const entry = { tex, w, h, hw: info.headerWidth || w, hh: info.headerHeight || h };
+        textures.push(tex);
+        return entry;
+      })();
+      texByKey.set(k, p);
+      return p;
     };
-    const mainTexEntry = await loadOne(obj.mainTexture, false, true); // slot0 CLAMP+mipmap（§2.6/§11-⑤）
-    const effectTex = new Map(); // ef.dir+slot → entry
-    for (const ef of obj.effects) {
-      for (let slot = 1; slot < ef.textures.length; slot++) {
-        const info = ef.textures[slot];
-        if (!info) continue;
-        effectTex.set(ef.dir + ':' + slot, await loadOne(info, true, false)); // slot1/2 REPEAT
+    const whiteEntry = { tex: makeSolidTex(255, 255, 255), w: 1, h: 1, hw: 1, hh: 1 };
+    const flowEntry = { tex: makeSolidTex(127, 127, 255), w: 1, h: 1, hw: 1, hh: 1 };
+    textures.push(whiteEntry.tex, flowEntry.tex);
+
+    // 每对象资源：主纹理 + 效果纹理 + program 列表 + FBO 对（仅带效果者）+ 几何
+    const ps = [CW / orthoW, CH / orthoH];
+    const eye = (scene.camera && scene.camera.eye) || [0, 0, 0];
+    const objResList = await Promise.all(sceneObjects.map(async (obj, oi) => {
+      const mainTexEntry = await loadOne(obj.mainTexture, false, true); // slot0 CLAMP+mipmap（§2.6/§11-⑤）
+      const programs = (obj.effects || []).map((ef) => ({ ef, ...programFor(ef) }));
+      // 效果纹理（槽位键按对象隔离；loadOne 按路径去重不重复上传）
+      const effectTex = new Map();
+      await Promise.all((obj.effects || []).map(async (ef) => {
+        for (let slot = 1; slot < ef.textures.length; slot++) {
+          const info = ef.textures[slot];
+          if (!info) continue;
+          effectTex.set(ef.dir + ':' + slot, await loadOne(info, true, false)); // slot1/2 REPEAT
+        }
+      }));
+      // FBO 链 = 对象纹理空间（对齐 CPU staticFrame 全分辨率效果链）
+      let fboA = null, fboB = null;
+      if (programs.length > 0) {
+        fboA = makeFBO(mainTexEntry.w, mainTexEntry.h);
+        fboB = makeFBO(mainTexEntry.w, mainTexEntry.h);
       }
-    }
+      // 几何：对象矩形（画布像素，CPU image.js:133-145 同款公式 + alignment 锚点）
+      const dw = obj.size[0] * obj.scale[0] * ps[0];
+      const dh = obj.size[1] * obj.scale[1] * ps[1];
+      let cx = obj.origin[0] * ps[0];
+      let cy = CH - obj.origin[1] * ps[1];
+      const al = String(obj.alignment || '').toLowerCase();
+      // lwe CImage.cpp:242-256：left → 左边锚定 origin（矩形右移半宽）；top → 矩形在 origin 下方展开
+      if (al.includes('left')) cx += dw / 2; else if (al.includes('right')) cx -= dw / 2;
+      if (al.includes('top')) cy += dh / 2; else if (al.includes('bottom')) cy -= dh / 2;
+      // viewShift（CPU camera.js:276 同款）：静态 scene.camera.eye 仅 x 平移前景，满幅背景豁免
+      const isBg = obj.size[0] >= orthoW - 1 && obj.size[1] >= orthoH - 1;
+      if (!isBg) cx += -eye[0] * ps[0];
+      const geo = {
+        dx: cx - dw / 2, dy: cy - dh / 2, dw, dh,
+        anglesZ: (obj.angles && obj.angles[2]) || 0,
+        alpha: Number.isFinite(obj.alpha) ? obj.alpha : 1,
+        brightness: Number.isFinite(obj.brightness) ? obj.brightness : 1,
+      };
+      return { obj, mainTexEntry, programs, effectTex, fboA, fboB, geo };
+    }));
 
     stats.initStage = 'fbo';
-    // FBO 链 = 对象纹理空间（对齐 CPU staticFrame 全分辨率效果链；present 负责缩放）
-    const FW = mainTexEntry.w, FH = mainTexEntry.h;
-    const fboA = makeFBO(FW, FH);
-    const fboB = makeFBO(FW, FH);
-
-    // 几何：对象矩形（画布像素，CPU image.js:133-145 同款公式）
-    const ps = [CW / orthoW, CH / orthoH];
-    const dw = obj.size[0] * obj.scale[0] * ps[0];
-    const dh = obj.size[1] * obj.scale[1] * ps[1];
-    const dx = obj.origin[0] * ps[0] - dw / 2;
-    const dy = CH - obj.origin[1] * ps[1] - dh / 2;
-    geo = { dx, dy, dw, dh, anglesZ: obj.angles[2] || 0, FW, FH };
+    geo = { clearcolor: [0, 0, 0, 1] };
     const cc = String(scene.general.clearcolor || '0 0 0').trim().split(/\s+/).map(Number);
     geo.clearcolor = [cc[0] || 0, cc[1] || 0, cc[2] || 0, 1];
 
-    res = { vbo, ibo, programs, presentProg, presentLocs, fboA, fboB, textures, mainTexEntry, effectTex };
+    res = { vbo, ibo, objects: objResList, progCache, presentProg, presentLocs, textures, whiteEntry, flowEntry };
   }
 
   function bindQuad(prog) {
@@ -390,16 +452,18 @@ function createSceneGLRenderer(opts) {
   };
   const resVec = (e) => [e.w, e.h, e.hw, e.hh]; // lwe: (mip0.w, mip0.h, header.w, header.h)
 
-  function render(t) {
-    if (!res) return;
-    const mvpFx = _weGLQuadMVP(geo.FW, geo.FH, 0, 0, geo.FW, geo.FH, true);
-    let input = res.mainTexEntry;
-    res.programs.forEach((p, i) => {
+  // 单对象效果链：主纹理 →（效果 pass ×N，对象自身 FBO 对 ping-pong）→ 输出 entry
+  function renderObjectChain(o, t) {
+    if (!o.programs.length) return o.mainTexEntry;
+    const FW = o.mainTexEntry.w, FH = o.mainTexEntry.h;
+    const mvpFx = _weGLQuadMVP(FW, FH, 0, 0, FW, FH, true);
+    let input = o.mainTexEntry;
+    o.programs.forEach((p, i) => {
       // sf35: FBO 逐 pass 交替（ping-pong）。旧逻辑 i===n-1?fboB:fboA 在 n≥3 时
       // 中间 pass 读写同一 FBO 纹理 = GL 规范禁止的 feedback loop（真机 tile GPU
       // 上未定义行为 → 3 效果链的中间效果错乱; SwiftShader 读改写容错掩盖了它,
       // E2E 从未暴露）。n=1/2 时与旧逻辑逐位等价（02 场景回归不受影响）。
-      const target = (i % 2 === 0) ? res.fboA : res.fboB;
+      const target = (i % 2 === 0) ? o.fboA : o.fboB;
       gl.bindFramebuffer(gl.FRAMEBUFFER, target.fbo);
       gl.viewport(0, 0, target.w, target.h);
       gl.disable(gl.BLEND); // 效果 FBO pass 禁 BLEND（附录 §3）
@@ -410,31 +474,41 @@ function createSceneGLRenderer(opts) {
       gl.bindTexture(gl.TEXTURE_2D, input.tex);
       if (p.locs.g_Texture0) gl.uniform1i(p.locs.g_Texture0, 0);
       setU(p.locs.g_Texture0Resolution, resVec(input));
-      // slot1/2 = mask/normal
-      for (const [texName, t] of Object.entries(p.sm.textures || {})) {
-        if (t.unit == null || t.unit === 0) continue;
-        const entry = res.effectTex.get(p.ef.dir + ':' + t.unit);
-        if (!entry) continue;
-        gl.activeTexture(gl.TEXTURE0 + t.unit);
+      // slot1/2 = mask/normal（空槽按 mode 回退：flowmask→中灰，其余→白）
+      for (const [texName, tx] of Object.entries(p.sm.textures || {})) {
+        if (tx.unit == null || tx.unit === 0) continue;
+        const entry = o.effectTex.get(p.ef.dir + ':' + tx.unit)
+          || (tx.mode === 'flowmask' ? res.flowEntry : res.whiteEntry);
+        gl.activeTexture(gl.TEXTURE0 + tx.unit);
         gl.bindTexture(gl.TEXTURE_2D, entry.tex);
-        if (p.locs[texName]) gl.uniform1i(p.locs[texName], t.unit);
+        if (p.locs[texName]) gl.uniform1i(p.locs[texName], tx.unit);
         setU(p.locs[texName + 'Resolution'], resVec(entry));
       }
       setU(p.locs.g_ModelViewProjectionMatrix, mvpFx);
       setU(p.locs.g_Time, t);
       // material 常量 → uniform（附录 §5：csv 值 → 类型转换 → 元注释 default 兜底）
+      // 同名跨阶段冲突按片元语义喂值（uniformsFrag 优先；GL 同名合一位置）
       for (const [name, u] of Object.entries(p.sm.uniforms || {})) {
-        if (u.type === 'sampler2D' || !u.material) continue;
-        let raw = p.ef.constants[u.material];
-        if (raw === undefined && u.default !== undefined) raw = u.default;
-        const v = convertUniform(u.type, raw);
+        if (u.type === 'sampler2D') continue;
+        const uu = (p.sm.uniformsFrag && p.sm.uniformsFrag[name]) || u;
+        if (!uu.material) continue;
+        let raw = p.ef.constants[uu.material];
+        if (raw === undefined && uu.default !== undefined) raw = uu.default;
+        const v = convertUniform(uu.type, raw);
         if (v == null) continue;
         setU(p.locs[name], v.length === 1 ? v[0] : v);
       }
       gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
       input = target;
     });
-    // present → 画布（正常 MVP + 像素空间刚体旋转）
+    return input;
+  }
+
+  function render(t) {
+    if (!res) return;
+    // ① 每对象效果链（输出 = 对象纹理空间的合成结果）
+    const outputs = res.objects.map((o) => renderObjectChain(o, t));
+    // ② 合成 pass：按场景对象顺序 src-over（CPU canvas 直 alpha 同款）
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, CW, CH);
     const c = geo.clearcolor;
@@ -442,15 +516,19 @@ function createSceneGLRenderer(opts) {
     gl.clear(gl.COLOR_BUFFER_BIT);
     gl.useProgram(res.presentProg);
     gl.enable(gl.BLEND);
-    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA); // = CPU 直 alpha src-over
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     bindQuad(res.presentProg);
     gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_2D, input.tex);
     gl.uniform1i(res.presentLocs.u_Tex, 0);
-    const mvp = _weGLMvpWithZRot(_weGLQuadMVP(CW, CH, geo.dx, geo.dy, geo.dw, geo.dh), geo.anglesZ, geo.dw, geo.dh);
-    gl.uniformMatrix4fv(res.presentLocs.u_MVP, false, mvp);
-    gl.uniform1f(res.presentLocs.u_ObjectAlpha, 1);
-    gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
+    res.objects.forEach((o, i) => {
+      const g = o.geo;
+      gl.bindTexture(gl.TEXTURE_2D, outputs[i].tex);
+      const mvp = _weGLMvpWithZRot(_weGLQuadMVP(CW, CH, g.dx, g.dy, g.dw, g.dh), g.anglesZ, g.dw, g.dh);
+      gl.uniformMatrix4fv(res.presentLocs.u_MVP, false, mvp);
+      gl.uniform1f(res.presentLocs.u_ObjectAlpha, g.alpha);
+      gl.uniform1f(res.presentLocs.u_Brightness, g.brightness);
+      gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
+    });
     gl.disable(gl.BLEND);
   }
 
@@ -563,15 +641,17 @@ function createSceneGLRenderer(opts) {
       }
       state = 'GL_INIT';
       stats.initStage = 'shaders';
-      // shader fetch（编译先于纹理下载）
+      // shader fetch（编译先于纹理下载；多对象：收集全部对象用到的效果目录）
       shaderMeta = {};
-      for (const ef of meta.scene.objects[0].effects) {
-        if (shaderMeta[ef.dir]) continue;
-        shaderMeta[ef.dir] = await fetchJson(BASE + '/scene-shader/' + token + '/' + ef.dir, 5000);
+      for (const obj of meta.scene.objects || []) {
+        for (const ef of obj.effects || []) {
+          if (shaderMeta[ef.dir]) continue;
+          shaderMeta[ef.dir] = await fetchJson(BASE + '/scene-shader/' + token + '/' + ef.dir, 5000);
+        }
       }
       if (disposed) return;
-      // 总 watchdog 12s（meta 之后）
-      const watchdog = setTimeout(() => fail('init-watchdog'), 12000);
+      // 总 watchdog（meta 之后）：多对象场景纹理数十张，4K 解码串行可观，放宽到 120s
+      const watchdog = setTimeout(() => fail('init-watchdog'), 120000);
       try {
         await buildResources();
       } finally {
@@ -593,6 +673,8 @@ function createSceneGLRenderer(opts) {
     dispose,
     stats,
     state: () => state,
+    // 降级清单（host gate 分层产物；客户端设置面板提示用；空数组 = 完整渲染）
+    degraded: () => (meta && Array.isArray(meta.degraded) ? meta.degraded : []),
     // 用户暂停/遮挡暂停（调用方按 isEffectivelyPlaying 同步）
     setPaused(p) {
       p = !!p;
