@@ -43,6 +43,15 @@ const outline = [
   '\t\tObject.defineProperty(exports, Symbol.toStringTag, { value: "Module" });',
 ];
 
+// scene-gl 拼接（plan-scene-webgl 附录 §7）：scene-gl.js 正文以 IIFE 形式拼进同一
+// factory，client.js 通过 __WESceneGL 访问。scene-gl.js 约定：无 import/export 纯
+// 脚本片段、末行 return {...}、禁止声明 module/exports 或与 client.js 顶层重名。
+const glSrc = readFileSync(resolve(root, 'src', 'scene-gl.js'), 'utf8');
+const glBody = stripHeader(glSrc).replace(/\r\n/g, '\n').replace(/\n+$/, '');
+outline.push('\t\tvar __WESceneGL = (function () {');
+outline.push(glBody.split('\n').map((l) => (l.trim() === '' ? '' : '\t\t' + l)).join('\n'));
+outline.push('\t\t})();');
+
 // Indent the source body by two tabs. Preserve blank-line gaps; never indent
 // an already-blank line.
 const indented = body
