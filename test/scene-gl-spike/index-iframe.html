@@ -1,0 +1,23 @@
+<!doctype html>
+<html>
+<head><meta charset="utf-8"><title>scene-gl spike iframe host</title>
+<style>body{margin:0;background:#222}iframe{border:0;display:block}</style>
+</head>
+<body>
+<!-- 冻结归因实验①代理：scene-player.js 的 iframe 形态 -->
+<iframe id="f" width="960" height="540"></iframe>
+<div id="hud" style="position:fixed;left:8px;bottom:8px;color:#0f0;font:12px monospace;background:rgba(0,0,0,.5)">iframe host</div>
+<script>
+  const q = new URLSearchParams(location.search);
+  document.getElementById('f').src = './index.html?' + (q.get('inner') || 'animate=1');
+  // 主文档 rAF 探针：iframe 内冻结不影响主文档 rAF 时 → 可区分「页面冻结」vs「渲染冻结」
+  window.__hostFrameTimes = [];
+  let last = performance.now();
+  (function loop(now) {
+    window.__hostFrameTimes.push(now - last); last = now;
+    requestAnimationFrame(loop);
+  })(last);
+  window.__ready = true;
+</script>
+</body>
+</html>
