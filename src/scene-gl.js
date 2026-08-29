@@ -19,31 +19,42 @@
  */
 
 // ---------- 附录 §4：MVP 工具 ----------
-function _weGLQuadMVP(W, H, dx, dy, dw, dh, flipY) {
+// P2-7/N-08: MVP 计算改为写入调用方给定缓冲（无 out 时落模块级复用缓冲），
+// 消除旧实现热路径每帧每对象 new Float32Array(16)×2~3；带缓存的调用方
+// （构建期 mvpFx / present 按 CW/CH 缓存）必须传独占缓冲，防止共享 scratch
+// 被后续计算覆写。
+const _WE_GL_MVP_SCRATCH = new Float32Array(16);
+const _WE_GL_ZROT_R = new Float32Array(16);
+const _WE_GL_ZROT_OUT = new Float32Array(16);
+function _weGLQuadMVP(W, H, dx, dy, dw, dh, flipY, out) {
   const cx = dx + dw / 2, cy = dy + dh / 2;
   const sy = flipY ? -2 * dh / H : 2 * dh / H; // 效果 pass: 图顶→NDC−1（y-down 链一致）
   const ty = flipY ? -(1 - 2 * cy / H) : 1 - 2 * cy / H;
-  return new Float32Array([
-    2 * dw / W, 0, 0, 0,
-    0, sy, 0, 0,
-    0, 0, -1, 0,
-    2 * cx / W - 1, ty, 0, 1,
-  ]);
+  const m = out || _WE_GL_MVP_SCRATCH;
+  m[0] = 2 * dw / W; m[1] = 0; m[2] = 0; m[3] = 0;
+  m[4] = 0; m[5] = sy; m[6] = 0; m[7] = 0;
+  m[8] = 0; m[9] = 0; m[10] = -1; m[11] = 0;
+  m[12] = 2 * cx / W - 1; m[13] = ty; m[14] = 0; m[15] = 1;
+  return m;
 }
-function _weGLMvpWithZRot(m, rad, dw, dh) {
+function _weGLMvpWithZRot(m, rad, dw, dh, out) {
   if (!rad) return m;
+  const o = out || _WE_GL_ZROT_OUT;
   const r = -rad; // CPU 正角 = 屏幕 CCW（判别实验②实测）
   const c = Math.cos(r), s = Math.sin(r);
   const kx = dw / dh, ky = dh / dw; // 像素空间刚体：S⁻¹·RotZ·S
-  const R = new Float32Array([c, s * kx, 0, 0, -s * ky, c, 0, 0, 0, 0, 1, 0, 0, 0, 0, 1]);
-  const out = new Float32Array(16);
+  const R = _WE_GL_ZROT_R;
+  R[0] = c; R[1] = s * kx; R[2] = 0; R[3] = 0;
+  R[4] = -s * ky; R[5] = c; R[6] = 0; R[7] = 0;
+  R[8] = 0; R[9] = 0; R[10] = 1; R[11] = 0;
+  R[12] = 0; R[13] = 0; R[14] = 0; R[15] = 1;
   for (let col = 0; col < 4; col++)
     for (let row = 0; row < 4; row++) {
       let sum = 0;
       for (let k = 0; k < 4; k++) sum += m[k * 4 + row] * R[col * 4 + k];
-      out[col * 4 + row] = sum;
+      o[col * 4 + row] = sum;
     }
-  return out;
+  return o;
 }
 
 // ---------- 附录 §2.1 + Phase 0 回写：define 头拼装 + int 字面量 fixup ----------
@@ -253,7 +264,7 @@ function createSceneGLRenderer(opts) {
   let observer = null;
   let meta = null;
   let shaderMeta = null; // dir → { combos, uniforms, textures, vert, frag }
-  let geo = null; // { dx, dy, dw, dh, anglesZ, clearcolor:[r,g,b,a], mvpFxW/H }
+  let geo = null; // 场景级 { clearcolor:[r,g,b,a] }（对象几何/MVP 缓存在 res.objects[].geo，P2-7）
 
   function compileShader(type, src, label) {
     const sh = gl.createShader(type);
@@ -364,6 +375,7 @@ function createSceneGLRenderer(opts) {
   function destroyResources() {
     if (!res) return;
     try {
+      if (res.vaos) for (const vao of res.vaos.values()) gl.deleteVertexArray(vao); // P2-7: VAO 随程序释放
       if (res.progCache) for (const e of res.progCache.values()) gl.deleteProgram(e.prog);
       if (res.presentProg) gl.deleteProgram(res.presentProg);
       for (const o of res.objects || []) {
@@ -557,7 +569,20 @@ function createSceneGLRenderer(opts) {
         for (const name of Object.keys(sm.uniforms || {})) locs[name] = gl.getUniformLocation(prog, name);
         locs.g_Time = gl.getUniformLocation(prog, 'g_Time');
         locs.g_ModelViewProjectionMatrix = gl.getUniformLocation(prog, 'g_ModelViewProjectionMatrix');
-        entry = { prog, locs, sm };
+        // P2-7: attrib 位置同款预取 — 旧 bindQuad 每帧每 pass getAttribLocation×2，
+        // 位置 link 后不变，构建期取一次（被裁掉的 attribute 返回 -1，绑定跳过）
+        const attribs = {
+          aPos: gl.getAttribLocation(prog, 'a_Position'),
+          aUV: gl.getAttribLocation(prog, 'a_TexCoord'),
+        };
+        // P2-7/N-08: slot1/2 纹理槽位表预展开 — 旧实现每帧每 pass
+        // Object.entries(sm.textures) 分配 + 逐项查 locs，全部构建后不变
+        const texSlots = [];
+        for (const [texName, tx] of Object.entries(sm.textures || {})) {
+          if (tx.unit == null || tx.unit === 0) continue;
+          texSlots.push({ texName, unit: tx.unit, mode: tx.mode, loc: locs[texName] ?? null, resLoc: locs[texName + 'Resolution'] ?? null });
+        }
+        entry = { prog, locs, attribs, texSlots, sm };
         progCache.set(key, entry);
       }
       return entry;
@@ -572,6 +597,11 @@ function createSceneGLRenderer(opts) {
       u_Tex: gl.getUniformLocation(presentProg, 'u_Tex'),
       u_ObjectAlpha: gl.getUniformLocation(presentProg, 'u_ObjectAlpha'),
       u_Brightness: gl.getUniformLocation(presentProg, 'u_Brightness'),
+    };
+    // P2-7: present 程序 attrib 位置同样构建期预取（旧 bindQuad 每帧查询）
+    const presentAttribs = {
+      aPos: gl.getAttribLocation(presentProg, 'a_Position'),
+      aUV: gl.getAttribLocation(presentProg, 'a_TexCoord'),
     };
 
     // ② 纹理 fetch（y-down 不翻转上传；多对象并发加载，路径去重共享）
@@ -603,6 +633,24 @@ function createSceneGLRenderer(opts) {
     const objResList = await Promise.all(sceneObjects.map(async (obj, oi) => {
       const mainTexEntry = await loadOne(obj.mainTexture, false, true); // slot0 CLAMP+mipmap（§2.6/§11-⑤）
       const programs = (obj.effects || []).map((ef) => ({ ef, ...programFor(ef) }));
+      // P2-7: 材质常量构建期一次预转换 — 旧实现在 renderObjectChain 每帧每 pass
+      // split/Number 转换（csv 值 + 类型转换 + 元注释 default 兜底，附录 §5 同款
+      // 逻辑前移；constants/uniform 位置构建后均不变）。同名跨阶段冲突按片元
+      // 语义喂值（uniformsFrag 优先；GL 同名合一位置）。
+      for (const p of programs) {
+        p.matUniforms = [];
+        for (const [name, u] of Object.entries(p.sm.uniforms || {})) {
+          if (u.type === 'sampler2D') continue;
+          const uu = (p.sm.uniformsFrag && p.sm.uniformsFrag[name]) || u;
+          if (!uu.material) continue;
+          let raw = p.ef.constants[uu.material];
+          if (raw === undefined && uu.default !== undefined) raw = uu.default;
+          const v = convertUniform(uu.type, raw);
+          const loc = p.locs[name];
+          if (v == null || loc == null) continue; // null loc = setU no-op 语义不变
+          p.matUniforms.push({ loc, v: v.length === 1 ? v[0] : v });
+        }
+      }
       // 效果纹理（槽位键按对象隔离；loadOne 按路径去重不重复上传）
       const effectTex = new Map();
       await Promise.all((obj.effects || []).map(async (ef) => {
@@ -630,7 +678,12 @@ function createSceneGLRenderer(opts) {
       // 几何（G-04）：origin/scale/angle 取父链折叠结果（computeGeo 内
       // resolveTransform：effTr 直消费 / 原始 parent 本地折叠 / 缺失 mark）
       const geo = computeGeo(obj, oi);
-      return { obj, oi, mainTexEntry, programs, effectTex, fboA, fboB, geo };
+      // P2-7: 效果链 MVP 构建期算一次 — 仅依赖主纹理尺寸（构建后不变；旧实现
+      // 每帧重建）。独占缓冲：多 pass 间持续被读，不可共享模块 scratch。
+      const mvpFx = programs.length > 0
+        ? _weGLQuadMVP(mainTexEntry.w, mainTexEntry.h, 0, 0, mainTexEntry.w, mainTexEntry.h, true, new Float32Array(16))
+        : null;
+      return { obj, oi, mainTexEntry, programs, effectTex, fboA, fboB, geo, mvpFx };
     }));
 
     stats.initStage = 'fbo';
@@ -638,22 +691,47 @@ function createSceneGLRenderer(opts) {
     const cc = String(scene.general.clearcolor || '0 0 0').trim().split(/\s+/).map(Number);
     geo.clearcolor = [cc[0] || 0, cc[1] || 0, cc[2] || 0, 1];
 
-    res = { vbo, ibo, objects: objResList, progCache, presentProg, presentLocs, textures, whiteEntry, flowEntry };
+    // P2-8: 静态场景判定（保守）— 本渲染器唯一的帧变 uniform 是 g_Time（材质
+    // 常量=scene.json 静态值、无鼠标/相机类动态输入、resolution/纹理均构建期
+    // 固定）。任一 program 的 g_Time 位置非空（被链接器优化掉的返回 null）即
+    // 视为动态场景，逐帧渲染保持现状；全部为 null 才允许跳帧。
+    let sceneIsStatic = true;
+    for (const o of objResList) {
+      if (!sceneIsStatic) break;
+      for (const p of o.programs) {
+        if (p.locs.g_Time != null) { sceneIsStatic = false; break; }
+      }
+    }
+
+    // P2-7: vaos = VAO 缓存（bindQuadVao 按 attrib 位置组合惰性建，见下）
+    res = { vbo, ibo, objects: objResList, progCache, presentProg, presentLocs, presentAttribs, textures, whiteEntry, flowEntry, sceneIsStatic, vaos: new Map() };
   }
 
-  function bindQuad(prog) {
-    const aPos = gl.getAttribLocation(prog, 'a_Position');
-    const aUV = gl.getAttribLocation(prog, 'a_TexCoord');
-    gl.bindBuffer(gl.ARRAY_BUFFER, res.vbo);
-    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, res.ibo);
-    if (aPos >= 0) {
-      gl.enableVertexAttribArray(aPos);
-      gl.vertexAttribPointer(aPos, 3, gl.FLOAT, false, 20, 0);
+  // P2-7: VAO 缓存（WebGL2 原生）— 全 pass 顶点布局一致（同 vbo/ibo、同
+  // stride/offset），仅 attrib 位置编号可能随 program 变化，故按 (aPos,aUV)
+  // 组合建 VAO（同一批 shader 名字相同，实际场景 1~2 个）。一次 bindVertexArray
+  // 恢复完整 attrib 状态，替代旧 bindQuad 每帧每 pass 的
+  // getAttribLocation×2 + enable + pointer×2；destroyResources 随程序一起释放，
+  // contextrestored 重建时随 res 重建。
+  function bindQuadVao(attribs) {
+    const key = attribs.aPos + '|' + attribs.aUV;
+    if (!res.vaos.has(key)) {
+      const vao = gl.createVertexArray();
+      gl.bindVertexArray(vao);
+      gl.bindBuffer(gl.ARRAY_BUFFER, res.vbo);
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, res.ibo);
+      if (attribs.aPos >= 0) {
+        gl.enableVertexAttribArray(attribs.aPos);
+        gl.vertexAttribPointer(attribs.aPos, 3, gl.FLOAT, false, 20, 0);
+      }
+      if (attribs.aUV >= 0) {
+        gl.enableVertexAttribArray(attribs.aUV);
+        gl.vertexAttribPointer(attribs.aUV, 2, gl.FLOAT, false, 20, 12);
+      }
+      gl.bindVertexArray(null);
+      res.vaos.set(key, vao);
     }
-    if (aUV >= 0) {
-      gl.enableVertexAttribArray(aUV);
-      gl.vertexAttribPointer(aUV, 2, gl.FLOAT, false, 20, 12);
-    }
+    gl.bindVertexArray(res.vaos.get(key));
   }
   const setU = (loc, v) => {
     if (loc == null || v == null) return;
@@ -664,15 +742,23 @@ function createSceneGLRenderer(opts) {
     else if (v.length === 2) gl.uniform2fv(loc, v);
     else gl.uniform1f(loc, v[0]);
   };
-  const resVec = (e) => [e.w, e.h, e.hw, e.hh]; // lwe: (mip0.w, mip0.h, header.w, header.h)
+  // N-08: resolution 向量模块级复用（旧实现每帧每 pass 每槽位分配新数组；
+  // setU→uniform4fv 即时消费不逃逸，复用安全）
+  const _weResVecBuf = [0, 0, 0, 0];
+  const resVec = (e) => {
+    const v = _weResVecBuf;
+    v[0] = e.w; v[1] = e.h; v[2] = e.hw; v[3] = e.hh;
+    return v;
+  }; // lwe: (mip0.w, mip0.h, header.w, header.h)
 
   // 单对象效果链：主纹理 →（效果 pass ×N，对象自身 FBO 对 ping-pong）→ 输出 entry
   function renderObjectChain(o, t) {
     if (!o.programs.length) return o.mainTexEntry;
-    const FW = o.mainTexEntry.w, FH = o.mainTexEntry.h;
-    const mvpFx = _weGLQuadMVP(FW, FH, 0, 0, FW, FH, true);
+    const mvpFx = o.mvpFx; // P2-7: 构建期缓存（仅依赖主纹理尺寸，见 buildResources）
     let input = o.mainTexEntry;
-    o.programs.forEach((p, i) => {
+    // P2-7/N-08: for 循环替代 forEach（旧实现每帧每对象分配闭包）
+    for (let i = 0; i < o.programs.length; i++) {
+      const p = o.programs[i];
       // sf35: FBO 逐 pass 交替（ping-pong）。旧逻辑 i===n-1?fboB:fboA 在 n≥3 时
       // 中间 pass 读写同一 FBO 纹理 = GL 规范禁止的 feedback loop（真机 tile GPU
       // 上未定义行为 → 3 效果链的中间效果错乱; SwiftShader 读改写容错掩盖了它,
@@ -682,46 +768,44 @@ function createSceneGLRenderer(opts) {
       gl.viewport(0, 0, target.w, target.h);
       gl.disable(gl.BLEND); // 效果 FBO pass 禁 BLEND（附录 §3）
       gl.useProgram(p.prog);
-      bindQuad(p.prog);
+      bindQuadVao(p.attribs); // P2-7: VAO 绑定（attrib 位置已构建期预取）
       // slot0 = 链输入（首效果=主图，后续=上一 FBO；lwe 约定 FBO 视为 (w,h,w,h)）
       gl.activeTexture(gl.TEXTURE0);
       gl.bindTexture(gl.TEXTURE_2D, input.tex);
       if (p.locs.g_Texture0) gl.uniform1i(p.locs.g_Texture0, 0);
       setU(p.locs.g_Texture0Resolution, resVec(input));
       // slot1/2 = mask/normal（空槽按 mode 回退：flowmask→中灰，其余→白）
-      for (const [texName, tx] of Object.entries(p.sm.textures || {})) {
-        if (tx.unit == null || tx.unit === 0) continue;
-        const entry = o.effectTex.get(p.ef.dir + ':' + tx.unit)
-          || (tx.mode === 'flowmask' ? res.flowEntry : res.whiteEntry);
-        gl.activeTexture(gl.TEXTURE0 + tx.unit);
+      // P2-7: 遍历构建期预展开的槽位表（含预取 loc，免每帧 Object.entries 分配）
+      for (let s = 0; s < p.texSlots.length; s++) {
+        const ts = p.texSlots[s];
+        const entry = o.effectTex.get(p.ef.dir + ':' + ts.unit)
+          || (ts.mode === 'flowmask' ? res.flowEntry : res.whiteEntry);
+        gl.activeTexture(gl.TEXTURE0 + ts.unit);
         gl.bindTexture(gl.TEXTURE_2D, entry.tex);
-        if (p.locs[texName]) gl.uniform1i(p.locs[texName], tx.unit);
-        setU(p.locs[texName + 'Resolution'], resVec(entry));
+        if (ts.loc) gl.uniform1i(ts.loc, ts.unit);
+        setU(ts.resLoc, resVec(entry));
       }
       setU(p.locs.g_ModelViewProjectionMatrix, mvpFx);
       setU(p.locs.g_Time, t);
-      // material 常量 → uniform（附录 §5：csv 值 → 类型转换 → 元注释 default 兜底）
-      // 同名跨阶段冲突按片元语义喂值（uniformsFrag 优先；GL 同名合一位置）
-      for (const [name, u] of Object.entries(p.sm.uniforms || {})) {
-        if (u.type === 'sampler2D') continue;
-        const uu = (p.sm.uniformsFrag && p.sm.uniformsFrag[name]) || u;
-        if (!uu.material) continue;
-        let raw = p.ef.constants[uu.material];
-        if (raw === undefined && uu.default !== undefined) raw = uu.default;
-        const v = convertUniform(uu.type, raw);
-        if (v == null) continue;
-        setU(p.locs[name], v.length === 1 ? v[0] : v);
+      // P2-7: 材质常量已构建期预转换（附录 §5 逻辑前移至 buildResources），直喂
+      for (let m = 0; m < p.matUniforms.length; m++) {
+        const mu = p.matUniforms[m];
+        setU(mu.loc, mu.v);
       }
       gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
       input = target;
-    });
+    }
     return input;
   }
 
+  // N-08: 合成输出槽模块级复用（旧实现每帧 res.objects.map 分配新数组；
+  // render 内即写即读不逃逸）
+  const _weOutputs = [];
   function render(t) {
     if (!res) return;
     // ① 每对象效果链（输出 = 对象纹理空间的合成结果）
-    const outputs = res.objects.map((o) => renderObjectChain(o, t));
+    const objs = res.objects;
+    for (let i = 0; i < objs.length; i++) _weOutputs[i] = renderObjectChain(objs[i], t);
     // ② 合成 pass：按场景对象顺序 src-over（CPU canvas 直 alpha 同款）
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     gl.viewport(0, 0, CW, CH);
@@ -731,18 +815,28 @@ function createSceneGLRenderer(opts) {
     gl.useProgram(res.presentProg);
     gl.enable(gl.BLEND);
     gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
-    bindQuad(res.presentProg);
+    bindQuadVao(res.presentAttribs);
     gl.activeTexture(gl.TEXTURE0);
     gl.uniform1i(res.presentLocs.u_Tex, 0);
-    res.objects.forEach((o, i) => {
+    for (let i = 0; i < objs.length; i++) {
+      const o = objs[i];
       const g = o.geo;
-      gl.bindTexture(gl.TEXTURE_2D, outputs[i].tex);
-      const mvp = _weGLMvpWithZRot(_weGLQuadMVP(CW, CH, g.dx, g.dy, g.dw, g.dh), g.anglesZ, g.dw, g.dh);
-      gl.uniformMatrix4fv(res.presentLocs.u_MVP, false, mvp);
+      gl.bindTexture(gl.TEXTURE_2D, _weOutputs[i].tex);
+      // P2-7: present MVP 缓存 — 仅视口（CW/CH）或几何（resize 重算 geo，换新
+      // 对象）变化时重算；旧实现每帧每对象 new Float32Array×2 + 全乘法重算。
+      // 独占缓冲（基座+旋转各一，旋转在位乘会污染未读元素，不可共用 scratch）。
+      if (!g.mvp || g.mvpW !== CW || g.mvpH !== CH) {
+        const base = new Float32Array(16), rot = new Float32Array(16);
+        _weGLQuadMVP(CW, CH, g.dx, g.dy, g.dw, g.dh, false, base);
+        g.mvp = _weGLMvpWithZRot(base, g.anglesZ, g.dw, g.dh, rot);
+        g.mvpW = CW;
+        g.mvpH = CH;
+      }
+      gl.uniformMatrix4fv(res.presentLocs.u_MVP, false, g.mvp);
       gl.uniform1f(res.presentLocs.u_ObjectAlpha, g.alpha);
       gl.uniform1f(res.presentLocs.u_Brightness, g.brightness);
       gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
-    });
+    }
     gl.disable(gl.BLEND);
   }
 
@@ -761,6 +855,11 @@ function createSceneGLRenderer(opts) {
     }
     pushFrameTime(dt);
     stats.frames++;
+    // P2-8: 静态场景跳帧 — 无 g_Time 依赖（构建期保守判定，见 buildResources）
+    // 且无脏标记时跳过 render（GL 工作全免；rAF 空转保持活跃，脏标记置位后
+    // 下一 vsync 立即恢复）。frameTimes/frames 照常记录（rAF 间隔量纲，外部
+    // 观测语义不变）。动态场景（任一 g_Time 存在）恒不触发，行为与旧版一致。
+    if (res && res.sceneIsStatic && !needRedraw) return;
     const t = rateBase + ((now - wallBase) / 1000) * playbackRate;
     stats.lastT = t;
     // G-03: 帧级 try/catch + 连续失败计数 — 连续 N 帧抛错判 fatal：停循环、
@@ -771,6 +870,7 @@ function createSceneGLRenderer(opts) {
       render(t);
       pushRenderTime(performance.now() - renderT0);
       if (disposed) return; // P0-2: 慢帧熔断已在 pushRenderTime 内 dispose → 跳过本帧余下动作（含 onReady）
+      needRedraw = false; // P2-8: 渲染成功帧后才清脏（抛错帧保持脏，G-03 重试仍逐帧跑）
       renderFails = 0;
       stats.renderFails = 0;
       if (!readyFired) {
@@ -794,6 +894,7 @@ function createSceneGLRenderer(opts) {
     if (running || disposed || !res || paused) return;
     running = true;
     lastNow = 0;
+    needRedraw = true; // P2-8: 恢复渲染保守重画一帧（暂停期间 canvas 可能被合成器回收）
     rafId = requestAnimationFrame(loop);
   }
   function stopLoop() {
@@ -802,6 +903,7 @@ function createSceneGLRenderer(opts) {
     rafId = 0;
   }
   let renderFails = 0; // G-03: 连续渲染抛错计数（成功帧清零）
+  let needRedraw = true; // P2-8: 静态场景脏标记（首帧/恢复/resize 置位，渲染成功后清除）
 
   // G-07: 视口/设备像素比变化 → 重建背板与对象几何。尺寸变化>阈值(2px)才落
   // GL 状态（防 dpr 抖动频繁触发）；超限 clamp 到 4096 并 mark（一次）。对象
@@ -824,6 +926,7 @@ function createSceneGLRenderer(opts) {
         try { o.geo = computeGeo(o.obj, o.oi); } catch { /* 单对象布局失败不拦整体 */ }
       }
     }
+    needRedraw = true; // P2-8: 视口/几何变化 → 静态场景重渲一帧
     return true;
   }
 
