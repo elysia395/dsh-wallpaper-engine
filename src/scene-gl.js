@@ -1199,7 +1199,7 @@ function createSceneGLRenderer(opts) {
     const programFor = (ef) => {
       // W2: 清单 ef.shader 为完整引用 (effects/<dir> 或 workshop/<id>/...)
       const sm = shaderMeta[ef.shader];
-      if (!sm) throw new Error('shader-meta-missing:' + ef.shader);
+      if (!sm) throw new Error(sm === null ? 'shader 拉取失败(端点 404/422/超时): ' + ef.shader : 'shader-meta-missing:' + ef.shader);
       const comboValues = resolveCombos(ef, sm);
       const key = ef.shader + '|' + JSON.stringify(comboValues);
       let entry = progCache.get(key);
@@ -1915,10 +1915,17 @@ function createSceneGLRenderer(opts) {
       shaderMeta = {};
       for (const obj of meta.scene.objects || []) {
         for (const ef of obj.effects || []) {
-          if (shaderMeta[ef.shader]) continue;
+          if (Object.prototype.hasOwnProperty.call(shaderMeta, ef.shader)) continue;
           // W2: 完整 shader 引用 (effects/<dir> / workshop/<id>/...), 逐段 URL 编码
           const ref = String(ef.shader).split('/').map(encodeURIComponent).join('/');
-          shaderMeta[ef.shader] = await fetchJson(BASE + '/scene-shader/' + token + '/' + ref, 5000);
+          // 逐 shader 拉取隔离: 单个 shader 端点 404/422（未支持 include 等）只让
+          // 该效果降级跳过 (programFor 抛错 → safeProgramFor 逐效果隔离), 不拖垮
+          // 整个渲染器 — 整体 mp4 回退仅限全部对象不可渲染/GL 不可用。
+          try {
+            shaderMeta[ef.shader] = await fetchJson(BASE + '/scene-shader/' + token + '/' + ref, 5000);
+          } catch (e) {
+            shaderMeta[ef.shader] = null; // 拉取失败哨兵（区别于 undefined = 逻辑漏洞）
+          }
         }
       }
       if (disposed) return;
