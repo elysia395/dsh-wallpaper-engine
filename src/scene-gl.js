@@ -103,14 +103,17 @@ void main(){ vec4 c = texture2D(u_Tex, v_UV); gl_FragColor = vec4(c.rgb * u_Brig
 //     根本不读 renderer 字段）；SPRITESHEET 帧动画 W3 未支持（本地 7 张壁纸
 //     的可解析粒子纹理均无帧元数据）。
 // 顶点布局（11 float / 44B）：corner(2) center(2) size(2) rot(1) color(4)。
-const _WE_GL_PART_STRIDE = 11;
+const _WE_GL_PART_STRIDE = 15; // corner2+center2+size2+rot1+color4+uvrect4 (sf40g 精灵表)
 const _WE_GL_PART_VERT = `
 attribute vec2 a_Corner; attribute vec2 a_Center; attribute vec2 a_Size;
-attribute float a_Rot; attribute vec4 a_Color;
+attribute float a_Rot; attribute vec4 a_Color; attribute vec4 a_UVRect;
 uniform vec2 u_Viewport;
 varying vec2 v_UV; varying vec4 v_Color;
 void main(){
-  v_UV = vec2(a_Corner.x + 0.5, 0.5 - a_Corner.y);
+  // UV = 帧子区域映射（官方 SPRITESHEET: GIF/精灵表逐帧采样; 无帧 = 整图
+  // rect(0,0,1,1)）。cornerUV 与整图语义同款: 左上角 → (0,0)。
+  vec2 cuv = vec2(a_Corner.x + 0.5, 0.5 - a_Corner.y);
+  v_UV = a_UVRect.xy + cuv * a_UVRect.zw;
   v_Color = a_Color;
   vec2 p = a_Corner * a_Size;
   float c = cos(a_Rot), s = sin(a_Rot);
@@ -599,7 +602,13 @@ function _weGLPAdvance(sys, t, base) {
 // 存活粒子写入顶点数组（CPU _drawParticles 同款裁剪/颜色/尺寸语义），
 // 返回四边形数。ps = [场景单位→画布像素 x, y]；ratio = 纹理高/宽（官方
 // genericparticle textureRatio：垂直尺寸乘纹理纵横比）。
-function _weGLPFillVerts(sys, f32, ps, CW, CH, texW, texH) {
+// frames = 精灵表帧元数据（像素单位，TEXS，>1 帧才传）：每粒子按生命进度
+// 选帧（官方 SPRITESHEET: idx = floor(lt*count)），UV 采帧子区域，纵横比
+// 按帧（sf40g: bubble1.tex 是 30 帧 GIF 网格，整图采样 → 每粒子画出 6×5
+// 泡泡方阵）。无帧 → uvRect=(0,0,1,1)，ratio 按整图。
+function _weGLPFillVerts(sys, f32, ps, CW, CH, texW, texH, frames) {
+  const fr = (frames && frames.length > 1 && texW > 0 && texH > 0) ? frames : null;
+  const frCount = fr ? fr.length : 0;
   const ratio = texW > 0 ? texH / texW : 1;
   const c1 = sys.color1, c2 = sys.color2;
   const S = _WE_GL_PART_STRIDE;
@@ -611,7 +620,17 @@ function _weGLPFillVerts(sys, f32, ps, CW, CH, texW, texH) {
     if (a <= 0.002) continue;
     const sz = Math.max(0.5, p.size);
     const x = p.pos[0] * ps[0], y = CH - p.pos[1] * ps[1];
-    const w = sz * ps[0], h = sz * ps[1] * ratio;
+    // 帧选择 + UV 矩形（CPU SPRITESHEET 同款: 显式帧宽优先, 缺省按 count 均分）
+    let ux = 0, uy = 0, uw = 1, uh = 1, pRatio = ratio;
+    if (fr) {
+      const f = fr[Math.min(frCount - 1, Math.floor(lifePos * frCount))];
+      const fw = (f && f.width > 0) ? f.width : (frCount > 0 ? texW / frCount : texW);
+      const fh = (f && f.height > 0) ? f.height : texH;
+      ux = (f ? f.x : 0) / texW; uy = (f ? f.y : 0) / texH;
+      uw = fw / texW; uh = fh / texH;
+      if (fw > 0) pRatio = fh / fw;
+    }
+    const w = sz * ps[0], h = sz * ps[1] * pRatio;
     // 官方 USERCOLORBLEND: rgb = mix(color1, color2, v_Color.r)
     const cr = c1[0] + (c2[0] - c1[0]) * p.color[0];
     const cg = c1[1] + (c2[1] - c1[1]) * p.color[0];
@@ -627,6 +646,7 @@ function _weGLPFillVerts(sys, f32, ps, CW, CH, texW, texH) {
       f32[o + 4] = w; f32[o + 5] = h;
       f32[o + 6] = rot;
       f32[o + 7] = cr; f32[o + 8] = cg; f32[o + 9] = cb; f32[o + 10] = a;
+      f32[o + 11] = ux; f32[o + 12] = uy; f32[o + 13] = uw; f32[o + 14] = uh;
     }
     n++;
     if (n >= sys.maxCount) break; // 顶点数组按 maxCount 预分配，硬顶防御
@@ -1284,6 +1304,7 @@ function createSceneGLRenderer(opts) {
         aSize: gl.getAttribLocation(particleProg, 'a_Size'),
         aRot: gl.getAttribLocation(particleProg, 'a_Rot'),
         aColor: gl.getAttribLocation(particleProg, 'a_Color'),
+        aUVRect: gl.getAttribLocation(particleProg, 'a_UVRect'), // sf40g 精灵表
       };
       // 粒子动态顶点缓冲（STREAM_DRAW 每帧重写）+ 共享索引缓冲（最大四边形数
       // 按全部粒子系统的 maxCount 取 max，Uint16 上限 16384 四边形足够）
@@ -1371,6 +1392,9 @@ function createSceneGLRenderer(opts) {
           if (pinfo.texture && pinfo.texture.path) {
             psys.texEntry = await loadOne(pinfo.texture, false, false); // 契约: CLAMP 不 mip
           }
+          // 精灵表帧元数据（sf40g）: gate 下发的 TEXS 帧表（>1 帧才有）
+          psys.frames = Array.isArray(pinfo.texture && pinfo.texture.frames)
+            && pinfo.texture.frames.length > 1 ? pinfo.texture.frames : null;
           psys.sim = _weGLCreateParticleSys(obj, pinfo, token);
           psys.f32 = new Float32Array(psys.sim.maxCount * 4 * _WE_GL_PART_STRIDE);
         } catch (e) {
@@ -1540,6 +1564,7 @@ function createSceneGLRenderer(opts) {
       if (A.aSize >= 0) { gl.enableVertexAttribArray(A.aSize); gl.vertexAttribPointer(A.aSize, 2, gl.FLOAT, false, S, 16); }
       if (A.aRot >= 0) { gl.enableVertexAttribArray(A.aRot); gl.vertexAttribPointer(A.aRot, 1, gl.FLOAT, false, S, 24); }
       if (A.aColor >= 0) { gl.enableVertexAttribArray(A.aColor); gl.vertexAttribPointer(A.aColor, 4, gl.FLOAT, false, S, 28); }
+      if (A.aUVRect >= 0) { gl.enableVertexAttribArray(A.aUVRect); gl.vertexAttribPointer(A.aUVRect, 4, gl.FLOAT, false, S, 44); } // sf40g 精灵表帧矩形
       gl.bindVertexArray(null);
       res.partVao = vao;
     }
@@ -1582,7 +1607,7 @@ function createSceneGLRenderer(opts) {
       const sim = P.sim;
       const mouse = sim.mousefollow ? mouseScenePos() : null;
       _weGLPAdvance(sim, t, mouse || sim.origin);
-      const n = _weGLPFillVerts(sim, P.f32, particlePs(), CW, CH, P.texEntry.w, P.texEntry.h);
+      const n = _weGLPFillVerts(sim, P.f32, particlePs(), CW, CH, P.texEntry.w, P.texEntry.h, P.frames);
       if (n <= 0) return;
       gl.useProgram(res.particleProg);
       bindParticleVao();
