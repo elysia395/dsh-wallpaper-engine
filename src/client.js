@@ -332,7 +332,7 @@ function sanitizeSettings(o) {
       ? o.glassColor : DEFAULTS.glassColor,
     glassWindow: o.glassWindow !== false,
     sidebarGlass: o.sidebarGlass !== false,
-    sidebarBlur: clampNum(o.sidebarBlur, 0, 200, DEFAULTS.sidebarBlur),
+    sidebarBlur: clampNum(o.sidebarBlur, 0, 60, DEFAULTS.sidebarBlur), // P1-5: 上限 200→60,旧持久化值超限即收敛
     sidebarAlpha: clampNum(o.sidebarAlpha, 0, 200, DEFAULTS.sidebarAlpha),
     sidebarColor: typeof o.sidebarColor === "string" && /^#[0-9a-f]{6}$/i.test(o.sidebarColor)
       ? o.sidebarColor : DEFAULTS.sidebarColor,
@@ -1451,6 +1451,15 @@ function trySceneGLNow(frameUrl) {
 // 下载) — 否则旧 timer 继续把旧壁纸进度写进共享 selection (进度条跳变),
 // 且旧 probe 的下载保持服务端渲染任务活跃 (worker + ffmpeg 占满 CPU)。
 let sceneAnimUpgrade = null; // {pollTimer, probe, frameUrl, maxWait} — 当前活跃的升级
+// P1-7:统一销毁 scene-anim probe <video>。probe preload="auto" 会缓冲整段动画
+// 视频,成功/缓存命中/停止路径都必须走这里(清 src + load() 触发浏览器 abort
+// 下载 → 服务端 res close → 渲染任务取消,再移除元素),否则隐藏 video 持续
+// 占用解码与带宽。原先只有 cancelSceneAnimUpgrade 一处清理。
+function destroySceneAnimProbe(v) {
+  if (!v) return;
+  try { v.removeAttribute("src"); v.load(); } catch { /* ignore */ }
+  try { v.remove(); } catch { /* ignore */ }
+}
 function cancelSceneAnimUpgrade() {
   const u = sceneAnimUpgrade;
   sceneAnimUpgrade = null;
@@ -1459,8 +1468,7 @@ function cancelSceneAnimUpgrade() {
   if (u.maxWait) { clearTimeout(u.maxWait); }
   if (u.probe) {
     // 清 src 触发浏览器 abort 下载 → 服务端 res close → 渲染任务取消
-    try { u.probe.removeAttribute("src"); u.probe.load(); } catch { /* ignore */ }
-    try { u.probe.remove(); } catch { /* ignore */ }
+    destroySceneAnimProbe(u.probe);
   }
   if (selection.sceneAnimProgress != null) selection.sceneAnimProgress = null;
 }
@@ -1530,6 +1538,9 @@ function queueSceneAnimUpgrade(frameUrl) {
   const stopPoll = () => {
     if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
     if (maxWait) { clearTimeout(maxWait); maxWait = null; }
+    // P1-7:轮询停止(含 onloadeddata 成功路径)时一并销毁 probe video,
+    // 不再只清定时器 —— 否则 preload="auto" 的隐藏 video 继续缓冲整段动画。
+    destroySceneAnimProbe(probe);
     if (sceneAnimUpgrade && sceneAnimUpgrade.pollTimer === pollTimer) sceneAnimUpgrade = null;
     if (selection.sceneAnimProgress != null) { selection.sceneAnimProgress = null; emit(); }
   };
@@ -1550,6 +1561,7 @@ function queueSceneAnimUpgrade(frameUrl) {
       selection.sceneAnimProgress = Number.isFinite(pct) ? pct : 100;
       emit();
       if (pct >= 100) {
+        destroySceneAnimProbe(probe); // P1-7:缓存命中/渲染完成路径同样销毁 probe
         clearInterval(pollTimer);
         if (maxWait) { clearTimeout(maxWait); maxWait = null; }
         trySwitch();
@@ -1559,6 +1571,7 @@ function queueSceneAnimUpgrade(frameUrl) {
   }, 1500);
   // 渲染超时兜底: 8 分钟未完成 → 停止轮询 (进度条消失, 保持静态帧)
   maxWait = setTimeout(() => {
+    destroySceneAnimProbe(probe); // P1-7:超时停止路径销毁 probe,中止后台缓冲/渲染
     if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
     if (selection.sceneAnimProgress != null) { selection.sceneAnimProgress = null; emit(); }
   }, 8 * 60 * 1000);
@@ -2057,6 +2070,12 @@ function syncLayers() {
 // every emit — i.e. twice per slider tick (handler + subscribed applyEffects)
 // and on every 500ms transcode poll — a forced synchronous layout storm.
 let lastScrimCss = "";
+// P1-6:字体样式表规则体缓存 —— 注入的 CSS 是纯常量(数值全部走 --we-font-*
+// 变量,见 applyEffects),照抄上面 lastScrimCss 的缓存模式:规则体只在变化时
+// 写入(即只写一次),后续 emit 仅更新 CSS 变量。旧实现每个滑杆 tick 都全量
+// 重写 <style> textContent,含 body *{!important} 的规则每次都触发全页样式
+// 重算(且 N-10 修复前每 tick 双跑 ×2)。
+let lastFontCss = "";
 // ── 字体自定义样式注入 ──────────────────────────────────────────────────────
 // <style id="we-font-patch"> 把 body 上注入的 --we-font-* 变量应用到整页文本：
 // - 普通文本吃 字体颜色 / 字重 / 字体族 三项（font-family 走变量，未设时回退
@@ -2067,12 +2086,15 @@ let lastScrimCss = "";
 function applyFontStyles() {
   try {
     let st = document.getElementById("we-font-patch");
+    const fresh = !st; // 元素缺失(被移除/首次)时即使缓存命中也强制重写
     if (!st) {
       st = document.createElement("style");
       st.id = "we-font-patch";
       (document.head || document.documentElement).appendChild(st);
     }
-    st.textContent = [
+    // P1-6:规则体为纯常量,仅当内容变化(即首次注入)时才写 textContent,
+    // 避免 `body *{!important}` 全量重写反复触发全页样式重算。
+    const css = [
       /* ── 白闪回归红线（v0.6.4 方案A 教训）────────────────────────────────
          旧写法用六连 :not(:has(...)) 做「含报错祖先整体排除」——:has() 的
          祖先失效集把每次点击/输入的样式重算扩大到近乎整棵 DOM，所有
@@ -2100,12 +2122,17 @@ function applyFontStyles() {
       '  font-family: revert !important;',
       '}',
     ].join('\n');
+    if (css !== lastFontCss || fresh) {
+      st.textContent = css;
+      lastFontCss = css;
+    }
   } catch { /* ignore */ }
 }
 
 function removeFontStyles() {
   const st = document.getElementById("we-font-patch");
   if (st) st.remove();
+  lastFontCss = ""; // P1-6:样式表已移除,清缓存以便下次开启时重新写入规则体
 }
 
 function applyEffects() {
@@ -2120,7 +2147,16 @@ function applyEffects() {
   // blur radius, so the 玻璃 slider drives BOTH frosted depth and how strongly
   // the wallpaper colour bleeds through the glass (0 blur → no melt). Kept
   // gentle so the glass stays 通透 (clear) instead of oversaturated.
-  s.setProperty("--we-saturate", String(1.15 + selection.blur * 0.028));
+  const glassSaturate = 1.15 + selection.blur * 0.028;
+  s.setProperty("--we-saturate", String(glassSaturate));
+  // P2-1:玻璃 backdrop-filter 合成变量(气泡/输入框消费,见 CSS 侧)。blur=0
+  // 时输出真正的 none —— blur(0px) saturate(...) 仍会强制建立 backdrop 采样层,
+  // 做法对齐 media 侧 --we-media-filter 的 none 回退;>0 时即 P1-5 收敛后的
+  // blur+saturate 两段链。
+  s.setProperty("--we-glass-filter",
+    selection.blur > 0
+      ? "blur(" + selection.blur + "px) saturate(" + glassSaturate + ")"
+      : "none");
   s.setProperty("--we-glass-brightness", "1.04");
   // Wallpaper blur strength in px (blurs the wallpaper itself).
   s.setProperty("--we-wallpaper-blur", selection.wallpaperBlur + "px");
@@ -2234,6 +2270,7 @@ function clearEffects() {
   s.removeProperty("--we-border-alpha");
   s.removeProperty("--we-blur");
   s.removeProperty("--we-saturate");
+  s.removeProperty("--we-glass-filter"); // P2-1:与设置处成对清理
   s.removeProperty("--we-glass-brightness");
   s.removeProperty("--we-wallpaper-blur");
   s.removeProperty("--we-media-filter");
@@ -2433,7 +2470,8 @@ function WallpaperPicker(props) {
   // Slider callbacks: keep the stored value in its canonical unit, then emit —
   // applyEffects is a subscribed listener (see apply()), so emit() applies the
   // CSS vars synchronously AND re-renders the numeric readouts in one pass.
-  // (Calling applyEffects directly here too used to double-apply every tick.)
+  // (Calling applyEffects directly here too used to double-apply every tick;
+  //  N-10 已把 内容面/字体自定义 等残留的直接调用一并移除,全部走 emit 链。)
   const onScrim = (pct) => { selection.scrim = pct / 100; persistSelection(); emit(); };
   const onBorder = (pct) => { selection.border = pct / 100; persistSelection(); emit(); };
   const onBlur = (px) => { selection.blur = px; persistSelection(); emit(); };
@@ -2462,7 +2500,7 @@ function WallpaperPicker(props) {
   // 侧栏玻璃（dsh-better-sidebar）：独立于会话玻璃的一套细粒度控制，各自立即
   // 生效并持久化（--we-sidebar-blur / --we-sidebar-alpha / --we-sidebar-color）。
   const onSidebarBlur = (px) => {
-    selection.sidebarBlur = clampNum(px, 0, 200, DEFAULTS.sidebarBlur);
+    selection.sidebarBlur = clampNum(px, 0, 60, DEFAULTS.sidebarBlur); // P1-5: 与滑杆上限同步 200→60
     persistSelection(); emit();
   };
   const onSidebarAlpha = (pct) => {
@@ -2492,36 +2530,36 @@ function WallpaperPicker(props) {
   // 内容面（编辑器/终端）近不透明玻璃底：透明度滑块 + 底色（空 = 跟随主题）。
   const onSidebarContentAlpha = (pct) => {
     selection.sidebarContentAlpha = clampNum(pct, 0, 80, DEFAULTS.sidebarContentAlpha);
-    persistSelection(); applyEffects(); emit();
+    persistSelection(); emit(); // N-10:不直接调 applyEffects(),统一走 emit 订阅链
   };
   const onSidebarContentColor = (hex) => {
     if (hex === "") {
       selection.sidebarContentColor = ""; // 跟随主题面板色
-      persistSelection(); applyEffects(); emit();
+      persistSelection(); emit(); // N-10:不直接调 applyEffects(),统一走 emit 订阅链
       return;
     }
     if (!/^#[0-9a-f]{6}$/i.test(hex)) return;
     selection.sidebarContentColor = hex;
-    persistSelection(); applyEffects(); emit();
+    persistSelection(); emit(); // N-10:不直接调 applyEffects(),统一走 emit 订阅链
   };
   // 字体自定义（#57 精简回归版）：总开关 + 颜色/字重/字体族，各项立即生效并持久化。
   const onToggleFontCustom = (v) => {
     selection.fontCustom = !!v;
-    persistSelection(); applyEffects(); emit();
+    persistSelection(); emit(); // N-10:不直接调 applyEffects(),统一走 emit 订阅链
   };
   const onFontColor = (hex) => {
     if (!/^#[0-9a-f]{6}$/i.test(hex)) return;
     selection.fontColor = hex;
-    persistSelection(); applyEffects(); emit();
+    persistSelection(); emit(); // N-10:不直接调 applyEffects(),统一走 emit 订阅链
   };
   const onFontWeight = (v) => {
     selection.fontWeight = clampNum(v, 100, 900, DEFAULTS.fontWeight);
-    persistSelection(); applyEffects(); emit();
+    persistSelection(); emit(); // N-10:不直接调 applyEffects(),统一走 emit 订阅链
   };
   const onFontFamily = (family) => {
     if (!FONT_FAMILY_VALUES.includes(family)) return;
     selection.fontFamily = family;
-    persistSelection(); applyEffects(); emit();
+    persistSelection(); emit(); // N-10:不直接调 applyEffects(),统一走 emit 订阅链
   };
 
   // Close the picker modal (ESC / backdrop / close buttons share this path).
@@ -2797,7 +2835,7 @@ function WallpaperPicker(props) {
       ),
       ],
       sel.sidebarPresent && sel.sidebarGlass && [
-      SliderRow("侧栏模糊", 0, 200, 1, sel.sidebarBlur, onSidebarBlur, sel.sidebarBlur + "px", "sb-blur"),
+      SliderRow("侧栏模糊", 0, 60, 1, sel.sidebarBlur, onSidebarBlur, sel.sidebarBlur + "px", "sb-blur"), // P1-5: 上限 200→60(saturate 侧早有 60 钳制,blur 半径超 60 的采样成本过高)
       SliderRow("侧栏透明度", 0, 200, 1, sel.sidebarAlpha, onSidebarAlpha, sel.sidebarAlpha + "%", "sb-alpha"),
       React.createElement("div", { key: "sb-color", className: "we-picker__row we-picker__accent-row" },
         React.createElement("span", { className: "we-picker__hint we-picker__label" }, "侧栏玻璃颜色"),
@@ -4187,7 +4225,9 @@ const CSS = `
   /* ── iOS liquid glass ──────────────────────────────────────────────────────
      The opaque conversation surfaces become translucent glass. The recipe is
      Apple-like, not a plain blur:
-       - LARGE-radius blur + HIGH saturation + brightness/contrast lift, so the
+       - LARGE-radius blur + HIGH saturation (P1-5: 原 brightness/contrast 两段
+         已收敛 —— 每个 backdrop-filter 函数段都是一个采样 pass,气泡是数量
+         最多的表面,视觉近似即可), so the
          wallpaper colour melts into a soft glow instead of a gray smear
          (saturation scales with blur in applyEffects: 0 blur → no melt);
        - a top-weighted specular gradient (background-image) — the sheen is
@@ -4195,9 +4235,10 @@ const CSS = `
        - a light, low-alpha base (not a dark one) so the wallpaper shows through;
        - a 1px top refraction highlight + 0.5px hairline + soft elevation
          shadow for "thick glass";
-       - blur radius + saturation both scale off --we-blur / --we-saturate
-         (the 玻璃 slider drives both, so composer, bubbles AND the
-         better-sidebar shell stay in one uniform liquid look).
+       - blur radius + saturation both scale off --we-glass-filter
+         (合成于 applyEffects,P2-1: blur=0 输出 none;the 玻璃 slider drives
+         both, so composer, bubbles AND the better-sidebar shell stay in one
+         uniform liquid look).
 
      Transparency is driven through the design tokens the surfaces already read
      (--dsw-specific-input-major on the composer card, --dsw-specific-bubble on
@@ -4222,8 +4263,11 @@ const CSS = `
        tint into "wet glass" — kept faint so the wallpaper stays 通透 (clear)
        instead of glaring. */
     background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.05) 38%, rgba(255, 255, 255, 0.02));
-    -webkit-backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
-    backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
+    /* P1-5:4 段链(blur+saturate+brightness+contrast)收敛为 blur+saturate 两段
+       —— 视觉近似(高光渐变/描边/阴影仍在),少两个 backdrop 采样 pass;值由
+       applyEffects 的 --we-glass-filter 提供,blur=0 时为真正的 none(P2-1)。 */
+    -webkit-backdrop-filter: var(--we-glass-filter, blur(16px) saturate(1.8));
+    backdrop-filter: var(--we-glass-filter, blur(16px) saturate(1.8));
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, var(--we-glass-highlight, 0.32)),
       inset 0 -1px 0 rgba(255, 255, 255, 0.08),
@@ -4997,8 +5041,8 @@ const CSS = `
     position: fixed; inset: 0; z-index: 1000;
     display: flex; align-items: center; justify-content: center;
     background: rgba(0, 0, 0, 0.55);
-    -webkit-backdrop-filter: blur(3px);
-    backdrop-filter: blur(3px);
+    /* P1-5:移除原 blur(3px) —— 全屏 inset:0 的 backdrop 采样只为轻微压暗,
+       纯 rgba 底已足够;模态本体 .we-picker__modal 不受影响。 */
     animation: we-overlay-in var(--we-dur, 200ms) var(--we-ease, ease-out);
   }
   .we-picker__modal {
