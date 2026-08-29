@@ -290,6 +290,12 @@ function _weGLPParseOperator(op, rng) {
   } else if (name === 'alphafade') {
     p.fadeIn = _weGLPVal(op, 'fadeintime', 0.5);
     p.fadeOut = _weGLPVal(op, 'fadeouttime', 0.5);
+  } else if (name === 'controlpointattract') {
+    // sf41a: 控制点吸引/排斥 (bubbles1.json scale:-300 = 自控制点排斥 —
+    // 未实现时泡泡沿湍流轨迹聚串堆叠; flags&1 的 cp 绑定鼠标)。
+    p.cpId = _weGLPVal(op, 'controlpoint', -1);
+    p.attractScale = _weGLPVal(op, 'scale', 0);
+    p.radius = _weGLPVal(op, 'radius', 0); // >0: 仅半径内生效
   } else if (name === 'sizechange' || name === 'alphachange') {
     p.st = _weGLPVal(op, 'starttime', 0);
     p.et = _weGLPVal(op, 'endtime', 1);
@@ -324,6 +330,17 @@ function _weGLCreateParticleSys(obj, pinfo, token) {
   const seed = _weGLPSeed(String(token) + '|' + String(obj.name || '') + '|' + tr.origin.join(','));
   const rng = _weGLPRng(seed);
   const maxCount = Math.max(1, Math.min(_WE_GL_PART_MAXCOUNT_CAP, Number(pinfo.maxcount) || 100));
+  // sf41a: 控制点表 (id → {flags, offset}) — controlpointattract 消费;
+  // flags&1 = 鼠标绑定 → 需要 pointer 钩子（区别于 mousefollow 发射器基座）。
+  const cps = new Map();
+  for (const c of (Array.isArray(pinfo.controlpoints) ? pinfo.controlpoints : [])) {
+    if (c && typeof c === 'object' && c.id != null) {
+      const off = _weGLPVec3(c.offset, [0, 0, 0]);
+      cps.set(Number(c.id), { flags: Number(c.flags) || 0, offset: [off[0], off[1]] });
+    }
+  }
+  const hasAttract = (pinfo.operator || []).some((op) => op && op.name === 'controlpointattract');
+  const pointerAttract = hasAttract && [...cps.values()].some((c) => (c.flags & 1) === 1);
   return {
     origin: [Number(tr.origin[0]) || 0, Number(tr.origin[1]) || 0],
     scale: [Number(tr.scale[0]) || 1, Number(tr.scale[1]) || 1],
@@ -337,6 +354,7 @@ function _weGLCreateParticleSys(obj, pinfo, token) {
     color1: Array.isArray(pinfo.color1) ? pinfo.color1 : [1, 1, 1],
     color2: Array.isArray(pinfo.color2) ? pinfo.color2 : [1, 1, 1],
     mousefollow: pinfo.mousefollow === true,
+    cps, pointerAttract, pointerScene: null,
     starttime: Number(pinfo.starttime) || 0,
     particles: [], count: 0, rng, seed, simT: 0,
   };
@@ -449,6 +467,12 @@ function _weGLPApplyOperator(sys, op, dt, t) {
         p.vel[1] += -op.gravity[1] * dt;
         const df = Math.max(0, 1 - op.drag * dt);
         p.vel[0] *= df; p.vel[1] *= df;
+        break;
+      }
+      case 'controlpointattract': {
+        // sf41a(回退 no-op): 官方力语义未定标 — 直接 a=scale(常量 -300) 实测
+        // 把泡泡钉死在控制点平面不上升 (量级碾压 gravity 50)。宁可保持聚串
+        // 偏差也不引入更糟的行为; 待官方实现参考后定标。解析/下发保留。
         break;
       }
       case 'angularmovement': {
@@ -1499,7 +1523,10 @@ function createSceneGLRenderer(opts) {
 
     // P2-7: vaos = VAO 缓存（bindQuadVao 按 attrib 位置组合惰性建，见下）
     res = { vbo, ibo, objects: objResList, progCache, presentProg, presentLocs, presentAttribs, textures, whiteEntry, flowEntry, sceneIsStatic, vaos: new Map(),
-      particleProg, partLocs, partAttribs, particleVbo, particleIbo, circleEntry, partVao: null, hasMouseFollow: objResList.some((o) => o.psys && o.psys.sim && o.psys.sim.mousefollow && !o.psys.failed) };
+      particleProg, partLocs, partAttribs, particleVbo, particleIbo, circleEntry, partVao: null,
+      // sf41a: mousefollow（发射器基座跟鼠标）或 pointerAttract（controlpointattract
+      // 的 flags&1 控制点跟鼠标）任一存在 → 装 pointermove 监听。
+      hasMouseFollow: objResList.some((o) => o.psys && o.psys.sim && !o.psys.failed && (o.psys.sim.mousefollow || o.psys.sim.pointerAttract)) };
   }
 
   // P2-7: VAO 缓存（WebGL2 原生）— 全 pass 顶点布局一致（同 vbo/ibo、同
@@ -1606,6 +1633,7 @@ function createSceneGLRenderer(opts) {
     try {
       const sim = P.sim;
       const mouse = sim.mousefollow ? mouseScenePos() : null;
+      if (sim.pointerAttract) sim.pointerScene = mouseScenePos(); // sf41a 控制点鼠标位置（未移动 null → 回退 origin）
       _weGLPAdvance(sim, t, mouse || sim.origin);
       const n = _weGLPFillVerts(sim, P.f32, particlePs(), CW, CH, P.texEntry.w, P.texEntry.h, P.frames);
       if (n <= 0) return;
