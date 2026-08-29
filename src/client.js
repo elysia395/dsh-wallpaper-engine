@@ -942,6 +942,7 @@ function applySelection(id) {
   // 旧 probe 下载断开 → 服务端 res close → 取消渲染 (worker/ffmpeg 释放 CPU)。
   cancelSceneAnimUpgrade();
   disposeSceneGL(); // GL 渲染器随壁纸切换即 dispose（防上下文累积 — scene-player 前例教训）
+  sceneGLNotice = null; // G-01/G-02：旧壁纸的 gate 提示随切换作废（展示按 token 匹配双保险）
   selection.id = id || "";
   persistSelection();
   if (!selection.id) {
@@ -1252,6 +1253,18 @@ function weStartDraw(canvas, video, customFit) {
 // glFailed（带 reason，调试零成本）→ 落既有 mp4 升级（queueSceneAnimUpgrade
 // 零改动）。GL 运行期间不排 mp4（验收 1：无 scene-anim 请求发出）。
 let sceneGL = null; // { renderer, token, frameUrl, ready } — 当前活跃的 GL 渲染器
+// G-01/G-02：GL 失败/门直接拒回退 CPU 后仍保留一次的 gate 结果（token 匹配
+// 当前壁纸才展示）——host gate 的 degraded/failed 信息不因“GL 未活到首帧 /
+// 降级开关关闭预检拒”而静默丢失，CPU 视频渲染成功也展示一次。
+let sceneGLNotice = null; // { token, degraded[], reason }
+// G-06：“不再提示”记忆（localStorage 持久化，与既有选择项同款风格）
+let weGLNoticeMuted = false;
+try { weGLNoticeMuted = localStorage.getItem("weGLDegradeMuted") === "1"; } catch { /* ignore */ }
+function muteSceneGLNotice() {
+  weGLNoticeMuted = true;
+  try { localStorage.setItem("weGLDegradeMuted", "1"); } catch { /* ignore */ }
+  emit();
+}
 function disposeSceneGL() {
   const g = sceneGL;
   sceneGL = null;
@@ -1264,36 +1277,75 @@ function sceneGLFailedReason(token) {
 function markSceneGLFailed(token, reason) {
   try { sessionStorage.setItem("weSceneGLFailed:" + token, String(reason)); } catch { /* ignore */ }
 }
-// 降级清单 → 设置面板一行汇总（按 feature 聚合计数，中文标签）
-function summarizeSceneGLDegraded(list) {
-  const LABEL = {
-    particle: "粒子",
-    "no-image": "文字/纯色",
-    puppet: "骨骼蒙皮",
-    "video-texture": "视频纹理",
-    "camera-object": "相机对象",
-    model: "模型",
-    passes: "多pass材质",
-    texture: "纹理缺失",
-    cbm: "颜色混合",
-    bloom: "泛光",
-    "camera-paths": "相机路径",
-  };
-  const counts = new Map();
-  for (const d of list) {
-    const f = String((d && d.feature) || "?");
-    let key = f;
-    if (f.startsWith("effect:")) key = "效果 " + f.slice(7);
-    else if (f.startsWith("anim:")) key = "属性动画";
-    else if (f.startsWith("blending:")) key = "混合模式";
-    else if (f.startsWith("shader:")) key = "材质shader";
-    else key = LABEL[f] || f;
-    counts.set(key, (counts.get(key) || 0) + 1);
+// 降级清单 → 设置面板一行汇总。G-06：多条 degraded 只显示首条+计数
+// （“对象A·粒子 等 3 项”），避免多类目刷屏；完整明细经 title 悬停保留
+// （sceneGLDegradedDetail — 对象名与 action 全文不丢，G-05 对齐 CPU C1
+// 的 {object, feature, action} 结构）。
+const SCENE_GL_LABEL = {
+  particle: "粒子",
+  "no-image": "文字/纯色",
+  puppet: "骨骼蒙皮",
+  "video-texture": "视频纹理",
+  "camera-object": "相机对象",
+  model: "模型",
+  passes: "多pass材质",
+  texture: "纹理缺失",
+  cbm: "颜色混合",
+  bloom: "泛光",
+  "camera-paths": "相机路径",
+};
+function sceneGLFeatureLabel(d) {
+  const f = String((d && d.feature) || "?");
+  let key = f;
+  if (f.startsWith("effect:")) key = "效果 " + f.slice(7);
+  else if (f.startsWith("anim:")) key = "属性动画";
+  else if (f.startsWith("blending:")) key = "混合模式";
+  else if (f.startsWith("shader:")) key = "材质shader";
+  else key = SCENE_GL_LABEL[f] || f;
+  return (d && d.object ? d.object + "·" : "") + key;
+}
+function sceneGLDegradedDetail(list) {
+  const lines = [];
+  for (const d of Array.isArray(list) ? list : []) {
+    if (!d) continue;
+    lines.push(String(d.object || "场景") + "·" + String(d.feature || "?") + "：" + String(d.action || ""));
   }
-  const parts = [];
-  for (const [k, n] of counts) parts.push(k + (n > 1 ? "×" + n : ""));
-  const shown = parts.slice(0, 6).join("、");
-  return shown + (parts.length > 6 ? " 等" + parts.length + "类" : "");
+  return lines.join("\n");
+}
+function summarizeSceneGLDegraded(list) {
+  const arr = (Array.isArray(list) ? list : []).filter(Boolean);
+  if (!arr.length) return "";
+  const head = sceneGLFeatureLabel(arr[0]);
+  return arr.length > 1 ? head + " 等 " + arr.length + " 项" : head;
+}
+// G-01/G-02/G-06：degrade 提示条内容 — GL 运行中取实时清单；GL 已回退 CPU
+// 视频渲染时取缓存的 gate 结果（token 匹配当前壁纸才显示），保证 gate 的
+// failed/degraded 信息在“GL 未活到首帧 / 门直接拒”路径同样上 UI。
+// 返回 { text, title } 或 null（无提示/已静音）。
+function sceneGLBannerInfo(sel) {
+  if (!sel || sel.type !== "scene" || weGLNoticeMuted) return null;
+  if (sceneGL && sceneGL.ready && Array.isArray(sceneGL.degraded) && sceneGL.degraded.length > 0) {
+    return {
+      text: "⚠ 部分特效未支持，已降级渲染：" + summarizeSceneGLDegraded(sceneGL.degraded),
+      title: sceneGLDegradedDetail(sceneGL.degraded),
+    };
+  }
+  const token = String(sel.sceneFrameUrl || "").split("/").pop();
+  if (sceneGLNotice && token && sceneGLNotice.token === token) {
+    const list = (Array.isArray(sceneGLNotice.degraded) ? sceneGLNotice.degraded : []).filter(Boolean);
+    if (list.length > 0) {
+      return {
+        text: "⚠ 部分特效未支持，已回退视频完整渲染：" + summarizeSceneGLDegraded(list),
+        title: sceneGLDegradedDetail(list),
+      };
+    }
+    // 无逐项清单（gate hard-reject / init 失败 / render-fatal）→ 一行 reason
+    return {
+      text: "⚠ 实时渲染不可用（" + String(sceneGLNotice.reason || "gl-error") + "），已回退视频渲染",
+      title: "",
+    };
+  }
+  return null;
 }
 function trySceneGL(frameUrl) {
   // 门控：beta 总开关 + localStorage weSceneGL=0 调试强制 mp4 + per-wallpaper
@@ -1311,7 +1363,10 @@ function trySceneGL(frameUrl) {
   if (selection.sceneGLDegrade === false) {
     const metaUrl = frameUrl.replace("/scene-frame/", "/scene-gl-meta/");
     const stillCurrent = () => selection.type === "scene" && selection.sceneFrameUrl === frameUrl;
-    const toMp4 = (reason) => {
+    // G-02：门直接拒（降级开关关 + 有缺失项 / gate hard-reject）回退 CPU 前，
+    // 把 gate 结果缓存进 notice —— CPU 视频渲染成功也展示一次，信息不丢
+    const toMp4 = (reason, degraded) => {
+      sceneGLNotice = { token, degraded: Array.isArray(degraded) ? degraded : [], reason: String(reason) };
       markSceneGLFailed(token, reason);
       if (stillCurrent()) {
         try { queueSceneAnimUpgrade(selection.sceneFrameUrl); } catch { /* ignore */ }
@@ -1323,8 +1378,8 @@ function trySceneGL(frameUrl) {
       .then((meta) => {
         if (!stillCurrent()) return; // 用户已切走
         if (!meta) { trySceneGLNow(frameUrl); return; } // 网络异常 → 交给 renderer 失败链
-        if (meta.supported !== true) { toMp4("unsupported:" + (meta.reason || "?")); return; }
-        if (Array.isArray(meta.degraded) && meta.degraded.length > 0) { toMp4("degrade-disabled"); return; }
+        if (meta.supported !== true) { toMp4("unsupported:" + (meta.reason || "?"), meta.degraded); return; }
+        if (Array.isArray(meta.degraded) && meta.degraded.length > 0) { toMp4("degrade-disabled", meta.degraded); return; }
         trySceneGLNow(frameUrl); // 无缺失项 → 正常 GL
       })
       .catch(() => { if (stillCurrent()) trySceneGLNow(frameUrl); });
@@ -1336,6 +1391,7 @@ function trySceneGL(frameUrl) {
 function trySceneGLNow(frameUrl) {
   const token = frameUrl.split("/").pop();
   disposeSceneGL();
+  sceneGLNotice = null; // 新一轮尝试使旧 gate 提示失效(失败由 onError 重写；成功则无提示)
   const { vw, vh } = sceneViewportSize();
   const renderer = __WESceneGL.createSceneGLRenderer({
     token,
@@ -1353,6 +1409,16 @@ function trySceneGLNow(frameUrl) {
     },
     onError: ({ reason }) => {
       if (!sceneGL || sceneGL.renderer !== renderer) return;
+      // G-01：GL 失败回退 CPU 前缓存 gate 结果 — 首帧前失败（shader 编译/纹理/
+      // watchdog/render-fatal）时 renderer.degraded() 仍能读到 host 清单
+      // （meta 已缓存在 renderer 内，dispose 不清除），提示条不因回退而断链
+      let glDegraded = [];
+      try { glDegraded = renderer.degraded ? renderer.degraded() : []; } catch { glDegraded = []; }
+      sceneGLNotice = {
+        token,
+        degraded: Array.isArray(glDegraded) ? glDegraded : [],
+        reason: String(reason || "gl-error"),
+      };
       markSceneGLFailed(token, reason);
       try { renderer.dispose(); } catch { /* ignore */ }
       sceneGL = null;
@@ -1365,6 +1431,7 @@ function trySceneGLNow(frameUrl) {
     },
   });
   sceneGL = { renderer, token, frameUrl, ready: false };
+  installGLResizeHook(); // G-07：视口/dpr 变化 → renderer.resize（懒装一次，no-op 便宜）
   // E2E/诊断钩子（验收 3/4：帧时环 + contextlost 计数 + glFailed 判定）
   try { window.__weSceneGL = { version: __WESceneGL.version, token, renderer }; } catch { /* ignore */ }
   // 触发层重建挂上 canvas（wantKey 加 gl 位）：sceneVideo 404 回退路径里
@@ -1402,6 +1469,44 @@ function sceneViewportSize() {
   const vw = Math.min(1920, Math.max(320, Math.round((window.innerWidth || 1920) * dpr)));
   const vh = Math.min(1080, Math.max(180, Math.round((window.innerHeight || 1080) * dpr)));
   return { vw, vh };
+}
+// G-07：视口/设备像素比变化 → GL 背板重建（renderer.resize：超限 clamp 4096 +
+// 阈值内忽略 + 对象几何重排）。debounce 200ms 防抖；dpr 变化（跨屏拖动）经
+// matchMedia resolution 监听 — 不一定伴随 window resize 事件。懒安装一次，
+// sceneGL 空转时 no-op（无 GL 常驻成本）。
+let glResizeHookInstalled = false;
+function installGLResizeHook() {
+  if (glResizeHookInstalled) return;
+  glResizeHookInstalled = true;
+  let timer = 0;
+  const apply = () => {
+    if (!sceneGL || !sceneGL.renderer || !sceneGL.ready) return;
+    try {
+      const { vw, vh } = sceneViewportSize();
+      sceneGL.renderer.resize(vw, vh);
+    } catch { /* ignore */ }
+  };
+  const schedule = () => {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(apply, 200);
+  };
+  try {
+    if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+      window.addEventListener("resize", schedule);
+    }
+  } catch { /* ignore */ }
+  let dprMq = null;
+  function onDprChange() { watchDpr(); schedule(); }
+  const watchDpr = () => {
+    try {
+      if (dprMq && typeof dprMq.removeEventListener === "function") dprMq.removeEventListener("change", onDprChange);
+      if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
+        dprMq = window.matchMedia("(resolution: " + (window.devicePixelRatio || 1) + "dpx)");
+        if (typeof dprMq.addEventListener === "function") dprMq.addEventListener("change", onDprChange);
+      } else dprMq = null;
+    } catch { dprMq = null; }
+  };
+  watchDpr();
 }
 
 function queueSceneAnimUpgrade(frameUrl) {
@@ -3380,6 +3485,7 @@ function WallpaperPicker(props) {
                 // 关闭: 取消动画升级 (渲染任务随 probe abort 取消), 回退静态帧
                 cancelSceneAnimUpgrade();
                 disposeSceneGL(); // scene-gl 同开关（GL 层随 beta 关闭即弃）
+                sceneGLNotice = null; // beta 关闭后不再有"已回退视频渲染"语义，清提示
                 if (sel.type === "scene" && sel.sceneFrameUrl
                   && selection.url && selection.url.indexOf("/scene-anim/") !== -1) {
                   selection.url = sel.sceneFrameUrl;
@@ -3440,13 +3546,17 @@ function WallpaperPicker(props) {
           "未支持的特效自动跳过并标注（无缝/无限时长）；关闭则回退视频完整渲染",
         ),
       ),
-      // 当前壁纸降级提示：GL 运行中且有缺失项 → 汇总列出（粒子×N、效果×N…）
-      sel.type === "scene" && sceneGL && sceneGL.ready && Array.isArray(sceneGL.degraded) && sceneGL.degraded.length > 0
-        && React.createElement("div", { className: "we-picker__row" },
-          React.createElement("span", { className: "we-picker__hint we-picker__label" },
-            "⚠ 部分特效未支持，已降级渲染：" + summarizeSceneGLDegraded(sceneGL.degraded),
-          ),
-        ),
+      // 当前壁纸降级提示（G-01/G-02/G-06）：GL 运行中列出实时清单；GL 回退
+      // CPU 视频渲染后保留一次 gate 结果（token 匹配）；多条只显示首条+计数
+      // （“对象A·粒子 等 3 项”），完整明细在 title 悬停；“不再提示”记忆。
+      sel.type === "scene" && ((info) => info && React.createElement("div", { className: "we-picker__row" },
+        React.createElement("span", { className: "we-picker__hint we-picker__label", title: info.title }, info.text),
+        React.createElement("button", {
+          className: "we-picker__btn", type: "button",
+          onClick: muteSceneGLNotice,
+          title: "本次及后续降级提示不再显示",
+        }, "不再提示"),
+      ))(sceneGLBannerInfo(sel)),
       // Playback speed — native playbackRate, instant, no media reload. Video
       // and scene-animation wallpapers (web/iframe wallpapers have no playbackRate).
       (sel.type === "video" || (sel.type === "scene" && sel.url && sel.url.indexOf("/scene-anim/") !== -1))

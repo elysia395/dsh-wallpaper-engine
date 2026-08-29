@@ -81,8 +81,13 @@ varying vec2 v_UV; uniform sampler2D u_Tex; uniform float u_ObjectAlpha; uniform
 void main(){ vec4 c = texture2D(u_Tex, v_UV); gl_FragColor = vec4(c.rgb * u_Brightness, c.a * u_ObjectAlpha); }
 `;
 
-const _WE_GL_ENGINE = 'dsh-we-scene-gl/2';
 const _WE_GL_VERSION = 3; // sf35: shake 2π 数学 + FBO 交替 (与 host SCENE_GL_ENGINE 同步)
+const WE_GL_MAX_DIM = 4096; // G-07: 背板/FBO 单边尺寸上限（dpr≤2 × 4K 视口足够）
+const WE_GL_RENDER_FATAL_MAX = 5; // G-03: 连续抛错帧数达到即判 fatal 上抛
+function clampGLDim(v) {
+  const n = Math.round(Number(v) || 0);
+  return Math.max(2, Math.min(WE_GL_MAX_DIM, n));
+}
 
 /**
  * 创建场景 GL 渲染器。
@@ -90,13 +95,15 @@ const _WE_GL_VERSION = 3; // sf35: shake 2π 数学 + FBO 交替 (与 host SCENE
  *   width/height = 视口预算像素（调用方按 dpr 算好）；canvas 背板在 meta 到达后
  *                 按场景 ortho 比例修正（sar fix，视口不一致时 CSS object-fit letterbox）
  *   onReady()    首帧渲染完成（调用方此刻才显示 canvas + 淡出底图 img）
- *   onError({reason, permanent})  任一失败（调用方标记 glFailed 回退 mp4）
- * 返回 { canvas, dispose(), stats(), setPaused(), setFpsCap(), setPlaybackRate() }。
+ *   onError({reason, permanent})  任一失败（调用方标记 glFailed 回退 mp4；
+ *                 含 G-03: 连续 N 帧渲染抛错 → 'render-fatal:...' 上抛）
+ * 返回 { canvas, dispose(), stats(), setPaused(), setFpsCap(), setPlaybackRate(),
+ *        degraded(), resize(w,h) }。
  */
 function createSceneGLRenderer(opts) {
   const token = opts.token;
-  let CW = Math.max(2, Math.round(opts.width));
-  let CH = Math.max(2, Math.round(opts.height));
+  let CW = clampGLDim(opts.width); // G-07: 创建期即 clamp（超限输入防背板/FBO 分配失败）
+  let CH = clampGLDim(opts.height);
   let fpsCap = Math.max(0, Number(opts.fpsCap) || 0); // 0 = 不限
   const onReady = typeof opts.onReady === 'function' ? opts.onReady : () => {};
   const onError = typeof opts.onError === 'function' ? opts.onError : () => {};
@@ -118,10 +125,26 @@ function createSceneGLRenderer(opts) {
   let gl = null;
   const ctrl = new AbortController();
   // E2E/诊断钩子（验收 3/4 读取）：帧时环形缓冲 + contextlost 计数
-  const stats = { state: () => state, frames: 0, frameTimes: [], contextLost: 0, errors: [], lastT: 0, initStage: 'meta' };
+  const stats = { state: () => state, frames: 0, frameTimes: [], contextLost: 0, errors: [], lastT: 0, initStage: 'meta', renderFails: 0 };
   const pushFrameTime = (ms) => {
     stats.frameTimes.push(ms);
     if (stats.frameTimes.length > 4096) stats.frameTimes.splice(0, stats.frameTimes.length - 4096);
+  };
+
+  // G-05: 渲染器本地降级记录 — 与 host gate 的 mark / CPU C1 结构对齐
+  // {object, feature, action}（object=null 表示场景级），经 degraded() 与 host
+  // 清单合并上浮给客户端提示条（对象名不丢）。
+  const degradedLocal = [];
+  const mark = (object, feature, action) => degradedLocal.push({ object, feature, action });
+  // G-07: viewport clamp 只 mark 一次（resize/dpr 变化会反复触发，防清单刷屏）
+  let viewportClampMarked = Math.round(Number(opts.width) || 0) > CW || Math.round(Number(opts.height) || 0) > CH;
+  if (viewportClampMarked) mark(null, 'viewport', '渲染尺寸超限，已 clamp 到 ' + WE_GL_MAX_DIM);
+  const noteViewportClamp = (w, h) => {
+    if (viewportClampMarked) return;
+    if (Math.round(Number(w) || 0) > WE_GL_MAX_DIM || Math.round(Number(h) || 0) > WE_GL_MAX_DIM) {
+      viewportClampMarked = true;
+      mark(null, 'viewport', '渲染尺寸超限，已 clamp 到 ' + WE_GL_MAX_DIM);
+    }
   };
 
   const fail = (reason, permanent) => {
@@ -188,7 +211,18 @@ function createSceneGLRenderer(opts) {
     }
     return p;
   }
+  let fboClampMarked = false; // G-07: FBO clamp 只 mark 一次（多对象场景防刷屏）
   function makeFBO(w, h) {
+    // G-07: FBO 尺寸上限守卫 — 超大对象纹理（拼接大图/异常 header）clamp 到
+    // 4096：效果链分辨率轻微下降，优于 FBO 分配失败整链报废
+    if (w > WE_GL_MAX_DIM || h > WE_GL_MAX_DIM) {
+      w = Math.min(WE_GL_MAX_DIM, Math.max(1, Math.round(w)));
+      h = Math.min(WE_GL_MAX_DIM, Math.max(1, Math.round(h)));
+      if (!fboClampMarked) {
+        fboClampMarked = true;
+        mark(null, 'fbo', '对象纹理超限，效果 FBO 已 clamp 到 ' + WE_GL_MAX_DIM);
+      }
+    }
     const tex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, tex);
     gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
@@ -286,24 +320,125 @@ function createSceneGLRenderer(opts) {
     return nums;
   }
 
+  // ---- G-07: 布局状态（buildResources 与 resize 共用）----
+  const layoutOrtho = { width: 0, height: 0 }; // 场景 ortho 逻辑尺寸（无 ortho 时=视口预算）
+  let camEye = [0, 0, 0];
+  let objectsById = new Map(); // G-04: 父链查找表（host gate objectsById 同款）
+  // sar fix：视口预算 → 场景 ortho 比例背板（视口比例 ≠ 场景比例 → CSS letterbox，
+  // 对齐 scene-anim 路由的 h=w/sar 修正语义）；落盘到 CW/CH + canvas 背板
+  function applySarFit(bw, bh) {
+    const W = Math.max(2, Math.round(bw)), H = Math.max(2, Math.round(bh));
+    if (layoutOrtho.width > 0 && layoutOrtho.height > 0) {
+      const sar = layoutOrtho.width / layoutOrtho.height;
+      let h = Math.round(W / sar), w = W;
+      if (h > H) { h = H; w = Math.round(h * sar); }
+      CW = Math.max(2, w);
+      CH = Math.max(2, h);
+    } else {
+      CW = W;
+      CH = H;
+    }
+    canvas.width = CW;
+    canvas.height = CH;
+  }
+
+  // ---- G-04: 父链折叠（host gate foldChain / CPU core.js resolveTransform 同式）----
+  // 只做平移+角+缩放复合：子 origin × 累积 scale → 旋转(累积 Z 角) → + 累积
+  // origin。host gate 已把折叠结果预写进 obj.effTr 时直接消费；原始 parent 字段
+  // 在场时（schema 漂移/直喂场景）本地折叠；父缺失/成环按无父渲染并 mark。
+  function foldChain(chain) {
+    const root = chain[chain.length - 1];
+    let ox = Number(root.origin && root.origin[0]) || 0;
+    let oy = Number(root.origin && root.origin[1]) || 0;
+    let sx = Number(root.scale && root.scale[0]) || 1;
+    let sy = Number(root.scale && root.scale[1]) || 1;
+    let angle = Number(root.angles && root.angles[2]) || 0;
+    for (let i = chain.length - 2; i >= 0; i--) {
+      const co = chain[i].origin || [], cs = chain[i].scale || [];
+      const ca = Number(chain[i].angles && chain[i].angles[2]) || 0;
+      const cos = Math.cos(angle), sin = Math.sin(angle);
+      const rx = (Number(co[0]) || 0) * sx, ry = (Number(co[1]) || 0) * sy;
+      ox += rx * cos - ry * sin;
+      oy += rx * sin + ry * cos;
+      sx *= Number(cs[0]) || 1;
+      sy *= Number(cs[1]) || 1;
+      angle += ca;
+    }
+    return { origin: [ox, oy], scale: [sx, sy], angle };
+  }
+  function resolveTransform(obj, oi) {
+    if (obj.effTr) {
+      const t = obj.effTr;
+      return {
+        origin: [Number(t.origin && t.origin[0]) || 0, Number(t.origin && t.origin[1]) || 0],
+        scale: [Number(t.scale && t.scale[0]) || 1, Number(t.scale && t.scale[1]) || 1],
+        angle: Number(t.angle) || 0,
+      };
+    }
+    if (obj.parent == null) {
+      return {
+        origin: [Number(obj.origin && obj.origin[0]) || 0, Number(obj.origin && obj.origin[1]) || 0],
+        scale: [Number(obj.scale && obj.scale[0]) || 1, Number(obj.scale && obj.scale[1]) || 1],
+        angle: Number(obj.angles && obj.angles[2]) || 0,
+      };
+    }
+    const name = String(obj.name || ('对象' + oi));
+    const chain = [obj];
+    let cur = obj, guard = 0, broken = false;
+    while (cur.parent != null && guard < 32) {
+      const parent = objectsById.get(cur.parent);
+      if (!parent || chain.includes(parent)) { broken = true; break; }
+      chain.push(parent);
+      cur = parent;
+      guard++;
+    }
+    if (broken) {
+      // 父缺失/成环：按无父渲染（自身变换），mark 上浮（H-04 姊妹项语义）
+      mark(name, 'parent 链缺失', '按无父渲染');
+      return {
+        origin: [Number(obj.origin && obj.origin[0]) || 0, Number(obj.origin && obj.origin[1]) || 0],
+        scale: [Number(obj.scale && obj.scale[0]) || 1, Number(obj.scale && obj.scale[1]) || 1],
+        angle: Number(obj.angles && obj.angles[2]) || 0,
+      };
+    }
+    mark(name, 'parent', '父链变换已折叠渲染');
+    return foldChain(chain);
+  }
+  // 几何：对象矩形（画布像素，CPU image.js:133-145 同款公式 + alignment 锚点）；
+  // G-04: origin/scale/angle 一律取父链折叠结果
+  function computeGeo(obj, oi) {
+    const ps = [layoutOrtho.width > 0 ? CW / layoutOrtho.width : 1, layoutOrtho.height > 0 ? CH / layoutOrtho.height : 1];
+    const tr = resolveTransform(obj, oi);
+    const dw = obj.size[0] * tr.scale[0] * ps[0];
+    const dh = obj.size[1] * tr.scale[1] * ps[1];
+    let cx = tr.origin[0] * ps[0];
+    let cy = CH - tr.origin[1] * ps[1];
+    const al = String(obj.alignment || '').toLowerCase();
+    // lwe CImage.cpp:242-256：left → 左边锚定 origin（矩形右移半宽）；top → 矩形在 origin 下方展开
+    if (al.includes('left')) cx += dw / 2; else if (al.includes('right')) cx -= dw / 2;
+    if (al.includes('top')) cy += dh / 2; else if (al.includes('bottom')) cy -= dh / 2;
+    // viewShift（CPU camera.js:276 同款）：静态 scene.camera.eye 仅 x 平移前景，满幅背景豁免
+    const isBg = obj.size[0] >= layoutOrtho.width - 1 && obj.size[1] >= layoutOrtho.height - 1;
+    if (!isBg) cx += -camEye[0] * ps[0];
+    return {
+      dx: cx - dw / 2, dy: cy - dh / 2, dw, dh,
+      anglesZ: tr.angle || 0,
+      alpha: Number.isFinite(obj.alpha) ? obj.alpha : 1,
+      brightness: Number.isFinite(obj.brightness) ? obj.brightness : 1,
+    };
+  }
+
   async function buildResources() {
     stats.initStage = 'build';
     const scene = meta.scene;
     const sceneObjects = Array.isArray(scene.objects) ? scene.objects : [];
-    const orthoW = scene.general.ortho.width || CW;
-    const orthoH = scene.general.ortho.height || CH;
-    // sar fix：背板按场景 ortho 比例（视口比例 ≠ 场景比例 → CSS letterbox，
-    // 对齐 scene-anim 路由的 h=w/sar 修正语义）
-    if (orthoW > 0 && orthoH > 0) {
-      const sar = orthoW / orthoH;
-      let bh = Math.round(CW / sar);
-      let bw = CW;
-      if (bh > CH) { bh = CH; bw = Math.round(bh * sar); }
-      CW = Math.max(2, bw);
-      CH = Math.max(2, bh);
-    }
-    canvas.width = CW;
-    canvas.height = CH;
+    layoutOrtho.width = scene.general.ortho.width || CW;
+    layoutOrtho.height = scene.general.ortho.height || CH;
+    camEye = (scene.camera && scene.camera.eye) || [0, 0, 0];
+    objectsById = new Map();
+    for (const o of sceneObjects) if (o && o.id != null) objectsById.set(o.id, o);
+    // sar fix（G-07 抽取为 applySarFit，resize 复用）：背板按场景 ortho 比例
+    applySarFit(CW, CH);
 
     gl = canvas.getContext('webgl2', { alpha: false, premultipliedAlpha: false, antialias: false, depth: false });
     if (!gl) throw new Error('webgl2-unavailable');
@@ -378,8 +513,6 @@ function createSceneGLRenderer(opts) {
     textures.push(whiteEntry.tex, flowEntry.tex);
 
     // 每对象资源：主纹理 + 效果纹理 + program 列表 + FBO 对（仅带效果者）+ 几何
-    const ps = [CW / orthoW, CH / orthoH];
-    const eye = (scene.camera && scene.camera.eye) || [0, 0, 0];
     const objResList = await Promise.all(sceneObjects.map(async (obj, oi) => {
       const mainTexEntry = await loadOne(obj.mainTexture, false, true); // slot0 CLAMP+mipmap（§2.6/§11-⑤）
       const programs = (obj.effects || []).map((ef) => ({ ef, ...programFor(ef) }));
@@ -398,25 +531,10 @@ function createSceneGLRenderer(opts) {
         fboA = makeFBO(mainTexEntry.w, mainTexEntry.h);
         fboB = makeFBO(mainTexEntry.w, mainTexEntry.h);
       }
-      // 几何：对象矩形（画布像素，CPU image.js:133-145 同款公式 + alignment 锚点）
-      const dw = obj.size[0] * obj.scale[0] * ps[0];
-      const dh = obj.size[1] * obj.scale[1] * ps[1];
-      let cx = obj.origin[0] * ps[0];
-      let cy = CH - obj.origin[1] * ps[1];
-      const al = String(obj.alignment || '').toLowerCase();
-      // lwe CImage.cpp:242-256：left → 左边锚定 origin（矩形右移半宽）；top → 矩形在 origin 下方展开
-      if (al.includes('left')) cx += dw / 2; else if (al.includes('right')) cx -= dw / 2;
-      if (al.includes('top')) cy += dh / 2; else if (al.includes('bottom')) cy -= dh / 2;
-      // viewShift（CPU camera.js:276 同款）：静态 scene.camera.eye 仅 x 平移前景，满幅背景豁免
-      const isBg = obj.size[0] >= orthoW - 1 && obj.size[1] >= orthoH - 1;
-      if (!isBg) cx += -eye[0] * ps[0];
-      const geo = {
-        dx: cx - dw / 2, dy: cy - dh / 2, dw, dh,
-        anglesZ: (obj.angles && obj.angles[2]) || 0,
-        alpha: Number.isFinite(obj.alpha) ? obj.alpha : 1,
-        brightness: Number.isFinite(obj.brightness) ? obj.brightness : 1,
-      };
-      return { obj, mainTexEntry, programs, effectTex, fboA, fboB, geo };
+      // 几何（G-04）：origin/scale/angle 取父链折叠结果（computeGeo 内
+      // resolveTransform：effTr 直消费 / 原始 parent 本地折叠 / 缺失 mark）
+      const geo = computeGeo(obj, oi);
+      return { obj, oi, mainTexEntry, programs, effectTex, fboA, fboB, geo };
     }));
 
     stats.initStage = 'fbo';
@@ -549,11 +667,28 @@ function createSceneGLRenderer(opts) {
     stats.frames++;
     const t = rateBase + ((now - wallBase) / 1000) * playbackRate;
     stats.lastT = t;
-    render(t);
-    if (!readyFired) {
-      readyFired = true;
-      state = 'GL_RUN';
-      try { onReady(); } catch { /* 调用方异常不中断渲染 */ }
+    // G-03: 帧级 try/catch + 连续失败计数 — 连续 N 帧抛错判 fatal：停循环、
+    // fail 上抛（onError → 调用方回退 CPU mp4 并提示）；偶发单帧失败计数
+    // 清零自愈。onReady 只在成功帧后触发（杜绝“抛错帧也标 ready”的假就绪）。
+    try {
+      render(t);
+      renderFails = 0;
+      stats.renderFails = 0;
+      if (!readyFired) {
+        readyFired = true;
+        state = 'GL_RUN';
+        try { onReady(); } catch { /* 调用方异常不中断渲染 */ }
+      }
+    } catch (e) {
+      renderFails++;
+      stats.renderFails = renderFails;
+      const msg = e && e.message ? e.message : String(e);
+      stats.errors.push('render:' + msg);
+      try { console.error('[scene-gl] 渲染帧失败（连续 ' + renderFails + '/' + WE_GL_RENDER_FATAL_MAX + '）:', e); } catch { /* console 不可用 */ }
+      if (renderFails >= WE_GL_RENDER_FATAL_MAX) {
+        fail('render-fatal:' + msg, true); // fail → dispose + onError（调用方标记 glFailed 回退）
+        return;
+      }
     }
   }
   function startLoop() {
@@ -566,6 +701,30 @@ function createSceneGLRenderer(opts) {
     running = false;
     if (rafId) cancelAnimationFrame(rafId);
     rafId = 0;
+  }
+  let renderFails = 0; // G-03: 连续渲染抛错计数（成功帧清零）
+
+  // G-07: 视口/设备像素比变化 → 重建背板与对象几何。尺寸变化>阈值(2px)才落
+  // GL 状态（防 dpr 抖动频繁触发）；超限 clamp 到 4096 并 mark（一次）。对象
+  // 效果 FBO 在纹理空间、与视口无关，无需随 resize 重建（重建=重传全部纹理）。
+  function resize(w, h) {
+    if (disposed) return false;
+    noteViewportClamp(w, h);
+    const oldW = CW, oldH = CH;
+    applySarFit(clampGLDim(w), clampGLDim(h));
+    if (Math.abs(CW - oldW) < 2 && Math.abs(CH - oldH) < 2) {
+      // 阈值内回滚（canvas 背板尺寸赋值本身有重分配成本，避免抖动）
+      CW = oldW; CH = oldH;
+      canvas.width = CW;
+      canvas.height = CH;
+      return false;
+    }
+    if (res && res.objects) {
+      for (const o of res.objects) {
+        try { o.geo = computeGeo(o.obj, o.oi); } catch { /* 单对象布局失败不拦整体 */ }
+      }
+    }
+    return true;
   }
 
   // 暂停策略：document.hidden + IntersectionObserver 离屏即停（§5.1）
@@ -673,8 +832,14 @@ function createSceneGLRenderer(opts) {
     dispose,
     stats,
     state: () => state,
-    // 降级清单（host gate 分层产物；客户端设置面板提示用；空数组 = 完整渲染）
-    degraded: () => (meta && Array.isArray(meta.degraded) ? meta.degraded : []),
+    // 降级清单 = host gate 产物 ⊕ 渲染器本地 mark（G-04 父链缺失 / G-07 clamp）。
+    // dispose 后仍可读（client 在 onError 里取用 — G-01 缓存的数据来源）。
+    degraded: () => [
+      ...((meta && Array.isArray(meta.degraded)) ? meta.degraded : []),
+      ...degradedLocal,
+    ],
+    // G-07: 视口/设备像素比变化时由调用方喂新预算（超限 clamp + 阈值内忽略）
+    resize,
     // 用户暂停/遮挡暂停（调用方按 isEffectivelyPlaying 同步）
     setPaused(p) {
       p = !!p;
