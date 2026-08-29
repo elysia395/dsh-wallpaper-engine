@@ -1876,6 +1876,11 @@ function createSceneGLRenderer(opts) {
     if (hiddenListener) document.removeEventListener('visibilitychange', hiddenListener);
     if (pointerListener) { document.removeEventListener('pointermove', pointerListener); pointerListener = null; }
     if (observer) { try { observer.disconnect(); } catch { /* */ } observer = null; }
+    // 摘除 canvas: 孤儿 canvas 留在 DOM 会把重建的新 canvas 挤出视口（或让
+    // 调用方误判层结构已更新）→ 新 renderer 的 IntersectionObserver 判不可见
+    // → stopLoop 取消唯一 rAF → 永冻 GL_INIT（实验开关切换卡死的实锤链条）。
+    // 调用方层重建也会 remove，这里双保险幂等。
+    try { canvas.remove(); } catch { /* */ }
     try { destroyResources(); } catch { /* */ }
     if (gl) {
       try {

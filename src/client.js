@@ -1260,7 +1260,11 @@ function weStartDraw(canvas, video, customFit) {
 // 视频时先试 GL（betaSceneAnim 总开关复用）；GL 任一失败 → sessionStorage
 // glFailed（带 reason，调试零成本）→ 落既有 mp4 升级（queueSceneAnimUpgrade
 // 零改动）。GL 运行期间不排 mp4（验收 1：无 scene-anim 请求发出）。
-let sceneGL = null; // { renderer, token, frameUrl, ready } — 当前活跃的 GL 渲染器
+let sceneGL = null; // { renderer, token, frameUrl, ready, seq } — 当前活跃的 GL 渲染器
+// 渲染器实例序号: recreate（实验开关切换等 dispose→重建路径）时递增并入
+// wantKey — 否则 key 不变、层不重建, 新 canvas 永远不进 DOM, IO 判不可见
+// stopLoop 取消唯一 rAF → 渲染器永冻 GL_INIT (实测复现链)。
+let sceneGLSeq = 0;
 // G-01/G-02：GL 失败/门直接拒回退 CPU 后仍保留一次的 gate 结果（token 匹配
 // 当前壁纸才展示）——host gate 的 degraded/failed 信息不因“GL 未活到首帧 /
 // 降级开关关闭预检拒”而静默丢失，CPU 视频渲染成功也展示一次。
@@ -1448,7 +1452,7 @@ function trySceneGLNow(frameUrl) {
       emit();
     },
   });
-  sceneGL = { renderer, token, frameUrl, ready: false };
+  sceneGL = { renderer, token, frameUrl, ready: false, seq: ++sceneGLSeq };
   installGLResizeHook(); // G-07：视口/dpr 变化 → renderer.resize（懒装一次，no-op 便宜）
   // E2E/诊断钩子（验收 3/4：帧时环 + contextlost 计数 + glFailed 判定）
   try { window.__weSceneGL = { version: __WESceneGL.version, token, renderer }; } catch { /* ignore */ }
@@ -2006,7 +2010,7 @@ function syncLayers() {
       + "\u0000" + (selection.sceneVideo || "")
       // scene-gl：GL 挂起/运行 vs 纯静态帧是不同层结构（img+canvas vs img），
       // GL 失败清空 sceneGL 后 key 变化触发重建回退。
-      + "\u0000" + (sceneGL ? "gl" : "");
+      + "\u0000" + (sceneGL ? "gl" + (sceneGL.seq || 0) : "");
     const gotKey = existing && existing.dataset.weKey;
     if (existing && gotKey !== wantKey) {
       releaseLayerMedia(existing);
