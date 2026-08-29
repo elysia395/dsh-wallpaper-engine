@@ -84,9 +84,54 @@ void main(){ vec4 c = texture2D(u_Tex, v_UV); gl_FragColor = vec4(c.rgb * u_Brig
 const _WE_GL_VERSION = 3; // sf35: shake 2π 数学 + FBO 交替 (与 host SCENE_GL_ENGINE 同步)
 const WE_GL_MAX_DIM = 4096; // G-07: 背板/FBO 单边尺寸上限（dpr≤2 × 4K 视口足够）
 const WE_GL_RENDER_FATAL_MAX = 5; // G-03: 连续抛错帧数达到即判 fatal 上抛
+const WE_GL_FT_CAP = 4096; // N-09: stats.frameTimes 容量上限
+const WE_GL_SLOW_WINDOW = 120; // P0-2: render 耗时滑窗帧数（窗口填满 ≈ 慢帧已持续 ≥3s 的帧数近似）
+const WE_GL_SLOW_P95_MS = 200; // P0-2: 滑窗 p95 render 耗时阈值（ms），持续超限 → 熔断回退 mp4
 function clampGLDim(v) {
   const n = Math.round(Number(v) || 0);
   return Math.max(2, Math.min(WE_GL_MAX_DIM, n));
+}
+
+// ---------- P1-3①: WebGL2 一次性预检 + SwiftShader 嗅探 ----------
+// 此前 webgl2-unavailable 要到 buildResources（meta+shader 串行 fetch 之后）才
+// 暴露，SwiftShader/llvmpipe 软渲染更是要到运行期才以 1fps 灾难形态显形。这里
+// 模块级只探一次：失败（无 webgl2 / 软渲染器）→ sessionStorage 全局标记 + 返回
+// 失败原因，调用方直接走 onError 降级（mp4），本会话不再进入 meta/shader fetch。
+// sessionStorage 读全部裹 try/catch（隐私模式会抛）。
+const WE_GL_PROBE_FAIL_KEY = 'weSceneGLProbeFailed';
+const WE_GL_SW_RENDERER_RE = /swiftshader|llvmpipe|software/i;
+let _weGLProbeResult; // undefined=未测；true=通过；string=失败原因（sessionStorage 命中时复用旧因）
+function weGLPreflight() {
+  if (_weGLProbeResult !== undefined) return _weGLProbeResult;
+  try {
+    const prev = sessionStorage.getItem(WE_GL_PROBE_FAIL_KEY);
+    if (prev) { _weGLProbeResult = prev; return prev; } // 本会话已判定失败 → 短路（连 probe canvas 都不建）
+  } catch { /* 隐私模式：跳过会话标记，仍现场探测 */ }
+  let reason = '';
+  try {
+    const g = document.createElement('canvas').getContext('webgl2');
+    if (!g) {
+      reason = 'webgl2-unavailable';
+    } else {
+      // 成功路径嗅探渲染器：UNMASKED_RENDERER 命中软栅格化（SwiftShader/llvmpipe
+      // /software）→ 同样降级（软渲染灾难路径）。嗅探本身失败不阻断（按硬件 GL 放行）。
+      try {
+        const ext = g.getExtension('WEBGL_debug_renderer_info');
+        const renderer = ext ? String(g.getParameter(ext.UNMASKED_RENDERER_WEBGL) || '') : '';
+        if (renderer && WE_GL_SW_RENDERER_RE.test(renderer)) reason = 'software-renderer:' + renderer.slice(0, 80);
+      } catch { /* */ }
+      try { const lose = g.getExtension('WEBGL_lose_context'); if (lose) lose.loseContext(); } catch { /* 探测完即释放 */ }
+    }
+  } catch (e) {
+    reason = 'webgl2-probe:' + (e && e.message ? e.message : e);
+  }
+  if (reason) {
+    try { sessionStorage.setItem(WE_GL_PROBE_FAIL_KEY, reason); } catch { /* 隐私模式 */ }
+    _weGLProbeResult = reason;
+    return reason;
+  }
+  _weGLProbeResult = true;
+  return true;
 }
 
 /**
@@ -127,8 +172,32 @@ function createSceneGLRenderer(opts) {
   // E2E/诊断钩子（验收 3/4 读取）：帧时环形缓冲 + contextlost 计数
   const stats = { state: () => state, frames: 0, frameTimes: [], contextLost: 0, errors: [], lastT: 0, initStage: 'meta', renderFails: 0 };
   const pushFrameTime = (ms) => {
-    stats.frameTimes.push(ms);
-    if (stats.frameTimes.length > 4096) stats.frameTimes.splice(0, stats.frameTimes.length - 4096);
+    // N-09: 旧实现在超 4096 后每帧 splice(0,1) O(n)。读方语义要求 frameTimes
+    // 恒为 oldest→newest 有序真数组（index.html 取 ft[len-1]=最新；gui-e2e.py
+    // 会外部 length=0 清空后重灌 + slice()），原地环形覆盖会破坏这两条，故改为
+    // 攒批削半：写满 1.5×cap 才一次 splice 削回 cap，摊还 O(1)/帧。
+    const ft = stats.frameTimes;
+    ft.push(ms);
+    if (ft.length >= WE_GL_FT_CAP + (WE_GL_FT_CAP >> 1)) ft.splice(0, ft.length - WE_GL_FT_CAP);
+  };
+  // P0-2: render 耗时滑窗熔断 — pushFrameTime 记的是 rAF 间隔（含浏览器节流/
+  // 合帧，非渲染成本），慢帧判定必须量 render() 本身。窗口填满（=慢帧已持续
+  // 数秒的帧数近似）且 p95 超阈 → onError({reason:'slow', permanent:false})
+  // 只触发一次，客户端 markSceneGLFailed + queueSceneAnimUpgrade 现有链零改动接住。
+  const renderMsRing = new Float64Array(WE_GL_SLOW_WINDOW);
+  let renderMsN = 0, renderMsHead = 0, slowFired = false;
+  const pushRenderTime = (ms) => {
+    renderMsRing[renderMsHead] = ms;
+    renderMsHead = (renderMsHead + 1) % WE_GL_SLOW_WINDOW;
+    if (renderMsN < WE_GL_SLOW_WINDOW) renderMsN++;
+    if (slowFired || renderMsN < WE_GL_SLOW_WINDOW) return; // 窗口未填满不判定（防开机抖动误熔断）
+    const sorted = Array.from(renderMsRing).sort((a, b) => a - b); // 120 个数/帧，排序成本可忽略
+    const p95 = sorted[Math.floor(sorted.length * 0.95)];
+    if (p95 > WE_GL_SLOW_P95_MS) {
+      slowFired = true; // fail → dispose 停循环，天然只触发一次；此为双保险
+      try { console.warn('[scene-gl] render p95=' + Math.round(p95) + 'ms 超过 ' + WE_GL_SLOW_P95_MS + 'ms 阈值，慢帧熔断降级'); } catch { /* console 不可用 */ }
+      fail('slow', false);
+    }
   };
 
   // G-05: 渲染器本地降级记录 — 与 host gate 的 mark / CPU C1 结构对齐
@@ -213,14 +282,17 @@ function createSceneGLRenderer(opts) {
   }
   let fboClampMarked = false; // G-07: FBO clamp 只 mark 一次（多对象场景防刷屏）
   function makeFBO(w, h) {
-    // G-07: FBO 尺寸上限守卫 — 超大对象纹理（拼接大图/异常 header）clamp 到
-    // 4096：效果链分辨率轻微下降，优于 FBO 分配失败整链报废
+    // G-07+N-06: FBO 尺寸上限守卫 — 超大对象纹理（拼接大图/异常 header）clamp
+    // 到 4096。两轴取同一缩放比 s=min(1,MAX/w,MAX/h)（等比，保持纵横比）：旧的
+    // w/h 各自独立 clamp 会把 8192×4608 压成 4096×4096（16:9→1:1），读 aspect
+    // 的效果（foliagesway 等）失真。效果链分辨率轻微下降，优于 FBO 分配失败整链报废
     if (w > WE_GL_MAX_DIM || h > WE_GL_MAX_DIM) {
-      w = Math.min(WE_GL_MAX_DIM, Math.max(1, Math.round(w)));
-      h = Math.min(WE_GL_MAX_DIM, Math.max(1, Math.round(h)));
+      const s = Math.min(1, WE_GL_MAX_DIM / w, WE_GL_MAX_DIM / h);
+      w = Math.max(1, Math.round(w * s));
+      h = Math.max(1, Math.round(h * s));
       if (!fboClampMarked) {
         fboClampMarked = true;
-        mark(null, 'fbo', '对象纹理超限，效果 FBO 已 clamp 到 ' + WE_GL_MAX_DIM);
+        mark(null, 'fbo', '对象纹理超限，效果 FBO 已等比 clamp（单边上限 ' + WE_GL_MAX_DIM + '）');
       }
     }
     const tex = gl.createTexture();
@@ -241,11 +313,25 @@ function createSceneGLRenderer(opts) {
     //  waterripple/iris 不读 slot0 resolution）。
     return { fbo, tex, w, h, hw: w, hh: h };
   }
+  let glMaxTexSize = 0; // N-07: gl.MAX_TEXTURE_SIZE（buildResources 拿到上下文后取一次）
   function uploadTex(bmp, { repeat, mip }) {
     const tex = gl.createTexture();
     gl.bindTexture(gl.TEXTURE_2D, tex);
+    // N-07: MAX_TEXTURE_SIZE 守卫 — 源图单边超限（拼接大图/异常包）时 texImage2D
+    // 会被 GPU 拒收（INVALID_VALUE → 纹理残缺）；等比降采样到限内（离屏 2D
+    // canvas drawImage 缩放）再上传。采样走归一化 UV、FBO 链另有画布预算 clamp，
+    // 故 entry 的 w/h 仍记原始尺寸（几何/aspect 不受影响）。
+    let src = bmp;
+    if (glMaxTexSize > 0 && (bmp.width > glMaxTexSize || bmp.height > glMaxTexSize)) {
+      const s = Math.min(1, glMaxTexSize / bmp.width, glMaxTexSize / bmp.height);
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(bmp.width * s));
+      c.height = Math.max(1, Math.round(bmp.height * s));
+      c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+      src = c;
+    }
     // 不翻转上传（y-down 定案）：tex 行 0 = PNG 行 0 = 图顶 = CPU v=0
-    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, bmp);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
     const w = repeat ? gl.REPEAT : gl.CLAMP_TO_EDGE;
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, w);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, w);
@@ -442,6 +528,7 @@ function createSceneGLRenderer(opts) {
 
     gl = canvas.getContext('webgl2', { alpha: false, premultipliedAlpha: false, antialias: false, depth: false });
     if (!gl) throw new Error('webgl2-unavailable');
+    glMaxTexSize = Number(gl.getParameter(gl.MAX_TEXTURE_SIZE)) || 0; // N-07: uploadTex 上传守卫用（重建时刷新）
 
     const vbo = gl.createBuffer();
     gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
@@ -525,11 +612,20 @@ function createSceneGLRenderer(opts) {
           effectTex.set(ef.dir + ':' + slot, await loadOne(info, true, false)); // slot1/2 REPEAT
         }
       }));
-      // FBO 链 = 对象纹理空间（对齐 CPU staticFrame 全分辨率效果链）
+      // FBO 链 = 对象纹理空间等比 clamp 到画布预算（P0-1：此前链 FBO 跟主纹理
+      // 走，8K 底图在 1080p 视口上多耗 ~5-8× 片元/GPU 显存；现对齐 CPU mp4 路径
+      // ≤ 视口预算的语义。N-06：两轴取同一缩放比 s=min(1,CW/w,CH/h) 保持纵横比
+      // ——w/h 各自独立 clamp 会把 16:9 压成 1:1，读 aspect 的效果失真；链输出
+      // 仍由 present pass 按对象几何画到真实画布，aspect 由 quad 几何保证。
+      // CW/CH 此刻 = applySarFit 后的画布背板 = 调用方视口预算（client
+      // sceneViewportSize ≤1920×1080）；≤ 预算的纹理 s=1，行为不变）
       let fboA = null, fboB = null;
       if (programs.length > 0) {
-        fboA = makeFBO(mainTexEntry.w, mainTexEntry.h);
-        fboB = makeFBO(mainTexEntry.w, mainTexEntry.h);
+        const s = Math.min(1, CW / mainTexEntry.w, CH / mainTexEntry.h);
+        const fw = Math.max(1, Math.round(mainTexEntry.w * s));
+        const fh = Math.max(1, Math.round(mainTexEntry.h * s));
+        fboA = makeFBO(fw, fh);
+        fboB = makeFBO(fw, fh);
       }
       // 几何（G-04）：origin/scale/angle 取父链折叠结果（computeGeo 内
       // resolveTransform：effTr 直消费 / 原始 parent 本地折叠 / 缺失 mark）
@@ -671,7 +767,10 @@ function createSceneGLRenderer(opts) {
     // fail 上抛（onError → 调用方回退 CPU mp4 并提示）；偶发单帧失败计数
     // 清零自愈。onReady 只在成功帧后触发（杜绝“抛错帧也标 ready”的假就绪）。
     try {
+      const renderT0 = performance.now(); // P0-2: 量 render 本身（pushFrameTime 记的是 rAF 间隔）
       render(t);
+      pushRenderTime(performance.now() - renderT0);
+      if (disposed) return; // P0-2: 慢帧熔断已在 pushRenderTime 内 dispose → 跳过本帧余下动作（含 onReady）
       renderFails = 0;
       stats.renderFails = 0;
       if (!readyFired) {
@@ -706,7 +805,8 @@ function createSceneGLRenderer(opts) {
 
   // G-07: 视口/设备像素比变化 → 重建背板与对象几何。尺寸变化>阈值(2px)才落
   // GL 状态（防 dpr 抖动频繁触发）；超限 clamp 到 4096 并 mark（一次）。对象
-  // 效果 FBO 在纹理空间、与视口无关，无需随 resize 重建（重建=重传全部纹理）。
+  // 效果 FBO 建于构建期画布预算内（P0-1 等比 clamp），不随 resize 重建（重建
+  // =重传全部纹理；视口放大时链输出由 present pass 放大，仅轻微变软）。
   function resize(w, h) {
     if (disposed) return false;
     noteViewportClamp(w, h);
@@ -786,6 +886,14 @@ function createSceneGLRenderer(opts) {
   // ---- 启动序列（附录 §8）----
   (async () => {
     try {
+      // 先让出同步栈：本 IIFE 在首个 await 前同步执行，此刻调用方尚未完成
+      // sceneGL 赋值，同步 fail() 的 onError 会撞上其早退守卫被吞（渲染器挂死）。
+      await Promise.resolve();
+      if (disposed) return;
+      // P1-3①: WebGL2 一次性预检 + SwiftShader 嗅探 — 失败即降级，不进入
+      // meta/shader 串行 fetch（webgl2-unavailable 此前要到 buildResources 才暴露）
+      const probeFail = weGLPreflight();
+      if (probeFail !== true) { fail(probeFail, true); return; }
       // GL_TRY：meta（5s 超时）
       meta = await fetchJson(BASE + '/scene-gl-meta/' + token, 5000);
       if (disposed) return;
