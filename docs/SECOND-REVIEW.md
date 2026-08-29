@@ -499,3 +499,25 @@ CPU 实渲 7/7 无异常(低分辨率下),但日志通道在生产配置下被 `
   3295448069/3478544779 变化已目检 = 双线性重采样 + foliagesway C4 跳过,构图一致。
 - **终验三件套**:逃逸电池 ALL BLOCKED;PNG 硬化抛错/合法回放任一;GLSL for 循环编译。
 - `npm run verify`(package-files + client + transcode-state)全 PASS。
+
+### 第二批(lwe 参照修正,2026-08)
+
+以 `~/projects/linux-wallpaperengine`(Almamu C++ 实现,b016d7d)行级对照后
+(裁决全文 docs/WE-REVERSE.md §10),修正第一批的发明语义/豁免项:
+
+| 提交 | 范围 | 内容 |
+|---|---|---|
+| `e3e444b` | 粒子系统 | p.life→p.lifetime 统一;P0-6 二次修正(box vel=0、仅 sphere 径向初速、sign 作用于出生偏移、cone 全删——旧全 emitter cone 采样为发明语义);sphere √均匀采样;步进 1/60;湍流确定性 curl-noise;velocityrandom 叠加+y翻转+sys.rng |
+| `2984be0` | visible/ortho | 非数值字符串 visible(含 'true')→ 隐藏(DynamicValue String 型 getBool 恒 false);ortho.height 缺失回退 1080→输出高(5 处) |
+| `4f9f8ba` | GLSL/纹理 | mul 官方语义(二元 * 涉矩阵从逐分量改代数乘,此前 m*v 得 0 级错误);fmod trunc 版;TEX flags 解析+clampUV 携带 |
+| `dd12db6` | 文档 | WE-REVERSE §10 lwe 对照(证实 9 项/修正 8 项/维持 6 项) |
+
+**豁免结案**:BASE-14(lwe 证实 sRGB 空间平均即官方)、P1-4(alphafade=0-1 寿命
+分数,我们实现本就正确)、MOD-05(lwe 同样未解明 MDLA 中间 15 float,维持豁免)。
+**仍待官方源**:ApplyBlending case 4/20(lwe 仓库无 common_blending.h 副本)。
+**分歧维持**:旋转方向(我们 exe 拟合 CCW vs lwe CW)、祖先 visible 传播(lwe 不传播,
+我们传播)——均以官方 exe 逆向/编辑器语义为准,记录于 §10.3。
+
+作者验收:粒子确定性(同参两渲染 sha256 一致)×2、sphere 径向语义读码+行号对照、
+visible 10 形态断言、mul/fmod 独立数值断言、MAD 稳定(3113554287=0.000;粒子壁纸
+变化均为语义修正预期)、npm run verify 全 PASS。
