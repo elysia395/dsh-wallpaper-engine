@@ -92,7 +92,7 @@ varying vec2 v_UV; uniform sampler2D u_Tex; uniform float u_ObjectAlpha; uniform
 void main(){ vec4 c = texture2D(u_Tex, v_UV); gl_FragColor = vec4(c.rgb * u_Brightness, c.a * u_ObjectAlpha); }
 `;
 
-const _WE_GL_VERSION = 3; // sf35: shake 2π 数学 + FBO 交替 (与 host SCENE_GL_ENGINE 同步)
+const _WE_GL_VERSION = 4; // W2: 通用效果层 (多pass拍平/previous/workshop shader 引用) — 与 host SCENE_GL_ENGINE 同步
 const WE_GL_MAX_DIM = 4096; // G-07: 背板/FBO 单边尺寸上限（dpr≤2 × 4K 视口足够）
 const WE_GL_RENDER_FATAL_MAX = 5; // G-03: 连续抛错帧数达到即判 fatal 上抛
 const WE_GL_FT_CAP = 4096; // N-09: stats.frameTimes 容量上限
@@ -554,16 +554,18 @@ function createSceneGLRenderer(opts) {
     stats.initStage = 'compile';
     const progCache = new Map(); // key → { prog, locs, sm }
     const programFor = (ef) => {
-      const sm = shaderMeta[ef.dir];
+      // W2: 清单 ef.shader 为完整引用 (effects/<dir> 或 workshop/<id>/...)
+      const sm = shaderMeta[ef.shader];
+      if (!sm) throw new Error('shader-meta-missing:' + ef.shader);
       const comboValues = resolveCombos(ef, sm);
-      const key = ef.dir + '|' + JSON.stringify(comboValues);
+      const key = ef.shader + '|' + JSON.stringify(comboValues);
       let entry = progCache.get(key);
       if (!entry) {
         const vsrc = _weGLAssemble(sm.vert, sm.combos, comboValues);
         const fsrc = _weGLAssemble(sm.frag, sm.combos, comboValues);
-        const vs = compileShader(gl.VERTEX_SHADER, vsrc, ef.dir + '.vert');
-        const fs = compileShader(gl.FRAGMENT_SHADER, fsrc, ef.dir + '.frag');
-        const prog = linkProgram(vs, fs, ef.dir);
+        const vs = compileShader(gl.VERTEX_SHADER, vsrc, ef.shader + '.vert');
+        const fs = compileShader(gl.FRAGMENT_SHADER, fsrc, ef.shader + '.frag');
+        const prog = linkProgram(vs, fs, ef.shader);
         // 预取全部 uniform 位置（被 #if 裁掉的返回 null，uniformX(null) 规范 no-op）
         const locs = {};
         for (const name of Object.keys(sm.uniforms || {})) locs[name] = gl.getUniformLocation(prog, name);
@@ -586,6 +588,17 @@ function createSceneGLRenderer(opts) {
         progCache.set(key, entry);
       }
       return entry;
+    };
+    // W2: 每效果编译隔离 — 单个效果 shader 编译/链接失败只跳过该链条目
+    // (链输入原样传给下一 pass), 不拖垮整个对象/场景; 失败记配置页提醒。
+    const safeProgramFor = (ef, objName) => {
+      try {
+        return programFor(ef);
+      } catch (e) {
+        mark(objName || '?', 'effect:' + (ef.dir || ef.shader),
+          'shader 编译/链接失败，已跳过该效果: ' + (e && e.message ? e.message : e));
+        return null;
+      }
     };
     const presentProg = linkProgram(
       compileShader(gl.VERTEX_SHADER, _WE_GL_PRESENT_VERT, 'present.vert'),
@@ -632,7 +645,10 @@ function createSceneGLRenderer(opts) {
     // 每对象资源：主纹理 + 效果纹理 + program 列表 + FBO 对（仅带效果者）+ 几何
     const objResList = await Promise.all(sceneObjects.map(async (obj, oi) => {
       const mainTexEntry = await loadOne(obj.mainTexture, false, true); // slot0 CLAMP+mipmap（§2.6/§11-⑤）
-      const programs = (obj.effects || []).map((ef) => ({ ef, ...programFor(ef) }));
+      const programs = (obj.effects || []).map((ef) => {
+        const pe = safeProgramFor(ef, obj.name);
+        return pe ? { ef, ...pe } : null;
+      }).filter(Boolean); // W2: 编译失败的效果已被隔离剔除
       // P2-7: 材质常量构建期一次预转换 — 旧实现在 renderObjectChain 每帧每 pass
       // split/Number 转换（csv 值 + 类型转换 + 元注释 default 兜底，附录 §5 同款
       // 逻辑前移；constants/uniform 位置构建后均不变）。同名跨阶段冲突按片元
@@ -656,8 +672,9 @@ function createSceneGLRenderer(opts) {
       await Promise.all((obj.effects || []).map(async (ef) => {
         for (let slot = 1; slot < ef.textures.length; slot++) {
           const info = ef.textures[slot];
-          if (!info) continue;
-          effectTex.set(ef.dir + ':' + slot, await loadOne(info, true, false)); // slot1/2 REPEAT
+          // W2: {previous:true}/{chain:true} 标记槽无 path — 绘制期绑定, 不预载
+          if (!info || !info.path) continue;
+          effectTex.set(ef.shader + ':' + slot, await loadOne(info, true, false)); // slot1/2 REPEAT
         }
       }));
       // FBO 链 = 对象纹理空间等比 clamp 到画布预算（P0-1：此前链 FBO 跟主纹理
@@ -778,8 +795,12 @@ function createSceneGLRenderer(opts) {
       // P2-7: 遍历构建期预展开的槽位表（含预取 loc，免每帧 Object.entries 分配）
       for (let s = 0; s < p.texSlots.length; s++) {
         const ts = p.texSlots[s];
-        const entry = o.effectTex.get(p.ef.dir + ':' + ts.unit)
-          || (ts.mode === 'flowmask' ? res.flowEntry : res.whiteEntry);
+        // W2: 清单槽 {previous:true} → 对象主纹理 (官方 effect.json pass.bind
+        // "previous" 语义); 其余按预载纹理/兜底
+        const slotInfo = p.ef.textures[ts.unit];
+        const entry = (slotInfo && slotInfo.previous === true) ? o.mainTexEntry
+          : (o.effectTex.get(p.ef.shader + ':' + ts.unit)
+            || (ts.mode === 'flowmask' ? res.flowEntry : res.whiteEntry));
         gl.activeTexture(gl.TEXTURE0 + ts.unit);
         gl.bindTexture(gl.TEXTURE_2D, entry.tex);
         if (ts.loc) gl.uniform1i(ts.loc, ts.unit);
@@ -1011,12 +1032,14 @@ function createSceneGLRenderer(opts) {
       }
       state = 'GL_INIT';
       stats.initStage = 'shaders';
-      // shader fetch（编译先于纹理下载；多对象：收集全部对象用到的效果目录）
+      // shader fetch（编译先于纹理下载；多对象：收集全部对象用到的 shader 引用）
       shaderMeta = {};
       for (const obj of meta.scene.objects || []) {
         for (const ef of obj.effects || []) {
-          if (shaderMeta[ef.dir]) continue;
-          shaderMeta[ef.dir] = await fetchJson(BASE + '/scene-shader/' + token + '/' + ef.dir, 5000);
+          if (shaderMeta[ef.shader]) continue;
+          // W2: 完整 shader 引用 (effects/<dir> / workshop/<id>/...), 逐段 URL 编码
+          const ref = String(ef.shader).split('/').map(encodeURIComponent).join('/');
+          shaderMeta[ef.shader] = await fetchJson(BASE + '/scene-shader/' + token + '/' + ref, 5000);
         }
       }
       if (disposed) return;

@@ -95,6 +95,7 @@ const DEFAULTS = {
   // 壁纸内嵌脚本执行: 默认关闭 (用户拍板: 完全不希望执行) — 仅影响 CPU 渲染
   // 路由 (GL 路由从不执行脚本); 含脚本壁纸在设置面板显示"内嵌脚本未运行"。
   enableSceneScripts: false,
+  sceneGLExperimental: false,
   // GL 降级渲染（默认开，用户拍板）：场景含不支持的效果/对象时只渲染可用部分
   // （粒子/文字/音频跳过、未支持效果跳过对象保留），设置面板列出缺失项；
   // 关闭则这类场景回退 CPU mp4 渲染（完整但有接缝/限时长/等待）。
@@ -316,6 +317,7 @@ function sanitizeSettings(o) {
     fpsCap: FPS_CAP_VALUES.includes(o.fpsCap) ? o.fpsCap : DEFAULTS.fpsCap,
     betaSceneAnim: o.betaSceneAnim === true,
     enableSceneScripts: o.enableSceneScripts === true,
+    sceneGLExperimental: o.sceneGLExperimental === true,
     sceneGLDegrade: o.sceneGLDegrade !== false,
     pauseOnHidden: o.pauseOnHidden !== false,
     pauseOnBlur: o.pauseOnBlur === true,
@@ -457,6 +459,7 @@ function serializeSelection() {
     fpsCap: selection.fpsCap,
     betaSceneAnim: selection.betaSceneAnim,
     enableSceneScripts: selection.enableSceneScripts,
+    sceneGLExperimental: selection.sceneGLExperimental,
     sceneGLDegrade: selection.sceneGLDegrade,
     pauseOnHidden: selection.pauseOnHidden,
     pauseOnBlur: selection.pauseOnBlur,
@@ -3618,6 +3621,36 @@ function WallpaperPicker(props) {
         ),
         React.createElement("span", { className: "we-picker__hint" },
           "默认关闭（内嵌脚本未运行）。开启有供应链风险，切换后重新渲染生效",
+        ),
+      ),
+      // 未测试特性实验开关（默认关，用户拍板：任务期间打开、收尾关回）：
+      // GL gate 对未在本地 7 张壁纸实测的效果目录/结构变体默认拦截；开启后按
+      // 通用机制放行（编译失败自动隔离，见 scene-gl safeProgramFor）。
+      sel.type === "scene" && sel.betaSceneAnim === true && React.createElement("div", { className: "we-picker__row" },
+        React.createElement("label", { className: "we-picker__rotation-toggle" },
+          React.createElement("input", {
+            type: "checkbox",
+            checked: sel.sceneGLExperimental === true,
+            onChange: (e) => {
+              selection.sceneGLExperimental = e.target.checked;
+              persistSelection();
+              // gate 分层随开关变化 → 与 GL 降级开关同款重分流（清失败记忆+重新评估）
+              try { sessionStorage.removeItem("weSceneGLFailed:" + (sel.sceneFrameUrl || "").split("/").pop()); } catch { /* ignore */ }
+              if (sel.sceneFrameUrl && !sel.sceneVideo) {
+                cancelSceneAnimUpgrade();
+                disposeSceneGL();
+                if (selection.url && selection.url.indexOf("/scene-anim/") !== -1) {
+                  selection.url = sel.sceneFrameUrl;
+                }
+                if (!trySceneGL(sel.sceneFrameUrl)) queueSceneAnimUpgrade(sel.sceneFrameUrl);
+              }
+              emit();
+            },
+          }),
+          "开启未测试特性（实验性）",
+        ),
+        React.createElement("span", { className: "we-picker__hint" },
+          "默认关闭。放行未实测的 GL 特效/变体，可能渲染异常，切换后立即重评估",
         ),
       ),
       // 当前壁纸降级提示（G-01/G-02/G-06）：GL 运行中列出实时清单；GL 回退
