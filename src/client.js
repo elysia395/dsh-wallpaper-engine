@@ -1302,6 +1302,15 @@ const SCENE_GL_LABEL = {
   bloom: "泛光",
   "camera-paths": "相机路径",
   "scene-script": "内嵌脚本未运行",
+  livetext: "即时文字(时钟)",
+  watermarktext: "水印文字",
+  "text-render": "文字栅格化失败",
+  "text-effects": "文字效果链",
+  "3D 模型": "3D模型",
+  "相机对象": "相机",
+  "声音对象": "声音",
+  "木偶对象": "木偶",
+  "visible 隐藏": "隐藏对象",
 };
 function sceneGLFeatureLabel(d) {
   const f = String((d && d.feature) || "?");
