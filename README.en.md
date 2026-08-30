@@ -43,7 +43,6 @@ Wallpaper Engine wallpapers come in four types:
 | **Scene** | Wallpaper Engine's own 3D engine | ✅ Full-scene frame — a pure-JS scene renderer (object tree / textures / particles / shader effects), see below |
 | **Video** | a plain `.mp4` file | ✅ Yes — plays in a `<video>` tag |
 | **Web** | a Chromium (`webwallpaper64.exe`) host for HTML | ✅ Yes — loads in an `<iframe>` |
-| **Image** | — (this plugin's custom upload) | ✅ Yes — upload local JPG / PNG as a wallpaper |
 | **Application** | an injected external window | ❌ No |
 
 A Scene wallpaper's 3D scene is fully replayed by the plugin's **pure-JS scene

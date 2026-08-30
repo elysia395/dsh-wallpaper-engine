@@ -84,11 +84,14 @@ const DEFAULTS = {
   // 解码占用随帧率线性下降）。与倍速完全解耦 —— 倍速照常叠加在抽帧版上。
   // 无 ffmpeg 或转码失败时自动回退原片（transcodeState: "fallback"）。
   fpsCap: 0,
-  // Scene 壁纸: 静态帧的 frameUrl (供 fpsCap 变更时重渲染)
+  // Scene 壁纸动画化: 静态帧的 frameUrl (供 fpsCap 变更时重渲染动画) + 渲染进度
+  // (0-100; 后台渲染 scene-anim 视频期间轮询, 完成置 null)。
   sceneFrameUrl: null,
-  // GPU 渲染加速 (静态帧): 测试中功能, 默认关闭; 开启后静态帧走 GPU
-  // (x64 + supreium-headless-gl, 失败自动回退 CPU)。
-  sceneGpuAccel: false,
+  sceneAnimProgress: null,
+  // beta场景动画: 默认关闭 — 关闭时 scene 壁纸只渲染静态帧 (稳定), 不启动
+  // scene-anim 视频后台渲染; 开启后才走动画化升级 (CPU 渲染试验性, 可能有
+  // 组件错误), 渲染期间进度条 + 完成自动切换视频。
+  betaSceneAnim: false,
   // 遮挡暂停（借鉴 Wallpaper Engine 的「被遮挡时暂停」——桌面端大部分时间
   // GPU≈0 主因就是它）：
   // - pauseOnHidden：页面隐藏（窗口最小化 / 切到其它标签页）时暂停视频。
@@ -304,8 +307,7 @@ function sanitizeSettings(o) {
       : [],
     playbackRate: clampNum(o.playbackRate, 0.5, 2, DEFAULTS.playbackRate),
     fpsCap: FPS_CAP_VALUES.includes(o.fpsCap) ? o.fpsCap : DEFAULTS.fpsCap,
-    // GPU 渲染加速 (静态帧): 测试中功能; 输出与 CPU 有微小 float 精度差, 缓存隔离
-    sceneGpuAccel: o.sceneGpuAccel === true,
+    betaSceneAnim: o.betaSceneAnim === true,
     pauseOnHidden: o.pauseOnHidden !== false,
     pauseOnBlur: o.pauseOnBlur === true,
     pauseOnBattery: o.pauseOnBattery === true,
@@ -444,7 +446,7 @@ function serializeSelection() {
     hiddenIds: selection.hiddenIds,
     playbackRate: selection.playbackRate,
     fpsCap: selection.fpsCap,
-    sceneGpuAccel: selection.sceneGpuAccel,
+    betaSceneAnim: selection.betaSceneAnim,
     pauseOnHidden: selection.pauseOnHidden,
     pauseOnBlur: selection.pauseOnBlur,
     pauseOnBattery: selection.pauseOnBattery,
@@ -930,6 +932,9 @@ function importPlaylistIntoDraft(playlist) {
 }
 
 function applySelection(id) {
+  // 切换壁纸 (任意类型): 终止旧的 scene 动画升级 — 旧轮询 timer 停止写进度,
+  // 旧 probe 下载断开 → 服务端 res close → 取消渲染 (worker/ffmpeg 释放 CPU)。
+  cancelSceneAnimUpgrade();
   selection.id = id || "";
   persistSelection();
   if (!selection.id) {
@@ -961,11 +966,16 @@ function applySelection(id) {
   }
   selection.url = w.type === "scene" ? w.frameUrl : w.media;
   selection.type = w.type;
-  // Scene 壁纸: 先显示静态帧 (frameUrl, 立即); sceneFrameUrl 供 fpsCap 变更时重渲染。
+  // Scene 壁纸动画化: 先显示静态帧 (frameUrl, 立即), 后台预渲染动画视频
+  // (scene-anim 路由 ?fmt=mp4, 首次分钟级) 完成后无缝切换 — video 元素提供
+  // 播放/暂停/倍速 控制, 与视频壁纸同款。sceneFrameUrl 供 fpsCap 变更时重渲染。
   selection.sceneFrameUrl = w.type === "scene" ? (w.frameUrl || null) : null;
   // Scene wallpapers with an embedded animation (host-extracted MP4) play it
   // as a hardware-decoded <video>; scenes without one stay on the static frame.
+  // 有内嵌 MP4 (sceneVideo) 的场景直接用硬件解码播放 — 不再触发 CPU scene-anim
+  // 升级 (避免重复动画 + 浪费 CPU, 且 scene-anim 完成后会覆盖 sceneVideo)。
   selection.sceneVideo = w.type === "scene" ? (w.sceneVideo || null) : null;
+  if (w.type === "scene" && w.frameUrl && !selection.sceneVideo) queueSceneAnimUpgrade(w.frameUrl);
   // Keep the preview around so a failed static frame can fall back to it.
   selection.previewUrl = w.preview || null;
   selection.transcodeState = "idle";
@@ -1223,13 +1233,110 @@ function weStartDraw(canvas, video, customFit) {
   weResizeObs.observe(canvas);
 }
 
+// ── Scene 壁纸动画化: 静态帧 → 后台预渲染视频 → 无缝切换 ──────
+// scene-anim 路由 (?fmt=mp4) 有落盘缓存 + 并发去重; 首次渲染分钟级, 故先显示
+// 静态帧 (frameUrl), 用隐藏 <video> 预加载动画视频 (触发宿主渲染), 完成后
+// 替换当前壁纸 URL — video 元素原生提供 播放/暂停/倍速/进度 控制,
+// 与视频壁纸同款配置。渲染期间轮询 /scene-anim-progress 显示进度条。
+// 切换壁纸 / fpsCap 变更会调用本函数: 必须终止旧升级 (轮询 timer + probe
+// 下载) — 否则旧 timer 继续把旧壁纸进度写进共享 selection (进度条跳变),
+// 且旧 probe 的下载保持服务端渲染任务活跃 (worker + ffmpeg 占满 CPU)。
+let sceneAnimUpgrade = null; // {pollTimer, probe, frameUrl, maxWait} — 当前活跃的升级
+function cancelSceneAnimUpgrade() {
+  const u = sceneAnimUpgrade;
+  sceneAnimUpgrade = null;
+  if (!u) return;
+  if (u.pollTimer) { clearInterval(u.pollTimer); }
+  if (u.maxWait) { clearTimeout(u.maxWait); }
+  if (u.probe) {
+    // 清 src 触发浏览器 abort 下载 → 服务端 res close → 渲染任务取消
+    try { u.probe.removeAttribute("src"); u.probe.load(); } catch { /* ignore */ }
+    try { u.probe.remove(); } catch { /* ignore */ }
+  }
+  if (selection.sceneAnimProgress != null) selection.sceneAnimProgress = null;
+}
+function queueSceneAnimUpgrade(frameUrl) {
+  cancelSceneAnimUpgrade(); // 旧升级终止 (旧壁纸渲染随服务端 res close 取消)
+  // beta场景动画开关: 默认关闭 → scene 壁纸只显示静态帧, 不进入动画化升级。
+  // 关闭状态下即使 sceneFrameUrl 变更 (fpsCap 点击) 也不启动后台渲染。
+  if (selection.betaSceneAnim !== true) return;
+  // fps 取帧率上限 (fpsCap>0 时重渲染对应帧率, 与视频抽帧同款语义)
+  const fps = selection.fpsCap > 0 ? Math.min(30, Math.max(2, selection.fpsCap)) : 12;
+  // 分辨率按屏幕 + devicePixelRatio (上限 1920×1080, CPU 渲染成本受限) —
+  // 提高分辨率避免动画放大模糊 (对比静态帧 3840 全分辨率)
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  const vw = Math.min(1920, Math.max(320, Math.round((window.innerWidth || 1920) * dpr)));
+  const vh = Math.min(1080, Math.max(180, Math.round((window.innerHeight || 1080) * dpr)));
+  const q = "?fps=" + fps + "&fmt=mp4&w=" + vw + "&h=" + vh;
+  const animUrl = frameUrl.replace("/scene-frame/", "/scene-anim/") + q;
+  // 渲染进度轮询 (首次分钟级; 缓存命中时第一次轮询即 100)
+  const token = frameUrl.split("/").pop();
+  const progUrl = "/wallpaper-engine/scene-anim-progress/" + token + q;
+  selection.sceneAnimProgress = 0;
+  emit(); // 立即反映新进度 (fpsCap 变更路径的调用方 emit 在前, 这里补一次)
+  let pollTimer = null, maxWait = null;
+  const stopPoll = () => {
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    if (maxWait) { clearTimeout(maxWait); maxWait = null; }
+    if (sceneAnimUpgrade && sceneAnimUpgrade.pollTimer === pollTimer) sceneAnimUpgrade = null;
+    if (selection.sceneAnimProgress != null) { selection.sceneAnimProgress = null; emit(); }
+  };
+  // 渲染完成切换的主动路径: 轮询到 100% 直接切换 — 不依赖 probe 的
+  // onloadeddata (渲染分钟级时浏览器 video 请求长时间挂起, onloadeddata
+  // 可能不触发/被中断 → 之前"渲染后仍显示静态帧")。
+  const trySwitch = () => {
+    if (selection.url && selection.url === frameUrl) {
+      selection.url = animUrl;
+      syncLayers();
+    }
+  };
+  pollTimer = setInterval(async () => {
+    try {
+      const r = await fetch(progUrl, { cache: "no-store" });
+      const j = await r.json();
+      const pct = Number(j && j.percent);
+      selection.sceneAnimProgress = Number.isFinite(pct) ? pct : 100;
+      emit();
+      if (pct >= 100) {
+        clearInterval(pollTimer);
+        if (maxWait) { clearTimeout(maxWait); maxWait = null; }
+        trySwitch();
+        if (selection.sceneAnimProgress != null) { selection.sceneAnimProgress = null; emit(); }
+      }
+    } catch { /* 网络错误: 保持上次进度 */ }
+  }, 1500);
+  // 渲染超时兜底: 8 分钟未完成 → 停止轮询 (进度条消失, 保持静态帧)
+  maxWait = setTimeout(() => {
+    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
+    if (selection.sceneAnimProgress != null) { selection.sceneAnimProgress = null; emit(); }
+  }, 8 * 60 * 1000);
+  // probe video: 触发服务端渲染 (probe.src 请求)。必须挂 DOM + load(),
+  // detached video 设 src 不保证加载 → onloadeddata 不触发 (静止根因)。
+  // onloadeddata 是快路径 (渲染快时提前切换); 慢渲染由轮询 100% 兜底。
+  const probe = document.createElement("video");
+  probe.muted = true;
+  probe.preload = "auto";
+  probe.style.cssText = "position:absolute;left:-100000px;top:0;width:1px;height:1px;opacity:0;pointer-events:none;";
+  probe.onloadeddata = () => {
+    trySwitch();
+    stopPoll();
+  };
+  probe.onerror = () => { /* 渲染慢挂起超时 → 保持轮询, 由进度 100 主动切换 */ };
+  probe.src = animUrl;
+  try { document.body.appendChild(probe); probe.load(); } catch { /* ignore */ }
+  sceneAnimUpgrade = { pollTimer, probe, frameUrl, maxWait };
+}
+
 function buildMedia(sel) {
-  // Scene 壁纸播放形态:
+  // Scene 壁纸播放形态优先级:
   //   1. sceneVideo — 场景内嵌 MP4 (作者主分支, 硬件解码 <video>, poster=静态帧)
-  //   2. 静态帧 img (frameUrl)
+  //   2. scene-anim — beta 动画升级 (本分支 CPU 渲染视频, URL 含 /scene-anim/)
+  //   3. 静态帧 img (frameUrl)
+  // 未升级时仍是静态帧 img。
   const isSceneVideo = sel.type === "scene" && Boolean(sel.sceneVideo);
-  const isStill = sel.type === "image" || (sel.type === "scene" && !isSceneVideo);
-  const media = sel.type === "video" || isSceneVideo
+  const isSceneAnim = sel.type === "scene" && sel.url && sel.url.indexOf("/scene-anim/") !== -1;
+  const isStill = sel.type === "image" || (sel.type === "scene" && !isSceneVideo && !isSceneAnim);
+  const media = sel.type === "video" || isSceneVideo || isSceneAnim
     ? document.createElement("video")
     : isStill
       ? document.createElement("img")
@@ -1238,10 +1345,9 @@ function buildMedia(sel) {
   // type — WE media included (the 适配 control used to be uploads-only).
   // iframes (web wallpapers) don't read object-fit, so they skip the class.
   const fitClass = " we-media--fit";
-  if (sel.type === "video") {
+  if (sel.type === "video" || isSceneAnim) {
     media.src = sel.url;
     media.autoplay = true;
-    // 视频壁纸始终循环 (官方 videoloopmode=default)。
     media.loop = true;
     media.muted = true;
     media.setAttribute("playsinline", "");
@@ -1269,50 +1375,15 @@ function buildMedia(sel) {
     media.autoplay = true;
     media.loop = true;
     media.muted = true;
-    media.preload = "auto";   // 尽快解出首帧, poster 尽快被视频画面替换
     media.setAttribute("playsinline", "");
     media.poster = sel.url;   // frameUrl as poster
     media.className = "we-media" + fitClass;
-    // ── 播放看门狗（自重构前备份恢复, 2026-08-30）──
-    // 应播放（无遮挡 + 用户未暂停）但视频暂停且数据就绪 → 强制 play()。
-    // 覆盖: play() 首次被 autoplay 策略拒绝/挂起、syncLayers 竞态漏调、
-    // 遮挡恢复后未续播 等"加载成功却停住"的路径。遮挡暂停(电池/隐藏/失焦)
-    // 与手动暂停都会让 isEffectivelyPlaying() 为 false, 故不会与之打架。
-    // 元素离开层时自清除, 不泄漏。
-    {
-      let wdTimer = setInterval(() => {
-        try {
-          const layer = document.getElementById(LAYER_ID);
-          if (!layer || !layer.contains(media)) { clearInterval(wdTimer); return; }
-          if (isEffectivelyPlaying() && media.paused && media.readyState >= 2) {
-            const p = media.play();
-            if (p && typeof p.catch === "function") p.catch(() => {});
-          }
-        } catch { /* ignore */ }
-      }, 1000);
-    }
     // No embedded video (404) or codec failure → degrade to the static frame.
-    // 幽灵 error 守卫: 层被重建/切换后, 被移除旧 <video> 的异步 error
-    // (load() 重置/abort 队列任务) 不得清空当前 selection.sceneVideo —
-    // 否则快速切换壁纸后, 新场景的内嵌 MP4 会被旧元素的残留 error 误杀,
-    // 永久退化成静态帧 png。
-    // 瞬时错误 (1=ABORTED, 2=NETWORK, 3=DECODE) 重试 2 次再降级: 一次网络
-    // 抖动或解码器冷启动不得把有内嵌 MP4 的场景永久打成静态帧。
-    // 占位 URL 404 (无内嵌视频) 在 Chromium 里报 code=4 (SRC_NOT_SUPPORTED)
-    // → 不重试立即降级, 与旧行为一致且零额外请求。
-    let sceneVideoRetries = 0;
     media.addEventListener("error", () => {
-      const curLayer = document.getElementById(LAYER_ID);
-      if (!curLayer || !curLayer.contains(media)) return;
-      if (!selection.sceneVideo) return;
-      const errCode = media.error ? media.error.code : 0;
-      if ((errCode === 1 || errCode === 2 || errCode === 3) && sceneVideoRetries < 2) {
-        sceneVideoRetries++;
-        try { media.load(); } catch { /* ignore */ }
-        return;
+      if (selection.sceneVideo) {
+        selection.sceneVideo = null;
+        try { syncLayers(); emit(); } catch { /* ignore */ }
       }
-      selection.sceneVideo = null;
-      try { syncLayers(); emit(); } catch { /* ignore */ }
     });
   } else if (isStill) {
     media.src = sel.url;
@@ -3116,51 +3187,49 @@ function WallpaperPicker(props) {
       SliderRow("暗化", 0, 90, 5, Math.round(sel.scrim * 100), onScrim, Math.round(sel.scrim * 100) + "%"),
       SliderRow("边框", 0, 90, 5, Math.round(sel.border * 100), onBorder, Math.round(sel.border * 100) + "%"),
       SliderRow("玻璃", 0, 60, 1, sel.blur, onBlur, sel.blur + "px"),
-      // GPU 渲染加速 (静态帧): 测试中功能, 默认关闭; 开启后静态帧走 GPU
-      // (x64 + supreium-headless-gl, 失败自动回退 CPU)。渲染过程中开关:
-      // scene-frame URL 无 gpu 参数, 开关后 URL 不变浏览器不重取 → 加
-      // ?gpu=0/1 查询参数强制重取 (服务端忽略 query, 按配置算缓存键隔离)。
+      // beta场景动画: 默认关闭 → scene 壁纸只渲染静态帧 (稳定, 与官方静态帧
+      // 一致); 开启后才启动 scene-anim 视频后台渲染 (CPU 渲染试验性, 可能有
+      // 组件错误)。关闭时若已在播放动画视频 → 回退静态帧并取消进行中的渲染。
       sel.type === "scene" && React.createElement("div", { className: "we-picker__row" },
         React.createElement("label", { className: "we-picker__rotation-toggle" },
           React.createElement("input", {
             type: "checkbox",
-            checked: sel.sceneGpuAccel === true,
+            checked: sel.betaSceneAnim === true,
             onChange: (e) => {
+              selection.betaSceneAnim = e.target.checked;
               const enable = e.target.checked;
-              selection.sceneGpuAccel = enable;
-              // 竞态: persistSelection 是 200ms 防抖 + 异步 PUT — 立即刷新时
-              // 宿主 config 可能还没收到 sceneGpuAccel → 服务端按旧配置渲染。
-              // 跳过防抖立即冲刷, 等 PUT 落盘完成再刷新。
-              const frameUrl = sel.sceneFrameUrl;
-              const isScene = sel.type === "scene" && frameUrl;
-              const doRefresh = () => {
-                if (isScene && selection.url && selection.url.indexOf("/scene-frame/") !== -1) {
-                  selection.url = frameUrl + (enable ? "?gpu=1" : "?gpu=0");
+              persistSelection();
+              if (!enable) {
+                // 关闭: 取消动画升级 (渲染任务随 probe abort 取消), 回退静态帧
+                cancelSceneAnimUpgrade();
+                if (sel.type === "scene" && sel.sceneFrameUrl
+                  && selection.url && selection.url.indexOf("/scene-anim/") !== -1) {
+                  selection.url = sel.sceneFrameUrl;
                   syncLayers();
                 }
-              };
-              if (isScene) {
+              } else if (sel.type === "scene" && sel.sceneFrameUrl && !sel.sceneVideo) {
+                // 开启: 先把 beta 持久化到宿主端 (宿主 /scene-anim 路由按 config.json
+                // 门控 — 防抖的 PUT 落地前渲染请求会先到宿主 → 403 → 进度卡 0)。
+                // 跳过防抖立即冲刷, 等 PUT 落盘完成 (宿主「响应即已持久化」) 再触发升级。
                 if (persistTimer) { clearTimeout(persistTimer); persistTimer = null; }
                 writeLocalCache();
                 const p = pushPersisted();
                 (p && typeof p.then === "function" ? p : Promise.resolve())
-                  .then(doRefresh)
-                  .catch(doRefresh); // 落盘失败也触发 (服务端读 localCache 兜底)
-              } else {
-                doRefresh();
+                  .then(() => { if (selection.betaSceneAnim && sel.sceneFrameUrl && !sel.sceneVideo) queueSceneAnimUpgrade(sel.sceneFrameUrl); })
+                  .catch(() => { if (selection.betaSceneAnim && sel.sceneFrameUrl && !sel.sceneVideo) queueSceneAnimUpgrade(sel.sceneFrameUrl); });
               }
               emit();
             },
           }),
-          "GPU 渲染加速",
+          "beta场景动画",
         ),
         React.createElement("span", { className: "we-picker__hint" },
-          "静态帧用 GPU 渲染（WebGL/ANGLE，仅 x64），失败自动回退 CPU",
+          "实验性场景壁纸渲染引擎，不要开启（除非你知道自己在干什么）",
         ),
       ),
       // Playback speed — native playbackRate, instant, no media reload. Video
-      // wallpapers only (web/iframe wallpapers have no playbackRate).
-      sel.type === "video"
+      // and scene-animation wallpapers (web/iframe wallpapers have no playbackRate).
+      (sel.type === "video" || (sel.type === "scene" && sel.url && sel.url.indexOf("/scene-anim/") !== -1))
         && React.createElement("div", { className: "we-picker__row" },
         React.createElement("span", { className: "we-picker__hint we-picker__label" }, "倍速"),
         [0.5, 0.75, 1, 1.25, 1.5, 2].map((rate) =>
@@ -3175,7 +3244,8 @@ function WallpaperPicker(props) {
       // 解码帧率上限（抽帧转码）：host 一次性把源视频重编码为上限帧率（时间线
       // 1.0x 正常速度，解码占用随帧率线性下降），与倍速解耦。首次转码需等待，
       // 播放中原片、转好自动切换；无 ffmpeg 自动回退原片。
-      sel.type === "video"
+      // scene 动画: fps 参数在渲染时决定 (scene-anim ?fps=..), 变更后重渲染。
+      (sel.type === "video" || (sel.type === "scene" && sel.url && sel.url.indexOf("/scene-anim/") !== -1))
         && React.createElement("div", { className: "we-picker__row" },
         React.createElement("span", { className: "we-picker__hint we-picker__label" }, "帧率上限"),
         FPS_CAP_VALUES.map((cap) =>
@@ -3185,10 +3255,27 @@ function WallpaperPicker(props) {
             type: "button",
             onClick: () => {
               selection.fpsCap = cap; persistSelection(); refreshMediaInfo(true); emit();
+              // scene 动画: fpsCap 变更 → 以新帧率重新渲染动画视频
+              // (sceneVideo 内嵌 MP4 的场景不重渲染 — 硬件解码不受 fpsCap 影响)
+              if (sel.type === "scene" && sel.sceneFrameUrl && !sel.sceneVideo) queueSceneAnimUpgrade(sel.sceneFrameUrl);
             },
           }, cap === 0 ? "无限制" : cap + "fps"),
         ),
       ),
+      // Scene 动画渲染进度: 首次渲染分钟级, 后台渲染期间显示进度条
+      // (轮询 /scene-anim-progress; 完成或切换壁纸后置 null)。
+      sel.type === "scene" && sel.sceneAnimProgress != null && sel.sceneAnimProgress < 100
+        && React.createElement("div", { className: "we-picker__row we-picker__prog" },
+          React.createElement("div", { className: "we-picker__prog-track" },
+            React.createElement("div", {
+              className: "we-picker__prog-bar",
+              style: { width: Math.max(2, Math.min(100, sel.sceneAnimProgress || 0)) + "%" },
+            }),
+          ),
+          React.createElement("span", { className: "we-picker__hint" },
+            "场景动画渲染中 " + (sel.sceneAnimProgress || 0) + "%",
+          ),
+        ),
       // Source metadata + transcode status (host moov probe / transcode lifecycle).
       sel.type === "video" && sel.mediaInfo && React.createElement("span", { className: "we-picker__hint" },
         "源 " + sel.mediaInfo.width + "×" + sel.mediaInfo.height
@@ -4980,25 +5067,6 @@ function apply(ctx) {
           emit(); // already on battery → pause immediately
         }).catch(() => { /* battery API unavailable: no-op */ });
       }
-      // ── 首次用户手势兜底播放（自重构前备份恢复, 2026-08-30）──
-      // 若宿主 WebView2 的 autoplay 策略拒（即使 muted 的 <video> 也拦在
-      // 用户手势之外）, 第一次点击/按键时强制播放当前壁纸视频（视频壁纸与
-      // sceneVideo 共用）。一次性: 成功后自动移除。
-      const onFirstGesture = () => {
-        const layer = document.getElementById(LAYER_ID);
-        const v = layer && layer.querySelector("video");
-        if (v && v.paused && isEffectivelyPlaying()) {
-          try { v.play().catch(() => {}); } catch { /* ignore */ }
-        }
-        for (const t of ["pointerdown", "keydown", "touchstart"]) {
-          window.removeEventListener(t, onFirstGesture);
-        }
-      };
-      if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
-        for (const t of ["pointerdown", "keydown", "touchstart"]) {
-          window.addEventListener(t, onFirstGesture, { passive: true, once: false });
-        }
-      }
       syncLayers();
       applyEffects();
       return () => {
@@ -5007,7 +5075,6 @@ function apply(ctx) {
         unsubEffects();
         if (typeof window !== "undefined" && typeof window.removeEventListener === "function") {
           for (const t of ocListeners) window.removeEventListener(t, onOcclusionChange);
-          for (const t of ["pointerdown", "keydown", "touchstart"]) window.removeEventListener(t, onFirstGesture);
         }
         if (batteryCleanup) { batteryCleanup(); batteryCleanup = null; }
         weBattery = null;

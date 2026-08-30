@@ -40,9 +40,9 @@
     "lib/scene-renderer.js",
     "lib/scene-render-worker.mjs",
     "lib/we-renderer/",
+    "lib/apng-encode.js",
     "lib/font-render.js",
     "lib/scene-scripts.js",
-    "lib/scene-script-apis.js",
     "lib/scene-manifest.js",
     "lib/scene-player.js",
     "lib/types/index.d.ts",
@@ -82,8 +82,7 @@
     }
   },
   "dependencies": {
-    "@shaderfrog/glsl-parser": "^7.0.1",
     "jpeg-js": "^0.4.4",
-    "supreium-headless-gl": "^8.3.0"
+    "@shaderfrog/glsl-parser": "^7.0.1"
   }
 }

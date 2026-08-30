@@ -384,10 +384,8 @@ async function runHandler(route, url) {
   const done = route.handler(fakeReq(url), res);
   if (done && typeof done.then === 'function') await done;
   if (!res.__state.ended) {
-    // 3840×2160 全场景渲染 (worker + 效果) 实测 20-30s (lens_flare_sun 等
-    // 全分辨率效果) — 8s 等待在冷缓存时会超时 → 0B 误报。放宽到 90s。
     await new Promise((resolveFn) => {
-      const t = setTimeout(resolveFn, 90000);
+      const t = setTimeout(resolveFn, 8000);
       res.on('finish', () => { clearTimeout(t); resolveFn(); });
     });
   }
@@ -411,9 +409,8 @@ if (token) {
   check('scene-frame 200 + payload', okFirst, 'status=' + firstRes.__state.status + ' ' + firstRes.__state.body.length + 'B ' + ctype);
   check('scene-frame mime', /image\/(jpeg|png)/.test(ctype), ctype);
   // cache file written under the plugin data dir (env-overridden for tests)
-  // 键 = sf34_<gpuFlag>_<token>_<fw>x<fh>_<mtime> (gpuFlag 隔离 GPU/CPU, 尺寸隔离非 16:9)
   const cacheDir = TEST_CACHE_DIR;
-  const cached = existsSync(cacheDir) ? readdirSync(cacheDir).filter((f) => f.startsWith('sf34_') && f.includes(token)) : [];
+  const cached = existsSync(cacheDir) ? readdirSync(cacheDir).filter((f) => f.startsWith('sf33_' + token + '_')) : [];
   check('frame cached on disk', cached.length >= 1, cacheDir + ' [' + cached.join(', ') + ']');
 
   // Second call must hit the cache (handler still returns the payload).
