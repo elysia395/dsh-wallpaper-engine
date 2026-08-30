@@ -60,3 +60,28 @@ experimental 开启后**额外**进入 GL 的特性：
   无降级 — 3427824116 的 6×parent 全为噪音）。
 - **A8 CPU foliagesway**：数值验证可用（util/noise 相位场、双实例串联）；
   3427824116「降级 CPU 无效果」实为陈旧基线 + A1 错位叠加所致。
+
+## sf45–sf50 专项修复（2026-09，用户实测驱动）
+- **sf45 木偶闭分行钳制**：3735447194 整周期动画角色鞋子短暂旋转/位移异常 —
+  `_sampleAnimRT` 行索引 fc+1 越界钳到 totalFrames。
+- **sf46 rope 渲染器**（后由 sf50 修正语义）：初版链节近似。
+- **sf47 eventfollow 子系统**：官方 children 语义 — 父粒子出生事件触发子系统
+  瞬时爆发（3427824116 流星 glow 可见主体，size 100-150）。
+- **sf48 粒子 scale**：size/vel/gravity × 对象 scale（官方模型矩阵含 S）。
+- **sf49 方向折算**：vel/重力为画布 y-down 系 → 过模型矩阵须 F·R(−a)·F=R(+a)；
+  发射器 origin 并入 (origin+offset) 再旋转。流星由俯冲修正为右上 20° 起跳+
+  重力弧线（harness: sf49-verify 12 项 + sf49-traj 5 项）。
+- **sf50 ropetrail 每粒子路径拖尾**（本次）：官方文档实锤语义 "draws a line
+  along the path of each particle"（docs.wallpaperengine.io renderer 页；
+  rope 才是 "draws a line between each particle"）。实现：每步(1/60)位置历史
+  快照环形保留 length 秒，绘制按 tk=age−k·L/S 回溯取 segments+1 点逐段 quad，
+  宽=size⊥段方向，UV.v 头(k/S)→尾((k+1)/S) 切片（genericropeparticle.vert
+  TRAILRENDERER 同款；渐隐由贴图 v 向 alpha 承担，drop.tex 实测 v≈0.19 亮核
+  v→1 隐）。修复前 sf46 误用 rope 语义（相邻存活粒子串链）→ 流星散布盒
+  ±1280×±256 内随机长线呈水平链 + 链节旋转 90° 偏差 → 用户所见"流星横移"。
+  附带修复 CPU 两处潜伏 bug：① 旋转采样先归一化后旋转 → 先旋转后归一化
+  （非方宽高比 quad rot≠0 时采样点被错误裁出，ropetrail 段 1:6 比近 90° 旋转
+  整段不画）；② sr/sg/sb 混色常量与旋转正弦 const sr TDZ 冲突改名 outR/G/B
+  （CPU 路径 rot≠0 纹理粒子长期抛 ReferenceError 被上游吞掉）。引擎握手
+  dsh-we-scene-gl/8。harness: sf50-trail 22 项（含像素级"头前无迹/尾后有迹"），
+  全量回归 20 套件 273 检查全绿（引擎夹具版本号同步 /8）。
