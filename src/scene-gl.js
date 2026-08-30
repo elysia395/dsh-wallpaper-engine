@@ -351,6 +351,9 @@ function _weGLCreateParticleSys(obj, pinfo, token) {
     lifetimeMul: Number.isFinite(Number(pinfo.lifetimeMul)) ? Number(pinfo.lifetimeMul) : 1,
     speedMul: Number.isFinite(Number(pinfo.speedMul)) ? Number(pinfo.speedMul) : 1,
     sizeMul: Number.isFinite(Number(pinfo.sizeMul)) ? Number(pinfo.sizeMul) : 1,
+    colorMul: Array.isArray(pinfo.colorMul) && pinfo.colorMul.length === 3
+      ? [Number(pinfo.colorMul[0]) || 0, Number(pinfo.colorMul[1]) || 0, Number(pinfo.colorMul[2]) || 0]
+      : [1, 1,  1],
     maxCount,
     emitters: (pinfo.emitter || []).map((e) => _weGLPParseEmitter(e, [Number(tr.scale[0]) || 1, Number(tr.scale[1]) || 1], Number(tr.angle) || 0)),
     initializers: (pinfo.initializer || []).map((i) => _weGLPParseInitializer(i)).filter(Boolean),
@@ -405,7 +408,7 @@ function _weGLPSpawn(sys, em, base) {
   const p = {
     pos: [base[0] + lx, base[1] + ly, 0],
     vel, angVel: 0, rot: 0,
-    alpha: 1, size: 20, color: [1, 1, 1],
+    alpha: 1, size: 20, color: [sys.colorMul ? sys.colorMul[0] : 1, sys.colorMul ? sys.colorMul[1] : 1, sys.colorMul ? sys.colorMul[2] : 1],
     lifetime: 1, age: 0,
     oscAlpha: null, oscSize: null, oscPos: null,
   };
@@ -451,10 +454,13 @@ function _weGLPApplyInitializer(sys, p, init) {
       break;
     }
     case 'colorrandom': {
+      // sf43 官方 (lwe createColorRandomInitializer): p.color =
+      // randomVec3(min,max) × instanceOverride.colorn — colorn 是逐通道颜色
+      //乘子 (3593194513 全部粒子带蓝调 colorn, 未乘 → 暖色/白花瓣色偏)。
       p.color = [
-        (init.min[0] + rng() * (init.max[0] - init.min[0])) * init.k,
-        (init.min[1] + rng() * (init.max[1] - init.min[1])) * init.k,
-        (init.min[2] + rng() * (init.max[2] - init.min[2])) * init.k,
+        (init.min[0] + rng() * (init.max[0] - init.min[0])) * init.k * (sys.colorMul ? sys.colorMul[0] : 1),
+        (init.min[1] + rng() * (init.max[1] - init.min[1])) * init.k * (sys.colorMul ? sys.colorMul[1] : 1),
+        (init.min[2] + rng() * (init.max[2] - init.min[2])) * init.k * (sys.colorMul ? sys.colorMul[2] : 1),
       ];
       break;
     }
@@ -663,10 +669,10 @@ function _weGLPFillVerts(sys, f32, ps, CW, CH, texW, texH, frames) {
       if (fw > 0) pRatio = fh / fw;
     }
     const w = sz * ps[0], h = sz * ps[1] * pRatio;
-    // 官方 USERCOLORBLEND: rgb = mix(color1, color2, v_Color.r)
-    const cr = c1[0] + (c2[0] - c1[0]) * p.color[0];
-    const cg = c1[1] + (c2[1] - c1[1]) * p.color[0];
-    const cb = c1[2] + (c2[2] - c1[2]) * p.color[0];
+    // sf43 官方: genericparticle.vert v_Color = a_Color 直通 (无 mix) —
+    // 顶点色 = colorrandom(min,max)×colorn。旧 mix(color1,color2,p.color.r)
+    // 是误读 (color1/2 是编辑器 usershadervalues UI 绑定, 非渲染 mix)。
+    const cr = p.color[0], cg = p.color[1], cb = p.color[2];
     const rot = p.rot || 0;
     const base = n * 4 * S;
     // 角点序与 _WE_GL_IDX [0,2,1,1,2,3] 对齐：左上/右上/左下/右下
