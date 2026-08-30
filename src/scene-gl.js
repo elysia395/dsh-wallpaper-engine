@@ -347,6 +347,10 @@ function _weGLCreateParticleSys(obj, pinfo, token) {
     angle: Number(tr.angle) || 0,
     alphaMul: Number.isFinite(Number(pinfo.alphaMul)) ? Number(pinfo.alphaMul) : 1,
     rateMul: Number.isFinite(Number(pinfo.rateMul)) ? Number(pinfo.rateMul) : 1,
+    // sf41c instanceoverride 乘子族 (lwe CParticle.cpp 同款语义)
+    lifetimeMul: Number.isFinite(Number(pinfo.lifetimeMul)) ? Number(pinfo.lifetimeMul) : 1,
+    speedMul: Number.isFinite(Number(pinfo.speedMul)) ? Number(pinfo.speedMul) : 1,
+    sizeMul: Number.isFinite(Number(pinfo.sizeMul)) ? Number(pinfo.sizeMul) : 1,
     maxCount,
     emitters: (pinfo.emitter || []).map((e) => _weGLPParseEmitter(e, [Number(tr.scale[0]) || 1, Number(tr.scale[1]) || 1], Number(tr.angle) || 0)),
     initializers: (pinfo.initializer || []).map((i) => _weGLPParseInitializer(i)).filter(Boolean),
@@ -413,7 +417,9 @@ function _weGLPApplyInitializer(sys, p, init) {
   const rng = sys.rng || Math.random;
   switch (init.name) {
     case 'sizerandom': {
-      p.size = init.min + rng() * (init.max - init.min);
+      // sf41c 官方 (lwe createSizeRandomInitializer): (min+t×(max-min)) ×
+      // instanceoverride.size / 2 — 尺寸减半 + 对象级 size 乘子。
+      p.size = (init.min + rng() * (init.max - init.min)) * (sys.sizeMul || 1) / 2;
       p._initSize = p.size;
       break;
     }
@@ -423,7 +429,8 @@ function _weGLPApplyInitializer(sys, p, init) {
       break;
     }
     case 'lifetimerandom': {
-      p.lifetime = init.min + rng() * (init.max - init.min);
+      // sf41c: × instanceoverride.lifetime (3735447194 泡泡 lifetime:2 → 6-10s)
+      p.lifetime = (init.min + rng() * (init.max - init.min)) * (sys.lifetimeMul || 1);
       break;
     }
     case 'velocityrandom': {
@@ -463,8 +470,9 @@ function _weGLPApplyOperator(sys, op, dt, t) {
       case 'movement': {
         p.pos[0] += p.vel[0] * dt;
         p.pos[1] += -p.vel[1] * dt; // vel 为画布系（y 向下），pos 场景系（y 向上）
-        p.vel[0] += op.gravity[0] * dt;
-        p.vel[1] += -op.gravity[1] * dt;
+        // sf41c: gravity × instanceoverride.speed (官方 lwe movement operator)
+        p.vel[0] += op.gravity[0] * (sys.speedMul || 1) * dt;
+        p.vel[1] += -op.gravity[1] * (sys.speedMul || 1) * dt;
         const df = Math.max(0, 1 - op.drag * dt);
         p.vel[0] *= df; p.vel[1] *= df;
         break;
