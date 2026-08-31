@@ -4361,6 +4361,34 @@ const CSS = `
      they did not stop the white flash and instead added compositing layers. The
      flash was traced to the rope's permanent CSS filter, which is now gone. */
 
+  /* ── Tool-dialog glass (ask_user_tool / exit_plan_mode / approval) ─────────
+     The tool takeover cards that pop over the composer (ask_user_question,
+     exit_plan_mode / plan review, and tool-permission approval) read the SAME
+     --dsw-specific-input-major token we make translucent above, so they turned
+     see-through — but unlike the composer/bubbles they had no backdrop-filter,
+     leaving their text floating directly on the wallpaper. Give the dialog
+     CARDS (not their padded flex frames) the IDENTICAL liquid-glass recipe as
+     the input bar, so the 玻璃 / 玻璃透明度 sliders drive them in lockstep.
+
+     Selector discipline (same rationale as the composer rule): CSS-module class
+     names (Mbwy4a_card / LVzXQa_card / bqrRRG_card) are build hashes that change
+     on every shell rebuild, so we anchor on the stable data-* attributes the
+     official source authors on the dialog frame/root, and target its direct
+     child card element (> section for user-questions, > div for approval). */
+  body[data-we-wallpaper] [data-question-key] > section,
+  body[data-we-wallpaper] [data-plan-review-key] > section,
+  body[data-we-wallpaper] [data-approval-key] > div {
+    /* Specular sheen: same top-weighted white gradient as the composer. */
+    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.05) 38%, rgba(255, 255, 255, 0.02));
+    -webkit-backdrop-filter: var(--we-glass-filter, blur(16px) saturate(1.8));
+    backdrop-filter: var(--we-glass-filter, blur(16px) saturate(1.8));
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, var(--we-glass-highlight, 0.32)),
+      inset 0 -1px 0 rgba(255, 255, 255, 0.08),
+      inset 0 0 0 0.5px rgba(255, 255, 255, 0.08),
+      0 12px 40px rgba(0, 0, 0, var(--we-glass-shadow, 0.12));
+  }
+
   /* ── dsh-better-sidebar glass ──────────────────────────────────────────────
      The sidebar shell is portalled onto <body> under a stable host attribute
      "data-dsh-better-sidebar" (set by the plugin's own mount code), so we can
