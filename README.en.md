@@ -225,6 +225,35 @@ plugin auto-loads (`dsh.client.immediately: true`).
 If your machine has Steam installed in a non-standard location, the host auto-detects
 via `libraryfolders.vdf`. Nothing further is required.
 
+### Troubleshooting install failures
+
+`dsh plugin --profile web add ...` forwards the command to **pnpm**. If you see this error:
+
+```text
+[ERR_PNPM_UNEXPECTED_VIRTUAL_STORE] Unexpected virtual store location
+dsh: pnpm failed in profile directory C:\Users\xxx\.dsh-desktop\profiles\web
+```
+
+**This is not a problem with the plugin itself** (any plugin would fail the same way) — the pnpm
+dependency state of that profile directory has gone stale. pnpm stores the virtual-store path
+(an absolute path) in `node_modules\.modules.yaml`; if the profile directory was **moved / copied /
+restored from a backup**, or the pnpm version / `virtual-store-dir` config changed, the recorded path
+no longer matches, so pnpm refuses to install anything into that profile.
+
+**Fix (Windows PowerShell):**
+
+```powershell
+# 1) Quit the DSH desktop app first
+# 2) Remove the profile's dependency directory (only node_modules — config / installed plugin names are kept)
+Remove-Item "$env:USERPROFILE\.dsh-desktop\profiles\web\node_modules" -Recurse -Force
+# 3) Reinstall this plugin
+dsh plugin --profile web add dsh-plugin-wallpaper-engine
+```
+
+> Deleting just `node_modules\.modules.yaml` also works (pnpm recreates it and continues); removing
+> the whole `node_modules` is more thorough. If `.dsh-desktop` is touched by OneDrive / cloud sync /
+> migration tools, add it to the sync exclusion list to avoid a recurrence.
+
 ## Usage
 
 1. Open `dsh web` → the DSH GUI.

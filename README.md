@@ -153,6 +153,29 @@ dsh plugin --profile web add link:./dsh-wallpaper-engine
 
 如果 Steam 装在非标准位置，host 会通过 `libraryfolders.vdf` 自动探测，无需额外配置。
 
+### 安装失败排查
+
+`dsh plugin --profile web add ...` 会把命令转发给 **pnpm**。如果你遇到下面的错误：
+
+```text
+[ERR_PNPM_UNEXPECTED_VIRTUAL_STORE] Unexpected virtual store location
+dsh: pnpm failed in profile directory C:\Users\xxx\.dsh-desktop\profiles\web
+```
+
+**这不是插件本身的问题**（换任何一个插件安装都会失败），而是该 profile 目录的 pnpm 依赖状态失效了：pnpm 在 `node_modules\.modules.yaml` 里记录了安装时的虚拟存储位置（绝对路径），一旦 profile 目录被**移动 / 复制 / 备份恢复**过，或 pnpm 版本 / `virtual-store-dir` 配置发生变化，记录值与当前路径不一致，pnpm 就会拒绝继续安装任何插件。
+
+**修复（Windows PowerShell）：**
+
+```powershell
+# 1) 先退出 DSH 桌面端
+# 2) 删除该 profile 的依赖目录（只删 node_modules 即可，配置/已装插件名不会丢）
+Remove-Item "$env:USERPROFILE\.dsh-desktop\profiles\web\node_modules" -Recurse -Force
+# 3) 重新安装本插件
+dsh plugin --profile web add dsh-plugin-wallpaper-engine
+```
+
+> 只删除 `node_modules\.modules.yaml` 一个文件也能修复（pnpm 会自动重建并继续），删除整个 `node_modules` 更彻底。如果 `.dsh-desktop` 被 OneDrive / 云同步 / 迁移工具动过，建议把它加入同步排除，避免复发。
+
 ## 使用
 
 1. 打开 `dsh web`，进入 DSH 界面。
