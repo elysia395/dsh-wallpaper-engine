@@ -5,6 +5,7 @@
 // variables, the picker renders, and automatic rotation is scoped to a
 // user-defined rotation group (list) with its own interval.
 import { readFileSync } from 'node:fs';
+import assert from 'node:assert/strict';
 import vm from 'node:vm';
 
 const React = {
@@ -94,6 +95,16 @@ const fetch = (url) => {
 };
 
 const code = readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8');
+const independentSidebarSelector = 'body[data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_panel"]';
+const wallpaperGatedSidebarSelector = 'body[data-we-sidebar-glass][data-we-wallpaper] [data-dsh-better-sidebar]';
+assert.ok(code.includes(independentSidebarSelector), 'sidebar glass must not require an active wallpaper');
+assert.ok(!code.includes(wallpaperGatedSidebarSelector), 'legacy wallpaper-gated sidebar selector must be removed');
+assert.ok(
+  code.includes('body[data-we-sidebar-glass] [data-dsh-better-sidebar] .cm-editor'),
+  'sidebar content surfaces must follow the sidebar master switch',
+);
+assert.ok(code.includes('body[data-we-wallpaper] {'), 'non-sidebar wallpaper effects must remain wallpaper-gated');
+console.log('sidebar glass selectors are wallpaper-independent: true');
 const cap = { handoff: null };
 const sandbox = {
   window: {
@@ -215,12 +226,14 @@ setTimeout(() => {
       })();
       if (sidebarSwitch) {
         sidebarSwitch.props.onChange({ target: { checked: false } });
+        assert.equal(bodyEl.attributes['data-we-sidebar-glass'], undefined, 'sidebar master off must restore native surfaces');
         tree = pickerRenders[0]();
         const offText = JSON.stringify(tree);
         console.log('switch off hides the three detail knobs:',
           !offText.includes('侧栏模糊') && !offText.includes('侧栏透明度') && !offText.includes('侧栏玻璃颜色'));
         console.log('switch itself stays visible when off:', offText.includes('侧栏液态玻璃'));
         sidebarSwitch.props.onChange({ target: { checked: true } });
+        assert.equal(bodyEl.attributes['data-we-sidebar-glass'], 'on', 'sidebar master on must re-arm sidebar surfaces');
         tree = pickerRenders[0]();
         console.log('switch back on restores the detail knobs:',
           JSON.stringify(tree).includes('侧栏模糊') && JSON.stringify(tree).includes('侧栏透明度') && JSON.stringify(tree).includes('侧栏玻璃颜色'));
@@ -407,6 +420,19 @@ setTimeout(() => {
       console.log('page 2 shows last wallpaper (Wall 29):', page2Text.includes('Wall 29'));
       console.log('page 2 no longer shows page-1 item (Wall 0):', !page2Text.includes('Wall 0'));
       console.log('scene C (frameUrl) in grid:', page2Text.includes('Scene C'));
+
+      // Turn the active wallpaper off through the real picker callback. Sidebar
+      // theming must remain armed because it is an independent feature; only
+      // wallpaper-owned layers and the data-we-wallpaper marker disappear.
+      const closeCard = cards.find((card) => JSON.stringify(card).includes('✕ 关闭'));
+      assert.ok(closeCard && typeof closeCard.props.onClick === 'function', 'close-wallpaper card must be available');
+      closeCard.props.onClick();
+      assert.equal(bodyEl.attributes['data-we-wallpaper'], undefined, 'wallpaper marker must clear');
+      assert.equal(bodyEl.attributes['data-we-sidebar-glass'], 'on', 'sidebar glass must remain enabled');
+      assert.equal(typeof p['--we-sidebar-color'], 'string', 'sidebar color variable must remain available');
+      assert.equal(typeof p['--we-sidebar-alpha'], 'string', 'sidebar alpha variable must remain available');
+      assert.equal(typeof p['--we-sidebar-blur'], 'string', 'sidebar blur variable must remain available');
+      console.log('sidebar glass remains armed without an active wallpaper: true');
     }
   }
   console.log('effects ran:', effects.length);
