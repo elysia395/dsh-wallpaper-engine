@@ -446,9 +446,12 @@ The liquid-glass effect is specifically adapted for dsh-better-sidebar's panels
 the conversation area share the same wallpaper + scrim background and read as one
 continuous surface.
 
-The **外观** section exposes a set of **sidebar glass** controls independent of the
-conversation glass (they target only the dsh-better-sidebar subtree; browsers
-without `backdrop-filter` fall back to a near-opaque fill):
+The **外观** section exposes a set of **sidebar glass** controls independent of
+both the conversation glass and the active wallpaper. Even with no Wallpaper
+Engine wallpaper selected, the sidebar can be tinted and frosted over the stock
+DSH surface or another background source. These controls target only the
+dsh-better-sidebar subtree; browsers without `backdrop-filter` fall back to a
+near-opaque fill:
 
 | Control | What it controls | Range | Default |
 |---|---|---|---|
@@ -459,10 +462,11 @@ without `backdrop-filter` fall back to a near-opaque fill):
 
 > Sidebar glass is a separate set of knobs from the settings-window glass: the
 > conversation「玻璃」slider only drives the composer/bubbles, while the sidebar
-> sliders drive the sidebar. The sidebar defaults to a fairly clear glass (so it
-> matches the wallpaper instead of glowing white); editor/terminal content
-> surfaces have their own near-opaque fill + transparency controls to keep text
-> readable in the narrow panels.
+> sliders drive the sidebar. Turning **侧栏液态玻璃** off restores the native
+> sidebar, including its editor/terminal content surfaces. The sidebar defaults
+> to a fairly clear glass (so it matches the background instead of glowing
+> white); editor/terminal content surfaces have their own near-opaque fill +
+> transparency controls to keep text readable in the narrow panels.
 
 ![dsh-better-sidebar compatibility](docs/images/better-sidebar.png)
 
