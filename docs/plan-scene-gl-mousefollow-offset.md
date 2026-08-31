@@ -4,14 +4,18 @@
 > 控制点）的跟踪点**沿屏幕中轴线最准，向两侧线性偏离光标中心**。
 > 结论：根因已定位——鼠标坐标换算漏算 CSS `object-fit: cover` 的裁边偏移与
 > 放大系数。本文档记录完整证据链、修复设计与验收方案。
-> 状态：**待实施**（本文档先行落盘，代码改动另行执行）。
+> 状态：**已实施**（sf52，2026-08-31；验收 `.analysis/sf52-mousefit-map.mjs` 33/33，
+> 引擎升 `/9`）。
 
 ---
 
 ## 一、问题现象与签名
 
-- 壁纸：3735447194（MrDogTastic's Mouse Trail，本机库
-  `~/Pictures/WallpaperEngine/3735447194`，scene.pkg 实测确认）。
+- 壁纸：3735447194（达妮娅 - 愿予你安然一梦 | 鸣潮，本机库
+  `~/Pictures/WallpaperEngine/3735447194`，scene.pkg 实测确认）；鼠标轨迹为其中的
+  组件对象 id=256 "MrDogTastic's Mouse Trail"
+  （`particles/workshop/2098048943/presets/trail_1.json`，controlpoint[0].flags=1
+  → mousefollow）。
 - 症状：鼠标轨迹粒子在中轴（水平居中线）附近贴合光标；向左/右两侧移动时，
   生成点偏离光标，偏离量随离中心距离增大，左右对称。
 - **签名判读**：误差 = f(到中心的距离) 且中心为零、两侧对称 —— 这是"线性

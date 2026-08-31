@@ -85,3 +85,28 @@ experimental 开启后**额外**进入 GL 的特性：
   （CPU 路径 rot≠0 纹理粒子长期抛 ReferenceError 被上游吞掉）。引擎握手
   dsh-we-scene-gl/8。harness: sf50-trail 22 项（含像素级"头前无迹/尾后有迹"），
   全量回归 20 套件 273 检查全绿（引擎夹具版本号同步 /8）。
+
+## sf51–sf52 专项修复（2026-09，review 报告评审后实施）
+- **sf51 图像路径 spritesheet 选帧**：3735447194 时钟旁一坨白色 — 时钟组件
+  obj443 "Day/Night (Click)" 的 256×768 三帧精灵表（genericimage4,
+  combos.spritesheet=1）在 GL 图像路径整图压进 256×256 方形 quad。CPU
+  image.js:140 早有选帧，GL 仅粒子路径消费 frames（sf40g）。修复：gate
+  glTexInfo 增 frameDuration（frametime 均值，CPU BASE-24 逐字镜像）+ image
+  payload 双条件（combos.spritesheet===1 && frames>1）下发 spritesheet 标记；
+  客户端 loadOne 第4参 wantSheet（缓存键 +s 维度防粒子整图串缓存）逐帧
+  canvas 裁切上传，render() floor(t/duration)%count 逐帧换 mainTexEntry
+  （与 CPU 公式逐字一致；静态冻结第0帧）。守卫：帧尺寸不一致/零尺寸/>64帧
+  → 维持整图。时钟文字为 livetext 按设计跳过，非 bug。
+- **sf52 鼠标坐标 object-fit 映射**：3735447194 鼠标轨迹（组件 obj256
+  "MrDogTastic's Mouse Trail"）中轴精确、两侧线性偏离 — installPointerHooks
+  旧公式假设背板与元素盒 1:1，漏算 CSS object-fit:cover 裁边（窗口比例≠
+  背板 16:9 时 cover 放大居中裁边，1920×1200 窗口边缘误差 ±96 背板px）。
+  修复：getComputedStyle 解析有效 fit → cover/contain/none/scale-down/fill
+  全模式内容矩形映射 + flip 镜像翻回；比例匹配时逐位退化为旧公式（零回归）。
+  stats.lastPointerPx 诊断钩子。两报告评审发现的小瑕疵（命名/anim:angles
+  描述）已在文档中勘误；附带发现 objectFit:"center" 写入 CSS object-fit 无效
+  关键字回落 fill 的 pre-existing 展示层落差（另立项）。
+- 引擎握手 dsh-we-scene-gl/9。harness: sf51-spritesheet 23 项（真实
+  scene.pkg 数据流 + 公式对齐 + 结构断言 + CPU 零改动 git 断言）、
+  sf52-mousefit-map 33 项（7 用例 5 探针手工推导真值 + 旧公式 >40px bug
+  签名 + 匹配退化逐位相等）；全量回归 23 套件 354 检查全绿（引擎夹具 /9）。

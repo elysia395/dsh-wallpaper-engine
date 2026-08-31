@@ -939,7 +939,7 @@ function _weGLPFillRopeVerts(sys, f32, ps, CW, CH, texW, texH) {
   return n;
 }
 
-const _WE_GL_VERSION = 8; // sf50: ropetrail 每粒子路径拖尾 — 与 host SCENE_GL_ENGINE 同步
+const _WE_GL_VERSION = 9; // sf51 spritesheet 图像逐帧轮播 + sf52 鼠标 object-fit 映射 — 与 host SCENE_GL_ENGINE 同步
 
 // ---------- W4: 木偶网格（绑定姿态静态渲染；MDLA 动画属实验层）----------
 // CPU puppet.js 语义: 网格顶点为相对对象中心的局部像素坐标 (y 向上);
@@ -1805,8 +1805,10 @@ function createSceneGLRenderer(opts) {
     stats.initStage = 'textures';
     const textures = [];
     const texByKey = new Map(); // path → Promise<{ tex, w, h }>
-    const loadOne = (info, repeat, mip) => {
-      const k = info.path + '|' + (mip ? 'm' : '');
+    const loadOne = (info, repeat, mip, wantSheet) => {
+      // sf51: 缓存键追加 sheet 维度 — 同路径粒子路径需整图 (帧矩形 UV 采样),
+      // 图像路径精灵表需逐帧裁剪纹理, 不加维度会串缓存。
+      const k = info.path + '|' + (mip ? 'm' : '') + (wantSheet ? 's' : '');
       if (texByKey.has(k)) return texByKey.get(k);
       stats.initStage = 'tex:' + info.path;
       const p = (async () => {
@@ -1814,9 +1816,30 @@ function createSceneGLRenderer(opts) {
         const bmp = await createImageBitmap(blob, { premultiplyAlpha: 'none' });
         const w = bmp.width, h = bmp.height; // close() 后 width/height 归零，先取
         const tex = uploadTex(bmp, { repeat, mip });
-        bmp.close();
         const entry = { tex, w, h, hw: info.headerWidth || w, hh: info.headerHeight || h };
         textures.push(tex);
+        // sf51: spritesheet 逐帧裁剪 (CPU image.js:139-156 语义) — 整图压进方形
+        // quad 会把三帧叠成一坨 (3735447194 Day/Night 按钮)。守卫任一命中即放弃
+        // sheet、维持整图，宁错勿崩。
+        if (wantSheet && Array.isArray(info.frames) && info.frames.length > 1 && info.frames.length <= 64) {
+          const fs = info.frames;
+          const fw = Number(fs[0].width) || 0, fh = Number(fs[0].height) || 0;
+          const uniform = fw > 0 && fh > 0 && fs.every((f) => (Number(f.width) || 0) === fw && (Number(f.height) || 0) === fh);
+          if (uniform) {
+            const entries = [];
+            for (const f of fs) {
+              const c = document.createElement('canvas'); // N-07 canvas 中转先例
+              c.width = fw; c.height = fh;
+              c.getContext('2d').drawImage(bmp, (Number(f.x) || 0), (Number(f.y) || 0), fw, fh, 0, 0, fw, fh);
+              const ftex = uploadTex(c, { repeat, mip }); // canvas 是合法 texImage2D 源
+              textures.push(ftex);
+              entries.push({ tex: ftex, w: fw, h: fh, hw: fw, hh: fh });
+            }
+            const dur = Number(info.frameDuration);
+            entry.sheet = { entries, duration: Number.isFinite(dur) && dur > 0 ? dur : 1 };
+          }
+        }
+        bmp.close();
         return entry;
       })();
       texByKey.set(k, p);
@@ -1903,7 +1926,12 @@ function createSceneGLRenderer(opts) {
         }
         return { obj, oi, mainTexEntry: vid.texEntry, vid, programs: [], effectTex: new Map(), fboA: null, fboB: null, geo: computeGeo(obj, oi), mvpFx: null, puppetMesh: null };
       }
-      const mainTexEntry = await loadOne(obj.mainTexture, false, true); // slot0 CLAMP+mipmap（§2.6/§11-⑤）
+      // sf51: spritesheet 图像 → 逐帧裁剪纹理 (wantSheet); sheet 存在时初始
+      // mainTexEntry = 第 0 帧 (CPU 静态帧 t=0 同款), 帧尺寸供 FBO/mvpFx 使用
+      // (loadOne 内守卫已保证各帧尺寸一致)。
+      const mainFull = await loadOne(obj.mainTexture, false, true, obj.spritesheet === true); // slot0 CLAMP+mipmap（§2.6/§11-⑤）
+      const sheet = mainFull.sheet || null;
+      const mainTexEntry = sheet ? sheet.entries[0] : mainFull;
       // W4: 木偶网格 (绑定姿态静态渲染; MDLA 动画属实验层)。带效果的 puppet
       // (3735447194 泡-中/05手-下/06手-上) 走 image 路径 — CPU renderPuppet
       // 本就不 applyEffects, image 路径反而保留官方设计的效果, 取舍对齐 W4
@@ -1974,7 +2002,7 @@ function createSceneGLRenderer(opts) {
       const mvpFx = programs.length > 0
         ? _weGLQuadMVP(mainTexEntry.w, mainTexEntry.h, 0, 0, mainTexEntry.w, mainTexEntry.h, true, new Float32Array(16))
         : null;
-      return { obj, oi, mainTexEntry, programs, effectTex, fboA, fboB, geo, mvpFx, puppetMesh };
+      return { obj, oi, mainTexEntry, programs, effectTex, fboA, fboB, geo, mvpFx, puppetMesh, sheet };
     }));
 
     // sf47: eventfollow 挂钩 — followParent=父对象名 的子系统把 pending 队列
@@ -2098,7 +2126,35 @@ function createSceneGLRenderer(opts) {
       try {
         const r = canvas.getBoundingClientRect ? canvas.getBoundingClientRect() : null;
         if (!r || !r.width || !r.height) return;
-        pointerPx = [(ev.clientX - r.left) * (CW / r.width), (ev.clientY - r.top) * (CH / r.height)];
+        // sf52: object-fit 内容矩形映射 — canvas 经 .we-media--fit CSS cover/contain
+        // 缩放裁边, getBoundingClientRect 返回元素布局盒而非内容矩形; 窗口比例 ≠
+        // 背板比例时旧公式 (clientX−r.left)·CW/r.width 中轴精确、两侧线性发散
+        // (3735447194 鼠标轨迹)。有效 fit 经 getComputedStyle 解析 --we-object-fit。
+        let fit = 'cover';
+        try { fit = String(getComputedStyle(canvas).objectFit || 'cover').toLowerCase(); } catch { }
+        const rx = r.width / CW, ry = r.height / CH;
+        let sx, sy;
+        if (fit === 'fill') { sx = rx; sy = ry; }                 // 逐轴拉伸
+        else {
+          const s = fit === 'contain' ? Math.min(rx, ry)
+            : fit === 'none' ? 1
+              : fit === 'scale-down' ? Math.min(1, Math.min(rx, ry))
+                : Math.max(rx, ry);                               // cover/未知 → cover
+          sx = sy = s;
+        }
+        // object-position 默认 50% 50%（CSS 未另行设置）
+        const offX = (r.width - CW * sx) / 2;
+        const offY = (r.height - CH * sy) / 2;
+        let bx = (ev.clientX - r.left - offX) / sx;
+        let by = (ev.clientY - r.top - offY) / sy;
+        // flip 镜像（--we-wallpaper-transform 的 scaleX(-1)）：rect 含 transform
+        // 仍是轴对齐盒 → x 单轴翻回
+        try {
+          const tr = getComputedStyle(canvas).transform;
+          if (tr && tr !== 'none' && (new DOMMatrix(tr)).a < 0) bx = CW - bx;
+        } catch { /* DOMMatrix 不可用跳过 */ }
+        pointerPx = [Math.min(CW, Math.max(0, bx)), Math.min(CH, Math.max(0, by))];
+        stats.lastPointerPx = pointerPx; // 诊断钩子（E2E/实机对拍用）
       } catch { /* 坐标读取失败保持旧值 */ }
     };
     document.addEventListener('pointermove', pointerListener);
@@ -2238,6 +2294,13 @@ function createSceneGLRenderer(opts) {
         }
         _weOutputs[i] = o.vid.failed ? null : o.vid.texEntry;
         continue;
+      }
+      // sf51: spritesheet 逐帧轮播（CPU image.js:142 floor(t/duration)%count
+      // 同款）— 换帧替换 mainTexEntry, renderObjectChain/合成 pass 每帧现读。
+      // 静态场景（P2-8 跳帧）冻结第 0 帧, 与 CPU 静态帧语义一致。
+      if (o.sheet) {
+        const idx = Math.floor(t / o.sheet.duration) % o.sheet.entries.length;
+        if (idx !== o._sheetIdx) { o._sheetIdx = idx; o.mainTexEntry = o.sheet.entries[idx]; }
       }
       _weOutputs[i] = o.psys ? null : renderObjectChain(o, t);
     }
