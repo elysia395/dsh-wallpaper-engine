@@ -1,0 +1,2638 @@
+/**
+ * scene-gl.js — WE 场景壁纸 WebGL2 实时渲染（scene-gl，plan-scene-webgl Phase 1）
+ *
+ * 本文件由 scripts/build-client.mjs 以 IIFE 形式拼进 client bundle 的同一 factory
+ * （附录 §7）：无 import/export 纯脚本片段；禁止声明 module/exports 或与 client.js
+ * 顶层重名；末行 return 模块对象。
+ *
+ * 渲染数学全部经 Phase 0 spike 实测对齐 CPU（docs/plan-scene-webgl-details.md §11）：
+ *   - y-down 全链路：纹理不翻转上传（tex 行 0=图顶=CPU v=0）、quad UV 顶边 v=0、
+ *     效果 pass MVP y 行取负、present MVP 正常（附录 §3 回写）；
+ *   - g_TextureNResolution = lwe 约定 (mip0.w, mip0.h, header.w, header.h)（§11-①）；
+ *   - angles：弧度、正角=屏幕 CCW、像素空间刚体旋转 S⁻¹·RotZ·S（§11-②）；
+ *   - slot0 CLAMP（跟 CPU）/ slot1+ REPEAT（§11-⑤）；
+ *   - ES 1.00 原样编译 + 两条 int 字面量 fixup（附录 §2 回写）。
+ *
+ * 状态机（附录 §8）：GL_TRY(meta) → GL_INIT(shader 编译先于纹理下载) → GL_RUN
+ * → DISPOSED；任一失败 → onError(reason)（调用方标记 glFailed 并回退 mp4）；
+ * contextlost → dispose → contextrestored 重建一次 → 再失败回退。
+ */
+
+// ---------- 附录 §4：MVP 工具 ----------
+// P2-7/N-08: MVP 计算改为写入调用方给定缓冲（无 out 时落模块级复用缓冲），
+// 消除旧实现热路径每帧每对象 new Float32Array(16)×2~3；带缓存的调用方
+// （构建期 mvpFx / present 按 CW/CH 缓存）必须传独占缓冲，防止共享 scratch
+// 被后续计算覆写。
+const _WE_GL_MVP_SCRATCH = new Float32Array(16);
+const _WE_GL_ZROT_R = new Float32Array(16);
+const _WE_GL_ZROT_OUT = new Float32Array(16);
+function _weGLQuadMVP(W, H, dx, dy, dw, dh, flipY, out) {
+  const cx = dx + dw / 2, cy = dy + dh / 2;
+  const sy = flipY ? -2 * dh / H : 2 * dh / H; // 效果 pass: 图顶→NDC−1（y-down 链一致）
+  const ty = flipY ? -(1 - 2 * cy / H) : 1 - 2 * cy / H;
+  const m = out || _WE_GL_MVP_SCRATCH;
+  m[0] = 2 * dw / W; m[1] = 0; m[2] = 0; m[3] = 0;
+  m[4] = 0; m[5] = sy; m[6] = 0; m[7] = 0;
+  m[8] = 0; m[9] = 0; m[10] = -1; m[11] = 0;
+  m[12] = 2 * cx / W - 1; m[13] = ty; m[14] = 0; m[15] = 1;
+  return m;
+}
+function _weGLMvpWithZRot(m, rad, dw, dh, out) {
+  if (!rad) return m;
+  const o = out || _WE_GL_ZROT_OUT;
+  const r = -rad; // CPU 正角 = 屏幕 CCW（判别实验②实测）
+  const c = Math.cos(r), s = Math.sin(r);
+  const kx = dw / dh, ky = dh / dw; // 像素空间刚体：S⁻¹·RotZ·S
+  const R = _WE_GL_ZROT_R;
+  R[0] = c; R[1] = s * kx; R[2] = 0; R[3] = 0;
+  R[4] = -s * ky; R[5] = c; R[6] = 0; R[7] = 0;
+  R[8] = 0; R[9] = 0; R[10] = 1; R[11] = 0;
+  R[12] = 0; R[13] = 0; R[14] = 0; R[15] = 1;
+  for (let col = 0; col < 4; col++)
+    for (let row = 0; row < 4; row++) {
+      let sum = 0;
+      for (let k = 0; k < 4; k++) sum += m[k * 4 + row] * R[col * 4 + k];
+      o[col * 4 + row] = sum;
+    }
+  return o;
+}
+
+// ---------- 附录 §2.1 + Phase 0 回写：define 头拼装 + int 字面量 fixup ----------
+function _weGLAssemble(expandedSrc, combosTable, comboValues) {
+  if (/^\s*#version/m.test(expandedSrc)) throw new Error('unexpected #version in WE shader');
+  let head = '';
+  for (const name of Object.keys(combosTable || {})) head += '#define ' + name + ' ' + (comboValues[name] ?? 0) + '\n';
+  head += '#define texSample2D texture2D\nprecision highp float;\nprecision highp int;\n';
+  const body = expandedSrc
+    .replace(/\* 2 - 1\b/g, '* 2.0 - 1.0')            // waterripple.frag n1/n2（官方编译器宽松放行）
+    .replace(/smoothstep\(1 - g_Rough, 1,/, 'smoothstep(1.0 - g_Rough, 1.0,') // iris.vert
+    .replace(/M_PI \* 2 \+/, 'M_PI * 2.0 +')          // foliagesway.frag phase
+    .replace(/v_Params\.x \* 10 \+/, 'v_Params.x * 10.0 +') // foliagesway.frag phase
+    .replace(/v_Params\.y \* 5\)/, 'v_Params.y * 5.0)');   // foliagesway.frag phase
+  return head + body + '\n';
+}
+
+// 顶点数据（全 pass 共用）：local ±0.5，UV 顶边 v=0（y-down 定案，附录 §3 回写）
+const _WE_GL_VERTS = new Float32Array([
+  -0.5,  0.5, 0,  0, 0,   // 左上 v=0（图顶）
+   0.5,  0.5, 0,  1, 0,   // 右上
+  -0.5, -0.5, 0,  0, 1,   // 左下 v=1（图底）
+   0.5, -0.5, 0,  1, 1,   // 右下
+]);
+const _WE_GL_IDX = new Uint16Array([0, 2, 1, 1, 2, 3]);
+
+const _WE_GL_PRESENT_VERT = `
+attribute vec3 a_Position; attribute vec2 a_TexCoord;
+varying vec2 v_UV; uniform mat4 u_MVP;
+void main(){ v_UV = a_TexCoord.xy; gl_Position = u_MVP * vec4(a_Position, 1.0); }
+`;
+const _WE_GL_PRESENT_FRAG = `
+precision highp float;
+varying vec2 v_UV; uniform sampler2D u_Tex; uniform float u_ObjectAlpha; uniform float u_Brightness;
+void main(){ vec4 c = texture2D(u_Tex, v_UV); gl_FragColor = vec4(c.rgb * u_Brightness, c.a * u_ObjectAlpha); }
+`;
+
+// ---------- W3: 粒子系统（CPU lib/we-renderer/particles.js 语义移植）----------
+// 与 CPU 的差异（契约允许"视觉语义一致，不逐帧一致"）：
+//   - 增量积分（t=0 起按 dt 推进），不做 CPU 的每帧从 0 重模拟；rng 为持续流
+//     （CPU 是每帧重放到构建后状态，两者统计同分布、序列不必相同）；
+//   - 位置只跟踪场景坐标（y 向上，CPU scenePos 一支；画布坐标一支恒可由
+//     ps/CH 导出，不双写）；
+//   - 湍流噪声输入用场景坐标（CPU 用画布坐标；curl 场镜像等价，视觉同分布）；
+//   - renderer（sprite/rope/ropetrail）一律按 sprite 绘制（CPU 同款：绘制码
+//     根本不读 renderer 字段）；SPRITESHEET 帧动画 W3 未支持（本地 7 张壁纸
+//     的可解析粒子纹理均无帧元数据）。
+// 顶点布局（11 float / 44B）：corner(2) center(2) size(2) rot(1) color(4)。
+const _WE_GL_PART_STRIDE = 15; // corner2+center2+size2+rot1+color4+uvrect4 (sf40g 精灵表)
+const _WE_GL_PART_VERT = `
+attribute vec2 a_Corner; attribute vec2 a_Center; attribute vec2 a_Size;
+attribute float a_Rot; attribute vec4 a_Color; attribute vec4 a_UVRect;
+uniform vec2 u_Viewport;
+varying vec2 v_UV; varying vec4 v_Color;
+void main(){
+  // UV = 帧子区域映射（官方 SPRITESHEET: GIF/精灵表逐帧采样; 无帧 = 整图
+  // rect(0,0,1,1)）。cornerUV 与整图语义同款: 左上角 → (0,0)。
+  vec2 cuv = vec2(a_Corner.x + 0.5, 0.5 - a_Corner.y);
+  v_UV = a_UVRect.xy + cuv * a_UVRect.zw;
+  v_Color = a_Color;
+  vec2 p = a_Corner * a_Size;
+  float c = cos(a_Rot), s = sin(a_Rot);
+  // 画布 y-down 下视觉逆时针正角（CPU blitRotated 同款约定）
+  vec2 rp = vec2(p.x * c + p.y * s, -p.x * s + p.y * c);
+  vec2 pos = a_Center + rp;
+  gl_Position = vec4(2.0 * pos.x / u_Viewport.x - 1.0, 1.0 - 2.0 * pos.y / u_Viewport.y, 0.0, 1.0);
+}
+`;
+const _WE_GL_PART_FRAG = `
+precision highp float;
+varying vec2 v_UV; varying vec4 v_Color; uniform sampler2D u_Tex;
+void main(){
+  // 官方 genericparticle.frag = 标准 RGBA 精灵: rgb × v_Color.rgb, a × v_Color.a。
+  // WE 粒子纹理 (halo/drop/beam 等官方全局素材) 是白 RGB + 形状在 ALPHA 通道;
+  // 旧实现采 tex.r 做形状 → 官方纹理 R 恒 1 → 白色实心方块 (实测 sf40g)。
+  // 程序化圆点同步改为白 RGB + 圆形 ALPHA, 两类纹理同语义。
+  vec4 t = texture2D(u_Tex, v_UV);
+  gl_FragColor = vec4(t.rgb * v_Color.rgb, t.a * v_Color.a);
+}
+`;
+
+// math.js parseVec3/getVal 移植（gate 已预解析 {user,value} 绑定；{value} 兜底仍在）
+function _weGLPVec3(s, def) {
+  if (s == null) return def;
+  const of = (v, i) => { const n = Number(v); return Number.isFinite(n) ? n : def[i]; };
+  if (typeof s === 'number') return Number.isFinite(s) ? [s, s, s] : [def[0], def[1], def[2]];
+  if (Array.isArray(s)) return [of(s[0], 0), of(s[1], 1), of(s[2], 2)];
+  const p = String(s).trim().split(/\s+/);
+  return [of(p[0], 0), of(p[1], 1), of(p[2], 2)];
+}
+function _weGLPVal(o, key, def) {
+  const v = o && o[key];
+  if (v == null) return def;
+  if (typeof v === 'object' && v !== null && 'value' in v) return v.value;
+  return v;
+}
+// mulberry32 确定性 rng（CPU 同款；种子 = token|对象名|origin 串 hash ——
+// 客户端没有 pkgPath，用 token 替代，跨帧/重建确定即可，不与 CPU 同序列）
+function _weGLPSeed(str) {
+  let seed = 0x9e3779b9;
+  for (let i = 0; i < str.length; i++) seed = (seed ^ str.charCodeAt(i)) * 16777619 >>> 0;
+  return seed;
+}
+function _weGLPRng(seed) {
+  return () => {
+    seed = (seed + 0x6D2B79F5) >>> 0;
+    let t = seed;
+    t = Math.imul(t ^ (t >>> 15), t | 1);
+    t ^= t + Math.imul(t ^ (t >>> 7), t | 61);
+    return ((t ^ (t >>> 14)) >>> 0) / 4294967296;
+  };
+}
+
+// 湍流确定性噪声（CPU particles.js 同表同式：Perlin 置换表 + 2D 数值旋度）
+const _WE_GL_PERLIN_PERM = (() => {
+  const base = [
+    151, 160, 137, 91, 90, 15, 131, 13, 201, 95, 96, 53, 194, 233, 7, 225,
+    140, 36, 103, 30, 69, 142, 8, 99, 37, 240, 21, 10, 23, 190, 6, 148,
+    247, 120, 234, 75, 0, 26, 197, 62, 94, 252, 219, 203, 117, 35, 11, 32,
+    57, 177, 33, 88, 237, 149, 56, 87, 174, 20, 125, 136, 171, 168, 68, 175,
+    74, 165, 71, 134, 139, 48, 27, 166, 77, 146, 158, 231, 83, 111, 229, 122,
+    60, 211, 133, 230, 220, 105, 92, 41, 55, 46, 245, 40, 244, 102, 143, 54,
+    65, 25, 63, 161, 1, 216, 80, 73, 209, 76, 132, 187, 208, 89, 18, 169,
+    200, 196, 135, 130, 116, 188, 159, 86, 164, 100, 109, 198, 173, 186, 3, 64,
+    52, 217, 226, 250, 124, 123, 5, 202, 38, 147, 118, 126, 255, 82, 85, 212,
+    207, 206, 59, 227, 47, 16, 58, 17, 182, 189, 28, 42, 223, 183, 170, 213,
+    119, 248, 152, 2, 44, 154, 163, 70, 221, 153, 101, 155, 167, 43, 172, 9,
+    129, 22, 39, 253, 19, 98, 108, 110, 79, 113, 224, 232, 178, 185, 112, 104,
+    218, 246, 97, 228, 251, 34, 242, 193, 238, 210, 144, 12, 191, 179, 162, 241,
+    81, 51, 145, 235, 249, 14, 239, 107, 49, 192, 214, 31, 181, 199, 106, 157,
+    184, 84, 204, 176, 115, 121, 50, 45, 127, 4, 150, 254, 138, 236, 205, 93,
+    222, 114, 67, 29, 24, 72, 243, 141, 128, 195, 78, 66, 215, 61, 156, 180,
+  ];
+  return base.concat(base);
+})();
+function _weGLPerlinGrad2(hash, x, y) {
+  switch (hash & 0xF) {
+    case 0x0: return x + y; case 0x1: return -x + y; case 0x2: return x - y; case 0x3: return -x - y;
+    case 0x4: return x; case 0x5: return -x; case 0x6: return x; case 0x7: return -x;
+    case 0x8: return y; case 0x9: return -y; case 0xA: return y; case 0xB: return -y;
+    case 0xC: return y + x; case 0xD: return -y; case 0xE: return y - x; default: return -y;
+  }
+}
+function _weGLPerlin2D(x, y) {
+  const fx = Math.floor(x), fy = Math.floor(y);
+  const xi = fx & 255, yi = fy & 255;
+  const xf = x - fx, yf = y - fy;
+  const e = (t) => t * t * t * (t * (t * 6 - 15) + 10);
+  const u = e(xf), v = e(yf);
+  const P = _WE_GL_PERLIN_PERM;
+  const A = P[xi] + yi, B = P[xi + 1] + yi;
+  const lerp = (t, a, b) => a + t * (b - a);
+  return lerp(v,
+    lerp(u, _weGLPerlinGrad2(P[P[A]], xf, yf), _weGLPerlinGrad2(P[P[B]], xf - 1, yf)),
+    lerp(u, _weGLPerlinGrad2(P[P[A + 1]], xf, yf - 1), _weGLPerlinGrad2(P[P[B + 1]], xf - 1, yf - 1)));
+}
+function _weGLCurl2D(x, y) {
+  const e = 1e-4;
+  return [(_weGLPerlin2D(x, y + e) - _weGLPerlin2D(x, y - e)) / (2 * e),
+          -(_weGLPerlin2D(x + e, y) - _weGLPerlin2D(x - e, y)) / (2 * e)];
+}
+
+// 发射器/初始器/算子预解析（CPU _parse* 移植，参数语义逐条对齐）
+function _weGLPParseEmitter(e, scale, angle) {
+  return {
+    name: e.name || 'boxrandom',
+    rate: e.rate ?? 10, // MOD-26: 显式 rate:0 (burst 专用) 不许回退 10
+    instantaneous: e.instantaneous || 0,
+    delay: e.delay || 0,
+    duration: e.duration || 0,
+    origin: _weGLPVec3(e.origin, [0, 0, 0]),
+    directions: _weGLPVec3(e.directions, [1, 1, 0]),
+    distanceMin: _weGLPVec3(e.distancemin, [0, 0, 0]),
+    distanceMax: _weGLPVec3(e.distancemax, [256, 256, 0]),
+    sign: _weGLPVec3(e.sign, [0, 0, 0]).map((x) => (typeof x === 'number' ? x : 0)),
+    speedMin: e.speedmin || 0,
+    speedMax: e.speedmax || 0,
+    flags: e.flags || 0,
+    acc: 0, // F-2: 每发射器独立小数累加器
+    _emitted: false,
+    scale, angle,
+  };
+}
+function _weGLPParseInitializer(i) {
+  const name = i.name || '';
+  const p = { name };
+  const num = (v, d) => { const n = Number(v); return Number.isFinite(n) ? n : d; };
+  if (name === 'sizerandom') {
+    p.min = num(_weGLPVal(i, 'min', 1), 1);
+    p.max = num(_weGLPVal(i, 'max', 20), 20);
+  } else if (name === 'alpharandom') {
+    p.min = num(_weGLPVal(i, 'min', 0.05), 0.05);
+    p.max = num(_weGLPVal(i, 'max', 1), 1);
+  } else if (name === 'lifetimerandom') {
+    p.min = num(_weGLPVal(i, 'min', 0), 0);
+    p.max = num(_weGLPVal(i, 'max', 1), 1);
+  } else if (name === 'velocityrandom') {
+    p.min = _weGLPVec3(_weGLPVal(i, 'min'), [-32, -32, -32]);
+    p.max = _weGLPVec3(_weGLPVal(i, 'max'), [32, 32, 32]);
+  } else if (name === 'rotationrandom') {
+    p.min = _weGLPVec3(_weGLPVal(i, 'min'), [0, 0, 0]);
+    p.max = _weGLPVec3(_weGLPVal(i, 'max'), [0, 0, Math.PI * 2]);
+  } else if (name === 'angularvelocityrandom') {
+    p.min = _weGLPVec3(_weGLPVal(i, 'min'), [0, 0, -5]);
+    p.max = _weGLPVec3(_weGLPVal(i, 'max'), [0, 0, 5]);
+  } else if (name === 'colorrandom') {
+    const min = _weGLPVec3(_weGLPVal(i, 'min'), [0, 0, 0]);
+    const max = _weGLPVec3(_weGLPVal(i, 'max'), [1, 1, 1]);
+    // 引擎初始器值域 0-255，着色器内归一化
+    p.k = (max[0] > 1 || max[1] > 1 || max[2] > 1 || min[0] > 1 || min[1] > 1 || min[2] > 1) ? 1 / 255 : 1;
+    p.min = min; p.max = max;
+  }
+  return p;
+}
+function _weGLPParseOperator(op, rng) {
+  const name = op.name || '';
+  const p = { name };
+  if (name === 'turbulence') {
+    // 官方 CParticle.cpp:1249-1252: phase/turbSpeed 建时随机一次并捕获
+    const sMin = _weGLPVal(op, 'speedmin', 500), sMax = _weGLPVal(op, 'speedmax', 1000);
+    const pMin = _weGLPVal(op, 'phasemin', 0), pMax = _weGLPVal(op, 'phasemax', 0);
+    p.turbSpeed = sMin + rng() * (sMax - sMin);
+    p.phase = pMin + rng() * Math.max(0, pMax - pMin);
+    p.scale = _weGLPVal(op, 'scale', 0.005);
+    p.timeScale = _weGLPVal(op, 'timescale', 0.01);
+    p.mask = _weGLPVec3(_weGLPVal(op, 'mask'), [1, 1, 0]);
+  } else if (name === 'movement') {
+    p.gravity = _weGLPVec3(_weGLPVal(op, 'gravity'), [0, 0, 0]);
+    p.drag = _weGLPVal(op, 'drag', 0);
+  } else if (name === 'angularmovement') {
+    p.force = _weGLPVec3(_weGLPVal(op, 'force'), [0, 0, 0]);
+    p.drag = _weGLPVal(op, 'drag', 0);
+  } else if (name === 'alphafade') {
+    p.fadeIn = _weGLPVal(op, 'fadeintime', 0.5);
+    p.fadeOut = _weGLPVal(op, 'fadeouttime', 0.5);
+  } else if (name === 'controlpointattract') {
+    // A2 (lwe ObjectParser.cpp:732-736): controlpoint 默认 0, origin (0,0,0),
+    // scale 默认 100, threshold 默认 1000 (生效半径 = threshold/2);
+    // flags&1 的 cp 绑定鼠标 (bubbles1.json scale:-300 = 自鼠标排斥)
+    p.cpId = _weGLPVal(op, 'controlpoint', 0);
+    p.cpOrigin = _weGLPVec3(_weGLPVal(op, 'origin'), [0, 0, 0]);
+    p.attractScale = _weGLPVal(op, 'scale', 100);
+    p.threshold = _weGLPVal(op, 'threshold', 1000) / 2;
+  } else if (name === 'sizechange' || name === 'alphachange') {
+    p.st = _weGLPVal(op, 'starttime', 0);
+    p.et = _weGLPVal(op, 'endtime', 1);
+    p.sv = _weGLPVal(op, 'startvalue', 1);
+    p.ev = _weGLPVal(op, 'endvalue', 0);
+  } else if (name === 'oscillatealpha') {
+    p.fMin = _weGLPVal(op, 'frequencymin', 0); p.fMax = _weGLPVal(op, 'frequencymax', 10);
+    p.sMin = _weGLPVal(op, 'scalemin', 0); p.sMax = _weGLPVal(op, 'scalemax', 1);
+    p.phMin = _weGLPVal(op, 'phasemin', 0); p.phMax = _weGLPVal(op, 'phasemax', Math.PI * 2);
+  } else if (name === 'oscillatesize') {
+    p.fMin = _weGLPVal(op, 'frequencymin', 0); p.fMax = _weGLPVal(op, 'frequencymax', 10);
+    p.sMin = _weGLPVal(op, 'scalemin', 0.8); p.sMax = _weGLPVal(op, 'scalemax', 1.2);
+    p.phMin = _weGLPVal(op, 'phasemin', 0); p.phMax = _weGLPVal(op, 'phasemax', Math.PI * 2);
+  } else if (name === 'oscillateposition') {
+    p.fMin = _weGLPVal(op, 'frequencymin', 0); p.fMax = _weGLPVal(op, 'frequencymax', 5);
+    p.sMin = _weGLPVal(op, 'scalemin', 0); p.sMax = _weGLPVal(op, 'scalemax', 10);
+    p.phMin = _weGLPVal(op, 'phasemin', 0); p.phMax = _weGLPVal(op, 'phasemax', Math.PI * 2);
+    p.mask = _weGLPVec3(_weGLPVal(op, 'mask'), [1, 1, 0]);
+  }
+  return p;
+}
+
+// 从清单粒子条目构建模拟系统（CPU _buildParticleSystem 移植；变换用 gate
+// 已折叠的 effTr / 自身 origin-scale-angles，与 resolveTransform 同式）。
+// maxcount 上限 8192：WE 允许任意大值，顶点缓冲/索引（Uint16）须有界。
+const _WE_GL_PART_MAXCOUNT_CAP = 8192;
+function _weGLCreateParticleSys(obj, pinfo, token) {
+  const tr = obj.effTr
+    ? { origin: obj.effTr.origin, scale: obj.effTr.scale, angle: obj.effTr.angle }
+    : {
+      origin: [Number(obj.origin && obj.origin[0]) || 0, Number(obj.origin && obj.origin[1]) || 0],
+      scale: [Number(obj.scale && obj.scale[0]) || 1, Number(obj.scale && obj.scale[1]) || 1],
+      angle: Number(obj.angles && obj.angles[2]) || 0,
+    };
+  const seed = _weGLPSeed(String(token) + '|' + String(obj.name || '') + '|' + tr.origin.join(','));
+  const rng = _weGLPRng(seed);
+  const maxCount = Math.max(1, Math.min(_WE_GL_PART_MAXCOUNT_CAP, Number(pinfo.maxcount) || 100));
+  // sf41a: 控制点表 (id → {flags, offset}) — controlpointattract 消费;
+  // flags&1 = 鼠标绑定 → 需要 pointer 钩子（区别于 mousefollow 发射器基座）。
+  const cps = new Map();
+  for (const c of (Array.isArray(pinfo.controlpoints) ? pinfo.controlpoints : [])) {
+    if (c && typeof c === 'object' && c.id != null) {
+      const off = _weGLPVec3(c.offset, [0, 0, 0]);
+      cps.set(Number(c.id), { flags: Number(c.flags) || 0, offset: [off[0], off[1]] });
+    }
+  }
+  const hasAttract = (pinfo.operator || []).some((op) => op && op.name === 'controlpointattract');
+  const pointerAttract = hasAttract && [...cps.values()].some((c) => (c.flags & 1) === 1);
+  const sys = {
+    origin: [Number(tr.origin[0]) || 0, Number(tr.origin[1]) || 0],
+    scale: [Number(tr.scale[0]) || 1, Number(tr.scale[1]) || 1],
+    angle: Number(tr.angle) || 0,
+    // sf48: 官方粒子 size × 对象 scale (官方 vert: size 局部扩展后过模型矩阵)
+    objScale: [Number(tr.scale[0]) || 1, Number(tr.scale[1]) || 1],
+    alphaMul: Number.isFinite(Number(pinfo.alphaMul)) ? Number(pinfo.alphaMul) : 1,
+    rateMul: Number.isFinite(Number(pinfo.rateMul)) ? Number(pinfo.rateMul) : 1,
+    // sf41c instanceoverride 乘子族 (lwe CParticle.cpp 同款语义)
+    lifetimeMul: Number.isFinite(Number(pinfo.lifetimeMul)) ? Number(pinfo.lifetimeMul) : 1,
+    speedMul: Number.isFinite(Number(pinfo.speedMul)) ? Number(pinfo.speedMul) : 1,
+    sizeMul: Number.isFinite(Number(pinfo.sizeMul)) ? Number(pinfo.sizeMul) : 1,
+    colorMul: Array.isArray(pinfo.colorMul) && pinfo.colorMul.length === 3
+      ? [Number(pinfo.colorMul[0]) || 0, Number(pinfo.colorMul[1]) || 0, Number(pinfo.colorMul[2]) || 0]
+      : [1, 1,  1],
+    maxCount,
+    emitters: (pinfo.emitter || []).map((e) => _weGLPParseEmitter(e, [Number(tr.scale[0]) || 1, Number(tr.scale[1]) || 1], Number(tr.angle) || 0)),
+    initializers: (pinfo.initializer || []).map((i) => _weGLPParseInitializer(i)).filter(Boolean),
+    operators: (pinfo.operator || []).map((op) => _weGLPParseOperator(op, rng)).filter(Boolean),
+    color1: Array.isArray(pinfo.color1) ? pinfo.color1 : [1, 1, 1],
+    color2: Array.isArray(pinfo.color2) ? pinfo.color2 : [1, 1, 1],
+    mousefollow: pinfo.mousefollow === true,
+    cps, pointerAttract, pointerScene: null,
+    // sf47: eventfollow 子系统 — followParent=父对象名 (spawn 事件路由),
+    // pending=待消费的事件位置, childHooks=子系统 pending 数组引用
+    followParent: typeof pinfo.followParent === 'string' ? pinfo.followParent : null,
+    pending: [], childHooks: [],
+    // sf46: rope/ropetrail 渲染器 (lwe CParticle.cpp:36 同款判定)
+    rope: (Array.isArray(pinfo.renderer) ? pinfo.renderer : []).some((r) => r && typeof r === 'object' && (r.name === 'rope' || r.name === 'ropetrail')),
+    // sf50: ropetrail 参数（官方语义 = 每粒子路径拖尾: length 秒历史 ÷ segments 段;
+    // lwe ObjectParser.cpp:770-778 默认 length 1.0 / segments 4, 下限 max(2,…)）
+    trailLength: (() => {
+      const r = (Array.isArray(pinfo.renderer) ? pinfo.renderer : []).find((x) => x && x.name === 'ropetrail');
+      if (!r) return 0;
+      const L = Number(r.length);
+      return Number.isFinite(L) && L > 0 ? L : 1.0;
+    })(),
+    trailSegments: (() => {
+      const r = (Array.isArray(pinfo.renderer) ? pinfo.renderer : []).find((x) => x && x.name === 'ropetrail');
+      if (!r) return 0;
+      const S = Math.round(Number(r.segments));
+      return Math.max(2, Number.isFinite(S) && S > 0 ? S : 4);
+    })(),
+    starttime: Number(pinfo.starttime) || 0,
+    particles: [], count: 0, rng, seed, simT: 0,
+  };
+  // sf50: 顶点预算 — ropetrail 每粒子最多 segments 个段 quad (无独立头 sprite);
+  // rope 链节 ≤ maxCount; Uint16 索引上限 16384 四边形 (65535/4)
+  sys.maxQuads = Math.min(16384, sys.maxCount * (sys.trailLength > 0 ? sys.trailSegments : 1));
+  return sys;
+}
+
+function _weGLPSpawn(sys, em, base) {
+  const rng = sys.rng;
+  let px, py;
+  if (em.name === 'sphererandom') {
+    const angle = rng() * Math.PI * 2;
+    const minR = em.distanceMin[0], maxR = em.distanceMax[0];
+    // 官方 CParticle.cpp:576-585: 2D 圆盘/环 √均匀面积采样
+    const u = rng();
+    const r = Math.sqrt(minR * minR + u * (maxR * maxR - minR * minR));
+    px = Math.cos(angle) * r * em.directions[0];
+    py = Math.sin(angle) * r * em.directions[1];
+    // sign 仅 sphere 生效，作用于出生位置偏移
+    if (em.sign[0] > 0) px = Math.abs(px); else if (em.sign[0] < 0) px = -Math.abs(px);
+    if (em.sign[1] > 0) py = Math.abs(py); else if (em.sign[1] < 0) py = -Math.abs(py);
+  } else {
+    // boxrandom: 每轴 [distancemin, distancemax] 随机距离 + 随机翻转符号
+    const randRange = (a, b) => (Math.min(a, b) + rng() * Math.abs(b - a));
+    const rx = randRange(em.distanceMin[0], em.distanceMax[0]);
+    const ry = randRange(em.distanceMin[1], em.distanceMax[1]);
+    px = (rng() < 0.5 ? -rx : rx) * em.directions[0];
+    py = (rng() < 0.5 ? -ry : ry) * em.directions[1];
+  }
+  // 系统缩放和旋转（注意官方为 -angle; 场景系 y 上）
+  // sf49: 发射器 origin 一并入旋转 — 官方模型矩阵作用于整个局部点
+  // (origin+offset): Rz(−a)·S; 此前只旋转随机偏移、origin 仅乘 scale →
+  // 旋转对象的散布区中心错位。
+  const cos = Math.cos(-em.angle), sin = Math.sin(-em.angle);
+  const ox = em.origin[0] + px, oy = em.origin[1] + py;
+  const rx = ox * cos - oy * sin, ry = ox * sin + oy * cos;
+  // 官方: boxrandom vel=0（初速由 initializer 负责）; sphererandom 且 speedmin/max
+  // 非全 0 → dir=normalize(出生偏移) 径向外喷; 速度存画布坐标系（y 向下）
+  let vel = [0, 0, 0];
+  if (em.name === 'sphererandom' && (em.speedMax > 0 || em.speedMin !== 0)) {
+    const len = Math.hypot(px, py);
+    const dx = len > 0 ? px / len : 0;
+    const dy = len > 0 ? py / len : 1;
+    const speed = em.speedMin + rng() * Math.max(0, em.speedMax - em.speedMin);
+    vel = [dx * speed, -dy * speed, 0];
+  }
+  const lx = rx * em.scale[0];
+  const ly = ry * em.scale[1];
+  // 场景局部坐标（y 向上）= 发射基座（系统 origin 或鼠标）+ 发射器偏移
+  const p = {
+    pos: [base[0] + lx, base[1] + ly, 0],
+    vel, angVel: 0, rot: 0,
+    alpha: 1, size: 20, color: [sys.colorMul ? sys.colorMul[0] : 1, sys.colorMul ? sys.colorMul[1] : 1, sys.colorMul ? sys.colorMul[2] : 1],
+    lifetime: 1, age: 0,
+    oscAlpha: null, oscSize: null, oscPos: null,
+  };
+  for (const init of sys.initializers) _weGLPApplyInitializer(sys, p, init);
+  // sf48+sf49: vel 是画布系 (y 下) — 场景系 R(−a) 折算到画布系 = F·R(−a)·F
+  // = R(+a) (此前误用 R(−a): 垂直分量反向, 3427824116 流星俯冲而非右上)。
+  // × 对象 scale (官方模拟在局部空间, 渲染过模型矩阵; CPU 同款)。
+  if (em.angle || em.scale[0] !== 1 || em.scale[1] !== 1) {
+    const vc = Math.cos(em.angle), vs = Math.sin(em.angle);
+    const nvx = p.vel[0] * vc - p.vel[1] * vs;
+    const nvy = p.vel[0] * vs + p.vel[1] * vc;
+    p.vel[0] = nvx * em.scale[0];
+    p.vel[1] = nvy * em.scale[1];
+  }
+  return p;
+}
+
+function _weGLPApplyInitializer(sys, p, init) {
+  const rng = sys.rng || Math.random;
+  switch (init.name) {
+    case 'sizerandom': {
+      // sf41c 官方 (lwe createSizeRandomInitializer): (min+t×(max-min)) ×
+      // instanceoverride.size / 2 — 尺寸减半 + 对象级 size 乘子。
+      p.size = (init.min + rng() * (init.max - init.min)) * (sys.sizeMul || 1) / 2;
+      p._initSize = p.size;
+      break;
+    }
+    case 'alpharandom': {
+      p.alpha = init.min + rng() * (init.max - init.min);
+      p._initAlpha = p.alpha;
+      break;
+    }
+    case 'lifetimerandom': {
+      // sf41c: × instanceoverride.lifetime (3735447194 泡泡 lifetime:2 → 6-10s)
+      p.lifetime = (init.min + rng() * (init.max - init.min)) * (sys.lifetimeMul || 1);
+      break;
+    }
+    case 'velocityrandom': {
+      // 官方: 叠加非赋值; vel.y 取负（场景 y 上 → 画布 y 下）
+      p.vel = [
+        p.vel[0] + init.min[0] + rng() * (init.max[0] - init.min[0]),
+        p.vel[1] - (init.min[1] + rng() * (init.max[1] - init.min[1])),
+        p.vel[2] + init.min[2] + rng() * (init.max[2] - init.min[2]),
+      ];
+      break;
+    }
+    case 'rotationrandom': {
+      p.rot = init.min[2] + rng() * (init.max[2] - init.min[2]);
+      break;
+    }
+    case 'angularvelocityrandom': {
+      p.angVel = init.min[2] + rng() * (init.max[2] - init.min[2]);
+      break;
+    }
+    case 'colorrandom': {
+      // sf43 官方 (lwe createColorRandomInitializer): p.color =
+      // randomVec3(min,max) × instanceOverride.colorn — colorn 是逐通道颜色
+      //乘子 (3593194513 全部粒子带蓝调 colorn, 未乘 → 暖色/白花瓣色偏)。
+      p.color = [
+        (init.min[0] + rng() * (init.max[0] - init.min[0])) * init.k * (sys.colorMul ? sys.colorMul[0] : 1),
+        (init.min[1] + rng() * (init.max[1] - init.min[1])) * init.k * (sys.colorMul ? sys.colorMul[1] : 1),
+        (init.min[2] + rng() * (init.max[2] - init.min[2])) * init.k * (sys.colorMul ? sys.colorMul[2] : 1),
+      ];
+      break;
+    }
+    // 其余（turbulentvelocityrandom/positionoffsetrandom/mapsequence* 等）CPU 同
+    // 样不实现（switch 无分支静默落地）—— 对齐 CPU 即 no-op
+  }
+}
+
+function _weGLPApplyOperator(sys, op, dt, t) {
+  const rng = sys.rng || Math.random;
+  for (const p of sys.particles) {
+    switch (op.name) {
+      case 'movement': {
+        p.pos[0] += p.vel[0] * dt;
+        p.pos[1] += -p.vel[1] * dt; // vel 为画布系（y 向下），pos 场景系（y 向上）
+        // sf41c: gravity × instanceoverride.speed (官方 lwe movement operator)
+        // sf48: × 对象 scale; sf49: 画布系 R(+a) 旋转 (与 vel 同折算 — 此前
+        // 漏旋转, 旋转对象的重力方向偏差 = 对象角)
+        const gs = sys.scale ? sys.scale[0] : 1;
+        const ga = sys.angle || 0;
+        const gvc = Math.cos(ga) * gs, gvs = Math.sin(ga) * gs;
+        const gyC = -op.gravity[1]; // 场景 y 上 → 画布 y 下
+        p.vel[0] += (op.gravity[0] * gvc - gyC * gvs) * (sys.speedMul || 1) * dt;
+        p.vel[1] += (op.gravity[0] * gvs + gyC * gvc) * (sys.speedMul || 1) * dt;
+        const df = Math.max(0, 1 - op.drag * dt);
+        p.vel[0] *= df; p.vel[1] *= df;
+        break;
+      }
+      case 'controlpointattract': {
+        // A2 重做 (lwe CParticle.cpp:1449-1494): threshold/2; center = cp.position +
+        // opOrigin (local y-down → 场景 y-up: S = O + (local.x, −local.y))。
+        //  linkMouse: S = (鼠标场景位 + off.x, −off.y); worldSpace: 屏中心+off;
+        //  local: 对象 origin + (off.x, −off.y)。无数据 CP = local(0,0) → origin。
+        // GL pos 为场景 y-up; vel 画布 y-down → y 方向取负。鼠标未移动 → 场景中心
+        // (官方静止鼠标默认中心)。
+        const cp = (sys.cps && sys.cps.get(op.cpId)) || { flags: 0, offset: [0, 0] };
+        const sw = sys.sceneW || 1920, sh = sys.sceneH || 1080;
+        const M = sys.pointerScene || [sw / 2, sh / 2];
+        let cx, cy;
+        if (cp.flags & 1) { cx = M[0] + cp.offset[0]; cy = M[1] - cp.offset[1]; }
+        else if (cp.flags & 2) { cx = sw / 2 + cp.offset[0]; cy = sh / 2 - cp.offset[1]; }
+        else { cx = sys.origin[0] + cp.offset[0]; cy = sys.origin[1] - cp.offset[1]; }
+        cx += op.cpOrigin[0];
+        cy -= op.cpOrigin[1];
+        const dx = cx - p.pos[0], dy = cy - p.pos[1];
+        const d = Math.hypot(dx, dy);
+        const spd = sys.speedMul || 1;
+        if (d > 0.001 && d < op.threshold) {
+          p.vel[0] += (dx / d) * op.attractScale * dt * spd;
+          p.vel[1] += (-dy / d) * op.attractScale * dt * spd;
+        }
+        break;
+      }
+      case 'angularmovement': {
+        // A2: lwe CParticle.cpp:1073/1076 — rotation/angularVelocity 均 × speedOverride
+        const spd = sys.speedMul || 1;
+        p.rot += p.angVel * dt * spd;
+        p.angVel += op.force[2] * dt * spd;
+        p.angVel *= Math.max(0, 1 - op.drag * dt);
+        if (p.rot > Math.PI) p.rot -= Math.PI * 2;
+        else if (p.rot < -Math.PI) p.rot += Math.PI * 2;
+        break;
+      }
+      case 'alphafade': {
+        // A2: lwe Maths.cpp:23-32 fadeValue = 线性插值 (旧 smoothstep 无出处)
+        const lifePos = p.lifetime > 0 ? p.age / p.lifetime : 1;
+        const base = p._initAlpha ?? 1;
+        let fade;
+        if (lifePos <= op.fadeIn) {
+          fade = op.fadeIn > 0 ? Math.min(1, Math.max(0, lifePos / op.fadeIn)) : 1;
+        } else if (lifePos > op.fadeOut) {
+          const tt = 1 - op.fadeOut > 0 ? Math.min(1, Math.max(0, (lifePos - op.fadeOut) / (1 - op.fadeOut))) : 1;
+          fade = 1 - tt;
+        } else fade = 1;
+        p.alpha = base * fade;
+        if (p.oscAlpha) p.oscAlpha.base = p.alpha;
+        break;
+      }
+      case 'sizechange': {
+        const lifePos = p.lifetime > 0 ? p.age / p.lifetime : 1;
+        let mul;
+        if (lifePos <= op.st) mul = op.sv;
+        else if (lifePos >= op.et) mul = op.ev;
+        else mul = op.sv + (op.ev - op.sv) * ((lifePos - op.st) / (op.et - op.st));
+        p.size = (p._initSize ?? 20) * mul;
+        if (p.oscSize) p.oscSize.base = p.size;
+        break;
+      }
+      case 'alphachange': {
+        const lifePos = p.lifetime > 0 ? p.age / p.lifetime : 1;
+        let mul;
+        if (lifePos <= op.st) mul = op.sv;
+        else if (lifePos >= op.et) mul = op.ev;
+        else mul = op.sv + (op.ev - op.sv) * ((lifePos - op.st) / (op.et - op.st));
+        p.alpha = (p._initAlpha ?? 1) * mul;
+        if (p.oscAlpha) p.oscAlpha.base = p.alpha;
+        break;
+      }
+      case 'turbulence': {
+        // MOD-29 官方语义: 确定性 curl noise 场（无逐步随机）; 噪声输入此处用
+        // 场景坐标（CPU 用画布坐标）—— 场镜像等价，统计/视觉同分布
+        // A2: lwe CParticle.cpp:1285 × instanceOverride.speed
+        const ns = op.scale * 2;
+        const c = _weGLCurl2D((p.pos[0] + op.phase + op.timeScale * t) * ns, p.pos[1] * ns);
+        const cl = Math.hypot(c[0], c[1]);
+        const spd = sys.speedMul || 1;
+        if (cl > 0.0001) {
+          p.vel[0] += (c[0] / cl) * op.turbSpeed * dt * op.mask[0] * spd;
+          p.vel[1] += (c[1] / cl) * op.turbSpeed * dt * op.mask[1] * spd;
+        }
+        break;
+      }
+      case 'oscillatealpha': {
+        if (!p.oscAlpha) {
+          // A2: lwe CParticle.cpp:1522-1523 phase = random(phasemin, phasemax+2π)
+          p.oscAlpha = { f: op.fMin + rng() * (op.fMax - op.fMin), ph: op.phMin + rng() * (op.phMax + Math.PI * 2 - op.phMin), base: p.alpha };
+        }
+        const cosVal = (Math.cos(p.oscAlpha.f * p.age + p.oscAlpha.ph) + 1) * 0.5;
+        p.alpha = p.oscAlpha.base * (op.sMin + (op.sMax - op.sMin) * cosVal);
+        break;
+      }
+      case 'oscillatesize': {
+        if (!p.oscSize) {
+          p.oscSize = { f: op.fMin + rng() * (op.fMax - op.fMin), ph: op.phMin + rng() * (op.phMax + Math.PI * 2 - op.phMin), base: p.size };
+        }
+        const cosVal = (Math.cos(p.oscSize.f * p.age + p.oscSize.ph) + 1) * 0.5;
+        p.size = p.oscSize.base * (op.sMin + (op.sMax - op.sMin) * cosVal);
+        break;
+      }
+      case 'oscillateposition': {
+        if (!p.oscPos) {
+          p.oscPos = {
+            f: [0, 0, 0].map(() => op.fMin + rng() * (op.fMax - op.fMin)),
+            ph: [0, 0, 0].map(() => op.phMin + rng() * (op.phMax + Math.PI * 2 - op.phMin)),
+            sc: [0, 0, 0].map(() => op.sMin + rng() * (op.sMax - op.sMin)),
+          };
+        }
+        // A2: lwe CParticle.cpp:1631 × instanceOverride.speed
+        const spd = sys.speedMul || 1;
+        for (let a = 0; a < 2; a++) {
+          const w = 2 * Math.PI * p.oscPos.f[a] / (2 * Math.PI);
+          const move = -p.oscPos.sc[a] * w * Math.sin(w * p.age + p.oscPos.ph[a]) * dt;
+          p.pos[a] += (a === 0 ? move : -move) * op.mask[a] * spd; // pos 场景系 y 向上
+        }
+        break;
+      }
+      // controlpointattract/maintaindistance*/reducemovement*/remapvalue 等
+      // CPU 同样未实现 → no-op
+    }
+  }
+}
+
+function _weGLPStep(sys, dt, simT, base) {
+  // sf47: eventfollow 子系统 — 消费父 spawn 事件 (瞬时发射器在事件位置爆发)
+  if (sys.pending && sys.pending.length) {
+    const events = sys.pending.splice(0, 64);
+    for (const ev of events) {
+      for (const em of sys.emitters) {
+        if (!(em.instantaneous > 0)) continue;
+        const cap = em.flags & 2 ? 1 : em.instantaneous;
+        for (let k = 0; k < cap && sys.count < sys.maxCount; k++) {
+          sys.particles.push(_weGLPSpawn(sys, em, ev));
+          sys.count++;
+        }
+      }
+    }
+  }
+  for (const em of sys.emitters) {
+    if (em.delay > 0 && simT < em.delay) continue;
+    if (em.duration > 0 && simT > em.delay + em.duration) continue; // MOD-27: 发射窗口
+    let toEmit = 0;
+    if (em.instantaneous > 0 && !em._emitted) { toEmit = em.instantaneous; em._emitted = true; }
+    em.acc += dt * em.rate * sys.rateMul;
+    toEmit += Math.floor(em.acc);
+    em.acc -= Math.floor(em.acc);
+    const cap = em.flags & 2 ? 1 : toEmit;
+    for (let k = 0; k < cap && sys.count < sys.maxCount; k++) {
+      const np = _weGLPSpawn(sys, em, base);
+      sys.particles.push(np);
+      sys.count++;
+      // sf47: 通知 eventfollow 子系统 (spawn 事件 = 父粒子出生位置)
+      if (sys.childHooks && sys.childHooks.length) {
+        for (const h of sys.childHooks) h.push([np.pos[0], np.pos[1]]);
+      }
+    }
+  }
+  for (const p of sys.particles) p.age += dt;
+  for (const op of sys.operators) _weGLPApplyOperator(sys, op, dt, simT);
+  // sf50: ropetrail 位置历史（官方 semantics: 沿每个粒子自己的路径画线）。
+  // 每步（固定 1/60）记录快照（pos 场景系 y-up + alpha/size），环形保留 length 秒;
+  // 绘制时按 tk=age−k·L/S 回溯取段端点。CPU _stepParticles 同款。
+  if (sys.trailLength > 0) {
+    const keep = Math.ceil(sys.trailLength * 60) + 2;
+    for (const p of sys.particles) {
+      const hst = p.hist || (p.hist = []);
+      hst.push({ a: p.age, x: p.pos[0], y: p.pos[1], al: p.alpha, sz: p.size });
+      if (hst.length > keep) hst.splice(0, hst.length - keep);
+    }
+  }
+  // P0-5: 死亡递减 — maxcount 封顶语义 = 同时存活数
+  for (let i = sys.particles.length - 1; i >= 0; i--) {
+    if (sys.particles[i].age >= sys.particles[i].lifetime) {
+      sys.particles.splice(i, 1);
+      sys.count--;
+    }
+  }
+}
+
+// 增量推进到 t（场景时间，秒）。base = 发射基座场景坐标（mousefollow 且有鼠标
+// → 鼠标；否则系统 origin）。大空洞（重建/长暂停恢复 >10s）→ 最多暖机 10s
+// （600 步）逼近稳态后跳钟，防逐帧追账雪崩；小洞最多 8 步/帧渐进追平。
+function _weGLPAdvance(sys, t, base) {
+  const st = sys.starttime || 0;
+  const target = Math.max(0, t - st);
+  if (target < sys.simT - 1e-9) {
+    // 时间回退（seek/循环）→ 确定性复位重模拟
+    sys.particles.length = 0;
+    sys.count = 0;
+    sys.simT = 0;
+    sys.rng = _weGLPRng(sys.seed);
+    for (const em of sys.emitters) { em.acc = 0; em._emitted = false; }
+    if (sys.pending) sys.pending.length = 0; // sf47: 事件队列同步复位
+  }
+  const gap = target - sys.simT;
+  if (gap <= 0) return;
+  if (gap > 10) {
+    let n = 0;
+    while (sys.simT < target && n < 600) {
+      const dt = Math.min(1 / 60, target - sys.simT);
+      _weGLPStep(sys, dt, sys.simT, base);
+      sys.simT += dt;
+      n++;
+    }
+    sys.simT = target;
+    return;
+  }
+  let n = 0;
+  while (sys.simT < target && n < 8) {
+    const dt = Math.min(1 / 60, target - sys.simT);
+    _weGLPStep(sys, dt, sys.simT, base);
+    sys.simT += dt;
+    n++;
+  }
+}
+
+// 存活粒子写入顶点数组（CPU _drawParticles 同款裁剪/颜色/尺寸语义），
+// 返回四边形数。ps = [场景单位→画布像素 x, y]；ratio = 纹理高/宽（官方
+// genericparticle textureRatio：垂直尺寸乘纹理纵横比）。
+// frames = 精灵表帧元数据（像素单位，TEXS，>1 帧才传）：每粒子按生命进度
+// 选帧（官方 SPRITESHEET: idx = floor(lt*count)），UV 采帧子区域，纵横比
+// 按帧（sf40g: bubble1.tex 是 30 帧 GIF 网格，整图采样 → 每粒子画出 6×5
+// 泡泡方阵）。无帧 → uvRect=(0,0,1,1)，ratio 按整图。
+function _weGLPFillVerts(sys, f32, ps, CW, CH, texW, texH, frames) {
+  // sf46: rope/ropetrail 渲染器（官方 genericropeparticle 语义的视觉等价实现）—
+  // 存活粒子按发射序 = 链节点（lwe renderRope 同款：oldest→newest 串链），逐对
+  // 相邻粒子生成"链节 quad"：中心=中点、宽=min(size)、长=段距+重叠、旋转让
+  // 纹理长轴对齐链方向、alpha 沿链向尾部淡出；最新粒子(链头)另画本体 sprite。
+  // 完整 genericropeparticle shader（Catmull-Rom 细分 + UV 流动 + TRAILFADE
+  // 组合）未移植 — 链节近似在流星(直线轨迹)场景与官方视觉等价。
+  if (sys.rope) return _weGLPFillRopeVerts(sys, f32, ps, CW, CH, texW, texH);
+  const fr = (frames && frames.length > 1 && texW > 0 && texH > 0) ? frames : null;
+  const frCount = fr ? fr.length : 0;
+  const ratio = texW > 0 ? texH / texW : 1;
+  const c1 = sys.color1, c2 = sys.color2;
+  const S = _WE_GL_PART_STRIDE;
+  let n = 0;
+  for (const p of sys.particles) {
+    const lifePos = p.lifetime > 0 ? p.age / p.lifetime : 1;
+    if (lifePos >= 1) continue;
+    const a = Math.max(0, p.alpha) * sys.alphaMul;
+    if (a <= 0.002) continue;
+    const sz = Math.max(0.5, p.size);
+    const x = p.pos[0] * ps[0], y = CH - p.pos[1] * ps[1];
+    // 帧选择 + UV 矩形（CPU SPRITESHEET 同款: 显式帧宽优先, 缺省按 count 均分）
+    let ux = 0, uy = 0, uw = 1, uh = 1, pRatio = ratio;
+    if (fr) {
+      const f = fr[Math.min(frCount - 1, Math.floor(lifePos * frCount))];
+      const fw = (f && f.width > 0) ? f.width : (frCount > 0 ? texW / frCount : texW);
+      const fh = (f && f.height > 0) ? f.height : texH;
+      ux = (f ? f.x : 0) / texW; uy = (f ? f.y : 0) / texH;
+      uw = fw / texW; uh = fh / texH;
+      if (fw > 0) pRatio = fh / fw;
+    }
+    const osc = sys.objScale || [1, 1];
+    const w = sz * ps[0] * osc[0], h = sz * ps[1] * osc[1] * pRatio;
+    // sf43 官方: genericparticle.vert v_Color = a_Color 直通 (无 mix) —
+    // 顶点色 = colorrandom(min,max)×colorn。旧 mix(color1,color2,p.color.r)
+    // 是误读 (color1/2 是编辑器 usershadervalues UI 绑定, 非渲染 mix)。
+    const cr = p.color[0], cg = p.color[1], cb = p.color[2];
+    const rot = p.rot || 0;
+    const base = n * 4 * S;
+    // 角点序与 _WE_GL_IDX [0,2,1,1,2,3] 对齐：左上/右上/左下/右下
+    const corners = [-0.5, 0.5, 0.5, 0.5, -0.5, -0.5, 0.5, -0.5];
+    for (let v = 0; v < 4; v++) {
+      const o = base + v * S;
+      f32[o] = corners[v * 2]; f32[o + 1] = corners[v * 2 + 1];
+      f32[o + 2] = x; f32[o + 3] = y;
+      f32[o + 4] = w; f32[o + 5] = h;
+      f32[o + 6] = rot;
+      f32[o + 7] = cr; f32[o + 8] = cg; f32[o + 9] = cb; f32[o + 10] = a;
+      f32[o + 11] = ux; f32[o + 12] = uy; f32[o + 13] = uw; f32[o + 14] = uh;
+    }
+    n++;
+    if (n >= sys.maxCount) break; // 顶点数组按 maxCount 预分配，硬顶防御
+  }
+  return n;
+}
+
+// sf50: ropetrail 历史回溯采样 — hist 按 age 升序, tk 落在相邻快照间线性插值;
+// 早于最早快照 → 钳到最早 (≈出生点, 拖尾从短渐长)。CPU _trailSample 同款。
+function _weGLTrailSample(hist, tk) {
+  const first = hist[0];
+  if (tk <= first.a) return first;
+  for (let i = hist.length - 1; i > 0; i--) {
+    const b = hist[i], a = hist[i - 1];
+    if (tk >= a.a && tk <= b.a) {
+      const f = (tk - a.a) / ((b.a - a.a) || 1e-9);
+      return { x: a.x + (b.x - a.x) * f, y: a.y + (b.y - a.y) * f, al: a.al + (b.al - a.al) * f, sz: a.sz + (b.sz - a.sz) * f };
+    }
+  }
+  return hist[hist.length - 1];
+}
+
+// sf46/sf50: rope / ropetrail 顶点（布局/角点序与 _weGLPFillVerts 同源）。
+// 官方语义 (docs.wallpaperengine.io renderer 文档):
+//   ropetrail = "沿每个粒子自己的路径画线" — 每粒子位置历史 (长度 length 秒,
+//   segments 段), 逐段 quad: 宽=size⊥段方向, UV.v 头(k/S)→尾((k+1)/S) 切片
+//   (官方 genericropeparticle.vert TRAILRENDERER 同款; 渐隐由贴图 v 向 alpha
+//   承担 — drop.tex v≈0.19 亮核, v→1 隐)。无独立头部 sprite。
+//   rope = "在发射的粒子间连线" — 相邻存活粒子串链 + 链头 sprite (sf46 近似)。
+// GL 旋转约定: 本地 +y 经 rot 映为 (sin r, cos r), 且 corner +0.5y 端采样 v=uy
+// → 段 quad rot=atan2(head−tail) 使头端采 uy=(k−1)/S, 尾端采 k/S。
+function _weGLPFillRopeVerts(sys, f32, ps, CW, CH, texW, texH) {
+  const S = _WE_GL_PART_STRIDE;
+  const ratio = texW > 0 ? texH / texW : 1;
+  const alive = sys.particles;
+  const na = alive.length;
+  if (na === 0) return 0;
+  let n = 0;
+  const quadCap = sys.maxQuads || sys.maxCount;
+  const put = (x, y, w, h, rot, cr, cg, cb, a, ux, uy, uw, uh) => {
+    const base = n * 4 * S;
+    const corners = [-0.5, 0.5, 0.5, 0.5, -0.5, -0.5, 0.5, -0.5];
+    for (let v = 0; v < 4; v++) {
+      const o = base + v * S;
+      f32[o] = corners[v * 2]; f32[o + 1] = corners[v * 2 + 1];
+      f32[o + 2] = x; f32[o + 3] = y;
+      f32[o + 4] = w; f32[o + 5] = h;
+      f32[o + 6] = rot;
+      f32[o + 7] = cr; f32[o + 8] = cg; f32[o + 9] = cb; f32[o + 10] = a;
+      f32[o + 11] = ux; f32[o + 12] = uy; f32[o + 13] = uw; f32[o + 14] = uh;
+    }
+    n++;
+  };
+  const uvw = texW > 0 ? 1 : 0, uvh = texH > 0 ? 1 : 0;
+  if (texW > 0 && sys.trailLength > 0) {
+    // —— ropetrail: 每粒子路径拖尾 ——
+    const L = sys.trailLength, SEG = sys.trailSegments;
+    const osc = sys.objScale || [1, 1];
+    for (const p of alive) {
+      const hst = p.hist;
+      if (!hst || !hst.length) continue;
+      const cr = p.color[0], cg = p.color[1], cb = p.color[2];
+      let hx = p.pos[0], hy = p.pos[1], ha = p.alpha, hs = p.size;
+      for (let k = 1; k <= SEG; k++) {
+        if (n >= quadCap) return n;
+        const s2 = _weGLTrailSample(hst, p.age - (k * L) / SEG);
+        const ax = hx * ps[0], ay = CH - hy * ps[1];
+        const bx = s2.x * ps[0], by = CH - s2.y * ps[1];
+        const dx = bx - ax, dy = by - ay;
+        const d = Math.hypot(dx, dy);
+        if (d >= 1e-3) {
+          const a = Math.max(0, Math.min((ha + s2.al) / 2, 1)) * sys.alphaMul;
+          if (a > 0.002) {
+            // 宽与 sprite 同口径 (全宽 = size·ps·osc); 长 = 段距 + 全宽重叠 (无缝)
+            const w = Math.max(0.5, (hs + s2.sz) / 2) * ps[0] * osc[0];
+            put((ax + bx) / 2, (ay + by) / 2, w, d + w,
+              Math.atan2(ax - bx, ay - by), // 本地 +y → 头 (头端采 v=(k−1)/SEG)
+              cr, cg, cb, a, 0, (k - 1) / SEG, uvw, 1 / SEG);
+          }
+        }
+        hx = s2.x; hy = s2.y; ha = s2.al; hs = s2.sz;
+      }
+    }
+    return n;
+  }
+  if (texW > 0) {
+    // 链节：相邻粒子对 (alive[0]=最旧 … na-1=最新/链头)
+    for (let k = 0; k + 1 < na && n < quadCap; k++) {
+      const p = alive[k], q = alive[k + 1];
+      const px = p.pos[0] * ps[0], py = CH - p.pos[1] * ps[1];
+      const qx = q.pos[0] * ps[0], qy = CH - q.pos[1] * ps[1];
+      const dx = qx - px, dy = qy - py;
+      const d = Math.hypot(dx, dy);
+      if (d < 1e-3) continue;
+      const fade = (k + 1) / na; // 尾 0 → 头 1
+      const a = Math.max(0, Math.min((p.alpha + q.alpha) / 2, 1)) * sys.alphaMul * fade;
+      if (a <= 0.002) continue;
+      const osc = sys.objScale || [1, 1];
+      const w = Math.max(0.5, Math.min(p.size, q.size)) * ps[0] * osc[0];
+      // 长度 = 段距 + 半宽重叠（链节衔接无缝）; 旋转: 本地 +y → 链方向
+      // (粒子 shader: local+y 经 rot 映射为 (sin r, cos r)) → r = atan2(dx, dy)
+      const h = d + w;
+      const rot = Math.atan2(dx, dy);
+      const cr = (p.color[0] + q.color[0]) / 2, cg = (p.color[1] + q.color[1]) / 2, cb = (p.color[2] + q.color[2]) / 2;
+      put((px + qx) / 2, (py + qy) / 2, w, h, rot, cr, cg, cb, a, 0, 0, uvw, uvh);
+    }
+    // 链头本体 sprite（流星核）
+    if (n < quadCap) {
+      const q = alive[na - 1];
+      const a = Math.max(0, q.alpha) * sys.alphaMul;
+      if (a > 0.002) {
+        const x = q.pos[0] * ps[0], y = CH - q.pos[1] * ps[1];
+        const osc2 = sys.objScale || [1, 1];
+        const w = Math.max(0.5, q.size) * ps[0] * osc2[0], h = w * ratio;
+        put(x, y, w, h, q.rot || 0, q.color[0], q.color[1], q.color[2], a, 0, 0, uvw, uvh);
+      }
+    }
+  } else {
+    // 无纹理：退回圆点 sprite（与 sprite 路径一致, additive 圆）
+    for (const p of alive) {
+      if (n >= sys.maxCount) break;
+      const a = Math.max(0, p.alpha) * sys.alphaMul;
+      if (a <= 0.002) continue;
+      const x = p.pos[0] * ps[0], y = CH - p.pos[1] * ps[1];
+      const sz = Math.max(0.5, p.size);
+      const osc3 = sys.objScale || [1, 1];
+      put(x, y, sz * ps[0] * osc3[0], sz * ps[1] * osc3[1], p.rot || 0, p.color[0], p.color[1], p.color[2], a, 0, 0, 0, 0);
+    }
+  }
+  return n;
+}
+
+const _WE_GL_VERSION = 9; // sf51 spritesheet 图像逐帧轮播 + sf52 鼠标 object-fit 映射 — 与 host SCENE_GL_ENGINE 同步
+
+// ---------- W4: 木偶网格（绑定姿态静态渲染；MDLA 动画属实验层）----------
+// CPU puppet.js 语义: 网格顶点为相对对象中心的局部像素坐标 (y 向上);
+// 布局 = 对象变换 (gate 折叠 effTr) 原点偏移 + 缩放; 旋转绕网格包围盒中心
+// (CPU blitRotated 枢轴)。旋转为清单静态值 → 构建期烘进顶点 (scene 空间),
+// resize 只重算 MVP。复用 presentProg (vec3 位置 + u_MVP), 同纹理同 uniform。
+// 顶点布局 (5 float / 20B): pos(3, 已烘旋转的 scene 局部坐标) uv(2, 原样不翻转
+// — 与 image 路径 uploadTex 无翻转语义一致)。
+function _weGLPuppetTr(obj) {
+  // 与 resolveTransform 前两支同源: effTr 折叠优先; 否则自身 origin/scale +
+  // angles[2] (gate foldChain 同款弧度语义)。puppet 经 gate 必有 effTr 或无父。
+  if (obj.effTr) {
+    return {
+      origin: [Number(obj.effTr.origin && obj.effTr.origin[0]) || 0, Number(obj.effTr.origin && obj.effTr.origin[1]) || 0],
+      scale: [Number(obj.effTr.scale && obj.effTr.scale[0]) || 1, Number(obj.effTr.scale && obj.effTr.scale[1]) || 1],
+      angle: Number(obj.effTr.angle) || 0,
+    };
+  }
+  return {
+    origin: [Number(obj.origin && obj.origin[0]) || 0, Number(obj.origin && obj.origin[1]) || 0],
+    scale: [Number(obj.scale && obj.scale[0]) || 1, Number(obj.scale && obj.scale[1]) || 1],
+    angle: Number(obj.angles && obj.angles[2]) || 0,
+  };
+}
+
+function _weGLPuppetVerts(payload, obj) {
+  const vc = payload.vertexCount | 0;
+  if (!vc || !Array.isArray(payload.positions) || payload.positions.length < vc * 3
+    || !Array.isArray(payload.uvs) || payload.uvs.length < vc * 2
+    || !Array.isArray(payload.indices) || payload.indices.length < 3) {
+    throw new Error('puppet-payload-invalid');
+  }
+  if (vc * 4 > 65535) throw new Error('puppet-too-many-verts'); // Uint16 索引界
+  const tr = _weGLPuppetTr(obj);
+  const angle = tr.angle;
+  // 包围盒中心 (scene 空间, 旋转枢轴 — CPU blitRotated cxB/cyB 同款)
+  let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+  for (let i = 0; i < vc; i++) {
+    const x = payload.positions[i * 3], y = payload.positions[i * 3 + 1];
+    if (x < minX) minX = x; if (x > maxX) maxX = x;
+    if (y < minY) minY = y; if (y > maxY) maxY = y;
+  }
+  const cxB = (minX + maxX) / 2, cyB = (minY + maxY) / 2;
+  // 正角 = 屏幕 CCW (CPU 判别实验同款); scene y 向上 → 数学 CCW 旋转 +angle
+  const c = Math.cos(angle), s = Math.sin(angle);
+  const out = new Float32Array(vc * 5);
+  for (let i = 0; i < vc; i++) {
+    const x0 = payload.positions[i * 3] - cxB, y0 = payload.positions[i * 3 + 1] - cyB;
+    out[i * 5] = cxB + x0 * c - y0 * s;
+    out[i * 5 + 1] = cyB + x0 * s + y0 * c;
+    out[i * 5 + 2] = payload.positions[i * 3 + 2] || 0;
+    out[i * 5 + 3] = payload.uvs[i * 2];
+    out[i * 5 + 4] = payload.uvs[i * 2 + 1];
+  }
+  const idx = new Uint16Array(payload.indices.length);
+  for (let i = 0; i < payload.indices.length; i++) {
+    const v = payload.indices[i] | 0;
+    if (v < 0 || v >= vc) throw new Error('puppet-index-oob');
+    idx[i] = v;
+  }
+  return { verts: out, indices: idx, angle, boundsCenter: [cxB, cyB] };
+}
+
+// 木偶 MVP: 局部 scene 坐标 (已烘旋转) → 画布 → NDC。与 computeGeo 同源:
+// ps = 画布/ortho 比; origin/scale 取 effTr。矩阵列主序, m[10]=-1/m[15]=1
+// 与 _weGLQuadMVP 同 z 约定。
+// A1: 相机 eye 不产生位移 — lwe Camera.cpp:50 projection=ortho·T(+eye) 与
+// lookAt (center=eye+(0,0,-1) → 纯平移 T(-eye)) 完全抵消, 旧 -camEye.x×ps 移除。
+function _weGLPuppetMVP(obj, CW, CH, ortho, out) {
+  const ps = [ortho.width > 0 ? CW / ortho.width : 1, ortho.height > 0 ? CH / ortho.height : 1];
+  const tr = _weGLPuppetTr(obj);
+  const m = out || new Float32Array(16);
+  m.fill(0);
+  m[0] = 2 * tr.scale[0] * ps[0] / CW;
+  m[5] = 2 * tr.scale[1] * ps[1] / CH;
+  m[10] = -1; m[15] = 1;
+  m[12] = 2 * tr.origin[0] * ps[0] / CW - 1;
+  m[13] = 2 * tr.origin[1] * ps[1] / CH - 1;
+  return m;
+}
+
+const _weGLVideoPlaceholder = new Uint8Array([0, 0, 0, 0]); // W6: 视频纹理 1×1 透明占位
+
+const WE_GL_MAX_DIM = 4096; // G-07: 背板/FBO 单边尺寸上限（dpr≤2 × 4K 视口足够）
+const WE_GL_RENDER_FATAL_MAX = 5; // G-03: 连续抛错帧数达到即判 fatal 上抛
+const WE_GL_FT_CAP = 4096; // N-09: stats.frameTimes 容量上限
+const WE_GL_SLOW_WINDOW = 120; // P0-2: render 耗时滑窗帧数（窗口填满 ≈ 慢帧已持续 ≥3s 的帧数近似）
+const WE_GL_SLOW_P95_MS = 200; // P0-2: 滑窗 p95 render 耗时阈值（ms），持续超限 → 熔断回退 mp4
+function clampGLDim(v) {
+  const n = Math.round(Number(v) || 0);
+  return Math.max(2, Math.min(WE_GL_MAX_DIM, n));
+}
+
+// ---------- P1-3①: WebGL2 一次性预检 + SwiftShader 嗅探 ----------
+// 此前 webgl2-unavailable 要到 buildResources（meta+shader 串行 fetch 之后）才
+// 暴露，SwiftShader/llvmpipe 软渲染更是要到运行期才以 1fps 灾难形态显形。这里
+// 模块级只探一次：失败（无 webgl2 / 软渲染器）→ sessionStorage 全局标记 + 返回
+// 失败原因，调用方直接走 onError 降级（mp4），本会话不再进入 meta/shader fetch。
+// sessionStorage 读全部裹 try/catch（隐私模式会抛）。
+const WE_GL_PROBE_FAIL_KEY = 'weSceneGLProbeFailed';
+const WE_GL_SW_RENDERER_RE = /swiftshader|llvmpipe|software/i;
+let _weGLProbeResult; // undefined=未测；true=通过；string=失败原因（sessionStorage 命中时复用旧因）
+function weGLPreflight() {
+  if (_weGLProbeResult !== undefined) return _weGLProbeResult;
+  try {
+    const prev = sessionStorage.getItem(WE_GL_PROBE_FAIL_KEY);
+    if (prev) { _weGLProbeResult = prev; return prev; } // 本会话已判定失败 → 短路（连 probe canvas 都不建）
+  } catch { /* 隐私模式：跳过会话标记，仍现场探测 */ }
+  let reason = '';
+  try {
+    const g = document.createElement('canvas').getContext('webgl2');
+    if (!g) {
+      reason = 'webgl2-unavailable';
+    } else {
+      // 成功路径嗅探渲染器：UNMASKED_RENDERER 命中软栅格化（SwiftShader/llvmpipe
+      // /software）→ 同样降级（软渲染灾难路径）。嗅探本身失败不阻断（按硬件 GL 放行）。
+      try {
+        const ext = g.getExtension('WEBGL_debug_renderer_info');
+        const renderer = ext ? String(g.getParameter(ext.UNMASKED_RENDERER_WEBGL) || '') : '';
+        if (renderer && WE_GL_SW_RENDERER_RE.test(renderer)) reason = 'software-renderer:' + renderer.slice(0, 80);
+      } catch { /* */ }
+      try { const lose = g.getExtension('WEBGL_lose_context'); if (lose) lose.loseContext(); } catch { /* 探测完即释放 */ }
+    }
+  } catch (e) {
+    reason = 'webgl2-probe:' + (e && e.message ? e.message : e);
+  }
+  if (reason) {
+    try { sessionStorage.setItem(WE_GL_PROBE_FAIL_KEY, reason); } catch { /* 隐私模式 */ }
+    _weGLProbeResult = reason;
+    return reason;
+  }
+  _weGLProbeResult = true;
+  return true;
+}
+
+/**
+ * 创建场景 GL 渲染器。
+ * opts: { token, width, height, fpsCap, onReady, onError }
+ *   width/height = 视口预算像素（调用方按 dpr 算好）；canvas 背板在 meta 到达后
+ *                 按场景 ortho 比例修正（sar fix，视口不一致时 CSS object-fit letterbox）
+ *   onReady()    首帧渲染完成（调用方此刻才显示 canvas + 淡出底图 img）
+ *   onError({reason, permanent})  任一失败（调用方标记 glFailed 回退 mp4；
+ *                 含 G-03: 连续 N 帧渲染抛错 → 'render-fatal:...' 上抛）
+ * 返回 { canvas, dispose(), stats(), setPaused(), setFpsCap(), setPlaybackRate(),
+ *        degraded(), resize(w,h) }。
+ */
+function createSceneGLRenderer(opts) {
+  const token = opts.token;
+  let CW = clampGLDim(opts.width); // G-07: 创建期即 clamp（超限输入防背板/FBO 分配失败）
+  let CH = clampGLDim(opts.height);
+  let fpsCap = Math.max(0, Number(opts.fpsCap) || 0); // 0 = 不限
+  const onReady = typeof opts.onReady === 'function' ? opts.onReady : () => {};
+  const onError = typeof opts.onError === 'function' ? opts.onError : () => {};
+  const BASE = '/wallpaper-engine';
+  const resUrl = (p) => BASE + '/scene-resource/' + token + '/' + p.split('/').map(encodeURIComponent).join('/');
+
+  const canvas = document.createElement('canvas');
+  canvas.width = 2; // 背板尺寸在 meta 到达后按场景 ortho 比例确定（sar fix）
+  canvas.height = 2;
+  canvas.className = 'we-gl-canvas';
+
+  let state = 'GL_TRY';
+  let disposed = false;
+  let readyFired = false;
+  let paused = false; // 用户暂停/遮挡暂停（调用方 setPaused）
+  let playbackRate = 1;
+  let rateBase = 0;  // 播放速率时间基：t = rateBase + (now − wallBase)/1000 × rate
+  let wallBase = 0;
+  let gl = null;
+  const ctrl = new AbortController();
+  // E2E/诊断钩子（验收 3/4 读取）：帧时环形缓冲 + contextlost 计数
+  const stats = { state: () => state, frames: 0, frameTimes: [], contextLost: 0, errors: [], lastT: 0, initStage: 'meta', renderFails: 0 };
+  const pushFrameTime = (ms) => {
+    // N-09: 旧实现在超 4096 后每帧 splice(0,1) O(n)。读方语义要求 frameTimes
+    // 恒为 oldest→newest 有序真数组（index.html 取 ft[len-1]=最新；gui-e2e.py
+    // 会外部 length=0 清空后重灌 + slice()），原地环形覆盖会破坏这两条，故改为
+    // 攒批削半：写满 1.5×cap 才一次 splice 削回 cap，摊还 O(1)/帧。
+    const ft = stats.frameTimes;
+    ft.push(ms);
+    if (ft.length >= WE_GL_FT_CAP + (WE_GL_FT_CAP >> 1)) ft.splice(0, ft.length - WE_GL_FT_CAP);
+  };
+  // P0-2: render 耗时滑窗熔断 — pushFrameTime 记的是 rAF 间隔（含浏览器节流/
+  // 合帧，非渲染成本），慢帧判定必须量 render() 本身。窗口填满（=慢帧已持续
+  // 数秒的帧数近似）且 p95 超阈 → onError({reason:'slow', permanent:false})
+  // 只触发一次，客户端 markSceneGLFailed + queueSceneAnimUpgrade 现有链零改动接住。
+  const renderMsRing = new Float64Array(WE_GL_SLOW_WINDOW);
+  let renderMsN = 0, renderMsHead = 0, slowFired = false;
+  const pushRenderTime = (ms) => {
+    renderMsRing[renderMsHead] = ms;
+    renderMsHead = (renderMsHead + 1) % WE_GL_SLOW_WINDOW;
+    if (renderMsN < WE_GL_SLOW_WINDOW) renderMsN++;
+    if (slowFired || renderMsN < WE_GL_SLOW_WINDOW) return; // 窗口未填满不判定（防开机抖动误熔断）
+    const sorted = Array.from(renderMsRing).sort((a, b) => a - b); // 120 个数/帧，排序成本可忽略
+    const p95 = sorted[Math.floor(sorted.length * 0.95)];
+    if (p95 > WE_GL_SLOW_P95_MS) {
+      slowFired = true; // fail → dispose 停循环，天然只触发一次；此为双保险
+      try { console.warn('[scene-gl] render p95=' + Math.round(p95) + 'ms 超过 ' + WE_GL_SLOW_P95_MS + 'ms 阈值，慢帧熔断降级'); } catch { /* console 不可用 */ }
+      fail('slow', false);
+    }
+  };
+
+  // G-05: 渲染器本地降级记录 — 与 host gate 的 mark / CPU C1 结构对齐
+  // {object, feature, action}（object=null 表示场景级），经 degraded() 与 host
+  // 清单合并上浮给客户端提示条（对象名不丢）。
+  const degradedLocal = [];
+  const mark = (object, feature, action) => degradedLocal.push({ object, feature, action });
+  // G-07: viewport clamp 只 mark 一次（resize/dpr 变化会反复触发，防清单刷屏）
+  let viewportClampMarked = Math.round(Number(opts.width) || 0) > CW || Math.round(Number(opts.height) || 0) > CH;
+  if (viewportClampMarked) mark(null, 'viewport', '渲染尺寸超限，已 clamp 到 ' + WE_GL_MAX_DIM);
+  const noteViewportClamp = (w, h) => {
+    if (viewportClampMarked) return;
+    if (Math.round(Number(w) || 0) > WE_GL_MAX_DIM || Math.round(Number(h) || 0) > WE_GL_MAX_DIM) {
+      viewportClampMarked = true;
+      mark(null, 'viewport', '渲染尺寸超限，已 clamp 到 ' + WE_GL_MAX_DIM);
+    }
+  };
+
+  const fail = (reason, permanent) => {
+    if (disposed) return;
+    stats.errors.push(String(reason));
+    dispose();
+    onError({ reason: String(reason), permanent: permanent !== false });
+  };
+  const fetchJson = async (url, timeoutMs) => {
+    const timer = setTimeout(() => ctrl.abort(new DOMException('timeout', 'AbortError')), timeoutMs);
+    try {
+      const resp = await fetch(url, { signal: ctrl.signal, cache: 'no-store' });
+      if (!resp.ok) throw new Error(url + ' → ' + resp.status);
+      return await resp.json();
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+  const fetchBlob = async (url, timeoutMs) => {
+    const timer = setTimeout(() => ctrl.abort(new DOMException('timeout', 'AbortError')), timeoutMs);
+    try {
+      const resp = await fetch(url, { signal: ctrl.signal, cache: 'no-store' });
+      if (!resp.ok) throw new Error(url + ' → ' + resp.status);
+      return await resp.blob();
+    } finally {
+      clearTimeout(timer);
+    }
+  };
+
+  // ---- GL 资源（rebuild 时整体重建）----
+  let res = null; // { vbo, ibo, programs:[{prog,uniforms}], presentProg, fboA, fboB, textures:[] }
+  let rafId = 0;
+  let running = false;
+  let lastNow = 0;
+  let fpsAcc = 0;
+  let hiddenListener = null;
+  let observer = null;
+  let meta = null;
+  let shaderMeta = null; // dir → { combos, uniforms, textures, vert, frag }
+  let geo = null; // 场景级 { clearcolor:[r,g,b,a] }（对象几何/MVP 缓存在 res.objects[].geo，P2-7）
+
+  function compileShader(type, src, label) {
+    const sh = gl.createShader(type);
+    gl.shaderSource(sh, src);
+    gl.compileShader(sh);
+    if (!gl.getShaderParameter(sh, gl.COMPILE_STATUS)) {
+      const log = gl.getShaderInfoLog(sh);
+      gl.deleteShader(sh);
+      throw new Error(label + ' compile: ' + log);
+    }
+    return sh;
+  }
+  function linkProgram(vs, fs, label) {
+    const p = gl.createProgram();
+    gl.attachShader(p, vs);
+    gl.attachShader(p, fs);
+    gl.linkProgram(p);
+    gl.deleteShader(vs);
+    gl.deleteShader(fs);
+    if (!gl.getProgramParameter(p, gl.LINK_STATUS)) {
+      const log = gl.getProgramInfoLog(p);
+      gl.deleteProgram(p);
+      throw new Error(label + ' link: ' + log);
+    }
+    return p;
+  }
+  let fboClampMarked = false; // G-07: FBO clamp 只 mark 一次（多对象场景防刷屏）
+  function makeFBO(w, h) {
+    // G-07+N-06: FBO 尺寸上限守卫 — 超大对象纹理（拼接大图/异常 header）clamp
+    // 到 4096。两轴取同一缩放比 s=min(1,MAX/w,MAX/h)（等比，保持纵横比）：旧的
+    // w/h 各自独立 clamp 会把 8192×4608 压成 4096×4096（16:9→1:1），读 aspect
+    // 的效果（foliagesway 等）失真。效果链分辨率轻微下降，优于 FBO 分配失败整链报废
+    if (w > WE_GL_MAX_DIM || h > WE_GL_MAX_DIM) {
+      const s = Math.min(1, WE_GL_MAX_DIM / w, WE_GL_MAX_DIM / h);
+      w = Math.max(1, Math.round(w * s));
+      h = Math.max(1, Math.round(h * s));
+      if (!fboClampMarked) {
+        fboClampMarked = true;
+        mark(null, 'fbo', '对象纹理超限，效果 FBO 已等比 clamp（单边上限 ' + WE_GL_MAX_DIM + '）');
+      }
+    }
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, w, h, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    const fbo = gl.createFramebuffer();
+    gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+    gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, tex, 0);
+    if (gl.checkFramebufferStatus(gl.FRAMEBUFFER) !== gl.FRAMEBUFFER_COMPLETE) throw new Error('FBO incomplete');
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    // hw/hh = w/h：lwe 约定 FBO 的 g_TextureNResolution 视为 (w,h,w,h)。
+    // 缺了它，链式效果的 slot0 resolution = [w,h,undefined,undefined] → NaN
+    // （foliagesway.vert aspect 计算 NaN → 位移方向崩坏；02 场景没踩中只因
+    //  waterripple/iris 不读 slot0 resolution）。
+    return { fbo, tex, w, h, hw: w, hh: h };
+  }
+  let glMaxTexSize = 0; // N-07: gl.MAX_TEXTURE_SIZE（buildResources 拿到上下文后取一次）
+  // W4: 木偶网格资源构建 (VBO=已烘旋转顶点 STATIC, IBO=Uint16; VAO 惰性,
+  // 首次 present 时按 presentAttribs 建)
+  function _weGLBuildPuppetMesh(payload, obj, oi) {
+    const { verts, indices } = _weGLPuppetVerts(payload, obj);
+    const vbo = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+    // sf42: 带动画的木偶逐帧 JS 蒙皮重写顶点 → DYNAMIC_DRAW
+    const hasAnim = !!(payload.animations && payload.animations.length && payload.bindRT && payload.bindInv);
+    gl.bufferData(gl.ARRAY_BUFFER, verts, hasAnim ? gl.DYNAMIC_DRAW : gl.STATIC_DRAW);
+    const ibo = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
+    // sf42: 蒙皮数据 (CPU _skinPuppet 同款语义; payload.rt 已物化每帧世界 RT)
+    let skin = null;
+    if (hasAnim && payload.vertexCount <= 4096) {
+      const vc = payload.vertexCount;
+      const nb = payload.bones.length;
+      // 蒙皮兼容性校验 (CPU 同款): 权重 0..1 且索引 < 骨数, 否则保持绑定姿态
+      let skinOK = true;
+      for (let i = 0; i < vc && skinOK; i++) {
+        for (let k = 0; k < 4; k++) {
+          const w = payload.blendWeights[i * 4 + k];
+          const bi = payload.blendIndices[i * 4 + k];
+          if (w < -0.001 || w > 1.001 || !isFinite(w) || bi >= nb) { skinOK = false; break; }
+        }
+      }
+      if (skinOK) {
+        skin = {
+          vc, nb,
+          positions: payload.positions,
+          bi: payload.blendIndices, bw: payload.blendWeights,
+          bindRT: payload.bindRT, bindInv: payload.bindInv,
+          animations: payload.animations,
+          // 层: manifest animationlayers (visible 过滤) 或默认层0
+          layers: (Array.isArray(obj.animationlayers) && obj.animationlayers.length
+            ? obj.animationlayers.filter((l) => l.visible !== false)
+            : [{ animation: 0, blend: 1, rate: 1, additive: false }]),
+          baseVerts: verts.slice(),
+          lastFrameKey: -1,
+          // 动画选择: 层.animation 是 id — 单动画 MDL 恒用 0; 多动画按层序
+          animIdxFor: (l, idx) => (payload.animations.length === 1 ? 0 : Math.min(idx, payload.animations.length - 1)),
+        };
+      }
+    }
+    return { vbo, ibo, indexCount: indices.length, vao: null, mvp: null, mvpW: 0, mvpH: 0, oi, skin };
+  }
+
+  // sf42: 木偶逐帧蒙皮 — CPU _skinPuppet 的 GL 移植 (行向量矩阵约定一致):
+  //   final = bind; 逐层 mix/additive 合成 → gBones = bindInv × final → 4 权重线性蒙皮
+  // 输出写回 pm.skinOut (5 float 顶点, 保持构建期烘入的 boundsCenter 旋转与 UV)。
+  function _weGLSkinPuppet(pm, t, verts, obj) {
+    const S = pm.skin;
+    const nb = S.nb;
+    const final = new Array(nb);
+    for (let b = 0; b < nb; b++) {
+      const r = S.bindRT[b];
+      final[b] = { angle: r.angle, tx: r.tx, ty: r.ty, sx: r.sx, sy: r.sy, tz: r.tz };
+    }
+    const FPS_DEF = 30; // A3: MDLA 头读出的动画 fps (非法回退 30; CPU 同源)
+    const fpsOf = (an) => (an && Number.isFinite(an.fps) && an.fps > 0 ? an.fps : FPS_DEF);
+    const refCache = new Map();
+    for (let li = 0; li < S.layers.length; li++) {
+      const layer = S.layers[li];
+      const anim = S.animations[S.animIdxFor(layer, li)] || S.animations[0];
+      if (!anim || !anim.rt || !anim.frameCount) continue;
+      const frame = Math.floor(t * fpsOf(anim) * (layer.rate || 1)) % anim.frameCount;
+      const lw = (fr) => {
+        const base = fr * nb * 3;
+        const out = new Array(nb);
+        for (let b = 0; b < nb; b++) {
+          out[b] = { angle: anim.rt[base + b * 3], tx: anim.rt[base + b * 3 + 1], ty: anim.rt[base + b * 3 + 2] };
+        }
+        return out;
+      };
+      const cur = lw(frame);
+      if (layer.additive) {
+        let ref = refCache.get(anim);
+        if (!ref) { ref = lw(0); refCache.set(anim, ref); }
+        for (let b = 0; b < nb; b++) {
+          let da = cur[b].angle - ref[b].angle;
+          while (da > Math.PI) da -= 2 * Math.PI;
+          while (da < -Math.PI) da += 2 * Math.PI;
+          final[b].angle += da * (layer.blend != null ? layer.blend : 1);
+          final[b].tx += (cur[b].tx - ref[b].tx) * (layer.blend != null ? layer.blend : 1);
+          final[b].ty += (cur[b].ty - ref[b].ty) * (layer.blend != null ? layer.blend : 1);
+        }
+      } else {
+        const bl = layer.blend != null ? layer.blend : 1;
+        for (let b = 0; b < nb; b++) {
+          let da = cur[b].angle - final[b].angle;
+          while (da > Math.PI) da -= 2 * Math.PI;
+          while (da < -Math.PI) da += 2 * Math.PI;
+          final[b].angle += da * bl;
+          final[b].tx += (cur[b].tx - final[b].tx) * bl;
+          final[b].ty += (cur[b].ty - final[b].ty) * bl;
+        }
+      }
+    }
+    // gBones = bindInv × [S·Rz|T] (行向量: 左因子先应用)
+    const gBones = new Array(nb);
+    for (let b = 0; b < nb; b++) {
+      const f = final[b];
+      const c = Math.cos(f.angle), s = Math.sin(f.angle);
+      const sx = f.sx || 1, sy = f.sy || 1;
+      const m = [c * sx, s * sx, 0, 0, -s * sy, c * sy, 0, 0, 0, 0, 1, 0, f.tx, f.ty, f.tz || 0, 1];
+      const iv = S.bindInv[b];
+      // 行向量矩阵乘 bindInv×m
+      const o16 = new Array(16);
+      for (let rrow = 0; rrow < 4; rrow++) {
+        for (let ccol = 0; ccol < 4; ccol++) {
+          o16[rrow * 4 + ccol] = iv[rrow * 4] * m[ccol] + iv[rrow * 4 + 1] * m[4 + ccol]
+            + iv[rrow * 4 + 2] * m[8 + ccol] + iv[rrow * 4 + 3] * m[12 + ccol];
+        }
+      }
+      gBones[b] = o16;
+    }
+    // 顶点蒙皮 + 构建期旋转重放 (boundsCenter 旋转 — _weGLPuppetVerts 同款)
+    const tr = _weGLPuppetTr(obj);
+    const ang = tr.angle;
+    // boundsCenter 从 baseVerts 反推: 构建期顶点已含旋转 — 用 bind 姿势几何重算中心
+    // (pm.skinCenter 在 buildPuppetMesh 时未存, 此处每帧重算 bind 包围盒成本低)
+    let minX = Infinity, maxX = -Infinity, minY = Infinity, maxY = -Infinity;
+    for (let i = 0; i < S.vc; i++) {
+      const x = S.positions[i * 3], y = S.positions[i * 3 + 1];
+      if (x < minX) minX = x; if (x > maxX) maxX = x;
+      if (y < minY) minY = y; if (y > maxY) maxY = y;
+    }
+    const cxB = (minX + maxX) / 2, cyB = (minY + maxY) / 2;
+    const c = Math.cos(ang), s2 = Math.sin(ang);
+    for (let i = 0; i < S.vc; i++) {
+      const p0 = S.positions[i * 3], p1 = S.positions[i * 3 + 1], p2 = S.positions[i * 3 + 2];
+      const bi = S.bi, bw = S.bw;
+      let x = 0, y = 0, z = 0;
+      for (let k = 0; k < 4; k++) {
+        const w = bw[i * 4 + k];
+        if (w === 0) continue;
+        const m = gBones[bi[i * 4 + k]] || gBones[0];
+        x += (p0 * m[0] + p1 * m[4] + p2 * m[8] + m[12]) * w;
+        y += (p0 * m[1] + p1 * m[5] + p2 * m[9] + m[13]) * w;
+        z += (p0 * m[2] + p1 * m[6] + p2 * m[10] + m[14]) * w;
+      }
+      const x0 = x - cxB, y0 = y - cyB;
+      verts[i * 5] = cxB + x0 * c - y0 * s2;
+      verts[i * 5 + 1] = cyB + x0 * s2 + y0 * c;
+      verts[i * 5 + 2] = z;
+      // UV 不变 (baseVerts 已带)
+      verts[i * 5 + 3] = S.baseVerts[i * 5 + 3];
+      verts[i * 5 + 4] = S.baseVerts[i * 5 + 4];
+    }
+  }
+
+  function uploadTex(bmp, { repeat, mip }) {
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    // N-07: MAX_TEXTURE_SIZE 守卫 — 源图单边超限（拼接大图/异常包）时 texImage2D
+    // 会被 GPU 拒收（INVALID_VALUE → 纹理残缺）；等比降采样到限内（离屏 2D
+    // canvas drawImage 缩放）再上传。采样走归一化 UV、FBO 链另有画布预算 clamp，
+    // 故 entry 的 w/h 仍记原始尺寸（几何/aspect 不受影响）。
+    let src = bmp;
+    if (glMaxTexSize > 0 && (bmp.width > glMaxTexSize || bmp.height > glMaxTexSize)) {
+      const s = Math.min(1, glMaxTexSize / bmp.width, glMaxTexSize / bmp.height);
+      const c = document.createElement('canvas');
+      c.width = Math.max(1, Math.round(bmp.width * s));
+      c.height = Math.max(1, Math.round(bmp.height * s));
+      c.getContext('2d').drawImage(bmp, 0, 0, c.width, c.height);
+      src = c;
+    }
+    // 不翻转上传（y-down 定案）：tex 行 0 = PNG 行 0 = 图顶 = CPU v=0
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, src);
+    const w = repeat ? gl.REPEAT : gl.CLAMP_TO_EDGE;
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, w);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, w);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+    if (mip) {
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR_MIPMAP_LINEAR);
+      gl.generateMipmap(gl.TEXTURE_2D);
+    } else {
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+    }
+    return tex;
+  }
+
+  // 空槽位回退（CPU _texSample(null) = [1,1,1,1] 语义扩展）：
+  //  - 默认（opacitymask/noise 等）→ 1×1 白：与 CPU null→白逐位一致
+  //  - mode:"flowmask" → 1×1 中灰 (127,127)：官方默认 util/noflow 即中心灰
+  //    (0.498→(c-0.498)*2≈0 无位移)，CPU 无 flow 纹理时 fmx=fmy=0 —— 两者
+  //    在"缺失"语义下一致；白色会被解读为 +1.004 全图位移（shake MAD 4.2 主因）
+  function makeSolidTex(r, g, b) {
+    const tex = gl.createTexture();
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, new Uint8Array([r, g, b, 255]));
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.REPEAT);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    return tex;
+  }
+
+  function destroyResources() {
+    if (!res) return;
+    try {
+      if (res.vaos) for (const vao of res.vaos.values()) gl.deleteVertexArray(vao); // P2-7: VAO 随程序释放
+      if (res.partVao) gl.deleteVertexArray(res.partVao); // W3: 粒子 VAO
+      if (res.progCache) for (const e of res.progCache.values()) gl.deleteProgram(e.prog);
+      if (res.presentProg) gl.deleteProgram(res.presentProg);
+      if (res.particleProg) gl.deleteProgram(res.particleProg);
+      for (const o of res.objects || []) {
+        for (const f of [o.fboA, o.fboB]) {
+          if (f) { gl.deleteFramebuffer(f.fbo); gl.deleteTexture(f.tex); }
+        }
+      }
+      for (const t of res.textures) gl.deleteTexture(t);
+      if (res.vbo) gl.deleteBuffer(res.vbo);
+      if (res.ibo) gl.deleteBuffer(res.ibo);
+      if (res.particleVbo) gl.deleteBuffer(res.particleVbo);
+      if (res.particleIbo) gl.deleteBuffer(res.particleIbo);
+      // W4: 木偶网格缓冲 (VAO 已随 res.vaos 统一释放)
+      for (const o of res.objects || []) {
+        if (o.puppetMesh) {
+          gl.deleteBuffer(o.puppetMesh.vbo);
+          gl.deleteBuffer(o.puppetMesh.ibo);
+        }
+      }
+      // W6: 视频纹理释放 (未入 res.textures — 非 loadOne 通道)
+      for (const o of res.objects || []) {
+        if (o.vid) {
+          try {
+            o.vid.failed = true; // 释放中不再触发超时 mark
+            if (o.vid.video) {
+              o.vid.video.pause();
+              o.vid.video.removeAttribute('src');
+              o.vid.video.load(); // 释放解码器
+            }
+            if (o.vid.texEntry) gl.deleteTexture(o.vid.texEntry.tex);
+          } catch { /* context 可能已丢 */ }
+        }
+      }
+    } catch { /* context 可能已丢 */ }
+    res = null;
+  }
+
+  // combos 解析（§2.4 规范）：元注释默认 ⊕ pass.combos ⊕ 纹理槽位派生
+  function resolveCombos(ef, sm) {
+    const values = {};
+    for (const [name, c] of Object.entries(sm.combos || {})) values[name] = c.default ?? '0';
+    for (const [name, v] of Object.entries(ef.combos || {})) values[name] = String(v);
+    // 纹理派生：shader 纹理表带 combo 的槽位（如 MASK）= 该 pass 槽纹理非 null
+    for (const [texName, t] of Object.entries(sm.textures || {})) {
+      if (!t.combo) continue;
+      const slot = t.unit;
+      if (slot == null || slot === 0) continue;
+      values[t.combo] = ef.textures[slot] ? '1' : '0';
+    }
+    return values;
+  }
+
+  // uniform 值转换（附录 §5）：float=Number；vecN=空白分隔 split；单数字播撒
+  function convertUniform(type, raw) {
+    if (raw == null) return null;
+    const nums = (typeof raw === 'number') ? [raw]
+      : String(raw).trim().split(/\s+/).map(Number).filter((x) => Number.isFinite(x));
+    if (!nums.length) return null;
+    if (type === 'float') return [nums[0]];
+    if (type === 'vec2') return nums.length >= 2 ? nums.slice(0, 2) : [nums[0], nums[0]];
+    if (type === 'vec3') return nums.length >= 3 ? nums.slice(0, 3) : [nums[0], nums[0], nums[0]];
+    if (type === 'vec4' || type === 'color') return nums.length >= 4 ? nums.slice(0, 4) : [nums[0], nums[0], nums[0], 1];
+    return nums;
+  }
+
+  // ---- G-07: 布局状态（buildResources 与 resize 共用）----
+  const layoutOrtho = { width: 0, height: 0 }; // 场景 ortho 逻辑尺寸（无 ortho 时=视口预算）
+  let camEye = [0, 0, 0]; // A1: 仅诊断保留 (渲染不再使用 — eye 与 view 抵消)
+  let objectsById = new Map(); // G-04: 父链查找表（host gate objectsById 同款）
+  // sar fix：视口预算 → 场景 ortho 比例背板（视口比例 ≠ 场景比例 → CSS letterbox，
+  // 对齐 scene-anim 路由的 h=w/sar 修正语义）；落盘到 CW/CH + canvas 背板
+  function applySarFit(bw, bh) {
+    const W = Math.max(2, Math.round(bw)), H = Math.max(2, Math.round(bh));
+    if (layoutOrtho.width > 0 && layoutOrtho.height > 0) {
+      const sar = layoutOrtho.width / layoutOrtho.height;
+      let h = Math.round(W / sar), w = W;
+      if (h > H) { h = H; w = Math.round(h * sar); }
+      CW = Math.max(2, w);
+      CH = Math.max(2, h);
+    } else {
+      CW = W;
+      CH = H;
+    }
+    canvas.width = CW;
+    canvas.height = CH;
+  }
+
+  // ---- G-04: 父链折叠（host gate foldChain / CPU core.js resolveTransform 同式）----
+  // 只做平移+角+缩放复合：子 origin × 累积 scale → 旋转(累积 Z 角) → + 累积
+  // origin。host gate 已把折叠结果预写进 obj.effTr 时直接消费；原始 parent 字段
+  // 在场时（schema 漂移/直喂场景）本地折叠；父缺失/成环按无父渲染并 mark。
+  function foldChain(chain) {
+    const root = chain[chain.length - 1];
+    let ox = Number(root.origin && root.origin[0]) || 0;
+    let oy = Number(root.origin && root.origin[1]) || 0;
+    let sx = Number(root.scale && root.scale[0]) || 1;
+    let sy = Number(root.scale && root.scale[1]) || 1;
+    let angle = Number(root.angles && root.angles[2]) || 0;
+    for (let i = chain.length - 2; i >= 0; i--) {
+      const co = chain[i].origin || [], cs = chain[i].scale || [];
+      const ca = Number(chain[i].angles && chain[i].angles[2]) || 0;
+      const cos = Math.cos(angle), sin = Math.sin(angle);
+      const rx = (Number(co[0]) || 0) * sx, ry = (Number(co[1]) || 0) * sy;
+      ox += rx * cos - ry * sin;
+      oy += rx * sin + ry * cos;
+      sx *= Number(cs[0]) || 1;
+      sy *= Number(cs[1]) || 1;
+      angle += ca;
+    }
+    return { origin: [ox, oy], scale: [sx, sy], angle };
+  }
+  function resolveTransform(obj, oi) {
+    if (obj.effTr) {
+      const t = obj.effTr;
+      return {
+        origin: [Number(t.origin && t.origin[0]) || 0, Number(t.origin && t.origin[1]) || 0],
+        scale: [Number(t.scale && t.scale[0]) || 1, Number(t.scale && t.scale[1]) || 1],
+        angle: Number(t.angle) || 0,
+      };
+    }
+    if (obj.parent == null) {
+      return {
+        origin: [Number(obj.origin && obj.origin[0]) || 0, Number(obj.origin && obj.origin[1]) || 0],
+        scale: [Number(obj.scale && obj.scale[0]) || 1, Number(obj.scale && obj.scale[1]) || 1],
+        angle: Number(obj.angles && obj.angles[2]) || 0,
+      };
+    }
+    const name = String(obj.name || ('对象' + oi));
+    const chain = [obj];
+    let cur = obj, guard = 0, broken = false;
+    while (cur.parent != null && guard < 32) {
+      const parent = objectsById.get(cur.parent);
+      if (!parent || chain.includes(parent)) { broken = true; break; }
+      chain.push(parent);
+      cur = parent;
+      guard++;
+    }
+    if (broken) {
+      // 父缺失/成环：按无父渲染（自身变换），mark 上浮（H-04 姊妹项语义）
+      mark(name, 'parent 链缺失', '按无父渲染');
+      return {
+        origin: [Number(obj.origin && obj.origin[0]) || 0, Number(obj.origin && obj.origin[1]) || 0],
+        scale: [Number(obj.scale && obj.scale[0]) || 1, Number(obj.scale && obj.scale[1]) || 1],
+        angle: Number(obj.angles && obj.angles[2]) || 0,
+      };
+    }
+    mark(name, 'parent', '父链变换已折叠渲染');
+    return foldChain(chain);
+  }
+  // 几何：对象矩形（画布像素，CPU image.js:133-145 同款公式 + alignment 锚点）；
+  // G-04: origin/scale/angle 一律取父链折叠结果
+  function computeGeo(obj, oi) {
+    const ps = [layoutOrtho.width > 0 ? CW / layoutOrtho.width : 1, layoutOrtho.height > 0 ? CH / layoutOrtho.height : 1];
+    const tr = resolveTransform(obj, oi);
+    const dw = obj.size[0] * tr.scale[0] * ps[0];
+    const dh = obj.size[1] * tr.scale[1] * ps[1];
+    let cx = tr.origin[0] * ps[0];
+    let cy = CH - tr.origin[1] * ps[1];
+    const al = String(obj.alignment || '').toLowerCase();
+    // lwe CImage.cpp:242-256：left → 左边锚定 origin（矩形右移半宽）；top → 矩形在 origin 下方展开
+    if (al.includes('left')) cx += dw / 2; else if (al.includes('right')) cx -= dw / 2;
+    if (al.includes('top')) cy += dh / 2; else if (al.includes('bottom')) cy -= dh / 2;
+    // A1: 相机 eye 不平移 — lwe projection=ortho·T(+eye) 与 lookAt T(-eye) 抵消
+    // (全部测试壁纸 center=eye+(0,0,-1), up=(0,1,0))。旧 "静态 eye 仅 x 平移
+    // 前景、满幅背景豁免" 是系统性错误 (3735447194 前景错移 -267.5×ps → 右侧拼缝)。
+    return {
+      dx: cx - dw / 2, dy: cy - dh / 2, dw, dh,
+      anglesZ: tr.angle || 0,
+      alpha: Number.isFinite(obj.alpha) ? obj.alpha : 1,
+      brightness: Number.isFinite(obj.brightness) ? obj.brightness : 1,
+    };
+  }
+
+  async function buildResources() {
+    stats.initStage = 'build';
+    const scene = meta.scene;
+    const sceneObjects = Array.isArray(scene.objects) ? scene.objects : [];
+    layoutOrtho.width = scene.general.ortho.width || CW;
+    layoutOrtho.height = scene.general.ortho.height || CH;
+    camEye = (scene.camera && scene.camera.eye) || [0, 0, 0];
+    objectsById = new Map();
+    for (const o of sceneObjects) if (o && o.id != null) objectsById.set(o.id, o);
+    // sar fix（G-07 抽取为 applySarFit，resize 复用）：背板按场景 ortho 比例
+    applySarFit(CW, CH);
+
+    gl = canvas.getContext('webgl2', { alpha: false, premultipliedAlpha: false, antialias: false, depth: false });
+    if (!gl) throw new Error('webgl2-unavailable');
+    glMaxTexSize = Number(gl.getParameter(gl.MAX_TEXTURE_SIZE)) || 0; // N-07: uploadTex 上传守卫用（重建时刷新）
+
+    const vbo = gl.createBuffer();
+    gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+    gl.bufferData(gl.ARRAY_BUFFER, _WE_GL_VERTS, gl.STATIC_DRAW);
+    const ibo = gl.createBuffer();
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
+    gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, _WE_GL_IDX, gl.STATIC_DRAW);
+
+    // ① shader 编译链接（失败快速退出，不下载纹理 — 附录 §8）
+    // 多对象：program 按 (dir + combos) 缓存共享（同一效果多对象复用，uniform 按绘制时喂）
+    stats.initStage = 'compile';
+    const progCache = new Map(); // key → { prog, locs, sm }
+    const programFor = (ef) => {
+      // W2: 清单 ef.shader 为完整引用 (effects/<dir> 或 workshop/<id>/...)
+      const sm = shaderMeta[ef.shader];
+      if (!sm) throw new Error(sm === null ? 'shader 拉取失败(端点 404/422/超时): ' + ef.shader : 'shader-meta-missing:' + ef.shader);
+      const comboValues = resolveCombos(ef, sm);
+      const key = ef.shader + '|' + JSON.stringify(comboValues);
+      let entry = progCache.get(key);
+      if (!entry) {
+        const vsrc = _weGLAssemble(sm.vert, sm.combos, comboValues);
+        const fsrc = _weGLAssemble(sm.frag, sm.combos, comboValues);
+        const vs = compileShader(gl.VERTEX_SHADER, vsrc, ef.shader + '.vert');
+        const fs = compileShader(gl.FRAGMENT_SHADER, fsrc, ef.shader + '.frag');
+        const prog = linkProgram(vs, fs, ef.shader);
+        // 预取全部 uniform 位置（被 #if 裁掉的返回 null，uniformX(null) 规范 no-op）
+        const locs = {};
+        for (const name of Object.keys(sm.uniforms || {})) locs[name] = gl.getUniformLocation(prog, name);
+        locs.g_Time = gl.getUniformLocation(prog, 'g_Time');
+        locs.g_ModelViewProjectionMatrix = gl.getUniformLocation(prog, 'g_ModelViewProjectionMatrix');
+        // P2-7: attrib 位置同款预取 — 旧 bindQuad 每帧每 pass getAttribLocation×2，
+        // 位置 link 后不变，构建期取一次（被裁掉的 attribute 返回 -1，绑定跳过）
+        const attribs = {
+          aPos: gl.getAttribLocation(prog, 'a_Position'),
+          aUV: gl.getAttribLocation(prog, 'a_TexCoord'),
+        };
+        // P2-7/N-08: slot1/2 纹理槽位表预展开 — 旧实现每帧每 pass
+        // Object.entries(sm.textures) 分配 + 逐项查 locs，全部构建后不变
+        const texSlots = [];
+        for (const [texName, tx] of Object.entries(sm.textures || {})) {
+          if (tx.unit == null || tx.unit === 0) continue;
+          texSlots.push({ texName, unit: tx.unit, mode: tx.mode, loc: locs[texName] ?? null, resLoc: locs[texName + 'Resolution'] ?? null });
+        }
+        entry = { prog, locs, attribs, texSlots, sm };
+        progCache.set(key, entry);
+      }
+      return entry;
+    };
+    // W2: 每效果编译隔离 — 单个效果 shader 编译/链接失败只跳过该链条目
+    // (链输入原样传给下一 pass), 不拖垮整个对象/场景; 失败记配置页提醒。
+    const safeProgramFor = (ef, objName) => {
+      try {
+        return programFor(ef);
+      } catch (e) {
+        mark(objName || '?', 'effect:' + (ef.dir || ef.shader),
+          'shader 编译/链接失败，已跳过该效果: ' + (e && e.message ? e.message : e));
+        return null;
+      }
+    };
+    const presentProg = linkProgram(
+      compileShader(gl.VERTEX_SHADER, _WE_GL_PRESENT_VERT, 'present.vert'),
+      compileShader(gl.FRAGMENT_SHADER, _WE_GL_PRESENT_FRAG, 'present.frag'),
+      'present',
+    );
+    const presentLocs = {
+      u_MVP: gl.getUniformLocation(presentProg, 'u_MVP'),
+      u_Tex: gl.getUniformLocation(presentProg, 'u_Tex'),
+      u_ObjectAlpha: gl.getUniformLocation(presentProg, 'u_ObjectAlpha'),
+      u_Brightness: gl.getUniformLocation(presentProg, 'u_Brightness'),
+    };
+    // P2-7: present 程序 attrib 位置同样构建期预取（旧 bindQuad 每帧查询）
+    const presentAttribs = {
+      aPos: gl.getAttribLocation(presentProg, 'a_Position'),
+      aUV: gl.getAttribLocation(presentProg, 'a_TexCoord'),
+    };
+
+    // W3: 粒子程序（单一 shader：纹理红通道形状 × 顶点色 tint × 绕中心旋转；
+    // normal/additive 两种 blending 由绘制时 blendFunc 切换）。仅场景含粒子
+    // 对象时编译/分配 —— 纯图像场景零成本，也不受粒子 shader 编译风险牵连。
+    const hasParticles = sceneObjects.some((o) => o && o.type === 'particle');
+    let particleProg = null, partLocs = null, partAttribs = null;
+    let particleVbo = null, particleIbo = null, circleEntry = null;
+    if (hasParticles) {
+      particleProg = linkProgram(
+        compileShader(gl.VERTEX_SHADER, _WE_GL_PART_VERT, 'particle.vert'),
+        compileShader(gl.FRAGMENT_SHADER, _WE_GL_PART_FRAG, 'particle.frag'),
+        'particle',
+      );
+      partLocs = {
+        u_Viewport: gl.getUniformLocation(particleProg, 'u_Viewport'),
+        u_Tex: gl.getUniformLocation(particleProg, 'u_Tex'),
+      };
+      partAttribs = {
+        aCorner: gl.getAttribLocation(particleProg, 'a_Corner'),
+        aCenter: gl.getAttribLocation(particleProg, 'a_Center'),
+        aSize: gl.getAttribLocation(particleProg, 'a_Size'),
+        aRot: gl.getAttribLocation(particleProg, 'a_Rot'),
+        aColor: gl.getAttribLocation(particleProg, 'a_Color'),
+        aUVRect: gl.getAttribLocation(particleProg, 'a_UVRect'), // sf40g 精灵表
+      };
+      // 粒子动态顶点缓冲（STREAM_DRAW 每帧重写）+ 共享索引缓冲（最大四边形数
+      // 按全部粒子系统的 maxCount 取 max，Uint16 上限 16384 四边形足够）
+      particleVbo = gl.createBuffer();
+      gl.bindBuffer(gl.ARRAY_BUFFER, particleVbo);
+      gl.bufferData(gl.ARRAY_BUFFER, 4, gl.STREAM_DRAW); // 占位分配，首帧 bufferData 重写
+      let partMaxQuads = 0;
+      for (const o of sceneObjects) {
+        if (o && o.type === 'particle') {
+          const mc = Math.max(1, Math.min(_WE_GL_PART_MAXCOUNT_CAP, Number(o.particle && o.particle.maxcount) || 100));
+          // sf50: ropetrail 每粒子 segments 个段 quad（与 _weGLCreateParticleSys
+          // maxQuads 同款口径; Uint16 索引上限 16384 四边形）
+          const rend = (Array.isArray(o.particle && o.particle.renderer) ? o.particle.renderer : [])
+            .find((r) => r && r.name === 'ropetrail');
+          const segMul = rend ? Math.max(2, Math.round(Number(rend.segments)) || 4) : 1;
+          const quads = Math.min(16384, mc * segMul);
+          if (quads > partMaxQuads) partMaxQuads = quads;
+        }
+      }
+      if (partMaxQuads > 0) {
+        const idx = new Uint16Array(partMaxQuads * 6);
+        for (let q = 0; q < partMaxQuads; q++) {
+          const b = q * 4, o6 = q * 6;
+          idx[o6] = b; idx[o6 + 1] = b + 2; idx[o6 + 2] = b + 1;
+          idx[o6 + 3] = b + 1; idx[o6 + 4] = b + 2; idx[o6 + 5] = b + 3;
+        }
+        particleIbo = gl.createBuffer();
+        gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, particleIbo);
+        gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, idx, gl.STATIC_DRAW);
+      }
+      // W3: 无纹理粒子的程序化圆点（CPU null-tex 语义：实心圆 + additive）。
+      // sf40g: 形状放 ALPHA 通道 (与官方粒子纹理同语义 — 白 RGB + A 形状),
+      // 粒子 frag 按 t.a 遮罩; 旧 R=形状在 RGBA 精灵语义下恒白色方块。
+      const circleData = new Uint8Array(64 * 64 * 4);
+      for (let cy = 0; cy < 64; cy++) {
+        for (let cx = 0; cx < 64; cx++) {
+          const dx = (cx + 0.5) / 64 - 0.5, dy = (cy + 0.5) / 64 - 0.5;
+          const inside = dx * dx + dy * dy <= 0.25;
+          const di = (cy * 64 + cx) * 4;
+          circleData[di] = 255;
+          circleData[di + 1] = 255;
+          circleData[di + 2] = 255;
+          circleData[di + 3] = inside ? 255 : 0;
+        }
+      }
+      const circleTex = gl.createTexture();
+      gl.bindTexture(gl.TEXTURE_2D, circleTex);
+      gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 64, 64, 0, gl.RGBA, gl.UNSIGNED_BYTE, circleData);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+      gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+      circleEntry = { tex: circleTex, w: 64, h: 64, hw: 64, hh: 64 };
+    }
+
+    // ② 纹理 fetch（y-down 不翻转上传；多对象并发加载，路径去重共享）
+    stats.initStage = 'textures';
+    const textures = [];
+    const texByKey = new Map(); // path → Promise<{ tex, w, h }>
+    const loadOne = (info, repeat, mip, wantSheet) => {
+      // sf51: 缓存键追加 sheet 维度 — 同路径粒子路径需整图 (帧矩形 UV 采样),
+      // 图像路径精灵表需逐帧裁剪纹理, 不加维度会串缓存。
+      const k = info.path + '|' + (mip ? 'm' : '') + (wantSheet ? 's' : '');
+      if (texByKey.has(k)) return texByKey.get(k);
+      stats.initStage = 'tex:' + info.path;
+      const p = (async () => {
+        const blob = await fetchBlob(resUrl(info.path), 10000);
+        const bmp = await createImageBitmap(blob, { premultiplyAlpha: 'none' });
+        const w = bmp.width, h = bmp.height; // close() 后 width/height 归零，先取
+        const tex = uploadTex(bmp, { repeat, mip });
+        const entry = { tex, w, h, hw: info.headerWidth || w, hh: info.headerHeight || h };
+        textures.push(tex);
+        // sf51: spritesheet 逐帧裁剪 (CPU image.js:139-156 语义) — 整图压进方形
+        // quad 会把三帧叠成一坨 (3735447194 Day/Night 按钮)。守卫任一命中即放弃
+        // sheet、维持整图，宁错勿崩。
+        if (wantSheet && Array.isArray(info.frames) && info.frames.length > 1 && info.frames.length <= 64) {
+          const fs = info.frames;
+          const fw = Number(fs[0].width) || 0, fh = Number(fs[0].height) || 0;
+          const uniform = fw > 0 && fh > 0 && fs.every((f) => (Number(f.width) || 0) === fw && (Number(f.height) || 0) === fh);
+          if (uniform) {
+            const entries = [];
+            for (const f of fs) {
+              const c = document.createElement('canvas'); // N-07 canvas 中转先例
+              c.width = fw; c.height = fh;
+              c.getContext('2d').drawImage(bmp, (Number(f.x) || 0), (Number(f.y) || 0), fw, fh, 0, 0, fw, fh);
+              const ftex = uploadTex(c, { repeat, mip }); // canvas 是合法 texImage2D 源
+              textures.push(ftex);
+              entries.push({ tex: ftex, w: fw, h: fh, hw: fw, hh: fh });
+            }
+            const dur = Number(info.frameDuration);
+            entry.sheet = { entries, duration: Number.isFinite(dur) && dur > 0 ? dur : 1 };
+          }
+        }
+        bmp.close();
+        return entry;
+      })();
+      texByKey.set(k, p);
+      return p;
+    };
+    const whiteEntry = { tex: makeSolidTex(255, 255, 255), w: 1, h: 1, hw: 1, hh: 1 };
+    const flowEntry = { tex: makeSolidTex(127, 127, 255), w: 1, h: 1, hw: 1, hh: 1 };
+    textures.push(whiteEntry.tex, flowEntry.tex);
+    if (circleEntry) textures.push(circleEntry.tex); // W3: 仅粒子场景存在
+
+    // 每对象资源：主纹理 + 效果纹理 + program 列表 + FBO 对（仅带效果者）+ 几何
+    const objResList = await Promise.all(sceneObjects.map(async (obj, oi) => {
+      // W3: 粒子对象 — 不建图像资源；纹理经 loadOne 复用（CLAMP 不 mip，路径
+      // 去重共享）；纹理/初始化失败隔离为 psys.failed + mark，不拖垮场景。
+      if (obj && obj.type === 'particle') {
+        const pinfo = obj.particle || {};
+        const psys = { sim: null, texEntry: circleEntry, blending: 'normal', failed: false, f32: null };
+        try {
+          psys.blending = obj.blending === 'additive' ? 'additive' : 'normal';
+          if (pinfo.texture && pinfo.texture.path) {
+            psys.texEntry = await loadOne(pinfo.texture, false, false); // 契约: CLAMP 不 mip
+          }
+          // 精灵表帧元数据（sf40g）: gate 下发的 TEXS 帧表（>1 帧才有）
+          psys.frames = Array.isArray(pinfo.texture && pinfo.texture.frames)
+            && pinfo.texture.frames.length > 1 ? pinfo.texture.frames : null;
+          psys.sim = _weGLCreateParticleSys(obj, pinfo, token);
+          // sf50: ropetrail 每粒子 segments 个段 quad → 顶点预算 ×trailSegments
+          psys.f32 = new Float32Array((psys.sim.maxQuads || psys.sim.maxCount) * 4 * _WE_GL_PART_STRIDE);
+        } catch (e) {
+          psys.failed = true;
+          mark(String(obj.name || ('对象' + oi)), 'particle',
+            '粒子纹理/初始化失败，已跳过该对象: ' + (e && e.message ? e.message : e));
+        }
+        return { obj, oi, psys, programs: [], effectTex: new Map(), fboA: null, fboB: null, geo: null, mvpFx: null };
+      }
+      // W6: 视频纹理对象 — <video muted loop playsinline> 逐帧 texImage2D。
+      // mp4 经 /scene-videotex (Range) 流式; loadeddata 前对象跳过绘制 (不阻塞
+      // 其他对象进 GL_RUN); error/30s 超时 → mark + 跳过, 不拖垮场景。
+      if (obj && obj.type === 'video') {
+        const vid = { video: null, texEntry: null, ready: false, failed: false, lastT: -1 };
+        try {
+          const tex = gl.createTexture();
+          gl.bindTexture(gl.TEXTURE_2D, tex);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+          gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+          // 1×1 透明占位 (ready 前不绘制, 此纹理仅防御性非空)
+          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, 1, 1, 0, gl.RGBA, gl.UNSIGNED_BYTE, _weGLVideoPlaceholder);
+          const vw = Math.max(2, Number(obj.mainTexture && obj.mainTexture.width) || 2);
+          const vh = Math.max(2, Number(obj.mainTexture && obj.mainTexture.height) || 2);
+          vid.texEntry = { tex, w: vw, h: vh, hw: vw, hh: vh, path: obj.mainTexture && obj.mainTexture.path };
+          const video = document.createElement('video');
+          video.muted = true;
+          video.loop = true;
+          video.playsInline = true;
+          video.setAttribute('playsinline', '');
+          video.preload = 'auto';
+          video.src = BASE + '/scene-videotex/' + encodeURIComponent(token) + '/' + encodeURIComponent(obj.mainTexture.path || '');
+          vid.video = video;
+          video.addEventListener('loadeddata', () => {
+            if (vid.failed) return;
+            const w = video.videoWidth, h = video.videoHeight;
+            if (w > 0 && h > 0) { vid.texEntry.w = w; vid.texEntry.h = h; vid.texEntry.hw = w; vid.texEntry.hh = h; }
+            vid.ready = true;
+            try { const p = video.play(); if (p && p.catch) p.catch(() => {}); } catch { /* ignore */ }
+          }, { once: true });
+          video.addEventListener('error', () => {
+            if (vid.failed) return;
+            vid.failed = true;
+            mark(String(obj.name || ('对象' + oi)), 'video', '视频纹理加载失败，已跳过该对象');
+          }, { once: true });
+          setTimeout(() => {
+            if (!vid.ready && !vid.failed) {
+              vid.failed = true;
+              mark(String(obj.name || ('对象' + oi)), 'video', '视频纹理加载超时(30s)，已跳过该对象');
+            }
+          }, 30000);
+          try { const p = video.play(); if (p && p.catch) p.catch(() => {}); } catch { /* ignore */ }
+        } catch (e) {
+          vid.failed = true;
+          mark(String(obj.name || ('对象' + oi)), 'video',
+            '视频纹理初始化失败，已跳过该对象: ' + (e && e.message ? e.message : e));
+        }
+        return { obj, oi, mainTexEntry: vid.texEntry, vid, programs: [], effectTex: new Map(), fboA: null, fboB: null, geo: computeGeo(obj, oi), mvpFx: null, puppetMesh: null };
+      }
+      // sf51: spritesheet 图像 → 逐帧裁剪纹理 (wantSheet); sheet 存在时初始
+      // mainTexEntry = 第 0 帧 (CPU 静态帧 t=0 同款), 帧尺寸供 FBO/mvpFx 使用
+      // (loadOne 内守卫已保证各帧尺寸一致)。
+      const mainFull = await loadOne(obj.mainTexture, false, true, obj.spritesheet === true); // slot0 CLAMP+mipmap（§2.6/§11-⑤）
+      const sheet = mainFull.sheet || null;
+      const mainTexEntry = sheet ? sheet.entries[0] : mainFull;
+      // W4: 木偶网格 (绑定姿态静态渲染; MDLA 动画属实验层)。带效果的 puppet
+      // (3735447194 泡-中/05手-下/06手-上) 走 image 路径 — CPU renderPuppet
+      // 本就不 applyEffects, image 路径反而保留官方设计的效果, 取舍对齐 W4
+      // 设计 §4。拉取/解析失败 → 回退 image 路径 (W3 前行为) + degraded。
+      let puppetMesh = null;
+      if (obj.type === 'puppet' && obj.puppet && !(obj.effects || []).length) {
+        try {
+          const payload = await fetchJson(BASE + '/scene-puppet/' + encodeURIComponent(token) + '/' + obj.puppet.objIdx, 8000);
+          puppetMesh = _weGLBuildPuppetMesh(payload, obj, oi);
+        } catch (e) {
+          puppetMesh = null;
+          mark(String(obj.name || ('对象' + oi)), 'puppet',
+            '木偶数据加载失败，按静态贴图渲染: ' + (e && e.message ? e.message : e));
+        }
+      }
+      const programs = (obj.effects || []).map((ef) => {
+        const pe = safeProgramFor(ef, obj.name);
+        return pe ? { ef, ...pe } : null;
+      }).filter(Boolean); // W2: 编译失败的效果已被隔离剔除
+      // P2-7: 材质常量构建期一次预转换 — 旧实现在 renderObjectChain 每帧每 pass
+      // split/Number 转换（csv 值 + 类型转换 + 元注释 default 兜底，附录 §5 同款
+      // 逻辑前移；constants/uniform 位置构建后均不变）。同名跨阶段冲突按片元
+      // 语义喂值（uniformsFrag 优先；GL 同名合一位置）。
+      for (const p of programs) {
+        p.matUniforms = [];
+        for (const [name, u] of Object.entries(p.sm.uniforms || {})) {
+          if (u.type === 'sampler2D') continue;
+          const uu = (p.sm.uniformsFrag && p.sm.uniformsFrag[name]) || u;
+          if (!uu.material) continue;
+          let raw = p.ef.constants[uu.material];
+          if (raw === undefined && uu.default !== undefined) raw = uu.default;
+          const v = convertUniform(uu.type, raw);
+          const loc = p.locs[name];
+          if (v == null || loc == null) continue; // null loc = setU no-op 语义不变
+          p.matUniforms.push({ loc, v: v.length === 1 ? v[0] : v });
+        }
+      }
+      // 效果纹理（槽位键按对象隔离；loadOne 按路径去重不重复上传）
+      const effectTex = new Map();
+      await Promise.all((obj.effects || []).map(async (ef) => {
+        for (let slot = 1; slot < ef.textures.length; slot++) {
+          const info = ef.textures[slot];
+          // W2: {previous:true}/{chain:true} 标记槽无 path — 绘制期绑定, 不预载
+          if (!info || !info.path) continue;
+          effectTex.set(ef.shader + ':' + slot, await loadOne(info, true, false)); // slot1/2 REPEAT
+        }
+      }));
+      // FBO 链 = 对象纹理空间等比 clamp 到画布预算（P0-1：此前链 FBO 跟主纹理
+      // 走，8K 底图在 1080p 视口上多耗 ~5-8× 片元/GPU 显存；现对齐 CPU mp4 路径
+      // ≤ 视口预算的语义。N-06：两轴取同一缩放比 s=min(1,CW/w,CH/h) 保持纵横比
+      // ——w/h 各自独立 clamp 会把 16:9 压成 1:1，读 aspect 的效果失真；链输出
+      // 仍由 present pass 按对象几何画到真实画布，aspect 由 quad 几何保证。
+      // CW/CH 此刻 = applySarFit 后的画布背板 = 调用方视口预算（client
+      // sceneViewportSize ≤1920×1080）；≤ 预算的纹理 s=1，行为不变）
+      let fboA = null, fboB = null;
+      if (programs.length > 0) {
+        const s = Math.min(1, CW / mainTexEntry.w, CH / mainTexEntry.h);
+        const fw = Math.max(1, Math.round(mainTexEntry.w * s));
+        const fh = Math.max(1, Math.round(mainTexEntry.h * s));
+        fboA = makeFBO(fw, fh);
+        fboB = makeFBO(fw, fh);
+      }
+      // 几何（G-04）：origin/scale/angle 取父链折叠结果（computeGeo 内
+      // resolveTransform：effTr 直消费 / 原始 parent 本地折叠 / 缺失 mark）
+      const geo = computeGeo(obj, oi);
+      // P2-7: 效果链 MVP 构建期算一次 — 仅依赖主纹理尺寸（构建后不变；旧实现
+      // 每帧重建）。独占缓冲：多 pass 间持续被读，不可共享模块 scratch。
+      const mvpFx = programs.length > 0
+        ? _weGLQuadMVP(mainTexEntry.w, mainTexEntry.h, 0, 0, mainTexEntry.w, mainTexEntry.h, true, new Float32Array(16))
+        : null;
+      return { obj, oi, mainTexEntry, programs, effectTex, fboA, fboB, geo, mvpFx, puppetMesh, sheet };
+    }));
+
+    // sf47: eventfollow 挂钩 — followParent=父对象名 的子系统把 pending 队列
+    // 注册进父 sim.childHooks (父粒子 spawn → 子系统在出生位置爆发)
+    {
+      const byName = new Map();
+      for (const o of objResList) {
+        if (o.psys && o.psys.sim && !o.psys.failed) byName.set(String(o.obj.name || ''), o.psys.sim);
+      }
+      for (const o of objResList) {
+        const sim = o.psys && o.psys.sim;
+        const fp = sim && sim.followParent;
+        if (fp && byName.has(fp)) byName.get(fp).childHooks.push(sim.pending);
+      }
+    }
+
+    stats.initStage = 'fbo';
+    geo = { clearcolor: [0, 0, 0, 1] };
+    const cc = String(scene.general.clearcolor || '0 0 0').trim().split(/\s+/).map(Number);
+    geo.clearcolor = [cc[0] || 0, cc[1] || 0, cc[2] || 0, 1];
+
+    // P2-8: 静态场景判定（保守）— 本渲染器唯一的帧变 uniform 是 g_Time（材质
+    // 常量=scene.json 静态值、无鼠标/相机类动态输入、resolution/纹理均构建期
+    // 固定）。任一 program 的 g_Time 位置非空（被链接器优化掉的返回 null）即
+    // 视为动态场景，逐帧渲染保持现状；全部为 null 才允许跳帧。
+    // W3: 任一粒子对象 → 恒动态（模拟逐帧推进，不许跳帧）。
+    let sceneIsStatic = true;
+    for (const o of objResList) {
+      if (!sceneIsStatic) break;
+      if (o.psys && o.psys.sim && !o.psys.failed) { sceneIsStatic = false; break; }
+      if (o.vid && !o.vid.failed) { sceneIsStatic = false; break; } // W6: 视频逐帧
+      for (const p of o.programs) {
+        if (p.locs.g_Time != null) { sceneIsStatic = false; break; }
+      }
+    }
+
+    // P2-7: vaos = VAO 缓存（bindQuadVao 按 attrib 位置组合惰性建，见下）
+    res = { vbo, ibo, objects: objResList, progCache, presentProg, presentLocs, presentAttribs, textures, whiteEntry, flowEntry, sceneIsStatic, vaos: new Map(),
+      particleProg, partLocs, partAttribs, particleVbo, particleIbo, circleEntry, partVao: null,
+      // sf41a: mousefollow（发射器基座跟鼠标）或 pointerAttract（controlpointattract
+      // 的 flags&1 控制点跟鼠标）任一存在 → 装 pointermove 监听。
+      hasMouseFollow: objResList.some((o) => o.psys && o.psys.sim && !o.psys.failed && (o.psys.sim.mousefollow || o.psys.sim.pointerAttract)) };
+  }
+
+  // P2-7: VAO 缓存（WebGL2 原生）— 全 pass 顶点布局一致（同 vbo/ibo、同
+  // stride/offset），仅 attrib 位置编号可能随 program 变化，故按 (aPos,aUV)
+  // 组合建 VAO（同一批 shader 名字相同，实际场景 1~2 个）。一次 bindVertexArray
+  // 恢复完整 attrib 状态，替代旧 bindQuad 每帧每 pass 的
+  // getAttribLocation×2 + enable + pointer×2；destroyResources 随程序一起释放，
+  // contextrestored 重建时随 res 重建。
+  function bindQuadVao(attribs) {
+    const key = attribs.aPos + '|' + attribs.aUV;
+    if (!res.vaos.has(key)) {
+      const vao = gl.createVertexArray();
+      gl.bindVertexArray(vao);
+      gl.bindBuffer(gl.ARRAY_BUFFER, res.vbo);
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, res.ibo);
+      if (attribs.aPos >= 0) {
+        gl.enableVertexAttribArray(attribs.aPos);
+        gl.vertexAttribPointer(attribs.aPos, 3, gl.FLOAT, false, 20, 0);
+      }
+      if (attribs.aUV >= 0) {
+        gl.enableVertexAttribArray(attribs.aUV);
+        gl.vertexAttribPointer(attribs.aUV, 2, gl.FLOAT, false, 20, 12);
+      }
+      gl.bindVertexArray(null);
+      res.vaos.set(key, vao);
+    }
+    gl.bindVertexArray(res.vaos.get(key));
+  }
+  function buildPuppetVao(pm) {
+    const vao = gl.createVertexArray();
+    gl.bindVertexArray(vao);
+    gl.bindBuffer(gl.ARRAY_BUFFER, pm.vbo);
+    gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, pm.ibo);
+    const at = res.presentAttribs;
+    if (at.aPos >= 0) { gl.enableVertexAttribArray(at.aPos); gl.vertexAttribPointer(at.aPos, 3, gl.FLOAT, false, 20, 0); }
+    if (at.aUV >= 0) { gl.enableVertexAttribArray(at.aUV); gl.vertexAttribPointer(at.aUV, 2, gl.FLOAT, false, 20, 12); }
+    gl.bindVertexArray(null);
+    res.vaos.set('puppet:' + pm.oi, vao); // 随 res.vaos 统一 dispose
+    return vao;
+  }
+  const setU = (loc, v) => {
+    if (loc == null || v == null) return;
+    if (typeof v === 'number') gl.uniform1f(loc, v);
+    else if (v.length === 16) gl.uniformMatrix4fv(loc, false, v);
+    else if (v.length === 4) gl.uniform4fv(loc, v);
+    else if (v.length === 3) gl.uniform3fv(loc, v);
+    else if (v.length === 2) gl.uniform2fv(loc, v);
+    else gl.uniform1f(loc, v[0]);
+  };
+
+  // W3: 粒子 VAO（单一布局：共享 particleVbo/particleIbo + 11 float stride；
+  // attrib 位置构建期预取，被裁掉的 attribute 返回 -1 跳过绑定）
+  function bindParticleVao() {
+    if (!res.partVao) {
+      const vao = gl.createVertexArray();
+      gl.bindVertexArray(vao);
+      gl.bindBuffer(gl.ARRAY_BUFFER, res.particleVbo);
+      gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, res.particleIbo);
+      const A = res.partAttribs, S = _WE_GL_PART_STRIDE * 4;
+      if (A.aCorner >= 0) { gl.enableVertexAttribArray(A.aCorner); gl.vertexAttribPointer(A.aCorner, 2, gl.FLOAT, false, S, 0); }
+      if (A.aCenter >= 0) { gl.enableVertexAttribArray(A.aCenter); gl.vertexAttribPointer(A.aCenter, 2, gl.FLOAT, false, S, 8); }
+      if (A.aSize >= 0) { gl.enableVertexAttribArray(A.aSize); gl.vertexAttribPointer(A.aSize, 2, gl.FLOAT, false, S, 16); }
+      if (A.aRot >= 0) { gl.enableVertexAttribArray(A.aRot); gl.vertexAttribPointer(A.aRot, 1, gl.FLOAT, false, S, 24); }
+      if (A.aColor >= 0) { gl.enableVertexAttribArray(A.aColor); gl.vertexAttribPointer(A.aColor, 4, gl.FLOAT, false, S, 28); }
+      if (A.aUVRect >= 0) { gl.enableVertexAttribArray(A.aUVRect); gl.vertexAttribPointer(A.aUVRect, 4, gl.FLOAT, false, S, 44); } // sf40g 精灵表帧矩形
+      gl.bindVertexArray(null);
+      res.partVao = vao;
+    }
+    gl.bindVertexArray(res.partVao);
+  }
+
+  // W3: 鼠标位置（canvas 背板像素，y 向下）— pointermove 监听只在有
+  // mousefollow 粒子系统时安装（installPointerHooks，buildResources 后调用）。
+  let pointerPx = null;
+  let pointerListener = null;
+  function installPointerHooks() {
+    if (pointerListener || !res || !res.hasMouseFollow) return;
+    pointerListener = (ev) => {
+      try {
+        const r = canvas.getBoundingClientRect ? canvas.getBoundingClientRect() : null;
+        if (!r || !r.width || !r.height) return;
+        // sf52: object-fit 内容矩形映射 — canvas 经 .we-media--fit CSS cover/contain
+        // 缩放裁边, getBoundingClientRect 返回元素布局盒而非内容矩形; 窗口比例 ≠
+        // 背板比例时旧公式 (clientX−r.left)·CW/r.width 中轴精确、两侧线性发散
+        // (3735447194 鼠标轨迹)。有效 fit 经 getComputedStyle 解析 --we-object-fit。
+        let fit = 'cover';
+        try { fit = String(getComputedStyle(canvas).objectFit || 'cover').toLowerCase(); } catch { }
+        const rx = r.width / CW, ry = r.height / CH;
+        let sx, sy;
+        if (fit === 'fill') { sx = rx; sy = ry; }                 // 逐轴拉伸
+        else {
+          const s = fit === 'contain' ? Math.min(rx, ry)
+            : fit === 'none' ? 1
+              : fit === 'scale-down' ? Math.min(1, Math.min(rx, ry))
+                : Math.max(rx, ry);                               // cover/未知 → cover
+          sx = sy = s;
+        }
+        // object-position 默认 50% 50%（CSS 未另行设置）
+        const offX = (r.width - CW * sx) / 2;
+        const offY = (r.height - CH * sy) / 2;
+        let bx = (ev.clientX - r.left - offX) / sx;
+        let by = (ev.clientY - r.top - offY) / sy;
+        // flip 镜像（--we-wallpaper-transform 的 scaleX(-1)）：rect 含 transform
+        // 仍是轴对齐盒 → x 单轴翻回
+        try {
+          const tr = getComputedStyle(canvas).transform;
+          if (tr && tr !== 'none' && (new DOMMatrix(tr)).a < 0) bx = CW - bx;
+        } catch { /* DOMMatrix 不可用跳过 */ }
+        pointerPx = [Math.min(CW, Math.max(0, bx)), Math.min(CH, Math.max(0, by))];
+        stats.lastPointerPx = pointerPx; // 诊断钩子（E2E/实机对拍用）
+      } catch { /* 坐标读取失败保持旧值 */ }
+    };
+    document.addEventListener('pointermove', pointerListener);
+  }
+  // 粒子投影缩放（computeGeo 同款 ps 语义：场景单位 → 画布像素）
+  function particlePs() {
+    return [layoutOrtho.width > 0 ? CW / layoutOrtho.width : 1, layoutOrtho.height > 0 ? CH / layoutOrtho.height : 1];
+  }
+  // 鼠标画布坐标 → 场景坐标（y 向上）；未移动过 → null（按对象 origin 发射）
+  function mouseScenePos() {
+    if (!pointerPx) return null;
+    const ps = particlePs();
+    return [pointerPx[0] / ps[0], (CH - pointerPx[1]) / ps[1]];
+  }
+
+  // W3: 单粒子系统一帧：推进模拟 → 写顶点 → 按 (纹理, blending) 组一次
+  // drawElements（每个系统按构造只有一组：单材质单纹理）。异常隔离：
+  // mark + psys.failed，不拖垮场景其余对象。
+  function renderParticleSys(o, t) {
+    const P = o.psys;
+    if (!P || P.failed || !P.sim) return;
+    try {
+      const sim = P.sim;
+      const mouse = sim.mousefollow ? mouseScenePos() : null;
+      if (sim.pointerAttract) sim.pointerScene = mouseScenePos(); // A2 控制点鼠标位置（未移动 null → 场景中心）
+      // A2: controlpointattract 场景宽高 (鼠标/世界系 CP 用; 官方口径 = ortho 场景宽高)
+      sim.sceneW = layoutOrtho.width > 0 ? layoutOrtho.width : CW;
+      sim.sceneH = layoutOrtho.height > 0 ? layoutOrtho.height : CH;
+      _weGLPAdvance(sim, t, mouse || sim.origin);
+      const n = _weGLPFillVerts(sim, P.f32, particlePs(), CW, CH, P.texEntry.w, P.texEntry.h, P.frames);
+      if (n <= 0) return;
+      gl.useProgram(res.particleProg);
+      bindParticleVao();
+      gl.bindBuffer(gl.ARRAY_BUFFER, res.particleVbo);
+      gl.bufferData(gl.ARRAY_BUFFER, P.f32.subarray(0, n * 4 * _WE_GL_PART_STRIDE), gl.STREAM_DRAW);
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, P.texEntry.tex);
+      if (res.partLocs.u_Tex) gl.uniform1i(res.partLocs.u_Tex, 0);
+      if (res.partLocs.u_Viewport) gl.uniform2f(res.partLocs.u_Viewport, CW, CH);
+      // CPU particles.js:744 同款: 无纹理圆点恒 additive (不看材质 blending);
+      // 有纹理才按材质 additive/normal。
+      if (P.blending === 'additive' || P.texEntry === res.circleEntry) gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
+      else gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+      gl.drawElements(gl.TRIANGLES, n * 6, gl.UNSIGNED_SHORT, 0);
+    } catch (e) {
+      P.failed = true;
+      mark(String(o.obj.name || ('对象' + o.oi)), 'particle',
+        '粒子模拟/绘制失败，已跳过该对象: ' + (e && e.message ? e.message : e));
+    }
+  }
+  // N-08: resolution 向量模块级复用（旧实现每帧每 pass 每槽位分配新数组；
+  // setU→uniform4fv 即时消费不逃逸，复用安全）
+  const _weResVecBuf = [0, 0, 0, 0];
+  const resVec = (e) => {
+    const v = _weResVecBuf;
+    v[0] = e.w; v[1] = e.h; v[2] = e.hw; v[3] = e.hh;
+    return v;
+  }; // lwe: (mip0.w, mip0.h, header.w, header.h)
+
+  // 单对象效果链：主纹理 →（效果 pass ×N，对象自身 FBO 对 ping-pong）→ 输出 entry
+  function renderObjectChain(o, t) {
+    if (!o.programs.length) return o.mainTexEntry;
+    const mvpFx = o.mvpFx; // P2-7: 构建期缓存（仅依赖主纹理尺寸，见 buildResources）
+    let input = o.mainTexEntry;
+    // P2-7/N-08: for 循环替代 forEach（旧实现每帧每对象分配闭包）
+    for (let i = 0; i < o.programs.length; i++) {
+      const p = o.programs[i];
+      // sf35: FBO 逐 pass 交替（ping-pong）。旧逻辑 i===n-1?fboB:fboA 在 n≥3 时
+      // 中间 pass 读写同一 FBO 纹理 = GL 规范禁止的 feedback loop（真机 tile GPU
+      // 上未定义行为 → 3 效果链的中间效果错乱; SwiftShader 读改写容错掩盖了它,
+      // E2E 从未暴露）。n=1/2 时与旧逻辑逐位等价（02 场景回归不受影响）。
+      const target = (i % 2 === 0) ? o.fboA : o.fboB;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, target.fbo);
+      gl.viewport(0, 0, target.w, target.h);
+      gl.disable(gl.BLEND); // 效果 FBO pass 禁 BLEND（附录 §3）
+      gl.useProgram(p.prog);
+      bindQuadVao(p.attribs); // P2-7: VAO 绑定（attrib 位置已构建期预取）
+      // slot0 = 链输入（首效果=主图，后续=上一 FBO；lwe 约定 FBO 视为 (w,h,w,h)）
+      gl.activeTexture(gl.TEXTURE0);
+      gl.bindTexture(gl.TEXTURE_2D, input.tex);
+      if (p.locs.g_Texture0) gl.uniform1i(p.locs.g_Texture0, 0);
+      setU(p.locs.g_Texture0Resolution, resVec(input));
+      // slot1/2 = mask/normal（空槽按 mode 回退：flowmask→中灰，其余→白）
+      // P2-7: 遍历构建期预展开的槽位表（含预取 loc，免每帧 Object.entries 分配）
+      for (let s = 0; s < p.texSlots.length; s++) {
+        const ts = p.texSlots[s];
+        // W2: 清单槽 {previous:true} → 对象主纹理 (官方 effect.json pass.bind
+        // "previous" 语义); 其余按预载纹理/兜底
+        const slotInfo = p.ef.textures[ts.unit];
+        const entry = (slotInfo && slotInfo.previous === true) ? o.mainTexEntry
+          : (o.effectTex.get(p.ef.shader + ':' + ts.unit)
+            || (ts.mode === 'flowmask' ? res.flowEntry : res.whiteEntry));
+        gl.activeTexture(gl.TEXTURE0 + ts.unit);
+        gl.bindTexture(gl.TEXTURE_2D, entry.tex);
+        if (ts.loc) gl.uniform1i(ts.loc, ts.unit);
+        setU(ts.resLoc, resVec(entry));
+      }
+      setU(p.locs.g_ModelViewProjectionMatrix, mvpFx);
+      setU(p.locs.g_Time, t);
+      // P2-7: 材质常量已构建期预转换（附录 §5 逻辑前移至 buildResources），直喂
+      for (let m = 0; m < p.matUniforms.length; m++) {
+        const mu = p.matUniforms[m];
+        setU(mu.loc, mu.v);
+      }
+      gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
+      input = target;
+    }
+    return input;
+  }
+
+  // N-08: 合成输出槽模块级复用（旧实现每帧 res.objects.map 分配新数组；
+  // render 内即写即读不逃逸）
+  const _weOutputs = [];
+  function render(t) {
+    if (!res) return;
+    // ① 每对象效果链（输出 = 对象纹理空间的合成结果）；W3: 粒子对象无效果链
+    // W6: 视频对象 — currentTime 变化时重传帧 (readyState≥2; FLIP_Y=false 与
+    // 图片纹理同款 y-down 约定), programs=[] → renderObjectChain 原样返回入口
+    const objs = res.objects;
+    for (let i = 0; i < objs.length; i++) {
+      const o = objs[i];
+      if (o.vid) {
+        if (!o.vid.failed && o.vid.ready) {
+          const v = o.vid.video;
+          const ct = v.currentTime;
+          if (v.readyState >= 2 && ct !== o.vid.lastT) {
+            o.vid.lastT = ct;
+            try {
+              gl.bindTexture(gl.TEXTURE_2D, o.vid.texEntry.tex);
+              gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, v);
+            } catch (e) {
+              o.vid.failed = true;
+              mark(String(o.obj.name || ('对象' + o.oi)), 'video',
+                '视频帧上传失败，已跳过该对象: ' + (e && e.message ? e.message : e));
+            }
+          }
+        }
+        _weOutputs[i] = o.vid.failed ? null : o.vid.texEntry;
+        continue;
+      }
+      // sf51: spritesheet 逐帧轮播（CPU image.js:142 floor(t/duration)%count
+      // 同款）— 换帧替换 mainTexEntry, renderObjectChain/合成 pass 每帧现读。
+      // 静态场景（P2-8 跳帧）冻结第 0 帧, 与 CPU 静态帧语义一致。
+      if (o.sheet) {
+        const idx = Math.floor(t / o.sheet.duration) % o.sheet.entries.length;
+        if (idx !== o._sheetIdx) { o._sheetIdx = idx; o.mainTexEntry = o.sheet.entries[idx]; }
+      }
+      _weOutputs[i] = o.psys ? null : renderObjectChain(o, t);
+    }
+    // ② 合成 pass：按场景对象顺序 src-over（CPU canvas 直 alpha 同款）；
+    // W3: 粒子对象在 painter order 中占其场景序位置（与 image 统一排序，不置顶）
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, CW, CH);
+    const c = geo.clearcolor;
+    gl.clearColor(c[0], c[1], c[2], c[3]);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.useProgram(res.presentProg);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+    bindQuadVao(res.presentAttribs);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.uniform1i(res.presentLocs.u_Tex, 0);
+    let presentBound = true; // 粒子绘制会切走 program/VAO/blend，后续图像绘制前恢复
+    for (let i = 0; i < objs.length; i++) {
+      const o = objs[i];
+      if (o.psys) {
+        renderParticleSys(o, t);
+        presentBound = false;
+        continue;
+      }
+      // W6: 视频 — failed/未 ready 跳过绘制 (透明), 其余走通用 present 路径
+      if (o.vid) {
+        if (o.vid.failed || !o.vid.ready) continue;
+      }
+      if (!presentBound) {
+        gl.useProgram(res.presentProg);
+        gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
+        bindQuadVao(res.presentAttribs);
+        gl.activeTexture(gl.TEXTURE0);
+        gl.uniform1i(res.presentLocs.u_Tex, 0);
+        presentBound = true;
+      }
+      // W4: 木偶网格 — 同 presentProg/blend, 仅 VAO/MVP 不同 (网格顶点已烘
+      // 旋转, MVP 局部 scene→NDC); 画完 VAO 已切走 → presentBound=false 让
+      // 后续图像走 restore 重绑 quad。
+      if (o.puppetMesh) {
+        const pm = o.puppetMesh;
+        // sf42: 骨骼动画 — 逐帧蒙皮重写顶点 (跳变帧率=层 rate×30fps 循环)
+        if (pm.skin) {
+          if (!pm.skinVerts || pm.skinVerts.length !== pm.skin.baseVerts.length) {
+            pm.skinVerts = pm.skin.baseVerts.slice();
+          }
+          _weGLSkinPuppet(pm, t, pm.skinVerts, o.obj);
+          gl.bindBuffer(gl.ARRAY_BUFFER, pm.vbo);
+          gl.bufferSubData(gl.ARRAY_BUFFER, 0, pm.skinVerts);
+        }
+        if (!pm.vao) pm.vao = buildPuppetVao(pm);
+        gl.bindVertexArray(pm.vao);
+        gl.bindTexture(gl.TEXTURE_2D, o.mainTexEntry.tex);
+        if (!pm.mvp || pm.mvpW !== CW || pm.mvpH !== CH) {
+          pm.mvp = _weGLPuppetMVP(o.obj, CW, CH, layoutOrtho, pm.mvp || new Float32Array(16));
+          pm.mvpW = CW;
+          pm.mvpH = CH;
+        }
+        gl.uniformMatrix4fv(res.presentLocs.u_MVP, false, pm.mvp);
+        gl.uniform1f(res.presentLocs.u_ObjectAlpha, o.geo.alpha);
+        gl.uniform1f(res.presentLocs.u_Brightness, o.geo.brightness);
+        gl.drawElements(gl.TRIANGLES, pm.indexCount, gl.UNSIGNED_SHORT, 0);
+        presentBound = false;
+        continue;
+      }
+      const g = o.geo;
+      gl.bindTexture(gl.TEXTURE_2D, _weOutputs[i].tex);
+      // P2-7: present MVP 缓存 — 仅视口（CW/CH）或几何（resize 重算 geo，换新
+      // 对象）变化时重算；旧实现每帧每对象 new Float32Array×2 + 全乘法重算。
+      // 独占缓冲（基座+旋转各一，旋转在位乘会污染未读元素，不可共用 scratch）。
+      if (!g.mvp || g.mvpW !== CW || g.mvpH !== CH) {
+        const base = new Float32Array(16), rot = new Float32Array(16);
+        _weGLQuadMVP(CW, CH, g.dx, g.dy, g.dw, g.dh, false, base);
+        g.mvp = _weGLMvpWithZRot(base, g.anglesZ, g.dw, g.dh, rot);
+        g.mvpW = CW;
+        g.mvpH = CH;
+      }
+      gl.uniformMatrix4fv(res.presentLocs.u_MVP, false, g.mvp);
+      gl.uniform1f(res.presentLocs.u_ObjectAlpha, g.alpha);
+      gl.uniform1f(res.presentLocs.u_Brightness, g.brightness);
+      gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
+    }
+    gl.disable(gl.BLEND);
+  }
+
+  // rAF 循环：g_Time 自由运行（时间基连续，暂停恢复无跳变）；fpsCap 累计器限帧；
+  // playbackRate 缩放场景时间（与 mp4 路径的 video.playbackRate 同款用户控制）
+  function loop(now) {
+    if (disposed || !running) return;
+    rafId = requestAnimationFrame(loop);
+    const dt = lastNow ? now - lastNow : 16.7;
+    lastNow = now;
+    if (fpsCap > 0) {
+      fpsAcc += dt;
+      const budget = 1000 / fpsCap;
+      if (fpsAcc < budget) return;
+      fpsAcc %= budget;
+    }
+    pushFrameTime(dt);
+    stats.frames++;
+    // P2-8: 静态场景跳帧 — 无 g_Time 依赖（构建期保守判定，见 buildResources）
+    // 且无脏标记时跳过 render（GL 工作全免；rAF 空转保持活跃，脏标记置位后
+    // 下一 vsync 立即恢复）。frameTimes/frames 照常记录（rAF 间隔量纲，外部
+    // 观测语义不变）。动态场景（任一 g_Time 存在）恒不触发，行为与旧版一致。
+    if (res && res.sceneIsStatic && !needRedraw) return;
+    const t = rateBase + ((now - wallBase) / 1000) * playbackRate;
+    stats.lastT = t;
+    // G-03: 帧级 try/catch + 连续失败计数 — 连续 N 帧抛错判 fatal：停循环、
+    // fail 上抛（onError → 调用方回退 CPU mp4 并提示）；偶发单帧失败计数
+    // 清零自愈。onReady 只在成功帧后触发（杜绝“抛错帧也标 ready”的假就绪）。
+    try {
+      const renderT0 = performance.now(); // P0-2: 量 render 本身（pushFrameTime 记的是 rAF 间隔）
+      render(t);
+      pushRenderTime(performance.now() - renderT0);
+      if (disposed) return; // P0-2: 慢帧熔断已在 pushRenderTime 内 dispose → 跳过本帧余下动作（含 onReady）
+      needRedraw = false; // P2-8: 渲染成功帧后才清脏（抛错帧保持脏，G-03 重试仍逐帧跑）
+      renderFails = 0;
+      stats.renderFails = 0;
+      if (!readyFired) {
+        readyFired = true;
+        state = 'GL_RUN';
+        try { onReady(); } catch { /* 调用方异常不中断渲染 */ }
+      }
+    } catch (e) {
+      renderFails++;
+      stats.renderFails = renderFails;
+      const msg = e && e.message ? e.message : String(e);
+      stats.errors.push('render:' + msg);
+      try { console.error('[scene-gl] 渲染帧失败（连续 ' + renderFails + '/' + WE_GL_RENDER_FATAL_MAX + '）:', e); } catch { /* console 不可用 */ }
+      if (renderFails >= WE_GL_RENDER_FATAL_MAX) {
+        fail('render-fatal:' + msg, true); // fail → dispose + onError（调用方标记 glFailed 回退）
+        return;
+      }
+    }
+  }
+  function startLoop() {
+    if (running || disposed || !res || paused) return;
+    running = true;
+    lastNow = 0;
+    needRedraw = true; // P2-8: 恢复渲染保守重画一帧（暂停期间 canvas 可能被合成器回收）
+    rafId = requestAnimationFrame(loop);
+  }
+  function stopLoop() {
+    running = false;
+    if (rafId) cancelAnimationFrame(rafId);
+    rafId = 0;
+  }
+  let renderFails = 0; // G-03: 连续渲染抛错计数（成功帧清零）
+  let needRedraw = true; // P2-8: 静态场景脏标记（首帧/恢复/resize 置位，渲染成功后清除）
+
+  // G-07: 视口/设备像素比变化 → 重建背板与对象几何。尺寸变化>阈值(2px)才落
+  // GL 状态（防 dpr 抖动频繁触发）；超限 clamp 到 4096 并 mark（一次）。对象
+  // 效果 FBO 建于构建期画布预算内（P0-1 等比 clamp），不随 resize 重建（重建
+  // =重传全部纹理；视口放大时链输出由 present pass 放大，仅轻微变软）。
+  function resize(w, h) {
+    if (disposed) return false;
+    noteViewportClamp(w, h);
+    const oldW = CW, oldH = CH;
+    applySarFit(clampGLDim(w), clampGLDim(h));
+    if (Math.abs(CW - oldW) < 2 && Math.abs(CH - oldH) < 2) {
+      // 阈值内回滚（canvas 背板尺寸赋值本身有重分配成本，避免抖动）
+      CW = oldW; CH = oldH;
+      canvas.width = CW;
+      canvas.height = CH;
+      return false;
+    }
+    if (res && res.objects) {
+      for (const o of res.objects) {
+        if (o.psys) continue; // W3: 粒子无对象几何（fill 时按当前 CW/CH 取 ps，无需重算）
+        try { o.geo = computeGeo(o.obj, o.oi); } catch { /* 单对象布局失败不拦整体 */ }
+      }
+    }
+    needRedraw = true; // P2-8: 视口/几何变化 → 静态场景重渲一帧
+    return true;
+  }
+
+  // 暂停策略：document.hidden + IntersectionObserver 离屏即停（§5.1）
+  function installPauseHooks() {
+    hiddenListener = () => { if (document.hidden) stopLoop(); else startLoop(); };
+    document.addEventListener('visibilitychange', hiddenListener);
+    if (typeof IntersectionObserver === 'function') {
+      observer = new IntersectionObserver((entries) => {
+        const e = entries[0];
+        if (!e) return;
+        if (e.isIntersecting) startLoop(); else stopLoop();
+      }, { threshold: 0.01 });
+      observer.observe(canvas);
+    }
+  }
+
+  // contextlost → dispose → contextrestored 短退避后重建一次 → 再失败回退（§2.11）
+  let rebuiltOnce = false;
+  function installContextHooks() {
+    canvas.addEventListener('webglcontextlost', (ev) => {
+      ev.preventDefault(); // 允许 contextrestored
+      stats.contextLost++;
+      stopLoop();
+    });
+    canvas.addEventListener('webglcontextrestored', () => {
+      if (disposed) return;
+      if (rebuiltOnce) { fail('contextlost-twice'); return; }
+      rebuiltOnce = true;
+      setTimeout(async () => {
+        try {
+          destroyResources();
+          await buildResources();
+          startLoop();
+        } catch (e) {
+          fail('contextlost-rebuild:' + (e && e.message ? e.message : e));
+        }
+      }, 500);
+    });
+  }
+
+  function dispose() {
+    if (disposed) return;
+    disposed = true;
+    state = 'DISPOSED';
+    stopLoop();
+    ctrl.abort();
+    if (hiddenListener) document.removeEventListener('visibilitychange', hiddenListener);
+    if (pointerListener) { document.removeEventListener('pointermove', pointerListener); pointerListener = null; }
+    if (observer) { try { observer.disconnect(); } catch { /* */ } observer = null; }
+    // 摘除 canvas: 孤儿 canvas 留在 DOM 会把重建的新 canvas 挤出视口（或让
+    // 调用方误判层结构已更新）→ 新 renderer 的 IntersectionObserver 判不可见
+    // → stopLoop 取消唯一 rAF → 永冻 GL_INIT（实验开关切换卡死的实锤链条）。
+    // 调用方层重建也会 remove，这里双保险幂等。
+    try { canvas.remove(); } catch { /* */ }
+    try { destroyResources(); } catch { /* */ }
+    if (gl) {
+      try {
+        const ext = gl.getExtension('WEBGL_lose_context');
+        if (ext) ext.loseContext();
+      } catch { /* */ }
+      gl = null;
+    }
+  }
+
+  // ---- 启动序列（附录 §8）----
+  (async () => {
+    try {
+      // 先让出同步栈：本 IIFE 在首个 await 前同步执行，此刻调用方尚未完成
+      // sceneGL 赋值，同步 fail() 的 onError 会撞上其早退守卫被吞（渲染器挂死）。
+      await Promise.resolve();
+      if (disposed) return;
+      // P1-3①: WebGL2 一次性预检 + SwiftShader 嗅探 — 失败即降级，不进入
+      // meta/shader 串行 fetch（webgl2-unavailable 此前要到 buildResources 才暴露）
+      const probeFail = weGLPreflight();
+      if (probeFail !== true) { fail(probeFail, true); return; }
+      // GL_TRY：meta（5s 超时）
+      meta = await fetchJson(BASE + '/scene-gl-meta/' + token, 5000);
+      if (disposed) return;
+      if (!meta || meta.supported !== true) {
+        fail('unsupported:' + ((meta && meta.reason) || 'unknown'), true);
+        return;
+      }
+      // 版本 handshake：engine 次版本不符 → 回退 mp4（附录 §7）
+      if (String(meta.engine || '').split('/')[1] !== String(_WE_GL_VERSION)) {
+        fail('engine-version:' + meta.engine, true);
+        return;
+      }
+      state = 'GL_INIT';
+      stats.initStage = 'shaders';
+      // shader fetch（编译先于纹理下载；多对象：收集全部对象用到的 shader 引用）
+      shaderMeta = {};
+      for (const obj of meta.scene.objects || []) {
+        for (const ef of obj.effects || []) {
+          if (Object.prototype.hasOwnProperty.call(shaderMeta, ef.shader)) continue;
+          // W2: 完整 shader 引用 (effects/<dir> / workshop/<id>/...), 逐段 URL 编码
+          const ref = String(ef.shader).split('/').map(encodeURIComponent).join('/');
+          // 逐 shader 拉取隔离: 单个 shader 端点 404/422（未支持 include 等）只让
+          // 该效果降级跳过 (programFor 抛错 → safeProgramFor 逐效果隔离), 不拖垮
+          // 整个渲染器 — 整体 mp4 回退仅限全部对象不可渲染/GL 不可用。
+          try {
+            shaderMeta[ef.shader] = await fetchJson(BASE + '/scene-shader/' + token + '/' + ref, 5000);
+          } catch (e) {
+            shaderMeta[ef.shader] = null; // 拉取失败哨兵（区别于 undefined = 逻辑漏洞）
+          }
+        }
+      }
+      if (disposed) return;
+      // 总 watchdog（meta 之后）：多对象场景纹理数十张，4K 解码串行可观，放宽到 120s
+      const watchdog = setTimeout(() => fail('init-watchdog'), 120000);
+      try {
+        await buildResources();
+      } finally {
+        clearTimeout(watchdog);
+      }
+      if (disposed) return;
+      stats.initStage = 'done';
+      installContextHooks();
+      installPauseHooks();
+      installPointerHooks(); // W3: 有 mousefollow 粒子系统时才真正挂监听
+      wallBase = performance.now();
+      startLoop();
+    } catch (e) {
+      fail('init:' + (e && e.message ? e.message : e), false);
+    }
+  })();
+
+  return {
+    canvas,
+    dispose,
+    stats,
+    state: () => state,
+    // 降级清单 = host gate 产物 ⊕ 渲染器本地 mark（G-04 父链缺失 / G-07 clamp）。
+    // dispose 后仍可读（client 在 onError 里取用 — G-01 缓存的数据来源）。
+    degraded: () => [
+      ...((meta && Array.isArray(meta.degraded)) ? meta.degraded : []),
+      ...degradedLocal,
+    ],
+    // G-07: 视口/设备像素比变化时由调用方喂新预算（超限 clamp + 阈值内忽略）
+    resize,
+    // 用户暂停/遮挡暂停（调用方按 isEffectivelyPlaying 同步）
+    setPaused(p) {
+      p = !!p;
+      if (p === paused) return;
+      paused = p;
+      if (p) stopLoop(); else startLoop();
+    },
+    // fpsCap 变更即时生效（不重建）
+    setFpsCap(cap) { fpsCap = Math.max(0, Number(cap) || 0); fpsAcc = 0; },
+    // 播放速率（mp4 路径 video.playbackRate 同款语义）：时间基重锚定，无跳变
+    setPlaybackRate(r) {
+      r = Number(r);
+      if (!Number.isFinite(r) || r <= 0 || r === playbackRate) return;
+      const now = performance.now();
+      rateBase = rateBase + ((now - wallBase) / 1000) * playbackRate;
+      wallBase = now;
+      playbackRate = r;
+    },
+  };
+}
+
+return { version: _WE_GL_VERSION, createSceneGLRenderer };

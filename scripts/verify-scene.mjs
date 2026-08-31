@@ -28,6 +28,10 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 // such restriction).
 const TEST_CACHE_DIR = join(root, '.test-cache', 'frames');
 process.env.DSH_WE_CACHE_DIR = TEST_CACHE_DIR;
+// Keep the loose-source default (~/Pictures on Linux) out of this hermetic
+// suite: point it at a directory that cannot exist, so no host Pictures folder
+// is ever scanned during tests.
+process.env.DSH_WE_LOOSE_DIR = join(root, '.test-cache', 'no-such-loose-dir');
 const pkgExtract = await import(pathToFileURL(resolve(root, 'lib', 'pkg-extract.js')).href);
 
 let passed = 0;
@@ -410,7 +414,7 @@ if (token) {
   check('scene-frame mime', /image\/(jpeg|png)/.test(ctype), ctype);
   // cache file written under the plugin data dir (env-overridden for tests)
   const cacheDir = TEST_CACHE_DIR;
-  const cached = existsSync(cacheDir) ? readdirSync(cacheDir).filter((f) => f.startsWith('sf33_' + token + '_')) : [];
+  const cached = existsSync(cacheDir) ? readdirSync(cacheDir).filter((f) => f.startsWith('sf35_' + token + '_')) : [];
   check('frame cached on disk', cached.length >= 1, cacheDir + ' [' + cached.join(', ') + ']');
 
   // Second call must hit the cache (handler still returns the payload).

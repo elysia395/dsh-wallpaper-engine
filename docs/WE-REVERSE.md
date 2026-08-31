@@ -222,3 +222,115 @@ scene.json 对象 {image, origin, size, parent, scale, angles}
   锚点矩阵平移（按骨骼旋角旋转）+ 自身 origin。
 - **逆向方法**：exe 字符串搜索（MDAT/attachment）→ 反汇编解析函数 →
   文件名匹配 MDL 锚点名字 → 渲染覆盖比例数值实验选语义变体。
+
+---
+
+## 9. GL 移植 spike 实证（test/scene-gl-spike，3295448069 全效果场景）
+
+以 GL（WebGL2，无预处理直接编译 pkg 官方 ES 1.00 shader）与 CPU 渲染器逐点对
+比（MAD 指标 + 效果隔离变体目录判别法）得出的官方语义裁决：
+
+### 9.1 v 轴方向 = D3D y-down（spike 最大坑）
+- 官方 shader 血统是 HLSL/D3D（`mul(v,m)` 行向量、`texSample2D` 宏）→ **v=0
+  在图顶、纹理行 0 = 图顶**（与 GL 默认 flipY 约定相反）。
+- GL 全链路 y-down 做法：纹理**不翻转**上传（tex 行 0 = PNG 行 0 = 图顶）；
+  quad UV 顶边 v=0；效果 pass 的 MVP **y 行取负**（图顶 → NDC−1 → FBO tex 行 0，
+  链内一致）；present pass MVP 正常（图顶 → NDC+1 = 屏幕上）。
+- 反例：flipY 上传会让 waterripple.frag 的 `frac(v + g_Time·…)` 时间相位镜像，
+  位移场整体翻倒（MAD 11+ 无法收敛）。
+
+### 9.2 g_TextureNResolution 语义（lwe 可考 + 实测排除其余约定）
+- **lwe（Almamu/linux-wallpaperengine）`CTexture::setupResolution` =
+  (mip0.w, mip0.h, header.w, header.h)**。绝大多数纹理 header==mip0 → zw/xy=1。
+- 判别实验①（效果隔离 MAD）：约定 (a) (w,h,1/w,1/h) 与 (b) (objW,objH,texW,texH)
+  都会让 iris mask 缩放变成近似 no-op（违背作者画眼部 mask 的意图）→ 排除；
+  lwe 约定下 GL vs 修正后 CPU MAD 2.88@960×540 / **1.25@1920×1080**（≈滤波地板）。
+- **waterripple.vert 的 MASK UV 用 g_Texture2Resolution（normal 槽分辨率）缩放**
+  ——lwe 约定下该缩放=1 → mask UV=纯 uv（作者意图：mask 与内容同坐标系，头部
+  黑团=保护区）。旧 CPU 实现 maskW/texW(=0.5) 是近似错误（已修，见 9.5）。
+
+### 9.3 ES 1.00 严格性：官方 shader 需 int 字面量修正
+- 严格 GLSL ES 1.00 禁 int→float 隐式转换，ANGLE/SwiftShader 拒绝官方文本两处：
+  `* 2 - 1`（waterripple.frag n1/n2 解码）、`smoothstep(1 - g_Rough, 1,`（iris.vert）。
+  WE 官方编译器宽松放行 → **assembleGLSL 需定向 regex fixup**（`* 2 - 1` →
+  `* 2.0 - 1.0` 等）。"唯一必需宏是 texSample2D" 的论断不成立。
+
+### 9.4 angles：弧度直读 + 屏幕空间旋转语义
+- **scene.json `angles` 是弧度**（lwe CImage.cpp:1097 注释明示 + glm::rotate(−angle,z)；
+  CPU 渲染器一致按弧度用）。
+- **正角 = 屏幕逆时针**（反旋拟合实测：GL 顶点空间需 r=−rad）。
+- **旋转必须像素空间刚体**：NDC/本地坐标各向异性（16:9 画布），直接 rotZ 会把
+  30° 压成 17.6°（tan⁻¹((h/w)·tanθ) 实测吻合）。正确做法 S⁻¹·RotZ·S（S=diag(dw,dh)）。
+- lwe 未做像素空间修正（其正交投影处理不同），此点为 DSH 特有需求。
+
+### 9.5 spike 顺带实锤的 CPU 渲染器 bug（均已修）
+1. **Canvas.clear 无视参数**（canvas.js）——恒填 (0,0,0,0)，scene.json clearcolor
+   从未生效；未覆盖区域透明黑而非场景底色（全幅场景无感，旋转/留边场景出错）。
+2. **waterripple mask UV u·0.5**——见 9.2（修后头部不再被波纹穿透，符合作者意图）。
+3. **waterripple 法线 z 未解码**——`nz = n1[2]` 原始 [0,1] 通道当 [-1,1] 用；
+   官方为 `n1.z = n1.z×2−1`（本场景 z≈1 数值影响≈0，但语义修正）。
+4. **iris mask 未采样**（更早会话已修）：官方 iris.vert 用 mask 纹理圈定生效区。
+
+### 9.6 纹理环绕模式
+- 官方 waterripple/normal/mask 均为 REPEAT（位移采样坐标本就跨 [0,1]）。
+- 主图（g_Texture0）：CPU 对位移后 UV clamp；判别实验⑤实测 REPEAT vs CLAMP
+  差异仅上下边缘 1-2px 带 → **跟 CPU 用 CLAMP**（无可考官方证据时跟已验收视觉）。
+
+## 10. lwe(linux-wallpaperengine,Almamu C++ 实现)对照裁决(2026-08,b016d7d)
+
+第二批修复前以 lwe 全仓库行级对照,结论分三档(代理考古 + 作者逐条亲自核实)。
+
+### 10.1 lwe 证实我们既有裁决(不变)
+- **§9.2 g_TextureNResolution = (mip0/GPU 尺寸, 真实尺寸)**:CTexture.cpp:122-141
+  (普通纹理解析 xy=mip0 实际、zw=header;动画=textureW/H+gifW/H;FBO 同构 CFBO.cpp:65)。
+- **§9.6 wrap**:文件纹理默认 REPEAT、.tex 头 `ClampUVs(=2)` → CLAMP_TO_EDGE
+  (CTexture.cpp:176-183);`_rt_*` FBO 恒 CLAMP(CFBO.cpp:26-35)——我们"效果链主图
+  CLAMP"与官方 FBO 语义一致;直接文件采样 REPEAT 一致。FLAG 另有 Video=32。
+- **v 轴**:WE 逻辑坐标左上 Y-down(CImage.cpp:1011-1014 渲染前翻 y;
+  ddy(x)=dFdy(-x) 显式补偿);效果 pass NDC↔UV 恒等,FBO 间采样不翻转。
+- **parent 折叠公式**:CImage.cpp:155-166 根向下 `子origin⊙祖scale→旋转祖angle→+祖
+  origin`、scale 逐轴乘、angle 只加 z — 与我们 resolveTransform 一致(我们另有
+  attachment 锚点扩展,lwe 未实现 MDAT)。
+- **parallax 参考宽度**:x/y 同乘场景 width(CImage.cpp:1114-1118)— 与我们一致。
+- **色彩空间(BASE-14 结案)**:lwe 全链 GL_RGBA8、零 GL_SRGB/pow → 降采样在 sRGB
+  空间平均即官方行为,豁免取消,现状正确。
+- **mul**:`#define mul(x,y) ((y)*(x))` 标准矩阵乘(ShaderUnit.cpp:30),非逐分量。
+- **fmod**:trunc 版 `(x)-(y)*trunc((x)/(y))`(同文件),负数行为 ≠ floor-mod。
+- **COMBO**:texture 派生 combo(如 MASK)=1 ⇔ 槽位实际绑定纹理(ShaderUnit.cpp:531-619)。
+
+### 10.2 lwe 推翻/修正我们实现(已列第二批修复)
+- **粒子寿命**:官方单 `lifetime` 字段(CParticle.h:76-79),我们 p.life/p.lifetime
+  错位 → 统一 lifetime。
+- **粒子初速**:boxrandom vel=0(CParticle.cpp:487-489);仅 sphererandom 径向
+  `normalize(出生偏移)×random(speedmin,speedmax)`(626-636);sign 仅 sphere 且作用于
+  出生偏移(614-623);**cone 官方解析但从未消费**(ObjectParser.cpp:605)→ 我们 P0-6
+  的全 emitter cone 采样是发明语义,二次修正。
+- **velocityrandom**:`p.velocity += vel` 且 `vel.y=-vel.y`(773-777)— 叠加+y翻转,
+  我们原是赋值+不翻转+Math.random。
+- **粒子步进**:官方真实 dt(≤0.1s/帧,CParticle.cpp:191-199),非固定 30fps →
+  静态帧改 1/60 步进逼近。
+- **alphafade(P1-4 结案)**:fadeintime/fadeouttime 是 **0-1 归一化寿命分数**
+  (CParticle.cpp:1102-1134),我们实现本就按 0-1 → 豁免取消,仅字段名修正。
+- **visible 字符串**:数值 !=0;字符串可 stof 按数值,不可解析(含 'true'/'false')
+  → String 型 getBool 恒 false(DynamicValue.cpp:160-185)→ 裸 'true' 官方也隐藏。
+- **ortho 回退**:projection 必填或 auto(包围盒→输出分辨率,CScene.cpp:41-69),
+  无 1080 默认 → 我们 ||1080 改 ||输出高。
+- **湍流**:确定性 curl-noise 场(NoiseUtils.h 固定置换表),每算子 phase/speed
+  建时随机一次 → 我们改确定性噪声场。
+
+### 10.3 lwe 未覆盖或与我们分歧(维持我们 exe 逆向结论/现状)
+- **旋转方向(§9.4 维持)**:lwe `glm::rotate(-angle, z)`(CImage.cpp:1100-1104)
+  净视觉 = 正角顺时针;我们 §9.4 经官方输出反旋拟合 = 正角逆时针。lwe 为第三方
+  近似(其作者亦注明投影路径与官方不同,CScene.cpp:117-121),以 exe 拟合为准。
+- **祖先 visible 传播(维持传播)**:lwe CImage::render 只查自身 visible;
+  我们 CPU/gate 沿父链传播(编辑器组隐藏直觉 + App Launcher Dock 作者组件模式)。
+  lwe 对 CText 甚至完全忽略父变换,说明其 parent 支持不完整,不跟随。
+- **puppet 骨骼 g_Bones/MDAT**:lwe 无任何骨骼数学(puppet 仅静态网格)→ MOD 系列
+  维持我们 exe 逆向。
+- **MDLA 80B stride 中间 15 float(MOD-05 维持豁免)**:lwe 只读 pos@0/uv@72,
+  其余未解释,仍需实测模型裁定。
+- **bloom gen.hdr/HDR 通道/feather(P1-25 维持现状)**:lwe 相机 bloom 开→无条件
+  base+bloom,无 HDR 支路 → 无法裁定,维持我们 gen.hdr 门控+注释。
+- **ApplyBlending case 4 vs 20**:lwe 仓库无 common_blending.h 副本(头文件在 WE
+  安装 assets/shaders/)→ 仍待官方源。
+- **jpeg**:lwe 用 stb_image,我们自研差异自担。
