@@ -176,6 +176,21 @@ dsh plugin --profile web add dsh-plugin-wallpaper-engine
 
 > 只删除 `node_modules\.modules.yaml` 一个文件也能修复（pnpm 会自动重建并继续），删除整个 `node_modules` 更彻底。如果 `.dsh-desktop` 被 OneDrive / 云同步 / 迁移工具动过，建议把它加入同步排除，避免复发。
 
+如果遇到下面的错误：
+
+```text
+[ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED] ... The git-hosted package "dsh-plugin-wallpaper-engine@0.6.8"
+needs to execute build scripts but is not in the "allowBuilds" allowlist.
+```
+
+**说明你用了 `github:` 形式的安装命令**（例如 `dsh plugin --profile web add github:elysia395/dsh-wallpaper-engine`）。pnpm 11 出于供应链安全，默认拒绝从 git 安装的包执行构建脚本，而本插件的 git checkout 需要 `prepare` 脚本构建 client，因此 `github:` 直装必然失败。请改用 **npm 包名**安装（npm 发布包已预构建，无需安装时编译）：
+
+```sh
+dsh plugin --profile web add dsh-plugin-wallpaper-engine
+```
+
+> 如果你的插件中心（dsh-plugin-hub）生成的是 `github:` 命令，请把它升级到 **v1.4.1+**——新版会自动反查 npm 包名并切到 npm 通道。
+
 ## 使用
 
 1. 打开 `dsh web`，进入 DSH 界面。

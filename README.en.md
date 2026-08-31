@@ -254,6 +254,26 @@ dsh plugin --profile web add dsh-plugin-wallpaper-engine
 > the whole `node_modules` is more thorough. If `.dsh-desktop` is touched by OneDrive / cloud sync /
 > migration tools, add it to the sync exclusion list to avoid a recurrence.
 
+If you see this error instead:
+
+```text
+[ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED] ... The git-hosted package "dsh-plugin-wallpaper-engine@0.6.8"
+needs to execute build scripts but is not in the "allowBuilds" allowlist.
+```
+
+**You used a `github:` install form** (e.g. `dsh plugin --profile web add github:elysia395/dsh-wallpaper-engine`).
+pnpm 11 blocks build scripts of git-hosted packages by default for supply-chain safety, and this
+plugin's git checkout needs the `prepare` script to build the client — so `github:` direct installs
+always fail. Use the **npm package name** instead (the published npm package is pre-built, no
+compile-time build needed):
+
+```sh
+dsh plugin --profile web add dsh-plugin-wallpaper-engine
+```
+
+> If your plugin hub (dsh-plugin-hub) generated a `github:` command, upgrade it to **v1.4.1+** — the
+> new version auto-resolves the npm package name and switches to the npm channel.
+
 ## Usage
 
 1. Open `dsh web` → the DSH GUI.
