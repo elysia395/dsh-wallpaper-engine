@@ -3872,7 +3872,21 @@ const CSS = `
     --dsw-specific-bubble: rgba(255, 255, 255, calc(var(--we-glass-alpha, 0.15) * 0.33));
   }
   body[data-we-wallpaper] [data-composer-card],
-  body[data-we-wallpaper] [class*="_bubble"] {
+  body[data-we-wallpaper] [class*="_bubble"],
+  /* Interactive tool popup cards read the SAME --dsw-specific-input-major
+     token as the composer (question / plan-review / approval), so they turn
+     translucent along with it — but unlike the composer they had NO
+     backdrop-filter, so at high transparency the popup's own text sits
+     directly on the busy wallpaper → 文字重叠 (#66). Each popup renders its
+     surface as a css-module *_card child of a STABLE, source-authored
+     container attribute: [data-question-key] (ask_user_question),
+     [data-plan-review-key] (plan review / exit_plan_mode panel) and
+     [data-approval-key] (tool-permission approval card). We scope _card
+     inside those containers instead of a broad [class*="_card"] (which would
+     also blur nested *_cardBody / hovercard surfaces). */
+  body[data-we-wallpaper] [data-question-key] [class*="_card"],
+  body[data-we-wallpaper] [data-plan-review-key] [class*="_card"],
+  body[data-we-wallpaper] [data-approval-key] [class*="_card"] {
     /* Specular sheen: a top-weighted white gradient turns a flat translucent
        tint into "wet glass" — kept faint so the wallpaper stays 通透 (clear)
        instead of glaring. */
