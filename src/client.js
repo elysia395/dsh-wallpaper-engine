@@ -106,9 +106,12 @@ const DEFAULTS = {
   //   浏览器对后台页的节流并不保证解码停止，显式 pause 让解码引擎直接归零。
   // - pauseOnBlur：窗口失焦（切到其它应用，壁纸很可能被遮挡）时暂停。
   //   浏览器无法直接探测"被窗口遮挡"，失焦是最接近的代理信号。
+  //   默认开（原为 false）：Linux/X11 上 Chromium 不做窗口遮挡检测，被全屏
+  //   应用盖住时 document.hidden 不变、IntersectionObserver 仍报可见，GL 场景
+  //   会持续满帧渲染 —— 实测这是 Intel i915 GPU reset（壁纸崩溃灰屏）的触发链。
   // 恢复可见 / 聚焦后，若用户未手动暂停则自动继续（同步 effective 播放态）。
   pauseOnHidden: true,
-  pauseOnBlur: false,
+  pauseOnBlur: true,
   // 使用电池供电时暂停（类似 WE 的电池优化）：navigator.getBattery 判定
   // 是否在电池上（!charging），不支持的浏览器自动无操作。
   pauseOnBattery: false,
@@ -320,7 +323,7 @@ function sanitizeSettings(o) {
     sceneGLExperimental: o.sceneGLExperimental === true,
     sceneGLDegrade: o.sceneGLDegrade !== false,
     pauseOnHidden: o.pauseOnHidden !== false,
-    pauseOnBlur: o.pauseOnBlur === true,
+    pauseOnBlur: o.pauseOnBlur !== false,
     pauseOnBattery: o.pauseOnBattery === true,
     flip: o.flip === true,
     objectFit: ["cover", "contain", "center", "fill"].includes(o.objectFit)
@@ -358,6 +361,12 @@ function sanitizeSettings(o) {
   };
 }
 
+// pauseOnBlur 默认 false→true 的一次性迁移标记（独立 key，不进 settings 白
+// 名单 — serializeSelection 全量重写会丢字段导致重复迁移）。旧存档里的
+// pauseOnBlur:false 大多是旧默认值随全量持久化落盘，而非用户显式关闭；
+// 迁移置 true 一次，之后用户再手动关闭会被尊重（标记阻止二次迁移）。
+const PAUSE_ON_BLUR_MIGRATED_KEY = "dsh-wallpaper-engine:pauseOnBlurMigrated";
+
 function readPersisted() {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
@@ -366,6 +375,25 @@ function readPersisted() {
   } catch {
     return { id: "", ...DEFAULTS };
   }
+}
+
+// 迁移必须在 loadPersisted 的 host/local 合并**之后**对最终 selection 判定：
+// host 文件是事实源，而 PUT 是全量白名单替换 —— 旧版任何一次壁纸选择/设置
+// 变更都把当时的默认 pauseOnBlur:false 落进了 host。只迁 localStorage 会被
+// 随后的 Object.assign(selection, sanitizeSettings(hostSettings)) 原样盖回
+// （writeLocalCache 还会把 false 写回 local，而标记已置位 → 迁移永不重跑，
+// 存量 GL 用户 —— 正是遮挡崩溃人群 —— 拿不到新默认值）。这里统一在合并
+// 结果上翻转并 persistSelection 回推 host，两层同源纠正；翻转后 PUT 失败
+// 由既有 persistDirty/pagehide 重试链兜底。
+function migratePauseOnBlurDefault() {
+  let migrated = false;
+  try { migrated = localStorage.getItem(PAUSE_ON_BLUR_MIGRATED_KEY) === "1"; } catch { /* ignore */ }
+  if (migrated) return;
+  if (selection.pauseOnBlur === false) {
+    selection.pauseOnBlur = true;
+    persistSelection(); // 立即调度 local 写 + PUT 回推 host（防下次启动又被旧 false 盖回）
+  }
+  try { localStorage.setItem(PAUSE_ON_BLUR_MIGRATED_KEY, "1"); } catch { /* ignore */ }
 }
 
 // ── Shared selection store (React + DOM layer share it) ────────────────────
@@ -605,6 +633,11 @@ async function loadPersisted() {
     // Host unreachable (route missing / static load): localStorage fallback.
     if (!stale) Object.assign(selection, readPersisted());
   }
+
+  // 一次性默认值迁移在合并结果上跑（见 migratePauseOnBlurDefault 注释）。
+  // stale（GET 在途期间用户改了设置）时跳过 —— 用户的写入比 host 应答新，
+  // 不被迁移翻动；标记未置位，下次启动照常迁移。
+  if (!stale) migratePauseOnBlurDefault();
 
   // Settings applied (host or fallback). Mark loaded so gated UI — the one-time
   // notice — knows the persisted noticeSeen is final before it renders.
@@ -1288,6 +1321,42 @@ function sceneGLFailedReason(token) {
 }
 function markSceneGLFailed(token, reason) {
   try { sessionStorage.setItem("weSceneGLFailed:" + token, String(reason)); } catch { /* ignore */ }
+}
+// GL 前台恢复重试：GPU 进程崩溃（Intel i915 reset，实测窗口被全屏应用遮挡
+// 期间满转触发）烧完 contextlost 重建额度后，markSceneGLFailed 把 GL 会话级
+// 永封（sessionStorage），层里只剩灰底、必须手动刷新才恢复。contextlost 类
+// 失败是环境性崩溃而非内容不支持，回到前台（可见且聚焦）时清标记重试一次；
+// 内容性失败（unsupported:/render-fatal:/init: 等）不自动重试 —— 重试也必然
+// 再失败，还白烧一次 meta/shader fetch。
+// 双重防崩溃循环：每 token 每页面会话只自动重试一次（GPU 持续崩时反复重试
+// 只会周期性 cancel+重启 CPU 兜底渲染，分钟级渲染永远完不成）+ 30s 全局冷却。
+let sceneGLRetryAt = 0;
+const sceneGLAutoRetried = new Set();
+function maybeRetrySceneGLAfterContextLoss() {
+  if (typeof document !== "undefined" && document.hidden) return; // 仍不可见
+  if (typeof document !== "undefined" && typeof document.hasFocus === "function"
+    && !document.hasFocus()) return; // 仍失焦（blur 事件也走这里）
+  if (sceneGL || selection.type !== "scene" || !selection.sceneFrameUrl || selection.sceneVideo) return;
+  // 只在层仍停在静态帧（= 崩溃后的灰色/静止形态）时恢复：mp4 兜底已接管
+  // （url 已切 /scene-anim/）时无需重试 —— wantKey 的 gl 位变化会整体重建层
+  // （在播视频销毁重建 = 可见重启闪烁），且 buildMedia 的 isSceneAnim 分支
+  // 根本不挂 GL canvas → 无头渲染器（IO 判不可见挂死，白占一个活上下文）。
+  if (selection.url !== selection.sceneFrameUrl) return;
+  const token = selection.sceneFrameUrl.split("/").pop();
+  const reason = sceneGLFailedReason(token);
+  if (!reason || reason.indexOf("contextlost") !== 0) return;
+  if (sceneGLAutoRetried.has(token)) return;
+  const now = Date.now();
+  if (now - sceneGLRetryAt < 30000) return;
+  sceneGLRetryAt = now;
+  sceneGLAutoRetried.add(token);
+  // 在途 CPU 兜底渲染不得迟到来袭：重试成功后 GL 已活，trySwitch 会在渲染
+  // 完成时按 url===frameUrl 把层切回 mp4，违反 sceneVideo > GL > CPU mp4
+  // 优先级（fpsCap 变更路径同款前置取消）。
+  cancelSceneAnimUpgrade();
+  try { sessionStorage.removeItem("weSceneGLFailed:" + token); } catch { /* ignore */ }
+  sceneGLNotice = null; // 重试期间撤下"实时渲染不可用"提示条（失败会由 onError 重写）
+  try { if (!trySceneGL(selection.sceneFrameUrl)) queueSceneAnimUpgrade(selection.sceneFrameUrl); } catch { /* ignore */ }
 }
 // 降级清单 → 设置面板一行汇总。G-06：多条 degraded 只显示首条+计数
 // （“对象A·粒子 等 3 项”），避免多类目刷屏；完整明细经 title 悬停保留
@@ -5541,7 +5610,8 @@ function apply(ctx) {
       // page hides/shows or the window loses/gains focus (see occlusionActive).
       // Fires syncLayers → play/pause on the video; decode drops to 0 while
       // minimized / covered by another app, exactly like desktop WE.
-      const onOcclusionChange = () => emit();
+      // 回到前台同时给 contextlost 崩溃的 GL 场景一次自动重试（灰色壁纸免刷新恢复）。
+      const onOcclusionChange = () => { maybeRetrySceneGLAfterContextLoss(); emit(); };
       let ocListeners = [];
       if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
         for (const t of ["visibilitychange", "blur", "focus"]) {

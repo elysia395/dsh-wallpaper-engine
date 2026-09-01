@@ -2492,11 +2492,20 @@ function createSceneGLRenderer(opts) {
   }
 
   // contextlost → dispose → contextrestored 短退避后重建一次 → 再失败回退（§2.11）
+  // 重建成功后稳定运行 60s 重置 rebuiltOnce：GPU 进程崩溃（Intel i915 reset 等，
+  // 实测遮挡期间满转触发）可能多次独立发生，"整个 renderer 生命周期只重建一次"
+  // 会让第二次无关崩溃直接 fail('contextlost-twice') → 会话级永封 GL → 灰色壁纸。
   let rebuiltOnce = false;
+  let rebuildStableTimer = 0;
+  const REBUILD_STABLE_MS = 60000;
+  function clearRebuildStableTimer() {
+    if (rebuildStableTimer) { clearTimeout(rebuildStableTimer); rebuildStableTimer = 0; }
+  }
   function installContextHooks() {
     canvas.addEventListener('webglcontextlost', (ev) => {
       ev.preventDefault(); // 允许 contextrestored
       stats.contextLost++;
+      clearRebuildStableTimer(); // 又丢了 → 上一段"稳定期"作废，不重置额度
       stopLoop();
     });
     canvas.addEventListener('webglcontextrestored', () => {
@@ -2508,6 +2517,11 @@ function createSceneGLRenderer(opts) {
           destroyResources();
           await buildResources();
           startLoop();
+          clearRebuildStableTimer();
+          rebuildStableTimer = setTimeout(() => {
+            rebuildStableTimer = 0;
+            rebuiltOnce = false; // 稳定期满 → 恢复一次重建额度
+          }, REBUILD_STABLE_MS);
         } catch (e) {
           fail('contextlost-rebuild:' + (e && e.message ? e.message : e));
         }
@@ -2520,6 +2534,7 @@ function createSceneGLRenderer(opts) {
     disposed = true;
     state = 'DISPOSED';
     stopLoop();
+    clearRebuildStableTimer();
     ctrl.abort();
     if (hiddenListener) document.removeEventListener('visibilitychange', hiddenListener);
     if (pointerListener) { document.removeEventListener('pointermove', pointerListener); pointerListener = null; }
