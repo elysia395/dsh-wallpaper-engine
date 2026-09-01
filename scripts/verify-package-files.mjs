@@ -1,7 +1,7 @@
 // 打包完整性守卫：从插件入口解析完整 import 图，凡 lib/ 下可达文件都必须被
 // package.json 的 files 白名单覆盖。漏列 = npm pack 丢文件 = 生产环境模块缺失
-// （0.6.8 漏 lib/scene-script-apis.js → scene-renderer 全线崩溃 → 静态帧回退
-// 错乱 / scene-anim 卡 0%）。
+// （历史教训: 0.6.8 漏装一个 lib 文件 → 渲染全线崩溃）。CPU 渲染链已移除,
+// 白名单只剩 GL/提取器管线文件。
 import fs from 'node:fs';
 import path from 'node:path';
 import url from 'node:url';
@@ -11,7 +11,7 @@ const pkg = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'))
 const filesList = Array.isArray(pkg.files) ? pkg.files : [];
 
 const seen = new Set();
-const queue = ['lib/index.js', 'lib/client.js', 'lib/scene-render-worker.mjs'];
+const queue = ['lib/index.js', 'lib/client.js'];
 const importRe = /(?:import|export)[^'"]*from\s+['"](\.[^'"]+)['"]|import\s*\(\s*['"](\.[^'"]+)['"]\s*\)|require\(\s*['"](\.[^'"]+)['"]\s*\)/g;
 while (queue.length) {
   const rel = queue.shift();
