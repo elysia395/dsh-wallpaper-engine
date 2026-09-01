@@ -4,12 +4,11 @@
 //     回推 host —— 存量用户 host/local 两层都落着旧默认 false（PUT 是全量
 //     白名单替换），只迁 localStorage 会被 loadPersisted 的 host 合并原样
 //     盖回（writeLocalCache 还会把 false 写回 local，标记已置位 → 永不重跑）。
-//  B. mp4 兜底已接管层（url 已切 /scene-anim/）时，前台恢复不得重试 GL：
-//     wantKey 的 gl 位变化会整体重建层（在播视频重启闪烁），且 buildMedia 的
-//     isSceneAnim 分支不挂 GL canvas → 无头渲染器。
+//  B. sceneVideo 在播（内嵌 MP4 硬解 <video>）时，前台恢复不得重试 GL
+//     （视频优先级高于 GL；重建层 = 在播视频重启闪烁）。
 //  C. 前台恢复重试只认 contextlost* 前缀（内容性失败不重试）；重试烧掉一次
-//     后，同 token 本页面会话不再自动重试（防崩溃循环反复 cancel/重启 CPU
-//     兜底渲染）；重试路径先取消在途 scene-anim 升级（M-2）。
+//     后，同 token 本页面会话不再自动重试（防崩溃循环）；CPU mp4 兜底已随
+//     渲染路径移除 — 重试失败停留静态帧, 全程零 /scene-anim/ 请求。
 //
 // 三个场景各自在独立 vm 上下文里完整跑 lib/client.js 的 boot 链
 // (apply → effect → loadPersisted → loadInventory → applySelection)。
@@ -41,7 +40,7 @@ const React = {
 };
 
 function makeSandbox(opts) {
-  // opts: { hostSettings, localSelection, session, progress }
+  // opts: { hostSettings, localSelection, session, sceneVideo }
   const putCalls = [];
   const timers = [];
   const intervals = [];
@@ -67,8 +66,8 @@ function makeSandbox(opts) {
       getAttribute(k) { return this.attributes[k] ?? null; },
       addEventListener() {}, removeEventListener() {},
       querySelector() { return null; },
-      // 渲染器预检走「webgl2-unavailable → onError → markSceneGLFailed +
-      // queueSceneAnimUpgrade」优雅失败链（与真实无 GL 环境同款分流）。
+      // 渲染器预检走「webgl2-unavailable → onError → markSceneGLFailed →
+      // 停留静态帧」失败链（与真实无 GL 环境同款分流）。
       getContext() { return null; },
       play() { return { catch() {} }; },
       pause() {}, load() {},
@@ -100,7 +99,6 @@ function makeSandbox(opts) {
     setItem(k, v) { this._store[k] = String(v); },
     removeItem(k) { delete this._store[k]; },
   };
-  const progress = { value: opts.progress ?? 0 };
   const fetchLog = [];
   const fetch = (url, init) => {
     const u = String(url);
@@ -112,17 +110,15 @@ function makeSandbox(opts) {
     if (u.includes('/wallpaper-engine/settings')) {
       return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ settings: opts.hostSettings, betterSidebar: false }) });
     }
-    if (u.includes('/scene-anim-progress/')) {
-      return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ percent: progress.value }) });
-    }
     if (u.includes('/wallpaper-engine/inventory')) {
       return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({
         installDir: 'D:/we', total: 1, portableCount: 1, playlists: [],
         wallpapers: [
-          // 单个 scene 壁纸（有 frameUrl → isPlayableType 判真）。无 sceneVideo
-          // 字段 → selection.sceneVideo=null，GL/CPU mp4 兜底链可达。
+          // 单个 scene 壁纸（有 frameUrl → isPlayableType 判真）。sceneVideo
+          // 由 opts 控制注入（内嵌 MP4 场景走 <video> 硬解, 不试 GL）。
           { id: 'sc', title: 'Scene GL', type: 'scene', playable: false, media: null, preview: null,
-            frameUrl: FRAME_URL, contentrating: 'Everyone' },
+            frameUrl: FRAME_URL, contentrating: 'Everyone',
+            ...(opts.sceneVideo ? { sceneVideo: '/wallpaper-engine/scene-video/TOK' } : {}) },
         ],
       }) });
     }
@@ -154,7 +150,7 @@ function makeSandbox(opts) {
     __activeInterval() { for (let i = intervals.length - 1; i >= 0; i--) if (!intervals[i].cleared) return intervals[i]; return null; },
     __bumpTime(ms) { vm.runInContext('__weFakeNow += ' + ms + ';', sandbox.__ctx); },
     __ctx: null,
-    __store: { localStorage, sessionStorage, putCalls, intervals, timers, progress, byId: () => byId },
+    __store: { localStorage, sessionStorage, putCalls, intervals, timers, fetchLog, byId: () => byId },
   };
   return sandbox;
 }
@@ -192,8 +188,8 @@ async function boot(sandbox) {
 async function scenarioA() {
   console.log('\n== A: pauseOnBlur 迁移在 host 事实源合并之后生效并回推 host ==');
   const sandbox = makeSandbox({
-    hostSettings: { id: 'sc', betaSceneAnim: true, pauseOnBlur: false }, // host 落着旧默认 false
-    localSelection: { id: 'sc', betaSceneAnim: true, pauseOnBlur: false }, // local 同样
+    hostSettings: { id: 'sc', pauseOnBlur: false }, // host 落着旧默认 false
+    localSelection: { id: 'sc', pauseOnBlur: false }, // local 同样
     progress: 0,
   });
   await boot(sandbox);
@@ -213,46 +209,38 @@ async function scenarioA() {
   check('A: 一次性迁移标记已置位', st.localStorage._store['dsh-wallpaper-engine:pauseOnBlurMigrated'] === '1');
 }
 
-// ── B. mp4 兜底已接管层 → 前台恢复不重试 GL ────────────────────────────────
+// ── B. sceneVideo 在播 → 前台恢复不重试 GL ────────────────────────────────
 async function scenarioB() {
-  console.log('\n== B: mp4 已接管（url=/scene-anim/）时前台恢复不动 GL ==');
+  console.log('\n== B: sceneVideo 在播时前台恢复不动 GL ==');
   const sandbox = makeSandbox({
-    hostSettings: { id: 'sc', betaSceneAnim: true, pauseOnBlur: false },
-    localSelection: { id: 'sc', betaSceneAnim: true, pauseOnBlur: false },
+    hostSettings: { id: 'sc', pauseOnBlur: false },
+    localSelection: { id: 'sc', pauseOnBlur: false },
     session: { [MARK_KEY]: 'contextlost-twice' }, // 崩溃封印在场
-    progress: 100, // 首次轮询即完成 → trySwitch 把层切到 mp4
+    sceneVideo: true, // 内嵌 MP4 → selection.sceneVideo 非空 → 重试守卫拦截
   });
   await boot(sandbox);
   const st = sandbox.__store;
-  const iv = sandbox.__activeInterval();
-  check('B: 前置 — boot 排上了 scene-anim 轮询', !!iv);
-  if (iv) { await iv.fn(); await settle(); } // 渲染完成 → url 切 /scene-anim/
-  const layer = st.byId()['dsh-wallpaper-engine-layer'];
-  check('B: 前置 — 层已切为 mp4 video（url 已离开静态帧）',
-    !!layer && layer.children.some((c) => c.tagName === 'VIDEO'),
-    layer ? 'children=' + layer.children.map((c) => c.tagName).join(',') : 'no layer');
-  // 模拟又一次崩溃封印 + 回前台
-  st.sessionStorage._store[MARK_KEY] = 'contextlost-twice';
   sandbox.__dispatch('focus');
   await settle();
-  check('B: mp4 在播时重试被守卫拦下（封印标记原样保留）',
+  check('B: sceneVideo 在播时重试被守卫拦下（封印标记原样保留）',
     st.sessionStorage._store[MARK_KEY] === 'contextlost-twice',
     'mark=' + st.sessionStorage._store[MARK_KEY]);
+  check('B: 全程零 /scene-anim/ 请求（CPU 渲染路径已移除）',
+    !st.fetchLog.some((u) => String(u).includes('/scene-anim')));
 }
 
 // ── C. 重试只在 contextlost* 且每 token 一次；先取消在途升级 ────────────────
 async function scenarioC() {
   console.log('\n== C: contextlost 前缀过滤 / 每 token 一次 / 取消在途升级 ==');
   const sandbox = makeSandbox({
-    hostSettings: { id: 'sc', betaSceneAnim: true, pauseOnBlur: false },
-    localSelection: { id: 'sc', betaSceneAnim: true, pauseOnBlur: false },
+    hostSettings: { id: 'sc', pauseOnBlur: false },
+    localSelection: { id: 'sc', pauseOnBlur: false },
     session: { [MARK_KEY]: 'render-fatal:boom' }, // 内容性失败
-    progress: 0, // 渲染不完成 → url 停在静态帧（重试路径可达）
   });
   await boot(sandbox);
   const st = sandbox.__store;
-  const bootInterval = sandbox.__activeInterval();
-  check('C: 前置 — boot 排上了 scene-anim 轮询', !!bootInterval);
+  check('C: 前置 — boot 后层停留静态帧（无任何轮询 interval）',
+    !sandbox.__activeInterval());
 
   sandbox.__dispatch('focus'); // 内容性失败 + 回前台
   await settle();
@@ -269,9 +257,10 @@ async function scenarioC() {
   check('C: contextlost 封印被清除并重试（新失败非 contextlost）',
     markAfterRetry === undefined || String(markAfterRetry).indexOf('contextlost') !== 0,
     'mark=' + markAfterRetry);
-  check('C: 重试前取消了 boot 时的在途升级（M-2）',
-    !!bootInterval && bootInterval.cleared === true, 'cleared=' + (bootInterval && bootInterval.cleared));
-  check('C: 重试失败后重新排上 CPU 兜底渲染', !!sandbox.__activeInterval() && sandbox.__activeInterval() !== bootInterval);
+  check('C: 重试失败后停留静态帧（无 CPU 兜底渲染轮询）', !sandbox.__activeInterval());
+  check('C: 全程零 /scene-anim/ 请求',
+    !sandbox.__store.fetchLog.some((u) => String(u).includes('/scene-anim')),
+    sandbox.__store.fetchLog.filter((u) => String(u).includes('/scene-anim')).join(',') || '(none)');
 
   st.sessionStorage._store[MARK_KEY] = 'contextlost-twice'; // 又一次崩溃封印
   sandbox.__bumpTime(60000); // 越过 30s 冷却 → 只剩"每 token 一次"在拦
