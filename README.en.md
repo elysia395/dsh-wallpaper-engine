@@ -11,14 +11,14 @@ A DSH bundle that turns your **Wallpaper Engine** wallpapers into the **backgrou
 > **v0.6.4 keeps reducing the compositing layers**: the repo panel is lazy-mounted when closed, the rope has no permanent filter, and the wallpaper media no longer forces a transform compositing layer by default — whilst **keeping the full frosted glass**. Normal browser tabs are unaffected and keep the full frosted glass + hardware acceleration.
 > The plugin shows a one-time notice (once per version) about this.
 
-It discovers the Wallpaper Engine install on your machine, lists its wallpapers, and renders them behind the DSH chat interface with an iOS-style **liquid glass** effect: Video (`.mp4`) plays live, Web/HTML loads in an iframe, and **Scene wallpapers are re-rendered as full-scene frames by the built-in renderer (object tree / textures / particles / shader effects)**. Since v0.2 it also adds:
+It discovers the Wallpaper Engine install on your machine, lists its wallpapers, and renders them behind the DSH chat interface with an iOS-style **liquid glass** effect: Video (`.mp4`) plays live, Web/HTML loads in an iframe, and **Scene wallpapers render live via WebGL2 (compiling the wallpaper's own official shaders), with an automatic static-image fallback when GL is unavailable**. Since v0.2 it also adds:
 
 - **Modal wallpaper picker** — the thumbnail grid lives in a popup modal, so the settings page stays compact;
 - **Hide / restore (soft delete)** — hide wallpapers you don't want, restore them anytime; no source files are touched;
 - **Playback speed** — six native presets from 0.5x to 2x, instant, no media reload;
 - **Horizontal flip** — mirror the image (video / web / uploaded images);
 - **Custom uploads** — use your own local JPG / PNG / MP4 as a wallpaper, with a configurable storage location and fit modes;
-- **Scene full-scene frames** (v0.6) — Scene wallpapers are fully replayed by a pure-JS scene renderer (object tree / textures / particles / shader effects) instead of being an unusable "not playable" entry.
+- **Scene live GL rendering** (v0.6; the CPU rendering path was removed in a later release) — Scene wallpapers render live in the browser via WebGL2: the client compiles the wallpaper's bundled official shaders (45 official effects + workshop customs), isolating failures per object and disclosing them in settings; falls back to the extractor static image when GL is unavailable.
 - **Liquid-glass settings page** (v0.3.1) — the settings UI is now a **first-level settings page** (following the dsh-web-ui-all skin-center design): the whole page is a customizable liquid-glass card with **accent color** (6 presets + a custom color picker) and **glass transparency** (0–60%). Both apply instantly and persist.
 - **Whole-settings-window liquid glass** (v0.3.2) — one click turns the **entire native DSH settings window** (dialog + left nav + ALL native sections: General / Models / Plugins / …) into liquid glass with your custom accent + transparency. With the「设置窗口液态玻璃」master switch on, the window background, nav active/hover, buttons, switches and links all follow the chosen accent and transparency; off restores the stock look.
 - **Unified glass tuning** (v0.3.3–v0.3.5) — the settings-window glass blur shares the SAME adjustment as the conversation bar: the **玻璃** (glass) slider (0–60 px) drives the blur radius of both the settings window and the composer/bubbles, with an identical saturation/brightness/contrast recipe. A new **玻璃颜色** (glass color) control lets you tint the glass BASE itself (6 presets + custom picker; defaults white in light / deep navy in dark; once picked, both themes use that color) — **配色** styles the interactive elements, **玻璃颜色** styles the glass itself.
@@ -40,48 +40,20 @@ Wallpaper Engine wallpapers come in four types:
 
 | Type | Rendered by | Portable to DSH? |
 |---|---|---|
-| **Scene** | Wallpaper Engine's own 3D engine | ✅ Full-scene frame — a pure-JS scene renderer (object tree / textures / particles / shader effects), see below |
+| **Scene** | Wallpaper Engine's own 3D engine | ✅ Live WebGL2 rendering (official shaders + particles / puppets / sprite sheets), with a static-image fallback, see below |
 | **Video** | a plain `.mp4` file | ✅ Yes — plays in a `<video>` tag |
 | **Web** | a Chromium (`webwallpaper64.exe`) host for HTML | ✅ Yes — loads in an `<iframe>` |
 | **Application** | an injected external window | ❌ No |
 
-A Scene wallpaper's 3D scene is fully replayed by the plugin's **pure-JS scene
-renderer** (`lib/scene-renderer.js`, built from linux-wallpaperengine / repkg
-reverse-engineering): it parses `scene.pkg`'s object tree and renders every
-image layer (with CPU implementations of shader effects like waterwaves /
-waterripple / shake), the puppet skeletal meshes (bind pose), and the particle
-systems (emitters / initializers / operators / sprite drawing). Scene cards carry
-a 「静态帧」 badge in the picker.
-
-> **Expected result**: the renderer outputs a 3840×2160 full-scene frame
-> (background + water + back hair + character + umbrella + particles), close to
-> the original for photographic, illustration and animation-screenshot scenes.
-> On failure (pure shader/procedural scenes, exotic texture formats) it falls
-> back to the older main-texture extractor, then to the workshop preview image
-> (`preview.jpg`) — expected behaviour, not a defect.
+Scene wallpapers render live in the browser via **WebGL2** (`src/scene-gl.js`; the math was calibrated against the wallpaper64.exe reverse engineering and line-audited against linux-wallpaperengine): the server-side gate resolves `scene.pkg` into a static schema (baked animation keyframes / rasterized text bitmaps / puppet mesh payloads) which the client replays deterministically along the timeline. **Effects compile the wallpaper's own official GLSL** (HLSL compat macros + literal fixups; all 45 official effects + workshop customs are allowed, failures isolated per object and disclosed in settings). When GL is unavailable / fails / the GPU crashes, it falls back to the **extractor static image** (multi-layer composite per scene.json, no effects/particles) with a visible degrade banner.
 
 ### Scene rendering: how it works
 
-- **Object tree**: parses `scene.pkg` (PKGV container + LZ4 entry chains) or a
-  loose `scene.json` directory, topologically sorts every object (image /
-  particle / text / sound) by dependencies / parent.
-- **image layers**: loads the material main textures (RGBA8888 / DXT1/3/5 …),
-  positions them in scene coordinates (origin / scale / angle accumulated down
-  the parent chain), and applies alpha / brightness.
-- **puppet meshes**: MDL (MDLV) mesh + bind-pose rasterization (software
-  raster + bilinear UV sampling + alpha compositing), so skeletal models like
-  the character / back hair display correctly.
-- **shader effect chain**: waterwaves (incl. the dual-wave DUALWAVES product) /
-  waterripple / shake are implemented in the CPU with the exact shader math;
-  mask textures are supported.
-- **particle systems**: boxrandom / sphererandom emitters, color / size / alpha /
-  lifetime / velocity / rotation initializers, movement / alphafade / sizechange /
-  turbulence / oscillate* operators, and sprite drawing.
-- **Cache**: results are cached at `~/.dsh-wallpaper-engine/cache/frames/`
-  keyed by `<version>_<path>_<mtime>` (override with `DSH_WE_CACHE_DIR`);
-  workshop updates and renderer upgrades invalidate the frame automatically.
-  First render takes ~3–4s, then near-instant on cache hit.
-
+- **Gate snapshot**: parses `scene.pkg` (PKGV container + LZ4 entry chains) or a loose `scene.json`, whitelist-checks and emits the full schema (object tree / animation keyframes / texture list / degrade list) in one shot.
+- **Effects**: the client compiles the wallpaper's bundled official shaders (combo assembly + `#include` expansion + HLSL→GLSL compat macros); a failing effect only skips that object (failure isolation).
+- **Particles / puppets / sprite sheets**: the particle system (emitters / initializers / operators) is a WebGL port of the CPU semantics; puppets use server-side MDL parsing payloads + client skinning; multi-frame textures cycle by frame-rect UV sampling.
+- **Text**: rasterized server-side into PNG bitmaps at gate time (static values).
+- **Fallback chain**: embedded sceneVideo > live GL > extractor static image (`sf36_` cache keys under `~/.dsh-wallpaper-engine/cache/frames/`, auto-invalidated by mtime); script-bearing scenes and missing items are disclosed via the degrade banner.
 ## How it works
 
 - **Host half** (`lib/index.js`): a Cordis plugin that

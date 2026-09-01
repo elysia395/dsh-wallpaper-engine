@@ -1,5 +1,25 @@
 # Changelog
 
+## Unreleased — 移除 CPU 渲染路径：GL-only + 静态图回退（破坏性变更）
+
+场景壁纸渲染优先级变为 **内嵌视频 > GL 实时 > 静态图**。CPU 软件渲染链
+（we-renderer 引擎 + worker + scene-anim mp4/apng 烘焙，~11.8k 行）全部移除，
+决策与依赖审计记录见 `docs/plan-remove-cpu-render.md`。
+
+- **行为变化**：无 WebGL2 / GPU 崩溃环境从"分钟级 CPU 烘焙 mp4 动画"退化为
+  静态图（提取器多图层拼合）；GL 失败自动回退并显示降级横幅。
+- **配置页 4 开关 → 2**：新增「GL 实时渲染」（默认开，关闭 = 纯静态图）；
+  「未测试特效放行」默认改开；「beta场景动画」「运行壁纸内嵌脚本」
+  「GL 降级渲染」删除（设置键 betaSceneAnim/enableSceneScripts/sceneGLDegrade
+  静默丢弃，等价全员升级 GL on）。
+- **内嵌脚本不再支持**：GL 快照式架构从不加载脚本（时钟/时段类脚本冻结为
+  存盘值，横幅披露"GL 渲染不支持脚本"）。
+- **性能**：不再有分钟级后台 CPU 光栅化与 ffmpeg 烘焙；启动时一次性清扫
+  旧 scene-anim 缓存产物（san_* / *.prog）。
+- 视频壁纸转码（抽帧/进度条）、内嵌视频场景、壁纸库缩略图（preview.jpg）
+  均不受影响。
+
+
 ## Unreleased — Linux/Intel GPU 崩溃链加固
 
 实测复现路径：窗口被其它全屏应用遮挡（X11 下 Chromium 不做遮挡检测，页面

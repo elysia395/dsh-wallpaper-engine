@@ -6,7 +6,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import url from 'node:url';
 import { parsePkg, readPkgEntry, decodeTex } from '../../lib/pkg-extract.js';
-import { encodePng } from '../../lib/scene-renderer.js';
+import { encodePng } from '../../lib/we-renderer/canvas.js';
 
 const HERE = path.dirname(url.fileURLToPath(import.meta.url));
 const PKG = process.argv[2] || '/home/beef/Pictures/WallpaperEngine/3295448069/scene.pkg';

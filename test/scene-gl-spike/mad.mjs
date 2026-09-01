@@ -3,7 +3,7 @@
 // 输出: 全局 MAD（0..255 RGB 均值）+ 16 行分段 MAD + 全局偏移搜索（±3px，亚像素拟合）
 // 验收: MAD ≤2 通过 / >5 失败 / 之间人眼仲裁；全局偏移 <0.5px（无整体上移断言）
 import fs from 'node:fs';
-import { decodePngBuffer } from '../../lib/scene-renderer.js';
+import { decodePngBuffer } from '../../lib/we-renderer/canvas.js';
 
 const [glPath, refPath] = process.argv.slice(2);
 if (!glPath || !refPath) { console.error('usage: mad.mjs <gl.png> <ref.png>'); process.exit(2); }
