@@ -285,11 +285,30 @@ dsh plugin --profile web add dsh-plugin-wallpaper-engine
 
 ![Settings UI overview](docs/images/features.png)
 
-> The settings page: the liquid-glass card (外观 accent/transparency), the current-wallpaper card, plus the 自定义壁纸 / 轮播列表 / 壁纸效果 sections.
+> The settings page: the liquid-glass card with six tabs (壁纸 / 外观 / 字体 / 吉祥物 / 效果 / 高级).
 
 ![Wallpaper picker modal](docs/images/wallpaper-library.png)
 
 > The picker modal: browse every wallpaper thumbnail, batch-hide, and restore from the hidden tab.
+
+### Six adjustment tabs
+
+The settings page and the wallpaper-repo drawer share the same **top category
+tabs** — every control is grouped into one of six domains, each tab showing only
+the 3–8 controls that belong there instead of a thirty-item single column:
+
+| Tab | Contents |
+|---|---|
+| **壁纸** (wallpaper, default) | current-wallpaper card (vinyl + picker + pause/close/refresh), auto-rotation, custom wallpapers |
+| **外观** (appearance) | accent, glass color, glass transparency, settings-window glass, sidebar glass & content surface |
+| **字体** (typography) | master switch + color / weight / family |
+| **吉祥物** (mascot) | visibility switch, form cards (artwork doubles as a live preview), size slider |
+| **效果** (effects) | wallpaper blur / brightness / contrast / saturate / scrim / border / glass, playback speed, fps cap, fit, flip, occlusion pause (an empty state guides you to pick a wallpaper first) |
+| **高级** (advanced) | compact layout, Edge compatibility |
+
+The pill indicator slides between tabs; the settings page and the drawer keep
+independent tab state (remembered in `localStorage`, never written to the config
+file). Long explanations moved into tooltips — each row keeps a one-line hint.
 
 ### Hide & restore (soft delete)
 
@@ -321,8 +340,8 @@ mirroring Wallpaper Engine's conservative first-run stance.
 
 ### Card style & vinyl record
 
-- **紧凑布局 (compact layout)**: a sliding toggle at the top of the settings
-  page. ON gives the **CD-rack** look — cards stack like CD jewel cases
+- **紧凑布局 (compact layout)**: a sliding toggle in the **高级** (advanced) tab.
+  ON gives the **CD-rack** look — cards stack like CD jewel cases
   (each row's top covers the row above, vertical only), hovering scales the
   card up and brings it to the front, the grid is tighter (~7 cards per row)
   and shows everything on ONE page with no pagination. OFF is the regular
@@ -344,11 +363,11 @@ mirroring Wallpaper Engine's conservative first-run stance.
 
 ### Playback speed & horizontal flip
 
-With a video wallpaper selected, the **壁纸效果** area shows the **倍速** presets (0.5x / 0.75x / 1x / 1.25x / 1.5x / 2x) — driven by the browser's native `playbackRate`, instant, no reload or black flash (wallpaper videos are muted, so there is no audio to keep in sync). The **水平翻转** toggle mirrors the image via CSS `scaleX(-1)` — it works for video, web, and uploaded images/videos alike, with zero main-thread cost.
+With a video wallpaper selected, the **效果** (effects) tab shows the **倍速** presets (0.5x / 0.75x / 1x / 1.25x / 1.5x / 2x) — driven by the browser's native `playbackRate`, instant, no reload or black flash (wallpaper videos are muted, so there is no audio to keep in sync). The **水平翻转** toggle mirrors the image via CSS `scaleX(-1)` — it works for video, web, and uploaded images/videos alike, with zero main-thread cost.
 
 ### Occlusion pause (battery-saving trio)
 
-Like Wallpaper Engine's "pause when covered" — the main reason desktop WE is ~0 GPU most of the time. Browsers cannot detect window occlusion directly, so the plugin uses the three closest signals (toggles in the **壁纸效果** area, instant + persisted):
+Like Wallpaper Engine's "pause when covered" — the main reason desktop WE is ~0 GPU most of the time. Browsers cannot detect window occlusion directly, so the plugin uses the three closest signals (toggles in the **效果** tab, instant + persisted):
 
 | Toggle | Default | Behavior |
 |---|---|---|
@@ -389,13 +408,13 @@ The **自定义壁纸** section uploads local images (JPG / PNG) or videos (MP4)
 
 ### Automatic rotation (轮播列表)
 
-Rotation runs over **user-defined carousel lists** (轮播列表). Create any number of lists with **新建**, pick Video/Web wallpapers into each from the inventory, give each list its own switch interval (1, 5, 10, 30, 60 or 120 minutes) and order (顺序/随机), then enable **自动轮转** on the list you want active. Lists are persisted in your browser's `localStorage` and are fully client-side — rotation never depends on Wallpaper Engine's own `config.json` playlist paths.
+Rotation runs over **user-defined carousel lists** (the 自动轮播 group in the **壁纸** tab). Create any number of lists with **新建**, pick Video/Web wallpapers into each from the inventory, give each list its own switch interval (1, 5, 10, 30, 60 or 120 minutes) and order (顺序/随机), then enable **自动轮转** on the list you want active. Lists are persisted in your browser's `localStorage` and are fully client-side — rotation never depends on Wallpaper Engine's own `config.json` playlist paths.
 
 At least two playable Video/Web wallpapers per list are required; manual changes reset the next timer; each list keeps its own cadence, so you can have one list switching every 5 minutes and another every 30. On first run, the first playable Wallpaper Engine playlist is imported automatically as a list so the feature works out of the box; **从 WE 播放列表导入** inside the editor imports any other playlist into the list being edited. Application wallpapers cannot be embedded in the web UI, so they are automatically excluded from rotation and hidden from the picker.
 
 ### Liquid-glass appearance (whole settings window + accent + transparency)
 
-The **外观** (appearance) area at the top of the settings page controls the look
+The **外观** (appearance) tab controls the look
 of the **entire native DSH settings window** (following the dsh-web-ui-all
 skin-center design):
 
@@ -426,7 +445,7 @@ skin-center design):
 
 ### Mascot (chat pull-cord)
 
-At the bottom of the **外观** (appearance) area is a mascot control group for the chat **pull-cord** (a draggable rope pinned to the top edge; pulling it down slides out the **wallpaper repo** drawer):
+The **吉祥物** (mascot) tab controls the chat **pull-cord** (a draggable rope pinned to the top edge; pulling it down slides out the **wallpaper repo** drawer). The **form** picker renders as cards — each card draws the actual artwork scaled by the current **吉祥物大小** slider, so choosing a form and judging its size happen in one place:
 
 | Control | What it does | Range | Default |
 |---|---|---|---|
@@ -438,7 +457,7 @@ At the bottom of the **外观** (appearance) area is a mascot control group for 
 
 ### Custom typography
 
-The settings page has a dedicated **字体** (typography) section placed before **外观**. The **master switch defaults to off** — the UI keeps the stock dsh typography with zero injected styling; turn it on to apply the three knobs below. Every change applies instantly and persists:
+The **字体** (typography) tab holds the dedicated typography section. The **master switch defaults to off** — the UI keeps the stock dsh typography with zero injected styling; turn it on to apply the three knobs below. Every change applies instantly and persists (the adjustment panel's own labels always stay in theme ink — they are deliberately excluded from the 字体颜色 tint to keep the panel readable):
 
 | Control | What it does | Range / options | Default |
 |---|---|---|---|
@@ -451,7 +470,7 @@ The settings page has a dedicated **字体** (typography) section placed before 
 
 ### The seven sliders
 
-While a wallpaper is active, seven sliders let you tune how it blends with the UI:
+The **效果** (effects) tab — available while a wallpaper is active — offers seven sliders to tune how it blends with the UI:
 
 | Slider | What it controls | Range | Default |
 |---|---|---|---|
@@ -461,7 +480,7 @@ While a wallpaper is active, seven sliders let you tune how it blends with the U
 | **饱和度** (saturate) | Wallpaper saturation (media filter) | 0–200 % | 100 % |
 | **暗化** (scrim) | Darkens the overlay between wallpaper and text | 0–90 % | 25 % |
 | **边框** (border) | Raises border/divider contrast | 0–90 % | 35 % |
-| **玻璃** (glass) | Blur radius of the frosted-glass panels (composer, bubbles) | 0–60 px | 24 |
+| **玻璃** (glass) | Blur radius of the frosted-glass panels (composer, bubbles) | 0–60 px | 16 |
 
 > **Light vs. dark mode** — Wallpapers differ wildly in colour and brightness, so
 > there is no one mode that fits every wallpaper. Switch DSH's theme between
@@ -495,7 +514,7 @@ The liquid-glass effect is specifically adapted for dsh-better-sidebar's panels
 the conversation area share the same wallpaper + scrim background and read as one
 continuous surface.
 
-The **外观** section exposes a set of **sidebar glass** controls independent of
+The **外观** tab exposes a set of **sidebar glass** controls independent of
 both the conversation glass and the active wallpaper. Even with no Wallpaper
 Engine wallpaper selected, the sidebar can be tinted and frosted over the stock
 DSH surface or another background source. These controls target only the

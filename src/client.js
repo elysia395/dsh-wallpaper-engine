@@ -1817,6 +1817,22 @@ function applyFontStyles() {
       '  font-weight: revert !important;',
       '  font-family: revert !important;',
       '}',
+      /* 3) 插件面板铬字还原：调节面板（设置页 / 壁纸仓库抽屉 / 选择弹窗）是
+            控件而非内容 —— 标签/读数/页签保持主题墨色（可读性优先），用户的
+            字体「颜色」只作用于聊天内容；字重/字族仍全局生效。显式墨色
+            token + 特异性 (0,2,1) 压过规则 1 的 (0,0,1)，不依赖 revert 语义。 */
+      'body :is(.we-picker, .we-picker__modal, .we-repo-panel) '
+        + ':is(.we-picker__ctl-label,.we-picker__card-name,.we-picker__current-title,'
+        + '.we-picker__btn,.we-picker select,.we-picker__text,.we-tabs__tab,'
+        + '.we-repo-panel__title,.we-picker__mascot-name,.we-picker__empty-title) {',
+      '  color: var(--dsw-alias-label-primary, inherit) !important;',
+      '}',
+      'body :is(.we-picker, .we-picker__modal, .we-repo-panel) '
+        + ':is(.we-picker__hint,.we-picker__ctl-hint,.we-picker__value,'
+        + '.we-picker__section-label,.we-picker__card-desc,.we-picker__card-badge,'
+        + '.we-picker__current-meta,.we-picker__uploads-name,.we-picker__uploads-path) {',
+      '  color: var(--dsw-alias-label-tertiary, rgba(128, 128, 128, 0.75)) !important;',
+      '}',
     ].join('\n');
   } catch { /* ignore */ }
 }
@@ -1979,6 +1995,27 @@ function clearEffects() {
   lastScrimCss = "";
 }
 
+// ── Picker tabs ─────────────────────────────────────────────────────────────
+// 调节面板的信息架构：六个域互斥页签，每页只留相关控件 —— 替代旧版三十个
+// 控件的单列长滚动。最后停留的页签记在 localStorage（仅 UI 状态，不进
+// config.json，也不需要 sanitize / serialize）。
+const PICKER_TAB_KEY = "dsh-wallpaper-engine:picker-tab";
+const PICKER_TABS = [
+  { id: "wallpaper", label: "壁纸" },
+  { id: "appearance", label: "外观" },
+  { id: "font", label: "字体" },
+  { id: "mascot", label: "吉祥物" },
+  { id: "effects", label: "效果" },
+  { id: "advanced", label: "高级" },
+];
+function readSavedPickerTab() {
+  try {
+    const v = localStorage.getItem(PICKER_TAB_KEY);
+    if (v && PICKER_TABS.some((t) => t.id === v)) return v;
+  } catch { /* ignore */ }
+  return "wallpaper";
+}
+
 // ── Settings picker ─────────────────────────────────────────────────────────
 // `key` is only needed when a SliderRow sits inside a conditionally-rendered
 // ARRAY (the sidebar-glass group) — React requires keys there.
@@ -2000,6 +2037,80 @@ function SliderRow(label, min, max, step, value, onInput, suffix, key) {
       onChange: (e) => onInput(Number(e.target.value)),
     }),
     React.createElement("span", { className: "we-picker__hint we-picker__value" }, suffix),
+  );
+}
+
+// ── Row builders for the tabbed picker ──────────────────────────────────────
+// 设置行统一语法：左「标签(+一句话说明)」、右控件；长说明走 title tooltip，
+// 不再整行铺陈强调色文字 —— 面板降噪的第一步。行内文字颜色一律走主题墨色
+// token（.we-picker 上的 --we-ink*），强调色只留给选中态与控件激活态。
+
+// 行左则：标签 + 可选一句话说明。
+function ctlText(label, hint, tooltip) {
+  return React.createElement("div", { className: "we-picker__ctl-text" },
+    React.createElement("span", {
+      className: "we-picker__ctl-label",
+      title: tooltip || undefined,
+    }, label),
+    hint ? React.createElement("span", { className: "we-picker__ctl-hint" }, hint) : null,
+  );
+}
+
+// 胶囊开关：统一替换原生 checkbox（原生勾选框是面板里最廉价的控件）。
+// input 视觉隐藏但可聚焦，焦点环落在 track 上（键盘可达）。
+function Toggle(props) {
+  return React.createElement("label", { className: "we-picker__switch", title: props.title },
+    React.createElement("input", {
+      type: "checkbox",
+      checked: props.checked,
+      disabled: props.disabled === true,
+      onChange: props.onChange,
+      "aria-label": props.label,
+    }),
+    React.createElement("span", { className: "we-picker__switch-track" },
+      React.createElement("span", { className: "we-picker__switch-thumb" }),
+    ),
+  );
+}
+
+// 开关行：标签(+说明)在左，胶囊开关在右。
+function switchRow(label, checked, onChange, opts) {
+  opts = opts || {};
+  return React.createElement("div", { className: "we-picker__ctl", key: opts.key },
+    ctlText(label, opts.hint, opts.tooltip),
+    Toggle({ checked: checked, onChange: onChange, label: label, title: opts.tooltip, disabled: opts.disabled }),
+  );
+}
+
+// 色板行：标签在左，预设圆点 + 自定义取色在右（窄容器自动换行）。
+// aria-label 保持「<标签> <hex>」格式（verify 断言依赖）；opts.auto 用于
+// 「跟随主题」这类重置项，opts.colorValue 允许自定义取色器的回退显示值。
+function swatchRow(label, presets, value, onPick, opts) {
+  opts = opts || {};
+  return React.createElement("div", { className: "we-picker__ctl we-picker__ctl--wrap", key: opts.key },
+    ctlText(label, opts.hint, opts.tooltip),
+    React.createElement("div", { className: "we-picker__swatches", role: "group", "aria-label": label },
+      opts.auto || null,
+      presets.map((hex) => React.createElement("button", {
+        key: hex,
+        className: "we-picker__swatch" + (value === hex ? " we-picker__swatch--active" : ""),
+        type: "button",
+        style: { background: hex },
+        title: hex,
+        onClick: () => onPick(hex),
+        "aria-label": label + " " + hex,
+      })),
+      React.createElement("label", { className: "we-picker__swatch-custom" },
+        React.createElement("input", {
+          type: "color",
+          value: opts.colorValue || value || "#ffffff",
+          onInput: (e) => onPick(e.target.value),
+          onChange: (e) => onPick(e.target.value),
+          title: "自定义" + label,
+        }),
+        React.createElement("span", { className: "we-picker__hint" }, "自定义"),
+      ),
+    ),
   );
 }
 
@@ -2278,6 +2389,16 @@ function WallpaperPicker(props) {
     return () => { document.body.style.overflow = prev; };
   }, [sel.pickerOpen]);
 
+  // ── 页签状态：调节面板分六个域（壁纸/外观/字体/吉祥物/效果/高级），每份
+  //    实例独立记忆（设置页与仓库抽屉互不影响）；只存 localStorage，不进
+  //    config.json。useState 必须在下方早退分支之前调用（Rules of Hooks）。 ──
+  const [activeTab, setActiveTab] = React.useState(readSavedPickerTab);
+  const switchTab = (id) => {
+    if (!PICKER_TABS.some((t) => t.id === id) || id === activeTab) return;
+    setActiveTab(id);
+    try { localStorage.setItem(PICKER_TAB_KEY, id); } catch { /* ignore */ }
+  };
+
   if (!sel.loaded) {
     return React.createElement("div", { className: "we-picker" },
       React.createElement("span", { className: "we-picker__hint" }, "扫描 Wallpaper Engine…"));
@@ -2355,6 +2476,725 @@ function WallpaperPicker(props) {
       }, "下一页 ›"),
     );
 
+  // ── 页签面板内容（函数声明提升，renderActiveTab 在 return 里先调用）──────
+  function renderWallpaperTab() {
+    return React.createElement(React.Fragment, null,
+      // ── 当前壁纸: vinyl record beside the selection, in both card styles. ──
+      React.createElement("div", { className: "we-picker__section" },
+        React.createElement("div", { className: "we-picker__section-head" },
+          React.createElement("span", { className: "we-picker__section-label" }, "当前壁纸"),
+        ),
+        React.createElement("div", { className: "we-picker__current" },
+          React.createElement(VinylRecord, {
+            cover: current && current.preview, title: current ? current.title : "",
+            playing: sel.playing && Boolean(sel.url),
+          }),
+          React.createElement("div", { className: "we-picker__current-info" },
+            React.createElement("div", { className: "we-picker__current-title", title: current ? current.title : "" },
+              sel.id && current ? current.title : "未选择壁纸"),
+            React.createElement("div", { className: "we-picker__current-meta" },
+              current
+                ? ({ video: "视频壁纸", web: "网页壁纸", image: "图片壁纸", scene: "场景壁纸（静态帧）" }[current.type] || "壁纸") + (sel.playing ? " · 播放中" : " · 已暂停")
+                : "尚未选择壁纸"),
+          ),
+          React.createElement("button", {
+            className: "we-picker__btn we-picker__btn--primary", type: "button",
+            ref: (el) => { pickerOpener = el; },
+            onClick: () => {
+              selection.pickerOpen = true;
+              selection.modalView = "normal";
+              pickerFocusPending = true; // 打开后焦点落入模态框（见 modalInitialFocus）
+              emit();
+            },
+          }, "选择壁纸"),
+        ),
+        // Playback controls (wallpaper-independent; the thumbnail grid lives in
+        // the modal above, so these stay within reach).
+        React.createElement("div", { className: "we-picker__row" },
+          React.createElement("button", {
+            className: "we-picker__btn", type: "button",
+            onClick: onTogglePlay, disabled: !sel.url,
+          }, sel.playing ? "暂停" : "播放"),
+          React.createElement("button", {
+            className: "we-picker__btn", type: "button",
+            onClick: onClear, disabled: !sel.id,
+          }, "关闭"),
+          React.createElement("button", {
+            className: "we-picker__btn", type: "button",
+            onClick: onRefresh, disabled: sel.loading,
+          }, sel.loading ? "刷新中…" : "刷新"),
+        ),
+      ),
+      // ── 自动轮播（原「轮播列表」）: user-defined carousel lists, each with
+      //    its own wallpaper set, interval and order. Fully client-side. ──
+      React.createElement("div", { className: "we-picker__section" },
+        React.createElement("div", { className: "we-picker__section-head" },
+          React.createElement("span", { className: "we-picker__section-label" }, "自动轮播"),
+        ),
+        React.createElement("div", { className: "we-picker__row we-picker__playlist-row" },
+        React.createElement("select", {
+          className: "we-picker__playlist-select",
+          value: sel.rotationGroupId,
+          onChange: onGroupChange,
+          disabled: groups.length === 0,
+          "aria-label": "轮播列表",
+        },
+        React.createElement("option", { value: "" }, groups.length ? "— 选择轮播列表 —" : "— 暂无轮播列表 —"),
+        ...groups.map((g) => React.createElement("option", {
+          key: g.id, value: g.id,
+        }, g.name + "（" + groupWallpapers(g).length + " 可播放 · " + g.interval + " 分钟）")),
+        ),
+        React.createElement("button", {
+          className: "we-picker__btn", type: "button",
+          onClick: startCreateGroup,
+        }, "新建"),
+        React.createElement("button", {
+          className: "we-picker__btn", type: "button",
+          onClick: () => startEditGroup(sel.rotationGroupId),
+          disabled: !sel.rotationGroupId,
+        }, "编辑"),
+        React.createElement("button", {
+          className: "we-picker__btn", type: "button",
+          onClick: onDeleteGroup,
+          disabled: !sel.rotationGroupId,
+        }, "删除"),
+      ),
+      editing && React.createElement("div", { className: "we-picker__editor" },
+        React.createElement("div", { className: "we-picker__row" },
+          React.createElement("span", { className: "we-picker__hint we-picker__label" }, "名称"),
+          React.createElement("input", {
+            className: "we-picker__text", type: "text",
+            value: editing.name,
+            "aria-label": "轮播列表名称",
+            onInput: (e) => { editing.name = e.target.value; emit(); },
+          }),
+        ),
+        React.createElement("div", { className: "we-picker__row" },
+          React.createElement("span", { className: "we-picker__hint we-picker__label" }, "间隔"),
+          React.createElement("select", {
+            className: "we-picker__rotation-interval",
+            value: String(editing.interval),
+            onChange: (e) => { editing.interval = clampNum(Number(e.target.value), 1, 1440, DEFAULTS.rotationInterval); emit(); },
+            "aria-label": "轮播间隔",
+          },
+          ...INTERVALS.map((minutes) =>
+            React.createElement("option", { key: minutes, value: String(minutes) }, minutes + " 分钟"),
+          )),
+          React.createElement("span", { className: "we-picker__hint we-picker__label" }, "顺序"),
+          React.createElement("select", {
+            className: "we-picker__playlist-select",
+            value: editing.order,
+            onChange: (e) => { editing.order = e.target.value; emit(); },
+            "aria-label": "轮播顺序",
+          },
+          React.createElement("option", { value: "sequence" }, "顺序"),
+          React.createElement("option", { value: "random" }, "随机"),
+          ),
+        ),
+        React.createElement("div", { className: "we-picker__editor-grid" },
+          playableInventory().length === 0
+            ? React.createElement("span", { className: "we-picker__hint" }, "没有可播放的壁纸")
+            : (cdMode ? playableInventory() : editorPageView.items).map((w) => {
+                const checked = editing.wallpaperIds.indexOf(w.id) >= 0;
+                return React.createElement("button", {
+                  key: w.id,
+                  className: "we-picker__editor-card" + (checked ? " we-picker__editor-card--checked" : ""),
+                  type: "button",
+                  title: w.title,
+                  "aria-pressed": checked,
+                  "aria-label": w.title,
+                  onClick: () => {
+                    const i = editing.wallpaperIds.indexOf(w.id);
+                    if (i >= 0) editing.wallpaperIds.splice(i, 1);
+                    else editing.wallpaperIds.push(w.id);
+                    emit();
+                  },
+                },
+                w.preview
+                  ? React.createElement("img", {
+                      src: w.preview, alt: w.title, loading: "lazy",
+                      onError: (e) => { e.target.style.display = "none"; },
+                              onLoad: (e) => { e.target.style.opacity = "1"; },
+                    })
+                  : React.createElement("span", { className: "we-picker__card-placeholder" }, "无预览"),
+                checked && React.createElement("span", { className: "we-picker__editor-check" }, "✓"),
+                );
+              }),
+        ),
+        !cdMode && editorPageView.pages > 1 && pagerRow(
+          playableInventory().length, editorPageView.page, editorPageView.pages,
+          () => { selection.editorPage--; emit(); },
+          () => { selection.editorPage++; emit(); },
+        ),
+        React.createElement("div", { className: "we-picker__row" },
+          React.createElement("span", { className: "we-picker__hint" }, "已选 " + editing.wallpaperIds.length + " 个"),
+          sel.inventory.playlists.length > 0 && React.createElement("select", {
+            className: "we-picker__playlist-select",
+            value: "",
+            onChange: (e) => {
+              const p = sel.inventory.playlists.find((pl) => pl.id === e.target.value);
+              if (p) importPlaylistIntoDraft(p);
+            },
+          },
+          React.createElement("option", { value: "" }, "从 WE 播放列表导入…"),
+          ...sel.inventory.playlists.map((p) => React.createElement("option", {
+            key: p.id, value: p.id,
+          }, p.name + "（" + (p.portableCount || 0) + " 可播放）")),
+          ),
+        ),
+        React.createElement("div", { className: "we-picker__row" },
+          React.createElement("button", {
+            className: "we-picker__btn", type: "button",
+            onClick: saveEditingGroup,
+          }, "保存"),
+          React.createElement("button", {
+            className: "we-picker__btn", type: "button",
+            onClick: cancelEditGroup,
+          }, "取消"),
+        ),
+      ),
+      React.createElement("div", { className: "we-picker__ctl" },
+        ctlText("自动轮转",
+          !sel.rotationGroupId
+            ? "请先选择或新建一个轮播列表"
+            : playableCount < 2
+              ? "当前列表至少需要 2 个可播放壁纸"
+              : "每 " + (group ? group.interval : DEFAULTS.rotationInterval) + " 分钟切换一次"),
+        React.createElement("div", { className: "we-picker__ctl-side" },
+          React.createElement("select", {
+            className: "we-picker__rotation-interval",
+            value: String(group ? group.interval : DEFAULTS.rotationInterval),
+            onChange: onGroupInterval,
+            disabled: !sel.rotationEnabled || !sel.rotationGroupId || playableCount < 2,
+            "aria-label": "轮转间隔",
+          },
+          ...INTERVALS.map((minutes) =>
+            React.createElement("option", { key: minutes, value: String(minutes) }, minutes + " 分钟"),
+          )),
+          Toggle({
+            checked: sel.rotationEnabled,
+            onChange: onToggleRotation,
+            label: "自动轮转",
+            disabled: !sel.rotationGroupId || playableCount < 2,
+            title: "按列表顺序/随机自动切换壁纸",
+          }),
+        ),
+      ),
+      ),
+      // ── 自定义壁纸: local JPG/PNG/MP4 as wallpapers. Files are written by the
+      //    host into its plugin-managed directory and served through the same
+      //    media/preview routes (read-A storage: survives restarts, no quota
+      //    limits). Uploads merge into the inventory on the host side. ──
+      React.createElement("div", { className: "we-picker__section" },
+        React.createElement("div", { className: "we-picker__section-head" },
+          React.createElement("span", { className: "we-picker__section-label" }, "自定义壁纸"),
+        ),
+        React.createElement("div", { className: "we-picker__uploads" },
+        // Storage location — users can point uploads at a non-system drive
+        // (most people don't want wallpaper files piling up on C:). The host
+        // persists the choice and migrates existing files on change.
+        React.createElement("div", { className: "we-picker__row" },
+          React.createElement("span", { className: "we-picker__hint we-picker__label" }, "存储位置"),
+          React.createElement("span", {
+            className: "we-picker__uploads-path",
+          }, sel.inventory.uploadDir || "—"),
+          React.createElement("button", {
+            className: "we-picker__btn", type: "button",
+            disabled: sel.uploading,
+            onClick: () => {
+              selection.editingUploadDir = true;
+              selection.uploadDirDraft = sel.inventory.uploadDir || "";
+              emit();
+            },
+          }, "更改"),
+        ),
+        sel.editingUploadDir && React.createElement("div", { className: "we-picker__row" },
+          React.createElement("input", {
+            className: "we-picker__text", type: "text",
+            value: selection.uploadDirDraft,
+            placeholder: "绝对路径，如 D:\\MyWallpapers",
+            onInput: (e) => { selection.uploadDirDraft = e.target.value; emit(); },
+            onKeyDown: (e) => {
+              if (e.key === "Enter") changeUploadDir(selection.uploadDirDraft, true);
+              if (e.key === "Escape") { selection.editingUploadDir = false; emit(); }
+            },
+          }),
+          React.createElement("button", {
+            className: "we-picker__btn", type: "button",
+            disabled: sel.uploading,
+            onClick: () => changeUploadDir(selection.uploadDirDraft, true),
+          }, "保存"),
+          React.createElement("button", {
+            className: "we-picker__btn", type: "button",
+            onClick: () => { selection.editingUploadDir = false; emit(); },
+          }, "取消"),
+        ),
+        React.createElement("div", { className: "we-picker__row" },
+          React.createElement("span", { className: "we-picker__hint" },
+            "已有文件会迁移到新位置"),
+          React.createElement("span", { className: "we-picker__hint" },
+            "支持 ~ 表示用户主目录"),
+        ),
+        React.createElement("div", { className: "we-picker__row" },
+          React.createElement("span", { className: "we-picker__hint we-picker__label" }, "自定义"),
+          React.createElement("input", {
+            className: "we-picker__file", type: "file",
+            accept: ".jpg,.jpeg,.png,.mp4",
+            disabled: sel.uploading,
+            onChange: (e) => {
+              const f = e.target.files && e.target.files[0];
+              if (f) uploadWallpaperFile(f);
+              e.target.value = "";
+            },
+          }),
+          sel.uploading && React.createElement("span", { className: "we-picker__hint" }, "上传中…"),
+        ),
+        sel.uploadError && React.createElement("div", { className: "we-picker__error" }, sel.uploadError),
+        sel.uploadNote && React.createElement("div", { className: "we-picker__note" }, sel.uploadNote),
+        React.createElement("div", { className: "we-picker__row" },
+          React.createElement("span", { className: "we-picker__hint" }, "已上传 " + uploadedList.length + " 个"),
+          React.createElement("span", { className: "we-picker__hint" }, "格式仅限 JPG / PNG / MP4"),
+        ),
+        uploadedList.length > 0 && React.createElement("div", { className: "we-picker__uploads-list" },
+          uploadedList.map((w) => React.createElement("div", { key: w.id, className: "we-picker__uploads-item" },
+            React.createElement("span", { className: "we-picker__uploads-name", title: w.title }, w.title),
+            React.createElement("span", { className: "we-picker__hint" }, w.type === "video" ? "MP4" : "图片"),
+            React.createElement("button", {
+              className: "we-picker__btn", type: "button",
+              disabled: sel.uploading,
+              onClick: () => {
+                if (!window.confirm("移除自定义壁纸「" + w.title + "」？此操作会删除本地文件，且不可恢复。")) return;
+                removeUploadWallpaper(w.id);
+              },
+            }, "移除"),
+          )),
+        ),
+        ),
+      ),
+      React.createElement("div", { className: "we-picker__row" },
+        React.createElement("span", { className: "we-picker__hint" },
+          (group
+            ? "列表「" + group.name + "」：" + group.wallpaperIds.length + " 项 · " + playableCount + " 可播放 · 每 " + group.interval + " 分钟 · " + (group.order === "random" ? "随机" : "顺序")
+            : playableList.length + " 个可播放壁纸") +
+          (sel.rotationEnabled ? " · 自动轮转中" : "")),
+      ),
+    );
+  }
+
+  function renderAppearanceTab() {
+    return React.createElement(React.Fragment, null,
+      // ── 主题：配色（accent）+ 玻璃基底（颜色/透明度）──
+      React.createElement("div", { className: "we-picker__section" },
+        React.createElement("div", { className: "we-picker__section-head" },
+          React.createElement("span", { className: "we-picker__section-label" }, "主题"),
+        ),
+        swatchRow("配色", ACCENT_PRESETS, sel.accent, onAccent, { key: "accent" }),
+        // 玻璃颜色: the settings-window glass BASE tint. Defaults keep the stock
+        // look (white light / deep navy dark); picking any preset or a custom
+        // color tints the whole window glass in BOTH themes.
+        swatchRow("玻璃颜色", GLASS_COLOR_PRESETS, sel.glassColor, onGlassColor, { key: "glass-color" }),
+        SliderRow("玻璃透明度", 0, 60, 5, sel.glassAlpha, onGlassAlpha, sel.glassAlpha + "%"),
+      ),
+      // ── 窗口与侧栏：两套液态玻璃总开关，细节控件缩进一级并随开关显隐 ──
+      React.createElement("div", { className: "we-picker__section" },
+        React.createElement("div", { className: "we-picker__section-head" },
+          React.createElement("span", { className: "we-picker__section-label" }, "窗口与侧栏"),
+        ),
+        // 设置窗口液态玻璃 master switch: turns the WHOLE native settings window
+        // (nav + every native section, not just this page) into liquid glass with
+        // the accent + transparency above; off restores the stock shell look.
+        switchRow("设置窗口液态玻璃", sel.glassWindow, (e) => {
+          selection.glassWindow = e.target.checked;
+          persistSelection();
+          emit();
+        }, {
+          key: "window-glass",
+          hint: "整个设置窗口跟随配色与透明度",
+          tooltip: "整个设置窗口（含 General / 模型 / 插件等全部原生分区）跟随配色与透明度；关闭则恢复原生样式",
+        }),
+        // 侧栏玻璃（dsh-better-sidebar 适配）：与设置窗口玻璃同级的一套独立细粒度
+        // 控制 —— 总开关 + 专用模糊 + 专用透明度 + 玻璃基底色调，全部只作用于
+        // dsh-better-sidebar 子树，不动会话玻璃（玻璃 / 玻璃透明度）的设置。
+        // 仅在 host 检测到 dsh-better-sidebar 已安装且启用时显示（sidebarPresent）。
+        // 开关本体 + 一句话说明始终显示；细节滑块以「侧栏液态玻璃」开关为前提
+        // —— 关闭时隐藏，开启后随 emit 重渲染实时出现。
+        sel.sidebarPresent && switchRow("侧栏液态玻璃", sel.sidebarGlass, (e) => {
+          selection.sidebarGlass = e.target.checked;
+          persistSelection();
+          emit();
+        }, {
+          key: "sidebar-glass-toggle",
+          hint: "dsh-better-sidebar 侧栏毛玻璃适配",
+          tooltip: "dsh-better-sidebar 侧栏（文件 / 终端 / Git 等面板）的毛玻璃适配；关闭则恢复其原生外观",
+        }),
+        sel.sidebarPresent && sel.sidebarGlass && [
+        SliderRow("侧栏模糊", 0, 200, 1, sel.sidebarBlur, onSidebarBlur, sel.sidebarBlur + "px", "sb-blur"),
+        SliderRow("侧栏透明度", 0, 200, 1, sel.sidebarAlpha, onSidebarAlpha, sel.sidebarAlpha + "%", "sb-alpha"),
+        swatchRow("侧栏玻璃颜色", GLASS_COLOR_PRESETS, sel.sidebarColor, onSidebarColor, { key: "sb-color" }),
+        // 内容面（编辑器 / 终端）近不透明玻璃底：透明度 + 底色。固定调色板
+        // （语法高亮 / ANSI）为不透明底设计，全透毛玻璃下注释灰不可读；这里
+        // 在"玻璃感"与"可读性"之间取平衡——透明度越大越透，底色空 = 跟随主题。
+        SliderRow("内容面透明度", 0, 80, 5, sel.sidebarContentAlpha, onSidebarContentAlpha, sel.sidebarContentAlpha + "%", "content-alpha"),
+        swatchRow("内容面底色", GLASS_COLOR_PRESETS, sel.sidebarContentColor, onSidebarContentColor, {
+          key: "content-color",
+          auto: React.createElement("button", {
+            key: "auto",
+            className: "we-picker__swatch we-picker__swatch--auto" + (sel.sidebarContentColor === "" ? " we-picker__swatch--active" : ""),
+            type: "button",
+            title: "跟随主题面板色",
+            onClick: () => onSidebarContentColor(""),
+            "aria-label": "内容面底色 跟随主题",
+          }, "主题"),
+          colorValue: sel.sidebarContentColor || "#1e1f26",
+        }),
+        ],
+      ),
+    );
+  }
+
+  function renderFontTab() {
+    return React.createElement(React.Fragment, null,
+      // ── 字体 (custom typography): 总开关（关 = 恢复 dsh 原生字体）+
+      //    颜色 / 字重 / 字体族，开启时才渲染细节控件。#57 精简回归版。 ──
+      React.createElement("div", { className: "we-picker__section" },
+        React.createElement("div", { className: "we-picker__section-head" },
+          React.createElement("span", { className: "we-picker__section-label" }, "全局字体"),
+        ),
+        switchRow("字体自定义", sel.fontCustom, (e) => onToggleFontCustom(e.target.checked), {
+          tooltip: "关闭后恢复 dsh 默认字体外观；开启后可调颜色/字重/字体族",
+        }),
+        sel.fontCustom && React.createElement(React.Fragment, null,
+          React.createElement("div", { className: "we-picker__ctl" },
+            ctlText("字体颜色"),
+            React.createElement("label", { className: "we-picker__swatch-custom" },
+              React.createElement("input", {
+                type: "color",
+                value: sel.fontColor,
+                onInput: (e) => onFontColor(e.target.value),
+                onChange: (e) => onFontColor(e.target.value),
+                title: "自定义字体颜色",
+              }),
+              React.createElement("span", { className: "we-picker__hint we-picker__value" }, sel.fontColor),
+            ),
+          ),
+          SliderRow("字重", 100, 900, 50, sel.fontWeight, onFontWeight, String(sel.fontWeight), "font-weight"),
+          // 字体族选择：专用胶囊按钮（.we-picker__font-chip），每个选项用它
+          // 自己的字体渲染预览 —— 按钮上看到的字样即应用后的效果。
+          React.createElement("div", { className: "we-picker__ctl we-picker__ctl--wrap" },
+            ctlText("字体", "按钮以自身字体预览"),
+            React.createElement("div", { className: "we-picker__chips" },
+              FONT_FAMILY_LABELS.map((f) =>
+                React.createElement("button", {
+                  key: f.v,
+                  type: "button",
+                  className: "we-picker__font-chip" + (sel.fontFamily === f.v ? " we-picker__font-chip--active" : ""),
+                  style: { fontFamily: fontFamilyStack(f.v) },
+                  title: f.v === "inherit" ? "跟随 dsh 原生字体栈" : FONT_FAMILY_STACKS[f.v],
+                  onClick: () => onFontFamily(f.v),
+                  "aria-pressed": sel.fontFamily === f.v ? "true" : "false",
+                  "aria-label": "字体 " + f.label,
+                }, f.label),
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  function renderMascotTab() {
+    return React.createElement(React.Fragment, null,
+      // ── 吉祥物：形态卡片即实时预览（随「吉祥物大小」滑块缩放），开关总控 ──
+      React.createElement("div", { className: "we-picker__section" },
+        React.createElement("div", { className: "we-picker__section-head" },
+          React.createElement("span", { className: "we-picker__section-label" }, "聊天吉祥物"),
+        ),
+        switchRow("显示吉祥物", sel.ropeShown !== false, onRopeVisibilityChange, {
+          key: "rope-shown",
+          hint: "关闭后隐藏吉祥物与壁纸仓库抽屉",
+          tooltip: "关闭后隐藏吉祥物与壁纸仓库抽屉；可随时在本页重新开启",
+        }),
+        // 吉祥物形态（maid = 默认小女仆 / whale = 鲸御姐）：卡片直接渲染形态
+        // 立绘并按当前 ropeScale 缩放 —— 选形态与看大小两件事在同一处完成，
+        // 调整下方滑块时卡片实时跟着变。关闭时仍可先设定，重新开启即生效。
+        React.createElement("div", { className: "we-picker__ctl we-picker__ctl--wrap" },
+          ctlText("吉祥物形态", "卡片按当前大小实时预览"),
+          React.createElement("div", { className: "we-picker__mascot-row", role: "group", "aria-label": "吉祥物形态" },
+            ROPE_FORM_VALUES.map((k) => {
+              const form = ROPE_FORMS[k];
+              return React.createElement("button", {
+                key: k,
+                type: "button",
+                className: "we-picker__mascot-card" + (sel.ropeForm === k ? " we-picker__mascot-card--active" : ""),
+                "aria-pressed": sel.ropeForm === k ? "true" : "false",
+                title: form.label,
+                onClick: () => onRopeFormChange(k),
+              },
+                React.createElement("span", {
+                  className: "we-picker__mascot-art",
+                  style: { width: Math.round(form.w * sel.ropeScale) + "px", height: Math.round(form.h * sel.ropeScale) + "px" },
+                },
+                  React.createElement("img", { src: form.img, alt: form.label, draggable: false })),
+                React.createElement("span", { className: "we-picker__mascot-name" }, form.label),
+              );
+            }),
+          ),
+        ),
+        SliderRow("吉祥物大小", ROPE_SCALE_MIN, ROPE_SCALE_MAX, ROPE_SCALE_STEP,
+          sel.ropeScale, onRopeScaleChange, Math.round(sel.ropeScale * 100) + "%", "rope-scale"),
+      ),
+    );
+  }
+
+  function renderEffectsTab() {
+    // 效果页签的空态：没有启用壁纸时不摆一列无效滑块，改为引导去选壁纸。
+    if (!sel.id) {
+      return React.createElement("div", { className: "we-picker__empty" },
+        React.createElement("span", { className: "we-picker__empty-title" }, "还没有启用壁纸"),
+        React.createElement("span", { className: "we-picker__hint" },
+          "选择一款壁纸后，可在这里调整模糊、亮度、适配、倍速等效果"),
+        React.createElement("button", {
+          className: "we-picker__btn we-picker__btn--primary", type: "button",
+          ref: (el) => { pickerOpener = el; },
+          onClick: () => {
+            selection.pickerOpen = true;
+            selection.modalView = "normal";
+            pickerFocusPending = true;
+            emit();
+          },
+        }, "选择壁纸"),
+      );
+    }
+    return React.createElement(React.Fragment, null,
+      // ── 画面：壁纸层滤镜与边框细调 ──
+      React.createElement("div", { className: "we-picker__section" },
+        React.createElement("div", { className: "we-picker__section-head" },
+          React.createElement("span", { className: "we-picker__section-label" }, "画面"),
+        ),
+        SliderRow("壁纸模糊", 0, 60, 1, sel.wallpaperBlur, onWallpaperBlur, sel.wallpaperBlur + "px"),
+        SliderRow("亮度", 40, 160, 5, sel.backgroundBrightness, onBackgroundBrightness, sel.backgroundBrightness + "%"),
+        SliderRow("对比度", 40, 200, 5, sel.backgroundContrast, onBackgroundContrast, sel.backgroundContrast + "%"),
+        SliderRow("饱和度", 0, 200, 5, sel.backgroundSaturate, onBackgroundSaturate, sel.backgroundSaturate + "%"),
+        SliderRow("暗化", 0, 90, 5, Math.round(sel.scrim * 100), onScrim, Math.round(sel.scrim * 100) + "%"),
+        SliderRow("边框", 0, 90, 5, Math.round(sel.border * 100), onBorder, Math.round(sel.border * 100) + "%"),
+        SliderRow("玻璃", 0, 60, 1, sel.blur, onBlur, sel.blur + "px"),
+        // beta场景动画: 默认关闭 → scene 壁纸只渲染静态帧 (稳定, 与官方静态帧
+        // 一致); 开启后才启动 scene-anim 视频后台渲染 (CPU 渲染试验性, 可能有
+        // 组件错误)。关闭时若已在播放动画视频 → 回退静态帧并取消进行中的渲染。
+        sel.type === "scene" && switchRow("beta场景动画", sel.betaSceneAnim === true, (e) => {
+          selection.betaSceneAnim = e.target.checked;
+          const enable = e.target.checked;
+          persistSelection();
+          if (!enable) {
+            // 关闭: 取消动画升级 (渲染任务随 probe abort 取消), 回退静态帧
+            cancelSceneAnimUpgrade();
+            if (sel.type === "scene" && sel.sceneFrameUrl
+              && selection.url && selection.url.indexOf("/scene-anim/") !== -1) {
+              selection.url = sel.sceneFrameUrl;
+              syncLayers();
+            }
+          } else if (sel.type === "scene" && sel.sceneFrameUrl && !sel.sceneVideo) {
+            // 开启: 先把 beta 持久化到宿主端 (宿主 /scene-anim 路由按 config.json
+            // 门控 — 防抖的 PUT 落地前渲染请求会先到宿主 → 403 → 进度卡 0)。
+            // 跳过防抖立即冲刷, 等 PUT 落盘完成 (宿主「响应即已持久化」) 再触发升级。
+            if (persistTimer) { clearTimeout(persistTimer); persistTimer = null; }
+            writeLocalCache();
+            const p = pushPersisted();
+            (p && typeof p.then === "function" ? p : Promise.resolve())
+              .then(() => { if (selection.betaSceneAnim && sel.sceneFrameUrl && !sel.sceneVideo) queueSceneAnimUpgrade(sel.sceneFrameUrl); })
+              .catch(() => { if (selection.betaSceneAnim && sel.sceneFrameUrl && !sel.sceneVideo) queueSceneAnimUpgrade(sel.sceneFrameUrl); });
+          }
+          emit();
+        }, {
+          key: "beta-scene",
+          hint: "实验性场景渲染 · 谨慎开启",
+          tooltip: "实验性场景壁纸渲染引擎，不要开启（除非你知道自己在干什么）",
+        }),
+      ),
+      // ── 播放：倍速 / 帧率 / 适配 / 翻转（按当前壁纸类型显隐）──
+      React.createElement("div", { className: "we-picker__section" },
+        React.createElement("div", { className: "we-picker__section-head" },
+          React.createElement("span", { className: "we-picker__section-label" }, "播放与适配"),
+        ),
+        // Playback speed — native playbackRate, instant, no media reload. Video
+        // and scene-animation wallpapers (web/iframe wallpapers have no playbackRate).
+        (sel.type === "video" || (sel.type === "scene" && sel.url && sel.url.indexOf("/scene-anim/") !== -1))
+          && React.createElement("div", { className: "we-picker__ctl", key: "rate" },
+          ctlText("倍速"),
+          React.createElement("div", { className: "we-picker__seg" },
+            [0.5, 0.75, 1, 1.25, 1.5, 2].map((rate) =>
+              React.createElement("button", {
+                key: rate,
+                className: "we-picker__btn we-picker__rate" + (sel.playbackRate === rate ? " we-picker__rate--active" : ""),
+                type: "button",
+                onClick: () => { selection.playbackRate = rate; persistSelection(); emit(); },
+              }, String(rate).replace(/\.?0+$/, "") + "x"),
+            ),
+          ),
+        ),
+        // 解码帧率上限（抽帧转码）：host 一次性把源视频重编码为上限帧率（时间线
+        // 1.0x 正常速度，解码占用随帧率线性下降），与倍速解耦。首次转码需等待，
+        // 播放中原片、转好自动切换；无 ffmpeg 自动回退原片。
+        // scene 动画: fps 参数在渲染时决定 (scene-anim ?fps=..), 变更后重渲染。
+        (sel.type === "video" || (sel.type === "scene" && sel.url && sel.url.indexOf("/scene-anim/") !== -1))
+          && React.createElement("div", { className: "we-picker__ctl", key: "fps" },
+          ctlText("帧率上限", "抽帧转码 · 降低解码占用"),
+          React.createElement("div", { className: "we-picker__seg" },
+            FPS_CAP_VALUES.map((cap) =>
+              React.createElement("button", {
+                key: cap,
+                className: "we-picker__btn we-picker__rate" + (sel.fpsCap === cap ? " we-picker__rate--active" : ""),
+                type: "button",
+                onClick: () => {
+                  selection.fpsCap = cap; persistSelection(); refreshMediaInfo(true); emit();
+                  // scene 动画: fpsCap 变更 → 以新帧率重新渲染动画视频
+                  // (sceneVideo 内嵌 MP4 的场景不重渲染 — 硬件解码不受 fpsCap 影响)
+                  if (sel.type === "scene" && sel.sceneFrameUrl && !sel.sceneVideo) queueSceneAnimUpgrade(sel.sceneFrameUrl);
+                },
+              }, cap === 0 ? "无限制" : cap + "fps"),
+            ),
+          ),
+        ),
+        // Scene 动画渲染进度: 首次渲染分钟级, 后台渲染期间显示进度条
+        // (轮询 /scene-anim-progress; 完成或切换壁纸后置 null)。
+        sel.type === "scene" && sel.sceneAnimProgress != null && sel.sceneAnimProgress < 100
+          && React.createElement("div", { className: "we-picker__row we-picker__prog", key: "scene-prog" },
+            React.createElement("div", { className: "we-picker__prog-track" },
+              React.createElement("div", {
+                className: "we-picker__prog-bar",
+                style: { width: Math.max(2, Math.min(100, sel.sceneAnimProgress || 0)) + "%" },
+              }),
+            ),
+            React.createElement("span", { className: "we-picker__hint" },
+              "场景动画渲染中 " + (sel.sceneAnimProgress || 0) + "%",
+            ),
+          ),
+        // Source metadata + transcode status (host moov probe / transcode lifecycle).
+        sel.type === "video" && sel.mediaInfo && React.createElement("span", { className: "we-picker__hint", key: "media-info" },
+          "源 " + sel.mediaInfo.width + "×" + sel.mediaInfo.height
+            + (sel.mediaInfo.fps ? " · " + sel.mediaInfo.fps + "fps" : "")
+            + (sel.mediaInfo.codec ? " · " + codecLabel(sel.mediaInfo.codec) : "")
+            + (sel.transcodeState === "working" ? " · 抽帧准备中…"
+              : sel.transcodeState === "ready" ? " · 已切换至 " + sel.fpsCap + "fps 抽帧版（正常速度，解码占用约减半）"
+              : sel.transcodeState === "fallback" ? " · 转码不可用，已回退原片"
+              : sel.transcodeState === "skipped" ? " · 源帧率 ≤ 上限，无需抽帧"
+              : ""),
+        ),
+        // Download / transcode progress bar (polled from /transcode-progress).
+        sel.type === "video" && sel.transcodeState === "working" && sel.transcodeProgress
+          && React.createElement("div", { className: "we-picker__row we-picker__prog", key: "transcode-prog" },
+            React.createElement("div", {
+              className: "we-picker__prog-track",
+              role: "progressbar",
+              "aria-label": "转码进度",
+              "aria-valuemin": 0,
+              "aria-valuemax": 100,
+              "aria-valuenow": Math.max(0, Math.min(100, sel.transcodeProgress.percent || 0)),
+            },
+              React.createElement("div", {
+                className: "we-picker__prog-bar",
+                style: { width: Math.max(2, Math.min(100, sel.transcodeProgress.percent || 0)) + "%" },
+              }),
+            ),
+            React.createElement("span", { className: "we-picker__hint" },
+              sel.transcodeProgress.phase === "download"
+                ? "下载 ffmpeg " + (sel.transcodeProgress.percent || 0) + "%"
+                : sel.transcodeProgress.phase === "transcode" && sel.transcodeProgress.finalizing ? "收尾中…"
+                : sel.transcodeProgress.phase === "transcode"
+                  ? "转码中 " + (sel.transcodeProgress.percent || 0) + "%"
+                    + (sel.transcodeProgress.eta ? " · 约剩 " + sel.transcodeProgress.eta + " 秒" : "")
+                : sel.transcodeProgress.phase === "done" ? "即将完成…"
+                : "准备中…",
+            ),
+          ),
+        // Fit mode — applies to the CURRENT wallpaper whatever its type (WE
+        // video/scene image and custom uploads alike; web/iframe wallpapers
+        // have no object-fit). 覆盖=cover 填充=contain 居中=center 拉伸=fill
+        React.createElement("div", { className: "we-picker__ctl", key: "fit" },
+          ctlText("适配"),
+          React.createElement("div", { className: "we-picker__seg" },
+            ["cover", "contain", "center", "fill"].map((mode) => {
+              const label = { cover: "覆盖", contain: "填充", center: "居中", fill: "拉伸" }[mode];
+              return React.createElement("button", {
+                key: mode,
+                className: "we-picker__btn we-picker__rate" + (sel.objectFit === mode ? " we-picker__rate--active" : ""),
+                type: "button",
+                title: mode,
+                onClick: () => {
+                  selection.objectFit = mode;
+                  persistSelection();
+                  emit();
+                  // Edge canvas 渲染路径的 fit 存在 weDrawCtx 上（syncLayers 的
+                  // same-canvas 守卫不会重建 draw loop），直接更新并重绘。
+                  if (weDrawCtx) {
+                    weDrawCtx.fit = mode;
+                    weDrawFrame();
+                  }
+                },
+              }, label);
+            }),
+          ),
+        ),
+        // Horizontal mirror — scaleX(-1), compositor-only; works for video,
+        // web (iframe) and (later) uploaded image wallpapers alike.
+        switchRow("水平翻转", sel.flip, (e) => { selection.flip = e.target.checked; persistSelection(); emit(); }, { key: "flip" }),
+      ),
+      // ── 省电：遮挡暂停（借鉴 Wallpaper Engine 的「被遮挡时暂停」）──
+      React.createElement("div", { className: "we-picker__section" },
+        React.createElement("div", { className: "we-picker__section-head" },
+          React.createElement("span", {
+            className: "we-picker__section-label",
+            title: "类似 WE 的遮挡暂停：最小化、切到其它应用或使用电池供电时视频暂停、GPU 解码归零；回到界面 / 接通电源自动继续（网页壁纸仅随页面隐藏被浏览器节流）",
+          }, "省电"),
+        ),
+        switchRow("最小化/切页时暂停", sel.pauseOnHidden, (e) => { selection.pauseOnHidden = e.target.checked; persistSelection(); emit(); }, { key: "pause-hidden" }),
+        switchRow("窗口失焦时暂停", sel.pauseOnBlur, (e) => { selection.pauseOnBlur = e.target.checked; persistSelection(); emit(); }, { key: "pause-blur" }),
+        switchRow("使用电池时暂停", sel.pauseOnBattery, (e) => { selection.pauseOnBattery = e.target.checked; persistSelection(); emit(); }, { key: "pause-battery" }),
+        React.createElement("span", { className: "we-picker__hint" },
+          "被遮挡或用电池时暂停视频、解码归零；回到界面自动继续"),
+      ),
+    );
+  }
+
+  function renderAdvancedTab() {
+    return React.createElement(React.Fragment, null,
+      // ── 浏览方式：紧凑 CD 架 vs 常规分页网格 ──
+      React.createElement("div", { className: "we-picker__section" },
+        React.createElement("div", { className: "we-picker__section-head" },
+          React.createElement("span", { className: "we-picker__section-label" }, "浏览方式"),
+        ),
+        // Card style: classic (WE's original aspect-ratio 16/9 cards — the CD-like
+        // look) vs the rewritten fixed-height cards that never overlap.
+        switchRow("紧凑布局", sel.pickerLayout === "classic", (e) => onLayoutChange(e.target.checked ? "classic" : "fixed"), {
+          hint: sel.pickerLayout === "classic" ? "CD 架：层叠 + 一页到底" : "常规网格 · 分页",
+          tooltip: "紧凑 CD 架：层叠 + 一页到底",
+        }),
+      ),
+      // ── 兼容性 ──
+      React.createElement("div", { className: "we-picker__section" },
+        React.createElement("div", { className: "we-picker__section-head" },
+          React.createElement("span", { className: "we-picker__section-label" }, "兼容性"),
+        ),
+        // Edge 兼容渲染开关：仅在 Edge 中生效（canvas 渲染，避免浏览器自带的
+        // 「下载 / 投屏」悬浮工具栏）。
+        switchRow("Edge 兼容", sel.edgeCompat !== false, (e) => onEdgeCompatChange(e.target.checked), {
+          hint: "Edge 下视频壁纸走 canvas 渲染",
+          tooltip: "Edge 兼容：视频壁纸改用 canvas 渲染，避免浏览器自带的「下载 / 投屏」悬浮工具栏；关闭则始终使用原生 <video>",
+        }),
+      ),
+    );
+  }
+
+  const renderActiveTab = () => {
+    if (activeTab === "appearance") return renderAppearanceTab();
+    if (activeTab === "font") return renderFontTab();
+    if (activeTab === "mascot") return renderMascotTab();
+    if (activeTab === "effects") return renderEffectsTab();
+    if (activeTab === "advanced") return renderAdvancedTab();
+    return renderWallpaperTab();
+  };
+  const tabIdx = Math.max(0, PICKER_TABS.findIndex((t) => t.id === activeTab));
+
   return React.createElement("div", { className: "we-picker", "data-we-cards": sel.pickerLayout },
     // ── Card header (mirrors the skin-center's pluginCard header): plugin
     //    name + live wallpaper count badge + description. ──
@@ -2363,314 +3203,27 @@ function WallpaperPicker(props) {
       React.createElement("span", { className: "we-picker__card-badge" }, String(playableList.length)),
       React.createElement("span", { className: "we-picker__card-desc" }, "本地 Wallpaper Engine 壁纸 · 液态玻璃主题"),
     ),
-    // ── 字体 (custom typography): 总开关（关 = 恢复 dsh 原生字体） +
-    //    颜色 / 字重 / 字体族，开启时才渲染细节控件。#57 精简回归版。 ──
-    React.createElement("div", { className: "we-picker__section" },
-      React.createElement("div", { className: "we-picker__section-head" },
-        React.createElement("span", { className: "we-picker__section-label" }, "字体"),
-      ),
-      React.createElement("div", { className: "we-picker__row" },
-        React.createElement("span", { className: "we-picker__hint we-picker__label" }, "字体自定义"),
-        React.createElement("label", { className: "we-picker__switch", title: "关闭后恢复 dsh 默认字体外观；开启后可调颜色/字重/字体族" },
-          React.createElement("input", {
-            type: "checkbox",
-            checked: sel.fontCustom,
-            onChange: (e) => onToggleFontCustom(e.target.checked),
-          }),
-          React.createElement("span", { className: "we-picker__switch-track" },
-            React.createElement("span", { className: "we-picker__switch-thumb" }),
-          ),
-        ),
-      ),
-      sel.fontCustom && React.createElement(React.Fragment, null,
-        React.createElement("div", { className: "we-picker__row we-picker__accent-row" },
-          React.createElement("span", { className: "we-picker__hint we-picker__label" }, "字体颜色"),
-          React.createElement("label", { className: "we-picker__swatch-custom" },
-            React.createElement("input", {
-              type: "color",
-              value: sel.fontColor,
-              onInput: (e) => onFontColor(e.target.value),
-              onChange: (e) => onFontColor(e.target.value),
-              title: "自定义字体颜色",
-            }),
-            React.createElement("span", { className: "we-picker__hint" }, sel.fontColor),
-          ),
-        ),
-        SliderRow("字重", 100, 900, 50, sel.fontWeight, onFontWeight, String(sel.fontWeight), "font-weight"),
-        // 字体族选择：专用胶囊按钮（.we-picker__font-chip），每个选项用它
-        // 自己的字体渲染预览 —— 按钮上看到的字样即应用后的效果；flex-wrap
-        // 分行排布，7 项（含行楷）不再挤在圆形色板里。
-        React.createElement("div", { className: "we-picker__row we-picker__font-row" },
-          React.createElement("span", { className: "we-picker__hint we-picker__label" }, "字体"),
-          FONT_FAMILY_LABELS.map((f) =>
-            React.createElement("button", {
-              key: f.v,
-              type: "button",
-              className: "we-picker__font-chip" + (sel.fontFamily === f.v ? " we-picker__font-chip--active" : ""),
-              style: { fontFamily: fontFamilyStack(f.v) },
-              title: f.v === "inherit" ? "跟随 dsh 原生字体栈" : FONT_FAMILY_STACKS[f.v],
-              onClick: () => onFontFamily(f.v),
-              "aria-pressed": sel.fontFamily === f.v ? "true" : "false",
-              "aria-label": "字体 " + f.label,
-            }, f.label),
-          ),
-        ),
-      ),
-    ),
-    // ── 外观 (liquid-glass theming): 配色 presets + custom color, and the
-    //    glass 透明度 slider. Applied instantly via --we-accent /
-    //    --we-glass-alpha (applyEffects), persisted in localStorage. ──
-    React.createElement("div", { className: "we-picker__section" },
-      React.createElement("div", { className: "we-picker__section-head" },
-        React.createElement("span", { className: "we-picker__section-label" }, "外观"),
-      ),
-      React.createElement("div", { className: "we-picker__row we-picker__accent-row" },
-        React.createElement("span", { className: "we-picker__hint we-picker__label" }, "配色"),
-        ACCENT_PRESETS.map((hex) => React.createElement("button", {
-          key: hex,
-          className: "we-picker__swatch" + (sel.accent === hex ? " we-picker__swatch--active" : ""),
-          type: "button",
-          style: { background: hex },
-          title: hex,
-          onClick: () => onAccent(hex),
-          "aria-label": "配色 " + hex,
-        })),
-        React.createElement("label", { className: "we-picker__swatch-custom" },
-          React.createElement("input", {
-            type: "color",
-            value: sel.accent,
-            onInput: (e) => onAccent(e.target.value),
-            onChange: (e) => onAccent(e.target.value),
-            title: "自定义配色",
-          }),
-          React.createElement("span", { className: "we-picker__hint" }, "自定义"),
-        ),
-      ),
-      // 玻璃颜色: the settings-window glass BASE tint. Defaults keep the stock
-      // look (white light / deep navy dark); picking any preset or a custom
-      // color tints the whole window glass in BOTH themes.
-      React.createElement("div", { className: "we-picker__row we-picker__accent-row" },
-        React.createElement("span", { className: "we-picker__hint we-picker__label" }, "玻璃颜色"),
-        GLASS_COLOR_PRESETS.map((hex) => React.createElement("button", {
-          key: hex,
-          className: "we-picker__swatch" + (sel.glassColor === hex ? " we-picker__swatch--active" : ""),
-          type: "button",
-          style: { background: hex },
-          title: hex,
-          onClick: () => onGlassColor(hex),
-          "aria-label": "玻璃颜色 " + hex,
-        })),
-        React.createElement("label", { className: "we-picker__swatch-custom" },
-          React.createElement("input", {
-            type: "color",
-            value: sel.glassColor,
-            onInput: (e) => onGlassColor(e.target.value),
-            onChange: (e) => onGlassColor(e.target.value),
-            title: "自定义玻璃颜色",
-          }),
-          React.createElement("span", { className: "we-picker__hint" }, "自定义"),
-        ),
-      ),
-      SliderRow("玻璃透明度", 0, 60, 5, sel.glassAlpha, onGlassAlpha, sel.glassAlpha + "%"),
-      // 设置窗口液态玻璃 master switch: turns the WHOLE native settings window
-      // (nav + every native section, not just this page) into liquid glass with
-      // the accent + transparency above; off restores the stock shell look.
-      React.createElement("label", { className: "we-picker__rotation-toggle we-picker__window-toggle" },
-        React.createElement("input", {
-          type: "checkbox",
-          checked: sel.glassWindow,
-          onChange: (e) => {
-            selection.glassWindow = e.target.checked;
-            persistSelection();
-            emit();
-          },
-        }),
-        "设置窗口液态玻璃",
-      ),
-      React.createElement("span", { className: "we-picker__hint" },
-        "整个设置窗口（含 General / 模型 / 插件等全部原生分区）跟随配色与透明度；关闭则恢复原生样式",
-      ),
-      // 侧栏玻璃（dsh-better-sidebar 适配）：与设置窗口玻璃同级的一套独立细粒度
-      // 控制 —— 总开关 + 专用模糊 + 专用透明度 + 玻璃基底色调，全部只作用于
-      // dsh-better-sidebar 子树，不动会话玻璃（玻璃 / 玻璃透明度）的设置。
-      // 仅在 host 检测到 dsh-better-sidebar 已安装且启用时显示（sidebarPresent）。
-      // 开关本体 + 说明始终显示；三个细节滑块（侧栏模糊 / 侧栏透明度 / 侧栏玻璃
-      // 颜色）以「侧栏液态玻璃」开关为前提 —— 关闭时隐藏，开启后随 emit 重渲染
-      // 实时出现（滑块只在毛玻璃生效时有意义）。
-      sel.sidebarPresent && [
-      React.createElement("label", { key: "sidebar-glass-toggle", className: "we-picker__rotation-toggle we-picker__window-toggle" },
-        React.createElement("input", {
-          type: "checkbox",
-          checked: sel.sidebarGlass,
-          onChange: (e) => {
-            selection.sidebarGlass = e.target.checked;
-            persistSelection();
-            emit();
-          },
-        }),
-        "侧栏液态玻璃",
-      ),
-      React.createElement("span", { key: "sidebar-glass-hint", className: "we-picker__hint" },
-        "dsh-better-sidebar 侧栏（文件 / 终端 / Git 等面板）的毛玻璃适配；关闭则恢复其原生外观",
-      ),
-      ],
-      sel.sidebarPresent && sel.sidebarGlass && [
-      SliderRow("侧栏模糊", 0, 200, 1, sel.sidebarBlur, onSidebarBlur, sel.sidebarBlur + "px", "sb-blur"),
-      SliderRow("侧栏透明度", 0, 200, 1, sel.sidebarAlpha, onSidebarAlpha, sel.sidebarAlpha + "%", "sb-alpha"),
-      React.createElement("div", { key: "sb-color", className: "we-picker__row we-picker__accent-row" },
-        React.createElement("span", { className: "we-picker__hint we-picker__label" }, "侧栏玻璃颜色"),
-        GLASS_COLOR_PRESETS.map((hex) => React.createElement("button", {
-          key: hex,
-          className: "we-picker__swatch" + (sel.sidebarColor === hex ? " we-picker__swatch--active" : ""),
-          type: "button",
-          style: { background: hex },
-          title: hex,
-          onClick: () => onSidebarColor(hex),
-          "aria-label": "侧栏玻璃颜色 " + hex,
-        })),
-        React.createElement("label", { className: "we-picker__swatch-custom" },
-          React.createElement("input", {
-            type: "color",
-            value: sel.sidebarColor,
-            onInput: (e) => onSidebarColor(e.target.value),
-            onChange: (e) => onSidebarColor(e.target.value),
-            title: "自定义侧栏玻璃颜色",
-          }),
-          React.createElement("span", { className: "we-picker__hint" }, "自定义"),
-        ),
-      ),
-      // 内容面（编辑器 / 终端）近不透明玻璃底：透明度 + 底色。固定调色板
-      // （语法高亮 / ANSI）为不透明底设计，全透毛玻璃下注释灰不可读；这里
-      // 在"玻璃感"与"可读性"之间取平衡——透明度越大越透，底色空 = 跟随主题。
-      SliderRow("内容面透明度", 0, 80, 5, sel.sidebarContentAlpha, onSidebarContentAlpha, sel.sidebarContentAlpha + "%"),
-      React.createElement("div", { className: "we-picker__row we-picker__accent-row" },
-        React.createElement("span", { className: "we-picker__hint we-picker__label" }, "内容面底色"),
-        React.createElement("button", {
-          className: "we-picker__swatch we-picker__swatch--auto" + (sel.sidebarContentColor === "" ? " we-picker__swatch--active" : ""),
-          type: "button",
-          title: "跟随主题面板色",
-          onClick: () => onSidebarContentColor(""),
-          "aria-label": "内容面底色 跟随主题",
-        }, "主题"),
-        GLASS_COLOR_PRESETS.map((hex) => React.createElement("button", {
-          key: hex,
-          className: "we-picker__swatch" + (sel.sidebarContentColor === hex ? " we-picker__swatch--active" : ""),
-          type: "button",
-          style: { background: hex },
-          title: hex,
-          onClick: () => onSidebarContentColor(hex),
-          "aria-label": "内容面底色 " + hex,
-        })),
-        React.createElement("label", { className: "we-picker__swatch-custom" },
-          React.createElement("input", {
-            type: "color",
-            value: sel.sidebarContentColor || "#1e1f26",
-            onInput: (e) => onSidebarContentColor(e.target.value),
-            onChange: (e) => onSidebarContentColor(e.target.value),
-            title: "自定义内容面底色",
-          }),
-          React.createElement("span", { className: "we-picker__hint" }, "自定义"),
-        ),
-      ),
-      ],
-      // Chat-interface mascot (rope dock): show/hide the pull-cord + repo drawer.
-      React.createElement("label", { className: "we-picker__rotation-toggle we-picker__window-toggle" },
-        React.createElement("input", {
-          type: "checkbox",
-          checked: sel.ropeShown !== false,
-          onChange: onRopeVisibilityChange,
-        }),
-        "显示吉祥物（聊天顶部拉绳）",
-      ),
-      React.createElement("span", { className: "we-picker__hint" },
-        "关闭后隐藏吉祥物与壁纸仓库抽屉；可随时在本页重新开启",
-      ),
-      // 吉祥物形态（maid = 默认小女仆 / whale = 鲸御姐）与大小，随 ropeShown
-      // 一起位于「外观」分区；关闭时仍可先设定，重新开启即生效。
-      React.createElement("div", { className: "we-picker__row" },
-        React.createElement("span", { className: "we-picker__hint we-picker__label" }, "吉祥物形态"),
-        React.createElement("select", {
-          className: "we-picker__playlist-select",
-          value: sel.ropeForm,
-          onChange: (e) => onRopeFormChange(e.target.value),
-          "aria-label": "吉祥物形态",
-          title: "选择吉祥物（聊天顶部拉绳）的形态",
+    // ── 页签栏（分段式）：六个域互斥展示，替代旧版三十控件的单列长滚动。
+    //    指示胶囊随 activeTab 平移（transform 合成器属性，不引发布局）。 ──
+    React.createElement("div", { className: "we-tabs", role: "tablist", "aria-label": "Wallpaper Engine 设置分区" },
+      React.createElement("span", {
+        className: "we-tabs__pill",
+        "aria-hidden": "true",
+        style: {
+          width: "calc((100% - 6px) / " + PICKER_TABS.length + ")",
+          transform: "translateX(" + tabIdx * 100 + "%)",
         },
-        ROPE_FORM_VALUES.map((k) =>
-          React.createElement("option", { key: k, value: k }, ROPE_FORMS[k].label),
-        ),
-        ),
-      ),
-      SliderRow("吉祥物大小", ROPE_SCALE_MIN, ROPE_SCALE_MAX, ROPE_SCALE_STEP,
-        sel.ropeScale, onRopeScaleChange, Math.round(sel.ropeScale * 100) + "%", "rope-scale"),
+      }),
+      PICKER_TABS.map((t) => React.createElement("button", {
+        key: t.id,
+        type: "button",
+        role: "tab",
+        "aria-selected": activeTab === t.id ? "true" : "false",
+        className: "we-tabs__tab" + (activeTab === t.id ? " we-tabs__tab--active" : ""),
+        onClick: () => switchTab(t.id),
+      }, t.label)),
     ),
-    // ── Card-style switch: classic (WE's original aspect-ratio 16/9 cards —
-    //    the CD-like look the author liked) vs the rewritten fixed-height
-    //    cards that never overlap in older browsers. The vinyl record beside
-    //    the selection stays in BOTH styles (here + modal head). ──
-    React.createElement("div", { className: "we-picker__row" },
-      React.createElement("span", { className: "we-picker__hint we-picker__label" }, "紧凑布局"),
-      React.createElement("label", { className: "we-picker__switch", title: "紧凑 CD 架：层叠 + 一页到底" },
-        React.createElement("input", {
-          type: "checkbox",
-          checked: sel.pickerLayout === "classic",
-          onChange: (e) => onLayoutChange(e.target.checked ? "classic" : "fixed"),
-        }),
-        React.createElement("span", { className: "we-picker__switch-track" },
-          React.createElement("span", { className: "we-picker__switch-thumb" }),
-        ),
-      ),
-      React.createElement("span", { className: "we-picker__hint" },
-        sel.pickerLayout === "classic"
-          ? "CD 架：层叠 + 一页到底"
-          : "常规网格 · 分页"),
-      // Edge 兼容渲染开关：与"紧凑布局"同一行、靠右。仅在 Edge 中生效
-      // （canvas 渲染，避免浏览器自带的「下载 / 投屏」悬浮工具栏）。
-      React.createElement("label", {
-        className: "we-picker__switch we-picker__switch--edge",
-        // 关键布局用内联样式而非插件 CSS：插件样式表按 TAG_ID 去重注入，
-        // 页面若残留旧样式表，新 CSS 规则不会生效（开关会靠左 / 不居中 /
-        // 字号不同）。内联样式始终生效，与样式表注入状态无关。
-        style: { marginLeft: "auto", alignItems: "center", gap: "6px", fontSize: "inherit" },
-        title: "Edge 兼容：视频壁纸改用 canvas 渲染，避免浏览器自带的「下载 / 投屏」悬浮工具栏；关闭则始终使用原生 <video>",
-      },
-        React.createElement("span", { className: "we-picker__hint we-picker__label" }, "Edge 兼容"),
-        React.createElement("input", {
-          type: "checkbox",
-          checked: sel.edgeCompat !== false,
-          onChange: (e) => onEdgeCompatChange(e.target.checked),
-        }),
-        React.createElement("span", { className: "we-picker__switch-track" },
-          React.createElement("span", { className: "we-picker__switch-thumb" }),
-        ),
-      ),
-    ),
-    // ── 当前壁纸: vinyl record beside the selection, in both card styles. ──
-    React.createElement("div", { className: "we-picker__section" },
-      React.createElement("div", { className: "we-picker__current" },
-        React.createElement(VinylRecord, {
-          cover: current && current.preview, title: current ? current.title : "",
-          playing: sel.playing && Boolean(sel.url),
-        }),
-        React.createElement("div", { className: "we-picker__current-info" },
-          React.createElement("div", { className: "we-picker__current-title", title: current ? current.title : "" },
-            sel.id && current ? current.title : "未选择壁纸"),
-          React.createElement("div", { className: "we-picker__current-meta" },
-            current
-              ? ({ video: "视频壁纸", web: "网页壁纸", image: "图片壁纸", scene: "场景壁纸（静态帧）" }[current.type] || "壁纸") + (sel.playing ? " · 播放中" : " · 已暂停")
-              : "尚未选择壁纸"),
-        ),
-        React.createElement("button", {
-          className: "we-picker__btn we-picker__btn--primary", type: "button",
-          ref: (el) => { pickerOpener = el; },
-          onClick: () => {
-            selection.pickerOpen = true;
-            selection.modalView = "normal";
-            pickerFocusPending = true; // 打开后焦点落入模态框（见 modalInitialFocus）
-            emit();
-          },
-        }, "选择壁纸"),
-      ),
+    React.createElement("div", { className: "we-tabpanel", role: "tabpanel" }, renderActiveTab()),
     // ── Wallpaper picker modal. Portalled onto <body>: fixed positioning is
     //    immune to ancestor transforms/backdrop-filters (the shell's own glass
     //    effects would otherwise trap it), and z-index 1000 sits above the
@@ -2915,482 +3468,6 @@ function WallpaperPicker(props) {
         ),
       ),
       document.body,
-    ),
-    // ── Playback controls (wallpaper-independent; the thumbnail grid lives in
-    //    the modal above, so these stay within reach). ──
-    React.createElement("div", { className: "we-picker__row" },
-      React.createElement("button", {
-        className: "we-picker__btn", type: "button",
-        onClick: onTogglePlay, disabled: !sel.url,
-      }, sel.playing ? "暂停" : "播放"),
-      React.createElement("button", {
-        className: "we-picker__btn", type: "button",
-        onClick: onClear, disabled: !sel.id,
-      }, "关闭"),
-      React.createElement("button", {
-        className: "we-picker__btn", type: "button",
-        onClick: onRefresh, disabled: sel.loading,
-      }, sel.loading ? "刷新中…" : "刷新"),
-    ),
-    ),
-    // ── 自定义壁纸: local JPG/PNG/MP4 as wallpapers. Files are written by the
-    //    host into its plugin-managed directory and served through the same
-    //    media/preview routes (read-A storage: survives restarts, no quota
-    //    limits). Uploads merge into the inventory on the host side. ──
-    React.createElement("div", { className: "we-picker__section" },
-      React.createElement("div", { className: "we-picker__section-head" },
-        React.createElement("span", { className: "we-picker__section-label" }, "自定义壁纸"),
-      ),
-      React.createElement("div", { className: "we-picker__uploads" },
-      // Storage location — users can point uploads at a non-system drive
-      // (most people don't want wallpaper files piling up on C:). The host
-      // persists the choice and migrates existing files on change.
-      React.createElement("div", { className: "we-picker__row" },
-        React.createElement("span", { className: "we-picker__hint we-picker__label" }, "存储位置"),
-        React.createElement("span", {
-          className: "we-picker__uploads-path",
-        }, sel.inventory.uploadDir || "—"),
-        React.createElement("button", {
-          className: "we-picker__btn", type: "button",
-          disabled: sel.uploading,
-          onClick: () => {
-            selection.editingUploadDir = true;
-            selection.uploadDirDraft = sel.inventory.uploadDir || "";
-            emit();
-          },
-        }, "更改"),
-      ),
-      sel.editingUploadDir && React.createElement("div", { className: "we-picker__row" },
-        React.createElement("input", {
-          className: "we-picker__text", type: "text",
-          value: selection.uploadDirDraft,
-          placeholder: "绝对路径，如 D:\\MyWallpapers",
-          onInput: (e) => { selection.uploadDirDraft = e.target.value; emit(); },
-          onKeyDown: (e) => {
-            if (e.key === "Enter") changeUploadDir(selection.uploadDirDraft, true);
-            if (e.key === "Escape") { selection.editingUploadDir = false; emit(); }
-          },
-        }),
-        React.createElement("button", {
-          className: "we-picker__btn", type: "button",
-          disabled: sel.uploading,
-          onClick: () => changeUploadDir(selection.uploadDirDraft, true),
-        }, "保存"),
-        React.createElement("button", {
-          className: "we-picker__btn", type: "button",
-          onClick: () => { selection.editingUploadDir = false; emit(); },
-        }, "取消"),
-      ),
-      React.createElement("div", { className: "we-picker__row" },
-        React.createElement("span", { className: "we-picker__hint" },
-          "已有文件会迁移到新位置"),
-        React.createElement("span", { className: "we-picker__hint" },
-          "支持 ~ 表示用户主目录"),
-      ),
-      React.createElement("div", { className: "we-picker__row" },
-        React.createElement("span", { className: "we-picker__hint we-picker__label" }, "自定义"),
-        React.createElement("input", {
-          className: "we-picker__file", type: "file",
-          accept: ".jpg,.jpeg,.png,.mp4",
-          disabled: sel.uploading,
-          onChange: (e) => {
-            const f = e.target.files && e.target.files[0];
-            if (f) uploadWallpaperFile(f);
-            e.target.value = "";
-          },
-        }),
-        sel.uploading && React.createElement("span", { className: "we-picker__hint" }, "上传中…"),
-      ),
-      sel.uploadError && React.createElement("div", { className: "we-picker__error" }, sel.uploadError),
-      sel.uploadNote && React.createElement("div", { className: "we-picker__note" }, sel.uploadNote),
-      React.createElement("div", { className: "we-picker__row" },
-        React.createElement("span", { className: "we-picker__hint" }, "已上传 " + uploadedList.length + " 个"),
-        React.createElement("span", { className: "we-picker__hint" }, "格式仅限 JPG / PNG / MP4"),
-      ),
-      uploadedList.length > 0 && React.createElement("div", { className: "we-picker__uploads-list" },
-        uploadedList.map((w) => React.createElement("div", { key: w.id, className: "we-picker__uploads-item" },
-          React.createElement("span", { className: "we-picker__uploads-name", title: w.title }, w.title),
-          React.createElement("span", { className: "we-picker__hint" }, w.type === "video" ? "MP4" : "图片"),
-          React.createElement("button", {
-            className: "we-picker__btn", type: "button",
-            disabled: sel.uploading,
-            onClick: () => {
-              if (!window.confirm("移除自定义壁纸「" + w.title + "」？此操作会删除本地文件，且不可恢复。")) return;
-              removeUploadWallpaper(w.id);
-            },
-          }, "移除"),
-        )),
-      ),
-      ),
-    ),
-    // ── 轮播列表: user-defined carousel lists, each with its own wallpaper
-    //    set, interval and order. Fully client-side (localStorage). ──
-    React.createElement("div", { className: "we-picker__section" },
-      React.createElement("div", { className: "we-picker__section-head" },
-        React.createElement("span", { className: "we-picker__section-label" }, "轮播列表"),
-      ),
-      React.createElement("div", { className: "we-picker__row we-picker__playlist-row" },
-      React.createElement("select", {
-        className: "we-picker__playlist-select",
-        value: sel.rotationGroupId,
-        onChange: onGroupChange,
-        disabled: groups.length === 0,
-        "aria-label": "轮播列表",
-      },
-      React.createElement("option", { value: "" }, groups.length ? "— 选择轮播列表 —" : "— 暂无轮播列表 —"),
-      ...groups.map((g) => React.createElement("option", {
-        key: g.id, value: g.id,
-      }, g.name + "（" + groupWallpapers(g).length + " 可播放 · " + g.interval + " 分钟）")),
-      ),
-      React.createElement("button", {
-        className: "we-picker__btn", type: "button",
-        onClick: startCreateGroup,
-      }, "新建"),
-      React.createElement("button", {
-        className: "we-picker__btn", type: "button",
-        onClick: () => startEditGroup(sel.rotationGroupId),
-        disabled: !sel.rotationGroupId,
-      }, "编辑"),
-      React.createElement("button", {
-        className: "we-picker__btn", type: "button",
-        onClick: onDeleteGroup,
-        disabled: !sel.rotationGroupId,
-      }, "删除"),
-    ),
-    editing && React.createElement("div", { className: "we-picker__editor" },
-      React.createElement("div", { className: "we-picker__row" },
-        React.createElement("span", { className: "we-picker__hint we-picker__label" }, "名称"),
-        React.createElement("input", {
-          className: "we-picker__text", type: "text",
-          value: editing.name,
-          "aria-label": "轮播列表名称",
-          onInput: (e) => { editing.name = e.target.value; emit(); },
-        }),
-      ),
-      React.createElement("div", { className: "we-picker__row" },
-        React.createElement("span", { className: "we-picker__hint we-picker__label" }, "间隔"),
-        React.createElement("select", {
-          className: "we-picker__rotation-interval",
-          value: String(editing.interval),
-          onChange: (e) => { editing.interval = clampNum(Number(e.target.value), 1, 1440, DEFAULTS.rotationInterval); emit(); },
-          "aria-label": "轮播间隔",
-        },
-        ...INTERVALS.map((minutes) =>
-          React.createElement("option", { key: minutes, value: String(minutes) }, minutes + " 分钟"),
-        )),
-        React.createElement("span", { className: "we-picker__hint we-picker__label" }, "顺序"),
-        React.createElement("select", {
-          className: "we-picker__playlist-select",
-          value: editing.order,
-          onChange: (e) => { editing.order = e.target.value; emit(); },
-          "aria-label": "轮播顺序",
-        },
-        React.createElement("option", { value: "sequence" }, "顺序"),
-        React.createElement("option", { value: "random" }, "随机"),
-        ),
-      ),
-      React.createElement("div", { className: "we-picker__editor-grid" },
-        playableInventory().length === 0
-          ? React.createElement("span", { className: "we-picker__hint" }, "没有可播放的壁纸")
-          : (cdMode ? playableInventory() : editorPageView.items).map((w) => {
-              const checked = editing.wallpaperIds.indexOf(w.id) >= 0;
-              return React.createElement("button", {
-                key: w.id,
-                className: "we-picker__editor-card" + (checked ? " we-picker__editor-card--checked" : ""),
-                type: "button",
-                title: w.title,
-                "aria-pressed": checked,
-                "aria-label": w.title,
-                onClick: () => {
-                  const i = editing.wallpaperIds.indexOf(w.id);
-                  if (i >= 0) editing.wallpaperIds.splice(i, 1);
-                  else editing.wallpaperIds.push(w.id);
-                  emit();
-                },
-              },
-              w.preview
-                ? React.createElement("img", {
-                    src: w.preview, alt: w.title, loading: "lazy",
-                    onError: (e) => { e.target.style.display = "none"; },
-                            onLoad: (e) => { e.target.style.opacity = "1"; },
-                  })
-                : React.createElement("span", { className: "we-picker__card-placeholder" }, "无预览"),
-              checked && React.createElement("span", { className: "we-picker__editor-check" }, "✓"),
-              );
-            }),
-      ),
-      !cdMode && editorPageView.pages > 1 && pagerRow(
-        playableInventory().length, editorPageView.page, editorPageView.pages,
-        () => { selection.editorPage--; emit(); },
-        () => { selection.editorPage++; emit(); },
-      ),
-      React.createElement("div", { className: "we-picker__row" },
-        React.createElement("span", { className: "we-picker__hint" }, "已选 " + editing.wallpaperIds.length + " 个"),
-        sel.inventory.playlists.length > 0 && React.createElement("select", {
-          className: "we-picker__playlist-select",
-          value: "",
-          onChange: (e) => {
-            const p = sel.inventory.playlists.find((pl) => pl.id === e.target.value);
-            if (p) importPlaylistIntoDraft(p);
-          },
-        },
-        React.createElement("option", { value: "" }, "从 WE 播放列表导入…"),
-        ...sel.inventory.playlists.map((p) => React.createElement("option", {
-          key: p.id, value: p.id,
-        }, p.name + "（" + (p.portableCount || 0) + " 可播放）")),
-        ),
-      ),
-      React.createElement("div", { className: "we-picker__row" },
-        React.createElement("button", {
-          className: "we-picker__btn", type: "button",
-          onClick: saveEditingGroup,
-        }, "保存"),
-        React.createElement("button", {
-          className: "we-picker__btn", type: "button",
-          onClick: cancelEditGroup,
-        }, "取消"),
-      ),
-    ),
-    React.createElement("div", { className: "we-picker__row we-picker__rotation-row" },
-      React.createElement("label", { className: "we-picker__rotation-toggle" },
-        React.createElement("input", {
-          type: "checkbox",
-          checked: sel.rotationEnabled,
-          onChange: onToggleRotation,
-          disabled: !sel.rotationGroupId || playableCount < 2,
-        }),
-        "自动轮转",
-      ),
-      React.createElement("select", {
-        className: "we-picker__rotation-interval",
-        value: String(group ? group.interval : DEFAULTS.rotationInterval),
-        onChange: onGroupInterval,
-        disabled: !sel.rotationEnabled || !sel.rotationGroupId || playableCount < 2,
-        "aria-label": "轮转间隔",
-      },
-      ...INTERVALS.map((minutes) =>
-        React.createElement("option", { key: minutes, value: String(minutes) }, minutes + " 分钟"),
-      )),
-      !sel.rotationGroupId && React.createElement("span", { className: "we-picker__hint" }, "请先选择或新建一个轮播列表"),
-      sel.rotationGroupId && playableCount < 2 && React.createElement("span", { className: "we-picker__hint" }, "当前列表至少需要 2 个可播放壁纸"),
-    ),
-    ),
-    sel.id && React.createElement("div", { className: "we-picker__section" },
-      React.createElement("div", { className: "we-picker__section-head" },
-        React.createElement("span", { className: "we-picker__section-label" }, "壁纸效果"),
-      ),
-      React.createElement(React.Fragment, null,
-      SliderRow("壁纸模糊", 0, 60, 1, sel.wallpaperBlur, onWallpaperBlur, sel.wallpaperBlur + "px"),
-      SliderRow("亮度", 40, 160, 5, sel.backgroundBrightness, onBackgroundBrightness, sel.backgroundBrightness + "%"),
-      SliderRow("对比度", 40, 200, 5, sel.backgroundContrast, onBackgroundContrast, sel.backgroundContrast + "%"),
-      SliderRow("饱和度", 0, 200, 5, sel.backgroundSaturate, onBackgroundSaturate, sel.backgroundSaturate + "%"),
-      SliderRow("暗化", 0, 90, 5, Math.round(sel.scrim * 100), onScrim, Math.round(sel.scrim * 100) + "%"),
-      SliderRow("边框", 0, 90, 5, Math.round(sel.border * 100), onBorder, Math.round(sel.border * 100) + "%"),
-      SliderRow("玻璃", 0, 60, 1, sel.blur, onBlur, sel.blur + "px"),
-      // beta场景动画: 默认关闭 → scene 壁纸只渲染静态帧 (稳定, 与官方静态帧
-      // 一致); 开启后才启动 scene-anim 视频后台渲染 (CPU 渲染试验性, 可能有
-      // 组件错误)。关闭时若已在播放动画视频 → 回退静态帧并取消进行中的渲染。
-      sel.type === "scene" && React.createElement("div", { className: "we-picker__row" },
-        React.createElement("label", { className: "we-picker__rotation-toggle" },
-          React.createElement("input", {
-            type: "checkbox",
-            checked: sel.betaSceneAnim === true,
-            onChange: (e) => {
-              selection.betaSceneAnim = e.target.checked;
-              const enable = e.target.checked;
-              persistSelection();
-              if (!enable) {
-                // 关闭: 取消动画升级 (渲染任务随 probe abort 取消), 回退静态帧
-                cancelSceneAnimUpgrade();
-                if (sel.type === "scene" && sel.sceneFrameUrl
-                  && selection.url && selection.url.indexOf("/scene-anim/") !== -1) {
-                  selection.url = sel.sceneFrameUrl;
-                  syncLayers();
-                }
-              } else if (sel.type === "scene" && sel.sceneFrameUrl && !sel.sceneVideo) {
-                // 开启: 先把 beta 持久化到宿主端 (宿主 /scene-anim 路由按 config.json
-                // 门控 — 防抖的 PUT 落地前渲染请求会先到宿主 → 403 → 进度卡 0)。
-                // 跳过防抖立即冲刷, 等 PUT 落盘完成 (宿主「响应即已持久化」) 再触发升级。
-                if (persistTimer) { clearTimeout(persistTimer); persistTimer = null; }
-                writeLocalCache();
-                const p = pushPersisted();
-                (p && typeof p.then === "function" ? p : Promise.resolve())
-                  .then(() => { if (selection.betaSceneAnim && sel.sceneFrameUrl && !sel.sceneVideo) queueSceneAnimUpgrade(sel.sceneFrameUrl); })
-                  .catch(() => { if (selection.betaSceneAnim && sel.sceneFrameUrl && !sel.sceneVideo) queueSceneAnimUpgrade(sel.sceneFrameUrl); });
-              }
-              emit();
-            },
-          }),
-          "beta场景动画",
-        ),
-        React.createElement("span", { className: "we-picker__hint" },
-          "实验性场景壁纸渲染引擎，不要开启（除非你知道自己在干什么）",
-        ),
-      ),
-      // Playback speed — native playbackRate, instant, no media reload. Video
-      // and scene-animation wallpapers (web/iframe wallpapers have no playbackRate).
-      (sel.type === "video" || (sel.type === "scene" && sel.url && sel.url.indexOf("/scene-anim/") !== -1))
-        && React.createElement("div", { className: "we-picker__row" },
-        React.createElement("span", { className: "we-picker__hint we-picker__label" }, "倍速"),
-        [0.5, 0.75, 1, 1.25, 1.5, 2].map((rate) =>
-          React.createElement("button", {
-            key: rate,
-            className: "we-picker__btn we-picker__rate" + (sel.playbackRate === rate ? " we-picker__rate--active" : ""),
-            type: "button",
-            onClick: () => { selection.playbackRate = rate; persistSelection(); emit(); },
-          }, String(rate).replace(/\.?0+$/, "") + "x"),
-        ),
-      ),
-      // 解码帧率上限（抽帧转码）：host 一次性把源视频重编码为上限帧率（时间线
-      // 1.0x 正常速度，解码占用随帧率线性下降），与倍速解耦。首次转码需等待，
-      // 播放中原片、转好自动切换；无 ffmpeg 自动回退原片。
-      // scene 动画: fps 参数在渲染时决定 (scene-anim ?fps=..), 变更后重渲染。
-      (sel.type === "video" || (sel.type === "scene" && sel.url && sel.url.indexOf("/scene-anim/") !== -1))
-        && React.createElement("div", { className: "we-picker__row" },
-        React.createElement("span", { className: "we-picker__hint we-picker__label" }, "帧率上限"),
-        FPS_CAP_VALUES.map((cap) =>
-          React.createElement("button", {
-            key: cap,
-            className: "we-picker__btn we-picker__rate" + (sel.fpsCap === cap ? " we-picker__rate--active" : ""),
-            type: "button",
-            onClick: () => {
-              selection.fpsCap = cap; persistSelection(); refreshMediaInfo(true); emit();
-              // scene 动画: fpsCap 变更 → 以新帧率重新渲染动画视频
-              // (sceneVideo 内嵌 MP4 的场景不重渲染 — 硬件解码不受 fpsCap 影响)
-              if (sel.type === "scene" && sel.sceneFrameUrl && !sel.sceneVideo) queueSceneAnimUpgrade(sel.sceneFrameUrl);
-            },
-          }, cap === 0 ? "无限制" : cap + "fps"),
-        ),
-      ),
-      // Scene 动画渲染进度: 首次渲染分钟级, 后台渲染期间显示进度条
-      // (轮询 /scene-anim-progress; 完成或切换壁纸后置 null)。
-      sel.type === "scene" && sel.sceneAnimProgress != null && sel.sceneAnimProgress < 100
-        && React.createElement("div", { className: "we-picker__row we-picker__prog" },
-          React.createElement("div", { className: "we-picker__prog-track" },
-            React.createElement("div", {
-              className: "we-picker__prog-bar",
-              style: { width: Math.max(2, Math.min(100, sel.sceneAnimProgress || 0)) + "%" },
-            }),
-          ),
-          React.createElement("span", { className: "we-picker__hint" },
-            "场景动画渲染中 " + (sel.sceneAnimProgress || 0) + "%",
-          ),
-        ),
-      // Source metadata + transcode status (host moov probe / transcode lifecycle).
-      sel.type === "video" && sel.mediaInfo && React.createElement("span", { className: "we-picker__hint" },
-        "源 " + sel.mediaInfo.width + "×" + sel.mediaInfo.height
-          + (sel.mediaInfo.fps ? " · " + sel.mediaInfo.fps + "fps" : "")
-          + (sel.mediaInfo.codec ? " · " + codecLabel(sel.mediaInfo.codec) : "")
-          + (sel.transcodeState === "working" ? " · 抽帧准备中…"
-            : sel.transcodeState === "ready" ? " · 已切换至 " + sel.fpsCap + "fps 抽帧版（正常速度，解码占用约减半）"
-            : sel.transcodeState === "fallback" ? " · 转码不可用，已回退原片"
-            : sel.transcodeState === "skipped" ? " · 源帧率 ≤ 上限，无需抽帧"
-            : ""),
-      ),
-      // Download / transcode progress bar (polled from /transcode-progress).
-      sel.type === "video" && sel.transcodeState === "working" && sel.transcodeProgress
-        && React.createElement("div", { className: "we-picker__row we-picker__prog" },
-          React.createElement("div", {
-            className: "we-picker__prog-track",
-            role: "progressbar",
-            "aria-label": "转码进度",
-            "aria-valuemin": 0,
-            "aria-valuemax": 100,
-            "aria-valuenow": Math.max(0, Math.min(100, sel.transcodeProgress.percent || 0)),
-          },
-            React.createElement("div", {
-              className: "we-picker__prog-bar",
-              style: { width: Math.max(2, Math.min(100, sel.transcodeProgress.percent || 0)) + "%" },
-            }),
-          ),
-          React.createElement("span", { className: "we-picker__hint" },
-            sel.transcodeProgress.phase === "download"
-              ? "下载 ffmpeg " + (sel.transcodeProgress.percent || 0) + "%"
-              : sel.transcodeProgress.phase === "transcode" && sel.transcodeProgress.finalizing ? "收尾中…"
-              : sel.transcodeProgress.phase === "transcode"
-                ? "转码中 " + (sel.transcodeProgress.percent || 0) + "%"
-                  + (sel.transcodeProgress.eta ? " · 约剩 " + sel.transcodeProgress.eta + " 秒" : "")
-              : sel.transcodeProgress.phase === "done" ? "即将完成…"
-              : "准备中…",
-          ),
-        ),
-      // Horizontal mirror — scaleX(-1), compositor-only; works for video,
-      // web (iframe) and (later) uploaded image wallpapers alike.
-      React.createElement("label", { className: "we-picker__rotation-toggle" },
-        React.createElement("input", {
-          type: "checkbox",
-          checked: sel.flip,
-          onChange: (e) => { selection.flip = e.target.checked; persistSelection(); emit(); },
-        }),
-        "水平翻转",
-      ),
-      // Fit mode — applies to the CURRENT wallpaper whatever its type (WE
-      // video/scene image and custom uploads alike; web/iframe wallpapers
-      // have no object-fit). 覆盖=cover 填充=contain 居中=center 拉伸=fill
-      React.createElement("div", { className: "we-picker__row we-picker__fit-row" },
-        React.createElement("span", { className: "we-picker__hint we-picker__label" }, "适配"),
-        ["cover", "contain", "center", "fill"].map((mode) => {
-          const label = { cover: "覆盖", contain: "填充", center: "居中", fill: "拉伸" }[mode];
-          return React.createElement("button", {
-            key: mode,
-            className: "we-picker__btn we-picker__rate" + (sel.objectFit === mode ? " we-picker__rate--active" : ""),
-            type: "button",
-            title: mode,
-            onClick: () => {
-              selection.objectFit = mode;
-              persistSelection();
-              emit();
-              // Edge canvas 渲染路径的 fit 存在 weDrawCtx 上（syncLayers 的
-              // same-canvas 守卫不会重建 draw loop），直接更新并重绘。
-              if (weDrawCtx) {
-                weDrawCtx.fit = mode;
-                weDrawFrame();
-              }
-            },
-          }, label);
-        }),
-        React.createElement("span", { className: "we-picker__hint" }, "覆盖=cover · 填充=contain · 居中=center · 拉伸=fill"),
-      ),
-      // 遮挡暂停（借鉴 Wallpaper Engine 的「被遮挡时暂停」）：三个省电开关
-      // 并排一行，说明放下一行 —— 最小化/切页、窗口失焦、电池供电时视频暂停、
-      // 解码归零，回到界面 / 接通电源自动继续。
-      React.createElement("div", { className: "we-picker__row" },
-        React.createElement("label", { className: "we-picker__rotation-toggle" },
-          React.createElement("input", {
-            type: "checkbox",
-            checked: sel.pauseOnHidden,
-            onChange: (e) => { selection.pauseOnHidden = e.target.checked; persistSelection(); emit(); },
-          }),
-          "最小化/切页时暂停",
-        ),
-        React.createElement("label", { className: "we-picker__rotation-toggle" },
-          React.createElement("input", {
-            type: "checkbox",
-            checked: sel.pauseOnBlur,
-            onChange: (e) => { selection.pauseOnBlur = e.target.checked; persistSelection(); emit(); },
-          }),
-          "窗口失焦时暂停",
-        ),
-        React.createElement("label", { className: "we-picker__rotation-toggle" },
-          React.createElement("input", {
-            type: "checkbox",
-            checked: sel.pauseOnBattery,
-            onChange: (e) => { selection.pauseOnBattery = e.target.checked; persistSelection(); emit(); },
-          }),
-          "使用电池时暂停",
-        ),
-      ),
-      React.createElement("span", { className: "we-picker__hint" },
-        "类似 WE 的遮挡暂停：最小化、切到其它应用或使用电池供电时视频暂停、GPU 解码归零；回到界面 / 接通电源自动继续（网页壁纸仅随页面隐藏被浏览器节流）",
-      ),
-      ),
-    ),
-    React.createElement("div", { className: "we-picker__row" },
-      React.createElement("span", { className: "we-picker__hint" },
-        (group
-          ? "列表「" + group.name + "」：" + group.wallpaperIds.length + " 项 · " + playableCount + " 可播放 · 每 " + group.interval + " 分钟 · " + (group.order === "random" ? "随机" : "顺序")
-          : playableList.length + " 个可播放壁纸") +
-        (sel.rotationEnabled ? " · 自动轮转中" : "")),
     ),
   );
 }
@@ -4008,7 +4085,16 @@ const CSS = `
   }
 
   /* Picker chrome. */
-  .we-picker { display: flex; flex-direction: column; gap: 10px; }
+  .we-picker {
+    display: flex; flex-direction: column; gap: 14px;
+    /* ── 统一控件 token：一套高度/圆角/墨色词汇贯穿全部控件 ──
+       墨色走宿主主题 token（明暗主题都可读），强调色只用于选中态/激活态。 */
+    --we-ui-h: 30px;
+    --we-ui-radius: 8px;
+    --we-ink: var(--dsw-alias-label-primary, inherit);
+    --we-ink-2: var(--dsw-alias-label-secondary, rgba(128, 128, 128, 0.9));
+    --we-ink-3: var(--dsw-alias-label-tertiary, rgba(128, 128, 128, 0.65));
+  }
   .we-picker__select { max-width: 100%; }
   .we-picker__row { display: flex; gap: 8px; align-items: center; }
   /* 抽帧转码下载/转码进度条. */
@@ -4145,15 +4231,20 @@ const CSS = `
      swatch gets an accent ring so the current choice is obvious at a glance. */
   .we-picker__accent-row { flex-wrap: wrap; }
   .we-picker__swatch {
-    width: 20px; height: 20px; padding: 0; border-radius: 50%;
-    border: 2px solid rgba(255, 255, 255, 0.7);
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+    width: 22px; height: 22px; padding: 0; border-radius: 50%;
+    border: 0;
+    /* 内圈发丝环让深色圆点在浅玻璃上也有边界；去外描边、留给选中态。 */
+    box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.55), 0 1px 3px rgba(0, 0, 0, 0.35);
     cursor: pointer;
     transition: transform var(--we-dur-fast, 120ms) var(--we-ease, ease), box-shadow var(--we-dur-fast, 120ms) var(--we-ease, ease);
   }
   .we-picker__swatch:hover { transform: scale(1.12); }
   .we-picker__swatch--active {
-    box-shadow: 0 0 0 2px var(--we-accent, #4f8cff), 0 0 0 4px rgba(255, 255, 255, 0.5);
+    /* 双环选中态：表面色间隔环 + accent 外环，比裸描边读得更清。 */
+    box-shadow:
+      inset 0 0 0 1px rgba(255, 255, 255, 0.55),
+      0 0 0 2px var(--dsw-alias-bg-layer-2, rgba(128, 128, 128, 0.2)),
+      0 0 0 4px var(--we-accent, #4f8cff);
   }
   /* "跟随主题" auto swatch (内容面底色): no fill, split ring showing both
      themes so it reads as "use the theme panel color". */
@@ -4172,10 +4263,8 @@ const CSS = `
   }
   .we-picker__swatch-custom input[type="color"]::-webkit-color-swatch-wrapper { padding: 0; }
   .we-picker__swatch-custom input[type="color"]::-webkit-color-swatch { border: 1px solid rgba(255, 255, 255, 0.6); border-radius: 50%; }
-  /* 字体族选择：胶囊 chip（非圆形色板）——文字选项需要横向空间与自字体
-     预览；选中态用 accent 描边，未选中淡描边 + 悬停提亮。flex-wrap 分行。 */
-  .we-picker__font-row { flex-wrap: wrap; row-gap: 6px; }
-  .we-picker__font-row .we-picker__label { flex-basis: 100%; }
+  /* 字体族选择：胶囊 chip（文字选项需要横向空间与自字体预览）。
+     容器 .we-picker__chips 见「统一设置行」区块。 */
   .we-picker__font-chip {
     padding: 3px 12px; border-radius: 999px;
     border: 1px solid rgba(255, 255, 255, 0.35);
@@ -4192,14 +4281,11 @@ const CSS = `
   }
   .we-picker__font-chip--active,
   .we-picker__font-chip--active:hover {
-    color: var(--dsw-alias-text-primary, inherit);
+    color: var(--we-ink, inherit);
     border-color: var(--we-accent, #4f8cff);
-    box-shadow: 0 0 0 1px var(--we-accent, #4f8cff);
+    background: color-mix(in srgb, var(--we-accent, #4f8cff) 12%, transparent);
   }
-  /* Master-switch row (设置窗口液态玻璃) sits on its own line under the 透明度
-     slider so the switch and the hint read as one labelled control. */
-  .we-picker__window-toggle { font-size: 0.82em; }
-  .we-picker__window-toggle + .we-picker__hint { margin-left: 2px; }
+  /* 主开关说明已收进行内一句话 + tooltip（见 we-picker__ctl-hint）。 */
 
   /* Pagination bar under each paged grid (normal / hidden / group editor).
      Horizontally centered; as a direct child of the flex modal body it sinks
@@ -4211,7 +4297,6 @@ const CSS = `
   .we-picker__playlist-select { flex: 1; min-width: 0; }
   .we-picker__filter-row { flex-wrap: wrap; flex-shrink: 0; }
   .we-picker__filter-row .we-picker__playlist-select { flex: 1 1 130px; }
-  .we-picker__rotation-toggle { display: inline-flex; align-items: center; gap: 6px; }
   .we-picker__rotation-interval { margin-left: auto; }
   /* Flat, uniform-height controls. Native <select> renders as a raised "3D"
      OS widget whose height can shift a pixel on hover; inside tightly packed
@@ -4220,25 +4305,25 @@ const CSS = `
      native chrome and PIN the height so no control's intrinsic size can move
      a row. */
   .we-picker__btn {
-    cursor: pointer; height: 26px; line-height: 24px; padding: 0 10px;
+    cursor: pointer; height: var(--we-ui-h, 30px); line-height: calc(var(--we-ui-h, 30px) - 2px); padding: 0 12px;
     border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));
-    border-radius: 6px; background: transparent;
-    color: var(--dsw-alias-label-secondary, #888); font-size: 0.82em;
+    border-radius: var(--we-ui-radius, 8px); background: transparent;
+    color: var(--we-ink, inherit); font-size: 0.82em;
     white-space: nowrap;
   }
   .we-picker__btn:hover { background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.12)); }
   .we-picker__btn:disabled { opacity: 0.45; cursor: default; }
   .we-picker select {
     appearance: none; -webkit-appearance: none;
-    height: 26px; padding: 0 8px;
+    height: var(--we-ui-h, 30px); padding: 0 8px;
     border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));
-    border-radius: 6px; background: transparent;
-    color: var(--dsw-alias-label-secondary, #888); font-size: 0.82em;
+    border-radius: var(--we-ui-radius, 8px); background: transparent;
+    color: var(--we-ink, inherit); font-size: 0.82em;
     cursor: pointer;
   }
   .we-picker select:hover { background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.12)); }
   .we-picker select:disabled { opacity: 0.45; cursor: default; }
-  .we-picker__hint { font-size: 0.8em; opacity: 0.78; }
+  .we-picker__hint { font-size: 0.8em; color: var(--we-ink-3, rgba(128, 128, 128, 0.75)); }
   /* 数字读数等宽：页码 / 计数 / fps / 百分比切换时不再跳动。 */
   .we-picker__pager .we-picker__hint, .we-picker__card-badge, .we-picker__value {
     font-variant-numeric: tabular-nums;
@@ -4251,28 +4336,117 @@ const CSS = `
     outline: 2px solid var(--we-accent, #4f8cff);
     outline-offset: 2px;
   }
-  /* Text inputs (搜索 / 路径 / 列表名称): match the flat 26px control style. */
+  /* Text inputs (搜索 / 路径 / 列表名称): match the flat control style. */
   .we-picker__text {
-    height: 26px; padding: 0 8px;
+    height: var(--we-ui-h, 30px); padding: 0 8px;
     border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));
-    border-radius: 6px; background: transparent;
-    color: var(--dsw-alias-label-secondary, #888); font-size: 0.82em;
+    border-radius: var(--we-ui-radius, 8px); background: transparent;
+    color: var(--we-ink, inherit); font-size: 0.82em;
   }
   .we-picker__search { flex: 1 1 150px; min-width: 0; }
   .we-picker__error { font-size: 0.82em; opacity: 0.9; color: #e5534b; }
   .we-picker__note { font-size: 0.8em; opacity: 0.85; color: var(--we-accent, var(--dsw-alias-brand-primary, #4f8cff)); }
 
   /* ── Visual grouping: sections with a hairline divider + quiet label. ── */
-  .we-picker__section { display: flex; flex-direction: column; gap: 8px; }
+  .we-picker__section { display: flex; flex-direction: column; gap: 10px; }
   .we-picker__section + .we-picker__section {
     border-top: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.22));
-    padding-top: 10px;
+    padding-top: 12px;
   }
   .we-picker__section-head { display: flex; align-items: center; }
   .we-picker__section-label {
-    font-size: 0.75em; font-weight: 500; opacity: 0.55;
-    letter-spacing: 0.01em;
+    font-size: 0.72em; font-weight: 600; letter-spacing: 0.04em;
+    /* 分组标题是「找路」信息而非装饰：次级墨色保证暗玻璃上可读。 */
+    color: var(--we-ink-2, rgba(128, 128, 128, 0.9));
   }
+
+  /* ── 页签栏（分段式）：玻璃轨道 + 滑动指示胶囊。窄抽屉里六枚等宽页签
+     恰好放下两至三字标签；指示胶囊平移走 transform（合成器属性）。 ── */
+  .we-tabs {
+    position: relative; display: flex; flex: 0 0 auto;
+    padding: 3px; border-radius: 10px;
+    background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.12));
+    border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.22));
+    overflow: hidden;
+  }
+  .we-tabs__pill {
+    position: absolute; top: 3px; left: 3px; bottom: 3px;
+    border-radius: 8px;
+    background: var(--dsw-alias-bg-layer-3, rgba(255, 255, 255, 0.16));
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.12);
+    transition: transform 220ms var(--we-ease, cubic-bezier(0.16, 1, 0.3, 1));
+    will-change: transform;
+  }
+  .we-tabs__tab {
+    position: relative; z-index: 1; flex: 1 1 0; min-width: 0;
+    height: 28px; padding: 0 4px; border: 0; background: transparent;
+    border-radius: 8px; cursor: pointer; white-space: nowrap;
+    font-size: 12px; line-height: 1;
+    color: var(--we-ink-2, rgba(128, 128, 128, 0.9));
+    transition: color var(--we-dur-fast, 120ms) var(--we-ease, ease);
+  }
+  .we-tabs__tab:hover { color: var(--we-ink, inherit); }
+  .we-tabs__tab--active { color: var(--we-ink, inherit); font-weight: 600; }
+  /* 页签面板：淡入 + 轻微上移落定（reduced-motion 由全局媒体查询静止）。 */
+  .we-tabpanel {
+    display: flex; flex-direction: column; gap: 12px;
+    animation: we-tab-in 180ms var(--we-ease, cubic-bezier(0.16, 1, 0.3, 1));
+  }
+  @keyframes we-tab-in {
+    from { opacity: 0; transform: translateY(4px); }
+  }
+
+  /* ── 统一设置行：左「标签(+一句话说明)」、右控件；32px 触达高度。 ── */
+  .we-picker__ctl {
+    display: flex; align-items: center; justify-content: space-between;
+    gap: 12px; min-height: 32px;
+  }
+  .we-picker__ctl--wrap { flex-wrap: wrap; row-gap: 8px; }
+  .we-picker__ctl-text { display: flex; flex-direction: column; gap: 1px; min-width: 0; }
+  .we-picker__ctl-label {
+    font-size: 0.88em; color: var(--we-ink, inherit);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .we-picker__ctl-hint {
+    font-size: 0.7em; color: var(--we-ink-3, rgba(128, 128, 128, 0.65));
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;
+  }
+  .we-picker__ctl-side { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
+  .we-picker__swatches { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
+  .we-picker__chips { display: flex; flex-wrap: wrap; gap: 6px; }
+
+  /* ── 吉祥物形态卡片：立绘即实时预览（随大小滑块缩放）。 ── */
+  .we-picker__mascot-row { display: flex; gap: 10px; flex-wrap: wrap; }
+  .we-picker__mascot-card {
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    padding: 12px 16px 10px; min-width: 96px;
+    border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.28));
+    border-radius: 12px; cursor: pointer;
+    background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.08));
+    transition:
+      border-color var(--we-dur-fast, 120ms) var(--we-ease, ease),
+      background-color var(--we-dur-fast, 120ms) var(--we-ease, ease),
+      box-shadow var(--we-dur-fast, 120ms) var(--we-ease, ease),
+      transform var(--we-dur-fast, 120ms) var(--we-ease, ease);
+  }
+  .we-picker__mascot-card:hover { border-color: var(--dsw-alias-label-dimmed, rgba(128, 128, 128, 0.5)); }
+  .we-picker__mascot-card:active { transform: scale(0.97); }
+  .we-picker__mascot-card--active {
+    border-color: var(--we-accent, #4f8cff);
+    background: color-mix(in srgb, var(--we-accent, #4f8cff) 10%, transparent);
+    box-shadow: 0 0 0 1px var(--we-accent, #4f8cff);
+  }
+  .we-picker__mascot-art { display: flex; align-items: flex-end; justify-content: center; }
+  .we-picker__mascot-art img { display: block; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
+  .we-picker__mascot-name { font-size: 0.78em; color: var(--we-ink-2, rgba(128, 128, 128, 0.9)); }
+  .we-picker__mascot-card--active .we-picker__mascot-name { color: var(--we-ink, inherit); }
+
+  /* ── 效果页签空态：不摆一列无效滑块，引导去选壁纸。 ── */
+  .we-picker__empty {
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    padding: 36px 16px; text-align: center;
+  }
+  .we-picker__empty-title { font-size: 0.95em; font-weight: 600; color: var(--we-ink, inherit); }
 
   /* ── Vinyl record (黑胶唱片): rotating disc with the selected wallpaper's
      cover as the label. Spins while the wallpaper is playing; pauses
@@ -4344,14 +4518,16 @@ const CSS = `
   }
   .we-picker__current-meta { font-size: 0.75em; opacity: 0.55; margin-top: 2px; }
 
-  /* Primary action (选择壁纸): brand accent, restrained — accent is for the
-     main action only, per the product register's "accent ≠ decoration". */
+  /* Primary action (选择壁纸): the ONE solid-accent control per view — accent
+     is reserved for primary action + selection states, never decoration. */
   .we-picker__btn--primary {
-    color: var(--we-accent, #4f8cff);
-    border-color: var(--we-accent, #4f8cff);
+    color: #fff;
+    background: var(--we-accent, #4f8cff);
+    border-color: transparent;
+    font-weight: 600;
   }
   .we-picker__btn--primary:hover {
-    background: var(--we-accent, #4f8cff);
+    background: color-mix(in srgb, var(--we-accent, #4f8cff) 86%, #000);
     color: #fff;
   }
 
@@ -4369,13 +4545,14 @@ const CSS = `
   }
   .we-picker__slider::-webkit-slider-thumb {
     -webkit-appearance: none; appearance: none;
-    width: 14px; height: 14px; margin-top: -5px; border-radius: 50%;
-    background: var(--dsw-alias-bg-layer-1, #fff);
+    width: 16px; height: 16px; margin-top: -6px; border-radius: 50%;
+    background: #fff;
     border: 2px solid var(--we-accent, #4f8cff);
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
     transition: transform var(--we-dur-fast, 120ms) var(--we-ease, ease);
   }
-  .we-picker__slider:hover::-webkit-slider-thumb { transform: scale(1.15); }
+  .we-picker__slider:hover::-webkit-slider-thumb { transform: scale(1.12); }
+  .we-picker__slider:active::-webkit-slider-thumb { transform: scale(1.2); }
   .we-picker__slider::-moz-range-track {
     height: 4px; border-radius: 2px;
     background: var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.4));
@@ -4386,14 +4563,12 @@ const CSS = `
     background: var(--we-accent, #4f8cff);
   }
   .we-picker__slider::-moz-range-thumb {
-    width: 14px; height: 14px; border-radius: 50%;
-    background: var(--dsw-alias-bg-layer-1, #fff);
+    width: 16px; height: 16px; border-radius: 50%;
+    background: #fff;
     border: 2px solid var(--we-accent, #4f8cff);
     box-shadow: 0 1px 4px rgba(0, 0, 0, 0.3);
   }
-  /* Native checkboxes tinted with the accent (自动轮转 / 水平翻转). */
-  .we-picker input[type="checkbox"] { accent-color: var(--we-accent, #4f8cff); }
-  .we-picker__rotation-toggle { cursor: pointer; }
+  /* （原生 checkbox 已全部替换为胶囊开关 .we-picker__switch。） */
 
   /* Sliding toggle switch (紧凑布局). Track + thumb slide left/right with a
      snappy 120ms transition; pinned accent so light themes stay readable. */
@@ -4404,11 +4579,14 @@ const CSS = `
     position: absolute; opacity: 0; width: 0; height: 0;
   }
   .we-picker__switch-track {
-    position: relative; width: 42px; height: 24px; border-radius: 12px;
-    background: rgba(128, 128, 128, 0.4);
-    transition: background-color var(--we-dur-fast, 120ms) var(--we-ease, ease);
-    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.3);
+    position: relative; width: 36px; height: 20px; border-radius: 999px;
+    background: var(--dsw-alias-bg-layer-3, rgba(128, 128, 128, 0.4));
+    border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.25));
+    box-sizing: border-box;
+    transition: background-color 180ms var(--we-ease, ease), border-color 180ms var(--we-ease, ease);
+    box-shadow: inset 0 1px 2px rgba(0, 0, 0, 0.16);
   }
+  .we-picker__switch:hover .we-picker__switch-track { border-color: var(--dsw-alias-label-dimmed, rgba(128, 128, 128, 0.5)); }
   /* 键盘焦点环：input 视觉隐藏但可聚焦，焦点环落在 track 上。 */
   .we-picker__switch input:focus-visible + .we-picker__switch-track {
     outline: 2px solid var(--we-accent, #4f8cff);
@@ -4418,18 +4596,14 @@ const CSS = `
     background: var(--we-accent, #4f8cff); /* 跟随「配色」设置，不再硬编码 */
   }
   .we-picker__switch-thumb {
-    position: absolute; left: 3px; top: 3px;
-    width: 18px; height: 18px; border-radius: 50%;
+    position: absolute; left: 2px; top: 2px;
+    width: 14px; height: 14px; border-radius: 50%;
     background: #fff;
-    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
-    transition: transform var(--we-dur-fast, 120ms) var(--we-ease, ease);
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.35);
+    transition: transform 180ms var(--we-ease, ease);
   }
   .we-picker__switch input:checked + .we-picker__switch-track .we-picker__switch-thumb {
-    transform: translateX(18px);
-  }
-  /* Edge 兼容渲染开关：塞在"紧凑布局"同一行，margin-left:auto 使其靠右。 */
-  .we-picker__switch--edge {
-    margin-left: auto; align-items: center; gap: 6px;
+    transform: translateX(16px);
   }
 
   /* Custom chevron for the flat selects (appearance: none removed the native
@@ -4469,9 +4643,14 @@ const CSS = `
       animation: none !important;
     }
   }
-  .we-picker__slider-row { display: flex; align-items: center; gap: 8px; }
-  .we-picker__label { min-width: 28px; }
-  .we-picker__value { min-width: 40px; text-align: right; }
+  .we-picker__slider-row { display: flex; align-items: center; gap: 10px; }
+  .we-picker__label { min-width: 28px; flex: 0 0 auto; color: var(--we-ink, inherit); font-size: 0.88em; }
+  .we-picker__value {
+    min-width: 48px; text-align: right; flex: 0 0 auto;
+    padding: 2px 8px; border-radius: 999px; font-size: 0.72em;
+    background: var(--dsw-alias-bg-layer-2, rgba(128, 128, 128, 0.14));
+    color: var(--we-ink-2, rgba(128, 128, 128, 0.9));
+  }
   .we-picker__text { flex: 1; min-width: 0; }
   .we-picker__editor {
     display: flex; flex-direction: column; gap: 6px;
@@ -4749,10 +4928,10 @@ const CSS = `
      the 卡片样式 two-button switch (wrapped in .we-picker__seg). */
   .we-picker__seg { display: flex; gap: 4px; flex: 1; min-width: 0; }
   .we-picker__rate {
-    flex: 1; padding: 0; text-align: center; font-size: 0.78em;
+    flex: 1; height: var(--we-ui-h, 30px); padding: 0; text-align: center; font-size: 0.78em;
     border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));
-    border-radius: 6px; background: transparent; cursor: pointer;
-    color: var(--dsw-alias-label-secondary, #888);
+    border-radius: var(--we-ui-radius, 8px); background: transparent; cursor: pointer;
+    color: var(--we-ink-2, rgba(128, 128, 128, 0.9));
   }
   .we-picker__rate + .we-picker__rate { margin-left: 0; }
   .we-picker__rate--active {
@@ -5000,10 +5179,12 @@ const CSS = `
   }
 `;
 
-// Bumped v2: force a fresh <style> injection even when a page still carries the
+// Bumped v3: tabbed picker IA + unified control chrome (sliding segmented tab
+// bar, pill switches everywhere, ink-token labels, 30px control heights).
+// Forces a fresh <style> injection even when a page still carries the
 // old stylesheet tag from a previous bundle (TAG_ID dedupes the injection; a
 // static id would leave stale CSS rules active and new rules missing).
-const TAG_ID = "dsh-wallpaper-engine/styles-v2";
+const TAG_ID = "dsh-wallpaper-engine/styles-v3";
 if (typeof document !== "undefined" &&
     document.querySelector("style[data-plugin-css=" + JSON.stringify(TAG_ID) + "]") === null) {
   const tag = document.createElement("style");
