@@ -108,9 +108,12 @@ const html = (theme) => `<!doctype html>
       return res({ ok: true });
     };
     // 预置：选中图片壁纸（ vinyl 封面可见）+ 关掉更新公告弹窗。
-    localStorage.setItem('dsh-wallpaper-engine:selection', JSON.stringify({
-      id: 'w1', noticeSeen: '0.6.8',
-    }));
+    // 仅为全新环境播种；已有存档（如已关闭公告的 noticeSeen）不得覆盖。
+    if (!localStorage.getItem('dsh-wallpaper-engine:selection')) {
+      localStorage.setItem('dsh-wallpaper-engine:selection', JSON.stringify({
+        id: 'w1', noticeSeen: '0.6.8',
+      }));
+    }
   })();
 </script>
 </head>
