@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.8.1 — 8K 工程静态帧只剩天空雾层
+
+`3427824116 胡桃-窗前`（投影 8192×4608）：天空/图层 1 两个 37.7MP 内嵌
+PNG 在拼合 Pass 1 全被静默判为解码失败——`decodeTexToRgba` 复用的
+`decodePngPayload` 带着 12MP 质量门上限（那是给 `pngQuality`"超限即信任"
+设计的），两层全弃 → 拼合弃用 → 回落单纹理路径输出天空雾图。
+
+- **真解码上限与质量门分离**：`decodePngPayload` 增加 `maxPixels` 参数
+  （默认仍 12MP）；`decodeTexToRgba` 传 64MP（与 JPEG 路径对齐）。
+- **拼合超限缩放**：画布超 33.2MP 硬上限时不再整帧放弃，按比例均匀缩放
+  画布与全部图层到 4K 预算（3840×2160）再拼合，层间几何不变。
+- 附带修复：隔行（Adam7）PNG 拒绝解码（防错位像素）；RGB PNG 载荷补
+  alpha=255（此前 source-over 拼合整层不可见）。
+- 新增 `scripts/verify-all-wallpapers.mjs` 全库端到端验证（视频/GL 门/静态帧）。
+
 ## Unreleased — 移除 CPU 渲染路径：GL-only + 静态图回退（破坏性变更）
 
 场景壁纸渲染优先级变为 **内嵌视频 > GL 实时 > 静态图**。CPU 软件渲染链
