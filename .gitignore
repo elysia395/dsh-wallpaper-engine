@@ -33,3 +33,9 @@ scene-layers-out/
 /scripts/reverse/
 /scripts/core/
 /scripts/anim/
+
+# ZCode 会话本地文件 (计划/缓存, 不入库)
+/.zcode/
+
+# 临时预览/诊断脚本 (本地 QA 用, 不入库)
+/scripts/.tmp-*
