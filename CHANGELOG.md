@@ -1,5 +1,20 @@
 # Changelog
 
+## 0.8.4 — CPU 渲染全部屏蔽（决策再修订）
+
+0.8.2 恢复的 CPU 渲染优先链经实测后用户拍板撤除：静态帧只走提取器
+（0.8.1 修复版），GPU 抓帧回填保留（0.8.3）。CPU 渲染相关代码全部移除
+（引擎模块与 0.8.0 移除后的基线一致；恢复方案留档于历史 4340e53）。
+
+- `/scene-frame` 回到提取器唯一实现；缓存键 sf37→sf38
+- we-renderer 引擎模块 (core/image/text/particles/model/mdl/camera/
+  bloom/textures/effects/glsl executor 等) 与 scene-renderer.js /
+  scene-render-worker.mjs 再次移除; puppet.js 恢复 GL 专用裁剪版
+- 保留: HEAD 缓存探测、PUT GPU 抓帧回填 (仅空槽)、负缓存、in-flight
+  去重、客户端 GL 接管后中止底图请求
+- 行为面: GL 开 → GPU 实时 + 抓帧建缓存; GL 关/失败 → 提取器静态图;
+  无纹理场景 422 → 预览回退 (0.8.1 实测 56/177 可出帧, 真实 7 张全部 ✓)
+
 ## 0.8.3 — 静态帧缓存：GPU 抓帧回填 + CPU 兜底按需触发
 
 0.8.2 的余留问题：GL 可用时客户端仍无条件预取 frameUrl 底图 → 每张壁纸

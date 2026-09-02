@@ -1,7 +1,7 @@
 // 打包完整性守卫：从插件入口解析完整 import 图，凡 lib/ 下可达文件都必须被
 // package.json 的 files 白名单覆盖。漏列 = npm pack 丢文件 = 生产环境模块缺失
-// （历史教训: 0.6.8 漏装一个 lib 文件 → 渲染全线崩溃）。注意 import 图抓不到
-// new Worker(new URL(...)) 引用 — scene-render-worker.mjs 必须显式列在白名单。
+// （历史教训: 0.6.8 漏装一个 lib 文件 → 渲染全线崩溃）。CPU 渲染链已屏蔽,
+// 白名单只剩 GL/提取器管线文件。
 import fs from 'node:fs';
 import path from 'node:path';
 import url from 'node:url';
