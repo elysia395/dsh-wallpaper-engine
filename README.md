@@ -50,7 +50,7 @@ Scene 壁纸在浏览器端用 **WebGL2 实时渲染**（`src/scene-gl.js`，数
 - **特效**：客户端编译壁纸 pkg 自带的官方 shader（combo 组装 + `#include` 展开 + HLSL→GLSL 兼容宏）；单效果失败只跳过该对象（失败隔离）。
 - **粒子 / 木偶 / 精灵表**：粒子系统（发射器/初始化器/运算符）为 CPU 版语义的 WebGL 移植；木偶走服务端 MDL 解析 payload + 客户端蒙皮；多帧纹理按帧矩形 UV 采样轮播。
 - **文字**：gate 期服务端 CFF 字体栅格化为 PNG 位图下发（静态值）。
-- **回退链**：内嵌视频 sceneVideo > GL 实时 > 静态图（CPU 引擎单帧渲染优先，提取器拼合兜底；`sf37_` 缓存键，`~/.dsh-wallpaper-engine/cache/frames/`，mtime 自动失效）；含内嵌脚本/缺失项的场景由降级横幅披露。
+- **回退链**：内嵌视频 sceneVideo > GL 实时 > 静态图（CPU 引擎单帧渲染优先，提取器拼合兜底；`sf37_` 缓存键，`~/.dsh-wallpaper-engine/cache/frames/`，mtime 自动失效）；含内嵌脚本/缺失项的场景由降级横幅披露。静态帧缓存每壁纸一份、仅空槽写入：GL 会话渲染 2.5s 后从 canvas 抓帧回填（`HEAD /scene-frame` 探测 + `PUT /scene-frame-cache`），GL 可用时不再触发 CPU 渲染（底图请求在 GL 接管后中止），GL 关闭/失败时由 CPU 渲染创建。
 ## 工作原理
 
 - **Host 端**（`lib/index.js`）：一个 Cordis 插件，负责

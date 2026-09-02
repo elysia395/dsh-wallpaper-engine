@@ -1429,8 +1429,31 @@ function trySceneGL(frameUrl) {
   return trySceneGLNow(frameUrl);
 }
 // trySceneGL 主体（降级预检通过或开关默认开后直达）
-function trySceneGLNow(frameUrl) {
-  const token = frameUrl.split("/").pop();
+// GPU 抓帧回填静态帧缓存 (2026-09-02 决策: CPU/GPU 皆可创建, 每壁纸一份,
+// 仅空槽写入)。GL ready 后 2.5s (粒子/效果展开, 对齐 CPU 渲染 time=2.5):
+// HEAD /scene-frame 探测 (204=无缓存) → captureFramePNG() → PUT 上传。
+// 任一步失败静默放弃 — 抓帧是锦上添花, 不影响显示链。
+function scheduleGLFrameCapture(renderer, token) {
+  if (!renderer || typeof renderer.captureFramePNG !== "function") return;
+  const seq = sceneGL ? sceneGL.seq : 0;
+  setTimeout(() => {
+    // 渲染器已被替换/释放 (切换壁纸/失败) → 放弃本次
+    if (!sceneGL || sceneGL.renderer !== renderer || sceneGL.seq !== seq) return;
+    try {
+      fetch("/wallpaper-engine/scene-frame/" + token, { method: "HEAD" }).then((probe) => {
+        if (probe.status === 200) return; // 已有缓存帧 (CPU 先渲染过) → 零开销跳过
+        if (probe.status !== 204) return; // 探测异常 (404/旧宿主无 HEAD) → 不抓
+        renderer.captureFramePNG().then((blob) => {
+          if (!blob || blob.size < 2048 || !sceneGL || sceneGL.renderer !== renderer) return;
+          fetch("/wallpaper-engine/scene-frame-cache/" + token, { method: "PUT", body: blob })
+            .catch(() => { /* 上传失败无所谓 — 下次会话再试 */ });
+        }).catch(() => { /* 抓帧失败 (暂停中/已释放) 静默 */ });
+      }).catch(() => { /* HEAD 失败静默 */ });
+    } catch { /* ignore */ }
+  }, 2500);
+}
+
+function trySceneGLNow(frameUrl) {  const token = frameUrl.split("/").pop();
   disposeSceneGL();
   sceneGLNotice = null; // 新一轮尝试使旧 gate 提示失效(失败由 onError 重写；成功则无提示)
   const { vw, vh } = sceneViewportSize();
@@ -1446,6 +1469,18 @@ function trySceneGLNow(frameUrl) {
       try { sceneGL.degraded = renderer.degraded ? renderer.degraded() : []; } catch { sceneGL.degraded = []; }
       // 首帧完成 → canvas 300ms 淡入覆盖底图 img（canvas 不透明 = 等价 img 淡出）
       renderer.canvas.classList.add("we-media--gl-ready");
+      // GL 已接管显示 → 底图 img 的取帧请求不再需要: 撤 src 让宿主 N-02
+      // 等待者归零, 中止仍在跑的 CPU worker 渲染 (GPU 可用时 CPU 兜底不落盘,
+      // 静态帧改由下方抓帧回填)。GL 失败时 onError → emit → wantKey 变化
+      // 重建层, img.src 由 buildMedia 重设, 回退链不断。
+      try {
+        const layer = renderer.canvas.closest(".we-layer");
+        const underlay = layer && layer.querySelector("img.we-media");
+        if (underlay && underlay.getAttribute("src")) underlay.removeAttribute("src");
+      } catch { /* ignore */ }
+      // GPU 抓帧回填静态帧缓存 (仅空槽, 每壁纸一份): ready 后等 ~2.5s 让
+      // 粒子/效果展开 (对齐 CPU 渲染 time=2.5), HEAD 探测无缓存才抓帧上传。
+      scheduleGLFrameCapture(renderer, token);
       emit();
     },
     onError: ({ reason }) => {

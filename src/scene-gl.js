@@ -2405,7 +2405,8 @@ function createSceneGLRenderer(opts) {
     // 且无脏标记时跳过 render（GL 工作全免；rAF 空转保持活跃，脏标记置位后
     // 下一 vsync 立即恢复）。frameTimes/frames 照常记录（rAF 间隔量纲，外部
     // 观测语义不变）。动态场景（任一 g_Time 存在）恒不触发，行为与旧版一致。
-    if (res && res.sceneIsStatic && !needRedraw) return;
+    // 抓帧请求在队 → 不跳帧 (静态场景也要真实 render 一帧供 readPixels)
+    if (res && res.sceneIsStatic && !needRedraw && !captureWaiters.length) return;
     const t = rateBase + ((now - wallBase) / 1000) * playbackRate;
     stats.lastT = t;
     // G-03: 帧级 try/catch + 连续失败计数 — 连续 N 帧抛错判 fatal：停循环、
@@ -2419,6 +2420,15 @@ function createSceneGLRenderer(opts) {
       needRedraw = false; // P2-8: 渲染成功帧后才清脏（抛错帧保持脏，G-03 重试仍逐帧跑）
       renderFails = 0;
       stats.renderFails = 0;
+      // GPU 抓帧 (captureFramePNG): 必须在刚 render 完的同一 rAF tick 内同步
+      // readPixels — canvas 未设 preserveDrawingBuffer, 换 tick 后台缓冲可能
+      // 已被合成器回收, 这里是唯一保证读到完整帧的位置。
+      if (captureWaiters.length) {
+        const waiters = captureWaiters.splice(0);
+        for (const w of waiters) {
+          try { captureIntoBlob(w); } catch (e) { try { w(null, e); } catch { /* */ } }
+        }
+      }
       if (!readyFired) {
         readyFired = true;
         state = 'GL_RUN';
@@ -2435,6 +2445,38 @@ function createSceneGLRenderer(opts) {
         return;
       }
     }
+  }
+  // ── GPU 抓帧 (静态帧缓存回填, 2026-09-02 决策) ─────────────────────────
+  // captureFramePNG(): 排队到下一渲染 tick, 同帧 readPixels → 行序翻转 →
+  // 2D canvas → toBlob('image/png')。供 client 在 GL ready 后回填该壁纸的
+  // sf37 缓存槽 (仅空槽写入, 每壁纸一份)。
+  const captureWaiters = [];
+  function captureIntoBlob(done) {
+    const w = canvas.width, h = canvas.height;
+    if (w < 2 || h < 2) { done(null, new Error('canvas too small')); return; }
+    const px = new Uint8Array(w * h * 4);
+    gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, px); // WebGL 坐标系 y 向上
+    const c2 = document.createElement('canvas');
+    c2.width = w; c2.height = h;
+    const ctx2 = c2.getContext('2d');
+    const img = ctx2.createImageData(w, h);
+    // 行序翻转 (readPixels 首行=底部; ImageData 首行=顶部)
+    const row = w * 4;
+    for (let y = 0; y < h; y++) {
+      img.data.set(px.subarray((h - 1 - y) * row, (h - y) * row), y * row);
+    }
+    ctx2.putImageData(img, 0, 0);
+    c2.toBlob((blob) => {
+      if (blob) done(blob);
+      else done(null, new Error('toBlob failed'));
+    }, 'image/png');
+  }
+  function captureFramePNG() {
+    return new Promise((resolve, reject) => {
+      if (disposed) { reject(new Error('renderer disposed')); return; }
+      if (!running) { reject(new Error('renderer not running')); return; }
+      captureWaiters.push((blob, err) => { if (err) reject(err); else resolve(blob); });
+    });
   }
   function startLoop() {
     if (running || disposed || !res || paused) return;
@@ -2629,6 +2671,9 @@ function createSceneGLRenderer(opts) {
     ],
     // G-07: 视口/设备像素比变化时由调用方喂新预算（超限 clamp + 阈值内忽略）
     resize,
+    // GPU 抓帧: 返回 PNG Blob (Promise)。必须在渲染循环活跃时调用 — 请求
+    // 在下一真实 render tick 内兑现 (见 loop 内 captureWaiters 消费)。
+    captureFramePNG,
     // 用户暂停/遮挡暂停（调用方按 isEffectivelyPlaying 同步）
     setPaused(p) {
       p = !!p;

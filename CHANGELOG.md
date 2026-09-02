@@ -1,5 +1,24 @@
 # Changelog
 
+## 0.8.3 — 静态帧缓存：GPU 抓帧回填 + CPU 兜底按需触发
+
+0.8.2 的余留问题：GL 可用时客户端仍无条件预取 frameUrl 底图 → 每张壁纸
+首次选中都会白跑一次 CPU worker 渲染 (4~30s CPU 尖峰, 结果被 GL 覆盖)。
+按用户决策落地"每壁纸一份缓存, CPU/GPU 皆可创建, 仅空槽写入":
+
+- **GPU 抓帧回填**：GL ready 后 2.5s (对齐 CPU 渲染 time=2.5, 粒子/效果
+  已展开) 从 canvas 同帧 `readPixels` 抓 PNG → `HEAD /scene-frame` 探测
+  空槽 (204) 才上传 → `PUT /scene-frame-cache/<token>` 写入 sf37 槽。
+  已有帧 (CPU 先渲染过) 零开销跳过; 任一步失败静默放弃。
+- **CPU 兜底按需触发**：GL ready 即撤底图 img 的 src → 宿主 N-02 等待者
+  归零 → 中止在跑的 CPU worker 渲染。GL 可用时 CPU 渲染不再落盘; GL
+  失败回退时层重建重设 img.src, 链路不变。
+- **首写胜出**：worker 渲染完成时若槽已被 GPU 帧占用则丢弃结果; PUT 也
+  只写空槽 — 两条创建路径互不覆盖。
+- `scene-frame` 支持 HEAD (纯磁盘探测, 绝不触发渲染); PUT 校验 PNG/JPEG
+  魔数 + 32MB 上限 + token 白名单。
+- 首次空窗 (完全无缓存) 维持现状不加垫图 (用户决策)。
+
 ## 0.8.2 — 静态帧恢复 CPU 渲染（决策修订）
 
 0.8.0 把提取器（多图层拼合）提为唯一静态帧实现后实测暴露：该分支在 0.7.1
