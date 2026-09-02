@@ -18,7 +18,7 @@
 - **视频倍速**：0.5x – 2x 六档原生调速，即时生效、不重载；
 - **水平翻转**：镜像画面（视频 / 网页 / 上传图片均适用）；
 - **自定义壁纸**：直接上传本地 JPG / PNG / MP4 当壁纸，可选存储位置与画面适配模式；
-- **场景壁纸 GL 实时渲染**（v0.6 起，CPU 渲染路径已于后续版本移除）：Scene 壁纸在浏览器端 WebGL2 实时渲染 — 客户端直接编译壁纸自带的官方 shader（45 个官方特效 + workshop 自定义），失败项逐项隔离并在设置页披露；GL 不可用/失败时自动回退提取器静态图。
+- **场景壁纸 GL 实时渲染**（v0.6 起）：Scene 壁纸在浏览器端 WebGL2 实时渲染 — 客户端直接编译壁纸自带的官方 shader（45 个官方特效 + workshop 自定义），失败项逐项隔离并在设置页披露；GL 不可用/失败时自动回退静态图（CPU 引擎渲染，含粒子/特效；渲染失败再退提取器拼合）。
 - **液态玻璃设置页**（v0.3.1）：设置页升级为**一级设置页**（参照 dsh-web-ui-all 皮肤中心的设计），整页是可自定义的液态玻璃卡片 —— **配色**（6 种预设 + 自定义取色）与**玻璃透明度**（0–60%）即时生效、持久保存。
 - **整个设置窗口液态玻璃化**（v0.3.2）：一键把 **DSH 原生设置窗口整体**（对话框 + 左侧导航 + General / 模型 / 插件等**全部原生分区**）换成液态玻璃 + 自定义配色 —— 开启「设置窗口液态玻璃」开关后，窗口背景、导航选中/悬停、按钮、开关、链接等全部跟随 **配色** 与 **玻璃透明度**，关闭则恢复原生样式。
 - **玻璃调节统一**（v0.3.3–v0.3.5）：设置窗口的玻璃模糊与**对话栏共用同一套调节参数**（「玻璃」滑动条 0–60 px 同时控制设置窗口与输入栏/气泡的模糊半径，饱和度/亮度/对比度配方一致）；新增「**玻璃颜色**」—— 设置窗口玻璃的**底色色调**可自定义（6 预设 + 自定义取色，默认浅色白 / 深色深夜蓝，选定后两种主题统一使用该色），与「配色」（交互元素）分工：**配色管控件、玻璃颜色管玻璃本身**。
@@ -42,7 +42,7 @@ Wallpaper Engine 的壁纸分四种类型：
 |---|---|---|
 | **Scene（场景）** | Wallpaper Engine 自带的 3D 引擎 | ✅ WebGL2 实时渲染（官方 shader 直跑 + 粒子/木偶/精灵表），回退静态图，见下文 |
 
-Scene 壁纸在浏览器端用 **WebGL2 实时渲染**（`src/scene-gl.js`，数学经 wallpaper64.exe 逆向 + linux-wallpaperengine 行级对照校准）：服务端 gate 把 `scene.pkg` 解成静态 schema 下发（动画关键帧烘焙 / 文字栅格化位图 / 木偶网格 payload），客户端按时间线确定性重放，**特效直接编译壁纸自带的官方 GLSL**（HLSL 兼容宏 + 字面量修正，45 个官方特效 + workshop 自定义全放行，失败逐项隔离并在设置页披露）。GL 不可用 / 初始化失败 / GPU 崩溃时自动回退**提取器静态图**（多图层按 scene.json 拼合，无特效/粒子），降级横幅可见。
+Scene 壁纸在浏览器端用 **WebGL2 实时渲染**（`src/scene-gl.js`，数学经 wallpaper64.exe 逆向 + linux-wallpaperengine 行级对照校准）：服务端 gate 把 `scene.pkg` 解成静态 schema 下发（动画关键帧烘焙 / 文字栅格化位图 / 木偶网格 payload），客户端按时间线确定性重放，**特效直接编译壁纸自带的官方 GLSL**（HLSL 兼容宏 + 字面量修正，45 个官方特效 + workshop 自定义全放行，失败逐项隔离并在设置页披露）。GL 不可用 / 初始化失败 / GPU 崩溃时自动回退**静态图**（服务端 CPU 引擎单帧渲染，含粒子/特效；渲染失败再退提取器多图层拼合），降级横幅可见。
 
 ### 场景渲染：怎么工作的
 
@@ -50,7 +50,7 @@ Scene 壁纸在浏览器端用 **WebGL2 实时渲染**（`src/scene-gl.js`，数
 - **特效**：客户端编译壁纸 pkg 自带的官方 shader（combo 组装 + `#include` 展开 + HLSL→GLSL 兼容宏）；单效果失败只跳过该对象（失败隔离）。
 - **粒子 / 木偶 / 精灵表**：粒子系统（发射器/初始化器/运算符）为 CPU 版语义的 WebGL 移植；木偶走服务端 MDL 解析 payload + 客户端蒙皮；多帧纹理按帧矩形 UV 采样轮播。
 - **文字**：gate 期服务端 CFF 字体栅格化为 PNG 位图下发（静态值）。
-- **回退链**：内嵌视频 sceneVideo > GL 实时 > 提取器静态图（`sf36_` 缓存键，`~/.dsh-wallpaper-engine/cache/frames/`，mtime 自动失效）；含内嵌脚本/缺失项的场景由降级横幅披露。
+- **回退链**：内嵌视频 sceneVideo > GL 实时 > 静态图（CPU 引擎单帧渲染优先，提取器拼合兜底；`sf37_` 缓存键，`~/.dsh-wallpaper-engine/cache/frames/`，mtime 自动失效）；含内嵌脚本/缺失项的场景由降级横幅披露。
 ## 工作原理
 
 - **Host 端**（`lib/index.js`）：一个 Cordis 插件，负责
@@ -60,7 +60,7 @@ Scene 壁纸在浏览器端用 **WebGL2 实时渲染**（`src/scene-gl.js`，数
      - `GET /wallpaper-engine/inventory` → 壁纸 JSON 列表
      - `GET /wallpaper-engine/media/<token>` → 视频 / HTML（支持 Range）
      - `GET /wallpaper-engine/preview/<token>` → 预览图
-     - `GET /wallpaper-engine/scene-frame/<token>` → 场景壁纸静态图（提取器多图层拼合，PNG/JPEG 磁盘缓存；GL 回退底图）
+     - `GET /wallpaper-engine/scene-frame/<token>` → 场景壁纸静态图（CPU 引擎 worker 单帧渲染优先，提取器多图层拼合兜底；PNG/JPEG 磁盘缓存；GL 回退底图）
      - `POST /wallpaper-engine/upload` → 上传自定义壁纸（JPG / PNG / MP4，原始字节流）
      - `POST /wallpaper-engine/remove` → 移除已上传的壁纸
      - `POST /wallpaper-engine/upload-dir` → 更改上传目录（持久化到 `~/.dsh-wallpaper-engine/config.json`，自动迁移已有文件）

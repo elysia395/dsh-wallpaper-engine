@@ -1,5 +1,25 @@
 # Changelog
 
+## 0.8.2 — 静态帧恢复 CPU 渲染（决策修订）
+
+0.8.0 把提取器（多图层拼合）提为唯一静态帧实现后实测暴露：该分支在 0.7.1
+只是 worker 崩溃兜底、从未被真实壁纸执行过，转正即翻车（y 翻转 / PNG 12MP
+解码门 / 画布 33MP 上限三连，0.8.1 已修但能力面仍窄——无粒子/文字/特效，
+SDK 纯粒子场景全 422）。决策修订（详见 `docs/plan-remove-cpu-render.md` 修订节）：
+
+- **`/scene-frame` 恢复两段式**：CPU 引擎（SceneRenderer）worker 单帧渲染
+  优先（含粒子/木偶/文字/shader 效果，即 0.7.1 的静态帧质量），失败回落
+  提取器拼合（0.8.1 修复版）。缓存键 sf36→sf37。
+- **只恢复静态帧，不恢复烘焙**：scene-anim / APNG / mp4 raw 多帧链、
+  betaSceneAnim 开关、渲染进度条 UI 均维持删除；worker 只剩单帧模式。
+- **脚本执行维持删除**：core.js 本地 sceneHasScripts 谓词 + 恒不执行；
+  degraded 文案对齐"静态渲染不支持脚本"。
+- 客户端取帧时机不变（选择即取，GL 就绪后淡入覆盖）：首次选择付一次
+  4~30s 的 worker 渲染，之后磁盘缓存命中（0.7.1 同款行为）。
+- we-renderer 引擎模块自 pre-removal 基线整体恢复（puppet.js 取消裁剪 —
+  对 GL 路径纯增量）；打包 files 白名单补回 scene-renderer.js /
+  scene-render-worker.mjs。
+
 ## 0.8.1 — 8K 工程静态帧只剩天空雾层
 
 `3427824116 胡桃-窗前`（投影 8192×4608）：天空/图层 1 两个 37.7MP 内嵌
