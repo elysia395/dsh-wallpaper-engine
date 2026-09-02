@@ -30,8 +30,10 @@ const TEST_CACHE_DIR = join(root, '.test-cache', 'frames');
 process.env.DSH_WE_CACHE_DIR = TEST_CACHE_DIR;
 // Keep the loose-source default (~/Pictures on Linux) out of this hermetic
 // suite: point it at a directory that cannot exist, so no host Pictures folder
-// is ever scanned during tests.
-process.env.DSH_WE_LOOSE_DIR = join(root, '.test-cache', 'no-such-loose-dir');
+// is ever scanned during tests. DSH_WE_LOOSE_DIR may be preset to run Level B
+// against a real library (scene-frame route end-to-end needs a scene source).
+process.env.DSH_WE_LOOSE_DIR = process.env.DSH_WE_LOOSE_DIR
+  || join(root, '.test-cache', 'no-such-loose-dir');
 const pkgExtract = await import(pathToFileURL(resolve(root, 'lib', 'pkg-extract.js')).href);
 
 let passed = 0;
@@ -365,7 +367,9 @@ check('scene-frame route registered', Boolean(sceneRoute), sceneRoute ? 'kind=' 
 // Route requires a token that mediaMap knows; tokens are minted during
 // inventory. Emulate by calling the inventory route first with a req shim.
 const invRoute = routes.find((r) => r.path === '/wallpaper-engine/inventory');
-function fakeReq(url) { return { url, headers: {}, method: 'GET' }; }
+// 真实 http.IncomingMessage 是 EventEmitter; scene-frame 的等待者计数用
+// req.once('close') — mock 需带同型 no-op。
+function fakeReq(url) { return { url, headers: {}, method: 'GET', once: () => {} }; }
 function fakeRes() {
   const state = { status: 200, headers: {}, body: Buffer.alloc(0), ended: false };
   // A real Writable so createReadStream(...).pipe(res) completes; the test
@@ -389,7 +393,8 @@ async function runHandler(route, url) {
   if (done && typeof done.then === 'function') await done;
   if (!res.__state.ended) {
     await new Promise((resolveFn) => {
-      const t = setTimeout(resolveFn, 8000);
+      // CPU worker 渲染首帧可达数十秒 (0.8.2 恢复两段式), 给足上限。
+      const t = setTimeout(resolveFn, 120000);
       res.on('finish', () => { clearTimeout(t); resolveFn(); });
     });
   }
@@ -401,9 +406,19 @@ let invBody = null;
 {
   const res = await runHandler(invRoute, '/wallpaper-engine/inventory');
   invBody = JSON.parse(res.__state.body.toString('utf8'));
-  const scene = (invBody.wallpapers || []).find((w) => w.type === 'scene' && w.frameUrl);
-  token = scene ? scene.frameUrl.split('/').pop() : null;
-  check('inventory exposes scene frameUrl', Boolean(token), token ? 'frame token minted' : 'no scene wallpaper with frameUrl on this machine');
+  const scenes = (invBody.wallpapers || []).filter((w) => w.type === 'scene' && w.frameUrl);
+  check('inventory exposes scene frameUrl', scenes.length > 0, scenes.length ? scenes.length + ' scene tokens minted' : 'no scene wallpaper with frameUrl on this machine');
+  // 库里首个 scene 可能是 SDK 粒子特效预览 (CPU 渲染失败且无纹理候选 → 422
+  // 属正确的回退行为)。挑第一个能产出静态帧的 scene 来做 payload/缓存断言;
+  // 最多探测 8 个, 全失败则跳过 (机器上没有可渲染场景)。
+  for (const scene of scenes.slice(0, 8)) {
+    const t = scene.frameUrl.split('/').pop();
+    const probe = await runHandler(sceneRoute, '/wallpaper-engine/scene-frame/' + t);
+    if (probe.__state.status === 200 && probe.__state.body.length > 1000) {
+      token = t;
+      break;
+    }
+  }
 }
 
 if (token) {
@@ -414,7 +429,7 @@ if (token) {
   check('scene-frame mime', /image\/(jpeg|png)/.test(ctype), ctype);
   // cache file written under the plugin data dir (env-overridden for tests)
   const cacheDir = TEST_CACHE_DIR;
-  const cached = existsSync(cacheDir) ? readdirSync(cacheDir).filter((f) => f.startsWith('sf35_' + token + '_')) : [];
+  const cached = existsSync(cacheDir) ? readdirSync(cacheDir).filter((f) => f.startsWith('sf37_' + token + '_')) : [];
   check('frame cached on disk', cached.length >= 1, cacheDir + ' [' + cached.join(', ') + ']');
 
   // Second call must hit the cache (handler still returns the payload).

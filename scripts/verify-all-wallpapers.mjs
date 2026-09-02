@@ -50,7 +50,9 @@ const host = hostMod.default || hostMod;
 const dispose = (host.apply || (host.inject && host.apply))(mockCtx);
 const route = (name) => routes.find((r) => r.path === `${BASE}/${name}`);
 
-function fakeReq(url) { return { url, headers: {}, method: 'GET' }; }
+// 真实 http.IncomingMessage 是 EventEmitter; scene-frame 的 N-02 等待者计数
+// 用 req.once('close') — mock 需带同型 no-op。
+function fakeReq(url) { return { url, headers: {}, method: 'GET', once: () => {} }; }
 function fakeRes() {
   const state = { status: 200, headers: {}, body: Buffer.alloc(0), ended: false };
   const res = new Writable({
@@ -69,7 +71,8 @@ async function runHandler(rt, url) {
   if (done && typeof done.then === 'function') await done;
   if (!res.__state.ended) {
     await new Promise((resolveFn) => {
-      const t = setTimeout(resolveFn, 30000);
+      // CPU worker 首帧渲染可达数十秒 (8K 工程 ~33s), 给足上限。
+      const t = setTimeout(resolveFn, 180000);
       res.on('finish', () => { clearTimeout(t); resolveFn(); });
     });
   }
