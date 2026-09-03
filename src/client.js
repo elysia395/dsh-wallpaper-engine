@@ -1515,7 +1515,26 @@ function trySceneGLNow(frameUrl) {
   installGLResizeHook(); // G-07：视口/dpr 变化 → renderer.resize（懒装一次，no-op 便宜）
   observeGLCanvas(renderer); // 主信号: RO 观察本会话 canvas — 换层重建后新 canvas 重挂
   // E2E/诊断钩子（验收 3/4：帧时环 + contextlost 计数 + glFailed 判定）
-  try { window.__weSceneGL = { version: __WESceneGL.version, token, renderer }; } catch { /* ignore */ }
+  try {
+    window.__weSceneGL = {
+      version: __WESceneGL.version, token, renderer,
+      // 视口链路诊断 (resize 排查): __weSceneGL.diag() 现场看预算/画布/最近 resize
+      diag: () => {
+        try {
+          return {
+            clientVersion: "0.8.7",
+            viewport: { iw: window.innerWidth, ih: window.innerHeight, dpr: window.devicePixelRatio || 1 },
+            budget: sceneViewportSize(),
+            lastBudget: glLastBudget,
+            ready: !!(sceneGL && sceneGL.ready),
+            canvas: renderer.canvas ? { w: renderer.canvas.width, h: renderer.canvas.height } : null,
+            viewportLog: (renderer.stats && renderer.stats.viewportLog) || [],
+            observerActive: !!glResizeObserver,
+          };
+        } catch (e) { return { error: String(e) }; }
+      },
+    };
+  } catch { /* ignore */ }
   // 触发层重建挂上 canvas（wantKey 加 gl 位）：sceneVideo 404 回退路径里
   // syncLayers 先于本函数跑过（sceneGL 还是 null，建成纯 img）— 不补这次
   // emit，canvas 永远不进层，渲染器首帧后只能靠偶发 emit 被挂载（headless

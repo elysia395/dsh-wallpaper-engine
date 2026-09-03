@@ -1112,6 +1112,10 @@ function createSceneGLRenderer(opts) {
   const ctrl = new AbortController();
   // E2E/诊断钩子（验收 3/4 读取）：帧时环形缓冲 + contextlost 计数
   const stats = { state: () => state, frames: 0, frameTimes: [], contextLost: 0, errors: [], lastT: 0, initStage: 'meta', renderFails: 0 };
+  // 视口诊断 (resize 链路排查): 每次 resize 尝试记录预算/结果, 现场可从
+  // window.__weSceneGL.renderer.stats.viewportLog 读最近 8 条。
+  stats.viewportLog = [];
+  stats.viewport = () => ({ cw: CW, ch: CH, canvasW: canvas.width, canvasH: canvas.height });
   const pushFrameTime = (ms) => {
     // N-09: 旧实现在超 4096 后每帧 splice(0,1) O(n)。读方语义要求 frameTimes
     // 恒为 oldest→newest 有序真数组（index.html 取 ft[len-1]=最新；gui-e2e.py
@@ -2507,7 +2511,13 @@ function createSceneGLRenderer(opts) {
     // 先算后赋: 阈值内的变化完全不触碰 canvas (赋值即清空位图), 也不标
     // needRedraw — 轮询/事件重复调用 resize 必须是真正的零成本 no-op。
     const fit = sarFitFor(clampGLDim(w), clampGLDim(h));
-    if (Math.abs(fit.w - CW) < 2 && Math.abs(fit.h - CH) < 2) return false;
+    if (Math.abs(fit.w - CW) < 2 && Math.abs(fit.h - CH) < 2) {
+      try {
+        stats.viewportLog.push({ t: Date.now(), req: w + 'x' + h, got: CW + 'x' + CH, ok: false });
+        if (stats.viewportLog.length > 8) stats.viewportLog.splice(0, stats.viewportLog.length - 8);
+      } catch { /* */ }
+      return false;
+    }
     CW = fit.w;
     CH = fit.h;
     if (canvas.width !== CW) canvas.width = CW;
@@ -2516,9 +2526,34 @@ function createSceneGLRenderer(opts) {
       for (const o of res.objects) {
         if (o.psys) continue; // W3: 粒子无对象几何（fill 时按当前 CW/CH 取 ps，无需重算）
         try { o.geo = computeGeo(o.obj, o.oi); } catch { /* 单对象布局失败不拦整体 */ }
+        // FBO 链随画布预算重建（buildResources 同款公式: s=min(1,CW/tw,CH/th)
+        // 等比 clamp）。旧 resize 漏了这步 — 画布变大后效果链仍以旧小分辨率
+        // 光栅化, present 拉伸 → 全屏下特效对象整层发虚 (用户实测 0.8.5/0.8.6
+        // "小窗刷新→全屏→模糊"的直接根因之一; 旧 1920 帽下 FBO 尺寸几乎不变,
+        // 该缺陷被预算帽掩盖从未暴露)。
+        if (o.fboA && o.mainTexEntry) {
+          try {
+            const s = Math.min(1, CW / o.mainTexEntry.w, CH / o.mainTexEntry.h);
+            const fw = Math.max(1, Math.round(o.mainTexEntry.w * s));
+            const fh = Math.max(1, Math.round(o.mainTexEntry.h * s));
+            if (fw !== o.fboA.w || fh !== o.fboA.h) {
+              gl.deleteFramebuffer(o.fboA.fbo); gl.deleteTexture(o.fboA.tex);
+              gl.deleteFramebuffer(o.fboB.fbo); gl.deleteTexture(o.fboB.tex);
+              o.fboA = makeFBO(fw, fh);
+              o.fboB = makeFBO(fw, fh);
+            }
+          } catch (e) {
+            // FBO 重建失败 (显存不足等): 保几何渲染, 效果链降级为旧分辨率
+            try { mark(o.obj && o.obj.name, 'fbo', 'resize 后 FBO 重建失败, 效果链维持旧分辨率: ' + (e && e.message ? e.message : e)); } catch { /* */ }
+          }
+        }
       }
     }
     needRedraw = true; // P2-8: 视口/几何变化 → 静态场景重渲一帧
+    try {
+      stats.viewportLog.push({ t: Date.now(), req: w + 'x' + h, got: CW + 'x' + CH, ok: true });
+      if (stats.viewportLog.length > 8) stats.viewportLog.splice(0, stats.viewportLog.length - 8);
+    } catch { /* */ }
     return true;
   }
 

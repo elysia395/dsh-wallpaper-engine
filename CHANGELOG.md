@@ -1,5 +1,19 @@
 # Changelog
 
+## 0.8.7 — resize 补全: FBO 链随画布重建 + 视口诊断钩子
+
+用户实测 0.8.5/0.8.6 "小分辨率刷新 → 全屏 → 模糊, 再刷新才正常"。定位:
+resize 链路确有触发, 但 renderer.resize() 不完整 — 对象效果链 FBO
+(fboA/fboB) 只在 buildResources 按创建时画布预算分配 (s=min(1,CW/tw,CH/th)),
+resize 只重算了几何; 画布变大后效果链仍以旧小分辨率光栅化, present 拉伸
+→ 全屏发虚。旧 1920 帽下 FBO 尺寸几乎从不变化, 该缺陷被预算帽掩盖。
+
+- resize() 现按 buildResources 同款公式重建各对象 FBO (等比 clamp,
+  失败降级为旧分辨率 + mark 披露)
+- stats.viewportLog 记录最近 8 次 resize 尝试 (含被阈值拒绝的) +
+  stats.viewport() 现场读 CW/CH/canvas; client 挂 __weSceneGL.diag()
+  一键看预算链全貌 (viewport/budget/lastBudget/ready/canvas/observer)
+
 ## 0.8.6 — 视口变化检测改用 ResizeObserver（轮询退役）
 
 0.8.5 的 2s 轮询兜底替换为标准 API — 变化信号覆盖矩阵（无轮询）：
