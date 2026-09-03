@@ -1,5 +1,18 @@
 # Changelog
 
+## 0.8.6 — 视口变化检测改用 ResizeObserver（轮询退役）
+
+0.8.5 的 2s 轮询兜底替换为标准 API — 变化信号覆盖矩阵（无轮询）：
+
+- **ResizeObserver 观察 GL canvas（主信号）**：元素布局盒尺寸变化即触发,
+  不依赖 window 事件 — 窗口缩放/缩放级/容器重排等布局成因全覆盖;
+  回调在绘制前送达; 生命周期跟随 GL 会话（observe/disconnect 随
+  trySceneGL/dispose）, GPU 崩溃加固的"失败后无残留监测"断言语义不变。
+- window resize 事件 + matchMedia resolution（dpr 跨屏变化 — 元素盒
+  尺寸可能不变只有 dpr 变, RO 不触发, 由这条补）。
+- onReady 补偿（GL 初始化窗口期的事件吞没, 0.8.5 引入）。
+- 预算比对早退 + renderer.resize 阈值内零触碰 canvas — 重复信号无成本。
+
 ## 0.8.5 — GL 渲染分辨率跟随窗口（视口预算修复 + 轮询兜底）
 
 两处叠加的分辨率问题（复现: 首启小分辨率 → 窗口全屏 → 壁纸模糊, 刷新才清晰）:
