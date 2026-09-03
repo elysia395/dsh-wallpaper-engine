@@ -30,7 +30,7 @@ It discovers the Wallpaper Engine install on your machine, lists its wallpapers,
 - **Wallpaper-effect tuning sliders** (v0.6.x) — the **壁纸效果** area gains three new sliders: **亮度 / 对比度 / 饱和度** (wallpaper media filter), alongside wallpaper blur / scrim etc., so any wallpaper can be blended comfortably with the UI. All apply instantly and persist.
 - **Custom typography** (v0.6.7) — a new **字体** section in settings. The master switch defaults to off (stock dsh look); once enabled you can tune **font color / weight (100–900) / family** (default · YaHei · KaiTi · SimSun · SimHei · 行楷 Xingkai · monospace, each chip previewed in its own font). Error/danger/warning text keeps its system red; toggling the switch off restores defaults in one click.
 
-![Wallpaper showcase](docs/images/showcase.png)
+![Main interface showcase](docs/images/main-interface.gif)
 
 > Wallpaper + scrim + iOS liquid glass rendered behind the DSH GUI.
 
@@ -283,11 +283,11 @@ dsh plugin --profile web add dsh-plugin-wallpaper-engine
    The choice is remembered in your browser's `localStorage` (key
    `dsh-wallpaper-engine:selection`).
 
-![Settings UI overview](docs/images/features.png)
+![Settings UI overview](docs/images/settings-ui.gif)
 
 > The settings page: the liquid-glass card with six tabs (壁纸 / 外观 / 字体 / 吉祥物 / 效果 / 高级).
 
-![Wallpaper picker modal](docs/images/wallpaper-library.png)
+![Wallpaper picker modal](docs/images/wallpaper-library.gif)
 
 > The picker modal: browse every wallpaper thumbnail, batch-hide, and restore from the hidden tab.
 
@@ -352,14 +352,6 @@ mirroring Wallpaper Engine's conservative first-run stance.
   record label — it spins while the wallpaper plays and stops when paused
   (animation is disabled under `prefers-reduced-motion`). A small record also
   sits in the picker modal head. The vinyl shows in **both** card styles.
-
-![Compact wallpaper library (CD-rack layout)](docs/images/compact-wallpaper-library.png)
-
-> Compact layout: the CD-rack stacked grid, hover scales the card to the front, everything on one page.
-
-![Rotating vinyl record](docs/images/vinyl-record.gif)
-
-> Vinyl record: the selected wallpaper's cover as the record label, spinning while playing, stopped on pause.
 
 ### Playback speed & horizontal flip
 
@@ -439,10 +431,6 @@ skin-center design):
 > back to a high-opacity solid so text stays readable. All controls apply
 > instantly and persist in `localStorage`.
 
-![Liquid-glass settings window](docs/images/liquid-glass-window.png)
-
-> Liquid glass: the whole settings window unified as glass, following accent, glass color and glass transparency.
-
 ### Mascot (chat pull-cord)
 
 The **吉祥物** (mascot) tab controls the chat **pull-cord** (a draggable rope pinned to the top edge; pulling it down slides out the **wallpaper repo** drawer). The **form** picker renders as cards — each card draws the actual artwork scaled by the current **吉祥物大小** slider, so choosing a form and judging its size happen in one place:
@@ -454,6 +442,10 @@ The **吉祥物** (mascot) tab controls the chat **pull-cord** (a draggable rope
 | **吉祥物大小** (mascot size) | Scale the mascot (the rope box follows the ratio; drag / snap geometry adapts automatically) | 0.5×–2.5× | 1× |
 
 > Both artworks are inlined as base64 (transparent background) at build time, so the single-file client bundle stays self-contained. **Size** changes only the rope's own box; the wallpaper-repo drawer below is unaffected. Settings apply instantly and persist to the host-side config file.
+
+![Mascot quick-adjustment drawer](docs/images/mascot-drawer.png)
+
+> Pull the top rope mascot to slide out the **wallpaper repo** drawer: six-tab quick adjustments with the vinyl card, rotation and custom-wallpaper management within reach.
 
 ### Custom typography
 
@@ -536,7 +528,9 @@ near-opaque fill:
 > white); editor/terminal content surfaces have their own near-opaque fill +
 > transparency controls to keep text readable in the narrow panels.
 
-![dsh-better-sidebar compatibility](docs/images/better-sidebar.png)
+![dsh-better-sidebar compatibility & custom typography](docs/images/better-sidebar-font.png)
+
+> The sidebar glass adaptation with the custom typography (行楷) applied at the same time.
 
 ## Limitations
 
