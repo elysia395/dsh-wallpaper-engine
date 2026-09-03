@@ -17,7 +17,13 @@ scene-layers-out/
 
 /_refs/
 
-/docs/images/
+# README 展示图: 默认忽略工作截图, 仅放行当前 README 引用的 5 张 (勿删白名单)
+/docs/images/*
+!/docs/images/main-interface.gif
+!/docs/images/settings-ui.gif
+!/docs/images/wallpaper-library.gif
+!/docs/images/mascot-drawer.png
+!/docs/images/better-sidebar-font.png
 
 /.git.bak-broken/
 
