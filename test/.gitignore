@@ -1,0 +1,10 @@
+# 运行时生成的捕获帧 / 差分图 / 报告 / 解包资产（壁纸版权内容不入库）
+cap-*.png
+diff-*.png
+gui-*.png
+ref-*.png
+*-report.json
+stats-e2e.json
+scene-gl-e2e/scene-gl.bundle.js
+scene-gl-spike/assets/*.png
+scene-gl-e2e/__pycache__/

@@ -12,19 +12,15 @@ scene-layers-out/
 # 视觉工具工件
 .dsh-vision-router/
 
-
-
-
 /_refs/
 
-/docs/images/
+# 排查期临时产物 (2026-08-31 里程碑清理; 历史误提交已删除)
+/.perf-probe/
+/.w3-ab/
 
 /.git.bak-broken/
 
-
-
 /scripts/lwe-ref/
-
 
 # 渲染输出 (回归/调试用, 不入库)
 /scripts/out/
@@ -33,3 +29,6 @@ scene-layers-out/
 /scripts/reverse/
 /scripts/core/
 /scripts/anim/
+
+# scene-gl e2e 截图工件 (可再生; capture.py 不消费 ref-*)
+/test/scene-gl-e2e/*.png
