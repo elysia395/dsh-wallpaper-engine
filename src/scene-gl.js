@@ -1530,20 +1530,24 @@ function createSceneGLRenderer(opts) {
   let objectsById = new Map(); // G-04: 父链查找表（host gate objectsById 同款）
   // sar fix：视口预算 → 场景 ortho 比例背板（视口比例 ≠ 场景比例 → CSS letterbox，
   // 对齐 scene-anim 路由的 h=w/sar 修正语义）；落盘到 CW/CH + canvas 背板
-  function applySarFit(bw, bh) {
+  // sarFitFor 纯计算不碰 canvas — resize 阈值判断需要先算后决定是否赋值
+  // (canvas.width 赋值即使同值也会清空位图, 静态场景 P2-8 跳帧会停在空帧)。
+  function sarFitFor(bw, bh) {
     const W = Math.max(2, Math.round(bw)), H = Math.max(2, Math.round(bh));
     if (layoutOrtho.width > 0 && layoutOrtho.height > 0) {
       const sar = layoutOrtho.width / layoutOrtho.height;
       let h = Math.round(W / sar), w = W;
       if (h > H) { h = H; w = Math.round(h * sar); }
-      CW = Math.max(2, w);
-      CH = Math.max(2, h);
-    } else {
-      CW = W;
-      CH = H;
+      return { w: Math.max(2, w), h: Math.max(2, h) };
     }
-    canvas.width = CW;
-    canvas.height = CH;
+    return { w: W, h: H };
+  }
+  function applySarFit(bw, bh) {
+    const fit = sarFitFor(bw, bh);
+    CW = fit.w;
+    CH = fit.h;
+    if (canvas.width !== CW) canvas.width = CW;
+    if (canvas.height !== CH) canvas.height = CH;
   }
 
   // ---- G-04: 父链折叠（host gate foldChain / CPU core.js resolveTransform 同式）----
@@ -2500,15 +2504,14 @@ function createSceneGLRenderer(opts) {
   function resize(w, h) {
     if (disposed) return false;
     noteViewportClamp(w, h);
-    const oldW = CW, oldH = CH;
-    applySarFit(clampGLDim(w), clampGLDim(h));
-    if (Math.abs(CW - oldW) < 2 && Math.abs(CH - oldH) < 2) {
-      // 阈值内回滚（canvas 背板尺寸赋值本身有重分配成本，避免抖动）
-      CW = oldW; CH = oldH;
-      canvas.width = CW;
-      canvas.height = CH;
-      return false;
-    }
+    // 先算后赋: 阈值内的变化完全不触碰 canvas (赋值即清空位图), 也不标
+    // needRedraw — 轮询/事件重复调用 resize 必须是真正的零成本 no-op。
+    const fit = sarFitFor(clampGLDim(w), clampGLDim(h));
+    if (Math.abs(fit.w - CW) < 2 && Math.abs(fit.h - CH) < 2) return false;
+    CW = fit.w;
+    CH = fit.h;
+    if (canvas.width !== CW) canvas.width = CW;
+    if (canvas.height !== CH) canvas.height = CH;
     if (res && res.objects) {
       for (const o of res.objects) {
         if (o.psys) continue; // W3: 粒子无对象几何（fill 时按当前 CW/CH 取 ps，无需重算）

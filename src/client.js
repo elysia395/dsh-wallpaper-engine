@@ -1297,6 +1297,7 @@ function muteSceneGLNotice() {
 function disposeSceneGL() {
   const g = sceneGL;
   sceneGL = null;
+  stopGLViewportPoll(); // GL 会话终止 → 视口轮询随停 (无 GL 时无需兜底)
   try { if (window.__weSceneGL) window.__weSceneGL = null; } catch { /* ignore */ }
   if (g && g.renderer) { try { g.renderer.dispose(); } catch { /* ignore */ } }
 }
@@ -1453,10 +1454,12 @@ function scheduleGLFrameCapture(renderer, token) {
   }, 2500);
 }
 
-function trySceneGLNow(frameUrl) {  const token = frameUrl.split("/").pop();
+function trySceneGLNow(frameUrl) {
+  const token = frameUrl.split("/").pop();
   disposeSceneGL();
   sceneGLNotice = null; // 新一轮尝试使旧 gate 提示失效(失败由 onError 重写；成功则无提示)
   const { vw, vh } = sceneViewportSize();
+  glLastBudget = { vw, vh }; // 创建时的预算 — 轮询/onReady 比对基准
   const renderer = __WESceneGL.createSceneGLRenderer({
     token,
     width: vw,
@@ -1465,6 +1468,10 @@ function trySceneGLNow(frameUrl) {  const token = frameUrl.split("/").pop();
     onReady: () => {
       if (!sceneGL || sceneGL.renderer !== renderer) return;
       sceneGL.ready = true;
+      // 初始化窗口期 (meta fetch + shader 编译, 1~3s) 内到达的 resize 事件
+      // 被 applyGLViewport 的 ready 检查吞掉 — ready 瞬间按当前视口补一次,
+      // 修复"首启小窗→全屏发虚, 刷新才恢复" (2s 轮询是二道保险)。
+      applyGLViewport();
       // 降级清单（host gate 分层产物）：设置面板提示用户哪些特效缺失
       try { sceneGL.degraded = renderer.degraded ? renderer.degraded() : []; } catch { sceneGL.degraded = []; }
       // 首帧完成 → canvas 300ms 淡入覆盖底图 img（canvas 不透明 = 等价 img 淡出）
@@ -1498,6 +1505,7 @@ function trySceneGLNow(frameUrl) {  const token = frameUrl.split("/").pop();
       markSceneGLFailed(token, reason);
       try { renderer.dispose(); } catch { /* ignore */ }
       sceneGL = null;
+      stopGLViewportPoll(); // GL 会话终止 → 视口轮询随停
       try { window.__weSceneGL = null; } catch { /* ignore */ }
       // GL 失败 → 停留静态帧底图（CPU mp4 兜底已随渲染路径移除）+ 徽标提示
       emit();
@@ -1505,6 +1513,7 @@ function trySceneGLNow(frameUrl) {  const token = frameUrl.split("/").pop();
   });
   sceneGL = { renderer, token, frameUrl, ready: false, seq: ++sceneGLSeq };
   installGLResizeHook(); // G-07：视口/dpr 变化 → renderer.resize（懒装一次，no-op 便宜）
+  ensureGLViewportPoll(); // 轮询随 GL 会话启停 (installGLResizeHook 只装一次, 重启要在这里)
   // E2E/诊断钩子（验收 3/4：帧时环 + contextlost 计数 + glFailed 判定）
   try { window.__weSceneGL = { version: __WESceneGL.version, token, renderer }; } catch { /* ignore */ }
   // 触发层重建挂上 canvas（wantKey 加 gl 位）：sceneVideo 404 回退路径里
@@ -1517,29 +1526,55 @@ function trySceneGLNow(frameUrl) {  const token = frameUrl.split("/").pop();
 
 function sceneViewportSize() {
   const dpr = Math.min(2, window.devicePixelRatio || 1);
-  const vw = Math.min(1920, Math.max(320, Math.round((window.innerWidth || 1920) * dpr)));
-  const vh = Math.min(1080, Math.max(180, Math.round((window.innerHeight || 1080) * dpr)));
+  // G-07 预算 = 视口物理像素 (CSS×dpr), 绝对上限 4K — 渲染器背板/FBO 上限
+  // WE_GL_MAX_DIM=4096 本就按"dpr≤2 × 4K 视口"设计。旧 1920×1080 固定帽
+  // (GL 引入期 3c3263a 的保守预算) 在 2K/4K 屏上把画布钉死在 1080p 整屏
+  // 拉伸发虚, 且窗口越大越模糊 — 分辨率要跟随视口。
+  const vw = Math.min(3840, Math.max(320, Math.round((window.innerWidth || 1920) * dpr)));
+  const vh = Math.min(2160, Math.max(180, Math.round((window.innerHeight || 1080) * dpr)));
   return { vw, vh };
 }
 // G-07：视口/设备像素比变化 → GL 背板重建（renderer.resize：超限 clamp 4096 +
-// 阈值内忽略 + 对象几何重排）。debounce 200ms 防抖；dpr 变化（跨屏拖动）经
-// matchMedia resolution 监听 — 不一定伴随 window resize 事件。懒安装一次，
-// sceneGL 空转时 no-op（无 GL 常驻成本）。
+// 阈值内忽略 + 对象几何重排）。三路触发：
+//   1. window resize 事件 (debounce 200ms) — 拖拽即时响应
+//   2. matchMedia resolution 监听 — dpr 变化（跨屏拖动）不一定伴随 resize 事件
+//   3. 2s 轮询兜底 — 事件可能落在 GL 初始化窗口期被 ready 检查吞掉
+//      (复现: 首启小窗 → GL 初始化中窗口全屏 → resize 事件丢弃 → 画布停在
+//       初始小分辨率整屏发虚, 刷新才恢复; onReady 补一次 + 轮询双保险)。
+// 预算无变化时整条链路零成本 (renderer.resize 阈值内不碰 canvas)。
+// 懒安装一次, sceneGL 空转时 no-op（无 GL 常驻成本）。
 let glResizeHookInstalled = false;
+let glLastBudget = null; // 最近一次应用的视口预算 {vw, vh} — 轮询的去重基准
+function applyGLViewport() {
+  if (!sceneGL || !sceneGL.renderer || !sceneGL.ready) return;
+  try {
+    const { vw, vh } = sceneViewportSize();
+    if (glLastBudget && glLastBudget.vw === vw && glLastBudget.vh === vh) return;
+    glLastBudget = { vw, vh }; // resize 阈值内忽略也算"已应用", 防轮询重试
+    sceneGL.renderer.resize(vw, vh);
+  } catch { /* ignore */ }
+}
+// 2s 轮询兜底 (用户决策 2026-09-02) — 生命周期跟随 GL 会话:
+// trySceneGL 启动, GL 终止 (dispose/失败) 停止 — GPU 崩溃加固的验收断言
+// (verify-gpu-crash-fix: 失败后无残留轮询 interval) 语义保持成立。
+let glViewportPollTimer = 0;
+function ensureGLViewportPoll() {
+  if (glViewportPollTimer) return;
+  try { glViewportPollTimer = setInterval(applyGLViewport, 2000); } catch { /* ignore */ }
+}
+function stopGLViewportPoll() {
+  if (glViewportPollTimer) {
+    try { clearInterval(glViewportPollTimer); } catch { /* ignore */ }
+    glViewportPollTimer = 0;
+  }
+}
 function installGLResizeHook() {
   if (glResizeHookInstalled) return;
   glResizeHookInstalled = true;
   let timer = 0;
-  const apply = () => {
-    if (!sceneGL || !sceneGL.renderer || !sceneGL.ready) return;
-    try {
-      const { vw, vh } = sceneViewportSize();
-      sceneGL.renderer.resize(vw, vh);
-    } catch { /* ignore */ }
-  };
   const schedule = () => {
     if (timer) clearTimeout(timer);
-    timer = setTimeout(apply, 200);
+    timer = setTimeout(applyGLViewport, 200);
   };
   try {
     if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
@@ -1558,6 +1593,7 @@ function installGLResizeHook() {
     } catch { dprMq = null; }
   };
   watchDpr();
+  ensureGLViewportPoll();
 }
 
 function buildMedia(sel) {
