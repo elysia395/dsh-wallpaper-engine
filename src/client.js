@@ -1910,7 +1910,7 @@ function installGLDiagHook(renderer, token) {
       diag: () => {
         try {
           return {
-            clientVersion: "0.8.8",
+            clientVersion: "0.8.9",
             viewport: { iw: window.innerWidth, ih: window.innerHeight, dpr: window.devicePixelRatio || 1 },
             budget: sceneViewportSize(),
             lastBudget: glLastBudget,

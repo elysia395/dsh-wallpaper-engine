@@ -274,6 +274,18 @@ async function scenarioC() {
 await scenarioA();
 await scenarioB();
 await scenarioC();
+
+// D. 静态回归（0.8.9）：GL 效果纹理表必须按 mask 路径键 —— 同对象挂两个同
+//    shader 效果（3427824116 图层 1 双 foliagesway）时，旧 shader:槽位 键
+//    完全相同，两个实例并发 set 互相覆盖（赛车），两个 pass 绑同一张 mask：
+//    头发不摆、两侧摆两次（被误读为沿用上一张壁纸特效）。
+check('D: 效果纹理按 mask 路径写入（非 shader:槽位 键）',
+  code.includes('effectTex.set(info.path,') && !code.includes("effectTex.set(ef.shader"),
+  '写侧键格式不符');
+check('D: 绘制期按 slotInfo.path 取纹理',
+  code.includes('o.effectTex.get(slotInfo.path)') && !code.includes("o.effectTex.get(p.ef.shader"),
+  '读侧键格式不符');
+
 console.log('\n' + (failCount === 0
   ? 'ALL GPU-CRASH-FIX CHECKS PASSED (' + passCount + ')'
   : 'GPU-CRASH-FIX CHECKS FAILED: ' + failCount + ' failed, ' + passCount + ' passed'));
