@@ -169,6 +169,47 @@ setTimeout(() => {
       console.log('rotation wraps to id:', JSON.parse(localStorage._store['dsh-wallpaper-engine:selection']).id);
     }
   }
+  // ── 轮换「就绪后切换 + 渐变」断言（0.8.8）────────────────────────────────
+  // mock 环境无 addEventListener/Image/__WESceneGL → 准备管线特性探测失败即
+  // 同步直通提交。按 5 分钟（300000ms）定位真正的轮换定时器，绕开上面遗留的
+  // 宽松探针（它会命中 persist 防抖的 200ms 定时器）。提交结果同步看新层
+  // dataset.weKey（含 selection.url），持久化需再 fire 200ms flushPersist。
+  const rotTimer = rotationTimers.find((item) => !item.cleared && item.ms === 5 * 60 * 1000);
+  console.log('rotation prepare: 5min rotation timer armed:', !!rotTimer);
+  const preLayer = document.getElementById('dsh-wallpaper-engine-layer');
+  const flushPersistWrites = () => {
+    for (const t of rotationTimers.filter((item) => !item.cleared && item.ms === 200 && !item.fired)) {
+      t.fired = true;
+      try { t.fn(); } catch (e) { console.log('persist flush threw:', e && e.message); }
+    }
+  };
+  if (rotTimer) {
+    rotTimer.fn();
+    const postLayer = document.getElementById('dsh-wallpaper-engine-layer');
+    const weKey1 = postLayer && postLayer.dataset ? postLayer.dataset.weKey : '';
+    console.log('rotation prepare: ready-commit switches layer to next (b/media/def):',
+      !!postLayer && postLayer !== preLayer && weKey1.indexOf('/wallpaper-engine/media/def') !== -1);
+    console.log('rotation fade: old layer marked weFading:', !!preLayer && preLayer.dataset.weFading === '1');
+    console.log('rotation fade: old layer yielded LAYER_ID:', !!preLayer && preLayer.id === '');
+    console.log('rotation fade: new layer carries fadein classes:', !!postLayer
+      && postLayer.className.indexOf('we-layer--fadein') !== -1
+      && postLayer.className.indexOf('we-layer--fadein-on') !== -1);
+    flushPersistWrites();
+    const persisted1 = JSON.parse(localStorage._store['dsh-wallpaper-engine:selection']).id;
+    console.log('rotation prepare: commit persisted (id b):', persisted1 === 'b');
+    // 第二次 fire（wrap）：上一份 fading 层被即时退役，选择绕回 a。
+    const rotTimer2 = rotationTimers.find((item) => !item.cleared && item.ms === 5 * 60 * 1000 && item !== rotTimer);
+    console.log('rotation prepare: timer re-armed after commit:', !!rotTimer2);
+    if (rotTimer2) {
+      rotTimer2.fn();
+      const layer2 = document.getElementById('dsh-wallpaper-engine-layer');
+      const weKey2 = layer2 && layer2.dataset ? layer2.dataset.weKey : '';
+      console.log('rotation prepare: second ready-commit wraps (a/media/xyz):',
+        !!layer2 && layer2 !== postLayer && weKey2.indexOf('/wallpaper-engine/media/xyz') !== -1);
+      console.log('rotation fade: second switch also fades:', !!layer2
+        && layer2.className.indexOf('we-layer--fadein') !== -1);
+    }
+  }
   console.log('picker renders:', pickerRenders.length > 0);
   if (pickerRenders.length) {
     let renderError = null;

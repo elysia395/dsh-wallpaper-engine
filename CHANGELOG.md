@@ -1,5 +1,46 @@
 # Changelog
 
+## 0.8.8 — 轮换「就绪后切换 + 交叉渐变」
+
+轮换体验重做：此前定时器到点即落实切换，新壁纸的视频加载 / 场景静态帧
+提取 / GL 编译全发生在切换之后，背景先黑场/半成品再逐渐就位，且切换是
+硬切。现在下一张壁纸完全 ready 才落实切换，并以 1.2s 交叉淡化上屏。
+
+- **就绪后切换（仅轮换路径）**：到点后进入后台准备管线 ——
+  图片解码完成（img onload）、视频可播放（detached video canplay）、
+  场景静态帧提取完成（GET frameUrl 触发 host 提取，onload 即完成）、
+  GL 场景首帧渲染完成（staged 渲染器挂在 opacity:0 但 in-DOM 的驻留层里
+  预渲染，IntersectionObserver 几何相交故渲染循环正常运转）—— 就绪才
+  applySelection。优先级不变量保持 sceneVideo > GL > 静态帧，逐级回退。
+- **就绪元素随提交走（黑屏闪烁根修）**：探测用的 img/video/iframe 元素
+  本身在 commit 时被新层直接领养（GL canvas 走 staged 领养通道），绝不
+  另建空白元素重新加载 —— 上屏即是已解码画面；视频一律带 poster=预览图
+  覆盖抽帧转码 swap 的空窗。
+- **GL 预渲染领养**：staged 渲染器 ready 后由 applySelection 直接接管
+  sceneGL 槽位（跳过二次 meta/shader fetch 与初始化等待），收尾与
+  trySceneGLNow onReady 等价（resize 观察/降级清单/视口补偿/抓帧回填/
+  诊断钩）；staged 失败沿用 glFailed 封印 + 降级提示条，回退静态帧探测。
+- **提交以准备期实测为准（三段闪烁链根修）**：准备管线记录实测结论
+  （sceneVideo / GL / 静态帧…）。修复前 sceneVideo 探测 404 回退 GL 后，
+  applySelection 仍按清单复活 sceneVideo —— 已就绪 GL 被误判销毁、新层
+  video 必然再次 error 硬重建、GL 二次初始化再硬重建，一次切换三段闪烁。
+  现在实测不可用的 sceneVideo 在提交时置 null，轮换提交不再事后重试
+  GL，一次轮换只有唯一一次渐变重建。
+- **交叉渐变**：提交时新层 opacity 0 → reflow → 1.2s 淡入；旧层不立即
+  拆除 —— 旧视频/旧 GL 渲染器保活继续播（真交叉淡化），渐变结束统一
+  移除并释放（任何时刻最多 2 层，快速连切即时退役上一份）。
+- **轮换锚点 = 实际显示（A→B→A→B 乒乓根修）**：跨窗 storage 同步只改
+  selection.id 不重建层，以其为锚会把"正在显示的"当作下一张再切回去。
+  锚点改为按 selection.url 反查当前上屏壁纸，多窗口各自独立单调轮转。
+- **健壮性**：候选坏壁纸（img/video error、帧提取 422 + preview 也挂）
+  自动跳过链式尝试下一个（有界于候选数）；各阶段 20s 超时兜底
+  （慢网络/慢提取提交兜底，GL 超时降级静态帧）—— 轮换永不静默卡死；
+  手动切换/关闭轮换/改列表即时取消进行中的准备（staged GL/probe 全释放）；
+  提交前再校验（轮换仍开/未被手动抢占/候选仍可播未隐藏）。
+- 手动点选行为不变：即时切换、无渐变（即时反馈优先）。
+- 开发钩子：localStorage.weRotationTestSec（秒）可临时覆盖轮换间隔
+  （冒烟测试/手动预览用），未设置时按组间隔正常运转。
+
 ## 0.8.7 — resize 补全: FBO 链随画布重建 + 视口诊断钩子
 
 用户实测 0.8.5/0.8.6 "小分辨率刷新 → 全屏 → 模糊, 再刷新才正常"。定位:
