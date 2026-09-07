@@ -33,7 +33,8 @@ function assert(cond, name, detail) {
 // ── React mock (same contract as verify-client.mjs) ─────────────────────────
 const React = {
   Fragment: 'Fragment',
-  useState: (init) => [init, () => {}],
+  // Function initializers are invoked (lazy useState), matching real React.
+  useState: (init) => [typeof init === "function" ? init() : init, () => {}],
   useEffect: () => {},
   useRef: (v) => ({ current: v }),
   createElement: (type, props, ...children) =>
@@ -249,6 +250,8 @@ async function main() {
   check('wallpaper layer + video mounted', !!video);
   check('video starts on the ORIGINAL (no transcode)', video.src === '/wallpaper-engine/media/w1' && !video.dataset.weTranscoded);
 
+  // The 帧率上限 controls live on the 效果 tab in the tabbed picker.
+  localStorage.setItem('dsh-wallpaper-engine:picker-tab', 'effects');
   // ---- 24fps: request starts, pending ----
   tree = renderTree();
   const b24 = findButton(tree, 'we-picker__rate', '24fps');

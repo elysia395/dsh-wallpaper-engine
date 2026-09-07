@@ -22,6 +22,14 @@ scene-layers-out/
 /.perf-probe/
 /.w3-ab/
 
+# README 展示图: 默认忽略工作截图, 仅放行当前 README 引用的 5 张 (勿删白名单)
+/docs/images/*
+!/docs/images/main-interface.gif
+!/docs/images/settings-ui.gif
+!/docs/images/wallpaper-library.gif
+!/docs/images/mascot-drawer.png
+!/docs/images/better-sidebar-font.png
+
 /.git.bak-broken/
 
 /scripts/lwe-ref/
@@ -36,3 +44,9 @@ scene-layers-out/
 
 # scene-gl e2e 截图工件 (可再生; capture.py 不消费 ref-*)
 /test/scene-gl-e2e/*.png
+
+# ZCode 会话本地文件 (计划/缓存, 不入库)
+/.zcode/
+
+# 临时预览/诊断脚本 (本地 QA 用, 不入库)
+/scripts/.tmp-*

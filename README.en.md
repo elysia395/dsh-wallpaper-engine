@@ -30,9 +30,24 @@ It discovers the Wallpaper Engine install on your machine, lists its wallpapers,
 - **Wallpaper-effect tuning sliders** (v0.6.x) — the **壁纸效果** area gains three new sliders: **亮度 / 对比度 / 饱和度** (wallpaper media filter), alongside wallpaper blur / scrim etc., so any wallpaper can be blended comfortably with the UI. All apply instantly and persist.
 - **Custom typography** (v0.6.7) — a new **字体** section in settings. The master switch defaults to off (stock dsh look); once enabled you can tune **font color / weight (100–900) / family** (default · YaHei · KaiTi · SimSun · SimHei · 行楷 Xingkai · monospace, each chip previewed in its own font). Error/danger/warning text keeps its system red; toggling the switch off restores defaults in one click.
 
-![Wallpaper showcase](docs/images/showcase.png)
+![Main interface showcase](docs/images/main-interface.gif)
 
 > Wallpaper + scrim + iOS liquid glass rendered behind the DSH GUI.
+
+## ⚠️ Upgrade order: update DeepSeek Harness FIRST, then this plugin (v0.7.1+)
+
+**Do NOT upgrade this plugin on an older DeepSeek Harness.** v0.7.1 targets DeepSeek Harness **0.1.2-rc.1** (shipped in **DSH Desktop v2.0.5**, released 2026-09-03 — that release switched the bundled harness from 0.1.2-alpha.1 to 0.1.2-rc.1). The correct upgrade order:
+
+1. **Update DeepSeek Harness / DSH Desktop first**: check for updates via the desktop app's top-bar version info, or grab the installer from [GitHub Releases](https://github.com/anywhere-labs/dsh-desktop/releases);
+2. **Then update this plugin**: `dsh plugin --profile web add dsh-plugin-wallpaper-engine` (or click update in the plugin market).
+
+> 💡 Also update your **other DSH plugins at the same time**: older plugins may fail to load outright on harness 0.1.2-rc.1 (an old dsh-better-sidebar in a web profile was observed crashing at boot due to an API change).
+
+If you upgraded the plugin first by mistake, simply updating the Harness to the latest version restores everything — no plugin rollback needed. The plugin also shows a one-time in-app notice per release.
+
+> ✅ **v0.7.1 has been verified on DSH Desktop v2.0.5 (harness 0.1.2-rc.1)**: host routes (inventory / media / scene-frame), the first-level settings section, the picker modal, video & scene wallpaper playback, the rope-dock drawer, and the liquid-glass effects all work in both Compatibility and Enhanced desktop modes. The APIs this plugin relies on (slots / webserver / theme variables) are unchanged between harness 0.1.2-alpha.1 and 0.1.2-rc.1.
+>
+> 🐛 **v0.7.1 also fixes the rc.1 "swatches / vinyl record render as rounded rectangles" regression** ([#74](https://github.com/elysia395/dsh-wallpaper-engine/issues/74)): rc.1's theme layer ships a new `corner-shape.css` that applies `corner-shape: superellipse(1.5)` (squircle-ish corners) to **every element**, so any `border-radius:50%` circle renders as a rounded rectangle. The plugin now explicitly resets `corner-shape: round` on every circle / pill control it draws (swatches, vinyl record, slider thumbs, toggle knobs, font chips, …); on older harness builds the declaration is ignored, with no side effects.
 
 ## Which wallpaper types are supported?
 
@@ -197,6 +212,55 @@ plugin auto-loads (`dsh.client.immediately: true`).
 If your machine has Steam installed in a non-standard location, the host auto-detects
 via `libraryfolders.vdf`. Nothing further is required.
 
+### Troubleshooting install failures
+
+`dsh plugin --profile web add ...` forwards the command to **pnpm**. If you see this error:
+
+```text
+[ERR_PNPM_UNEXPECTED_VIRTUAL_STORE] Unexpected virtual store location
+dsh: pnpm failed in profile directory C:\Users\xxx\.dsh-desktop\profiles\web
+```
+
+**This is not a problem with the plugin itself** (any plugin would fail the same way) — the pnpm
+dependency state of that profile directory has gone stale. pnpm stores the virtual-store path
+(an absolute path) in `node_modules\.modules.yaml`; if the profile directory was **moved / copied /
+restored from a backup**, or the pnpm version / `virtual-store-dir` config changed, the recorded path
+no longer matches, so pnpm refuses to install anything into that profile.
+
+**Fix (Windows PowerShell):**
+
+```powershell
+# 1) Quit the DSH desktop app first
+# 2) Remove the profile's dependency directory (only node_modules — config / installed plugin names are kept)
+Remove-Item "$env:USERPROFILE\.dsh-desktop\profiles\web\node_modules" -Recurse -Force
+# 3) Reinstall this plugin
+dsh plugin --profile web add dsh-plugin-wallpaper-engine
+```
+
+> Deleting just `node_modules\.modules.yaml` also works (pnpm recreates it and continues); removing
+> the whole `node_modules` is more thorough. If `.dsh-desktop` is touched by OneDrive / cloud sync /
+> migration tools, add it to the sync exclusion list to avoid a recurrence.
+
+If you see this error instead:
+
+```text
+[ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED] ... The git-hosted package "dsh-plugin-wallpaper-engine@0.6.8"
+needs to execute build scripts but is not in the "allowBuilds" allowlist.
+```
+
+**You used a `github:` install form** (e.g. `dsh plugin --profile web add github:elysia395/dsh-wallpaper-engine`).
+pnpm 11 blocks build scripts of git-hosted packages by default for supply-chain safety, and this
+plugin's git checkout needs the `prepare` script to build the client — so `github:` direct installs
+always fail. Use the **npm package name** instead (the published npm package is pre-built, no
+compile-time build needed):
+
+```sh
+dsh plugin --profile web add dsh-plugin-wallpaper-engine
+```
+
+> If your plugin hub (dsh-plugin-hub) generated a `github:` command, upgrade it to **v1.4.1+** — the
+> new version auto-resolves the npm package name and switches to the npm channel.
+
 ## Usage
 
 1. Open `dsh web` → the DSH GUI.
@@ -206,13 +270,32 @@ via `libraryfolders.vdf`. Nothing further is required.
    The choice is remembered in your browser's `localStorage` (key
    `dsh-wallpaper-engine:selection`).
 
-![Settings UI overview](docs/images/features.png)
+![Settings UI overview](docs/images/settings-ui.gif)
 
-> The settings page: the liquid-glass card (外观 accent/transparency), the current-wallpaper card, plus the 自定义壁纸 / 轮播列表 / 壁纸效果 sections.
+> The settings page: the liquid-glass card with six tabs (壁纸 / 外观 / 字体 / 吉祥物 / 效果 / 高级).
 
-![Wallpaper picker modal](docs/images/wallpaper-library.png)
+![Wallpaper picker modal](docs/images/wallpaper-library.gif)
 
 > The picker modal: browse every wallpaper thumbnail, batch-hide, and restore from the hidden tab.
+
+### Six adjustment tabs
+
+The settings page and the wallpaper-repo drawer share the same **top category
+tabs** — every control is grouped into one of six domains, each tab showing only
+the 3–8 controls that belong there instead of a thirty-item single column:
+
+| Tab | Contents |
+|---|---|
+| **壁纸** (wallpaper, default) | current-wallpaper card (vinyl + picker + pause/close/refresh), auto-rotation, custom wallpapers |
+| **外观** (appearance) | accent, glass color, glass transparency, settings-window glass, sidebar glass & content surface |
+| **字体** (typography) | master switch + color / weight / family |
+| **吉祥物** (mascot) | visibility switch, form cards (artwork doubles as a live preview), size slider |
+| **效果** (effects) | wallpaper blur / brightness / contrast / saturate / scrim / border / glass, playback speed, fps cap, fit, flip, occlusion pause (an empty state guides you to pick a wallpaper first) |
+| **高级** (advanced) | compact layout, Edge compatibility |
+
+The pill indicator slides between tabs; the settings page and the drawer keep
+independent tab state (remembered in `localStorage`, never written to the config
+file). Long explanations moved into tooltips — each row keeps a one-line hint.
 
 ### Hide & restore (soft delete)
 
@@ -244,8 +327,8 @@ mirroring Wallpaper Engine's conservative first-run stance.
 
 ### Card style & vinyl record
 
-- **紧凑布局 (compact layout)**: a sliding toggle at the top of the settings
-  page. ON gives the **CD-rack** look — cards stack like CD jewel cases
+- **紧凑布局 (compact layout)**: a sliding toggle in the **高级** (advanced) tab.
+  ON gives the **CD-rack** look — cards stack like CD jewel cases
   (each row's top covers the row above, vertical only), hovering scales the
   card up and brings it to the front, the grid is tighter (~7 cards per row)
   and shows everything on ONE page with no pagination. OFF is the regular
@@ -257,21 +340,13 @@ mirroring Wallpaper Engine's conservative first-run stance.
   (animation is disabled under `prefers-reduced-motion`). A small record also
   sits in the picker modal head. The vinyl shows in **both** card styles.
 
-![Compact wallpaper library (CD-rack layout)](docs/images/compact-wallpaper-library.png)
-
-> Compact layout: the CD-rack stacked grid, hover scales the card to the front, everything on one page.
-
-![Rotating vinyl record](docs/images/vinyl-record.gif)
-
-> Vinyl record: the selected wallpaper's cover as the record label, spinning while playing, stopped on pause.
-
 ### Playback speed & horizontal flip
 
-With a video wallpaper selected, the **壁纸效果** area shows the **倍速** presets (0.5x / 0.75x / 1x / 1.25x / 1.5x / 2x) — driven by the browser's native `playbackRate`, instant, no reload or black flash (wallpaper videos are muted, so there is no audio to keep in sync). The **水平翻转** toggle mirrors the image via CSS `scaleX(-1)` — it works for video, web, and uploaded images/videos alike, with zero main-thread cost.
+With a video wallpaper selected, the **效果** (effects) tab shows the **倍速** presets (0.5x / 0.75x / 1x / 1.25x / 1.5x / 2x) — driven by the browser's native `playbackRate`, instant, no reload or black flash (wallpaper videos are muted, so there is no audio to keep in sync). The **水平翻转** toggle mirrors the image via CSS `scaleX(-1)` — it works for video, web, and uploaded images/videos alike, with zero main-thread cost.
 
 ### Occlusion pause (battery-saving trio)
 
-Like Wallpaper Engine's "pause when covered" — the main reason desktop WE is ~0 GPU most of the time. Browsers cannot detect window occlusion directly, so the plugin uses the three closest signals (toggles in the **壁纸效果** area, instant + persisted):
+Like Wallpaper Engine's "pause when covered" — the main reason desktop WE is ~0 GPU most of the time. Browsers cannot detect window occlusion directly, so the plugin uses the three closest signals (toggles in the **效果** tab, instant + persisted):
 
 | Toggle | Default | Behavior |
 |---|---|---|
@@ -323,13 +398,13 @@ Wallpaper Engine is Windows-only, so a native Linux host has no Steam/WE install
 
 ### Automatic rotation (轮播列表)
 
-Rotation runs over **user-defined carousel lists** (轮播列表). Create any number of lists with **新建**, pick Video/Web wallpapers into each from the inventory, give each list its own switch interval (1, 5, 10, 30, 60 or 120 minutes) and order (顺序/随机), then enable **自动轮转** on the list you want active. Lists are persisted in your browser's `localStorage` and are fully client-side — rotation never depends on Wallpaper Engine's own `config.json` playlist paths.
+Rotation runs over **user-defined carousel lists** (the 自动轮播 group in the **壁纸** tab). Create any number of lists with **新建**, pick Video/Web wallpapers into each from the inventory, give each list its own switch interval (1, 5, 10, 30, 60 or 120 minutes) and order (顺序/随机), then enable **自动轮转** on the list you want active. Lists are persisted in your browser's `localStorage` and are fully client-side — rotation never depends on Wallpaper Engine's own `config.json` playlist paths.
 
 At least two playable Video/Web wallpapers per list are required; manual changes reset the next timer; each list keeps its own cadence, so you can have one list switching every 5 minutes and another every 30. On first run, the first playable Wallpaper Engine playlist is imported automatically as a list so the feature works out of the box; **从 WE 播放列表导入** inside the editor imports any other playlist into the list being edited. Application wallpapers cannot be embedded in the web UI, so they are automatically excluded from rotation and hidden from the picker.
 
 ### Liquid-glass appearance (whole settings window + accent + transparency)
 
-The **外观** (appearance) area at the top of the settings page controls the look
+The **外观** (appearance) tab controls the look
 of the **entire native DSH settings window** (following the dsh-web-ui-all
 skin-center design):
 
@@ -354,13 +429,9 @@ skin-center design):
 > back to a high-opacity solid so text stays readable. All controls apply
 > instantly and persist in `localStorage`.
 
-![Liquid-glass settings window](docs/images/liquid-glass-window.png)
-
-> Liquid glass: the whole settings window unified as glass, following accent, glass color and glass transparency.
-
 ### Mascot (chat pull-cord)
 
-At the bottom of the **外观** (appearance) area is a mascot control group for the chat **pull-cord** (a draggable rope pinned to the top edge; pulling it down slides out the **wallpaper repo** drawer):
+The **吉祥物** (mascot) tab controls the chat **pull-cord** (a draggable rope pinned to the top edge; pulling it down slides out the **wallpaper repo** drawer). The **form** picker renders as cards — each card draws the actual artwork scaled by the current **吉祥物大小** slider, so choosing a form and judging its size happen in one place:
 
 | Control | What it does | Range | Default |
 |---|---|---|---|
@@ -370,9 +441,13 @@ At the bottom of the **外观** (appearance) area is a mascot control group for 
 
 > Both artworks are inlined as base64 (transparent background) at build time, so the single-file client bundle stays self-contained. **Size** changes only the rope's own box; the wallpaper-repo drawer below is unaffected. Settings apply instantly and persist to the host-side config file.
 
+![Mascot quick-adjustment drawer](docs/images/mascot-drawer.png)
+
+> Pull the top rope mascot to slide out the **wallpaper repo** drawer: six-tab quick adjustments with the vinyl card, rotation and custom-wallpaper management within reach.
+
 ### Custom typography
 
-The settings page has a dedicated **字体** (typography) section placed before **外观**. The **master switch defaults to off** — the UI keeps the stock dsh typography with zero injected styling; turn it on to apply the three knobs below. Every change applies instantly and persists:
+The **字体** (typography) tab holds the dedicated typography section. The **master switch defaults to off** — the UI keeps the stock dsh typography with zero injected styling; turn it on to apply the three knobs below. Every change applies instantly and persists (the adjustment panel's own labels always stay in theme ink — they are deliberately excluded from the 字体颜色 tint to keep the panel readable):
 
 | Control | What it does | Range / options | Default |
 |---|---|---|---|
@@ -385,7 +460,7 @@ The settings page has a dedicated **字体** (typography) section placed before 
 
 ### The seven sliders
 
-While a wallpaper is active, seven sliders let you tune how it blends with the UI:
+The **效果** (effects) tab — available while a wallpaper is active — offers seven sliders to tune how it blends with the UI:
 
 | Slider | What it controls | Range | Default |
 |---|---|---|---|
@@ -395,7 +470,7 @@ While a wallpaper is active, seven sliders let you tune how it blends with the U
 | **饱和度** (saturate) | Wallpaper saturation (media filter) | 0–200 % | 100 % |
 | **暗化** (scrim) | Darkens the overlay between wallpaper and text | 0–90 % | 25 % |
 | **边框** (border) | Raises border/divider contrast | 0–90 % | 35 % |
-| **玻璃** (glass) | Blur radius of the frosted-glass panels (composer, bubbles) | 0–60 px | 24 |
+| **玻璃** (glass) | Blur radius of the frosted-glass panels (composer, bubbles) | 0–60 px | 16 |
 
 > **Light vs. dark mode** — Wallpapers differ wildly in colour and brightness, so
 > there is no one mode that fits every wallpaper. Switch DSH's theme between
@@ -430,9 +505,12 @@ The liquid-glass effect is specifically adapted for dsh-better-sidebar's panels
 the conversation area share the same wallpaper + scrim background and read as one
 continuous surface.
 
-The **外观** section exposes a set of **sidebar glass** controls independent of the
-conversation glass (they target only the dsh-better-sidebar subtree; browsers
-without `backdrop-filter` fall back to a near-opaque fill):
+The **外观** tab exposes a set of **sidebar glass** controls independent of
+both the conversation glass and the active wallpaper. Even with no Wallpaper
+Engine wallpaper selected, the sidebar can be tinted and frosted over the stock
+DSH surface or another background source. These controls target only the
+dsh-better-sidebar subtree; browsers without `backdrop-filter` fall back to a
+near-opaque fill:
 
 | Control | What it controls | Range | Default |
 |---|---|---|---|
@@ -443,12 +521,15 @@ without `backdrop-filter` fall back to a near-opaque fill):
 
 > Sidebar glass is a separate set of knobs from the settings-window glass: the
 > conversation「玻璃」slider only drives the composer/bubbles, while the sidebar
-> sliders drive the sidebar. The sidebar defaults to a fairly clear glass (so it
-> matches the wallpaper instead of glowing white); editor/terminal content
-> surfaces have their own near-opaque fill + transparency controls to keep text
-> readable in the narrow panels.
+> sliders drive the sidebar. Turning **侧栏液态玻璃** off restores the native
+> sidebar, including its editor/terminal content surfaces. The sidebar defaults
+> to a fairly clear glass (so it matches the background instead of glowing
+> white); editor/terminal content surfaces have their own near-opaque fill +
+> transparency controls to keep text readable in the narrow panels.
 
-![dsh-better-sidebar compatibility](docs/images/better-sidebar.png)
+![dsh-better-sidebar compatibility & custom typography](docs/images/better-sidebar-font.png)
+
+> The sidebar glass adaptation with the custom typography (行楷) applied at the same time.
 
 ## Limitations
 
