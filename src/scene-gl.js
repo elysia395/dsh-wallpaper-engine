@@ -111,8 +111,10 @@ uniform vec2 u_Viewport;
 varying vec2 v_UV; varying vec4 v_Color;
 void main(){
   // UV = 帧子区域映射（官方 SPRITESHEET: GIF/精灵表逐帧采样; 无帧 = 整图
-  // rect(0,0,1,1)）。cornerUV 与整图语义同款: 左上角 → (0,0)。
-  vec2 cuv = vec2(a_Corner.x + 0.5, 0.5 - a_Corner.y);
+  // rect(0,0,1,1)）。粒子位置是画布 y-down 空间: corner.y=+0.5 落屏幕下半,
+  // 须采 v=1 (图底) — 旧写法 0.5-y 让屏幕下方采图顶 → sprite 垂直镜像
+  // (sf53: 3735447194 卡通泡泡 rot≡0, 高光跑到底部, 观感=贴图旋转 180°)。
+  vec2 cuv = vec2(a_Corner.x + 0.5, 0.5 + a_Corner.y);
   v_UV = a_UVRect.xy + cuv * a_UVRect.zw;
   v_Color = a_Color;
   vec2 p = a_Corner * a_Size;
@@ -836,8 +838,9 @@ function _weGLTrailSample(hist, tk) {
 //   (官方 genericropeparticle.vert TRAILRENDERER 同款; 渐隐由贴图 v 向 alpha
 //   承担 — drop.tex v≈0.19 亮核, v→1 隐)。无独立头部 sprite。
 //   rope = "在发射的粒子间连线" — 相邻存活粒子串链 + 链头 sprite (sf46 近似)。
-// GL 旋转约定: 本地 +y 经 rot 映为 (sin r, cos r), 且 corner +0.5y 端采样 v=uy
-// → 段 quad rot=atan2(head−tail) 使头端采 uy=(k−1)/S, 尾端采 k/S。
+// GL 旋转约定: 本地 +y 经 rot 映为 (sin r, cos r); sf53 起 corner +0.5y 端采样
+// v=uy+uh (图底端, 与 CPU v=(ny+1)/2 同式) → 段 quad rot=atan2(tail−head)
+// (本地 +y→尾) 使头端采 uy=(k−1)/S, 尾端采 k/S。
 function _weGLPFillRopeVerts(sys, f32, ps, CW, CH, texW, texH) {
   const S = _WE_GL_PART_STRIDE;
   const ratio = texW > 0 ? texH / texW : 1;
@@ -883,7 +886,7 @@ function _weGLPFillRopeVerts(sys, f32, ps, CW, CH, texW, texH) {
             // 宽与 sprite 同口径 (全宽 = size·ps·osc); 长 = 段距 + 全宽重叠 (无缝)
             const w = Math.max(0.5, (hs + s2.sz) / 2) * ps[0] * osc[0];
             put((ax + bx) / 2, (ay + by) / 2, w, d + w,
-              Math.atan2(ax - bx, ay - by), // 本地 +y → 头 (头端采 v=(k−1)/SEG)
+              Math.atan2(bx - ax, by - ay), // 本地 +y → 尾 (sf53 随 shader v 向修正撤掉反向补偿; 头端采 v=(k−1)/SEG)
               cr, cg, cb, a, 0, (k - 1) / SEG, uvw, 1 / SEG);
           }
         }
@@ -939,7 +942,7 @@ function _weGLPFillRopeVerts(sys, f32, ps, CW, CH, texW, texH) {
   return n;
 }
 
-const _WE_GL_VERSION = 9; // sf51 spritesheet 图像逐帧轮播 + sf52 鼠标 object-fit 映射 — 与 host SCENE_GL_ENGINE 同步
+const _WE_GL_VERSION = 9; // sf51 spritesheet 图像逐帧轮播 + sf52 鼠标 object-fit 映射 — 与 host SCENE_GL_ENGINE 同步 (sf53 粒子 v 向修复为纯客户端 shader 语义修正, 不改协议, 版本号保持 9)
 
 // ---------- W4: 木偶网格（绑定姿态静态渲染；MDLA 动画属实验层）----------
 // CPU puppet.js 语义: 网格顶点为相对对象中心的局部像素坐标 (y 向上);
