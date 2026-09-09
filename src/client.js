@@ -84,23 +84,25 @@ const DEFAULTS = {
   // 解码占用随帧率线性下降）。与倍速完全解耦 —— 倍速照常叠加在抽帧版上。
   // 无 ffmpeg 或转码失败时自动回退原片（transcodeState: "fallback"）。
   fpsCap: 0,
-  // Scene 壁纸动画化: 静态帧的 frameUrl (供 fpsCap 变更时重渲染动画) + 渲染进度
-  // (0-100; 后台渲染 scene-anim 视频期间轮询, 完成置 null)。
+  // Scene 壁纸静态帧 frameUrl (GL 未就绪/失败时的底图)。
   sceneFrameUrl: null,
-  sceneAnimProgress: null,
-  // beta场景动画: 默认关闭 — 关闭时 scene 壁纸只渲染静态帧 (稳定), 不启动
-  // scene-anim 视频后台渲染; 开启后才走动画化升级 (CPU 渲染试验性, 可能有
-  // 组件错误), 渲染期间进度条 + 完成自动切换视频。
-  betaSceneAnim: false,
+  // GL 实时渲染总开关 (默认开; CPU 渲染路径已移除 — 关闭即纯静态帧模式)。
+  sceneGL: true,
+  // 白名单外效果放行 (默认开: 机制通用 + 失败隔离; CPU 备胎已删, 拦截只会
+  // 让特效静默消失)。关闭则仅放行已实测效果集。
+  sceneGLExperimental: true,
   // 遮挡暂停（借鉴 Wallpaper Engine 的「被遮挡时暂停」——桌面端大部分时间
   // GPU≈0 主因就是它）：
   // - pauseOnHidden：页面隐藏（窗口最小化 / 切到其它标签页）时暂停视频。
   //   浏览器对后台页的节流并不保证解码停止，显式 pause 让解码引擎直接归零。
   // - pauseOnBlur：窗口失焦（切到其它应用，壁纸很可能被遮挡）时暂停。
   //   浏览器无法直接探测"被窗口遮挡"，失焦是最接近的代理信号。
+  //   默认开（原为 false）：Linux/X11 上 Chromium 不做窗口遮挡检测，被全屏
+  //   应用盖住时 document.hidden 不变、IntersectionObserver 仍报可见，GL 场景
+  //   会持续满帧渲染 —— 实测这是 Intel i915 GPU reset（壁纸崩溃灰屏）的触发链。
   // 恢复可见 / 聚焦后，若用户未手动暂停则自动继续（同步 effective 播放态）。
   pauseOnHidden: true,
-  pauseOnBlur: false,
+  pauseOnBlur: true,
   // 使用电池供电时暂停（类似 WE 的电池优化）：navigator.getBattery 判定
   // 是否在电池上（!charging），不支持的浏览器自动无操作。
   pauseOnBattery: false,
@@ -307,9 +309,10 @@ function sanitizeSettings(o) {
       : [],
     playbackRate: clampNum(o.playbackRate, 0.5, 2, DEFAULTS.playbackRate),
     fpsCap: FPS_CAP_VALUES.includes(o.fpsCap) ? o.fpsCap : DEFAULTS.fpsCap,
-    betaSceneAnim: o.betaSceneAnim === true,
+    sceneGL: o.sceneGL !== false,
+    sceneGLExperimental: o.sceneGLExperimental !== false,
     pauseOnHidden: o.pauseOnHidden !== false,
-    pauseOnBlur: o.pauseOnBlur === true,
+    pauseOnBlur: o.pauseOnBlur !== false,
     pauseOnBattery: o.pauseOnBattery === true,
     flip: o.flip === true,
     objectFit: ["cover", "contain", "center", "fill"].includes(o.objectFit)
@@ -327,7 +330,7 @@ function sanitizeSettings(o) {
       ? o.glassColor : DEFAULTS.glassColor,
     glassWindow: o.glassWindow !== false,
     sidebarGlass: o.sidebarGlass !== false,
-    sidebarBlur: clampNum(o.sidebarBlur, 0, 200, DEFAULTS.sidebarBlur),
+    sidebarBlur: clampNum(o.sidebarBlur, 0, 60, DEFAULTS.sidebarBlur), // P1-5: 上限 200→60,旧持久化值超限即收敛
     sidebarAlpha: clampNum(o.sidebarAlpha, 0, 200, DEFAULTS.sidebarAlpha),
     sidebarColor: typeof o.sidebarColor === "string" && /^#[0-9a-f]{6}$/i.test(o.sidebarColor)
       ? o.sidebarColor : DEFAULTS.sidebarColor,
@@ -347,6 +350,12 @@ function sanitizeSettings(o) {
   };
 }
 
+// pauseOnBlur 默认 false→true 的一次性迁移标记（独立 key，不进 settings 白
+// 名单 — serializeSelection 全量重写会丢字段导致重复迁移）。旧存档里的
+// pauseOnBlur:false 大多是旧默认值随全量持久化落盘，而非用户显式关闭；
+// 迁移置 true 一次，之后用户再手动关闭会被尊重（标记阻止二次迁移）。
+const PAUSE_ON_BLUR_MIGRATED_KEY = "dsh-wallpaper-engine:pauseOnBlurMigrated";
+
 function readPersisted() {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
@@ -355,6 +364,25 @@ function readPersisted() {
   } catch {
     return { id: "", ...DEFAULTS };
   }
+}
+
+// 迁移必须在 loadPersisted 的 host/local 合并**之后**对最终 selection 判定：
+// host 文件是事实源，而 PUT 是全量白名单替换 —— 旧版任何一次壁纸选择/设置
+// 变更都把当时的默认 pauseOnBlur:false 落进了 host。只迁 localStorage 会被
+// 随后的 Object.assign(selection, sanitizeSettings(hostSettings)) 原样盖回
+// （writeLocalCache 还会把 false 写回 local，而标记已置位 → 迁移永不重跑，
+// 存量 GL 用户 —— 正是遮挡崩溃人群 —— 拿不到新默认值）。这里统一在合并
+// 结果上翻转并 persistSelection 回推 host，两层同源纠正；翻转后 PUT 失败
+// 由既有 persistDirty/pagehide 重试链兜底。
+function migratePauseOnBlurDefault() {
+  let migrated = false;
+  try { migrated = localStorage.getItem(PAUSE_ON_BLUR_MIGRATED_KEY) === "1"; } catch { /* ignore */ }
+  if (migrated) return;
+  if (selection.pauseOnBlur === false) {
+    selection.pauseOnBlur = true;
+    persistSelection(); // 立即调度 local 写 + PUT 回推 host（防下次启动又被旧 false 盖回）
+  }
+  try { localStorage.setItem(PAUSE_ON_BLUR_MIGRATED_KEY, "1"); } catch { /* ignore */ }
 }
 
 // ── Shared selection store (React + DOM layer share it) ────────────────────
@@ -446,7 +474,8 @@ function serializeSelection() {
     hiddenIds: selection.hiddenIds,
     playbackRate: selection.playbackRate,
     fpsCap: selection.fpsCap,
-    betaSceneAnim: selection.betaSceneAnim,
+    sceneGL: selection.sceneGL,
+    sceneGLExperimental: selection.sceneGLExperimental,
     pauseOnHidden: selection.pauseOnHidden,
     pauseOnBlur: selection.pauseOnBlur,
     pauseOnBattery: selection.pauseOnBattery,
@@ -591,6 +620,11 @@ async function loadPersisted() {
     // Host unreachable (route missing / static load): localStorage fallback.
     if (!stale) Object.assign(selection, readPersisted());
   }
+
+  // 一次性默认值迁移在合并结果上跑（见 migratePauseOnBlurDefault 注释）。
+  // stale（GET 在途期间用户改了设置）时跳过 —— 用户的写入比 host 应答新，
+  // 不被迁移翻动；标记未置位，下次启动照常迁移。
+  if (!stale) migratePauseOnBlurDefault();
 
   // Settings applied (host or fallback). Mark loaded so gated UI — the one-time
   // notice — knows the persisted noticeSeen is final before it renders.
@@ -817,18 +851,6 @@ function nextGroupId() {
   return "grp-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
 }
 
-function nextRotationWallpaper() {
-  const list = rotationCandidates();
-  if (list.length < 2) return null;
-  const group = activeRotationGroup();
-  if (group && group.order === "random") {
-    const candidates = list.filter((w) => w.id !== selection.id);
-    return candidates[Math.floor(Math.random() * candidates.length)] || null;
-  }
-  const current = list.findIndex((w) => w.id === selection.id);
-  return list[(current + 1 + list.length) % list.length] || null;
-}
-
 function clearRotationTimer() {
   if (selection.rotationTimer === null) return;
   if (typeof window !== "undefined" && typeof window.clearTimeout === "function") {
@@ -844,16 +866,422 @@ function syncRotationTimer() {
   if (typeof window === "undefined" || typeof window.setTimeout !== "function") return;
   const group = activeRotationGroup();
   const minutes = group ? group.interval : DEFAULTS.rotationInterval;
+  // 开发/测试覆盖钩子：localStorage.weRotationTestSec（秒）可临时缩短轮换
+  // 间隔（冒烟测试与手动预览用）；未设置时按组间隔（默认 5 分钟）正常运转。
+  let delayMs = minutes * 60 * 1000;
+  try {
+    const testSec = Number(localStorage.getItem("weRotationTestSec"));
+    if (testSec > 0) delayMs = Math.max(1000, Math.round(testSec * 1000));
+  } catch { /* ignore */ }
   selection.rotationTimer = window.setTimeout(() => {
     selection.rotationTimer = null;
     if (!selection.rotationEnabled || !selection.id) return;
-    const next = nextRotationWallpaper();
-    if (next) applySelection(next.id);
-    // 静默停摆修复：候选在 armed 期间被隐藏到不足 2 个时 next 为 null，
-    // 不重建定时器轮播就无声停止。re-arm（候选仍 <2 时 syncRotationTimer
-    // 自身不会 arm；恢复 ≥2 由 hide/restore 里的补 arm 接管）。
-    else syncRotationTimer();
-  }, minutes * 60 * 1000);
+    // 就绪后切换（2026-10 决策）：不再到点即 applySelection —— 先在后台把
+    // 下一张壁纸准备到完全 ready（GL 首帧 / 静态帧提取完成 / 视频可播放 /
+    // 图片解码完成），就绪才落实切换并做交叉淡化。准备期间旧壁纸原样保持。
+    beginRotationPrepare(new Set());
+  }, delayMs);
+}
+
+// ── Rotation prepare pipeline (就绪后切换 + 渐变) ───────────────────────────
+// 到点 → beginRotationPrepare：后台探测下一张壁纸的就绪信号，ready 才 commit
+// （applySelection + 交叉淡化），fail 则跳过该候选链式尝试下一个（有界于候选
+// 数，全灭则 re-arm 定时器下轮重来）。手动切换/关闭轮换会取消进行中的准备。
+let rotationPrep = null; // { id, fromId, excluded:Set, cancelled, timers:[], staged, probeMedia, readyEl, settled }
+let pendingRotationFade = false; // commit 置位，syncLayers 消费后清零
+let fadingLayerNode = null;      // 正在淡出的旧壁纸层（渐变结束移除）
+let fadingGL = null;             // 为渐变保活的旧 GL 渲染器（旧层移除时 dispose）
+// 已就绪、等待被 buildMedia 领养进新层的媒体元素（img/video/iframe —— GL
+// canvas 走 sceneGL 领养通道）。就绪态随元素走：探测用的就是最终上屏的元素，
+// 杜绝"探测就绪了但层里另建空白元素重新加载"的黑屏闪烁。
+let preparedMediaEl = null;
+const ROTATION_PREP_TIMEOUT_MS = 20000; // 单阶段就绪探测上限（超时走兜底，不卡死轮换）
+// 交叉渐变时长（新层淡入 + 旧层宽限移除的基准）。用户试看反馈：600ms 偏仓促，
+// 拉长到 1200ms 观感更稳。CSS .we-layer--fadein 的 transition 必须与之同步。
+const ROTATION_FADE_MS = 1200;
+
+function disposeFadingGL() {
+  const g = fadingGL;
+  fadingGL = null;
+  if (g && g.renderer) { try { g.renderer.dispose(); } catch { /* ignore */ } }
+}
+
+function cancelRotationPrepare() {
+  const prep = rotationPrep;
+  if (!prep) return;
+  rotationPrep = null;
+  prep.cancelled = true;
+  for (const t of prep.timers) {
+    try { clearTimeout(t); } catch { /* ignore */ }
+  }
+  prep.timers = [];
+  if (prep.staged) {
+    try { prep.staged.renderer.dispose(); } catch { /* ignore */ }
+    try { prep.staged.div.remove(); } catch { /* ignore */ }
+    prep.staged = null;
+  }
+  releaseProbeMedia(prep);
+  if (prep.readyEl) { disposeMediaEl(prep.readyEl); prep.readyEl = null; }
+}
+
+// 媒体元素完整释放（video 是解码器根：pause + 清 src 才真释放，
+// releaseLayerMedia 同款教训）。
+function disposeMediaEl(m) {
+  if (!m) return;
+  try { m.onload = null; m.onerror = null; } catch { /* ignore */ }
+  try {
+    if (typeof m.removeEventListener === "function") {
+      m.removeEventListener("canplay", m.__weCanplay);
+      m.removeEventListener("error", m.__weError);
+      m.removeEventListener("load", m.__weLoad);
+    }
+  } catch { /* ignore */ }
+  if (m.tagName === "VIDEO") {
+    try { m.pause(); m.removeAttribute("src"); m.load(); } catch { /* ignore */ }
+  }
+}
+
+// 未就绪/被取消的探测元素：完整释放。
+function releaseProbeMedia(prep) {
+  const m = prep && prep.probeMedia;
+  if (!m) return;
+  prep.probeMedia = null;
+  disposeMediaEl(m);
+}
+
+// 就绪的探测元素：只摘事件监听，元素连同其已加载/已播放状态完整保留 ——
+// commit 时由 buildMedia 直接领养进新层（就绪态随元素走，杜绝"探测就绪了
+// 但层里另建空白元素重新加载"的黑屏闪烁）。
+function adoptProbe(prep) {
+  const m = prep && prep.probeMedia;
+  if (!m) return;
+  prep.probeMedia = null;
+  try { m.onload = null; m.onerror = null; } catch { /* ignore */ }
+  try {
+    if (typeof m.removeEventListener === "function") {
+      m.removeEventListener("canplay", m.__weCanplay);
+      m.removeEventListener("error", m.__weError);
+      m.removeEventListener("load", m.__weLoad);
+    }
+  } catch { /* ignore */ }
+  prep.readyEl = m;
+}
+
+function disposePreparedMedia() {
+  const el = preparedMediaEl;
+  preparedMediaEl = null;
+  disposeMediaEl(el);
+}
+
+// buildMedia 领养通道：类型匹配才交付，不匹配（陈旧元素）立即释放防泄漏。
+function consumePreparedMedia(tag) {
+  const el = preparedMediaEl;
+  preparedMediaEl = null;
+  if (!el) return null;
+  if (el.tagName === tag) return el;
+  disposeMediaEl(el);
+  return null;
+}
+
+// 轮换锚点 = 当前【实际显示】的壁纸（按 selection.url 反查），而非裸
+// selection.id：storage 跨窗同步只改 id 不重建层，id 可能与上屏内容脱节，
+// 以其为锚点会把"正在显示的"当作下一张再切回去（A→B→A→B 乒乓）。
+function rotationAnchorWallpaper() {
+  const byId = wallpaperById();
+  const sel = byId.get(selection.id);
+  if (sel && (sel.media === selection.url || (sel.frameUrl && sel.frameUrl === selection.url))) return sel;
+  const displayed = selection.inventory.wallpapers.find(
+    (w) => w.media === selection.url || (w.frameUrl && w.frameUrl === selection.url),
+  );
+  return displayed || sel || null;
+}
+
+// 候选选择：排除锚点（当前显示）与已失败 id；sequence 从锚点位置向后取第一个
+// 可用者，random 随机取。全部排除完返回 null（调用方 re-arm，下轮重新评估）。
+function rotationNextCandidate(excluded) {
+  const full = rotationCandidates();
+  const anchor = rotationAnchorWallpaper();
+  const anchorId = anchor ? anchor.id : selection.id;
+  const usable = full.filter((w) => w.id !== anchorId && !(excluded && excluded.has(w.id)));
+  if (!usable.length) return null;
+  const group = activeRotationGroup();
+  let pick = null;
+  if (group && group.order === "random") {
+    pick = usable[Math.floor(Math.random() * usable.length)] || null;
+  } else {
+    const cur = full.findIndex((w) => w.id === anchorId);
+    for (let i = 1; i <= full.length; i++) {
+      const w = full[(cur + i + full.length) % full.length];
+      if (w && usable.indexOf(w) !== -1) { pick = w; break; }
+    }
+    if (!pick) pick = usable[0];
+  }
+  return pick;
+}
+
+function beginRotationPrepare(excluded) {
+  cancelRotationPrepare();
+  const next = rotationNextCandidate(excluded);
+  // 静默停摆修复语义保留：候选在 armed 期间被隐藏到不足时 re-arm（候选仍 <2
+  // 时 syncRotationTimer 自身不会 arm；恢复 ≥2 由 hide/restore 的补 arm 接管）。
+  if (!next) { syncRotationTimer(); return; }
+  const prep = {
+    id: next.id, fromId: selection.id, excluded,
+    cancelled: false, settled: false, timers: [], staged: null, probeMedia: null,
+  };
+  rotationPrep = prep;
+  const onReady = () => {
+    if (prep.cancelled || prep.settled || rotationPrep !== prep) return;
+    prep.settled = true;
+    commitRotationSwitch(prep);
+  };
+  const onFail = () => {
+    if (prep.cancelled || prep.settled || rotationPrep !== prep) return;
+    prep.settled = true;
+    // 跳过坏壁纸：清理本次准备（staged 在失败点已自清理）后链式尝试下一个。
+    rotationPrep = null;
+    prep.cancelled = true;
+    for (const t of prep.timers) { try { clearTimeout(t); } catch { /* ignore */ } }
+    prep.timers = [];
+    releaseProbeMedia(prep);
+    excluded.add(next.id);
+    beginRotationPrepare(excluded);
+  };
+  prepareWallpaper(next, prep, onReady, onFail);
+}
+
+// 单阶段超时兜底：宁肯兜底提交/降级也绝不让轮换静默卡死。返回 timer handle。
+function prepTimeout(prep, fn, ms) {
+  if (typeof window === "undefined" || typeof window.setTimeout !== "function") return null;
+  const t = window.setTimeout(() => {
+    if (prep.cancelled || prep.settled || rotationPrep !== prep) return;
+    fn();
+  }, ms || ROTATION_PREP_TIMEOUT_MS);
+  prep.timers.push(t);
+  return t;
+}
+
+function prepareWallpaper(w, prep, onReady, onFail) {
+  if (!w) { onFail(); return; }
+  if (w.type === "image") {
+    prep.kind = "image";
+    // headless 验证环境无 Image → 同步直通（验收脚本同步断言切换结果）。
+    if (typeof Image !== "function") { onReady(); return; }
+    const img = new Image();
+    prep.probeMedia = img;
+    img.onload = () => { adoptProbe(prep); onReady(); };
+    img.onerror = () => { releaseProbeMedia(prep); onFail(); };
+    prepTimeout(prep, () => { adoptProbe(prep); onReady(); }); // 慢图兜底提交（元素在新层继续加载）
+    img.alt = "";
+    img.draggable = false;
+    img.className = "we-media we-media--fit";
+    img.src = w.media;
+    return;
+  }
+  if (w.type === "video") {
+    prep.kind = "video";
+    prepareVideoProbe(w.media, w.preview, prep, onReady, onFail);
+    return;
+  }
+  if (w.type === "scene") {
+    // 优先级不变量：sceneVideo > GL > 静态帧。host 对每个 scene 都 mint
+    // sceneVideo URL（是否有内嵌视频只有请求后才知道），404/解码失败逐级回退。
+    if (w.sceneVideo) {
+      prep.kind = "sceneVideo";
+      prepareVideoProbe(w.sceneVideo, w.frameUrl || w.preview, prep, onReady,
+        () => prepareSceneGLStage(w, prep, onReady, onFail));
+      return;
+    }
+    prepareSceneGLStage(w, prep, onReady, onFail);
+    return;
+  }
+  // web (iframe)：detached 预载，load 后随元素移入新层（慢页超时兜底提交）。
+  prep.kind = "web";
+  prepareWebProbe(w, prep, onReady);
+}
+
+// detached <video> 预载 + 预播：canplay = 可播放就绪，元素本身（含已解码画面）
+// 在 commit 时移入新层 —— 上屏即是活画面，无重新加载黑窗。error = 硬失败
+// （跳过/回退），超时 = 兜底提交（poster 覆盖空窗）。
+function prepareVideoProbe(url, posterUrl, prep, onReady, onFail) {
+  if (!url || typeof document === "undefined" || typeof document.createElement !== "function") { onReady(); return; }
+  const v = document.createElement("video");
+  // headless mock 元素无事件设施 → 同步直通。
+  if (!v || typeof v.addEventListener !== "function") { onReady(); return; }
+  prep.probeMedia = v;
+  const onCanplay = () => { adoptProbe(prep); onReady(); };
+  const onErr = () => { releaseProbeMedia(prep); onFail(); };
+  v.__weCanplay = onCanplay;
+  v.__weError = onErr;
+  v.addEventListener("canplay", onCanplay, { once: true });
+  v.addEventListener("error", onErr, { once: true });
+  prepTimeout(prep, () => { adoptProbe(prep); onReady(); }); // 慢网络兜底提交
+  try {
+    v.muted = true;
+    v.loop = true;
+    v.autoplay = true;
+    v.preload = "auto";
+    v.setAttribute("playsinline", "");
+    if (posterUrl) v.poster = posterUrl;
+    v.className = "we-media we-media--fit";
+    v.src = url;
+    v.load();
+    // detached 也先播起来：移入新层时正在播放的画面无缝续播。
+    const p = typeof v.play === "function" ? v.play() : null;
+    if (p && typeof p.catch === "function") p.catch(() => { /* 可见后 syncLayers 补 play */ });
+  } catch { adoptProbe(prep); onReady(); }
+}
+
+// detached <iframe> 预载：load 事件（跨域也在元素上触发）后即随元素移入新层。
+function prepareWebProbe(w, prep, onReady) {
+  if (!w.media || typeof document === "undefined" || typeof document.createElement !== "function") { onReady(); return; }
+  const f = document.createElement("iframe");
+  if (!f || typeof f.addEventListener !== "function") { onReady(); return; }
+  prep.probeMedia = f;
+  const onLoad = () => { adoptProbe(prep); onReady(); };
+  f.__weLoad = onLoad;
+  f.addEventListener("load", onLoad, { once: true });
+  prepTimeout(prep, () => { adoptProbe(prep); onReady(); }); // 慢页兜底提交（元素继续加载）
+  try {
+    f.setAttribute("frameborder", "0");
+    f.setAttribute("scrolling", "no");
+    f.setAttribute("sandbox", "allow-scripts");
+    f.className = "we-media we-iframe";
+    f.src = w.media;
+  } catch { adoptProbe(prep); onReady(); }
+}
+
+// 场景 GL 预渲染：staged 渲染器挂在 opacity:0 但 in-DOM 的 staging 层里
+// （IntersectionObserver 不看 opacity，几何相交 → 渲染循环正常运转），首帧
+// 渲染完成（onReady）才放行 commit。门控与 trySceneGL 完全对齐。失败/超时
+// 回退静态帧阶段。coex idle 相位壁纸本就不上屏，跳过 GL 预渲染不浪费 GPU。
+function prepareSceneGLStage(w, prep, onReady, onFail) {
+  prep.kind = "gl";
+  const frameUrl = w.frameUrl || "";
+  const token = frameUrl.split("/").pop();
+  let glOff = false;
+  try { glOff = localStorage.getItem("weSceneGL") === "0"; } catch { /* ignore */ }
+  const glAllowed = selection.sceneGL !== false && !glOff && token
+    && !sceneGLFailedReason(token)
+    && typeof __WESceneGL !== "undefined" && __WESceneGL
+    && typeof __WESceneGL.createSceneGLRenderer === "function"
+    && typeof document !== "undefined" && document.body
+    && currentCoexPhase() !== "idle";
+  if (!glAllowed) { prepareSceneStaticStage(w, prep, onReady, onFail); return; }
+  const div = document.createElement("div");
+  if (!div || typeof div.appendChild !== "function") { prepareSceneStaticStage(w, prep, onReady, onFail); return; }
+  div.className = "we-layer we-layer--staging";
+  stampPluginRoot(div);
+  const { vw, vh } = sceneViewportSize();
+  let renderer = null;
+  const bailToStatic = () => {
+    if (prep.cancelled || prep.settled) return;
+    prep.staged = null;
+    try { if (renderer) renderer.dispose(); } catch { /* ignore */ }
+    try { div.remove(); } catch { /* ignore */ }
+    prepareSceneStaticStage(w, prep, onReady, onFail);
+  };
+  try {
+    renderer = __WESceneGL.createSceneGLRenderer({
+      token,
+      width: vw,
+      height: vh,
+      fpsCap: selection.fpsCap || 0,
+      onReady: () => {
+        if (prep.cancelled || prep.settled || rotationPrep !== prep || !prep.staged || prep.staged.renderer !== renderer) return;
+        prep.staged.ready = true;
+        onReady();
+      },
+      onError: ({ reason }) => {
+        if (prep.cancelled || prep.settled || rotationPrep !== prep) return;
+        // 与 trySceneGLNow 同款失败簿记：commit 后 glFailed 门拦住重试，
+        // 降级提示条经 sceneGLNotice（token 匹配）照常上 UI。
+        let glDegraded = [];
+        try { glDegraded = renderer && renderer.degraded ? renderer.degraded() : []; } catch { glDegraded = []; }
+        sceneGLNotice = {
+          token,
+          degraded: Array.isArray(glDegraded) ? glDegraded : [],
+          reason: String(reason || "gl-error"),
+        };
+        markSceneGLFailed(token, reason);
+        bailToStatic();
+      },
+    });
+  } catch { renderer = null; }
+  if (!renderer || !renderer.canvas) { bailToStatic(); return; }
+  renderer.canvas.className = "we-media we-media--gl we-media--fit";
+  prep.staged = { renderer, token, frameUrl, div, ready: false };
+  div.appendChild(renderer.canvas);
+  document.body.appendChild(div);
+  prepTimeout(prep, bailToStatic); // GL 初始化卡死（hidden 停循环等）→ 降级静态帧
+}
+
+// 静态帧阶段：GET frameUrl 由 host 按需触发提取（in-flight 去重），img onload
+// = 提取+解码完成，元素随 commit 移入新层。提取失败（422）→ preview 探测；
+// preview 也失败 → onFail 跳过。
+function prepareSceneStaticStage(w, prep, onReady, onFail) {
+  prep.kind = "static";
+  if (typeof Image !== "function") { onReady(); return; }
+  const tryPreview = () => {
+    if (!w.preview) { onFail(); return; }
+    const p = new Image();
+    prep.probeMedia = p;
+    p.onload = () => { adoptProbe(prep); onReady(); };
+    p.onerror = () => { releaseProbeMedia(prep); onFail(); };
+    p.alt = "";
+    p.draggable = false;
+    p.className = "we-media we-media--fit";
+    p.src = w.preview;
+  };
+  if (!w.frameUrl) { tryPreview(); return; }
+  const img = new Image();
+  prep.probeMedia = img;
+  img.onload = () => { adoptProbe(prep); onReady(); };
+  img.onerror = () => { releaseProbeMedia(prep); tryPreview(); };
+  prepTimeout(prep, () => { adoptProbe(prep); onReady(); }); // 慢提取兜底提交
+  img.alt = "";
+  img.draggable = false;
+  img.className = "we-media we-media--fit";
+  img.src = w.frameUrl;
+}
+
+// 就绪 → 落实切换：提交前再校验（准备期间用户可能手动切换/隐藏候选/关闭轮换），
+// 通过则置渐变标记并 applySelection（fromRotation 保活旧 GL + adoptGL 领养
+// staged 渲染器）。staging div 在 applySelection 返回后移除 —— emit→buildMedia
+// 已把 canvas 移动进新层，canvas 全程不经历 detached 状态（规避 IO 误判不可见
+// → stopLoop → 渲染器永冻的实锤链条）。
+function commitRotationSwitch(prep) {
+  rotationPrep = null;
+  for (const t of prep.timers) { try { clearTimeout(t); } catch { /* ignore */ } }
+  prep.timers = [];
+  releaseProbeMedia(prep);
+  const staged = prep.staged;
+  prep.staged = null;
+  const adoptGL = staged && staged.ready
+    ? { renderer: staged.renderer, token: staged.token, frameUrl: staged.frameUrl }
+    : null;
+  if (staged && !adoptGL) { try { staged.renderer.dispose(); } catch { /* ignore */ } }
+  const w = wallpaperById().get(prep.id);
+  const valid = selection.rotationEnabled && selection.id === prep.fromId
+    && w && isRotatableWallpaper(w) && !isHiddenWallpaper(w.id);
+  if (!valid) {
+    if (adoptGL) { try { adoptGL.renderer.dispose(); } catch { /* ignore */ } }
+    if (staged) { try { staged.div.remove(); } catch { /* ignore */ } }
+    if (prep.readyEl) disposeMediaEl(prep.readyEl);
+    syncRotationTimer();
+    return;
+  }
+  // 就绪元素随提交走：buildMedia 直接领养进新层（不再另建空白元素重新加载）。
+  preparedMediaEl = prep.readyEl || null;
+  prep.readyEl = null;
+  pendingRotationFade = true;
+  applySelection(prep.id, { fromRotation: true, adoptGL, kind: prep.kind });
+  // 领养保险丝：applySelection 的领养条件未命中（理论上不可达 — 准备期前提
+  // 与领养条件一致，此处仅兜底）时 staged 渲染器不能泄漏。
+  if (adoptGL && (!sceneGL || sceneGL.renderer !== adoptGL.renderer)) {
+    try { adoptGL.renderer.dispose(); } catch { /* ignore */ }
+  }
+  if (staged) { try { staged.div.remove(); } catch { /* ignore */ } }
 }
 
 // ── Rotation group CRUD (draft-based editor) ────────────────────────────────
@@ -892,6 +1320,8 @@ function saveEditingGroup() {
   else selection.rotationGroups.push(cleaned);
   selection.rotationGroupId = cleaned.id;
   selection.editing = null;
+  // 列表成员可能已变：进行中的轮换准备候选作废，下轮按新成员重评。
+  cancelRotationPrepare();
   if (selection.rotationEnabled && !rotationCandidates().some((w) => w.id === selection.id)) {
     const first = rotationCandidates()[0];
     applySelection(first ? first.id : "");
@@ -911,6 +1341,8 @@ function deleteGroup(id) {
   const idx = selection.rotationGroups.findIndex((g) => g.id === id);
   if (idx < 0) return;
   selection.rotationGroups.splice(idx, 1);
+  // 列表结构变化：进行中的轮换准备候选可能已不在活动列表 → 取消，下轮重评。
+  cancelRotationPrepare();
   if (selection.rotationGroupId === id) {
     selection.rotationGroupId = "";
     if (selection.rotationEnabled) {
@@ -931,10 +1363,27 @@ function importPlaylistIntoDraft(playlist) {
   emit();
 }
 
-function applySelection(id) {
-  // 切换壁纸 (任意类型): 终止旧的 scene 动画升级 — 旧轮询 timer 停止写进度,
-  // 旧 probe 下载断开 → 服务端 res close → 取消渲染 (worker/ffmpeg 释放 CPU)。
-  cancelSceneAnimUpgrade();
+function applySelection(id, opts) {
+  // 手动切换/清除/revalidate：取消进行中的轮换准备（staged GL/probe 全部释放），
+  // 并丢弃任何滞留的就绪元素。
+  if (!opts || !opts.fromRotation) { cancelRotationPrepare(); disposePreparedMedia(); }
+  // 切换壁纸 (任意类型): GL 渲染器随壁纸切换即 dispose（防上下文累积 —
+  // scene-player 前例教训）。轮换渐变例外：旧渲染器移入 fadingGL 保活，
+  // 旧层在交叉淡化期间继续渲染，渐变结束随旧层移除一并 dispose。
+  if (opts && opts.fromRotation && sceneGL && sceneGL.renderer) {
+    disposeFadingGL(); // 上一份保活渲染器先退役（快速连切链式防泄漏）
+    disconnectGLResizeObserver(); // 视口观察转交新渲染器（领养时 observeGLCanvas 重挂）
+    try { if (window.__weSceneGL) window.__weSceneGL = null; } catch { /* ignore */ }
+    fadingGL = sceneGL;
+    sceneGL = null;
+  } else {
+    disposeSceneGL();
+  }
+  // G-01/G-02：旧壁纸的 gate 提示随切换作废（展示按 token 匹配双保险）。
+  // 轮换提交例外：staged GL 失败簿记（sceneGLNotice）是在准备期为【新】壁纸
+  // 写入的，必须保留到提交后上 UI；成功/非场景路径的旧 token 提示由 banner
+  // 的 token 匹配天然隐藏，无需显式清。
+  if (!opts || !opts.fromRotation) sceneGLNotice = null;
   selection.id = id || "";
   persistSelection();
   if (!selection.id) {
@@ -966,16 +1415,48 @@ function applySelection(id) {
   }
   selection.url = w.type === "scene" ? w.frameUrl : w.media;
   selection.type = w.type;
-  // Scene 壁纸动画化: 先显示静态帧 (frameUrl, 立即), 后台预渲染动画视频
-  // (scene-anim 路由 ?fmt=mp4, 首次分钟级) 完成后无缝切换 — video 元素提供
-  // 播放/暂停/倍速 控制, 与视频壁纸同款。sceneFrameUrl 供 fpsCap 变更时重渲染。
+  // Scene 壁纸: 静态帧 (frameUrl, 提取器产物) 是底图 — GL 就绪后 canvas 淡入
+  // 覆盖; GL 失败/关闭则停留于此。
   selection.sceneFrameUrl = w.type === "scene" ? (w.frameUrl || null) : null;
   // Scene wallpapers with an embedded animation (host-extracted MP4) play it
   // as a hardware-decoded <video>; scenes without one stay on the static frame.
-  // 有内嵌 MP4 (sceneVideo) 的场景直接用硬件解码播放 — 不再触发 CPU scene-anim
-  // 升级 (避免重复动画 + 浪费 CPU, 且 scene-anim 完成后会覆盖 sceneVideo)。
+  // 有内嵌 MP4 (sceneVideo) 的场景直接用硬件解码播放 (优先级高于 GL)。
   selection.sceneVideo = w.type === "scene" ? (w.sceneVideo || null) : null;
-  if (w.type === "scene" && w.frameUrl && !selection.sceneVideo) queueSceneAnimUpgrade(w.frameUrl);
+  // 轮换提交以准备期【实测】为准：sceneVideo 探测已 404/解码失败（kind 非
+  // sceneVideo）时不得按 inventory 原样复活它 —— 否则新层 <video> 必然再次
+  // error：adopt 门（!sceneVideo）失效销毁已就绪 GL、error 后硬重建静态帧、
+  // trySceneGL 再初始化又一次硬重建 = 一次切换三段闪烁（实测闪烁主链）。
+  if (opts && opts.fromRotation && w.type === "scene"
+    && opts.kind && opts.kind !== "sceneVideo") {
+    selection.sceneVideo = null;
+  }
+  // 优先级不变量：sceneVideo > GL > 静态帧。GL 失败由 onError 标记 glFailed
+  // (会话内不再试), 层停留静态帧底图。
+  // 轮换领养：staged 渲染器在准备期已完成首帧（ready），直接接管 sceneGL 槽位，
+  // 跳过 trySceneGL 重建（避免二次 meta/shader fetch + 二次初始化等待）；收尾
+  // 与 trySceneGLNow onReady 等价（resize 观察/降级清单/视口补偿/抓帧回填/诊断钩）。
+  const adopt = opts && opts.adoptGL;
+  if (adopt && w.type === "scene" && w.frameUrl && !selection.sceneVideo) {
+    sceneGL = { renderer: adopt.renderer, token: adopt.token, frameUrl: adopt.frameUrl, ready: true, seq: ++sceneGLSeq };
+    installGLResizeHook();
+    observeGLCanvas(adopt.renderer);
+    try { sceneGL.degraded = adopt.renderer.degraded ? adopt.renderer.degraded() : []; } catch { sceneGL.degraded = []; }
+    // 准备期间视口可能变化：按当前预算补一次 resize（renderer.resize 阈值内
+    // 自带 no-op），并同步去重基准 glLastBudget（对齐 trySceneGLNow 语义）。
+    try {
+      const { vw, vh } = sceneViewportSize();
+      adopt.renderer.resize(vw, vh);
+      glLastBudget = { vw, vh };
+    } catch { /* ignore */ }
+    scheduleGLFrameCapture(adopt.renderer, adopt.token);
+    installGLDiagHook(adopt.renderer, adopt.token);
+  } else if (w.type === "scene" && w.frameUrl && !selection.sceneVideo
+    && (!opts || !opts.fromRotation)) {
+    // 轮换提交不在这里补 trySceneGL：准备期 GL 已得到充分机会（成功即
+    // adopt 分支消费；失败已簿记 glFailed 门），事后再试只会二次初始化 +
+    // 无渐变硬重建（闪烁）。手动切换/恢复路径维持原即时初始化语义。
+    try { trySceneGL(w.frameUrl); } catch { /* ignore */ }
+  }
   // Keep the preview around so a failed static frame can fall back to it.
   selection.previewUrl = w.preview || null;
   selection.transcodeState = "idle";
@@ -1167,6 +1648,10 @@ function releaseLayerMedia(node) {
   if (v) {
     try { v.pause(); v.removeAttribute("src"); v.load(); } catch { /* ignore */ }
   }
+  // scene-gl dispose 钩子（附录 §10.3）：层被移除时若还挂着 GL canvas 的渲染器
+  // （正常路径已由 applySelection/onError 清理，这里是保险丝）→ 即弃，防泄漏。
+  const g = node && node.querySelector("canvas.we-media--gl");
+  if (g && sceneGL && sceneGL.renderer && sceneGL.renderer.canvas === g) disposeSceneGL();
 }
 function weDrawFrame() {
   const ctx = weDrawCtx;
@@ -1233,125 +1718,384 @@ function weStartDraw(canvas, video, customFit) {
   weResizeObs.observe(canvas);
 }
 
-// ── Scene 壁纸动画化: 静态帧 → 后台预渲染视频 → 无缝切换 ──────
-// scene-anim 路由 (?fmt=mp4) 有落盘缓存 + 并发去重; 首次渲染分钟级, 故先显示
-// 静态帧 (frameUrl), 用隐藏 <video> 预加载动画视频 (触发宿主渲染), 完成后
-// 替换当前壁纸 URL — video 元素原生提供 播放/暂停/倍速/进度 控制,
-// 与视频壁纸同款配置。渲染期间轮询 /scene-anim-progress 显示进度条。
-// 切换壁纸 / fpsCap 变更会调用本函数: 必须终止旧升级 (轮询 timer + probe
-// 下载) — 否则旧 timer 继续把旧壁纸进度写进共享 selection (进度条跳变),
-// 且旧 probe 的下载保持服务端渲染任务活跃 (worker + ffmpeg 占满 CPU)。
-let sceneAnimUpgrade = null; // {pollTimer, probe, frameUrl, maxWait} — 当前活跃的升级
-function cancelSceneAnimUpgrade() {
-  const u = sceneAnimUpgrade;
-  sceneAnimUpgrade = null;
-  if (!u) return;
-  if (u.pollTimer) { clearInterval(u.pollTimer); }
-  if (u.maxWait) { clearTimeout(u.maxWait); }
-  if (u.probe) {
-    // 清 src 触发浏览器 abort 下载 → 服务端 res close → 渲染任务取消
-    try { u.probe.removeAttribute("src"); u.probe.load(); } catch { /* ignore */ }
-    try { u.probe.remove(); } catch { /* ignore */ }
-  }
-  if (selection.sceneAnimProgress != null) selection.sceneAnimProgress = null;
+// ── Scene GL 实时渲染（scene-gl — plan-scene-webgl Phase 1）──────────────────
+// 优先级不变量：内嵌视频 sceneVideo > GL > 静态帧。scene 壁纸无内嵌视频时先试
+// GL（sceneGL 总开关, 默认开）；GL 任一失败 → sessionStorage glFailed（带
+// reason，调试零成本）→ 停留静态帧底图 + 降级徽标（CPU mp4 兜底已随渲染路径
+// 移除）。contextlost 类环境性失败回前台自动重试一次。
+let sceneGL = null; // { renderer, token, frameUrl, ready, seq } — 当前活跃的 GL 渲染器
+// 渲染器实例序号: recreate（实验开关切换等 dispose→重建路径）时递增并入
+// wantKey — 否则 key 不变、层不重建, 新 canvas 永远不进 DOM, IO 判不可见
+// stopLoop 取消唯一 rAF → 渲染器永冻 GL_INIT (实测复现链)。
+let sceneGLSeq = 0;
+// G-01/G-02：GL 失败/门直接拒回退 CPU 后仍保留一次的 gate 结果（token 匹配
+// 当前壁纸才展示）——host gate 的 degraded/failed 信息不因“GL 未活到首帧 /
+// 降级开关关闭预检拒”而静默丢失，CPU 视频渲染成功也展示一次。
+let sceneGLNotice = null; // { token, degraded[], reason }
+// G-06：“不再提示”记忆（localStorage 持久化，与既有选择项同款风格）
+let weGLNoticeMuted = false;
+try { weGLNoticeMuted = localStorage.getItem("weGLDegradeMuted") === "1"; } catch { /* ignore */ }
+function muteSceneGLNotice() {
+  weGLNoticeMuted = true;
+  try { localStorage.setItem("weGLDegradeMuted", "1"); } catch { /* ignore */ }
+  emit();
 }
-function queueSceneAnimUpgrade(frameUrl) {
-  cancelSceneAnimUpgrade(); // 旧升级终止 (旧壁纸渲染随服务端 res close 取消)
-  // beta场景动画开关: 默认关闭 → scene 壁纸只显示静态帧, 不进入动画化升级。
-  // 关闭状态下即使 sceneFrameUrl 变更 (fpsCap 点击) 也不启动后台渲染。
-  if (selection.betaSceneAnim !== true) return;
-  // fps 取帧率上限 (fpsCap>0 时重渲染对应帧率, 与视频抽帧同款语义)
-  const fps = selection.fpsCap > 0 ? Math.min(30, Math.max(2, selection.fpsCap)) : 12;
-  // 分辨率按屏幕 + devicePixelRatio (上限 1920×1080, CPU 渲染成本受限) —
-  // 提高分辨率避免动画放大模糊 (对比静态帧 3840 全分辨率)
-  const dpr = Math.min(2, window.devicePixelRatio || 1);
-  const vw = Math.min(1920, Math.max(320, Math.round((window.innerWidth || 1920) * dpr)));
-  const vh = Math.min(1080, Math.max(180, Math.round((window.innerHeight || 1080) * dpr)));
-  const q = "?fps=" + fps + "&fmt=mp4&w=" + vw + "&h=" + vh;
-  const animUrl = frameUrl.replace("/scene-frame/", "/scene-anim/") + q;
-  // 渲染进度轮询 (首次分钟级; 缓存命中时第一次轮询即 100)
-  const token = frameUrl.split("/").pop();
-  const progUrl = "/wallpaper-engine/scene-anim-progress/" + token + q;
-  selection.sceneAnimProgress = 0;
-  emit(); // 立即反映新进度 (fpsCap 变更路径的调用方 emit 在前, 这里补一次)
-  let pollTimer = null, maxWait = null;
-  const stopPoll = () => {
-    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
-    if (maxWait) { clearTimeout(maxWait); maxWait = null; }
-    if (sceneAnimUpgrade && sceneAnimUpgrade.pollTimer === pollTimer) sceneAnimUpgrade = null;
-    if (selection.sceneAnimProgress != null) { selection.sceneAnimProgress = null; emit(); }
-  };
-  // 渲染完成切换的主动路径: 轮询到 100% 直接切换 — 不依赖 probe 的
-  // onloadeddata (渲染分钟级时浏览器 video 请求长时间挂起, onloadeddata
-  // 可能不触发/被中断 → 之前"渲染后仍显示静态帧")。
-  const trySwitch = () => {
-    if (selection.url && selection.url === frameUrl) {
-      selection.url = animUrl;
-      syncLayers();
+function disposeSceneGL() {
+  const g = sceneGL;
+  sceneGL = null;
+  disconnectGLResizeObserver(); // GL 会话终止 → 视口观察随停 (无 GL 时无需监测)
+  try { if (window.__weSceneGL) window.__weSceneGL = null; } catch { /* ignore */ }
+  if (g && g.renderer) { try { g.renderer.dispose(); } catch { /* ignore */ } }
+}
+function sceneGLFailedReason(token) {
+  try { return sessionStorage.getItem("weSceneGLFailed:" + token); } catch { return "ss"; }
+}
+function markSceneGLFailed(token, reason) {
+  try { sessionStorage.setItem("weSceneGLFailed:" + token, String(reason)); } catch { /* ignore */ }
+}
+// GL 前台恢复重试：GPU 进程崩溃（Intel i915 reset，实测窗口被全屏应用遮挡
+// 期间满转触发）烧完 contextlost 重建额度后，markSceneGLFailed 把 GL 会话级
+// 永封（sessionStorage），层里只剩灰底、必须手动刷新才恢复。contextlost 类
+// 失败是环境性崩溃而非内容不支持，回到前台（可见且聚焦）时清标记重试一次；
+// 内容性失败（unsupported:/render-fatal:/init: 等）不自动重试 —— 重试也必然
+// 再失败，还白烧一次 meta/shader fetch。
+// 双重防崩溃循环：每 token 每页面会话只自动重试一次（GPU 持续崩时反复重试
+// 只会周期性 cancel+重启 CPU 兜底渲染，分钟级渲染永远完不成）+ 30s 全局冷却。
+let sceneGLRetryAt = 0;
+const sceneGLAutoRetried = new Set();
+function maybeRetrySceneGLAfterContextLoss() {
+  if (typeof document !== "undefined" && document.hidden) return; // 仍不可见
+  if (typeof document !== "undefined" && typeof document.hasFocus === "function"
+    && !document.hasFocus()) return; // 仍失焦（blur 事件也走这里）
+  if (sceneGL || selection.type !== "scene" || !selection.sceneFrameUrl || selection.sceneVideo) return;
+  // 只在层仍停在静态帧（= 崩溃后的灰色/静止形态）时恢复。
+  if (selection.url !== selection.sceneFrameUrl) return;
+  const token = selection.sceneFrameUrl.split("/").pop();
+  const reason = sceneGLFailedReason(token);
+  if (!reason || reason.indexOf("contextlost") !== 0) return;
+  if (sceneGLAutoRetried.has(token)) return;
+  const now = Date.now();
+  if (now - sceneGLRetryAt < 30000) return;
+  sceneGLRetryAt = now;
+  sceneGLAutoRetried.add(token);
+  try { sessionStorage.removeItem("weSceneGLFailed:" + token); } catch { /* ignore */ }
+  sceneGLNotice = null; // 重试期间撤下"实时渲染不可用"提示条（失败会由 onError 重写）
+  try { trySceneGL(selection.sceneFrameUrl); } catch { /* ignore */ }
+}
+// 降级清单 → 设置面板一行汇总。G-06：多条 degraded 只显示首条+计数
+// （“对象A·粒子 等 3 项”），避免多类目刷屏；完整明细经 title 悬停保留
+// （sceneGLDegradedDetail — 对象名与 action 全文不丢，G-05 对齐 CPU C1
+// 的 {object, feature, action} 结构）。
+const SCENE_GL_LABEL = {
+  particle: "粒子",
+  "no-image": "文字/纯色",
+  puppet: "骨骼蒙皮",
+  "video-texture": "视频纹理",
+  "camera-object": "相机对象",
+  model: "模型",
+  passes: "多pass材质",
+  texture: "纹理缺失",
+  cbm: "颜色混合",
+  bloom: "泛光",
+  "camera-paths": "相机路径",
+  "scene-script": "内嵌脚本未运行",
+  livetext: "即时文字(时钟)",
+  watermarktext: "水印文字",
+  "text-render": "文字栅格化失败",
+  "text-effects": "文字效果链",
+  "3D 模型": "3D模型",
+  "相机对象": "相机",
+  "声音对象": "声音",
+  "木偶对象": "木偶",
+  "visible 隐藏": "隐藏对象",
+};
+function sceneGLFeatureLabel(d) {
+  const f = String((d && d.feature) || "?");
+  let key = f;
+  if (f.startsWith("effect:")) key = "效果 " + f.slice(7);
+  else if (f.startsWith("anim:")) key = "属性动画";
+  else if (f.startsWith("blending:")) key = "混合模式";
+  else if (f.startsWith("shader:")) key = "材质shader";
+  else key = SCENE_GL_LABEL[f] || f;
+  return (d && d.object ? d.object + "·" : "") + key;
+}
+function sceneGLDegradedDetail(list) {
+  const lines = [];
+  for (const d of Array.isArray(list) ? list : []) {
+    if (!d) continue;
+    lines.push(String(d.object || "场景") + "·" + String(d.feature || "?") + "：" + String(d.action || ""));
+  }
+  return lines.join("\n");
+}
+function summarizeSceneGLDegraded(list) {
+  const arr = (Array.isArray(list) ? list : []).filter(Boolean);
+  if (!arr.length) return "";
+  const head = sceneGLFeatureLabel(arr[0]);
+  return arr.length > 1 ? head + " 等 " + arr.length + " 项" : head;
+}
+// G-01/G-02/G-06：degrade 提示条内容 — GL 运行中取实时清单；GL 已回退静态
+// 帧时取缓存的 gate 结果（token 匹配当前壁纸才显示），保证 gate 的
+// failed/degraded 信息在“GL 未活到首帧 / 门直接拒”路径同样上 UI。
+// 返回 { text, title } 或 null（无提示/已静音）。
+function sceneGLBannerInfo(sel) {
+  if (!sel || sel.type !== "scene" || weGLNoticeMuted) return null;
+  if (sceneGL && sceneGL.ready && Array.isArray(sceneGL.degraded) && sceneGL.degraded.length > 0) {
+    return {
+      text: "⚠ 部分特效未支持，已降级渲染：" + summarizeSceneGLDegraded(sceneGL.degraded),
+      title: sceneGLDegradedDetail(sceneGL.degraded),
+    };
+  }
+  const token = String(sel.sceneFrameUrl || "").split("/").pop();
+  if (sceneGLNotice && token && sceneGLNotice.token === token) {
+    const list = (Array.isArray(sceneGLNotice.degraded) ? sceneGLNotice.degraded : []).filter(Boolean);
+    if (list.length > 0) {
+      return {
+        text: "⚠ 部分特效未支持，已回退静态图：" + summarizeSceneGLDegraded(list),
+        title: sceneGLDegradedDetail(list),
+      };
     }
-  };
-  pollTimer = setInterval(async () => {
+    // 无逐项清单（gate hard-reject / init 失败 / render-fatal）→ 一行 reason
+    return {
+      text: "⚠ 实时渲染不可用（" + String(sceneGLNotice.reason || "gl-error") + "），已回退静态图",
+      title: "",
+    };
+  }
+  return null;
+}
+function trySceneGL(frameUrl) {
+  // 门控：sceneGL 总开关（默认开；关闭 = 纯静态帧模式）+ localStorage
+  // weSceneGL=0 调试强制静态 + per-wallpaper glFailed + 模块可用性 + 版本
+  // handshake（__WESceneGL.version vs meta.engine 在 renderer 内部复核）
+  if (selection.sceneGL === false) return false;
+  let glOff = false;
+  try { glOff = localStorage.getItem("weSceneGL") === "0"; } catch { /* ignore */ }
+  if (glOff) return false;
+  const token = frameUrl.split("/").pop();
+  if (sceneGLFailedReason(token)) return false;
+  if (typeof __WESceneGL === "undefined" || !__WESceneGL || typeof __WESceneGL.createSceneGLRenderer !== "function") return false;
+  return trySceneGLNow(frameUrl);
+}
+// trySceneGL 主体（降级预检通过或开关默认开后直达）
+// GPU 抓帧回填静态帧缓存 (2026-09-02 决策: CPU/GPU 皆可创建, 每壁纸一份,
+// 仅空槽写入)。GL ready 后 2.5s (粒子/效果展开, 对齐 CPU 渲染 time=2.5):
+// HEAD /scene-frame 探测 (204=无缓存) → captureFramePNG() → PUT 上传。
+// 任一步失败静默放弃 — 抓帧是锦上添花, 不影响显示链。
+function scheduleGLFrameCapture(renderer, token) {
+  if (!renderer || typeof renderer.captureFramePNG !== "function") return;
+  const seq = sceneGL ? sceneGL.seq : 0;
+  setTimeout(() => {
+    // 渲染器已被替换/释放 (切换壁纸/失败) → 放弃本次
+    if (!sceneGL || sceneGL.renderer !== renderer || sceneGL.seq !== seq) return;
     try {
-      const r = await fetch(progUrl, { cache: "no-store" });
-      const j = await r.json();
-      const pct = Number(j && j.percent);
-      selection.sceneAnimProgress = Number.isFinite(pct) ? pct : 100;
+      fetch("/wallpaper-engine/scene-frame/" + token, { method: "HEAD" }).then((probe) => {
+        if (probe.status === 200) return; // 已有缓存帧 (CPU 先渲染过) → 零开销跳过
+        if (probe.status !== 204) return; // 探测异常 (404/旧宿主无 HEAD) → 不抓
+        renderer.captureFramePNG().then((blob) => {
+          if (!blob || blob.size < 2048 || !sceneGL || sceneGL.renderer !== renderer) return;
+          fetch("/wallpaper-engine/scene-frame-cache/" + token, { method: "PUT", body: blob })
+            .catch(() => { /* 上传失败无所谓 — 下次会话再试 */ });
+        }).catch(() => { /* 抓帧失败 (暂停中/已释放) 静默 */ });
+      }).catch(() => { /* HEAD 失败静默 */ });
+    } catch { /* ignore */ }
+  }, 2500);
+}
+
+// E2E/诊断钩子（验收 3/4：帧时环 + contextlost 计数 + glFailed 判定）。
+// trySceneGLNow 与轮换预渲染领养路径共用。
+function installGLDiagHook(renderer, token) {
+  try {
+    window.__weSceneGL = {
+      version: __WESceneGL.version, token, renderer,
+      // 视口链路诊断 (resize 排查): __weSceneGL.diag() 现场看预算/画布/最近 resize
+      diag: () => {
+        try {
+          return {
+            clientVersion: "0.8.9",
+            viewport: { iw: window.innerWidth, ih: window.innerHeight, dpr: window.devicePixelRatio || 1 },
+            budget: sceneViewportSize(),
+            lastBudget: glLastBudget,
+            ready: !!(sceneGL && sceneGL.ready),
+            canvas: renderer.canvas ? { w: renderer.canvas.width, h: renderer.canvas.height } : null,
+            viewportLog: (renderer.stats && renderer.stats.viewportLog) || [],
+            observerActive: !!glResizeObserver,
+          };
+        } catch (e) { return { error: String(e) }; }
+      },
+    };
+  } catch { /* ignore */ }
+}
+
+function trySceneGLNow(frameUrl) {
+  const token = frameUrl.split("/").pop();
+  disposeSceneGL();
+  sceneGLNotice = null; // 新一轮尝试使旧 gate 提示失效(失败由 onError 重写；成功则无提示)
+  const { vw, vh } = sceneViewportSize();
+  glLastBudget = { vw, vh }; // 创建时的预算 — 轮询/onReady 比对基准
+  const renderer = __WESceneGL.createSceneGLRenderer({
+    token,
+    width: vw,
+    height: vh,
+    fpsCap: selection.fpsCap || 0,
+    onReady: () => {
+      if (!sceneGL || sceneGL.renderer !== renderer) return;
+      sceneGL.ready = true;
+      // 初始化窗口期 (meta fetch + shader 编译, 1~3s) 内到达的 resize 事件
+      // 被 applyGLViewport 的 ready 检查吞掉 — ready 瞬间按当前视口补一次,
+      // 修复"首启小窗→全屏发虚, 刷新才恢复" (2s 轮询是二道保险)。
+      applyGLViewport();
+      // 降级清单（host gate 分层产物）：设置面板提示用户哪些特效缺失
+      try { sceneGL.degraded = renderer.degraded ? renderer.degraded() : []; } catch { sceneGL.degraded = []; }
+      // 首帧完成 → canvas 300ms 淡入覆盖底图 img（canvas 不透明 = 等价 img 淡出）
+      renderer.canvas.classList.add("we-media--gl-ready");
+      // GL 已接管显示 → 底图 img 的取帧请求不再需要: 撤 src 让宿主 N-02
+      // 等待者归零, 中止仍在跑的 CPU worker 渲染 (GPU 可用时 CPU 兜底不落盘,
+      // 静态帧改由下方抓帧回填)。GL 失败时 onError → emit → wantKey 变化
+      // 重建层, img.src 由 buildMedia 重设, 回退链不断。
+      try {
+        const layer = renderer.canvas.closest(".we-layer");
+        const underlay = layer && layer.querySelector("img.we-media");
+        if (underlay && underlay.getAttribute("src")) underlay.removeAttribute("src");
+      } catch { /* ignore */ }
+      // GPU 抓帧回填静态帧缓存 (仅空槽, 每壁纸一份): ready 后等 ~2.5s 让
+      // 粒子/效果展开 (对齐 CPU 渲染 time=2.5), HEAD 探测无缓存才抓帧上传。
+      scheduleGLFrameCapture(renderer, token);
       emit();
-      if (pct >= 100) {
-        clearInterval(pollTimer);
-        if (maxWait) { clearTimeout(maxWait); maxWait = null; }
-        trySwitch();
-        if (selection.sceneAnimProgress != null) { selection.sceneAnimProgress = null; emit(); }
-      }
-    } catch { /* 网络错误: 保持上次进度 */ }
-  }, 1500);
-  // 渲染超时兜底: 8 分钟未完成 → 停止轮询 (进度条消失, 保持静态帧)
-  maxWait = setTimeout(() => {
-    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
-    if (selection.sceneAnimProgress != null) { selection.sceneAnimProgress = null; emit(); }
-  }, 8 * 60 * 1000);
-  // probe video: 触发服务端渲染 (probe.src 请求)。必须挂 DOM + load(),
-  // detached video 设 src 不保证加载 → onloadeddata 不触发 (静止根因)。
-  // onloadeddata 是快路径 (渲染快时提前切换); 慢渲染由轮询 100% 兜底。
-  const probe = document.createElement("video");
-  probe.muted = true;
-  probe.preload = "auto";
-  probe.style.cssText = "position:absolute;left:-100000px;top:0;width:1px;height:1px;opacity:0;pointer-events:none;";
-  probe.onloadeddata = () => {
-    trySwitch();
-    stopPoll();
+    },
+    onError: ({ reason }) => {
+      if (!sceneGL || sceneGL.renderer !== renderer) return;
+      // G-01：GL 失败回退 CPU 前缓存 gate 结果 — 首帧前失败（shader 编译/纹理/
+      // watchdog/render-fatal）时 renderer.degraded() 仍能读到 host 清单
+      // （meta 已缓存在 renderer 内，dispose 不清除），提示条不因回退而断链
+      let glDegraded = [];
+      try { glDegraded = renderer.degraded ? renderer.degraded() : []; } catch { glDegraded = []; }
+      sceneGLNotice = {
+        token,
+        degraded: Array.isArray(glDegraded) ? glDegraded : [],
+        reason: String(reason || "gl-error"),
+      };
+      markSceneGLFailed(token, reason);
+      try { renderer.dispose(); } catch { /* ignore */ }
+      sceneGL = null;
+      disconnectGLResizeObserver(); // GL 会话终止 → 视口观察随停
+      try { window.__weSceneGL = null; } catch { /* ignore */ }
+      // GL 失败 → 停留静态帧底图（CPU mp4 兜底已随渲染路径移除）+ 徽标提示
+      emit();
+    },
+  });
+  sceneGL = { renderer, token, frameUrl, ready: false, seq: ++sceneGLSeq };
+  installGLResizeHook(); // G-07：视口/dpr 变化 → renderer.resize（懒装一次，no-op 便宜）
+  observeGLCanvas(renderer); // 主信号: RO 观察本会话 canvas — 换层重建后新 canvas 重挂
+  installGLDiagHook(renderer, token);
+  // 触发层重建挂上 canvas（wantKey 加 gl 位）：sceneVideo 404 回退路径里
+  // syncLayers 先于本函数跑过（sceneGL 还是 null，建成纯 img）— 不补这次
+  // emit，canvas 永远不进层，渲染器首帧后只能靠偶发 emit 被挂载（headless
+  // 实测卡 GL_INIT 死等 IntersectionObserver）。
+  emit();
+  return true;
+}
+
+function sceneViewportSize() {
+  const dpr = Math.min(2, window.devicePixelRatio || 1);
+  // G-07 预算 = 视口物理像素 (CSS×dpr), 绝对上限 4K — 渲染器背板/FBO 上限
+  // WE_GL_MAX_DIM=4096 本就按"dpr≤2 × 4K 视口"设计。旧 1920×1080 固定帽
+  // (GL 引入期 3c3263a 的保守预算) 在 2K/4K 屏上把画布钉死在 1080p 整屏
+  // 拉伸发虚, 且窗口越大越模糊 — 分辨率要跟随视口。
+  const vw = Math.min(3840, Math.max(320, Math.round((window.innerWidth || 1920) * dpr)));
+  const vh = Math.min(2160, Math.max(180, Math.round((window.innerHeight || 1080) * dpr)));
+  return { vw, vh };
+}
+// G-07：视口/设备像素比变化 → GL 背板重建（renderer.resize：超限 clamp 4096 +
+// 阈值内忽略 + 对象几何重排）。变化信号三路（覆盖矩阵互补, 无轮询）:
+//   1. ResizeObserver 观察 GL canvas 元素 (主信号, 标准 API) — 元素布局盒
+//      尺寸变化即触发, 不依赖 window 事件, 布局成因全覆盖 (窗口缩放/缩放
+//      级/容器重排); Chromium/Electron 原生支持, 回调在绘制前送达
+//   2. window resize 事件 + matchMedia resolution (dpr 变化, 跨屏拖动时
+//      元素盒尺寸可能不变只有 dpr 变 — RO 不触发, 由这条补)
+//   3. onReady 补偿 — GL 初始化窗口期 (1~3s) 的变化事件被 ready 检查早退
+//      吞掉 (复现: 首启小窗 → 初始化中全屏 → 画布停在初始小分辨率),
+//      ready 瞬间按当前视口补一次 resize
+// 预算无变化时整条链路零成本 (applyGLViewport 预算比对早退 +
+// renderer.resize 阈值内不碰 canvas)。
+let glResizeHookInstalled = false;
+let glLastBudget = null; // 最近一次应用的视口预算 {vw, vh} — 去重基准
+let glViewportApplyTimer = 0;
+let glResizeObserver = null; // ResizeObserver — 生命周期跟随 GL 会话
+function scheduleGLViewportApply() {
+  if (glViewportApplyTimer) clearTimeout(glViewportApplyTimer);
+  glViewportApplyTimer = setTimeout(applyGLViewport, 200);
+}
+function applyGLViewport() {
+  if (!sceneGL || !sceneGL.renderer || !sceneGL.ready) return;
+  try {
+    const { vw, vh } = sceneViewportSize();
+    if (glLastBudget && glLastBudget.vw === vw && glLastBudget.vh === vh) return;
+    glLastBudget = { vw, vh }; // resize 阈值内忽略也算"已应用", 防重试
+    sceneGL.renderer.resize(vw, vh);
+  } catch { /* ignore */ }
+}
+function observeGLCanvas(renderer) {
+  disconnectGLResizeObserver();
+  if (!renderer || !renderer.canvas || typeof ResizeObserver !== "function") return;
+  try {
+    glResizeObserver = new ResizeObserver(scheduleGLViewportApply);
+    glResizeObserver.observe(renderer.canvas);
+  } catch { glResizeObserver = null; }
+}
+function disconnectGLResizeObserver() {
+  if (glResizeObserver) {
+    try { glResizeObserver.disconnect(); } catch { /* ignore */ }
+    glResizeObserver = null;
+  }
+}
+function installGLResizeHook() {
+  if (glResizeHookInstalled) return;
+  glResizeHookInstalled = true;
+  try {
+    if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+      window.addEventListener("resize", scheduleGLViewportApply);
+    }
+  } catch { /* ignore */ }
+  let dprMq = null;
+  function onDprChange() { watchDpr(); scheduleGLViewportApply(); }
+  const watchDpr = () => {
+    try {
+      if (dprMq && typeof dprMq.removeEventListener === "function") dprMq.removeEventListener("change", onDprChange);
+      if (typeof window !== "undefined" && typeof window.matchMedia === "function") {
+        dprMq = window.matchMedia("(resolution: " + (window.devicePixelRatio || 1) + "dpx)");
+        if (typeof dprMq.addEventListener === "function") dprMq.addEventListener("change", onDprChange);
+      } else dprMq = null;
+    } catch { dprMq = null; }
   };
-  probe.onerror = () => { /* 渲染慢挂起超时 → 保持轮询, 由进度 100 主动切换 */ };
-  probe.src = animUrl;
-  try { document.body.appendChild(probe); probe.load(); } catch { /* ignore */ }
-  sceneAnimUpgrade = { pollTimer, probe, frameUrl, maxWait };
+  watchDpr();
 }
 
 function buildMedia(sel) {
   // Scene 壁纸播放形态优先级:
-  //   1. sceneVideo — 场景内嵌 MP4 (作者主分支, 硬件解码 <video>, poster=静态帧)
-  //   2. scene-anim — beta 动画升级 (本分支 CPU 渲染视频, URL 含 /scene-anim/)
-  //   3. 静态帧 img (frameUrl)
-  // 未升级时仍是静态帧 img。
+  //   1. sceneVideo — 场景内嵌 MP4 (硬件解码 <video>, poster=静态帧)
+  //   2. GL canvas 覆盖层 (trySceneGL 挂起, onReady 后 300ms 淡入)
+  //   3. 静态帧 img (frameUrl, 提取器产物 — GL 未就绪/失败/关闭时的底图)
   const isSceneVideo = sel.type === "scene" && Boolean(sel.sceneVideo);
-  const isSceneAnim = sel.type === "scene" && sel.url && sel.url.indexOf("/scene-anim/") !== -1;
-  const isStill = sel.type === "image" || (sel.type === "scene" && !isSceneVideo && !isSceneAnim);
-  const media = sel.type === "video" || isSceneVideo || isSceneAnim
-    ? document.createElement("video")
-    : isStill
-      ? document.createElement("img")
-      : document.createElement("iframe");
+  const isStill = sel.type === "image" || (sel.type === "scene" && !isSceneVideo);
   // The user-chosen fit mode (覆盖/填充/居中/拉伸) applies to every wallpaper
   // type — WE media included (the 适配 control used to be uploads-only).
   // iframes (web wallpapers) don't read object-fit, so they skip the class.
   const fitClass = " we-media--fit";
-  if (sel.type === "video" || isSceneAnim) {
-    media.src = sel.url;
+  let media;
+  if (sel.type === "video") {
+    // 轮换领养：就绪元素（已 canplay/预播中）直接进层，绝不重赋 src（重赋
+    // 即使同值也会触发 resource selection 重新加载 = 黑屏闪烁源）。
+    const prepared = consumePreparedMedia("VIDEO");
+    media = prepared || document.createElement("video");
+    if (!prepared) {
+      media.src = sel.url;
+      // poster=预览图：覆盖初始加载与抽帧转码 swap 的空窗（原黑屏闪烁点）。
+      if (sel.previewUrl) media.poster = sel.previewUrl;
+    }
     media.autoplay = true;
     media.loop = true;
     media.muted = true;
     media.setAttribute("playsinline", "");
-    // Native playbackRate — hardware-decoded, instant, no reload (and the
+    // Native playbackRate — hardware-decoded, instant, no media reload (and the
     // videos are muted anyway, so there is no audio to keep in sync).
     try { media.playbackRate = sel.playbackRate; } catch { /* ignore */ }
     if (IS_EDGE && sel.edgeCompat !== false) {
@@ -1371,12 +2115,16 @@ function buildMedia(sel) {
     // Scene animation as <video>: autoplay/loop/muted, poster = the extracted
     // static frame (shown while the video loads). Hardware-decoded → smooth,
     // no WebGL context → no freeze.
-    media.src = sel.sceneVideo;
+    const prepared = consumePreparedMedia("VIDEO");
+    media = prepared || document.createElement("video");
+    if (!prepared) {
+      media.src = sel.sceneVideo;
+      media.poster = sel.url;   // frameUrl as poster
+    }
     media.autoplay = true;
     media.loop = true;
     media.muted = true;
     media.setAttribute("playsinline", "");
-    media.poster = sel.url;   // frameUrl as poster
     media.className = "we-media" + fitClass;
     // No embedded video (404) or codec failure → degrade to the static frame.
     media.addEventListener("error", () => {
@@ -1384,9 +2132,19 @@ function buildMedia(sel) {
         selection.sceneVideo = null;
         try { syncLayers(); emit(); } catch { /* ignore */ }
       }
+      // 无内嵌视频 (scene-video 404) → 降级试 GL; GL 也失败 → 静态帧底图。
+      // host 对每个 scene 都 mint sceneVideo URL (是否有内嵌视频只有请求后才知道)。
+      if (selection.type === "scene" && selection.sceneFrameUrl) {
+        try { trySceneGL(selection.sceneFrameUrl); } catch { /* ignore */ }
+      }
     });
   } else if (isStill) {
-    media.src = sel.url;
+    const prepared = consumePreparedMedia("IMG");
+    media = prepared || document.createElement("img");
+    // 轮换领养路径 GL 已 ready：底图 img 不赋 src —— 等价于 onReady 里的撤 src，
+    // GL 已接管显示还去 GET frameUrl 只会白触发一次 host 提取（N-02 等待者）。
+    const glAlreadyCovers = sel.type === "scene" && sceneGL && sceneGL.ready;
+    if (!prepared && !glAlreadyCovers) media.src = sel.url;
     media.alt = "";
     media.draggable = false;
     media.className = "we-media" + fitClass;
@@ -1397,8 +2155,21 @@ function buildMedia(sel) {
         if (media.src !== sel.previewUrl) media.src = sel.previewUrl;
       };
     }
+    // scene-gl（plan §5.2）：GL 挂起/运行 → [静态帧 img 底图, GL canvas 覆盖层]。
+    // canvas 初始 opacity 0，首帧渲染完成（onReady）后 300ms CSS 淡入；
+    // GL 失败（onError → sceneGL=null）时 wantKey 变化触发层重建为纯 img。
+    // 注意：层重建会重跑本分支重赋 className — ready 类必须按 sceneGL.ready
+    // 幂等重挂（onReady 只火一次，否则重建后淡入类永久丢失）。
+    if (sel.type === "scene" && sceneGL && sceneGL.renderer) {
+      const glCanvas = sceneGL.renderer.canvas;
+      glCanvas.className = "we-media we-media--gl" + fitClass
+        + (sceneGL.ready ? " we-media--gl-ready" : "");
+      return [media, glCanvas];
+    }
   } else {
-    media.src = sel.url;
+    const prepared = consumePreparedMedia("IFRAME");
+    media = prepared || document.createElement("iframe");
+    if (!prepared) media.src = sel.url;
     media.setAttribute("frameborder", "0");
     media.setAttribute("scrolling", "no");
     // 安全隔离：WE web 壁纸是 workshop 第三方 HTML/JS，而 media 路由与宿主
@@ -1691,7 +2462,30 @@ function codecLabel(codec) {
   return { avc1: "H.264", hvc1: "H.265", hev1: "H.265", av01: "AV1", vp09: "VP9", mp4v: "MPEG-4" }[codec] || codec;
 }
 
+// 本分支不含 dev 侧共存（Coexistence v1）特性。源分支该谓词按皮肤归属返回
+// idle/owning；此处恒 "owning"，等价于源分支共存关闭（coexEnabled()=false）
+// 时的行为 —— 本插件全权负责壁纸渲染输出，无 idle 让位相位。
+function currentCoexPhase() { return "owning"; }
+
+// portal 打标助手（源分支 T11 不变量的最小携带版）：body 级动态根插入即带
+// data-dsh-plugin 属性。d21c3f7 的 GL staging div 依赖它；常量与定义取自
+// dev 侧共存特性（本分支无皮肤中心协作，打标无副作用、仅保留 DOM 标注语义）。
+const PLUGIN_ROOT_MARK = "data-dsh-plugin";
+const PLUGIN_ROOT_ID = "dsh-plugin-wallpaper-engine";
+function stampPluginRoot(el) {
+  try { el.setAttribute(PLUGIN_ROOT_MARK, PLUGIN_ROOT_ID); } catch { /* ignore */ }
+  return el;
+}
+
 function syncLayers() {
+  // Coexistence v1: idle 相位（外观归属=皮肤中心）暂停“渲染输出”，但绝不
+  // 改写用户已持久化的 selection.url —— 切回 owning 时原壁纸原样恢复。
+  const wantWallpaper = !!selection.url && currentCoexPhase() !== "idle";
+  // 轮换渐变标记在入口消费：commitRotationSwitch 置位后首个 syncLayers 即
+  // applySelection 的 emit；无旧层可淡（首壁纸/idle 相位）时自然作废，绝不
+  // 滞留到下一次无关重建。
+  const rotationFade = pendingRotationFade;
+  pendingRotationFade = false;
   // 1. Wallpaper element.
   const existing = document.getElementById(LAYER_ID);
   if (selection.url) {
@@ -1700,19 +2494,36 @@ function syncLayers() {
       // Scene wallpapers: the media kind depends on sceneVideo (MP4 <video> vs
       // static-frame <img>), and the 404 fallback nulls sceneVideo — the key
       // must reflect it so the fallback rebuilds the layer.
-      + "\u0000" + (selection.sceneVideo || "");
+      + "\u0000" + (selection.sceneVideo || "")
+      // scene-gl：GL 挂起/运行 vs 纯静态帧是不同层结构（img+canvas vs img），
+      // GL 失败清空 sceneGL 后 key 变化触发重建回退。
+      + "\u0000" + (sceneGL ? "gl" + (sceneGL.seq || 0) : "");
     const gotKey = existing && existing.dataset.weKey;
+    let startFade = false;
     if (existing && gotKey !== wantKey) {
-      releaseLayerMedia(existing);
-      existing.remove();
-      // Release the previous draw loop: without this, switching from an Edge
-      // canvas video to a non-canvas wallpaper (image/web/scene, or Edge 兼容
-      // turned off) would keep the old hidden <video> referenced and playing
-      // forever — CPU/GPU/battery + memory leak per switch (rotation mixes
-      // types). weStartDraw() re-initialises when a canvas exists again.
-      weStopDraw();
+      startFade = rotationFade;
+      if (startFade) {
+        // 轮换渐变：旧层不立即拆除 —— 标记淡出保留（旧视频/旧 GL 继续播放，
+        // 真交叉淡化），新层淡入结束后由定时器移除。任何时刻最多 2 层：
+        // 上一份 fading 层先即时退役。
+        retireFadingLayer();
+        existing.dataset.weFading = "1";
+        try { existing.id = ""; } catch { /* ignore */ }
+        fadingLayerNode = existing;
+      } else {
+        releaseLayerMedia(existing);
+        existing.remove();
+        // Release the previous draw loop: without this, switching from an Edge
+        // canvas video to a non-canvas wallpaper (image/web/scene, or Edge 兼容
+        // turned off) would keep the old hidden <video> referenced and playing
+        // forever — CPU/GPU/battery + memory leak per switch (rotation mixes
+        // types). weStartDraw() re-initialises when a canvas exists again.
+        weStopDraw();
+      }
     }
     let node = document.getElementById(LAYER_ID);
+    // 渐变路径旧层已让出 LAYER_ID；mock 环境的 stale byId 命中按 weFading 排除。
+    if (node && node.dataset && node.dataset.weFading === "1") node = null;
     if (!node) {
       node = document.createElement("div");
       node.id = LAYER_ID;
@@ -1722,6 +2533,15 @@ function syncLayers() {
       if (Array.isArray(built)) for (const el of built) node.appendChild(el);
       else node.appendChild(built);
       document.body.appendChild(node);
+      if (startFade && fadingLayerNode === existing) {
+        // 交叉淡化：新层 opacity 0 起步 → 强制 reflow → 加-on 触发淡入
+        // （时长 = ROTATION_FADE_MS）；旧层保持全透明不动画，淡出等效于被新层覆盖（canvas 不透明同款语义），
+        // 渐变结束统一移除并释放其媒体与保活 GL 渲染器。
+        node.className = "we-layer we-layer--fadein";
+        void node.offsetWidth; // 强制 reflow，确保 transition 从 0 起跑
+        node.className = "we-layer we-layer--fadein we-layer--fadein-on";
+        scheduleFadingLayerRemoval(existing);
+      }
     }
     const canvas = node.querySelector("canvas.we-media--canvas");
     const video = node.querySelector("video");
@@ -1747,10 +2567,19 @@ function syncLayers() {
         maybeUpgradeToTranscoded(video, selection.url.split("/").pop());
       }
     }
+    // scene-gl 暂停/速率同步（与 video 同款 isEffectivelyPlaying 语义）
+    if (sceneGL && sceneGL.renderer) {
+      try {
+        sceneGL.renderer.setPaused(!isEffectivelyPlaying());
+        sceneGL.renderer.setPlaybackRate(selection.playbackRate);
+      } catch { /* ignore */ }
+    }
   } else if (existing) {
     weStopDraw();
     releaseLayerMedia(existing);
     existing.remove();
+  } else if (!wantWallpaper) {
+    disposePreparedMedia(); // 层未建（idle 相位/清除）：滞留就绪元素立即释放
   }
 
   // 2. Scrim element (always present while a wallpaper is active).
@@ -1767,6 +2596,37 @@ function syncLayers() {
     if (scrim) scrim.remove();
     document.body.removeAttribute(ACTIVE_ATTR);
   }
+  // 保活 GL 兜底：本轮没有渐变在跑（fadingLayerNode 为空）时保活渲染器已失去
+  // 意义（首壁纸切换/coex idle 不建层/渐变已被快速连切中断）→ 立即退役。
+  if (!fadingLayerNode) disposeFadingGL();
+}
+
+// ── 轮换渐变：旧层退役 ───────────────────────────────────────────────────────
+// retireFadingLayerNow: 快速连切时上一份 fading 层即时退役（任何时刻最多 2 层）。
+// scheduleFadingLayerRemoval: 渐变宽限期后移除旧层并释放其媒体 + 保活 GL。
+function retireFadingLayer() {
+  const node = fadingLayerNode;
+  if (!node) return;
+  fadingLayerNode = null;
+  releaseLayerMedia(node);
+  try { node.remove(); } catch { /* ignore */ }
+  disposeFadingGL();
+}
+function scheduleFadingLayerRemoval(node) {
+  if (typeof window === "undefined" || typeof window.setTimeout !== "function") {
+    retireFadingLayer();
+    return;
+  }
+  window.setTimeout(() => {
+    if (fadingLayerNode !== node) return; // 已被快速连切即时退役
+    fadingLayerNode = null;
+    releaseLayerMedia(node);
+    try { node.remove(); } catch { /* ignore */ }
+    // Edge canvas：只有绘制上下文仍属于旧层时才停（新层已 weStartDraw 接管）。
+    if (weDrawCtx && weDrawCtx.canvas && typeof node.contains === "function"
+      && node.contains(weDrawCtx.canvas)) weStopDraw();
+    disposeFadingGL();
+  }, ROTATION_FADE_MS + 100);
 }
 
 // ── Effect application: push the knobs into CSS variables ───────────────────
@@ -1775,6 +2635,12 @@ function syncLayers() {
 // every emit — i.e. twice per slider tick (handler + subscribed applyEffects)
 // and on every 500ms transcode poll — a forced synchronous layout storm.
 let lastScrimCss = "";
+// P1-6:字体样式表规则体缓存 —— 注入的 CSS 是纯常量(数值全部走 --we-font-*
+// 变量,见 applyEffects),照抄上面 lastScrimCss 的缓存模式:规则体只在变化时
+// 写入(即只写一次),后续 emit 仅更新 CSS 变量。旧实现每个滑杆 tick 都全量
+// 重写 <style> textContent,含 body *{!important} 的规则每次都触发全页样式
+// 重算(且 N-10 修复前每 tick 双跑 ×2)。
+let lastFontCss = "";
 // ── 字体自定义样式注入 ──────────────────────────────────────────────────────
 // <style id="we-font-patch"> 把 body 上注入的 --we-font-* 变量应用到整页文本：
 // - 普通文本吃 字体颜色 / 字重 / 字体族 三项（font-family 走变量，未设时回退
@@ -1785,12 +2651,15 @@ let lastScrimCss = "";
 function applyFontStyles() {
   try {
     let st = document.getElementById("we-font-patch");
+    const fresh = !st; // 元素缺失(被移除/首次)时即使缓存命中也强制重写
     if (!st) {
       st = document.createElement("style");
       st.id = "we-font-patch";
       (document.head || document.documentElement).appendChild(st);
     }
-    st.textContent = [
+    // P1-6:规则体为纯常量,仅当内容变化(即首次注入)时才写 textContent,
+    // 避免 `body *{!important}` 全量重写反复触发全页样式重算。
+    const css = [
       /* ── 白闪回归红线（v0.6.4 方案A 教训）────────────────────────────────
          旧写法用六连 :not(:has(...)) 做「含报错祖先整体排除」——:has() 的
          祖先失效集把每次点击/输入的样式重算扩大到近乎整棵 DOM，所有
@@ -1834,12 +2703,17 @@ function applyFontStyles() {
       '  color: var(--dsw-alias-label-tertiary, rgba(128, 128, 128, 0.75)) !important;',
       '}',
     ].join('\n');
+    if (css !== lastFontCss || fresh) {
+      st.textContent = css;
+      lastFontCss = css;
+    }
   } catch { /* ignore */ }
 }
 
 function removeFontStyles() {
   const st = document.getElementById("we-font-patch");
   if (st) st.remove();
+  lastFontCss = ""; // P1-6:样式表已移除,清缓存以便下次开启时重新写入规则体
 }
 
 function applyEffects() {
@@ -1854,7 +2728,16 @@ function applyEffects() {
   // blur radius, so the 玻璃 slider drives BOTH frosted depth and how strongly
   // the wallpaper colour bleeds through the glass (0 blur → no melt). Kept
   // gentle so the glass stays 通透 (clear) instead of oversaturated.
-  s.setProperty("--we-saturate", String(1.15 + selection.blur * 0.028));
+  const glassSaturate = 1.15 + selection.blur * 0.028;
+  s.setProperty("--we-saturate", String(glassSaturate));
+  // P2-1:玻璃 backdrop-filter 合成变量(气泡/输入框消费,见 CSS 侧)。blur=0
+  // 时输出真正的 none —— blur(0px) saturate(...) 仍会强制建立 backdrop 采样层,
+  // 做法对齐 media 侧 --we-media-filter 的 none 回退;>0 时即 P1-5 收敛后的
+  // blur+saturate 两段链。
+  s.setProperty("--we-glass-filter",
+    selection.blur > 0
+      ? "blur(" + selection.blur + "px) saturate(" + glassSaturate + ")"
+      : "none");
   s.setProperty("--we-glass-brightness", "1.04");
   // Wallpaper blur strength in px (blurs the wallpaper itself).
   s.setProperty("--we-wallpaper-blur", selection.wallpaperBlur + "px");
@@ -1968,6 +2851,7 @@ function clearEffects() {
   s.removeProperty("--we-border-alpha");
   s.removeProperty("--we-blur");
   s.removeProperty("--we-saturate");
+  s.removeProperty("--we-glass-filter"); // P2-1:与设置处成对清理
   s.removeProperty("--we-glass-brightness");
   s.removeProperty("--we-wallpaper-blur");
   s.removeProperty("--we-media-filter");
@@ -2223,6 +3107,8 @@ function WallpaperPicker(props) {
   };
   const onToggleRotation = () => {
     selection.rotationEnabled = !selection.rotationEnabled;
+    // 关闭轮换：进行中的准备（staged GL/探测）一并取消，不再落实切换。
+    if (!selection.rotationEnabled) cancelRotationPrepare();
     if (selection.rotationEnabled) {
       if (!selection.rotationGroupId) {
         const usable = firstUsableGroup();
@@ -2262,7 +3148,8 @@ function WallpaperPicker(props) {
   // Slider callbacks: keep the stored value in its canonical unit, then emit —
   // applyEffects is a subscribed listener (see apply()), so emit() applies the
   // CSS vars synchronously AND re-renders the numeric readouts in one pass.
-  // (Calling applyEffects directly here too used to double-apply every tick.)
+  // (Calling applyEffects directly here too used to double-apply every tick;
+  //  N-10 已把 内容面/字体自定义 等残留的直接调用一并移除,全部走 emit 链。)
   const onScrim = (pct) => { selection.scrim = pct / 100; persistSelection(); emit(); };
   const onBorder = (pct) => { selection.border = pct / 100; persistSelection(); emit(); };
   const onBlur = (px) => { selection.blur = px; persistSelection(); emit(); };
@@ -2291,7 +3178,7 @@ function WallpaperPicker(props) {
   // 侧栏玻璃（dsh-better-sidebar）：独立于会话玻璃的一套细粒度控制，各自立即
   // 生效并持久化（--we-sidebar-blur / --we-sidebar-alpha / --we-sidebar-color）。
   const onSidebarBlur = (px) => {
-    selection.sidebarBlur = clampNum(px, 0, 200, DEFAULTS.sidebarBlur);
+    selection.sidebarBlur = clampNum(px, 0, 60, DEFAULTS.sidebarBlur); // P1-5: 与滑杆上限同步 200→60
     persistSelection(); emit();
   };
   const onSidebarAlpha = (pct) => {
@@ -2321,36 +3208,36 @@ function WallpaperPicker(props) {
   // 内容面（编辑器/终端）近不透明玻璃底：透明度滑块 + 底色（空 = 跟随主题）。
   const onSidebarContentAlpha = (pct) => {
     selection.sidebarContentAlpha = clampNum(pct, 0, 80, DEFAULTS.sidebarContentAlpha);
-    persistSelection(); applyEffects(); emit();
+    persistSelection(); emit(); // N-10:不直接调 applyEffects(),统一走 emit 订阅链
   };
   const onSidebarContentColor = (hex) => {
     if (hex === "") {
       selection.sidebarContentColor = ""; // 跟随主题面板色
-      persistSelection(); applyEffects(); emit();
+      persistSelection(); emit(); // N-10:不直接调 applyEffects(),统一走 emit 订阅链
       return;
     }
     if (!/^#[0-9a-f]{6}$/i.test(hex)) return;
     selection.sidebarContentColor = hex;
-    persistSelection(); applyEffects(); emit();
+    persistSelection(); emit(); // N-10:不直接调 applyEffects(),统一走 emit 订阅链
   };
   // 字体自定义（#57 精简回归版）：总开关 + 颜色/字重/字体族，各项立即生效并持久化。
   const onToggleFontCustom = (v) => {
     selection.fontCustom = !!v;
-    persistSelection(); applyEffects(); emit();
+    persistSelection(); emit(); // N-10:不直接调 applyEffects(),统一走 emit 订阅链
   };
   const onFontColor = (hex) => {
     if (!/^#[0-9a-f]{6}$/i.test(hex)) return;
     selection.fontColor = hex;
-    persistSelection(); applyEffects(); emit();
+    persistSelection(); emit(); // N-10:不直接调 applyEffects(),统一走 emit 订阅链
   };
   const onFontWeight = (v) => {
     selection.fontWeight = clampNum(v, 100, 900, DEFAULTS.fontWeight);
-    persistSelection(); applyEffects(); emit();
+    persistSelection(); emit(); // N-10:不直接调 applyEffects(),统一走 emit 订阅链
   };
   const onFontFamily = (family) => {
     if (!FONT_FAMILY_VALUES.includes(family)) return;
     selection.fontFamily = family;
-    persistSelection(); applyEffects(); emit();
+    persistSelection(); emit(); // N-10:不直接调 applyEffects(),统一走 emit 订阅链
   };
 
   // Close the picker modal (ESC / backdrop / close buttons share this path).
@@ -2828,7 +3715,7 @@ function WallpaperPicker(props) {
           tooltip: "dsh-better-sidebar 侧栏（文件 / 终端 / Git 等面板）的毛玻璃适配；关闭则恢复其原生外观",
         }),
         sel.sidebarPresent && sel.sidebarGlass && [
-        SliderRow("侧栏模糊", 0, 200, 1, sel.sidebarBlur, onSidebarBlur, sel.sidebarBlur + "px", "sb-blur"),
+        SliderRow("侧栏模糊", 0, 60, 1, sel.sidebarBlur, onSidebarBlur, sel.sidebarBlur + "px", "sb-blur"), // P1-5: 上限 200→60(saturate 侧早有 60 钳制,blur 半径超 60 的采样成本过高)
         SliderRow("侧栏透明度", 0, 200, 1, sel.sidebarAlpha, onSidebarAlpha, sel.sidebarAlpha + "%", "sb-alpha"),
         swatchRow("侧栏玻璃颜色", GLASS_COLOR_PRESETS, sel.sidebarColor, onSidebarColor, { key: "sb-color" }),
         // 内容面（编辑器 / 终端）近不透明玻璃底：透明度 + 底色。固定调色板
@@ -2978,47 +3865,72 @@ function WallpaperPicker(props) {
         SliderRow("暗化", 0, 90, 5, Math.round(sel.scrim * 100), onScrim, Math.round(sel.scrim * 100) + "%"),
         SliderRow("边框", 0, 90, 5, Math.round(sel.border * 100), onBorder, Math.round(sel.border * 100) + "%"),
         SliderRow("玻璃", 0, 60, 1, sel.blur, onBlur, sel.blur + "px"),
-        // beta场景动画: 默认关闭 → scene 壁纸只渲染静态帧 (稳定, 与官方静态帧
-        // 一致); 开启后才启动 scene-anim 视频后台渲染 (CPU 渲染试验性, 可能有
-        // 组件错误)。关闭时若已在播放动画视频 → 回退静态帧并取消进行中的渲染。
-        sel.type === "scene" && switchRow("beta场景动画", sel.betaSceneAnim === true, (e) => {
-          selection.betaSceneAnim = e.target.checked;
+        // GL 实时渲染总开关（默认开）：关闭 = scene 壁纸纯静态帧模式（GL 不启动，
+        // 已活的 GL 层即弃）。CPU mp4 渲染路径已移除 — 关闭后无动画、无渲染等待。
+        sel.type === "scene" && switchRow("GL 实时渲染", sel.sceneGL !== false, (e) => {
+          selection.sceneGL = e.target.checked;
           const enable = e.target.checked;
           persistSelection();
           if (!enable) {
-            // 关闭: 取消动画升级 (渲染任务随 probe abort 取消), 回退静态帧
-            cancelSceneAnimUpgrade();
-            if (sel.type === "scene" && sel.sceneFrameUrl
-              && selection.url && selection.url.indexOf("/scene-anim/") !== -1) {
-              selection.url = sel.sceneFrameUrl;
-              syncLayers();
-            }
+            // 关闭: 弃 GL 层, 停留/回退静态帧底图
+            disposeSceneGL();
+            sceneGLNotice = null; // 关闭后不再有"实时渲染不可用"语义，清提示
           } else if (sel.type === "scene" && sel.sceneFrameUrl && !sel.sceneVideo) {
-            // 开启: 先把 beta 持久化到宿主端 (宿主 /scene-anim 路由按 config.json
-            // 门控 — 防抖的 PUT 落地前渲染请求会先到宿主 → 403 → 进度卡 0)。
-            // 跳过防抖立即冲刷, 等 PUT 落盘完成 (宿主「响应即已持久化」) 再触发升级。
+            // 开启: 先把开关持久化到宿主端 (GL 端点按 settings 403 门控 —
+            // 防抖的 PUT 落地前 meta 请求会先到宿主 → 403)。
             if (persistTimer) { clearTimeout(persistTimer); persistTimer = null; }
             writeLocalCache();
             const p = pushPersisted();
+            const startScene = () => {
+              if (selection.sceneGL === false || !sel.sceneFrameUrl || sel.sceneVideo) return;
+              try { trySceneGL(sel.sceneFrameUrl); } catch { /* ignore */ }
+            };
             (p && typeof p.then === "function" ? p : Promise.resolve())
-              .then(() => { if (selection.betaSceneAnim && sel.sceneFrameUrl && !sel.sceneVideo) queueSceneAnimUpgrade(sel.sceneFrameUrl); })
-              .catch(() => { if (selection.betaSceneAnim && sel.sceneFrameUrl && !sel.sceneVideo) queueSceneAnimUpgrade(sel.sceneFrameUrl); });
+              .then(startScene)
+              .catch(startScene);
           }
           emit();
         }, {
-          key: "beta-scene",
-          hint: "实验性场景渲染 · 谨慎开启",
-          tooltip: "实验性场景壁纸渲染引擎，不要开启（除非你知道自己在干什么）",
+          key: "scene-gl",
+          hint: "场景壁纸 WebGL2 实时渲染；关闭则使用静态图（含内嵌视频的场景不受影响）",
         }),
+        // 未测试特性放行（默认开，用户拍板）：GL gate 默认只放行本地实测效果集；
+        // 开启后按通用机制放行其余效果（客户端编译官方 shader, 失败自动隔离,
+        // 见 scene-gl safeProgramFor）。CPU 备胎已删 — 拦截只会让特效静默消失。
+        sel.type === "scene" && switchRow("未测试特效放行", sel.sceneGLExperimental === true, (e) => {
+          selection.sceneGLExperimental = e.target.checked;
+          persistSelection();
+          // gate 分层随开关变化 → 清失败记忆 + 重新分流
+          try { sessionStorage.removeItem("weSceneGLFailed:" + (sel.sceneFrameUrl || "").split("/").pop()); } catch { /* ignore */ }
+          if (sel.sceneFrameUrl && !sel.sceneVideo && selection.sceneGL !== false) {
+            disposeSceneGL();
+            try { trySceneGL(sel.sceneFrameUrl); } catch { /* ignore */ }
+          }
+          emit();
+        }, {
+          key: "scene-gl-experimental",
+          hint: "默认开启。放行未实测的特效/结构变体（渲染异常时逐项隔离并在此列出）",
+        }),
+        // 当前壁纸降级提示（G-01/G-02/G-06）：GL 运行中列出实时清单；GL 回退
+        // 静态帧后保留一次 gate 结果（token 匹配）；多条只显示首条+计数
+        // （“对象A·粒子 等 3 项”），完整明细在 title 悬停；“不再提示”记忆。
+        sel.type === "scene" && ((info) => info && React.createElement("div", { className: "we-picker__row" },
+          React.createElement("span", { className: "we-picker__hint we-picker__label", title: info.title }, info.text),
+          React.createElement("button", {
+            className: "we-picker__btn", type: "button",
+            onClick: muteSceneGLNotice,
+            title: "本次及后续降级提示不再显示",
+          }, "不再提示"),
+        ))(sceneGLBannerInfo(sel)),
       ),
       // ── 播放：倍速 / 帧率 / 适配 / 翻转（按当前壁纸类型显隐）──
       React.createElement("div", { className: "we-picker__section" },
         React.createElement("div", { className: "we-picker__section-head" },
           React.createElement("span", { className: "we-picker__section-label" }, "播放与适配"),
         ),
-        // Playback speed — native playbackRate, instant, no media reload. Video
-        // and scene-animation wallpapers (web/iframe wallpapers have no playbackRate).
-        (sel.type === "video" || (sel.type === "scene" && sel.url && sel.url.indexOf("/scene-anim/") !== -1))
+        // Playback speed — native playbackRate, instant, no media reload.
+        // (web/iframe wallpapers have no playbackRate; scene 动画已随 CPU 路径移除)
+        sel.type === "video"
           && React.createElement("div", { className: "we-picker__ctl", key: "rate" },
           ctlText("倍速"),
           React.createElement("div", { className: "we-picker__seg" },
@@ -3035,8 +3947,8 @@ function WallpaperPicker(props) {
         // 解码帧率上限（抽帧转码）：host 一次性把源视频重编码为上限帧率（时间线
         // 1.0x 正常速度，解码占用随帧率线性下降），与倍速解耦。首次转码需等待，
         // 播放中原片、转好自动切换；无 ffmpeg 自动回退原片。
-        // scene 动画: fps 参数在渲染时决定 (scene-anim ?fps=..), 变更后重渲染。
-        (sel.type === "video" || (sel.type === "scene" && sel.url && sel.url.indexOf("/scene-anim/") !== -1))
+        // scene: fpsCap 对 GL 实时渲染即时生效 (renderer.setFpsCap)。
+        (sel.type === "video" || (sel.type === "scene" && sceneGL))
           && React.createElement("div", { className: "we-picker__ctl", key: "fps" },
           ctlText("帧率上限", "抽帧转码 · 降低解码占用"),
           React.createElement("div", { className: "we-picker__seg" },
@@ -3047,28 +3959,15 @@ function WallpaperPicker(props) {
                 type: "button",
                 onClick: () => {
                   selection.fpsCap = cap; persistSelection(); refreshMediaInfo(true); emit();
-                  // scene 动画: fpsCap 变更 → 以新帧率重新渲染动画视频
-                  // (sceneVideo 内嵌 MP4 的场景不重渲染 — 硬件解码不受 fpsCap 影响)
-                  if (sel.type === "scene" && sel.sceneFrameUrl && !sel.sceneVideo) queueSceneAnimUpgrade(sel.sceneFrameUrl);
+                  // scene-gl：fpsCap 变更即时生效（GL 实时渲染无重渲染成本）
+                  if (sceneGL && sceneGL.renderer) {
+                    try { sceneGL.renderer.setFpsCap(cap); } catch { /* ignore */ }
+                  }
                 },
               }, cap === 0 ? "无限制" : cap + "fps"),
             ),
           ),
         ),
-        // Scene 动画渲染进度: 首次渲染分钟级, 后台渲染期间显示进度条
-        // (轮询 /scene-anim-progress; 完成或切换壁纸后置 null)。
-        sel.type === "scene" && sel.sceneAnimProgress != null && sel.sceneAnimProgress < 100
-          && React.createElement("div", { className: "we-picker__row we-picker__prog", key: "scene-prog" },
-            React.createElement("div", { className: "we-picker__prog-track" },
-              React.createElement("div", {
-                className: "we-picker__prog-bar",
-                style: { width: Math.max(2, Math.min(100, sel.sceneAnimProgress || 0)) + "%" },
-              }),
-            ),
-            React.createElement("span", { className: "we-picker__hint" },
-              "场景动画渲染中 " + (sel.sceneAnimProgress || 0) + "%",
-            ),
-          ),
         // Source metadata + transcode status (host moov probe / transcode lifecycle).
         sel.type === "video" && sel.mediaInfo && React.createElement("span", { className: "we-picker__hint", key: "media-info" },
           "源 " + sel.mediaInfo.width + "×" + sel.mediaInfo.height
@@ -3866,6 +4765,25 @@ const CSS = `
   /* The 适配 row sets the fit mode for the CURRENT wallpaper (any type);
      only .we-media--fit reads the variable (iframes have no object-fit). */
   .we-layer .we-media--fit { object-fit: var(--we-object-fit, cover); }
+  /* scene-gl 覆盖层：静态帧 img 之上（同层第二个子元素，DOM 序即层序）。
+     opacity 0 起步，首帧渲染完成加 .we-media--gl-ready → 300ms 淡入
+     （canvas 上下文 alpha:false 不透明，覆盖即等价底图淡出 — plan §5.2）。 */
+  .we-layer .we-media--gl {
+    position: absolute; inset: 0;
+    opacity: 0; transition: opacity .3s ease;
+  }
+  .we-layer .we-media--gl.we-media--gl-ready { opacity: 1; }
+
+  /* 轮换「就绪后切换 + 渐变」（0.8.8）：
+     - staging：GL 预渲染驻留层 —— opacity 0 但 in-DOM 几何相交，
+       IntersectionObserver 仍判可见，staged 渲染器渲染循环正常运转；
+       就绪后 canvas 被移动进正式层，staging div 移除。
+     - fadein：轮换提交时新层 opacity 0 起步，reflow 后加-on 触发交叉淡入
+       （时长与 ROTATION_FADE_MS 同步，当前 1200ms）；旧层不动画（被新层
+       覆盖等效淡出），渐变结束移除。 */
+  .we-layer--staging { opacity: 0; }
+  .we-layer--fadein { opacity: 0; transition: opacity 1.2s ease; }
+  .we-layer--fadein.we-layer--fadein-on { opacity: 1; }
 
   /* Scrim: sits ABOVE the wallpaper (z-index -1 > -2, so it never depends on
      DOM insertion order — the wallpaper element is re-appended on wallpaper
@@ -3922,7 +4840,9 @@ const CSS = `
   /* ── iOS liquid glass ──────────────────────────────────────────────────────
      The opaque conversation surfaces become translucent glass. The recipe is
      Apple-like, not a plain blur:
-       - LARGE-radius blur + HIGH saturation + brightness/contrast lift, so the
+       - LARGE-radius blur + HIGH saturation (P1-5: 原 brightness/contrast 两段
+         已收敛 —— 每个 backdrop-filter 函数段都是一个采样 pass,气泡是数量
+         最多的表面,视觉近似即可), so the
          wallpaper colour melts into a soft glow instead of a gray smear
          (saturation scales with blur in applyEffects: 0 blur → no melt);
        - a top-weighted specular gradient (background-image) — the sheen is
@@ -3930,9 +4850,10 @@ const CSS = `
        - a light, low-alpha base (not a dark one) so the wallpaper shows through;
        - a 1px top refraction highlight + 0.5px hairline + soft elevation
          shadow for "thick glass";
-       - blur radius + saturation both scale off --we-blur / --we-saturate
-         (the 玻璃 slider drives both, so composer, bubbles AND the
-         better-sidebar shell stay in one uniform liquid look).
+       - blur radius + saturation both scale off --we-glass-filter
+         (合成于 applyEffects,P2-1: blur=0 输出 none;the 玻璃 slider drives
+         both, so composer, bubbles AND the better-sidebar shell stay in one
+         uniform liquid look).
 
      Transparency is driven through the design tokens the surfaces already read
      (--dsw-specific-input-major on the composer card, --dsw-specific-bubble on
@@ -3971,8 +4892,11 @@ const CSS = `
        tint into "wet glass" — kept faint so the wallpaper stays 通透 (clear)
        instead of glaring. */
     background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.05) 38%, rgba(255, 255, 255, 0.02));
-    -webkit-backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
-    backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
+    /* P1-5:4 段链(blur+saturate+brightness+contrast)收敛为 blur+saturate 两段
+       —— 视觉近似(高光渐变/描边/阴影仍在),少两个 backdrop 采样 pass;值由
+       applyEffects 的 --we-glass-filter 提供,blur=0 时为真正的 none(P2-1)。 */
+    -webkit-backdrop-filter: var(--we-glass-filter, blur(16px) saturate(1.8));
+    backdrop-filter: var(--we-glass-filter, blur(16px) saturate(1.8));
     box-shadow:
       inset 0 1px 0 rgba(255, 255, 255, var(--we-glass-highlight, 0.32)),
       inset 0 -1px 0 rgba(255, 255, 255, 0.08),
@@ -4874,8 +5798,8 @@ const CSS = `
     position: fixed; inset: 0; z-index: 1000;
     display: flex; align-items: center; justify-content: center;
     background: rgba(0, 0, 0, 0.55);
-    -webkit-backdrop-filter: blur(3px);
-    backdrop-filter: blur(3px);
+    /* P1-5:移除原 blur(3px) —— 全屏 inset:0 的 backdrop 采样只为轻微压暗,
+       纯 rgba 底已足够;模态本体 .we-picker__modal 不受影响。 */
     animation: we-overlay-in var(--we-dur, 200ms) var(--we-ease, ease-out);
   }
   .we-picker__modal {
@@ -5266,7 +6190,8 @@ function apply(ctx) {
       // page hides/shows or the window loses/gains focus (see occlusionActive).
       // Fires syncLayers → play/pause on the video; decode drops to 0 while
       // minimized / covered by another app, exactly like desktop WE.
-      const onOcclusionChange = () => emit();
+      // 回到前台同时给 contextlost 崩溃的 GL 场景一次自动重试（灰色壁纸免刷新恢复）。
+      const onOcclusionChange = () => { maybeRetrySceneGLAfterContextLoss(); emit(); };
       let ocListeners = [];
       if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
         for (const t of ["visibilitychange", "blur", "focus"]) {

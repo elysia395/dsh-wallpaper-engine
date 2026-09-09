@@ -1,0 +1,39 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>scene-gl e2e</title>
+<style>body{margin:0;background:#222;color:#eee;font:12px monospace}#c{display:block}#s{position:fixed;top:4px;left:4px;background:#000a;padding:4px;white-space:pre}</style>
+</head>
+<body>
+<div id="s">booting…</div>
+<script src="scene-gl.bundle.js"></script>
+<script>
+// E2E harness：从 query 创建渲染器，结果暴露给 Playwright。
+// ?token=<b64>&w=1920&h=1080&fps=0
+const q = new URLSearchParams(location.search);
+window.__result = { state: 'BOOT', ready: false, error: null, renderer: null };
+(function () {
+  if (typeof __WESceneGL === 'undefined') { window.__result.error = 'module-missing'; return; }
+  const token = q.get('token');
+  const status = document.getElementById('s');
+  const r = __WESceneGL.createSceneGLRenderer({
+    token,
+    width: Number(q.get('w')) || 1920,
+    height: Number(q.get('h')) || 1080,
+    fpsCap: Number(q.get('fps')) || 0,
+    onReady: () => { window.__result.ready = true; window.__result.state = r.state(); },
+    onError: (e) => { window.__result.error = e.reason; window.__result.state = 'ERROR'; },
+  });
+  window.__result.renderer = r;
+  r.canvas.id = 'c';
+  document.body.appendChild(r.canvas);
+  setInterval(() => {
+    window.__result.state = window.__result.error ? 'ERROR' : r.state();
+    const ft = r.stats.frameTimes;
+    status.textContent = 'state=' + window.__result.state + ' frames=' + r.stats.frames
+      + ' ctxLost=' + r.stats.contextLost + (window.__result.error ? ' err=' + window.__result.error : '')
+      + (ft.length ? ' lastDt=' + ft[ft.length - 1].toFixed(1) : '');
+  }, 250);
+})();
+</script>
+</body>
+</html>

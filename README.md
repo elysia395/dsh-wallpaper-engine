@@ -11,14 +11,14 @@
 > **v0.6.4 继续按「减少合成层」处理**：仓库面板关闭时懒加载、拉绳无永久滤镜、壁纸媒体默认下不再强制一个变换合成层——同时**完整保留毛玻璃**；普通浏览器标签页完全不受影响，保持完整毛玻璃与硬件加速。
 > 插件更新后会弹一次提示，告知此优化（每个新版本仅出现一次）。
 
-它会自动发现你本机的 Wallpaper Engine 安装，列出你的壁纸，并把*可移植*的类型渲染到 DSH 对话界面的后方，配以 **iOS 风格液态玻璃**效果：Video（`.mp4`）动态播放、Web/HTML 以 iframe 加载，**Scene（场景）由内置渲染器输出完整场景帧（对象树/纹理/粒子/shader 效果）**。v0.2 起还支持：
+它会自动发现你本机的 Wallpaper Engine 安装，列出你的壁纸，并把*可移植*的类型渲染到 DSH 对话界面的后方，配以 **iOS 风格液态玻璃**效果：Video（`.mp4`）动态播放、Web/HTML 以 iframe 加载，**Scene（场景）由 WebGL2 实时渲染（直接编译执行官方 shader），GL 不可用时自动回退静态图**。v0.2 起还支持：
 
 - **壁纸选择弹窗**：缩略图网格收纳进独立弹窗，设置页不再被长列表占满；
 - **隐藏 / 恢复**：不想看的壁纸一键隐藏（软删除），随时恢复，不碰源文件；
 - **视频倍速**：0.5x – 2x 六档原生调速，即时生效、不重载；
 - **水平翻转**：镜像画面（视频 / 网页 / 上传图片均适用）；
 - **自定义壁纸**：直接上传本地 JPG / PNG / MP4 当壁纸，可选存储位置与画面适配模式；
-- **场景壁纸完整场景帧**（v0.6）：Scene 壁纸由纯 JS 场景渲染器完整重放（对象树/纹理/粒子/shader 效果），不再是主纹理静态帧。
+- **场景壁纸 GL 实时渲染**（v0.6 起）：Scene 壁纸在浏览器端 WebGL2 实时渲染 — 客户端直接编译壁纸自带的官方 shader（45 个官方特效 + workshop 自定义），失败项逐项隔离并在设置页披露；GL 不可用/失败时自动回退静态图（提取器多图层拼合，CPU 渲染链已屏蔽）。
 - **液态玻璃设置页**（v0.3.1）：设置页升级为**一级设置页**（参照 dsh-web-ui-all 皮肤中心的设计），整页是可自定义的液态玻璃卡片 —— **配色**（6 种预设 + 自定义取色）与**玻璃透明度**（0–60%）即时生效、持久保存。
 - **整个设置窗口液态玻璃化**（v0.3.2）：一键把 **DSH 原生设置窗口整体**（对话框 + 左侧导航 + General / 模型 / 插件等**全部原生分区**）换成液态玻璃 + 自定义配色 —— 开启「设置窗口液态玻璃」开关后，窗口背景、导航选中/悬停、按钮、开关、链接等全部跟随 **配色** 与 **玻璃透明度**，关闭则恢复原生样式。
 - **玻璃调节统一**（v0.3.3–v0.3.5）：设置窗口的玻璃模糊与**对话栏共用同一套调节参数**（「玻璃」滑动条 0–60 px 同时控制设置窗口与输入栏/气泡的模糊半径，饱和度/亮度/对比度配方一致）；新增「**玻璃颜色**」—— 设置窗口玻璃的**底色色调**可自定义（6 预设 + 自定义取色，默认浅色白 / 深色深夜蓝，选定后两种主题统一使用该色），与「配色」（交互元素）分工：**配色管控件、玻璃颜色管玻璃本身**。
@@ -55,21 +55,17 @@ Wallpaper Engine 的壁纸分四种类型：
 
 | 类型 | 由谁渲染 | 能否搬到 DSH |
 |---|---|---|
-| **Scene（场景）** | Wallpaper Engine 自带的 3D 引擎 | ✅ 完整场景帧 — 纯 JS 场景渲染器（对象树/纹理/粒子/shader 效果），见下文 |
+| **Scene（场景）** | Wallpaper Engine 自带的 3D 引擎 | ✅ WebGL2 实时渲染（官方 shader 直跑 + 粒子/木偶/精灵表），回退静态图，见下文 |
 
-Scene 壁纸的 3D 场景由本插件内置的**纯 JS 场景渲染器**（`lib/scene-renderer.js`，参考 linux-wallpaperengine / repkg 逆向成果）完整重放：解析 `scene.pkg` 的对象树，渲染全部 image 层（含 waterwaves/waterripple/shake 等 shader 效果的 CPU 实现）、puppet 骨骼网格（绑定姿态）、以及粒子系统（发射器/初始化器/运算符/精灵绘制）。选择器里场景卡片带有「静态帧」徽标，可与动态壁纸区分。
-
-> **展现效果**：渲染器输出 3840×2160 完整场景帧（背景+水+后发+人物+伞+粒子），对摄影、插画、动画截图类场景壁纸效果接近原版；渲染失败（纯 shader 生成类/特殊纹理格式）时自动回退旧的主纹理提取，再失败回退工坊预览图（`preview.jpg`），属预期行为，不视为缺陷。
+Scene 壁纸在浏览器端用 **WebGL2 实时渲染**（`src/scene-gl.js`，数学经 wallpaper64.exe 逆向 + linux-wallpaperengine 行级对照校准）：服务端 gate 把 `scene.pkg` 解成静态 schema 下发（动画关键帧烘焙 / 文字栅格化位图 / 木偶网格 payload），客户端按时间线确定性重放，**特效直接编译壁纸自带的官方 GLSL**（HLSL 兼容宏 + 字面量修正，45 个官方特效 + workshop 自定义全放行，失败逐项隔离并在设置页披露）。GL 不可用 / 初始化失败 / GPU 崩溃时自动回退**提取器静态图**（多图层按 scene.json 拼合；CPU 渲染链已屏蔽），降级横幅可见。
 
 ### 场景渲染：怎么工作的
 
-- **对象树**：解析 `scene.pkg`（PKGV 容器 + LZ4 条目链）或松散 `scene.json` 目录，按 dependencies/parent 拓扑排序全部对象（image / particle / text / sound）。
-- **image 层**：加载材质主纹理（RGBA8888 / DXT1/3/5 等），按 scene 坐标定位（origin/scale/angle 父链累积），应用 alpha/brightness。
-- **puppet 网格**：MDL（MDLV）网格 + 绑定姿态光栅化（软件光栅 + 双线性 UV 采样 + 透明合成），人物/后发等骨骼模型正确显示。
-- **shader 效果链**：waterwaves（含 DUALWAVES 双波乘积）/ waterripple / shake 按 shader 精确数学在 CPU 实现；mask 纹理支持。
-- **粒子系统**：boxrandom/sphererandom 发射器、color/size/alpha/lifetime/velocity/rotation 等初始化器、movement/alphafade/sizechange/turbulence/oscillate* 等运算符、sprite 精灵绘制。
-- **缓存**：渲染结果按 `<版本>_<路径>_<mtime>` 缓存到 `~/.dsh-wallpaper-engine/cache/frames/`（可用 `DSH_WE_CACHE_DIR` 覆盖），工坊更新后自动失效重建；首次渲染约 3-4 秒，之后秒级命中。
-
+- **gate 快照**：解析 `scene.pkg`（PKGV 容器 + LZ4 条目链）或松散 `scene.json`，白名单判定 + 完整 schema（对象树/动画关键帧/纹理清单/降级清单）一次性下发。
+- **特效**：客户端编译壁纸 pkg 自带的官方 shader（combo 组装 + `#include` 展开 + HLSL→GLSL 兼容宏）；单效果失败只跳过该对象（失败隔离）。
+- **粒子 / 木偶 / 精灵表**：粒子系统（发射器/初始化器/运算符）为 CPU 版语义的 WebGL 移植；木偶走服务端 MDL 解析 payload + 客户端蒙皮；多帧纹理按帧矩形 UV 采样轮播。
+- **文字**：gate 期服务端 CFF 字体栅格化为 PNG 位图下发（静态值）。
+- **回退链**：内嵌视频 sceneVideo > GL 实时 > 提取器静态图（`sf38_` 缓存键，`~/.dsh-wallpaper-engine/cache/frames/`，mtime 自动失效）；含内嵌脚本/缺失项的场景由降级横幅披露。静态帧缓存每壁纸一份、仅空槽写入：GL 会话渲染 2.5s 后从 canvas 抓帧回填（`HEAD /scene-frame` 探测 + `PUT /scene-frame-cache`，GPU 创建）；GL 关闭/失败时由提取器创建（CPU 兜底渲染已屏蔽）。
 ## 工作原理
 
 - **Host 端**（`lib/index.js`）：一个 Cordis 插件，负责
@@ -79,7 +75,7 @@ Scene 壁纸的 3D 场景由本插件内置的**纯 JS 场景渲染器**（`lib/
      - `GET /wallpaper-engine/inventory` → 壁纸 JSON 列表
      - `GET /wallpaper-engine/media/<token>` → 视频 / HTML（支持 Range）
      - `GET /wallpaper-engine/preview/<token>` → 预览图
-     - `GET /wallpaper-engine/scene-frame/<token>` → 场景壁纸完整场景帧（纯 JS 渲染器输出 3840×2160，失败回退主纹理提取，PNG 磁盘缓存）
+     - `GET /wallpaper-engine/scene-frame/<token>` → 场景壁纸静态图（提取器多图层拼合/主纹理直出；PNG/JPEG 磁盘缓存；GL 回退底图。`HEAD` 探测缓存、`PUT /scene-frame-cache/<token>` 供 GPU 抓帧回填）
      - `POST /wallpaper-engine/upload` → 上传自定义壁纸（JPG / PNG / MP4，原始字节流）
      - `POST /wallpaper-engine/remove` → 移除已上传的壁纸
      - `POST /wallpaper-engine/upload-dir` → 更改上传目录（持久化到 `~/.dsh-wallpaper-engine/config.json`，自动迁移已有文件）
@@ -302,6 +298,17 @@ dsh plugin --profile web add dsh-plugin-wallpaper-engine
 - **管理**：已上传列表可单独**移除**（二次确认后删除本地文件）；上传的壁纸同样支持隐藏 / 恢复、倍速与翻转。
 - **重复去重**：重复上传同一文件会自动识别（按内容校验），直接选择已有的那张，不会在仓库里堆积副本。
 
+### 松散壁纸源（Linux 默认 `~/Pictures`）
+
+Wallpaper Engine 是 Windows 独占软件，原生 Linux 主机没有 Steam/WE 安装可供扫描。为此插件在 Linux 上默认把 **`$HOME/Pictures/WallpaperEngine`** 作为**只读的松散壁纸源**，识别两种内容：
+
+- **图片 / 视频**（直接列出）：JPG / JPEG / PNG / GIF / WebP / APNG，MP4 / WebM / MKV / AVI / MOV，走与自定义壁纸相同的 `/media`、`/preview` 管道；
+- **WE 场景项目文件夹**（整体识别为一个场景壁纸）：目录含 `project.json` 且带 `scene.pkg` / `scene.json`（即从 Steam 工坊下载的原始场景目录）→ 读取 `project.json` 的标题 / 分级 / 预览，并通过现有的 `scene-frame` / `scene-video` / `scene-runtime` 管线输出完整场景帧，与安装版 WE 场景同一套渲染链路。
+
+- **只读**：插件不会往该目录写入或删除任何文件，选择器里也没有「移除」按钮——松散壁纸的 id 使用 `ls-` 前缀，与上传的 `up-` 前缀区分，客户端的管理/删除逻辑不会触碰它们。
+- **配置**：`DSH_WE_LOOSE_DIR` 环境变量可覆盖（逗号 / 分号分隔多个目录，支持 `~`），在任意平台生效；一旦设置，Linux 不再使用 `~/Pictures/WallpaperEngine` 默认值。把该变量指向一个不存在的目录即可完全关闭此功能。
+- **扫描**：有界递归子目录（最多 4 层），跳过隐藏文件 / 目录与符号链接，单次上限 3000 个条目；被识别的场景项目整个目录计为 1 个条目（不会把内部的纹理 / preview / shaders 单独散列）；id 按路径 SHA-256 生成（`ls-<hash>`），稳定、重启不重复。
+
 ### 自动轮转（轮播列表）
 
 轮转基于**自定义轮播列表**（「壁纸」页签的自动轮播分组）。用 **新建** 可以创建任意多个列表，从库存里勾选 Video/Web 壁纸加入每个列表，并为每个列表单独设置**切换间隔**（1、5、10、30、60 或 120 分钟）和**播放顺序**（顺序/随机），勾选 **自动轮转** 后只在该列表内循环。列表保存在浏览器 `localStorage`，完全在客户端维护——轮转不再依赖 Wallpaper Engine 自己的 `config.json` 播放列表路径。
@@ -378,6 +385,7 @@ dsh plugin --profile web add dsh-plugin-wallpaper-engine
 | `DSH_WE_FFMPEG_URL` | 替换自动下载源（自建镜像 / 代理加速） |
 | `DSH_WE_CACHE_DIR` | 覆盖缓存根目录（抽帧转码缓存 / 场景静态帧缓存） |
 | `DSH_WE_STEAM_ROOT` | 显式指定 Steam 根目录（逗号/分号分隔，Windows 或 `/mnt` 路径；注册表/自动探测失效时的兜底） |
+| `DSH_WE_LOOSE_DIR` | 松散壁纸源目录（逗号/分号分隔，支持 `~`）；未设置时 Linux 默认 `$HOME/Pictures/WallpaperEngine`，指向不存在的目录可关闭 |
 
 ## 与 dsh-better-sidebar 的兼容适配
 

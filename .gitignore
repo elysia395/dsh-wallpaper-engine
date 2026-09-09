@@ -3,6 +3,10 @@ node_modules/
 *.tgz
 .playwright-mcp/
 .test-cache/
+# 全库验证产物 (report.json/帧图, 可再生)
+.verify-all/
+# 排查期临时脚本与纹理转储
+.refactor-tmp/
 scene-diagnosis.tsv
 # Local ffmpeg (Windows static build, ~370MB) — used for transcode experiments;
 # never commit binaries (platform-specific + huge).
@@ -12,10 +16,11 @@ scene-layers-out/
 # 视觉工具工件
 .dsh-vision-router/
 
-
-
-
 /_refs/
+
+# 排查期临时产物 (2026-08-31 里程碑清理; 历史误提交已删除)
+/.perf-probe/
+/.w3-ab/
 
 # README 展示图: 默认忽略工作截图, 仅放行当前 README 引用的 5 张 (勿删白名单)
 /docs/images/*
@@ -27,10 +32,7 @@ scene-layers-out/
 
 /.git.bak-broken/
 
-
-
 /scripts/lwe-ref/
-
 
 # 渲染输出 (回归/调试用, 不入库)
 /scripts/out/
@@ -39,6 +41,9 @@ scene-layers-out/
 /scripts/reverse/
 /scripts/core/
 /scripts/anim/
+
+# scene-gl e2e 截图工件 (可再生; capture.py 不消费 ref-*)
+/test/scene-gl-e2e/*.png
 
 # ZCode 会话本地文件 (计划/缓存, 不入库)
 /.zcode/
