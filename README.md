@@ -34,18 +34,21 @@
 
 > 壁纸 + 磨砂遮罩 + iOS 液态玻璃，渲染在 DSH 界面后方。
 
-## ⚠️ 升级顺序：先更新 DeepSeek Harness，再更新本插件（v0.7.1 起）
+## ⚠️ 更新前置条件：① DSH 内核最新 ② better-sidebar 最新（v0.7.2 起）
 
-**在旧版 DeepSeek Harness 上请勿升级本插件。** v0.7.1 适配 DeepSeek Harness **0.1.2-rc.1**（对应 **DSH Desktop v2.0.5**，2026-09-03 发布——该版本起桌面端内置的 harness 由 0.1.2-alpha.1 切换为 0.1.2-rc.1）。正确的升级顺序：
+**两个前置条件都满足之前，请勿更新本插件。** v0.7.2 适配 DeepSeek Harness **0.1.5-rc.1**（对应 **DSH Desktop ≥ 2.0.7**），并要求 **dsh-better-sidebar ≥ 0.19.0**（0.19 起右侧栏接入 DSH 0.1.5 的官方原生侧栏；仍停留在 0.1.2-rc.1 旧内核的用户请保持 better-sidebar 0.18.x，不要混搭）。正确的更新顺序：
 
 1. **先把 DeepSeek Harness / DSH Desktop 更新到最新版**：DSH Desktop 在「顶部导航栏 → 版本信息」检查更新，或到 [GitHub Releases](https://github.com/anywhere-labs/dsh-desktop/releases) 下载对应平台安装包；
-2. **再更新本插件**：`dsh plugin --profile web add dsh-plugin-wallpaper-engine`（或插件市场里点更新）。
+2. **再把 dsh-better-sidebar 更新到 0.19.0+**：`dsh plugin --profile web add dsh-better-sidebar@latest`；
+3. **最后更新本插件**：`dsh plugin --profile web add dsh-plugin-wallpaper-engine`（或插件市场里点更新）。
 
-> 💡 同时建议把**其它 DSH 插件也一并更新**：旧版插件在 harness 0.1.2-rc.1 下可能直接加载失败（实测 web profile 里的旧版 dsh-better-sidebar 会因 API 变更而启动报错）。
+> 💡 同时建议把**其它 DSH 插件也一并更新**：旧版插件在 harness 0.1.5 下可能直接加载失败（实测旧版 dsh-better-sidebar 在 0.1.5 下会因 API 变更异常）。
 
-顺序反了（harness 还是旧版就升了插件）时，先把 harness 更新到最新即可恢复；无需回滚插件。插件更新后会在界面里弹一次提示（每个新版本仅出现一次），漏看也没关系。
+顺序反了时，把内核与 better-sidebar 各自更新到匹配版本即可恢复；无需回滚本插件。插件更新后会在界面里弹一次提示（每个新版本仅出现一次），漏看也没关系。
 
-> ✅ **v0.7.1 已在 DSH Desktop v2.0.5（harness 0.1.2-rc.1）上完成实测**：壁纸宿主路由（inventory / media / scene-frame）、设置一级分区、选择器弹窗、视频与场景壁纸播放、拉绳抽屉、液态玻璃在「兼容模式」与「增强模式」下均正常。本插件依赖的 slots / webserver / 主题变量等 API 在 0.1.2-alpha.1 → 0.1.2-rc.1 之间保持稳定。
+> 🐛 **v0.7.2 修复「右侧栏完全透明」并把玻璃扩展到官方原生右侧栏**：harness 0.1.5 的官方原生右侧栏面板直接绘制 `--dsw-alias-bg-base`——这正是本插件为露出壁纸设成透明的 token，且官方面板没有自己的毛玻璃，导致升级 better-sidebar 0.19 后右侧栏整体透明。v0.7.2 起官方原生右侧栏纳入「侧栏液态玻璃」适配：同一组**侧栏模糊 / 透明度 / 玻璃颜色**滑杆生效，总开关关闭时回退主题面板色（不再透明）。
+
+> ✅ **v0.7.1 已在 DSH Desktop v2.0.5（harness 0.1.2-rc.1）上完成实测**：壁纸宿主路由（inventory / media / scene-frame）、设置一级分区、选择器弹窗、视频与场景壁纸播放、拉绳抽屉、液态玻璃在「兼容模式」与「增强模式」下均正常。本插件依赖的 slots / webserver / 主题变量等 API 在 0.1.2-rc.1 → 0.1.5-rc.1 之间经实测同样稳定。
 >
 > 🐛 **v0.7.1 修复 rc.1 的「色板 / 黑胶唱片变圆角矩形」**（[#74](https://github.com/elysia395/dsh-wallpaper-engine/issues/74)）：rc.1 主题层新增 `corner-shape.css`，给**所有元素**统一加了 `corner-shape: superellipse(1.5)`（方圆形角），任何 `border-radius:50%` 的正圆都被渲染成圆角矩形。插件现已对自身绘制的全部正圆 / 胶囊控件（色板、黑胶唱片、滑杆圆点、开关滑块、字体 chip 等）显式重置 `corner-shape: round`，在旧版 harness 上该声明会被自动忽略、无副作用。
 

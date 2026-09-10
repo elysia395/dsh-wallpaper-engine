@@ -3797,15 +3797,20 @@ function RopeDock() {
 }
 
 // ── One-time "what's new" notice ─────────────────────────────────────────────
-// This round: v0.7.1 adapts to DeepSeek Harness 0.1.2-rc.1 (DSH Desktop v2.0.5,
-// which switched its bundled harness from 0.1.2-alpha.1 to 0.1.2-rc.1) and — the
-// important part — announces the UPGRADE ORDER: users must update DeepSeek
-// Harness / DSH Desktop to the latest version BEFORE updating this plugin; on an
-// older harness the plugin should not be updated. The dismissal version is
-// stored WITH the settings (host file, port-independent) so it survives DSH
-// Desktop's random --port restarts and never re-shows after being closed. Bump
-// NOTICE_VERSION next release to announce something new again.
-const NOTICE_VERSION = "0.7.1";
+// This round: v0.7.2 extends the liquid-glass adaptation to the NATIVE right
+// sidebar that harness 0.1.5 introduced (better-sidebar 0.19 registers its
+// tabs into it) and fixes the right column turning fully transparent there —
+// the native panel paints var(--dsw-alias-bg-base), the exact token WE makes
+// transparent while a wallpaper is active, and it had no frost of its own.
+// Updating to the latest plugin now has TWO PREREQUISITES, announced via this
+// notice: ① the DeepSeek Harness kernel must be the latest (DSH Desktop
+// ≥ 2.0.7 / harness 0.1.5-rc.1+), and ② dsh-better-sidebar must be the latest
+// (0.19.0+; users still on the 0.1.2-rc.1 line keep 0.18.x — no mixing). The
+// dismissal version is stored WITH the settings (host file, port-independent)
+// so it survives DSH Desktop's random --port restarts and never re-shows
+// after being closed. Bump NOTICE_VERSION next release to announce something
+// new again.
+const NOTICE_VERSION = "0.7.2";
 
 function UpdateNotice() {
   const sel = useStore();
@@ -3823,18 +3828,20 @@ function UpdateNotice() {
   };
   if (!show) return null;
   return React.createElement("div", { className: "we-update-notice", role: "alert" },
-    React.createElement("div", { className: "we-update-notice__title" }, "⚠️ 升级顺序提醒：先更新 DeepSeek Harness，再更新本插件（v0.7.1 已适配 DSH Desktop 2.0.5）"),
+    React.createElement("div", { className: "we-update-notice__title" }, "⚠️ v0.7.2 前置条件：① DSH 内核最新 ② better-sidebar 最新"),
     React.createElement("div", { className: "we-update-notice__body" },
       React.createElement("p",
         null,
-        "本版本适配 DeepSeek Harness 0.1.2-rc.1（DSH Desktop v2.0.5 内置版本）。更新本插件前，请先把 DeepSeek Harness / DSH Desktop 更新到最新版（桌面版在顶部导航栏的版本信息里检查更新）；",
-        React.createElement("strong", null, "harness 还是旧版时请不要更新本插件"),
-        "。顺序反了也无妨——把 harness 更新到最新即可恢复，无需回滚插件。另外建议把其它 DSH 插件也一并更新：旧版插件在新版 harness 下可能无法加载。"),
+        "本版本把液态玻璃适配扩展到 DSH 0.1.5 的官方原生右侧栏，并修复升级 better-sidebar 0.19 后右侧栏完全透明的问题。更新本插件前，请先满足两个前置条件："),
+      React.createElement("p",
+        null,
+        "① ", React.createElement("strong", null, "DeepSeek Harness 内核为最新版"), "——DSH Desktop ≥ 2.0.7（内置 0.1.5-rc.1+），桌面端在顶部导航栏的版本信息里检查更新；",
+        "② ", React.createElement("strong", null, "dsh-better-sidebar 插件为最新版"), "——0.19.0+（仍停留在 0.1.2-rc.1 旧内核的用户请保持 0.18.x，不要混搭）。"),
       React.createElement("p",
         null,
         React.createElement("strong",
           null,
-          "DSH Desktop 用户请留意：在桌面设置中选择「增强模式」并开启「玻璃材质」，才能实现最完美的无边框全屏沉浸式效果。")),
+          "两个前置条件都满足之前，请不要更新本插件；顺序反了把内核与插件各自更新到匹配版本即可恢复。")),
       React.createElement("p", { className: "we-update-notice__hint" },
         "本提示每个新版本只出现一次，点下方按钮关闭后不再弹出。"),
     ),
@@ -4059,6 +4066,48 @@ const CSS = `
     body[data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_gitHeader"],
     body[data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_browserBar"],
     body[data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_terminalWrap"] {
+      background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) 92%, transparent) !important;
+      backdrop-filter: none !important;
+      -webkit-backdrop-filter: none !important;
+    }
+  }
+
+  /* ── Official right sidebar (harness 0.1.5+) ──────────────────────────────
+     0.1.5 moved the right column into the NATIVE sidebar (better-sidebar 0.19
+     registers its tabs into it and only keeps its own bottom dock). The native
+     panel paints background: var(--dsw-alias-bg-base) — the EXACT token WE
+     sets to transparent while a wallpaper is active — so without adaptation
+     the whole right column went fully see-through with no frost (v0.7.2 fix).
+     The panel is addressed via its stable data attributes
+     (data-sidebar-right-panel="push"|"fullscreen"; CSS-module hashes like
+     P3OORG_panel drift between harness builds and must not be used). The
+     侧栏液态玻璃 master switch gates the SAME frosted recipe and the SAME
+     侧栏模糊/透明度/玻璃颜色 knobs as the better-sidebar glass; with the
+     switch off, the panel falls back to the theme's opaque layer colour so
+     「关闭则恢复原生外观」keeps holding there too. */
+  body[data-we-wallpaper] [data-sidebar-right-panel] {
+    background-color: var(--dsw-alias-bg-layer-1, #1e1f26);
+  }
+  body[data-we-sidebar-glass] [data-sidebar-right-panel] {
+    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) calc(var(--we-sidebar-alpha, 0.15) * 0.66 * 100%), transparent) !important;
+    background-image: linear-gradient(180deg,
+      rgba(255, 255, 255, calc(var(--we-sidebar-sheen, 1) * 0.14)),
+      rgba(255, 255, 255, calc(var(--we-sidebar-sheen, 1) * 0.04)) 38%,
+      rgba(255, 255, 255, calc(var(--we-sidebar-sheen, 1) * 0.01))) !important;
+    -webkit-backdrop-filter: blur(var(--we-sidebar-blur, 16px)) saturate(var(--we-sidebar-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01) !important;
+    backdrop-filter: blur(var(--we-sidebar-blur, 16px)) saturate(var(--we-sidebar-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01) !important;
+    box-shadow:
+      inset 0 1px 0 rgba(255, 255, 255, calc(var(--we-sidebar-sheen, 1) * 0.32)),
+      inset 0 -1px 0 rgba(255, 255, 255, calc(var(--we-sidebar-sheen, 1) * 0.08)),
+      inset 0 0 0 0.5px rgba(255, 255, 255, calc(var(--we-sidebar-sheen, 1) * 0.06));
+  }
+  body[data-ds-dark-theme][data-we-sidebar-glass] [data-sidebar-right-panel] {
+    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) calc(var(--we-sidebar-alpha, 0.15) * 0.33 * 100%), transparent) !important;
+  }
+  /* No backdrop-filter support: near-opaque tinted plate, same policy as the
+     better-sidebar glass above. */
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    body[data-we-sidebar-glass] [data-sidebar-right-panel] {
       background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) 92%, transparent) !important;
       backdrop-filter: none !important;
       -webkit-backdrop-filter: none !important;
