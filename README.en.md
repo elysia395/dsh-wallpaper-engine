@@ -335,10 +335,11 @@ Above the thumbnail grid in the picker modal there are two dropdowns that
 reproduce Wallpaper Engine's own categorisation:
 
 - **内容分级** (content rating) — reads each wallpaper's `contentrating` field
-  from `project.json` (WE's workshop tags G / PG13 / R): **全部** (all) /
+  (WE wallpapers: `project.json`; custom uploads: `uploads/.meta.json`; the
+  field mirrors WE's workshop tags G / PG13 / R): **全部** (all) /
   **Everyone (G, default)** / **PG13** (parental guidance) / **Mature (R)** /
-  **未分级** (unrated — wallpapers without the field, typically local projects
-  or custom uploads).
+  **未分级** (unrated — wallpapers without the field, typically local projects;
+  custom uploads without a rating stay in this bucket too).
 - **类型** (type) — filters by the embeddable type: **全部** (all) / **视频**
   (video) / **网页** (web) / **图片** (image, custom uploads).
 
