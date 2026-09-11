@@ -4011,7 +4011,7 @@ const CSS = `
      base too; the blur lives on the root panels (one blur per shell). */
   body[data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_boundaryError"],
   body[data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_panel"] {
-    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) calc(var(--we-sidebar-alpha, 0.15) * 0.66 * 100%), transparent) !important;
+    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) max(calc(var(--we-sidebar-alpha, 0.15) * 0.66 * 100%), 8%), transparent) !important;
     /* Specular sheen + refraction highlights follow --we-sidebar-sheen
        (= min(1, alpha/0.2236)): at default (12%) and any MORE solid setting
        the sheen keeps the ORIGINAL design strength (0.14/0.04/0.01,
@@ -4036,11 +4036,11 @@ const CSS = `
   body[data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_gitHeader"],
   body[data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_browserBar"],
   body[data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_terminalWrap"] {
-    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) calc(var(--we-sidebar-alpha, 0.15) * 0.53 * 100%), transparent) !important;
+    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) max(calc(var(--we-sidebar-alpha, 0.15) * 0.53 * 100%), 8%), transparent) !important;
   }
   body[data-ds-dark-theme][data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_boundaryError"],
   body[data-ds-dark-theme][data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_panel"] {
-    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) calc(var(--we-sidebar-alpha, 0.15) * 0.33 * 100%), transparent) !important;
+    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) max(calc(var(--we-sidebar-alpha, 0.15) * 0.33 * 100%), 6%), transparent) !important;
   }
   body[data-ds-dark-theme][data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_pane"],
   body[data-ds-dark-theme][data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_tabBar"],
@@ -4050,7 +4050,7 @@ const CSS = `
   body[data-ds-dark-theme][data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_gitHeader"],
   body[data-ds-dark-theme][data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_browserBar"],
   body[data-ds-dark-theme][data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_terminalWrap"] {
-    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) calc(var(--we-sidebar-alpha, 0.15) * 0.26 * 100%), transparent) !important;
+    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) max(calc(var(--we-sidebar-alpha, 0.15) * 0.26 * 100%), 6%), transparent) !important;
   }
   /* No backdrop-filter support: fall back to near-opaque tinted surfaces so
      sidebar text never sits directly on a busy wallpaper (same policy as the
@@ -4089,7 +4089,7 @@ const CSS = `
     background-color: var(--dsw-alias-bg-layer-1, #1e1f26);
   }
   body[data-we-sidebar-glass] [data-sidebar-right-panel] {
-    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) calc(var(--we-sidebar-alpha, 0.15) * 0.66 * 100%), transparent) !important;
+    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) max(calc(var(--we-sidebar-alpha, 0.15) * 0.66 * 100%), 8%), transparent) !important;
     background-image: linear-gradient(180deg,
       rgba(255, 255, 255, calc(var(--we-sidebar-sheen, 1) * 0.14)),
       rgba(255, 255, 255, calc(var(--we-sidebar-sheen, 1) * 0.04)) 38%,
@@ -4102,7 +4102,7 @@ const CSS = `
       inset 0 0 0 0.5px rgba(255, 255, 255, calc(var(--we-sidebar-sheen, 1) * 0.06));
   }
   body[data-ds-dark-theme][data-we-sidebar-glass] [data-sidebar-right-panel] {
-    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) calc(var(--we-sidebar-alpha, 0.15) * 0.33 * 100%), transparent) !important;
+    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) max(calc(var(--we-sidebar-alpha, 0.15) * 0.33 * 100%), 6%), transparent) !important;
   }
   /* No backdrop-filter support: near-opaque tinted plate, same policy as the
      better-sidebar glass above. */
@@ -4130,9 +4130,15 @@ const CSS = `
      follow the theme panel color). The sidebar master switch gates these
      surfaces too, so turning it off restores the complete native sidebar even
      when a wallpaper remains active. .cm-editor / .xterm are library-global
-     class names (stable across the sidebar's builds). */
+     class names (stable across the sidebar's builds).
+     v0.7.2: with better-sidebar 0.19 the editor / preview tabs render inside
+     the NATIVE right sidebar ([data-sidebar-right-panel]), no longer under
+     the plugin's own shell — extend the same plate to content surfaces there,
+     or 内容面透明度 / 内容面底色 stop responding for those tabs. */
   body[data-we-sidebar-glass] [data-dsh-better-sidebar] .cm-editor,
-  body[data-we-sidebar-glass] [data-dsh-better-sidebar] .xterm {
+  body[data-we-sidebar-glass] [data-dsh-better-sidebar] .xterm,
+  body[data-we-sidebar-glass] [data-sidebar-right-panel] .cm-editor,
+  body[data-we-sidebar-glass] [data-sidebar-right-panel] .xterm {
     background-color: color-mix(in srgb, var(--we-content-surface-color, var(--dsw-alias-bg-layer-1, #1e1f26)) var(--we-content-surface-alpha, 88%), transparent) !important;
   }
 
