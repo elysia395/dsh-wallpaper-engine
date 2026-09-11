@@ -1919,6 +1919,12 @@ function applyEffects() {
   s.setProperty("--we-sidebar-alpha", String(sidebarAlpha));
   s.setProperty("--we-sidebar-sheen", String(Math.min(1, sidebarAlpha / 0.2236)));
   s.setProperty("--we-sidebar-color", selection.sidebarColor);
+  // 侧栏玻璃颜色的混入强度（%）：独立于 alpha 的可见性曲线。alpha 在高透档
+  // 趋近 0，若混色跟着 alpha 走，颜色滑杆在最高档等于失效（0.4%–1% 不可感知，
+  // v0.7.2 首版 6%–8% 下限仍被反馈"非常不明显"）。改为随透明度滑杆线性映射
+  // 20%–48%：最透档也有可感知色染，往实调颜色越来越浓。
+  const sidebarTint = 20 + (200 - Math.min(Math.max(selection.sidebarAlpha, 0), 200)) / 200 * 28;
+  s.setProperty("--we-sidebar-tint", sidebarTint.toFixed(1) + "%");
   if (selection.sidebarGlass) document.body.setAttribute("data-we-sidebar-glass", "on");
   else document.body.removeAttribute("data-we-sidebar-glass");
   // 内容面（编辑器/终端）近不透明玻璃底：透明度滑块 0–80 → 不透明度 100%–20%
@@ -1983,6 +1989,7 @@ function clearEffects() {
   s.removeProperty("--we-sidebar-alpha");
   s.removeProperty("--we-sidebar-sheen");
   s.removeProperty("--we-sidebar-color");
+  s.removeProperty("--we-sidebar-tint");
   document.body.removeAttribute("data-we-sidebar-glass");
   s.removeProperty("--we-content-surface-alpha");
   s.removeProperty("--we-content-surface-color");
@@ -4011,7 +4018,7 @@ const CSS = `
      base too; the blur lives on the root panels (one blur per shell). */
   body[data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_boundaryError"],
   body[data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_panel"] {
-    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) max(calc(var(--we-sidebar-alpha, 0.15) * 0.66 * 100%), 8%), transparent) !important;
+    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) var(--we-sidebar-tint, 20%), transparent) !important;
     /* Specular sheen + refraction highlights follow --we-sidebar-sheen
        (= min(1, alpha/0.2236)): at default (12%) and any MORE solid setting
        the sheen keeps the ORIGINAL design strength (0.14/0.04/0.01,
@@ -4036,11 +4043,11 @@ const CSS = `
   body[data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_gitHeader"],
   body[data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_browserBar"],
   body[data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_terminalWrap"] {
-    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) max(calc(var(--we-sidebar-alpha, 0.15) * 0.53 * 100%), 8%), transparent) !important;
+    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) calc(var(--we-sidebar-tint, 20%) * 0.75), transparent) !important;
   }
   body[data-ds-dark-theme][data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_boundaryError"],
   body[data-ds-dark-theme][data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_panel"] {
-    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) max(calc(var(--we-sidebar-alpha, 0.15) * 0.33 * 100%), 6%), transparent) !important;
+    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) calc(var(--we-sidebar-tint, 20%) * 0.65), transparent) !important;
   }
   body[data-ds-dark-theme][data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_pane"],
   body[data-ds-dark-theme][data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_tabBar"],
@@ -4050,7 +4057,7 @@ const CSS = `
   body[data-ds-dark-theme][data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_gitHeader"],
   body[data-ds-dark-theme][data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_browserBar"],
   body[data-ds-dark-theme][data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_terminalWrap"] {
-    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) max(calc(var(--we-sidebar-alpha, 0.15) * 0.26 * 100%), 6%), transparent) !important;
+    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) calc(var(--we-sidebar-tint, 20%) * 0.5), transparent) !important;
   }
   /* No backdrop-filter support: fall back to near-opaque tinted surfaces so
      sidebar text never sits directly on a busy wallpaper (same policy as the
@@ -4089,7 +4096,7 @@ const CSS = `
     background-color: var(--dsw-alias-bg-layer-1, #1e1f26);
   }
   body[data-we-sidebar-glass] [data-sidebar-right-panel] {
-    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) max(calc(var(--we-sidebar-alpha, 0.15) * 0.66 * 100%), 8%), transparent) !important;
+    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) var(--we-sidebar-tint, 20%), transparent) !important;
     background-image: linear-gradient(180deg,
       rgba(255, 255, 255, calc(var(--we-sidebar-sheen, 1) * 0.14)),
       rgba(255, 255, 255, calc(var(--we-sidebar-sheen, 1) * 0.04)) 38%,
@@ -4102,7 +4109,7 @@ const CSS = `
       inset 0 0 0 0.5px rgba(255, 255, 255, calc(var(--we-sidebar-sheen, 1) * 0.06));
   }
   body[data-ds-dark-theme][data-we-sidebar-glass] [data-sidebar-right-panel] {
-    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) max(calc(var(--we-sidebar-alpha, 0.15) * 0.33 * 100%), 6%), transparent) !important;
+    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) calc(var(--we-sidebar-tint, 20%) * 0.65), transparent) !important;
   }
   /* No backdrop-filter support: near-opaque tinted plate, same policy as the
      better-sidebar glass above. */
