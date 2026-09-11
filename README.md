@@ -248,7 +248,7 @@ dsh plugin --profile web add dsh-plugin-wallpaper-engine
 
 选择壁纸弹窗的网格上方有两个下拉框，复刻 Wallpaper Engine 自己的分类方式：
 
-- **内容分级** —— 读取每张壁纸 `project.json` 的 `contentrating` 字段（即 WE workshop 的 G / PG13 / R 三档标签）：**全部** / **Everyone（G，默认）** / **PG13（家长指导级）** / **Mature（R）** / **未分级**（没有该字段的壁纸，通常是本地项目或自上传内容）。
+- **内容分级** —— 读取每张壁纸的 `contentrating` 字段（WE 壁纸读 `project.json`，自上传内容读 `uploads/.meta.json`，即 WE workshop 的 G / PG13 / R 三档标签）：**全部** / **Everyone（G，默认）** / **PG13（家长指导级）** / **Mature（R）** / **未分级**（没有该字段的壁纸，通常是本地项目；自上传内容未设置时同样按未分级处理）。
 - **类型** —— 按可内嵌类型筛选：**全部** / **视频** / **网页** / **图片**（自上传）。
 
 每个选项都带当前可播放壁纸数量；被过滤的壁纸会从网格、轮播编辑器和轮播候选中整体剔除，也不会被自动选中或轮换。选择保存在浏览器 `localStorage`；默认 Everyone 对应 WE 保守的首启立场。
