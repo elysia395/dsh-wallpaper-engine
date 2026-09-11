@@ -17,7 +17,7 @@ It discovers the Wallpaper Engine install on your machine, lists its wallpapers,
 - **Hide / restore (soft delete)** — hide wallpapers you don't want, restore them anytime; no source files are touched;
 - **Playback speed** — six native presets from 0.5x to 2x, instant, no media reload;
 - **Horizontal flip** — mirror the image (video / web / uploaded images);
-- **Custom uploads** — use your own local JPG / PNG / MP4 as a wallpaper, with a configurable storage location and fit modes;
+- **Custom uploads** — use your own local JPG / PNG / MP4 as a wallpaper, with a configurable storage location, fit modes, and automatic thumbnails for uploaded MP4s;
 - **Scene full-scene frames** (v0.6) — Scene wallpapers are fully replayed by a pure-JS scene renderer (object tree / textures / particles / shader effects) instead of being an unusable "not playable" entry.
 - **Liquid-glass settings page** (v0.3.1) — the settings UI is now a **first-level settings page** (following the dsh-web-ui-all skin-center design): the whole page is a customizable liquid-glass card with **accent color** (6 presets + a custom color picker) and **glass transparency** (0–60%). Both apply instantly and persist.
 - **Whole-settings-window liquid glass** (v0.3.2) — one click turns the **entire native DSH settings window** (dialog + left nav + ALL native sections: General / Models / Plugins / …) into liquid glass with your custom accent + transparency. With the「设置窗口液态玻璃」master switch on, the window background, nav active/hover, buttons, switches and links all follow the chosen accent and transparency; off restores the stock look.
@@ -34,18 +34,21 @@ It discovers the Wallpaper Engine install on your machine, lists its wallpapers,
 
 > Wallpaper + scrim + iOS liquid glass rendered behind the DSH GUI.
 
-## ⚠️ Upgrade order: update DeepSeek Harness FIRST, then this plugin (v0.7.1+)
+## ⚠️ Prerequisites for updating: ① latest DSH kernel ② latest better-sidebar (v0.7.2+)
 
-**Do NOT upgrade this plugin on an older DeepSeek Harness.** v0.7.1 targets DeepSeek Harness **0.1.2-rc.1** (shipped in **DSH Desktop v2.0.5**, released 2026-09-03 — that release switched the bundled harness from 0.1.2-alpha.1 to 0.1.2-rc.1). The correct upgrade order:
+**Do NOT update this plugin until BOTH prerequisites are met.** v0.7.2 targets DeepSeek Harness **0.1.5-rc.1** (shipped in **DSH Desktop ≥ 2.0.7**) and requires **dsh-better-sidebar ≥ 0.19.0** (from 0.19 the right column plugs into the native right sidebar of harness 0.1.5; users still on the 0.1.2-rc.1 line should keep better-sidebar 0.18.x — do not mix). The correct update order:
 
 1. **Update DeepSeek Harness / DSH Desktop first**: check for updates via the desktop app's top-bar version info, or grab the installer from [GitHub Releases](https://github.com/anywhere-labs/dsh-desktop/releases);
-2. **Then update this plugin**: `dsh plugin --profile web add dsh-plugin-wallpaper-engine` (or click update in the plugin market).
+2. **Then update dsh-better-sidebar to 0.19.0+**: `dsh plugin --profile web add dsh-better-sidebar@latest`;
+3. **Finally update this plugin**: `dsh plugin --profile web add dsh-plugin-wallpaper-engine` (or click update in the plugin market).
 
-> 💡 Also update your **other DSH plugins at the same time**: older plugins may fail to load outright on harness 0.1.2-rc.1 (an old dsh-better-sidebar in a web profile was observed crashing at boot due to an API change).
+> 💡 Also update your **other DSH plugins at the same time**: older plugins may fail to load outright on harness 0.1.5 (an old dsh-better-sidebar was observed misbehaving on 0.1.5 due to API changes).
 
-If you upgraded the plugin first by mistake, simply updating the Harness to the latest version restores everything — no plugin rollback needed. The plugin also shows a one-time in-app notice per release.
+If you updated out of order, bringing the kernel and better-sidebar back to their matching latest versions restores everything — no plugin rollback needed. The plugin also shows a one-time in-app notice per release.
 
-> ✅ **v0.7.1 has been verified on DSH Desktop v2.0.5 (harness 0.1.2-rc.1)**: host routes (inventory / media / scene-frame), the first-level settings section, the picker modal, video & scene wallpaper playback, the rope-dock drawer, and the liquid-glass effects all work in both Compatibility and Enhanced desktop modes. The APIs this plugin relies on (slots / webserver / theme variables) are unchanged between harness 0.1.2-alpha.1 and 0.1.2-rc.1.
+> 🐛 **v0.7.2 fixes the "right sidebar fully transparent" regression and extends the glass to the native right sidebar**: the harness 0.1.5 native sidebar panel paints `var(--dsw-alias-bg-base)` — the exact token this plugin sets to transparent while a wallpaper is active — and the native panel ships no frosted glass of its own, so after moving to better-sidebar 0.19 the whole right column went see-through. From v0.7.2 the native right sidebar is covered by the「侧栏液态玻璃」adaptation: the same **侧栏模糊 / 透明度 / 玻璃颜色** sliders drive it, and with the master switch off it falls back to the theme's opaque panel colour (no longer transparent).
+
+> ✅ **v0.7.1 has been verified on DSH Desktop v2.0.5 (harness 0.1.2-rc.1)**: host routes (inventory / media / scene-frame), the first-level settings section, the picker modal, video & scene wallpaper playback, the rope-dock drawer, and the liquid-glass effects all work in both Compatibility and Enhanced desktop modes. The APIs this plugin relies on (slots / webserver / theme variables) were verified unchanged on harness 0.1.5-rc.1 as well.
 >
 > 🐛 **v0.7.1 also fixes the rc.1 "swatches / vinyl record render as rounded rectangles" regression** ([#74](https://github.com/elysia395/dsh-wallpaper-engine/issues/74)): rc.1's theme layer ships a new `corner-shape.css` that applies `corner-shape: superellipse(1.5)` (squircle-ish corners) to **every element**, so any `border-radius:50%` circle renders as a rounded rectangle. The plugin now explicitly resets `corner-shape: round` on every circle / pill control it draws (swatches, vinyl record, slider thumbs, toggle knobs, font chips, …); on older harness builds the declaration is ignored, with no side effects.
 
@@ -109,6 +112,7 @@ a 「静态帧」 badge in the picker.
      - `GET /wallpaper-engine/inventory` → JSON list of wallpapers
      - `GET /wallpaper-engine/media/<token>` → video / HTML (Range supported)
      - `GET /wallpaper-engine/preview/<token>` → preview image
+     - `GET /wallpaper-engine/video-preview/<token>` → on-demand ffmpeg-extracted thumbnail for a custom MP4 upload (disk-cached)
      - `GET /wallpaper-engine/scene-frame/<token>` → scene full-scene frame (pure-JS renderer output 3840×2160, falls back to main-texture extraction, PNG disk-cached)
      - `POST /wallpaper-engine/upload` → upload a custom wallpaper (JPG / PNG / MP4, raw bytes)
      - `POST /wallpaper-engine/remove` → remove an uploaded wallpaper
@@ -410,6 +414,7 @@ The **自定义壁纸** section uploads local images (JPG / PNG) or videos (MP4)
 
 - **Storage location**: files default to `~/.dsh-wallpaper-engine/uploads` (your home directory — usually the C: drive). Click **更改** to move storage to any drive (absolute path, `~` supported); existing files migrate automatically and the choice persists across restarts — recommended for users who don't want wallpaper data on the system drive.
 - **Format limit**: JPG / PNG / MP4 only; validated twice (browser + host) with a clear error message.
+- **Video thumbnails**: uploaded MP4s get an on-demand ffmpeg-extracted thumbnail in the picker (the first second is skipped to avoid black fade-ins), cached under `~/.dsh-wallpaper-engine/cache/video-previews/`; without ffmpeg the card keeps the "no preview" placeholder and playback is unaffected.
 - **Fit modes**: 覆盖 (cover) / 填充 (contain) / 居中 (center) / 拉伸 (fill) — applied to custom wallpapers only (WE wallpapers keep their intended cover framing).
 - **Management**: each upload can be **移除** (confirm dialog, deletes the local file); uploaded wallpapers also support hide/restore, playback speed, and flip.
 - **Deduplication**: re-uploading an identical file is detected by content (SHA-256) and returns the existing entry — no duplicate copies pile up in the library.
