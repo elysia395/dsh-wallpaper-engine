@@ -167,6 +167,24 @@ _viewShift(o, size, ps) {
 - **rate** 加速层动画采样。
 - DSH 旧实现只取第一个 visible 层 → 多 visible 层壁纸缺层错位。
 
+### 6.2 未挂层 = 不播动画（0.8.15 实证）
+- **对象的 `animationlayers` 是唯一的动画驱动源**：对象没有该字段（或全部层
+  `visible:false`）⇒ 未播放任何动画 ⇒ 网格按 **MDLS 绑定姿态**渲染 ——
+  这也是对象 `rect`（origin+size）与 raw 网格顶点一一对应的基准姿态。
+- **反例（自造默认层0 的后果）**：`3302695207` 的 5 个 `人物` 对象都没有
+  `animationlayers`，而 `人物_puppet.mdl` 的 MDLA **根骨帧0 恒为
+  (864.231,−103.348)**、`MDLS` bind 根骨为 **(1311.230, +600.650)** ——
+  差 (−447.0,−704.0) 场景单位、**全 121 帧相同**（常数偏移，非动画）。
+  早期客户端兜底 `[{animation:0, blend:1}]` 会把这个偏移当姿态套上去 →
+  整块网格平移 (−223,−352) 画布像素 → 人物下半身被推出画布下沿 411px、
+  并脱开场景里独立摆好的 `扫帚`（其 rect 只与 bind 姿态对齐）。
+- **判据（可复算）**：任意 puppet MDL 都能对比 `_ensureBindRig()` 与
+  `_sampleAnimRT(mesh, anim0, 0)` 的各骨平移；相等 = 该模型的动画不改变摆放
+  （库内 27 个带动画模型里 22 个如此），不等 = 该壁纸**必须**有层才会动。
+- **库内普查（49 个 puppet payload）**：挂层的 38 个（3463520581 / 3593194513 /
+  3735447194 / 3784528825 等）全部显式挂层 → 去掉"默认层0"兜底对它们零影响
+  （payload JSON 逐字节相同）；未挂层的 11 个里只有本壁纸 5 个对象带动画。
+
 ---
 
 ## 7. 组件数据流（组件→图片哪部分 + 放哪里）
@@ -220,8 +238,90 @@ scene.json 对象 {image, origin, size, parent, scale, angles}
     attachment 是官方场景对象属性。
 - **实现语义**：子有效原点 = 父原点 + 骨骼最终世界位姿（动画层合成后）+
   锚点矩阵平移（按骨骼旋角旋转）+ 自身 origin。
+- **实现位置（0.8.12 起）**：`lib/we-renderer/puppet-export.js` 的
+  `parseMdatAnchors` / `buildPuppetAnchors` + `lib/index.js` gate 的
+  `foldChain`（锚点偏移先于子 origin 累加，同受祖先 scale/旋转影响）。
+  0.8.4 移除 CPU 渲染路径时该实现随之删除，GL 路径直到 0.8.12 才补回
+  （3463520581 Asuna 部件错位根因：58 个带 attachment 的对象全部丢锚点）。
+  - 骨骼位姿取 **绑定姿态**（MDLS bind 链）——无动画时与网格渲染口径一致。
+  - **结论修正（0.8.13, 2026-09-12）**：0.8.12 记的「`hair back` +677 锚点残差」
+    **不是锚点语义问题**，而是 **MDLS 骨骼条目解析截断**：`asuna body bottom`
+    声明 7 根骨骼而解析只出 1 根 → 其 `Attachment bottom` 锚点的 `boneIdx=2`
+    越界归零，躯干+头整组少走 (+230.3, +274.2) 父局部偏移（画面上就是"头/躯干
+    往左下移"、"后脑与脸分开"、远处看两个头）。骨骼解析修好后同一条
+    `world` 语义**零系数**对齐（before/after 元数据 diff：仅 6 个对象位移，
+    全部 = `asuna body` 及其 5 个 `head` 锚点子对象的 (+240.7, +286.5) 场景位移）。
+    此前"拟合出 0.55×"实为缺失骨骼项造成的假残差 —— 教训：锚点求值前先确认
+    `boneIdx` 能解析（越界静默归零会把数据错误伪装成语义缺口）。
+  - **MDLS0004 骨骼条目实测布局**（`models/asuna body bottom_puppet.mdl`）：
+    `[tmp u8][type u32][parent i32][len u32=64][64B 行主序矩阵][0x00][名字]`
+    —— **名字没有终止符**，直接接下一根骨骼的 `tmp`；无名骨骼则只有那一个
+    `0x00`（旧实现按"跳过 1 个 0x00"解析，恰好只对无名形态正确）。定位下一根
+    骨骼必须按"下一个合法头"扫描（`len` 合理 + `parent < 本骨序号` + 矩阵
+    `m[15]=1`、无透视列），见 `puppet.js _nextBoneHeader`。
+  - 反向验证对照组：KIRITO PUPPET 的 `Attachment` 锚点 ≈(2.7, −7.5) → 锚点
+    几乎不生效，其 7 个部件不靠锚点即拼装正确（与右半侧目检一致）。
+  - 锚点值空间自洽性检查（对后续排查有用）：除根 puppet 占位网格外，所有锚点
+    点（骨骼世界平移 + 锚点矩阵平移）都落在**该模型自身网格 bbox 内**且位置
+    语义合理（`asuna body` 的 `head` 锚点 (45, 369) 位于 985 顶点躯干网格的
+    顶部 = 头部；`asuna body bottom` 的 `Attachment bottom` (233, 377) 位于
+    872 顶点裙摆网格上缘 = 胸口）。根 puppet `puppet_puppet.mdl` 是 60×60
+    占位网格，其 `hair back` 锚点 (8, 675) 落在网格外 —— 属该占位模型自身的
+    数据特征（父级只提供"根锚点"语义，子级网格自己承担形状）。
 - **逆向方法**：exe 字符串搜索（MDAT/attachment）→ 反汇编解析函数 →
   文件名匹配 MDL 锚点名字 → 渲染覆盖比例数值实验选语义变体。
+
+---
+
+## 8b. MDL 容器族与"图集排版姿态"（0.8.14，2686862510 部件脱离人物）
+
+**结论：库内有两种 MDL 顶点记录布局，且旧容器 (`MDLV0013/0016`) 的 `MDLS` bind
+姿势是"图集排版姿态"，渲染姿态来自 `MDLA` 首帧。静态帧必须按首帧装配，否则
+部件停在图集排版位置（用户报的"左肩和披风脱离人物"）。**
+
+- **顶点记录两族**（`pos` 恒在记录首 12B，差别只在 `pos` 之后有没有法线/切线区）：
+
+  | 容器 | 记录 | 布局 | 库内 |
+  |---|---|---|---|
+  | `MDLV0021/0023` | 80B | `[pos 12][法线/切线 28][blendIdx 16][weights 16][uv 8]`（uv@72） | 36 个 |
+  | `MDLV0013/0016` | 52B | `[pos 12][blendIdx 16][weights 16][uv 8]`（uv@44） | 3 个 |
+
+  两族**互斥**（全库审计：52B 只有这两个容器命中，80B 只有新容器命中）→ 解析
+  策略是"先 80B 主路径（条件与旧实现逐条一致），失败再 52B 紧凑回退"，紧凑
+  回退额外校验 `Σw = 1` 与 `uv ∈ [−4,5]`（抽样 90%）以防噪声块误判。
+- **网格 ≡ 图集**：两个文件都满足 `pos = (W·u − W/2, H/2 − H·v)`，逐顶点残差
+  `0.0000`（2686862510 781 顶点）/`0.0002`（3022080536 2954 顶点，W=2156,
+  H=3291）→ 网格顶点就是图集像素的搬运，**绑定姿势 = 图集排版姿势**。
+- **渲染姿态 = MDLA 首帧**（实测）：
+  - 2686862510 `本体_puppet.mdl`：骨骼 3/4/5 首帧世界 vs bind 平移差
+    (+285.30, −3.32)/(−329.34, +30.20)/(+194.88, −799.69)（骨骼 0/1/2 = 0）
+    → 左右披风片落到躯干 `x[−274..165]` 两侧同高位置、斗篷 `x[−167..651]
+    y[−499..0]` 披身向右飘 —— 与作者 `preview.gif` 一致。
+  - 新容器（34 个文件实测）：`bind` vs `帧0` 差 ≤0.03 单位（3593194513 /
+    3735447194 / 3784528825）→ 新容器不烘焙，行为不变。
+- **MDLA0001/0003 实测布局**（逐字节核对 2686862510）：
+  ```
+  "MDLA\0" + u32 段尾偏移 + u32 动画数
+  per 动画: u32 id + u32 0 + 名字\0 + 循环标志\0
+            + float fps + u32 frameCount + u32 0 + u32 boneCount
+  per 骨骼: u32 0 + u32 segBytes + segBytes 数据        ← 每骨 8B 段头!
+  行 = 9 float/36B: pos.x, pos.y, pos.z, ?, ?, rotZ, sx, sy, sz
+  segBytes = (frameCount + 1) × 36 (末行 = 循环闭合行), 段步进 = segBytes + 8
+  ```
+  两个坑：① 既有实现用 **`[f0 41]` 魔数扫描**（= float 30.0）定位头部，
+  `fps = 3.625` 时恒失配 → 整个 MDLA 丢弃；② 段**不是连续排布**，每根骨骼
+  自带 8B 段头（`u32 0 + u32 segBytes`），按 `p + b*segBytes` 取段会从第二根起
+  整体偏移。旧容器单骨整段（pos 列 0/1、rot 列 5），与新容器 `_sampleAnimRT`
+  的列交错规则 (`(2b+5)%9`) 不同 → **旧容器逐帧动画不进入物化列表**，
+  只用首帧的静态装配姿态。
+- **实现**：`puppet.js _scanVertexBlock`（双布局）、`_parseLegacyMdla`、
+  `_legacyPoseRT`、`_poseMeshByRT`；`puppet-export.js buildPuppetPayload`
+  （`legacyContainer` → 烘焙首帧）/ `buildPuppetAnchors`（同口径骨位姿）。
+- **回归证据**：39 个 MDL 解析审计只有这 2 个旧容器变化；47 个 payload
+  JSON 逐字节相同；185 场景扫描 before/after 只有这 2 个场景 `degraded` −1。
+- **遗留（未验证，不动）**：`MDLV0016 背景_puppet.mdl` / `MDLV0021
+  bar_puppet.mdl` 仍无几何块（另一类问题）；新容器 `MDLA0006` 的段步进是否
+  同样含 8B 段头**未审计**（MOD-05 的列交错疑点可能源于此，需单独验证后再动）。
 
 ---
 
@@ -334,3 +434,84 @@ scene.json 对象 {image, origin, size, parent, scale, angles}
 - **ApplyBlending case 4 vs 20**:lwe 仓库无 common_blending.h 副本(头文件在 WE
   安装 assets/shaders/)→ 仍待官方源。
 - **jpeg**:lwe 用 stb_image,我们自研差异自担。
+
+---
+
+## 11. 效果链以【效果】为单位编译（0.8.16，3302695207 背景整块变黑）
+
+**结论：一个 WE 效果 = 同一 `dir` 的连续若干 pass，这些 pass 内部串联，必须整组
+生效或整组不生效。** 只剔除"编译失败的那一个 pass"是错的。
+
+- **实测结构**（3302695207 `snow0` 背景对象，官方 meta `dir` 字段）：
+  ```
+  waterflow            （1 pass）
+  depthparallax        （1 pass）
+  godrays              （5 pass：downsample2 → cast → gaussian → gaussian
+                        [combos VERTICAL=1] → combine）
+  ```
+  人物对象同构：`waterwaves ×3 + shake + color_grading(workshop)`。
+- **错误行为的后果**：实验开关打开时 `depthparallax`、
+  `godrays_cast`（`'=' : cannot convert from 'const highp int'`）、
+  `godrays_gaussian`（**shader 拉取失败 404/422：该 shader 不在壁纸包内，
+  属 WE 内置 `assets/shaders/`**）、`godrays_combine`（`COPYBG` combo 预处理
+  报错）全部编译失败，只剩 `godrays_downsample2` 成功 → 该 pass 的亮部提纯
+  被当成整条链的最终输出 → **背景整块变黑，只剩太阳亮斑**（画布均值亮度
+  113.5 → 21.6），人物正常 → 用户看到"人物正常但背景异常"。
+- **修复**：客户端 `_weGLBuildPuppetMesh`/buildResources 侧按 `dir` 把
+  `obj.effects` 切成连续组；组内任一 pass 无 program → **整组丢弃**（链输入
+  原样传给下一个效果，与"未支持效果"同语义）并记一条 degraded
+  （`效果的部分 pass 编译失败 (N/M)，整个效果已跳过（链输入原样传递）`）。
+- **实测**：修复后同一配置下画布均值 21.6 → 113.9（背景恢复），
+  `snow0` 只剩 `waterflow` 生效、`godrays`/`depthparallax` 整组跳过；
+  人物侧只有 `color_grading` 被整组跳过（waterwaves/shake 逐位不变）。
+- **零回归判据**：实验开关**关**时该改动只差 19 px（0.001%，纯时序抖动）；
+  4 个既有壁纸（3463520581 / 3735447194 / 3784528825 / 2686862510）实验开
+  前后差异 0.08%~1.96%，**低于同码重拍的对照抖动 2.52%** → 效果链全部编译
+  通过的对象逐位不变。
+- 备注：`godrays_gaussian` 属 WE 安装目录内置 shader，壁纸包内没有 → 该效果
+  在本机**无法**完整运行；整组跳过是唯一不产生错误画面的口径。
+
+### 11.1 粒子 `colorrandom`：整条 vec3 共用一个随机因子（0.8.17，官方实拍裁决）
+
+- **lwe 现状**（我们 0.8.16 前照搬）：`createColorRandomInitializer`
+  (CParticle.cpp:718) → `Maths::randomVec3` (Maths.cpp:13) = **逐通道各自独立
+  随机**。
+- **官方实拍反证**（3302695207 雪天，用户提供的 WE 运行截图）：雪花一律白偏蓝
+  （最彩色样本 (163,211,231)/(204,236,246)），**没有任何绿/黄色点**；场景是深蓝
+  夜景、不存在把绿点染成蓝的环境色。
+- **我们照搬的后果**：预设 `particles/presets/snowperspective.json` 的
+  `colorrandom` min=(255,255,255) max=(95,98,100)（作者本意"白↔浅灰"）在逐通道
+  独立随机下会落到 (0.37,1.00,0.70) 这类高饱和色 → 实测雪花为
+  (99,254,115) 绿 / (244,100,139) 粉 / (209,108,247) 紫 / (234,231,101) 黄，
+  色度均值 61.9、最大 155.0。
+- **修正**：单随机因子 t 在 min→max 间整条 vec3 线性插值；修正后同机
+  `snow3` 单独层实测色度均值 **61.9 → 1.9**、最大 **155.0 → 5.0**，样本
+  (104,107,109)…(142,143,144) ✓。
+- **库内其它作者预设同样印证**（全部是"两色之间细微变化"，逐通道随机只会得到
+  去饱和噪声）：3463520581 `Leaves (green)` (255,255,255)→(255,236,0)、
+  3784528825 `Sakura` (255,255,255)→(255,192,248)、
+  3593194513 `光束 2` (110,92,20)→(170,110,40)。
+- 口径：与 §10.3 "lwe 未覆盖或与我们分歧 → 以官方输出为准" 一致。
+
+### 11.2 粒子图层与官方内置素材（0.8.17 核对结论）
+
+本机 `~/Pictures/WallpaperEngine/assets/`（91MB，WE 安装目录 assets 副本）可满足
+此前一直走兜底的所有缺件，插件已默认把 `<loose 根>/assets` 登记为全局素材根：
+
+- `materials/particle/chromaticdot.tex`（雪，rgba8888 64×64，实测中心亮、
+  周边黑 = 加性 blending 的形状在 RGB 里）
+- `materials/particle/fog/fog1.tex`（雾，**r8 + 64 帧 spritesheet** 128×128/帧）
+- `assets/effects/godrays/shaders/effects/godrays_*.{vert,frag}`（背景 godrays 链
+  缺的就是这个 gaussian pass）
+- `assets/materials/util/solidlayer_instance_4.json`（snow5 的材质，1 pass，
+  `genericimage4` + `util/white`）
+- `assets/shaders/genericparticle.{vert,geom,frag}` + `common_particles.h`：粒子
+  投影的**权威实现** —— `gl_Position = mul(vec4(position,1), g_ModelViewProjectionMatrix)`，
+  即透视来自 MVP；`flags&4` 的"透视粒子"用专用透视相机（lwe CParticle.cpp:1895-1896:
+  `perspective(fov, aspect, near, far) * lookAt((0,0,1000),(0,0,0),(0,1,0))`），
+  我们目前只做 2D 圆盘 + 正交，z 分量丢弃 → `snowperspective` 的雪被压成中段一条带。
+
+**对照测量**（官方实拍 1758×1029 与我们的 1920×1080 在 0.9 缩放 + (30,0) 偏移下
+整帧 NCC 0.798）：背景/人物/雪天变体/「雪」角标一致；差异集中在
+①透视粒子（雪的分布）②fog1 的 spritesheet 帧 ③snow5 solid layer 被跳过
+④livetext/音频/水印控件层（需脚本 + 系统时间/电量/音频输入）。

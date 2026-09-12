@@ -5,7 +5,10 @@ node_modules/
 .test-cache/
 # 全库验证产物 (report.json/帧图, 可再生)
 .verify-all/
-# 排查期临时脚本与纹理转储
+# 单壁纸定点排查产物 (可再生)
+.verify-one/
+# 排查期临时脚本与纹理转储 (含视觉工具缓存的截图/裁剪产物)
+.dsh-vision-toolkit/
 .refactor-tmp/
 scene-diagnosis.tsv
 # Local ffmpeg (Windows static build, ~370MB) — used for transcode experiments;

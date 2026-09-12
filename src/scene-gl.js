@@ -68,7 +68,20 @@ function _weGLAssemble(expandedSrc, combosTable, comboValues) {
     .replace(/smoothstep\(1 - g_Rough, 1,/, 'smoothstep(1.0 - g_Rough, 1.0,') // iris.vert
     .replace(/M_PI \* 2 \+/, 'M_PI * 2.0 +')          // foliagesway.frag phase
     .replace(/v_Params\.x \* 10 \+/, 'v_Params.x * 10.0 +') // foliagesway.frag phase
-    .replace(/v_Params\.y \* 5\)/, 'v_Params.y * 5.0)');   // foliagesway.frag phase
+    .replace(/v_Params\.y \* 5\)/, 'v_Params.y * 5.0)')   // foliagesway.frag phase
+    // sf54: workshop 2655151285 (3784528825 ripple1440p 层) + 旧版 shimmer 的
+    // 宽松 GLSL fixup — 官方引擎 (NVIDIA 系宽松编译器) 放行的 int 字面量/向量
+    // 截断写法，ANGLE 严格模式全报 wrong operand types。不修则整链编译失败 →
+    // ripple 层裸贴图 (86% 不透明黑) 上屏 = "中下方大块黑色图层"。
+    .replace(/\b2 \* abs\(/g, '2.0 * abs(')           // waterflow.frag blend/blend2
+    .replace(/\bfloat (\w+) = (\d+);/g, 'float $1 = $2.0;') // waterripple.frag `float mask = 1;`
+    .replace(/\(1 - (?=g_)/g, '(1.0 - ')              // perspective.vert vec2(1 - g_Top/g_Bottom…)
+    .replace(/, 1 - (?=g_)/g, ', 1.0 - ')             // perspective.vert `, 1 - g_Right`
+    .replace(/\(1 - ([ts])\)/g, '(1.0 - $1)')         // perspective.vert (1 - t)/(1 - s)
+    .replace(/= 1 \/ \(/g, '= 1.0 / (')               // perspective.vert `1 / (1 - t)` 型
+    .replace(/= 1 \/ ([ts]);/g, '= 1.0 / $1;')        // perspective.vert `1 / t;`、`1 / s;`
+    .replace(/\brotateVec2\(v_TexCoord,/, 'rotateVec2(v_TexCoord.xy,') // shimmer.frag vec4 实参截断
+    .replace(/\bvec3 (\w+) = (texSample2D\([^;]*?\));/g, 'vec3 $1 = $2.rgb;'); // shimmer.frag vec3 = vec4
   return head + body + '\n';
 }
 
@@ -501,13 +514,20 @@ function _weGLPApplyInitializer(sys, p, init) {
       break;
     }
     case 'colorrandom': {
-      // sf43 官方 (lwe createColorRandomInitializer): p.color =
-      // randomVec3(min,max) × instanceOverride.colorn — colorn 是逐通道颜色
-      //乘子 (3593194513 全部粒子带蓝调 colorn, 未乘 → 暖色/白花瓣色偏)。
+      // sf43 官方 (lwe createColorRandomInitializer) 取 min..max 之间的随机颜色
+      // × instanceOverride.colorn — colorn 是逐通道颜色乘子 (3593194513 全部
+      // 粒子带蓝调 colorn, 未乘 → 暖色/白花瓣色偏)。
+      // sf56: 随机因子**整条 vec3 共用一个 t**(min→max 插值), 不做逐通道独立随机。
+      // 判据 (3302695207 官方实拍): 预设 snowperspective 的 colorrandom
+      // min=(255,255,255)/max=(95,98,100) 是"白↔浅灰"的细微变化; 逐通道独立
+      // 随机会产生 (0.37,1.0,0.70) 这类彩虹色 —— 实测我们的雪花呈绿/青/黄色,
+      // 而官方实拍里雪花一律白偏蓝、无绿/黄色点。lwe randomVec3 逐通道随机属其
+      // 自身误差, 以官方输出为准 (同 §10.3 "分歧以官方为准"口径)。
+      const t = rng();
       p.color = [
-        (init.min[0] + rng() * (init.max[0] - init.min[0])) * init.k * (sys.colorMul ? sys.colorMul[0] : 1),
-        (init.min[1] + rng() * (init.max[1] - init.min[1])) * init.k * (sys.colorMul ? sys.colorMul[1] : 1),
-        (init.min[2] + rng() * (init.max[2] - init.min[2])) * init.k * (sys.colorMul ? sys.colorMul[2] : 1),
+        (init.min[0] + t * (init.max[0] - init.min[0])) * init.k * (sys.colorMul ? sys.colorMul[0] : 1),
+        (init.min[1] + t * (init.max[1] - init.min[1])) * init.k * (sys.colorMul ? sys.colorMul[1] : 1),
+        (init.min[2] + t * (init.max[2] - init.min[2])) * init.k * (sys.colorMul ? sys.colorMul[2] : 1),
       ];
       break;
     }
@@ -942,7 +962,7 @@ function _weGLPFillRopeVerts(sys, f32, ps, CW, CH, texW, texH) {
   return n;
 }
 
-const _WE_GL_VERSION = 9; // sf51 spritesheet 图像逐帧轮播 + sf52 鼠标 object-fit 映射 — 与 host SCENE_GL_ENGINE 同步 (sf53 粒子 v 向修复为纯客户端 shader 语义修正, 不改协议, 版本号保持 9)
+const _WE_GL_VERSION = 10; // sf54: colorBlendMode 9 (BlendAdd) present 加性合成 + 带效果木偶走网格路径采样效果链输出 + assemble int 字面量 fixup 扩展 (workshop 2655151285 waterflow/waterripple/perspective + shimmer) — 与 host SCENE_GL_ENGINE 同步
 
 // ---------- W4: 木偶网格（绑定姿态静态渲染；MDLA 动画属实验层）----------
 // CPU puppet.js 语义: 网格顶点为相对对象中心的局部像素坐标 (y 向上);
@@ -1275,8 +1295,19 @@ function createSceneGLRenderer(opts) {
     gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, ibo);
     gl.bufferData(gl.ELEMENT_ARRAY_BUFFER, indices, gl.STATIC_DRAW);
     // sf42: 蒙皮数据 (CPU _skinPuppet 同款语义; payload.rt 已物化每帧世界 RT)
+    // 层 = 对象的 animationlayers (visible 过滤) —— **不做"默认层0"兜底**:
+    // 官方语义里动画由对象挂的层驱动, 未挂层的 puppet 保持绑定姿态 (= raw
+    // 网格顶点 = 对象 rect = 作者构图基准)。早期兜底"无层就播动画0"会把
+    // "动画帧0 ≠ bind" 的模型整体搬走: 3302695207 人物 根骨帧0 恒为
+    // (864.2,-103.3) 而 bind 为 (1311.2,600.7) → 全网格平移 (-447,-704)
+    // 场景单位 (画布 -223/-352 px) — 人物下半身被推出画布下沿、脱开扫帚,
+    // 即"部件位置严重异常"。同库其余带动画 puppet 全部显式挂层 (38/38),
+    // 该兜底只在本壁纸生效过 → 去掉它对既有壁纸零影响。
+    const animLayers = Array.isArray(obj.animationlayers)
+      ? obj.animationlayers.filter((l) => l.visible !== false)
+      : [];
     let skin = null;
-    if (hasAnim && payload.vertexCount <= 4096) {
+    if (hasAnim && animLayers.length && payload.vertexCount <= 4096) {
       const vc = payload.vertexCount;
       const nb = payload.bones.length;
       // 蒙皮兼容性校验 (CPU 同款): 权重 0..1 且索引 < 骨数, 否则保持绑定姿态
@@ -1295,10 +1326,7 @@ function createSceneGLRenderer(opts) {
           bi: payload.blendIndices, bw: payload.blendWeights,
           bindRT: payload.bindRT, bindInv: payload.bindInv,
           animations: payload.animations,
-          // 层: manifest animationlayers (visible 过滤) 或默认层0
-          layers: (Array.isArray(obj.animationlayers) && obj.animationlayers.length
-            ? obj.animationlayers.filter((l) => l.visible !== false)
-            : [{ animation: 0, blend: 1, rate: 1, additive: false }]),
+          layers: animLayers,
           baseVerts: verts.slice(),
           lastFrameKey: -1,
           // 动画选择: 层.animation 是 id — 单动画 MDL 恒用 0; 多动画按层序
@@ -1519,6 +1547,27 @@ function createSceneGLRenderer(opts) {
   }
 
   // uniform 值转换（附录 §5）：float=Number；vecN=空白分隔 split；单数字播撒
+  // sf54: 程序活跃 uniform 的 name→分量数映射 (构建期一次; 链接器已剔除的
+  // uniform 不在表内 — 调用方按缺省跳过裁剪, 与旧行为一致)。
+  function _weGLActiveUniformArity(prog) {
+    const map = new Map();
+    try {
+      const n = gl.getProgramParameter(prog, gl.ACTIVE_UNIFORMS) || 0;
+      for (let i = 0; i < n; i++) {
+        const info = gl.getActiveUniform(prog, i);
+        if (!info) continue;
+        const name = String(info.name || '').replace(/\[0\]$/, '');
+        const arity = info.type === gl.FLOAT_VEC4 ? 4
+          : info.type === gl.FLOAT_VEC3 ? 3
+          : info.type === gl.FLOAT_VEC2 ? 2
+          : (info.type === gl.FLOAT || info.type === gl.INT || info.type === gl.BOOL
+            || info.type === gl.SAMPLER_2D) ? 1
+          : 0; // mat4 等不在 matUniforms 通道
+        if (arity > 0) map.set(name, arity);
+      }
+    } catch { /* 查询失败 → 不裁剪 (旧行为) */ }
+    return map;
+  }
   function convertUniform(type, raw) {
     if (raw == null) return null;
     const nums = (typeof raw === 'number') ? [raw]
@@ -1708,13 +1757,15 @@ function createSceneGLRenderer(opts) {
     };
     // W2: 每效果编译隔离 — 单个效果 shader 编译/链接失败只跳过该链条目
     // (链输入原样传给下一 pass), 不拖垮整个对象/场景; 失败记配置页提醒。
+    // 返回 {pe, err}: err 供"整效果整组剔除"判定复用 (见 buildResources)。
     const safeProgramFor = (ef, objName) => {
       try {
-        return programFor(ef);
+        return { pe: programFor(ef), err: null };
       } catch (e) {
+        const msg = (e && e.message) ? e.message : String(e);
         mark(objName || '?', 'effect:' + (ef.dir || ef.shader),
-          'shader 编译/链接失败，已跳过该效果: ' + (e && e.message ? e.message : e));
-        return null;
+          'shader 编译/链接失败，已跳过该效果: ' + msg);
+        return { pe: null, err: msg };
       }
     };
     const presentProg = linkProgram(
@@ -1943,12 +1994,15 @@ function createSceneGLRenderer(opts) {
       const mainFull = await loadOne(obj.mainTexture, false, true, obj.spritesheet === true); // slot0 CLAMP+mipmap（§2.6/§11-⑤）
       const sheet = mainFull.sheet || null;
       const mainTexEntry = sheet ? sheet.entries[0] : mainFull;
-      // W4: 木偶网格 (绑定姿态静态渲染; MDLA 动画属实验层)。带效果的 puppet
-      // (3735447194 泡-中/05手-下/06手-上) 走 image 路径 — CPU renderPuppet
-      // 本就不 applyEffects, image 路径反而保留官方设计的效果, 取舍对齐 W4
-      // 设计 §4。拉取/解析失败 → 回退 image 路径 (W3 前行为) + degraded。
+      // sf54: 木偶网格 (绑定姿态渲染 + sf42 蒙皮动画)。带效果的 puppet 同样走
+      // 网格路径 — 效果链先在【贴图集空间】跑 (官方语义: mask 画在 sheet 空间,
+      // 本场景 Girl 19×waterwaves mask 1369×1370 = sheet 2738×2741 半分辩率),
+      // present 时网格采样链输出 FBO (下方 `if (o.puppetMesh)` 绑 _weOutputs[i])。
+      // W4 旧取舍 (带效果 puppet 走 image 路径平铺整张 sheet) 对部件散列 atlas
+      // (3784528825 Girl/Dragon Head) 是灾难 — "人物部件凌乱"根因。
+      // 拉取/解析失败 → 回退 image 路径 (W3 前行为) + degraded。
       let puppetMesh = null;
-      if (obj.type === 'puppet' && obj.puppet && !(obj.effects || []).length) {
+      if (obj.type === 'puppet' && obj.puppet) {
         try {
           const payload = await fetchJson(BASE + '/scene-puppet/' + encodeURIComponent(token) + '/' + obj.puppet.objIdx, 8000);
           puppetMesh = _weGLBuildPuppetMesh(payload, obj, oi);
@@ -1958,25 +2012,59 @@ function createSceneGLRenderer(opts) {
             '木偶数据加载失败，按静态贴图渲染: ' + (e && e.message ? e.message : e));
         }
       }
-      const programs = (obj.effects || []).map((ef) => {
-        const pe = safeProgramFor(ef, obj.name);
-        return pe ? { ef, ...pe } : null;
-      }).filter(Boolean); // W2: 编译失败的效果已被隔离剔除
+      // W2 + sf55: 效果链以【效果】为单位整组编译 —— 一个效果 = 同一 `dir`
+      // 的连续若干 pass (godrays 实测 5 个: downsample2→cast→gaussian×2→
+      // combine), 这些 pass **内部串联**: 中间某个 pass 编译失败时若只剔它,
+      // 后续 pass 会把"效果内部的中间缓冲"当成链输入继续跑 → 整条链的最终
+      // 输出是中间结果而非合成图 (3302695207 背景 snow0 在实验开关下正是
+      // 如此: depthparallax/godrays_cast/gaussian/combine 全失败, 只剩
+      // godrays_downsample2 的亮部提纯被当背景 → 背景整块变黑、只剩太阳亮斑)。
+      // 整组剔除 = "该效果不生效"(链输入原样传给下一个效果), 与未支持效果
+      // 同语义; 全部 pass 都能编译的效果链逐位不变 (库内既有壁纸零影响)。
+      const programs = [];
+      {
+        const passList = (obj.effects || []).map((ef) => ({ ef, ...safeProgramFor(ef, obj.name) }));
+        for (let i = 0; i < passList.length;) {
+          const dir = passList[i].ef && passList[i].ef.dir;
+          let j = i;
+          while (j < passList.length && passList[j].ef && passList[j].ef.dir === dir) j++;
+          const group = passList.slice(i, j);
+          const bad = group.filter((g) => !g.pe);
+          if (bad.length) {
+            mark(String(obj.name || ('对象' + oi)), 'effect:' + (dir || (bad[0].ef && bad[0].ef.shader) || '?'),
+              `效果的部分 pass 编译失败 (${bad.length}/${group.length})，整个效果已跳过（链输入原样传递）: ${bad[0].err || 'shader 不可用'}`);
+          } else {
+            for (const g of group) programs.push({ ef: g.ef, ...g.pe });
+          }
+          i = j;
+        }
+      }
       // P2-7: 材质常量构建期一次预转换 — 旧实现在 renderObjectChain 每帧每 pass
       // split/Number 转换（csv 值 + 类型转换 + 元注释 default 兜底，附录 §5 同款
       // 逻辑前移；constants/uniform 位置构建后均不变）。同名跨阶段冲突按片元
       // 语义喂值（uniformsFrag 优先；GL 同名合一位置）。
       for (const p of programs) {
         p.matUniforms = [];
+        // sf54: 按 GL 活跃 uniform 的实际 arity 裁剪/补齐常量值 — 元注释
+        // "type":"color" 恒产 4 分量，但 shader 声明多为 vec3
+        // (waterripple g_SpecularColor / shimmer u_color) → uniform4fv 每帧
+        // GL_INVALID_OPERATION 且常量从未生效。meta 类型不可信时以链接器为准。
+        let arityMap = null;
         for (const [name, u] of Object.entries(p.sm.uniforms || {})) {
           if (u.type === 'sampler2D') continue;
           const uu = (p.sm.uniformsFrag && p.sm.uniformsFrag[name]) || u;
           if (!uu.material) continue;
           let raw = p.ef.constants[uu.material];
           if (raw === undefined && uu.default !== undefined) raw = uu.default;
-          const v = convertUniform(uu.type, raw);
+          let v = convertUniform(uu.type, raw);
           const loc = p.locs[name];
           if (v == null || loc == null) continue; // null loc = setU no-op 语义不变
+          if (!arityMap) arityMap = _weGLActiveUniformArity(p.prog);
+          const arity = arityMap.get(name);
+          if (arity === 3 && v.length === 4) v = v.slice(0, 3);
+          else if (arity === 4 && v.length === 3) v = [v[0], v[1], v[2], 1];
+          else if (arity === 2 && v.length > 2) v = v.slice(0, 2);
+          else if (arity === 1 && v.length > 1) v = [v[0]];
           p.matUniforms.push({ loc, v: v.length === 1 ? v[0] : v });
         }
       }
@@ -2356,6 +2444,8 @@ function createSceneGLRenderer(opts) {
       // W4: 木偶网格 — 同 presentProg/blend, 仅 VAO/MVP 不同 (网格顶点已烘
       // 旋转, MVP 局部 scene→NDC); 画完 VAO 已切走 → presentBound=false 让
       // 后续图像走 restore 重绑 quad。
+      // sf54: 带效果的木偶采样效果链输出 (_weOutputs[i]; 链在贴图集空间跑,
+      // 网格 UV 直采结果) — 无效果时 = mainTexEntry, 行为与 W4 逐位一致。
       if (o.puppetMesh) {
         const pm = o.puppetMesh;
         // sf42: 骨骼动画 — 逐帧蒙皮重写顶点 (跳变帧率=层 rate×30fps 循环)
@@ -2369,7 +2459,7 @@ function createSceneGLRenderer(opts) {
         }
         if (!pm.vao) pm.vao = buildPuppetVao(pm);
         gl.bindVertexArray(pm.vao);
-        gl.bindTexture(gl.TEXTURE_2D, o.mainTexEntry.tex);
+        gl.bindTexture(gl.TEXTURE_2D, _weOutputs[i].tex);
         if (!pm.mvp || pm.mvpW !== CW || pm.mvpH !== CH) {
           pm.mvp = _weGLPuppetMVP(o.obj, CW, CH, layoutOrtho, pm.mvp || new Float32Array(16));
           pm.mvpW = CW;
@@ -2378,7 +2468,11 @@ function createSceneGLRenderer(opts) {
         gl.uniformMatrix4fv(res.presentLocs.u_MVP, false, pm.mvp);
         gl.uniform1f(res.presentLocs.u_ObjectAlpha, o.geo.alpha);
         gl.uniform1f(res.presentLocs.u_Brightness, o.geo.brightness);
+        // sf54: colorBlendMode 9 (BlendAdd) — 未夹取时 dst+src·α 与官方逐位等价
+        const cbmAddP = Number(o.obj.colorBlendMode) === 9;
+        if (cbmAddP) gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
         gl.drawElements(gl.TRIANGLES, pm.indexCount, gl.UNSIGNED_SHORT, 0);
+        if (cbmAddP) gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
         presentBound = false;
         continue;
       }
@@ -2397,7 +2491,12 @@ function createSceneGLRenderer(opts) {
       gl.uniformMatrix4fv(res.presentLocs.u_MVP, false, g.mvp);
       gl.uniform1f(res.presentLocs.u_ObjectAlpha, g.alpha);
       gl.uniform1f(res.presentLocs.u_Brightness, g.brightness);
+      // sf54: colorBlendMode 9 (BlendAdd) — 加性合成 (dst+src·α);
+      // 3784528825 ripple1440p 黑底水纹层靠它隐形黑底、只留波环高光。
+      const cbmAdd = Number(o.obj.colorBlendMode) === 9;
+      if (cbmAdd) gl.blendFunc(gl.SRC_ALPHA, gl.ONE);
       gl.drawElements(gl.TRIANGLES, 6, gl.UNSIGNED_SHORT, 0);
+      if (cbmAdd) gl.blendFunc(gl.SRC_ALPHA, gl.ONE_MINUS_SRC_ALPHA);
     }
     gl.disable(gl.BLEND);
   }
@@ -2465,7 +2564,7 @@ function createSceneGLRenderer(opts) {
   // ── GPU 抓帧 (静态帧缓存回填, 2026-09-02 决策) ─────────────────────────
   // captureFramePNG(): 排队到下一渲染 tick, 同帧 readPixels → 行序翻转 →
   // 2D canvas → toBlob('image/png')。供 client 在 GL ready 后回填该壁纸的
-  // sf37 缓存槽 (仅空槽写入, 每壁纸一份)。
+  // 静态帧缓存槽 (键版本随 host 提取管线滚动, 当前 sf39; 仅空槽写入, 每壁纸一份)。
   const captureWaiters = [];
   function captureIntoBlob(done) {
     const w = canvas.width, h = canvas.height;
