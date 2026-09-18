@@ -30,6 +30,13 @@ const TEST_CACHE_DIR = join(root, '.test-cache', 'frames');
 process.env.DSH_WE_CACHE_DIR = TEST_CACHE_DIR;
 const pkgExtract = await import(pathToFileURL(resolve(root, 'lib', 'pkg-extract.js')).href);
 
+// 场景帧缓存键前缀归 lib/index.js 的 PIPELINE_VERSION 所有 (常量定义在 lib/index.js:2174,
+// 键在 :3027 组装为 `<版本>_<gpu 标志>_<base64url(abs)>_<mtime>`) —— 这里从源码推导而非
+// 写死字面量: 渲染管线升版时断言自动跟随, 不会再残留 sf33_/sf34_ 这类过期前缀。
+// 找不到常量时置 null, 由下方 '... derived ...' 断言直接报出来。
+const PIPELINE_VERSION = (/^\s*const PIPELINE_VERSION\s*=\s*'([^']+)'/m
+  .exec(readFileSync(resolve(root, 'lib', 'index.js'), 'utf8')) || [])[1] || null;
+
 let passed = 0;
 let failed = 0;
 const results = [];
@@ -385,8 +392,8 @@ async function runHandler(route, url) {
   if (done && typeof done.then === 'function') await done;
   if (!res.__state.ended) {
     // 3840×2160 全场景渲染 (worker + 全分辨率效果) 冷缓存实测 20-30s — 8s 会超时
-    // 并误报 0B。放宽到 90s。(移植自 fork 2081b4b 线的等待预算; 缓存前缀断言仍
-    // 保留本线更严格的写法 — 本仓库 PIPELINE_VERSION 为 sf35a。)
+    // 并误报 0B。放宽到 90s。(移植自 fork 2081b4b 线的等待预算; 缓存键前缀断言
+    // 改为从 lib/index.js 的 PIPELINE_VERSION 推导 —— 见脚本顶部与下方断言。)
     await new Promise((resolveFn) => {
       const t = setTimeout(resolveFn, 90000);
       res.on('finish', () => { clearTimeout(t); resolveFn(); });
@@ -411,9 +418,16 @@ if (token) {
   const ctype = firstRes.__state.headers['Content-Type'] || firstRes.__state.headers['content-type'] || '';
   check('scene-frame 200 + payload', okFirst, 'status=' + firstRes.__state.status + ' ' + firstRes.__state.body.length + 'B ' + ctype);
   check('scene-frame mime', /image\/(jpeg|png)/.test(ctype), ctype);
+  // 缓存键前缀必须来自 lib/index.js 的 PIPELINE_VERSION (不写死字面量)。
+  check('cache-key prefix derived from lib/index.js PIPELINE_VERSION', Boolean(PIPELINE_VERSION),
+    PIPELINE_VERSION || 'PIPELINE_VERSION not found in lib/index.js');
   // cache file written under the plugin data dir (env-overridden for tests)
+  // 键形如 <PIPELINE_VERSION>_<gpu 标志>_<base64url(abs)>_<mtime>.png|jpg —— gpu 段
+  // 夹在版本与 token 之间, 所以只断言「版本前缀 + token」, 不假定两者的相对位置。
   const cacheDir = TEST_CACHE_DIR;
-  const cached = existsSync(cacheDir) ? readdirSync(cacheDir).filter((f) => f.startsWith('sf33_' + token + '_')) : [];
+  const cached = existsSync(cacheDir)
+    ? readdirSync(cacheDir).filter((f) => f.startsWith(PIPELINE_VERSION + '_') && f.includes('_' + token + '_'))
+    : [];
   check('frame cached on disk', cached.length >= 1, cacheDir + ' [' + cached.join(', ') + ']');
 
   // Second call must hit the cache (handler still returns the payload).
