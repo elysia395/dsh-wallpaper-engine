@@ -32,7 +32,73 @@ macOS 版本由 [Jerry（@ruijiaang-lab）](https://github.com/ruijiaang-lab)维
 - 请使用目标分支与 DSH profile 要求的 Node.js 版本；当前 macOS 包要求 Node.js 24 或更高版本。
 
 > **不要直接改 `lib/client.js` 做"热补丁"验证**——它只是构建产物，下次 `npm run build` 会整体覆盖，
-> 补丁即丢失（2026-08-30 曾因此丢失 sceneVideo 健壮性修复，见 TODO.md）。任何行为改动先落 `src/client.js`。
+> 补丁即丢失（2026-08-30 曾因此丢失 sceneVideo 健壮性修复）。任何行为改动先落 `src/client.js`。
+
+## Install a local dev build / 从本地源码安装（开发者）
+
+### 1. Get the code (`checkout`) / 取得源码
+
+> *checkout* simply means "get a copy of the source code into a folder on your machine": click **Code → Download ZIP** on the GitHub page and unzip it, or clone it with Git:
+>
+> ```sh
+> git clone https://github.com/elysia395/dsh-wallpaper-engine.git
+> ```
+>
+> You then have a folder containing `package.json`, `lib/`, `src/` and `cordis.patch.yml` — called **the plugin folder** below.
+
+> *checkout* 的意思很简单：把源代码下载 / 复制一份到你电脑的某个文件夹里。通常在这个 GitHub 页面点 **Code → Download ZIP** 下载并解压，或用 Git 克隆：
+>
+> ```sh
+> git clone https://github.com/elysia395/dsh-wallpaper-engine.git
+> ```
+>
+> 完成后你会得到一个包含 `package.json`、`lib/`、`src/`、`cordis.patch.yml` 的文件夹。下文把这个文件夹称作**插件文件夹**。
+
+### 2. Install it using its folder path (`link:`) / 用文件夹路径安装（`link:`）
+
+> `link:` tells `dsh` (which forwards the command to `pnpm`) to make a *link* to your local plugin folder instead of downloading a package from the internet — so edits + `npm run build` take effect without reinstalling.
+>
+> `link:` 表示：告诉 `dsh`（它会把命令转发给 pnpm）去**连接你本地那个插件文件夹**，而不是从网上下载一个包。好处是改完代码并重新构建后，改动能直接生效，不用反复重装。
+
+Replace `<插件文件夹绝对路径>` with the **full path of your plugin folder** (the "address bar" path you see when you open that folder in Explorer / your file manager):
+
+把命令里的 `<插件文件夹绝对路径>` **替换成你插件文件夹的完整路径**（就是资源管理器地址栏里显示的那串路径）：
+
+```sh
+dsh plugin --profile web add link:<插件文件夹绝对路径>
+```
+
+**Concrete example** —假设你的插件文件夹路径像 `D:\dev\dsh-wallpaper-engine` 这样：
+
+```sh
+dsh plugin --profile web add link:D:\dev\dsh-wallpaper-engine
+```
+
+You can also use a relative path if your shell is already in the folder's parent / 如果你已经 `cd` 到了插件文件夹的上一级，也可以用相对路径：
+
+```sh
+dsh plugin --profile web add link:./dsh-wallpaper-engine
+```
+
+> **Which exact path to fill in?** It must be the **folder that contains `package.json`** — not the path to `package.json` itself, and not any file inside. It is the same value you would paste into Explorer's address bar.
+>
+> **该填哪个确切的路径？** 必须是**包含 `package.json` 的那个文件夹**——不是 `package.json` 文件本身的路径，也不是它里面任何单个文件的路径。
+
+> Why prefer `link:` over `file:`? `link:` creates a live link to your source folder, so edits to `src/client.js` + `npm run build` take effect without reinstalling; `file:` packs a static snapshot, which needs a re-add after every change. Both work for a first install.
+>
+> 为什么推荐 `link:` 而不用 `file:`？`link:` 是和你的源码文件夹**建立实时连接**，改完 `src/client.js` 并 `npm run build` 后直接生效，无需重装；`file:` 则是打包成一份静态快照，每次改动都要重新 add。首次安装两者都可以。
+
+### 3. Restart / 重启确认
+
+Then restart `dsh web`. The host plugin becomes a bundle layer and the client plugin auto-loads (`dsh.client.immediately: true`).
+
+然后重启 `dsh web`。host 端会成为 bundle 层，client 端会自动加载（`dsh.client.immediately: true`）。
+
+If Steam is installed in a non-standard location, the host auto-detects it via `libraryfolders.vdf` — nothing further is required. / 如果 Steam 装在非标准位置，host 会通过 `libraryfolders.vdf` 自动探测，无需额外配置。
+
+> **注意 profile 与「应用必须先关闭」**：上面的示例用 `--profile web`；若目标是桌面端 profile，请改成 `--profile desktop`，并务必**先完全关闭应用**再安装（应用运行期间安装会停在 `startup-unconfirmed`，恢复状态会在下次启动时自动回滚，见上文「从唯一源码构建」）。
+
+---
 
 ## Verify before opening a PR / 提交 PR 前验证
 
@@ -72,8 +138,9 @@ UI 改动还应说明实际测试过的 DSH 界面、浏览器或 DSH Desktop �
 - host 侧（`lib/index.js`、`lib/scene-renderer.js`、`lib/scene-render-worker.mjs` 等）是启动时
   加载的代码，**任何修改都要重启 DSH 才生效**；客户端（`src/client.js`）改动 `npm run build`
   后同样以重启为准。
-- 渲染管线变更后必须 bump `lib/index.js` 的 `sf*` 缓存键前缀 + 删旧缓存，否则旧帧命中导致
-  "修复不生效"；`scripts/verify-scene.mjs` 的断言前缀须同步（当前 `sf34_`）。
+- 渲染管线变更后必须 bump `lib/index.js` 的 `PIPELINE_VERSION`（`sf*` 缓存键前缀）+ 删旧缓存，否则旧帧
+  命中导致 "修复不生效"；`scripts/verify-scene.mjs` 的断言前缀**从该常量推导**（脚本里勿写死字面量），
+  因此 bump 后无需同步改动脚本。前缀值以 `lib/index.js` 的常量为唯一来源，文档不重复登记它。
 
 ### UTF-8 无 BOM 铁律
 
@@ -88,11 +155,11 @@ BOM（EF BB BF）会让 `JSON.parse` 直接抛错（2026-08-23 曾致 DSH Deskto
 
 ### 排障路径速查
 
-- DSH Desktop 错误日志：`C:\Users\Kai\AppData\Roaming\DSH Desktop\logs\dsh-<date>.error.log`
-- 插件安装恢复状态：`C:\Users\Kai\AppData\Roaming\DSH Desktop\plugin-install-recovery\state.json`
+- DSH Desktop 错误日志：`%APPDATA%\DSH Desktop\logs\dsh-<date>.error.log`
+- 插件安装恢复状态：`%APPDATA%\DSH Desktop\plugin-install-recovery\state.json`
   （应用运行期间执行 CLI 安装 → `startup-unconfirmed` 自动回滚；正确流程：应用完全关闭 →
   `dsh plugin --profile <p> add link:<path>` → 重启确认 `verified`）
-- 场景帧缓存：`C:\Users\Kai\.dsh-wallpaper-engine\cache\frames\`；抽帧转码缓存同目录 `transcodes/`。
+- 场景帧缓存：`%USERPROFILE%\.dsh-wallpaper-engine\cache\frames\`；抽帧转码缓存同目录 `transcodes/`。
 
 ---
 

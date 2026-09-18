@@ -2796,9 +2796,11 @@ function WallpaperPicker(props) {
     return () => { document.body.style.overflow = prev; };
   }, [sel.pickerOpen]);
 
-  // ── 页签状态：调节面板分六个域（壁纸/外观/字体/吉祥物/效果/高级），每份
-  //    实例独立记忆（设置页与仓库抽屉互不影响）；只存 localStorage，不进
-  //    config.json。useState 必须在下方早退分支之前调用（Rules of Hooks）。 ──
+  // ── 页签状态：调节面板分六个域（壁纸/外观/字体/吉祥物/效果/高级）。设置页与
+  //    仓库抽屉**共用同一个 localStorage 键**（PICKER_TAB_KEY）—— 两边初始读到
+  //    的是同一个已保存页签，任一处切换都会写回该键（故不是"各自独立记忆"）；
+  //    只存 localStorage，不进 config.json。
+  //    useState 必须在下方早退分支之前调用（Rules of Hooks）。 ──
   const [activeTab, setActiveTab] = React.useState(readSavedPickerTab);
   const switchTab = (id) => {
     if (!PICKER_TABS.some((t) => t.id === id) || id === activeTab) return;

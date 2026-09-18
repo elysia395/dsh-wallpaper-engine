@@ -6,54 +6,26 @@
 
 A DSH bundle that turns your **Wallpaper Engine** wallpapers into the **background of the DSH web GUI** (`dsh web`).
 
-> ✅ **Improved: occasional full-screen white flash in immersive windows** (v0.6.4, keeps full frosted glass)
-> Older builds could flash the **whole window white** when you clicked the dialog or typed in an **immersive fullscreen window** opened via a **desktop shortcut** (standalone / kiosk) — under **hardware acceleration**, Chromium's compositor occasionally paints the backdrop white while it re-composites over the wallpaper.
-> **v0.6.4 keeps reducing the compositing layers**: the repo panel is lazy-mounted when closed, the rope has no permanent filter, and the wallpaper media no longer forces a transform compositing layer by default — whilst **keeping the full frosted glass**. Normal browser tabs are unaffected and keep the full frosted glass + hardware acceleration.
-> The plugin shows a one-time notice (once per version) about this.
-
-It discovers the Wallpaper Engine install on your machine, lists its wallpapers, and renders them behind the DSH chat interface with an iOS-style **liquid glass** effect: Video (`.mp4`) plays live, Web/HTML loads in an iframe, and **Scene wallpapers are re-rendered as full-scene frames by the built-in renderer (object tree / textures / particles / shader effects)**. Since v0.2 it also adds:
-
-- **Modal wallpaper picker** — the thumbnail grid lives in a popup modal, so the settings page stays compact;
-- **Hide / restore (soft delete)** — hide wallpapers you don't want, restore them anytime; no source files are touched;
-- **Playback speed** — six native presets from 0.5x to 2x, instant, no media reload;
-- **Horizontal flip** — mirror the image (video / web / uploaded images);
-- **Custom uploads** — use your own local JPG / PNG / MP4 as a wallpaper, with a configurable storage location, fit modes, and automatic thumbnails for uploaded MP4s;
-- **Scene full-scene frames** (v0.6) — Scene wallpapers are fully replayed by a pure-JS scene renderer (object tree / textures / particles / shader effects) instead of being an unusable "not playable" entry.
-- **Liquid-glass settings page** (v0.3.1) — the settings UI is now a **first-level settings page** (following the dsh-web-ui-all skin-center design): the whole page is a customizable liquid-glass card with **accent color** (6 presets + a custom color picker) and **glass transparency** (0–60%). Both apply instantly and persist.
-- **Whole-settings-window liquid glass** (v0.3.2) — one click turns the **entire native DSH settings window** (dialog + left nav + ALL native sections: General / Models / Plugins / …) into liquid glass with your custom accent + transparency. With the「设置窗口液态玻璃」master switch on, the window background, nav active/hover, buttons, switches and links all follow the chosen accent and transparency; off restores the stock look.
-- **Unified glass tuning** (v0.3.3–v0.3.5) — the settings-window glass blur shares the SAME adjustment as the conversation bar: the **玻璃** (glass) slider (0–60 px) drives the blur radius of both the settings window and the composer/bubbles, with an identical saturation/brightness/contrast recipe. A new **玻璃颜色** (glass color) control lets you tint the glass BASE itself (6 presets + custom picker; defaults white in light / deep navy in dark; once picked, both themes use that color) — **配色** styles the interactive elements, **玻璃颜色** styles the glass itself.
-- **Settings persisted to a host file** (v0.4.0) — all settings (selected wallpaper, accent, transparency, layout, rotation, hidden, speed/flip, …) are now stored in `~/.dsh-wallpaper-engine/config.json` instead of browser localStorage, so they survive restarts, port changes (including DSH Desktop's random `--port 0` loopback port), browser-data clears and browser switches. Legacy localStorage config is migrated automatically on first launch.
-- **Edge-compatible rendering** — Edge (and only Edge) paints its built-in "download / cast" media-overlay toolbar over any *visible* `<video>` element, and there is no official switch to disable it. On Edge, video wallpapers are therefore rendered onto a `<canvas>` by default to keep that toolbar away. A new「Edge 兼容」toggle (right-aligned on the 紧凑布局 row, on by default) turns this off and falls back to the native `<video>` in every browser.
-- **Media-stream handle fix + async scan** (v0.4.1) — media/preview/scene-frame streams now release their file handles immediately when the client disconnects (fixes handles accumulating with every wallpaper switch/refresh, and Windows locking that prevented deleting/moving a wallpaper file). The wallpaper-library scan is fully async (fs.promises thread pool), so it no longer blocks the event loop (noticeably faster startup on WSL / big libraries). **WSL support**: Steam roots mounted under `/mnt/<drive>` are auto-detected, so a Harness running inside WSL can discover a Windows Wallpaper Engine install.
-- **Occlusion pause (battery-saving trio)** — like Wallpaper Engine's "pause when covered": pause the video wallpaper on minimize / tab-switch, on window focus loss, and/or on battery power, dropping the decoder engine to zero; it resumes automatically when you come back (web/iframe wallpapers are only throttled by the browser while hidden). Each toggle persists.
-- **Decode frame-rate cap (frame-skip transcode)** — high-fps sources (e.g. 4K120 H.264) are the dominant GPU cost (~60% Video Decode at 1.0x on a 4060). The **帧率上限** control (unlimited / 60 / 48 / 30 / 24 fps) has the host re-encode the wallpaper ONCE to the capped fps (timeline stays 1.0x normal speed, fully decoupled from 倍速) as **4K-preserving AV1**, with a **live download/transcode progress bar**; measured 4K120→24fps drops GPU from ~60% to **~15%**. ffmpeg is provisioned in three tiers: explicit path → **auto-download** (npmmirror + GitHub dual-source race, cross-platform asset table verified) → system PATH.
-- **Wallpaper-effect tuning sliders** (v0.6.x) — the **壁纸效果** area gains three new sliders: **亮度 / 对比度 / 饱和度** (wallpaper media filter), alongside wallpaper blur / scrim etc., so any wallpaper can be blended comfortably with the UI. All apply instantly and persist.
-- **Custom typography** (v0.6.7) — a new **字体** section in settings. The master switch defaults to off (stock dsh look); once enabled you can tune **font color / weight (100–900) / family** (default · YaHei · KaiTi · SimSun · SimHei · 行楷 Xingkai · monospace, each chip previewed in its own font). Error/danger/warning text keeps its system red; toggling the switch off restores defaults in one click.
-- **Wallpaper opacity** ([#82](https://github.com/elysia395/dsh-wallpaper-engine/issues/82)) — a new **壁纸透明度** slider in the effects tab (0–90 %, higher = more transparent): fades the whole wallpaper layer toward the page base colour — the IDEA background-image style of "visible but not overpowering". Complements the scrim, keeping text readable.
-- **Input caret color** ([#83](https://github.com/elysia395/dsh-wallpaper-engine/issues/83)) — a new **输入光标** section on the typography tab: when the caret is hard to see against the wallpaper, pick a high-contrast color from 6 presets or the custom picker (or **自动** to restore the native dsh caret). Applies to every text input and editable area, independent of the typography master switch.
-- **Custom uploads usable + honest playback state** ([#84](https://github.com/elysia395/dsh-wallpaper-engine/issues/84)) — fixes "my uploaded video wallpaper is blank and there is no resume button": ① `uploads/.meta.json` never records a `contentrating`, so uploads used to read as **unrated** while the rating filter defaults to **Everyone** — every custom upload was filtered out by default (absent from the grid, and rejected when the upload flow auto-applied it → blank wallpaper layer + a disabled 播放 button). An upload without a rating now counts as **Everyone**, so your own files work out of the box, while an explicit G / PG13 / R tag still filters normally. ② A refused `video.play()` (autoplay policy, a codec the browser cannot decode such as HEVC/10-bit, or a play() interrupted by the next src swap) used to be swallowed silently: the panel kept saying 「播放中」 and the only control was 「暂停」 — a wallpaper frozen on its first frame with no way to resume. The control now reflects the `<video>` element's REAL state, so it returns to 「播放」 (a working retry) with a readable reason, e.g. "cannot decode this video — use H.264", and it re-issues play() automatically once the media becomes ready (an aborted play() is the most common cause of a frozen wallpaper). ③ A wallpaper dropped by a filter now says which filter excluded it instead of leaving an unexplained blank.
-
 ![Main interface showcase](docs/images/main-interface.gif)
 
 > Wallpaper + scrim + iOS liquid glass rendered behind the DSH GUI.
 
-## ⚠️ Prerequisites for updating: ① latest DSH kernel ② latest better-sidebar (v0.7.2+)
+It discovers the Wallpaper Engine install on your machine, lists its wallpapers, and renders the *portable* ones behind the DSH chat interface with an iOS-style **liquid glass** effect. What you get out of the box:
 
-**Do NOT update this plugin until BOTH prerequisites are met.** v0.7.2 targets DeepSeek Harness **0.1.5-rc.1** (shipped in **DSH Desktop ≥ 2.0.7**) and requires **dsh-better-sidebar ≥ 0.19.0** (from 0.19 the right column plugs into the native right sidebar of harness 0.1.5; users still on the 0.1.2-rc.1 line should keep better-sidebar 0.18.x — do not mix). The correct update order:
+- **All four wallpaper types covered** — Video (`.mp4`) with hardware decoding, Web/HTML in an iframe, Scene replayed as a full-scene frame by the built-in renderer, Image via custom uploads (local JPG / PNG / MP4);
+- **One look, fully controllable** — accent colour, glass colour and transparency, liquid glass for the whole settings window and the sidebar, custom typography and input-caret colour; everything applies instantly and persists;
+- **Eight picture sliders** — wallpaper blur / brightness / contrast / saturation / wallpaper opacity / scrim / border / glass;
+- **Battery & performance** — occlusion pause (minimize / focus-loss / battery, three toggles) and a decode frame-rate cap (host-side frame-skip transcode that cuts hardware-decoder load sharply);
+- **Library management** — thumbnail picker modal, hide / restore (soft delete), content-rating and type filters, CD-rack compact layout, spinning vinyl record;
+- **Automatic rotation** — any number of user-defined lists, each with its own interval and playback order;
+- **Mascot pull-cord** — a rope along the top of the chat; pull it down to open the **wallpaper repo** drawer (six tabs of quick controls);
+- **Settings stored in a host file** (since v0.4.0) — they survive restarts, port changes, browser-data clears and browser switches.
 
-1. **Update DeepSeek Harness / DSH Desktop first**: check for updates via the desktop app's top-bar version info, or grab the installer from [GitHub Releases](https://github.com/anywhere-labs/dsh-desktop/releases);
-2. **Then update dsh-better-sidebar to 0.19.0+**: `dsh plugin --profile web add dsh-better-sidebar@latest`;
-3. **Finally update this plugin**: `dsh plugin --profile web add dsh-plugin-wallpaper-engine` (or click update in the plugin market).
+> The full feature list and the per-release change log live in **[`docs/CHANGELOG.md`](docs/CHANGELOG.md)** (Chinese-first, English section included).
 
-> 💡 Also update your **other DSH plugins at the same time**: older plugins may fail to load outright on harness 0.1.5 (an old dsh-better-sidebar was observed misbehaving on 0.1.5 due to API changes).
-
-If you updated out of order, bringing the kernel and better-sidebar back to their matching latest versions restores everything — no plugin rollback needed. The plugin also shows a one-time in-app notice per release.
-
-> 🐛 **v0.7.2 fixes the "right sidebar fully transparent" regression and extends the glass to the native right sidebar**: the harness 0.1.5 native sidebar panel paints `var(--dsw-alias-bg-base)` — the exact token this plugin sets to transparent while a wallpaper is active — and the native panel ships no frosted glass of its own, so after moving to better-sidebar 0.19 the whole right column went see-through. From v0.7.2 the native right sidebar is covered by the「侧栏液态玻璃」adaptation: the same **侧栏模糊 / 透明度 / 玻璃颜色** sliders drive it, and with the master switch off it falls back to the theme's opaque panel colour (no longer transparent).
-
-> ✅ **v0.7.1 has been verified on DSH Desktop v2.0.5 (harness 0.1.2-rc.1)**: host routes (inventory / media / scene-frame), the first-level settings section, the picker modal, video & scene wallpaper playback, the rope-dock drawer, and the liquid-glass effects all work in both Compatibility and Enhanced desktop modes. The APIs this plugin relies on (slots / webserver / theme variables) were verified unchanged on harness 0.1.5-rc.1 as well.
+> ⚠️ **Two prerequisites before you update this plugin**: ① the DSH kernel / DSH Desktop is current (harness 0.1.5-rc.1, DSH Desktop ≥ 2.0.7); ② dsh-better-sidebar ≥ 0.19.0 (if you are still on the older 0.1.2-rc.1 kernel, stay on 0.18.x — do not mix).
 >
-> 🐛 **v0.7.1 also fixes the rc.1 "swatches / vinyl record render as rounded rectangles" regression** ([#74](https://github.com/elysia395/dsh-wallpaper-engine/issues/74)): rc.1's theme layer ships a new `corner-shape.css` that applies `corner-shape: superellipse(1.5)` (squircle-ish corners) to **every element**, so any `border-radius:50%` circle renders as a rounded rectangle. The plugin now explicitly resets `corner-shape: round` on every circle / pill control it draws (swatches, vinyl record, slider thumbs, toggle knobs, font chips, …); on older harness builds the declaration is ignored, with no side effects.
+> The correct update order, the compatibility matrix and how to recover from updating out of order: **[`docs/UPGRADING.md`](docs/UPGRADING.md)**.
 
 ## Which wallpaper types are supported?
 
@@ -67,74 +39,8 @@ Wallpaper Engine wallpapers come in four types:
 | **Image** | — (this plugin's custom upload) | ✅ Yes — upload local JPG / PNG as a wallpaper |
 | **Application** | an injected external window | ❌ No |
 
-A Scene wallpaper's 3D scene is fully replayed by the plugin's **pure-JS scene
-renderer** (`lib/scene-renderer.js`, built from linux-wallpaperengine / repkg
-reverse-engineering): it parses `scene.pkg`'s object tree and renders every
-image layer (with CPU implementations of shader effects like waterwaves /
-waterripple / shake), the puppet skeletal meshes (bind pose), and the particle
-systems (emitters / initializers / operators / sprite drawing). Scene cards carry
-a 「静态帧」 badge in the picker.
+> A Scene wallpaper is rendered by the built-in **pure-JS scene renderer** into a **3840-wide** full-scene frame (height derived from the scene aspect — 2160 for a 16:9 scene; object tree / textures / puppet meshes / shader effects / particles); on failure it falls back step by step to the main-texture extraction, then to the workshop preview image. Implementation details, the host / client split and the complete HTTP route table: **[`docs/HOW-IT-WORKS.md`](docs/HOW-IT-WORKS.md)**.
 
-> **Expected result**: the renderer outputs a 3840×2160 full-scene frame
-> (background + water + back hair + character + umbrella + particles), close to
-> the original for photographic, illustration and animation-screenshot scenes.
-> On failure (pure shader/procedural scenes, exotic texture formats) it falls
-> back to the older main-texture extractor, then to the workshop preview image
-> (`preview.jpg`) — expected behaviour, not a defect.
-
-### Scene rendering: how it works
-
-- **Object tree**: parses `scene.pkg` (PKGV container + LZ4 entry chains) or a
-  loose `scene.json` directory, topologically sorts every object (image /
-  particle / text / sound) by dependencies / parent.
-- **image layers**: loads the material main textures (RGBA8888 / DXT1/3/5 …),
-  positions them in scene coordinates (origin / scale / angle accumulated down
-  the parent chain), and applies alpha / brightness.
-- **puppet meshes**: MDL (MDLV) mesh + bind-pose rasterization (software
-  raster + bilinear UV sampling + alpha compositing), so skeletal models like
-  the character / back hair display correctly.
-- **shader effect chain**: waterwaves (incl. the dual-wave DUALWAVES product) /
-  waterripple / shake are implemented in the CPU with the exact shader math;
-  mask textures are supported.
-- **particle systems**: boxrandom / sphererandom emitters, color / size / alpha /
-  lifetime / velocity / rotation initializers, movement / alphafade / sizechange /
-  turbulence / oscillate* operators, and sprite drawing.
-- **Cache**: results are cached at `~/.dsh-wallpaper-engine/cache/frames/`
-  keyed by `<version>_<path>_<mtime>` (override with `DSH_WE_CACHE_DIR`);
-  workshop updates and renderer upgrades invalidate the frame automatically.
-  First render takes ~3–4s, then near-instant on cache hit.
-
-## How it works
-
-- **Host half** (`lib/index.js`): a Cordis plugin that
-  1. locates the Wallpaper Engine install by reading Steam's `libraryfolders.vdf`
-     (so it works even when Steam is on a non-default drive),
-  2. enumerates wallpapers from `projects/defaultprojects`, `projects/myprojects`,
-     and `steamapps/workshop/content/431960/*`,
-  3. registers same-origin HTTP routes on the DSH webserver so the browser half
-     can fetch data and stream media directly:
-     - `GET /wallpaper-engine/inventory` → JSON list of wallpapers
-     - `GET /wallpaper-engine/media/<token>` → video / HTML (Range supported)
-     - `GET /wallpaper-engine/preview/<token>` → preview image
-     - `GET /wallpaper-engine/video-preview/<token>` → on-demand ffmpeg-extracted thumbnail for a custom MP4 upload (disk-cached)
-     - `GET /wallpaper-engine/scene-frame/<token>` → scene full-scene frame (pure-JS renderer output 3840×2160, falls back to main-texture extraction, PNG disk-cached)
-     - `POST /wallpaper-engine/upload` → upload a custom wallpaper (JPG / PNG / MP4, raw bytes)
-     - `POST /wallpaper-engine/remove` → remove an uploaded wallpaper
-     - `POST /wallpaper-engine/upload-dir` → change the upload directory (persisted to `~/.dsh-wallpaper-engine/config.json`, migrates existing files)
-     - `GET /wallpaper-engine/settings` → read plugin settings (v0.4.0)
-     - `PUT /wallpaper-engine/settings` → save plugin settings (v0.4.0, written to `~/.dsh-wallpaper-engine/config.json`)
-     - `GET /wallpaper-engine/media-info/<token>` → media metadata (resolution / codec / fps / duration, from a moov probe)
-     - `GET /wallpaper-engine/transcoded/<token>?fps=N` → frame-skip transcode stream (one-time ffmpeg re-encode, disk-cached)
-     - `GET /wallpaper-engine/transcode-progress/<token>?fps=N` → download / transcode progress (progress-bar polling)
-- **Client half** (`lib/client.js`): a browser module that fetches the inventory
-  and renders the selected wallpaper into a fixed layer *behind* the app columns,
-  plus a **first-level settings page** "Wallpaper Engine" (liquid-glass card,
-  picker modal, hide/restore, playback speed / flip, accent color + glass
-  transparency, and custom-upload management).
-- **Custom-upload storage**: uploaded files are written to a plugin-managed local
-  directory (default `~/.dsh-wallpaper-engine/uploads`, changeable from the
-  settings UI) and served through the same `/media` + `/preview` routes as WE
-  media — identical pipeline, survives restarts, no browser quota limits.
 
 ## Settings persistence (v0.4.0)
 
@@ -162,6 +68,11 @@ since v0.4.0 — no longer in browser localStorage.**
 - **Writes**: every settings change is persisted automatically (debounced
   200 ms); if the file is corrupted the plugin falls back to defaults and does
   not overwrite your file.
+- **What still lives in the browser**: only pure UI state — the **active tab**
+  shared by the settings page and the drawer (one `localStorage` key), plus the
+  mascot rope's **snap position**. Browser `localStorage` also acts as a **synchronous read
+  cache** and a fallback when the host routes are unreachable, but it is no longer
+  the source of truth for any setting.
 
 ## Install
 
@@ -187,115 +98,17 @@ Then restart `dsh web` and open **Settings → Wallpaper Engine**.
 
 ### For developers (running your own copy)
 
-**For most people you can skip this section.** You only need it if you want to
-work on the plugin's code yourself. The steps below assume you know what a command
-line and a *repository* (a code folder that is under Git version control) are.
-
-**1. Get the code (`checkout`)**
-
-> *What "checkout" means:* it just means "download/get a copy of the source code
-> into a folder on your machine." Typically you click **Code → Download ZIP** on
-> this GitHub page and unzip it, or clone it with Git:
->
-> ```sh
-> git clone https://github.com/elysia395/dsh-wallpaper-engine.git
-> ```
->
-> After this you have a folder that contains `package.json`, `lib/`, `src/`, and
-> `cordis.patch.yml`. That folder is what the rest of this section calls
-> **the plugin folder**.
-
-**2. Install it using its folder path (`link:`)**
-
-> *What `link:` means here:* it tells `dsh` (which forwards the command to `pnpm`)
-> to make a *link* to your local plugin folder instead of downloading a package
-> from the internet. The benefit: when you edit the code and rebuild, the change
-> shows up without reinstalling.
-
-Replace `<插件文件夹绝对路径>` below with the **full path of your plugin folder**
-(the "address bar" path you see when you open that folder in Explorer / your file
-manager):
-
-```sh
-dsh plugin --profile web add link:<插件文件夹绝对路径>
-```
-
-**Concrete example** — if your plugin folder is at a path like `D:\dev\dsh-wallpaper-engine`:
-
-```sh
-dsh plugin --profile web add link:D:\dev\dsh-wallpaper-engine
-```
-
-You can also use a relative path if your shell's current directory is already the
-folder's parent:
-
-```sh
-dsh plugin --profile web add link:./dsh-wallpaper-engine
-```
-
-> **Which exact path to fill in?** It must be the **folder that contains
-> `package.json`** — not the path to `package.json` itself, and not any file inside.
-> It is the same value you would paste into Explorer's address bar to open that folder.
-
-> Why prefer `link:` over `file:`? `link:` creates a live link to your source
-> folder, so edits to `src/client.js` + `npm run build` take effect without
-> reinstalling; `file:` packs a static snapshot, which needs a re-add after every
-> change. Both work for a first install.
-
-Then restart `dsh web`. The host plugin becomes a bundle layer and the client
-plugin auto-loads (`dsh.client.immediately: true`).
-
-If your machine has Steam installed in a non-standard location, the host auto-detects
-via `libraryfolders.vdf`. Nothing further is required.
+**For most people you can skip this section.** The full walkthrough for installing from a local
+checkout with `link:` (including what "checkout" means and which exact path to fill in) now lives in the
+**[contribution guide](CONTRIBUTING.md)** — you only need it if you want to work on the plugin's code yourself.
 
 ### Troubleshooting install failures
 
-`dsh plugin --profile web add ...` forwards the command to **pnpm**. If you see this error:
+Symptom-and-fix steps for the common install errors now live in
+**[`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md)**: a stale pnpm virtual store in the profile
+(`ERR_PNPM_UNEXPECTED_VIRTUAL_STORE`), `github:` installs rejected by the `allowBuilds` allowlist
+(`ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED`), and a "symptom → where to look first" table.
 
-```text
-[ERR_PNPM_UNEXPECTED_VIRTUAL_STORE] Unexpected virtual store location
-dsh: pnpm failed in profile directory C:\Users\xxx\.dsh-desktop\profiles\web
-```
-
-**This is not a problem with the plugin itself** (any plugin would fail the same way) — the pnpm
-dependency state of that profile directory has gone stale. pnpm stores the virtual-store path
-(an absolute path) in `node_modules\.modules.yaml`; if the profile directory was **moved / copied /
-restored from a backup**, or the pnpm version / `virtual-store-dir` config changed, the recorded path
-no longer matches, so pnpm refuses to install anything into that profile.
-
-**Fix (Windows PowerShell):**
-
-```powershell
-# 1) Quit the DSH desktop app first
-# 2) Remove the profile's dependency directory (only node_modules — config / installed plugin names are kept)
-Remove-Item "$env:USERPROFILE\.dsh-desktop\profiles\web\node_modules" -Recurse -Force
-# 3) Reinstall this plugin
-dsh plugin --profile web add dsh-plugin-wallpaper-engine
-```
-
-> Deleting just `node_modules\.modules.yaml` also works (pnpm recreates it and continues); removing
-> the whole `node_modules` is more thorough. If `.dsh-desktop` is touched by OneDrive / cloud sync /
-> migration tools, add it to the sync exclusion list to avoid a recurrence.
-
-If you see this error instead:
-
-```text
-[ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED] ... The git-hosted package "dsh-plugin-wallpaper-engine@0.6.8"
-needs to execute build scripts but is not in the "allowBuilds" allowlist.
-```
-
-**You used a `github:` install form** (e.g. `dsh plugin --profile web add github:elysia395/dsh-wallpaper-engine`).
-pnpm 11 blocks build scripts of git-hosted packages by default for supply-chain safety, and this
-plugin's git checkout needs the `prepare` script to build the client — so `github:` direct installs
-always fail. Use the **npm package name** instead (the published npm package is pre-built, no
-compile-time build needed):
-
-```sh
-dsh plugin --profile web add dsh-plugin-wallpaper-engine
-```
-
-> If your plugin hub (dsh-plugin-hub) generated a `github:` command, upgrade it to **v1.4.1+** — the
-> new version auto-resolves the npm package name and switches to the npm channel.
 
 ## Usage
 
@@ -303,8 +116,7 @@ dsh plugin --profile web add dsh-plugin-wallpaper-engine
 2. Open **Settings** and pick **Wallpaper Engine** from the left navigation (a first-level settings page, its own nav entry).
 3. Click **选择壁纸** to open the picker modal, then click a Video/Web/Scene wallpaper (or an uploaded image/video) in the thumbnail grid. It appears behind the app; close the modal via the backdrop, ESC, or the close button. Application wallpapers cannot be embedded in the web UI and are hidden from the grid.
 4. Use **暂停/播放** to pause a video wallpaper, and **关闭** to clear it.
-   The choice is remembered in your browser's `localStorage` (key
-   `dsh-wallpaper-engine:selection`).
+   The choice is persisted host-side to `~/.dsh-wallpaper-engine/config.json` (the browser's `localStorage` is only a sync cache and fallback — see 「Settings persistence」 below).
 
 ![Settings UI overview](docs/images/settings-ui.gif)
 
@@ -326,16 +138,16 @@ the 3–8 controls that belong there instead of a thirty-item single column:
 | **外观** (appearance) | accent, glass color, glass transparency, settings-window glass, sidebar glass & content surface |
 | **字体** (typography) | master switch + color / weight / family, input caret color |
 | **吉祥物** (mascot) | visibility switch, form cards (artwork doubles as a live preview), size slider |
-| **效果** (effects) | wallpaper blur / brightness / contrast / saturate / wallpaper opacity / scrim / border / glass, playback speed, fps cap, fit, flip, occlusion pause (an empty state guides you to pick a wallpaper first) |
+| **效果** (effects) | wallpaper blur / brightness / contrast / saturate / wallpaper opacity / scrim / border / glass, playback speed, fps cap, fit, flip, occlusion pause, beta scene animation / GPU render acceleration (scene wallpapers only, experimental) (an empty state guides you to pick a wallpaper first) |
 | **高级** (advanced) | compact layout, Edge compatibility |
 
-The pill indicator slides between tabs; the settings page and the drawer keep
-independent tab state (remembered in `localStorage`, never written to the config
-file). Long explanations moved into tooltips — each row keeps a one-line hint.
+The pill indicator slides between tabs; the settings page and the drawer share
+one stored tab (a single `localStorage` key — switching a tab in the settings page
+leaves the drawer opening on that same tab; never written to the config file). Long explanations moved into tooltips — each row keeps a one-line hint.
 
 ### Hide & restore (soft delete)
 
-Every wallpaper card has a **隐藏** button in its top-right corner — it only removes the wallpaper from the list, **never touches the source file**. Restore any wallpaper from the **已隐藏** tab in the modal (single restore or **全部恢复**); the **批量** button in the modal toolbar enters multi-select mode to hide several at once. Hidden state is persisted in `localStorage` (survives refresh/restart); hiding the currently playing wallpaper doesn't interrupt playback, and automatic rotation skips hidden wallpapers.
+Every wallpaper card has a **隐藏** button in its top-right corner — it only removes the wallpaper from the list, **never touches the source file**. Restore any wallpaper from the **已隐藏** tab in the modal (single restore or **全部恢复**); the **批量** button in the modal toolbar enters multi-select mode to hide several at once. Hidden state is persisted host-side with the rest of your settings (survives refresh / restart / browser switches); hiding the currently playing wallpaper doesn't interrupt playback, and automatic rotation skips hidden wallpapers.
 
 ### Content-rating & type filters
 
@@ -352,12 +164,13 @@ reproduce Wallpaper Engine's own categorisation:
   default filter would otherwise hide the user's own files entirely — absent
   from the grid and impossible to select).
 - **类型** (type) — filters by the embeddable type: **全部** (all) / **视频**
-  (video) / **网页** (web) / **图片** (image, custom uploads).
+  (video) / **网页** (web) / **图片** (image, custom uploads) / **场景** (scene,
+  static frame).
 
 Every option shows how many playable wallpapers currently match. Wallpapers
 outside the selected categories are dropped from the grid, the rotation editor
 and the rotation candidates — they are never auto-selected or rotated either.
-The choice persists in browser `localStorage`; the default is **Everyone**,
+The choice is persisted host-side to `config.json`; the default is **Everyone**,
 mirroring Wallpaper Engine's conservative first-run stance.
 
 > Note: the rating is read from each wallpaper file's `contentrating` field —
@@ -373,7 +186,7 @@ mirroring Wallpaper Engine's conservative first-run stance.
   card up and brings it to the front, the grid is tighter (~7 cards per row)
   and shows everything on ONE page with no pagination. OFF is the regular
   grid (fixed-height overlap-proof cards with pagination, default). The
-  choice persists in `localStorage`.
+  choice is persisted host-side to `config.json`.
 - **黑胶唱片 (vinyl record)**: next to the wallpaper selection there is a
   **rotating vinyl record** that uses the selected wallpaper's cover as the
   record label — it spins while the wallpaper plays and stops when paused
@@ -413,7 +226,7 @@ High-fps sources (e.g. 4K120 H.264) dominate GPU decode (~60% Video Decode at 1.
 | **Auto-download** | with no local ffmpeg, the first use downloads a pinned single-file build for the platform (Windows x64 / Linux x64·arm64 / macOS x64·arm64 etc., asset table verified) from a **dual-source race**: `npmmirror` (fast in CN) vs GitHub release (fast elsewhere), first success wins — streamed to disk, magic-byte/size verified, 5-minute per-source timeout, cached at `~/.dsh-wallpaper-engine/ffmpeg/`. `DSH_WE_FFMPEG_URL` overrides the source (self-hosted mirror / proxy). |
 | **System PATH** | falls back to a bare `ffmpeg`; if none exists the wallpaper silently stays on the original |
 
-> Transcoding uses **NVENC** (`av1_nvenc`, falling back to `h264_nvenc`) and requires an NVIDIA GPU + driver; without one the feature auto-disables (or falls back to slow software H.264). No ffmpeg or a failed transcode simply disables the feature — no side effects.
+> Transcoding uses **NVENC** (`av1_nvenc`, falling back to `h264_nvenc`) and requires an NVIDIA GPU + driver; without one the feature auto-disables. No ffmpeg or a failed transcode simply disables the feature — no side effects.
 
 ### Custom wallpapers
 
@@ -422,15 +235,15 @@ The **自定义壁纸** section uploads local images (JPG / PNG) or videos (MP4)
 - **Storage location**: files default to `~/.dsh-wallpaper-engine/uploads` (your home directory — usually the C: drive). Click **更改** to move storage to any drive (absolute path, `~` supported); existing files migrate automatically and the choice persists across restarts — recommended for users who don't want wallpaper data on the system drive.
 - **Format limit**: JPG / PNG / MP4 only; validated twice (browser + host) with a clear error message.
 - **Video thumbnails**: uploaded MP4s get an on-demand ffmpeg-extracted thumbnail in the picker (the first second is skipped to avoid black fade-ins), cached under `~/.dsh-wallpaper-engine/cache/video-previews/`; without ffmpeg the card keeps the "no preview" placeholder and playback is unaffected.
-- **Fit modes**: 覆盖 (cover) / 填充 (contain) / 居中 (center) / 拉伸 (fill) — applied to custom wallpapers only (WE wallpapers keep their intended cover framing).
+- **Fit modes**: 覆盖 (cover) / 填充 (contain) / 居中 (center) / 拉伸 (fill) — applied to every wallpaper type (web iframes don't read `object-fit`, so they are unaffected).
 - **Management**: each upload can be **移除** (confirm dialog, deletes the local file); uploaded wallpapers also support hide/restore, playback speed, and flip.
 - **Deduplication**: re-uploading an identical file is detected by content (SHA-256) and returns the existing entry — no duplicate copies pile up in the library.
 
 ### Automatic rotation (轮播列表)
 
-Rotation runs over **user-defined carousel lists** (the 自动轮播 group in the **壁纸** tab). Create any number of lists with **新建**, pick Video/Web wallpapers into each from the inventory, give each list its own switch interval (1, 5, 10, 30, 60 or 120 minutes) and order (顺序/随机), then enable **自动轮转** on the list you want active. Lists are persisted in your browser's `localStorage` and are fully client-side — rotation never depends on Wallpaper Engine's own `config.json` playlist paths.
+Rotation runs over **user-defined carousel lists** (the 自动轮播 group in the **壁纸** tab). Create any number of lists with **新建**, pick Video/Web wallpapers — or a Scene whose frame is available — into each from the inventory, give each list its own switch interval (1, 5, 10, 30, 60 or 120 minutes) and order (顺序/随机), then enable **自动轮转** on the list you want active. Lists are persisted host-side to `~/.dsh-wallpaper-engine/config.json`; **rotation runs entirely client-side** and never depends on Wallpaper Engine's own `config.json` playlist paths.
 
-At least two playable Video/Web wallpapers per list are required; manual changes reset the next timer; each list keeps its own cadence, so you can have one list switching every 5 minutes and another every 30. On first run, the first playable Wallpaper Engine playlist is imported automatically as a list so the feature works out of the box; **从 WE 播放列表导入** inside the editor imports any other playlist into the list being edited. Application wallpapers cannot be embedded in the web UI, so they are automatically excluded from rotation and hidden from the picker.
+At least two playable wallpapers per list are required (Video/Web, or a Scene served as a static frame); manual changes reset the next timer; each list keeps its own cadence, so you can have one list switching every 5 minutes and another every 30. On first run, the first playable Wallpaper Engine playlist is imported automatically as a list so the feature works out of the box; **从 WE 播放列表导入** inside the editor imports any other playlist into the list being edited. Application wallpapers cannot be embedded in the web UI, so they are automatically excluded from rotation and hidden from the picker; Scene wallpapers (playable as a static frame) can join rotation.
 
 ### Liquid-glass appearance (whole settings window + accent + transparency)
 
@@ -457,7 +270,8 @@ skin-center design):
 > the transparency — higher lets the wallpaper colour show through more clearly,
 > lower approaches solid. Browsers without `backdrop-filter` automatically fall
 > back to a high-opacity solid so text stays readable. All controls apply
-> instantly and persist in `localStorage`.
+> instantly and persist host-side to `config.json` (they survive restarts and
+> browser switches).
 
 ### Mascot (chat pull-cord)
 
@@ -533,10 +347,18 @@ The **效果** (effects) tab — available while a wallpaper is active — offer
 ## Configuration
 
 There is no model-visible tool or prompt text. The bundle adds zero tokens to the
-agent. Selection, hidden state, and rotation lists live in browser `localStorage`;
-no durable DSH settings are written. The only on-disk data is the **custom-upload
-files** (in the directory you chose) and `~/.dsh-wallpaper-engine/config.json`
-(~100 bytes) that remembers that directory.
+agent, and no **durable DSH setting** is written (the harness settings system is
+untouched). The plugin's own on-disk data is only:
+
+- `~/.dsh-wallpaper-engine/config.json` — **every plugin setting** (selected
+  wallpaper, hidden list, rotation lists, appearance / typography / effects
+  controls) plus the **upload directory**, i.e. 「Settings persistence」 above;
+- the **custom-upload files** and the **caches** — `uploads/` and
+  `cache/frames/`, `cache/transcodes/`, `cache/video-previews/`, `ffmpeg/` under the directories you chose
+  (the cache root can be overridden with `DSH_WE_CACHE_DIR`).
+
+Browser `localStorage` keeps only pure UI state (tab memory, rope position) and
+acts as a synchronous read cache / fallback for the config.
 
 **Environment variables**:
 
@@ -580,13 +402,27 @@ near-opaque fill:
 
 > The sidebar glass adaptation with the custom typography (行楷) applied at the same time.
 
+## Documentation
+
+| Document | Contents |
+|---|---|
+| **This page** (`README.en.md`) | Facade: capability overview, supported wallpaper types, install, the complete user guide (six tabs / eight sliders / appearance / mascot / typography / rotation / custom uploads) |
+| [`README.md`](README.md) | 中文 README (the primary user guide — Chinese is the reference language) |
+| [`README.beginner.md`](README.beginner.md) | Beginner-friendly walkthrough (Chinese; for users who have never touched a terminal) |
+| [`docs/UPGRADING.md`](docs/UPGRADING.md) | Update prerequisites, compatibility matrix, update order and rollback (Chinese + English) |
+| [`docs/CHANGELOG.md`](docs/CHANGELOG.md) | Per-release features and fixes (Chinese + English) |
+| [`docs/HOW-IT-WORKS.md`](docs/HOW-IT-WORKS.md) | Scene renderer, host / client split, complete HTTP route table (Chinese + English) |
+| [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) | Install-failure fixes and "symptom → where to look first" (Chinese + English) |
+| [`CONTRIBUTING.md`](CONTRIBUTING.md) | Local-source install, build & verify, per-platform branch rules (bilingual) |
+| [`docs/README.md`](docs/README.md) | Full documentation index (incl. renderer-decision and robustness-audit engineering docs, Chinese) |
+
 ## Limitations
 
 - Application wallpapers cannot be embedded and are hidden from the thumbnail
   picker and rotation candidates. Their live render remains Wallpaper Engine's
-  desktop job. Scene wallpapers are re-rendered to a full-scene static frame
-  (see above) — the only dynamic (animated particle / water) effects are frozen
-  in that frame.
+  desktop job. Scene wallpapers are rendered to a full-scene frame (static) —
+  see 「Which wallpaper types are supported?」 above; any scene animation is
+  frozen in that frame.
 - The browser must be able to autoplay muted `<video>` (DSH runs on loopback; muted
   autoplay is allowed by modern browsers).
 - Media is served from your local Wallpaper Engine install paths; the host only
