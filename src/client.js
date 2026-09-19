@@ -2272,6 +2272,13 @@ function applyEffects() {
   if (detectMicaSupport() === false) document.body.setAttribute("data-we-mica", "off");
   else document.body.removeAttribute("data-we-mica");
 
+  // 软件渲染钩子（#95，见 detectSoftwareRender）：@supports 只做语法检查，软件
+  // 合成下 backdrop-filter 被静默忽略时它依然为真，所以近不透明回退必须靠运行时
+  // 探测来挂载。命中时 CSS（body[data-we-glass-fallback]）让面板/侧栏/内容面/
+  // 弹层改用与 @supports 回退完全相同的配方，并显式 backdrop-filter: none。
+  if (detectSoftwareRender()) document.body.setAttribute("data-we-glass-fallback", "1");
+  else document.body.removeAttribute("data-we-glass-fallback");
+
   // 字体自定义（#57 精简回归版）：开关关闭 → 清空变量与样式表，恢复原生外观。
   if (selection.fontCustom) {
     s.setProperty("--we-font-color", selection.fontColor);
@@ -2340,6 +2347,7 @@ function clearEffects() {
   s.removeProperty("--we-sidebar-tint");
   document.body.removeAttribute("data-we-sidebar-glass");
   document.body.removeAttribute("data-we-mica"); // #73 Mica 能力钩子随 fiber 注销
+  document.body.removeAttribute("data-we-glass-fallback"); // #95 软件渲染回退钩子同上
   s.removeProperty("--we-content-surface-alpha");
   s.removeProperty("--we-content-surface-color");
   s.removeProperty("--we-font-color");
@@ -4346,6 +4354,42 @@ function UpdateNotice() {
   );
 }
 
+// ── Text-surface readability floor (upstream #82) ───────────────────────────
+// The wallpaper may be dimmed/blended so it "does not dominate", but TEXT MUST
+// STAY READABLE. IDEA's background-image feature has ONE knob (image opacity)
+// and still "just works" because the image always sits BEHIND the editor /
+// tool-window surfaces, which keep a background of their own
+// (https://www.jetbrains.com/help/idea/setting-background-image.html). This
+// plugin lacked exactly that structural property: every text-bearing surface
+// was painted as `glass colour @ --we-glass-alpha`, and in dark mode that alpha
+// is additionally multiplied by 0.4 — worst case 0.03 × 0.4 = 0.012, i.e. no
+// frost at all, so conversation text scrolling behind the composer read
+// straight through.
+//
+// The floor is a THEME-BASE LAYER composited OVER that glass tint at a fixed
+// weight no slider can lower: the tint's alpha only scales the other operand,
+// so the effective coverage is floor + a·(1−floor) ≥ floor. Clamping the tint
+// alpha itself with max() cannot work here — in dark mode the tint is a WHITE
+// glaze, so over the brightest plausible wallpaper pixel the surface composites
+// to white at ANY alpha and white body text keeps exactly 1.00:1 (the measured
+// before row below). In light mode such a clamp would work but would have to
+// sit at 0.44, above every alpha the slider can reach (max 0.25) — it would
+// flatten the slider completely. The theme-base layer fixes both themes and
+// keeps the slider alive above the floor.
+//
+// Both values come from measurement (scripts/verify-readability.mjs recomputes
+// the same grid): 玻璃透明度 {0,15,30,45,60} × theme {light,dark} ×
+// 壁纸透明度 {0,50,90}, theme text colour (light #000 / dark #fff) against the
+// surface composited onto the worst-case backdrop (light: darkest plausible
+// wallpaper pixel #000; dark: brightest #fff):
+//   light  exact 0.44194 → 0.45   worst case 4.63:1  (bubble @ 玻璃透明度=60)
+//   dark   exact 0.58136 → 0.59   worst case 4.63:1  (settings layer-3 @ 0)
+// The floor is independent of 壁纸透明度: it never reads --we-wallpaper-opacity,
+// which keeps affecting .we-layer only. Values are interpolated into the CSS
+// below so the stylesheet and this comment can never drift apart.
+const READABILITY_FLOOR = 0.45;
+const READABILITY_FLOOR_DARK = 0.59;
+
 // ── Styles ──────────────────────────────────────────────────────────────────
 const CSS = `
   /* Wallpaper layer: a fixed child of <body>, sunk BELOW the app frame.
@@ -4423,7 +4467,7 @@ const CSS = `
      不存在，本规则不参与匹配，行为与今天逐字节相同。 */
   body[data-we-mica="off"][data-we-wallpaper] .dshDesktopSidebarSurface {
     --dsw-specific-sidebar-fill: transparent !important;
-    background-color: color-mix(in srgb, var(--we-content-surface-color, var(--dsw-alias-bg-layer-1, #1e1f26)) var(--we-content-surface-alpha, 88%), transparent) !important;
+    background-color: color-mix(in srgb, var(--we-content-surface-color, var(--dsw-alias-bg-layer-1, #1e1f26)) max(calc(var(--we-readability-floor) * 100%), var(--we-content-surface-alpha, 88%)), transparent) !important;
   }
 
   /* ── Light-scheme text contrast boost ──────────────────────────────────────
@@ -4439,6 +4483,28 @@ const CSS = `
     --dsw-alias-label-tertiary: rgb(70, 73, 79);
     --dsw-alias-label-caption: rgb(110, 114, 120);
     --dsw-alias-label-dimmed: rgb(50, 52, 56);
+  }
+
+  /* ── 文字面可读性下限 (text-surface readability floor, #82) ───────────────
+     动机、IDEA 模型与 4.5:1 目标见 JS 的 READABILITY_FLOOR 注释（数值的唯一
+     来源，下面用模板插值注入，二者不会漂移）。写法：每个承载文字的面都从
+         <原玻璃色 @ 原 alpha>
+     变成
+         color-mix(in srgb, <主题底色> floor%, <原玻璃色 @ 原 alpha> (1-floor)%)
+     —— color-mix 在预乘空间按权重插值，权重会乘上操作数自身的 alpha，
+     所以这条声明恰好等于「主题底色 @floor 压在 原玻璃色 之上」：
+         effective alpha = floor + a_glass × (1 − floor) ≥ floor
+     玻璃透明度 与 暗主题的 ×0.4 只改 a_glass（另一项权重），floor 这一项
+     固定不动 —— 下限因此不可能被滑杆削弱；floor 之上仍是原来的玻璃配方，
+     只是压了一层主题底色（壁纸在亮/暗极端像素处不再吃掉文字）。
+     --we-wallpaper-opacity 不参与本层：壁纸透明度仍只作用于 .we-layer。 */
+  body {
+    --we-readability-floor: ${READABILITY_FLOOR};
+    --we-readability-base: #ffffff;
+  }
+  body[data-ds-dark-theme] {
+    --we-readability-floor: ${READABILITY_FLOOR_DARK};
+    --we-readability-base: #0d1524;
   }
 
   /* ── iOS liquid glass ──────────────────────────────────────────────────────
@@ -4464,14 +4530,26 @@ const CSS = `
      token, so the blur itself still needs an element selector — [data-composer-card]
      is authored in the shell source and survives rebuilds. Bubbles carry no such
      attribute, so they fall back to the module-CSS suffix convention; if that
-     ever stops matching the bubble stays translucent, just without the blur. */
+     ever stops matching the bubble stays translucent, just without the blur.
+     Both tokens carry text, so both go through the readability floor (the
+     composer card AND the tool popups that read --dsw-specific-input-major). */
   body[data-we-wallpaper] {
-    --dsw-specific-input-major: rgba(255, 255, 255, var(--we-glass-alpha, 0.15));
-    --dsw-specific-bubble: rgba(255, 255, 255, calc(var(--we-glass-alpha, 0.15) * 0.8));
+    --dsw-specific-input-major: color-mix(in srgb,
+      var(--we-readability-base) calc(var(--we-readability-floor) * 100%),
+      rgba(255, 255, 255, var(--we-glass-alpha, 0.15)) calc((1 - var(--we-readability-floor)) * 100%));
+    --dsw-specific-bubble: color-mix(in srgb,
+      var(--we-readability-base) calc(var(--we-readability-floor) * 100%),
+      rgba(255, 255, 255, calc(var(--we-glass-alpha, 0.15) * 0.8)) calc((1 - var(--we-readability-floor)) * 100%));
   }
   body[data-ds-dark-theme][data-we-wallpaper] {
-    --dsw-specific-input-major: rgba(255, 255, 255, calc(var(--we-glass-alpha, 0.15) * 0.4));
-    --dsw-specific-bubble: rgba(255, 255, 255, calc(var(--we-glass-alpha, 0.15) * 0.33));
+    /* The ×0.4 / ×0.33 factors below only scale the TINT operand; the floor
+       keeps its own weight, so the dark-theme undercut cannot happen. */
+    --dsw-specific-input-major: color-mix(in srgb,
+      var(--we-readability-base) calc(var(--we-readability-floor) * 100%),
+      rgba(255, 255, 255, calc(var(--we-glass-alpha, 0.15) * 0.4)) calc((1 - var(--we-readability-floor)) * 100%));
+    --dsw-specific-bubble: color-mix(in srgb,
+      var(--we-readability-base) calc(var(--we-readability-floor) * 100%),
+      rgba(255, 255, 255, calc(var(--we-glass-alpha, 0.15) * 0.33)) calc((1 - var(--we-readability-floor)) * 100%));
   }
   body[data-we-wallpaper] [data-composer-card],
   body[data-we-wallpaper] [class*="_bubble"],
@@ -4553,7 +4631,11 @@ const CSS = `
      base too; the blur lives on the root panels (one blur per shell). */
   body[data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_boundaryError"],
   body[data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_panel"] {
-    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) var(--we-sidebar-tint, 20%), transparent) !important;
+    /* 侧栏面板同样承载文字 → 同一层可读性下限（--we-sidebar-tint 是这里的
+       玻璃色权重，只在另一项上生效）。 */
+    background-color: color-mix(in srgb,
+      var(--we-readability-base) calc(var(--we-readability-floor) * 100%),
+      color-mix(in srgb, var(--we-sidebar-color, #ffffff) var(--we-sidebar-tint, 20%), transparent) calc((1 - var(--we-readability-floor)) * 100%)) !important;
     /* Specular sheen + refraction highlights follow --we-sidebar-sheen
        (= min(1, alpha/0.2236)): at default (12%) and any MORE solid setting
        the sheen keeps the ORIGINAL design strength (0.14/0.04/0.01,
@@ -4578,11 +4660,15 @@ const CSS = `
   body[data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_gitHeader"],
   body[data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_browserBar"],
   body[data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_terminalWrap"] {
-    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) calc(var(--we-sidebar-tint, 20%) * 0.75), transparent) !important;
+    background-color: color-mix(in srgb,
+      var(--we-readability-base) calc(var(--we-readability-floor) * 100%),
+      color-mix(in srgb, var(--we-sidebar-color, #ffffff) calc(var(--we-sidebar-tint, 20%) * 0.75), transparent) calc((1 - var(--we-readability-floor)) * 100%)) !important;
   }
   body[data-ds-dark-theme][data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_boundaryError"],
   body[data-ds-dark-theme][data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_panel"] {
-    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) calc(var(--we-sidebar-tint, 20%) * 0.65), transparent) !important;
+    background-color: color-mix(in srgb,
+      var(--we-readability-base) calc(var(--we-readability-floor) * 100%),
+      color-mix(in srgb, var(--we-sidebar-color, #ffffff) calc(var(--we-sidebar-tint, 20%) * 0.65), transparent) calc((1 - var(--we-readability-floor)) * 100%)) !important;
   }
   body[data-ds-dark-theme][data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_pane"],
   body[data-ds-dark-theme][data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_tabBar"],
@@ -4592,7 +4678,9 @@ const CSS = `
   body[data-ds-dark-theme][data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_gitHeader"],
   body[data-ds-dark-theme][data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_browserBar"],
   body[data-ds-dark-theme][data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_terminalWrap"] {
-    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) calc(var(--we-sidebar-tint, 20%) * 0.5), transparent) !important;
+    background-color: color-mix(in srgb,
+      var(--we-readability-base) calc(var(--we-readability-floor) * 100%),
+      color-mix(in srgb, var(--we-sidebar-color, #ffffff) calc(var(--we-sidebar-tint, 20%) * 0.5), transparent) calc((1 - var(--we-readability-floor)) * 100%)) !important;
   }
   /* No backdrop-filter support: fall back to near-opaque tinted surfaces so
      sidebar text never sits directly on a busy wallpaper (same policy as the
@@ -4631,7 +4719,9 @@ const CSS = `
     background-color: var(--dsw-alias-bg-layer-1, #1e1f26);
   }
   body[data-we-sidebar-glass] [data-sidebar-right-panel] {
-    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) var(--we-sidebar-tint, 20%), transparent) !important;
+    background-color: color-mix(in srgb,
+      var(--we-readability-base) calc(var(--we-readability-floor) * 100%),
+      color-mix(in srgb, var(--we-sidebar-color, #ffffff) var(--we-sidebar-tint, 20%), transparent) calc((1 - var(--we-readability-floor)) * 100%)) !important;
     background-image: linear-gradient(180deg,
       rgba(255, 255, 255, calc(var(--we-sidebar-sheen, 1) * 0.14)),
       rgba(255, 255, 255, calc(var(--we-sidebar-sheen, 1) * 0.04)) 38%,
@@ -4644,7 +4734,9 @@ const CSS = `
       inset 0 0 0 0.5px rgba(255, 255, 255, calc(var(--we-sidebar-sheen, 1) * 0.06));
   }
   body[data-ds-dark-theme][data-we-sidebar-glass] [data-sidebar-right-panel] {
-    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) calc(var(--we-sidebar-tint, 20%) * 0.65), transparent) !important;
+    background-color: color-mix(in srgb,
+      var(--we-readability-base) calc(var(--we-readability-floor) * 100%),
+      color-mix(in srgb, var(--we-sidebar-color, #ffffff) calc(var(--we-sidebar-tint, 20%) * 0.65), transparent) calc((1 - var(--we-readability-floor)) * 100%)) !important;
   }
   /* No backdrop-filter support: near-opaque tinted plate, same policy as the
      better-sidebar glass above. */
@@ -4681,7 +4773,7 @@ const CSS = `
   body[data-we-sidebar-glass] [data-dsh-better-sidebar] .xterm,
   body[data-we-sidebar-glass] [data-sidebar-right-panel] .cm-editor,
   body[data-we-sidebar-glass] [data-sidebar-right-panel] .xterm {
-    background-color: color-mix(in srgb, var(--we-content-surface-color, var(--dsw-alias-bg-layer-1, #1e1f26)) var(--we-content-surface-alpha, 88%), transparent) !important;
+    background-color: color-mix(in srgb, var(--we-content-surface-color, var(--dsw-alias-bg-layer-1, #1e1f26)) max(calc(var(--we-readability-floor) * 100%), var(--we-content-surface-alpha, 88%)), transparent) !important;
   }
 
   /* Picker chrome. */
@@ -4731,10 +4823,17 @@ const CSS = `
     /* Glass surface alphas (light scheme): the base tint is --we-glass-color
        (玻璃颜色) mixed with transparent at the 玻璃透明度-driven alpha, so the
        whole window glass can be tinted to any color. Default (no custom color)
-       = white glass, the stock look. */
-    --dsw-alias-bg-layer-1: color-mix(in srgb, var(--we-glass-color, #ffffff) calc(var(--we-glass-alpha, 0.5) * 0.9 * 100%), transparent);
-    --dsw-alias-bg-layer-2: color-mix(in srgb, var(--we-glass-color, #ffffff) calc(var(--we-glass-alpha, 0.5) * 1.0 * 100%), transparent);
-    --dsw-alias-bg-layer-3: color-mix(in srgb, var(--we-glass-color, #ffffff) calc(var(--we-glass-alpha, 0.5) * 1.1 * 100%), transparent);
+       = white glass, the stock look. 这三层同样是文字面（导航 + 原生分区），
+       所以每层都压在可读性下限的主题底色之下。 */
+    --dsw-alias-bg-layer-1: color-mix(in srgb,
+      var(--we-readability-base) calc(var(--we-readability-floor) * 100%),
+      color-mix(in srgb, var(--we-glass-color, #ffffff) calc(var(--we-glass-alpha, 0.5) * 0.9 * 100%), transparent) calc((1 - var(--we-readability-floor)) * 100%));
+    --dsw-alias-bg-layer-2: color-mix(in srgb,
+      var(--we-readability-base) calc(var(--we-readability-floor) * 100%),
+      color-mix(in srgb, var(--we-glass-color, #ffffff) calc(var(--we-glass-alpha, 0.5) * 1.0 * 100%), transparent) calc((1 - var(--we-readability-floor)) * 100%));
+    --dsw-alias-bg-layer-3: color-mix(in srgb,
+      var(--we-readability-base) calc(var(--we-readability-floor) * 100%),
+      color-mix(in srgb, var(--we-glass-color, #ffffff) calc(var(--we-glass-alpha, 0.5) * 1.1 * 100%), transparent) calc((1 - var(--we-readability-floor)) * 100%));
     /* Nav + interactive states tinted with the accent. */
     --dsw-specific-sidebar-nav-item-active: color-mix(in srgb, var(--we-accent, #4f8cff) 26%, rgba(255, 255, 255, 0.08));
     --dsw-specific-sidebar-nav-item-hover: color-mix(in srgb, var(--we-accent, #4f8cff) 13%, rgba(255, 255, 255, 0.05));
@@ -4770,9 +4869,16 @@ const CSS = `
   /* Dark scheme: deep translucent base instead of white. The default glass
      color is deep navy; a user-picked 玻璃颜色 overrides it in both themes. */
   body[data-ds-dark-theme][data-we-glass-window] [role="dialog"]:has([data-slot="settings.section"]) {
-    --dsw-alias-bg-layer-1: color-mix(in srgb, var(--we-glass-color, #0d1524) calc(var(--we-glass-alpha, 0.5) * 0.9 * 100%), transparent);
-    --dsw-alias-bg-layer-2: color-mix(in srgb, var(--we-glass-color, #0d1524) calc(var(--we-glass-alpha, 0.5) * 1.0 * 100%), transparent);
-    --dsw-alias-bg-layer-3: color-mix(in srgb, var(--we-glass-color, #0d1524) calc(var(--we-glass-alpha, 0.5) * 1.1 * 100%), transparent);
+    /* 设置窗口的整块面板（导航 + 每个原生分区）都承载文字 → 同样过下限。 */
+    --dsw-alias-bg-layer-1: color-mix(in srgb,
+      var(--we-readability-base) calc(var(--we-readability-floor) * 100%),
+      color-mix(in srgb, var(--we-glass-color, #0d1524) calc(var(--we-glass-alpha, 0.5) * 0.9 * 100%), transparent) calc((1 - var(--we-readability-floor)) * 100%));
+    --dsw-alias-bg-layer-2: color-mix(in srgb,
+      var(--we-readability-base) calc(var(--we-readability-floor) * 100%),
+      color-mix(in srgb, var(--we-glass-color, #0d1524) calc(var(--we-glass-alpha, 0.5) * 1.0 * 100%), transparent) calc((1 - var(--we-readability-floor)) * 100%));
+    --dsw-alias-bg-layer-3: color-mix(in srgb,
+      var(--we-readability-base) calc(var(--we-readability-floor) * 100%),
+      color-mix(in srgb, var(--we-glass-color, #0d1524) calc(var(--we-glass-alpha, 0.5) * 1.1 * 100%), transparent) calc((1 - var(--we-readability-floor)) * 100%));
     --dsw-specific-sidebar-nav-item-active: color-mix(in srgb, var(--we-accent, #4f8cff) 30%, rgba(255, 255, 255, 0.06));
     --dsw-specific-sidebar-nav-item-hover: color-mix(in srgb, var(--we-accent, #4f8cff) 14%, rgba(255, 255, 255, 0.04));
     background-image: linear-gradient(
@@ -5644,7 +5750,9 @@ const CSS = `
 
   /* One-time update notice — a floating glass toast (bottom-center) that tells
      immersive/kiosk-window users about the white flash and its one fix. High
-     z-index so it sits above the chat; buttons reuse the flat picker style. */
+     z-index so it sits above the chat; buttons reuse the flat picker style.
+     底板跟着主题底色走（max(下限, 82%) 保住原来的 82% 衬底）：明主题白衬黑字、
+     暗主题深蓝衬白字，不再是一块写死的深色板。 */
   .we-update-notice {
     position: fixed; left: 50%; bottom: 26px; z-index: 1100;
     transform: translateX(-50%);
@@ -5652,7 +5760,7 @@ const CSS = `
     box-sizing: border-box;
     display: flex; flex-direction: column; gap: 10px;
     padding: 16px 18px; border-radius: 14px;
-    background-color: color-mix(in srgb, var(--we-glass-color, #ffffff) calc(var(--we-glass-alpha, 0.5) * 90%), rgba(24, 28, 40, 0.82));
+    background-color: color-mix(in srgb, var(--we-glass-color, #ffffff) calc(var(--we-glass-alpha, 0.5) * 90%), var(--we-readability-base) calc(max(var(--we-readability-floor), 0.82) * 100%));
     background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.03) 40%, rgba(255, 255, 255, 0.01));
     -webkit-backdrop-filter: blur(var(--we-blur, 16px)) saturate(1.2);
     backdrop-filter: blur(var(--we-blur, 16px)) saturate(1.2);
@@ -5699,7 +5807,10 @@ const CSS = `
      layer is a known Chromium white-flash-on-repaint source). */
   .we-repo-panel--open {
     border-left: 1px solid rgba(255, 255, 255, 0.22);
-    background-color: color-mix(in srgb, var(--we-glass-color, #ffffff) calc(var(--we-glass-alpha, 0.5) * 72%), transparent);
+    /* 插件自己的抽屉同样是文字面 → 同一层可读性下限。 */
+    background-color: color-mix(in srgb,
+      var(--we-readability-base) calc(var(--we-readability-floor) * 100%),
+      color-mix(in srgb, var(--we-glass-color, #ffffff) calc(var(--we-glass-alpha, 0.5) * 72%), transparent) calc((1 - var(--we-readability-floor)) * 100%));
     background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.05) 38%, rgba(255, 255, 255, 0.02));
     -webkit-backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
     backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
@@ -5774,7 +5885,10 @@ const CSS = `
     height: 100dvh; max-height: 100dvh;
     border-radius: 0;
     border: 0; border-left: 1px solid rgba(255, 255, 255, 0.22);
-    background-color: color-mix(in srgb, var(--we-glass-color, #ffffff) calc(var(--we-glass-alpha, 0.5) * 80%), transparent);
+    /* 仓库抽屉的右四分之一弹窗同样是文字面 → 同一层可读性下限。 */
+    background-color: color-mix(in srgb,
+      var(--we-readability-base) calc(var(--we-readability-floor) * 100%),
+      color-mix(in srgb, var(--we-glass-color, #ffffff) calc(var(--we-glass-alpha, 0.5) * 80%), transparent) calc((1 - var(--we-readability-floor)) * 100%));
     background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.05) 38%, rgba(255, 255, 255, 0.02));
     -webkit-backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
     backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
@@ -5799,6 +5913,89 @@ const CSS = `
       background-color: color-mix(in srgb, var(--we-glass-color, #ffffff) 94%, transparent);
       backdrop-filter: none; -webkit-backdrop-filter: none;
     }
+  }
+
+  /* ── 软件渲染回退（upstream #95，运行时探测）───────────────────────────────
+     有些第三方桌面外壳（增强 / 扩展窗口模式，通常走软件合成）根本不执行
+     backdrop-filter，但属性语法是认的 —— 所以上面那些
+     @supports not ((backdrop-filter: blur(1px)) or (…)) 回退永远为真、永不启用，
+     玻璃面板只剩全透明（「过透」）。detectSoftwareRender() 在运行时探测软件光栅器
+     并把结果挂到 body[data-we-glass-fallback]，下面把同一批回退配方原样再挂一次：
+     相同的 --we-* token、相同的 color-mix 近不透明声明（不新增任何 token /
+     机制），只多一条显式的 backdrop-filter: none（语法检查通过时 @supports
+     做不到这件事）。选择器与上面 @supports 回退逐条对应，并保留各自的总开关
+     (data-we-sidebar-glass / data-we-glass-window)，所以关掉开关仍然是原生外观。
+     输入框卡片按上游 #94 的 ::before 载体单独覆盖（见下方规则）。
+     手动覆盖：?we-glassfallback=on|off（见 detectSoftwareRender）。 ── */
+  body[data-we-glass-fallback][data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_boundaryError"],
+  body[data-we-glass-fallback][data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_panel"],
+  body[data-we-glass-fallback][data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_pane"],
+  body[data-we-glass-fallback][data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_tabBar"],
+  body[data-we-glass-fallback][data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_paneCard"],
+  body[data-we-glass-fallback][data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_editorHeader"],
+  body[data-we-glass-fallback][data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_explorerHeader"],
+  body[data-we-glass-fallback][data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_gitHeader"],
+  body[data-we-glass-fallback][data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_browserBar"],
+  body[data-we-glass-fallback][data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_terminalWrap"] {
+    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) 92%, transparent) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  body[data-we-glass-fallback][data-we-sidebar-glass] [data-sidebar-right-panel] {
+    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) 92%, transparent) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  /* 内容面（编辑器/终端）本来就是近不透明底板（--we-content-surface-alpha，默认
+     88%），这里把同一条声明再挂一遍，让软件渲染下三块侧栏区域落在同一个规则块里。 */
+  body[data-we-glass-fallback][data-we-sidebar-glass] [data-dsh-better-sidebar] .cm-editor,
+  body[data-we-glass-fallback][data-we-sidebar-glass] [data-dsh-better-sidebar] .xterm,
+  body[data-we-glass-fallback][data-we-sidebar-glass] [data-sidebar-right-panel] .cm-editor,
+  body[data-we-glass-fallback][data-we-sidebar-glass] [data-sidebar-right-panel] .xterm {
+    background-color: color-mix(in srgb, var(--we-content-surface-color, var(--dsw-alias-bg-layer-1, #1e1f26)) max(calc(var(--we-readability-floor) * 100%), var(--we-content-surface-alpha, 88%)), transparent) !important;
+  }
+  /* 设置窗口：把三层面板 token 钉回实色（@supports 回退里的同一条 token 覆写），
+     并显式关掉不会生效的 backdrop-filter。 */
+  body[data-we-glass-fallback][data-we-glass-window] [role="dialog"]:has([data-slot="settings.section"]) {
+    --dsw-alias-bg-layer-1: var(--we-glass-color, #ffffff);
+    --dsw-alias-bg-layer-2: var(--we-glass-color, #ffffff);
+    --dsw-alias-bg-layer-3: var(--we-glass-color, #ffffff);
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  body[data-ds-dark-theme][data-we-glass-fallback][data-we-glass-window] [role="dialog"]:has([data-slot="settings.section"]) {
+    --dsw-alias-bg-layer-1: var(--we-glass-color, #0d1524);
+    --dsw-alias-bg-layer-2: var(--we-glass-color, #0d1524);
+    --dsw-alias-bg-layer-3: var(--we-glass-color, #0d1524);
+  }
+  /* 输入框卡片（issue #95 报「过透」的那块界面）：上游 #94 已把模糊从卡片本体搬到
+     [data-composer-card]::before 载体（卡片上的 backdrop-filter 会成为 fixed 后代的
+     包含块，#89）——载体上没有背景，卡片自身的底色只有 --we-glass-alpha（默认 15%），
+     所以只关掉 backdrop-filter 仍然过透。这里让 ::before 自己变成近不透明底板：
+     载体是同一块表面，模糊没了就由它兜住底色，配方与上面 .we-repo-panel 逐字相同
+     （同一个 --we-glass-color / 92%，未新增 token 或机制）。 */
+  body[data-we-glass-fallback][data-we-wallpaper] [data-composer-card]::before {
+    background-color: color-mix(in srgb, var(--we-glass-color, #ffffff) 92%, transparent);
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  /* 仓库抽屉 / 面板弹窗：与 @supports 回退逐字相同的 92% / 94% 近不透明配方。 */
+  body[data-we-glass-fallback] .we-repo-panel {
+    background-color: color-mix(in srgb, var(--we-glass-color, #ffffff) 92%, transparent);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  body[data-we-glass-fallback] .we-picker__modal--panel {
+    background-color: color-mix(in srgb, var(--we-glass-color, #ffffff) 94%, transparent);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  /* 弹层遮罩 / 一次性通知：底色本身已经接近不透明（55% 黑 / 82% 深色底衬），
+     不需要换配方，只把永远不生效的 backdrop-filter 关掉。 */
+  body[data-we-glass-fallback] .we-picker__modal-overlay,
+  body[data-we-glass-fallback] .we-update-notice {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
   }
   @media (prefers-reduced-motion: reduce) {
     .we-rope--settle, .we-repo-panel, .we-picker__modal--panel, .we-repo-panel__modal-scrim { transition: none !important; }
@@ -5893,6 +6090,74 @@ function detectMicaSupport() {
     }
   } catch { /* 探测异常：保持 null（不适用）→ 不改任何既有行为 */ }
   return micaSupport;
+}
+
+// ── 软件光栅化探测（upstream #95）───────────────────────────────────────────
+// 某些第三方桌面外壳（增强 / 扩展窗口模式，通常是软件合成）里 `backdrop-filter`
+// 被静默忽略：属性语法仍然被接受，所以 `@supports not (backdrop-filter: …)`
+// 永远为真 —— 那条回退根本不会启用，玻璃面板就变成「过透」（全透）。这里改为
+// 运行时探测：真的去建一个 WebGL 上下文并读渲染器字符串，如果它是软件光栅器
+// （或连上下文都建不出来），就把 body[data-we-glass-fallback] 挂上，让 CSS 用
+// 既有的近不透明配方接管（见 CSS 里那一段）。
+// 手动覆盖（用户排障 / 维护者无 GPU 环境复现）：
+//   ?we-glassfallback=on|1  → 强制回退 · off|0 → 强制关闭 · 其他值 = 自动探测
+// 只探测一次并缓存 —— applyEffects 每次设置变动都会读它。
+// 全程 typeof 守卫 + try/catch：非浏览器 / 验证沙箱里绝不抛出，也绝不改变行为。
+const SOFT_RENDER_RE = /swiftshader|software|llvmpipe|softpipe|microsoft basic render|angle \(software|stack-gl/i;
+let softRenderFallback; // undefined = 未探测 · true = 软件/无 WebGL · false = 硬件
+function detectSoftwareRender() {
+  if (softRenderFallback !== undefined) return softRenderFallback;
+  softRenderFallback = false;
+  try {
+    // 手动覆盖优先于一切探测（缓存最终决定）。
+    if (typeof location !== "undefined" && location && typeof location.search === "string") {
+      let raw = "";
+      if (typeof URLSearchParams === "function") {
+        raw = new URLSearchParams(location.search).get("we-glassfallback") || "";
+      } else {
+        const m = /[?&]we-glassfallback=([^&]*)/.exec(location.search);
+        raw = m ? decodeURIComponent(m[1]) : "";
+      }
+      const flag = String(raw).toLowerCase();
+      if (flag === "on" || flag === "1") return (softRenderFallback = true);
+      if (flag === "off" || flag === "0") return (softRenderFallback = false);
+    }
+    if (typeof document === "undefined" || !document
+        || typeof document.createElement !== "function") return softRenderFallback;
+    const canvas = document.createElement("canvas");
+    if (!canvas || typeof canvas.getContext !== "function") return (softRenderFallback = true);
+    let gl = null;
+    try { gl = canvas.getContext("webgl"); } catch { /* ignore */ }
+    if (!gl) { try { gl = canvas.getContext("experimental-webgl"); } catch { /* ignore */ } }
+    // 连 WebGL 上下文都拿不到 → 没有硬件合成，backdrop-filter 必定不生效。
+    if (!gl) return (softRenderFallback = true);
+    let renderer = "";
+    let vendor = "";
+    try {
+      const dbg = typeof gl.getExtension === "function" && gl.getExtension("WEBGL_debug_renderer_info");
+      if (dbg && typeof gl.getParameter === "function") {
+        renderer = gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || "";
+        vendor = gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL) || "";
+      }
+      // 没有调试扩展（或被隐私设置屏蔽）时退回公开的 RENDERER / VENDOR。
+      if (!renderer && typeof gl.getParameter === "function" && gl.RENDERER !== undefined) {
+        renderer = gl.getParameter(gl.RENDERER) || "";
+      }
+      // VENDOR 只是同一判定的第二个可读串（实测：本仓库自带的 supreium-headless-gl
+      // 是软件光栅器，但 RENDERER 只报裸 "ANGLE"，软件线索只出现在 VENDOR="stack-gl"，
+      // 且它不暴露 WEBGL_debug_renderer_info）—— 浏览器硬件链路不会因此误判。
+      if (!vendor && typeof gl.getParameter === "function" && gl.VENDOR !== undefined) {
+        vendor = gl.getParameter(gl.VENDOR) || "";
+      }
+    } catch { /* 读不到渲染器字符串：不判定为软件渲染 */ }
+    softRenderFallback = SOFT_RENDER_RE.test(String(renderer) + " " + String(vendor));
+    // 礼貌释放：只探测一次，但也不给页面永久占一个 WebGL 槽位。
+    try {
+      const lose = typeof gl.getExtension === "function" && gl.getExtension("WEBGL_lose_context");
+      if (lose && typeof lose.loseContext === "function") lose.loseContext();
+    } catch { /* ignore */ }
+  } catch { /* 探测异常：保持 false（不改变既有行为） */ }
+  return softRenderFallback;
 }
 
 function apply(ctx) {

@@ -68,7 +68,7 @@
   "license": "MIT",
   "scripts": {
     "build": "node scripts/build-client.mjs",
-    "verify": "node scripts/verify-client.mjs && node scripts/verify-transcode-state.mjs && node scripts/verify-mdla.mjs && node scripts/verify-playback-controls.mjs && node scripts/verify-resource-lifecycle.mjs && node scripts/verify-package-files.mjs",
+    "verify": "node scripts/verify-client.mjs && node scripts/verify-transcode-state.mjs && node scripts/verify-mdla.mjs && node scripts/verify-playback-controls.mjs && node scripts/verify-resource-lifecycle.mjs && node scripts/verify-softrender.mjs && node scripts/verify-readability.mjs && node scripts/verify-package-files.mjs",
     "prepare": "node scripts/prepare.mjs"
   },
   "peerDependencies": {

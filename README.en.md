@@ -14,7 +14,7 @@ It discovers the Wallpaper Engine install on your machine, lists its wallpapers,
 
 - **All four wallpaper types covered** — Video (`.mp4`) with hardware decoding, Web/HTML in an iframe, Scene replayed as a full-scene frame by the built-in renderer, Image via custom uploads (local JPG / PNG / MP4);
 - **One look, fully controllable** — accent colour, glass colour and transparency, liquid glass for the whole settings window and the sidebar, custom typography and input-caret colour; everything applies instantly and persists;
-- **Eight picture sliders** — wallpaper blur / brightness / contrast / saturation / wallpaper opacity / scrim / border / glass;
+- **Eight picture sliders** — wallpaper blur / brightness / contrast / saturation / wallpaper opacity / scrim / border / glass (text-bearing surfaces keep a readability floor, so no setting can make body text illegible);
 - **Battery & performance** — occlusion pause (minimize / focus-loss / battery, three toggles) and a decode frame-rate cap (host-side frame-skip transcode that cuts hardware-decoder load sharply);
 - **Library management** — thumbnail picker modal, hide / restore (soft delete), content-rating and type filters, CD-rack compact layout, spinning vinyl record;
 - **Automatic rotation** — any number of user-defined lists, each with its own interval and playback order;
@@ -273,6 +273,25 @@ skin-center design):
 > instantly and persist host-side to `config.json` (they survive restarts and
 > browser switches).
 
+> **Text-surface readability floor (on by default, not user-adjustable in this
+> version)** — every surface that carries text (composer card & tool popups,
+> message bubbles, all three settings-window layers, sidebar panels and the
+> editor/terminal content plate, the plugin's own wallpaper-repository drawer and
+> panel modal) now composites a layer of the **theme base colour** — white in
+> light mode, deep navy in dark mode — underneath the glass tint at a fixed
+> weight of 45 % (59 % in dark). The values are the smallest that keep body text
+> at **WCAG 4.5:1** across the measured grid (glass transparency {0,15,30,45,60}
+> × theme × wallpaper opacity {0,50,90}), with the worst case taken at the
+> darkest plausible wallpaper pixel (light) and the brightest (dark): worst-case
+> body-text contrast improves from **1.00:1 to 4.63:1**. Raising **玻璃透明度** to
+> its maximum, or raising **壁纸透明度**, can therefore no longer make text
+> illegible — those two sliders only move the glass-tint half of the weight, the
+> floor half stays fixed. Semantics are unchanged: glass transparency still means
+> "higher = more transparent" and still applies monotonically (you can still make
+> a panel clearer or more solid), it just cannot go below the floor; wallpaper
+> opacity still drives only the wallpaper layer (`.we-layer`) and still means
+> "blend into the page base colour", with no coupling to the floor.
+
 ### Mascot (chat pull-cord)
 
 The **吉祥物** (mascot) tab controls the chat **pull-cord** (a draggable rope pinned to the top edge; pulling it down slides out the **wallpaper repo** drawer). The **form** picker renders as cards — each card draws the actual artwork scaled by the current **吉祥物大小** slider, so choosing a form and judging its size happen in one place:
@@ -330,7 +349,7 @@ The **效果** (effects) tab — available while a wallpaper is active — offer
 | **亮度** (brightness) | Wallpaper brightness (media filter) | 40–160 % | 100 % |
 | **对比度** (contrast) | Wallpaper contrast (media filter) | 40–200 % | 100 % |
 | **饱和度** (saturate) | Wallpaper saturation (media filter) | 0–200 % | 100 % |
-| **壁纸透明度** (wallpaper opacity) | Transparency of the whole wallpaper layer (higher = more transparent): fading it out blends the wallpaper into the page base colour — the IDEA background-image style of "visible but not overpowering". Complements **暗化** (scrim): one fades the wallpaper itself, the other darkens the whole picture; for the blend-into-base look, combine higher opacity with a lower scrim | 0–90 % | 0 % |
+| **壁纸透明度** (wallpaper opacity) | Transparency of the whole wallpaper layer (higher = more transparent): fading it out blends the wallpaper into the page base colour (**light theme → toward white, dark theme → toward black**) — the IDEA background-image style of "visible but not overpowering". Complements **暗化** (scrim): one fades the wallpaper itself, the other darkens the whole picture; for the blend-into-base look, combine higher opacity with a lower scrim | 0–90 % | 0 % |
 | **暗化** (scrim) | Darkens the overlay between wallpaper and text | 0–90 % | 25 % |
 | **边框** (border) | Raises border/divider contrast | 0–90 % | 35 % |
 | **玻璃** (glass) | Blur radius of the frosted-glass panels (composer, bubbles) | 0–60 px | 16 |
@@ -343,6 +362,13 @@ The **效果** (effects) tab — available while a wallpaper is active — offer
 > (and optionally add a little **壁纸模糊**) until it is comfortable; if the
 > wallpaper is too loud instead, raise **壁纸透明度** to let it recede into the
 > base colour. All eight sliders apply instantly — no page refresh needed.
+>
+> **Text surfaces always keep a floor** — every surface that carries text
+> (composer, bubbles, settings window, sidebar & content plate, the plugin's own
+> drawer / panel modal) keeps a **readability floor** (on by default, not
+> adjustable): a fixed theme-base layer sits under the glass tint, so the sliders
+> above can no longer push body text below legibility (worst case 4.63:1 — see
+> the "Text-surface readability floor" note above).
 
 ## Configuration
 
