@@ -4289,20 +4289,22 @@ function RopeDock() {
 }
 
 // ── One-time "what's new" notice ─────────────────────────────────────────────
-// This round: v0.7.2 extends the liquid-glass adaptation to the NATIVE right
-// sidebar that harness 0.1.5 introduced (better-sidebar 0.19 registers its
-// tabs into it) and fixes the right column turning fully transparent there —
-// the native panel paints var(--dsw-alias-bg-base), the exact token WE makes
-// transparent while a wallpaper is active, and it had no frost of its own.
-// Updating to the latest plugin now has TWO PREREQUISITES, announced via this
-// notice: ① the DeepSeek Harness kernel must be the latest (DSH Desktop
-// ≥ 2.0.7 / harness 0.1.5-rc.1+), and ② dsh-better-sidebar must be the latest
-// (0.19.0+; users still on the 0.1.2-rc.1 line keep 0.18.x — no mixing). The
-// dismissal version is stored WITH the settings (host file, port-independent)
-// so it survives DSH Desktop's random --port restarts and never re-shows
-// after being closed. Bump NOTICE_VERSION next release to announce something
-// new again.
-const NOTICE_VERSION = "0.7.2";
+// This round: v0.7.4 adds two user-facing controls (壁纸透明度 #82 / 输入光标颜色
+// #83), fixes custom-upload wallpapers (#84) — an upload without a rating was
+// hidden by the default 「Everyone」 filter (absent from the grid, and applying
+// one left a blank layer plus a dead 播放 button), and the play control used to
+// claim 「播放中」 even when <video> had refused to start — and carries the fixes
+// merged after v0.7.3: the Scene static-frame series (#88) plus the community
+// PRs for the composer glass containing block (#89) and the honest sceneVideo
+// field (#92).
+// Updating still has TWO PREREQUISITES (unchanged since v0.7.2): ① the DeepSeek
+// Harness kernel must be the latest (DSH Desktop ≥ 2.0.7 / harness 0.1.5-rc.1+),
+// and ② dsh-better-sidebar must be the latest (0.19.0+; users still on the
+// 0.1.2-rc.1 line keep 0.18.x — no mixing). The dismissal version is stored WITH
+// the settings (host file, port-independent) so it survives DSH Desktop's random
+// --port restarts and never re-shows after being closed. Bump NOTICE_VERSION next
+// release to announce something new again.
+const NOTICE_VERSION = "0.7.4";
 
 function UpdateNotice() {
   const sel = useStore();
@@ -4320,22 +4322,25 @@ function UpdateNotice() {
   };
   if (!show) return null;
   return React.createElement("div", { className: "we-update-notice", role: "alert" },
-    React.createElement("div", { className: "we-update-notice__title" }, "⚠️ v0.7.2 前置条件：① DSH 内核最新 ② better-sidebar 最新"),
+    React.createElement("div", { className: "we-update-notice__title" }, "✨ v0.7.4：壁纸透明度 · 输入光标颜色 · 自上传壁纸修复 · 场景渲染修复"),
     React.createElement("div", { className: "we-update-notice__body" },
       React.createElement("p",
         null,
-        "本版本把液态玻璃适配扩展到 DSH 0.1.5 的官方原生右侧栏，并修复升级 better-sidebar 0.19 后右侧栏完全透明的问题。更新本插件前，请先满足两个前置条件："),
+        "本版本新增两个可调项、修复自上传壁纸的两处关键问题，并合入场景渲染与输入框玻璃的修复："),
       React.createElement("p",
         null,
-        "① ", React.createElement("strong", null, "DeepSeek Harness 内核为最新版"), "——DSH Desktop ≥ 2.0.7（内置 0.1.5-rc.1+），桌面端在顶部导航栏的版本信息里检查更新；",
-        "② ", React.createElement("strong", null, "dsh-better-sidebar 插件为最新版"), "——0.19.0+（仍停留在 0.1.2-rc.1 旧内核的用户请保持 0.18.x，不要混搭）。"),
+        "① ", React.createElement("strong", null, "壁纸透明度"), "（「效果」页签）——把壁纸整层淡出、融向页面底色（0–90%），配合「暗化」做出「看得见但不喧宾夺主」的背景；"),
       React.createElement("p",
         null,
-        React.createElement("strong",
-          null,
-          "两个前置条件都满足之前，请不要更新本插件；顺序反了把内核与插件各自更新到匹配版本即可恢复。")),
+        "② ", React.createElement("strong", null, "输入光标颜色"), "（「字体」页签）——光标与壁纸撞色看不清时，选一个高对比颜色（6 预设 + 取色器），对所有输入框生效；"),
+      React.createElement("p",
+        null,
+        "③ ", React.createElement("strong", null, "自上传壁纸修复"), "——以前未标注分级的自上传内容会被默认的「Everyone」过滤藏起来（网格里看不到、选中后一片空白、播放按钮变灰）；现在按 Everyone 处理。视频壁纸的播放按钮也会如实显示真实状态：播不出来时可以点「播放」重试，并给出原因（如「无法解码，建议改用 H.264 编码的 MP4」）。"),
+      React.createElement("p",
+        null,
+        "④ ", React.createElement("strong", null, "场景与界面修复"), "——场景壁纸静态帧的「白方块 / 底色 / alpha 回退」问题与 42 处资源泄漏已修复（#88）；并合入社区贡献：输入框玻璃的定位修复（#89）与场景内嵌视频字段的诚实化（#92）。"),
       React.createElement("p", { className: "we-update-notice__hint" },
-        "本提示每个新版本只出现一次，点下方按钮关闭后不再弹出。"),
+        "前置条件不变：DSH 内核最新（DSH Desktop ≥ 2.0.7 / harness 0.1.5-rc.1+）且 dsh-better-sidebar ≥ 0.19.0。本提示每个新版本只出现一次，点下方按钮关闭后不再弹出。"),
     ),
     React.createElement("button", { className: "we-update-notice__btn we-picker__btn", type: "button", onClick: dismiss }, "知道了"),
   );
@@ -4495,6 +4500,33 @@ const CSS = `
       inset 0 -1px 0 rgba(255, 255, 255, 0.08),
       inset 0 0 0 0.5px rgba(255, 255, 255, 0.08),
       0 12px 40px rgba(0, 0, 0, var(--we-glass-shadow, 0.12));
+  }
+  /* ── composer card: the blur must not live on the card itself ─────────────
+     [data-composer-card] contains position:fixed descendants: @dsh-external/
+     dsh-webui mounts the "AI 浏览器" seat (.dsh-browser-seat-wrap) inside it with a
+     hard-coded position:fixed. A non-none backdrop-filter makes the element a
+     containing block for its fixed descendants, so that button stops being
+     viewport-anchored and drops ~522px below the card. The seat then carries
+     543px of phantom overflow, which becomes extra scrollable content in the
+     conversation scroller: by the time you reach the bottom the sticky travel is
+     already spent, so the composer is left stranded above it (#89).
+     Hosting the blur on ::before fixes it — a pseudo-element has no DOM
+     descendants, so it can never become a containing block. Same blur radius,
+     same --we-* tokens, same inset/radius → visually identical.
+     把模糊改由 ::before 伪元素承载：伪元素没有 DOM 后代，不会成为 fixed 后代的包含块。 */
+  body[data-we-wallpaper] [data-composer-card] {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  body[data-we-wallpaper] [data-composer-card]::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    z-index: -1;
+    -webkit-backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
+    backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
   }
   /* Note (anti-flicker): the composer/bubbles keep ONLY the backdrop-filter
      glass. Extra always-on layers (transform/will-change/contain) were removed —
