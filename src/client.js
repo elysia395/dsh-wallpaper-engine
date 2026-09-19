@@ -2169,11 +2169,28 @@ function applyEffects() {
   s.setProperty("--we-border-alpha", String(selection.border));
   // Glass blur strength in px (0 disables the frosted-glass effect).
   s.setProperty("--we-blur", selection.blur + "px");
-  // iOS liquid glass: the backdrop "colour melt" (saturation) scales with the
-  // blur radius, so the 玻璃 slider drives BOTH frosted depth and how strongly
-  // the wallpaper colour bleeds through the glass (0 blur → no melt). Kept
-  // gentle so the glass stays 通透 (clear) instead of oversaturated.
-  s.setProperty("--we-saturate", String(1.15 + selection.blur * 0.028));
+  // iOS liquid glass: the backdrop "colour melt" (saturation) is a CONSTANT
+  // material property, DECOUPLED from the blur radius — the 玻璃 slider now
+  // drives ONE thing (frost depth, --we-blur) instead of two semantically
+  // unrelated ones. Rationale: --we-saturate amplifies whatever chroma the
+  // backdrop still carries, and blur is what smears the residual wallpaper text
+  // into that chroma. The old coupled ramp therefore magnified exactly the
+  // signal the owner reads as 荧光/彩色鬼影 (a fluorescent colour ghost) instead
+  // of a neutral haze, worst at the top of the slider where the amplification
+  // met the most smearing. A flat value kills the runaway at high radii while
+  // keeping the "wet glass" chroma lift at every radius. GLASS_SATURATE is
+  // deliberately BELOW the stylesheet's own 1.8 fallback (what applies before
+  // this variable is first written), so the steady-state glass is milder than
+  // the pre-write default rather than stronger.
+  //   blur px:     0      15     30     45     60
+  //   old:       1.15   1.57   1.99   2.41   2.83   (1.15 + blur*0.028)
+  //   new:       1.30   1.30   1.30   1.30   1.30   (constant; 6.1x less chroma
+  //                                                  amplification at 60px)
+  // ?we-saturate=legacy restores the old coupled ramp byte-for-byte (A/B
+  // escape hatch, see useLegacySaturateCoupling).
+  s.setProperty("--we-saturate", useLegacySaturateCoupling()
+    ? String(1.15 + selection.blur * 0.028)
+    : String(GLASS_SATURATE));
   s.setProperty("--we-glass-brightness", "1.04");
   // Wallpaper blur strength in px (blurs the wallpaper itself).
   s.setProperty("--we-wallpaper-blur", selection.wallpaperBlur + "px");
@@ -4444,17 +4461,19 @@ const CSS = `
   /* ── iOS liquid glass ──────────────────────────────────────────────────────
      The opaque conversation surfaces become translucent glass. The recipe is
      Apple-like, not a plain blur:
-       - LARGE-radius blur + HIGH saturation + brightness/contrast lift, so the
-         wallpaper colour melts into a soft glow instead of a gray smear
-         (saturation scales with blur in applyEffects: 0 blur → no melt);
+       - LARGE-radius blur + a modest constant saturation + brightness/contrast
+         lift, so the wallpaper colour melts into a soft glow instead of a gray
+         smear (saturation is DECOUPLED from the blur radius — see GLASS_SATURATE
+         in applyEffects — so a big radius no longer amplifies the residual
+         wallpaper text into a colour ghost);
        - a top-weighted specular gradient (background-image) — the sheen is
          what makes the surface read as "wet glass", not a flat tint;
        - a light, low-alpha base (not a dark one) so the wallpaper shows through;
        - a 1px top refraction highlight + 0.5px hairline + soft elevation
          shadow for "thick glass";
-       - blur radius + saturation both scale off --we-blur / --we-saturate
-         (the 玻璃 slider drives both, so composer, bubbles AND the
-         better-sidebar shell stay in one uniform liquid look).
+       - --we-blur drives the blur radius (the 玻璃 slider's one job now) and
+         --we-saturate is a flat material constant, so composer, bubbles AND the
+         better-sidebar shell stay in one uniform liquid look at every radius.
 
      Transparency is driven through the design tokens the surfaces already read
      (--dsw-specific-input-major on the composer card, --dsw-specific-bubble on
@@ -5893,6 +5912,40 @@ function detectMicaSupport() {
     }
   } catch { /* 探测异常：保持 null（不适用）→ 不改任何既有行为 */ }
   return micaSupport;
+}
+
+// ── 玻璃饱和度解耦（?we-saturate）─────────────────────────────────────────────
+// --we-saturate 曾经随 玻璃 滑块（模糊半径）线性上升：1.15 + blur*0.028，即
+// 0px→1.15 … 60px→2.83。于是一个滑块同时改了两件语义无关的事：毛玻璃深度
+// （--we-blur）和背景「色彩融化」强度。高模糊 + 高饱和会把玻璃后残留的壁纸文字
+// 放大成 荧光/彩色鬼影，而不是中性雾面 —— 所以饱和度改为常量材料属性
+// （GLASS_SATURATE，取 1.25–1.4 液态玻璃区间的低端 1.3，且低于样式表自身 1.8 的
+// 回退默认值），滑块只管模糊深度。
+// A/B 逃生舱（与 dsh-desktop-mica 同风格）：
+//   ?we-saturate=legacy → 完全恢复旧的耦合公式（逐字节等值）
+//   其余（缺省 / 垃圾值 / 大小写混写）→ 新的常量行为
+// 只解析一次并缓存 —— applyEffects 每次设置变动都会读它。
+// 全程 typeof 守卫 + try/catch：非浏览器 / 验证沙箱里绝不抛出，也绝不改变行为。
+// 不挂任何 DOM 属性，所以 dispose 没有额外清理（--we-saturate 本身已在
+// clearEffects 里移除）。
+const GLASS_SATURATE = 1.3;
+let legacySaturateCoupling; // undefined = 未解析 · true = 旧耦合 · false = 常量
+function useLegacySaturateCoupling() {
+  if (legacySaturateCoupling !== undefined) return legacySaturateCoupling;
+  legacySaturateCoupling = false;
+  try {
+    if (typeof location !== "undefined" && location && typeof location.search === "string") {
+      let raw = "";
+      if (typeof URLSearchParams === "function") {
+        raw = new URLSearchParams(location.search).get("we-saturate") || "";
+      } else {
+        const m = /[?&]we-saturate=([^&]*)/.exec(location.search);
+        raw = m ? decodeURIComponent(m[1]) : "";
+      }
+      legacySaturateCoupling = String(raw).toLowerCase() === "legacy";
+    }
+  } catch { /* 解析异常：保持新行为（常量），绝不抛出 */ }
+  return legacySaturateCoupling;
 }
 
 function apply(ctx) {
