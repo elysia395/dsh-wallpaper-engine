@@ -198,6 +198,12 @@ const DEFAULTS = {
   // 以 !important 注入 textarea / input / contenteditable，与字体自定义
   // （fontCustom）互不依赖 —— 只想要光标可见时无需打开全局字体染色。
   caretColor: "",
+  // ── 壁纸音轨（壁纸引擎视频自带的声音）────────────────────────────────
+  // 音量 0–1，0 = 静音。原版把视频壁纸一律 muted，这里把静音变成「音量 0」
+  // 这一特例，并补上一个可记忆的总开关。
+  videoVolume: 0,
+  // 音轨总开关：false = 静音但保留 videoVolume 数值（关掉再打开能恢复原音量）。
+  videoAudioEnabled: true,
 };
 
 // Selectable values for the two filters. Declared up top because
@@ -328,6 +334,8 @@ function sanitizeSettings(o) {
       ? o.hiddenIds.filter((x) => typeof x === "string" && x)
       : [],
     playbackRate: clampNum(o.playbackRate, 0.5, 2, DEFAULTS.playbackRate),
+    videoVolume: clampNum(o.videoVolume, 0, 1, DEFAULTS.videoVolume),
+    videoAudioEnabled: o.videoAudioEnabled !== false,
     fpsCap: FPS_CAP_VALUES.includes(o.fpsCap) ? o.fpsCap : DEFAULTS.fpsCap,
     betaSceneAnim: o.betaSceneAnim === true,
     pauseOnHidden: o.pauseOnHidden !== false,
@@ -483,6 +491,8 @@ function serializeSelection() {
     rotationSeeded: selection.rotationSeeded,
     hiddenIds: selection.hiddenIds,
     playbackRate: selection.playbackRate,
+    videoVolume: selection.videoVolume,
+    videoAudioEnabled: selection.videoAudioEnabled,
     fpsCap: selection.fpsCap,
     betaSceneAnim: selection.betaSceneAnim,
     pauseOnHidden: selection.pauseOnHidden,
@@ -1416,10 +1426,10 @@ function buildMedia(sel) {
     media.src = sel.url;
     media.autoplay = true;
     media.loop = true;
-    media.muted = true;
+    // 音轨按用户设置应用（见 weApplyAudio）：默认 0 音量 → 行为与原来的
+    // muted 一致；调高音量后才有声音。
     media.setAttribute("playsinline", "");
-    // Native playbackRate — hardware-decoded, instant, no reload (and the
-    // videos are muted anyway, so there is no audio to keep in sync).
+    // Native playbackRate — hardware-decoded, instant, no reload.
     try { media.playbackRate = sel.playbackRate; } catch { /* ignore */ }
     if (IS_EDGE && sel.edgeCompat !== false) {
       // Edge: keep the decoder element out of sight (its floating 下载/投屏
@@ -1441,7 +1451,6 @@ function buildMedia(sel) {
     media.src = sel.sceneVideo;
     media.autoplay = true;
     media.loop = true;
-    media.muted = true;
     media.setAttribute("playsinline", "");
     media.poster = sel.url;   // frameUrl as poster
     media.className = "we-media" + fitClass;
@@ -1561,9 +1570,30 @@ function watchVideoState(video) {
 //                              显式点击「播放」才清掉重来（见 onTogglePlay）；
 //                              AbortError（被换源打断）不算真拒绝，见
 //                              playRefusalBlocks。
+// ── 壁纸音轨（volume / 总开关）───────────────────────────────────────────
+// 期望音量：总开关关闭 → 0；否则取 videoVolume（钳到 0–1）。
+// 把最终决策收成一个函数，避免 buildMedia / applyVideoPlayback / UI tick
+// 三处各自判断而漂移。
+function weAudioVolume() {
+  try {
+    if (selection.videoAudioEnabled === false) return 0;   // 总开关关闭 → 静音
+    return clampNum(selection.videoVolume, 0, 1, 0);
+  } catch { return 0; }
+}
+// 把期望音量写到元素上。muted 与 volume 必须成对设置：只设 volume=0 时部分
+// 浏览器仍会在 seek/换源后出声，而只设 muted 会让音量滑块看起来没生效。
+function weApplyAudio(video) {
+  if (!video) return;
+  const v = weAudioVolume();
+  try {
+    video.volume = v;
+    video.muted = v <= 0;
+  } catch { /* ignore */ }
+}
 function applyVideoPlayback(video) {
   if (!video) return;
   watchVideoState(video);
+  weApplyAudio(video);
   if (!isEffectivelyPlaying()) {
     try { video.pause(); } catch { /* ignore */ }
     syncVideoState(video);
@@ -1577,6 +1607,7 @@ function applyVideoPlayback(video) {
   p.then(
     () => {
       if (video.dataset) delete video.dataset.wePlayRefused;
+      weApplyAudio(video);
       syncVideoState(video);
     },
     (err) => {
@@ -2435,6 +2466,16 @@ function WallpaperPicker(props) {
     selection.playing = !selection.playing;
     emit();
   };
+  // 音乐开关：只翻总开关，不动 videoVolume —— 关掉再打开能恢复原音量。
+  // 切换后立刻作用于当前元素，不必等下一次 emit 收敛。
+  const onToggleAudio = () => {
+    selection.videoAudioEnabled = selection.videoAudioEnabled === false;
+    const layer = document.getElementById(LAYER_ID);
+    const v = layer && layer.querySelector("video");
+    if (v) weApplyAudio(v);
+    persistSelection();
+    emit();
+  };
   const onClear = () => applySelection("");
   const onRefresh = () => loadInventory();
   // Filter changes: persist + re-validate so wallpapers outside the selected
@@ -2791,6 +2832,18 @@ function WallpaperPicker(props) {
             onClick: onTogglePlay, disabled: !sel.url,
             // 按钮显示真实状态（#84）: 播放失败时回到「播放」，就是用户要的「继续」。
           }, playbackLive ? "暂停" : "播放"),
+          // 音乐开关：与「播放」同级的一键切换。只影响音轨，不动播放态 ——
+          // 关掉后画面继续播放。仅对含音轨的壁纸类型显示（视频 / 场景内嵌 MP4）。
+          (sel.type === "video" || (sel.type === "scene" && sel.sceneVideo))
+            && React.createElement("button", {
+              className: "we-picker__btn" + (weAudioVolume() > 0 || selection.videoAudioEnabled === false ? "" : " is-on"),
+              type: "button",
+              onClick: onToggleAudio,
+              disabled: !sel.url,
+              title: selection.videoAudioEnabled === false
+                ? "开启壁纸音轨（按音量滑块生效）"
+                : "关闭壁纸音轨（画面继续播放）",
+            }, selection.videoAudioEnabled === false ? "🔇 音乐关" : "🔊 音乐开"),
           React.createElement("button", {
             className: "we-picker__btn", type: "button",
             onClick: onClear, disabled: !sel.id,
@@ -4698,6 +4751,11 @@ const CSS = `
   }
   .we-picker__btn:hover { background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.12)); }
   .we-picker__btn:disabled { opacity: 0.45; cursor: default; }
+  /* 音乐开关处于「开」时用 accent 色描边，一眼可辨但不抢主按钮。 */
+  .we-picker__btn.is-on {
+    border-color: var(--we-accent, var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35)));
+    color: var(--we-accent, inherit);
+  }
   .we-picker select {
     appearance: none; -webkit-appearance: none;
     height: var(--we-ui-h, 30px); padding: 0 8px;
