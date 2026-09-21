@@ -84,5 +84,172 @@
   "dependencies": {
     "jpeg-js": "^0.4.4",
     "@shaderfrog/glsl-parser": "^7.0.1"
+  },
+  "overrides": {
+    "@deepseek-ai/cordis": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/cordis-plugin-include": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/cordis-plugin-loader": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-agent": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-agent-default-model": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-agent-presets": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-api-gateway": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-api-remotes": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-atomic-write": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-attachment": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-brand": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-client-connection": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-client-runtime": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-client-ui-slots": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-code-runtime": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-commands": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-compaction": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-cordis-host-runner": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-credentials": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-file-reference": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-goal": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-home-paths": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-host-apiproxy": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-host-directory-picker": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-host-plugin-inventory": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-host-webserver": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-invariants": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-jobs": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-llm": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-llm-retry": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-message-feedback": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-native-command": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-output-retention": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-scope": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-session": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-session-persistence": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-session-projection": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-session-projection-cache": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-session-query": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-session-reference": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-session-title": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-settings": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-skill": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-storage": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-storage-domain": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-subagent": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-system-prompt": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-timeout": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-tools": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-typert-protocol": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-typert-registry": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-user-approval": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-user-questions": {
+      "js-yaml": "4.3.2"
+    },
+    "@deepseek-ai/dsh-workspace": {
+      "js-yaml": "4.3.2"
+    },
+    "js-yaml": {
+      "js-yaml": "4.3.2"
+    }
   }
 }
