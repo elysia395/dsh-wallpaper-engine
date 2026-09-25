@@ -111,8 +111,16 @@ const fetch = (url, opts) => {
     sceneFrameHeadCalls.push(u);
     return Promise.resolve({
       ok: true, status: 204,
-      headers: { get: (k) => (String(k).toLowerCase() === 'x-we-gpu'
-        ? (u.includes('/scene-frame/ccc') && cccGpuPinned ? '1' : '0') : null) },
+      headers: { get: (k) => {
+        const key = String(k).toLowerCase();
+        const pinned = u.includes('/scene-frame/ccc') && cccGpuPinned;
+        if (key === 'x-we-gpu') return pinned ? '1' : '0';
+        // 预览窗口要显示实时帧的像素尺寸（宿主从 PNG 的 IHDR 读）。
+        if (key === 'x-we-gpu-w') return pinned ? '2488' : null;
+        if (key === 'x-we-gpu-h') return pinned ? '1376' : null;
+        if (key === 'x-we-gpu-ar') return pinned ? '1.8081' : null;
+        return null;
+      } },
     });
   }
   if (method === 'DELETE') {
@@ -283,9 +291,50 @@ setTimeout(async () => {
   };
   const findRotTimer = () => rotationTimers.find((item) => !item.cleared && !item.fired && item.ms === 5 * 60 * 1000);
   const fireRot = (t) => { t.fired = true; t.fn(); };
+  // 切换过场（#112）：默认是「硬切」，所以下面这组轮换断言先经 UI 选成
+  // 「交叉淡化」才有过渡路径；硬切与动画型过场各有专门断言（见本节末尾）。
+  const findAriaBtn = (label) => {
+    const tree = pickerRenders[0]();
+    let hit = null;
+    (function walk(node) {
+      if (hit || !node || typeof node !== 'object') return;
+      if (Array.isArray(node)) { node.forEach(walk); return; }
+      if (node.props && node.props['aria-label'] === label) { hit = node; return; }
+      if (Array.isArray(node.children)) node.children.forEach(walk);
+    })(tree);
+    return hit;
+  };
+  // 过场动画是**下拉菜单**（过场会持续增加，平铺按钮迟早挤爆）——
+  // 断言集中在「选项集合 + 选中值驱动」两件事上，新增过场只需扩这张表。
+  const TRANSITION_IDS = { 硬切: 'cut', 交叉淡化: 'fade', 推移: 'push', 擦除: 'wipe', 光圈: 'iris', 缩放: 'zoom', 条带: 'bars' };
+  const findTransitionSelect = () => findAriaBtn('过场动画');
+  const pickTransition = (label) => {
+    const el = findTransitionSelect();
+    assert.ok(el, '「过场动画」下拉必须存在');
+    const id = TRANSITION_IDS[label];
+    assert.ok(id, '测试用的过场名必须在这张表里：' + label);
+    assert.ok(Array.isArray(el.children) && el.children.some((o) => o && o.props && o.props.value === id),
+      '下拉里必须有这个过场选项：' + label);
+    el.props.onChange({ target: { value: id } });
+  };
   const preLayer = document.getElementById('dsh-wallpaper-engine-layer');
   const rotTimer = findRotTimer();
   rotCheck('rotation timer scheduled (5min)', !!rotTimer);
+  rotCheck('切换过场 renders a dropdown with all seven transitions',
+    (() => {
+      const el = findTransitionSelect();
+      if (!el || el.type !== 'select' || !Array.isArray(el.children)) return false;
+      const ids = el.children.map((o) => o.props && o.props.value);
+      const labels = el.children.map((o) => (o.children || [])[0]);
+      return Object.keys(TRANSITION_IDS).length === ids.length
+        && Object.values(TRANSITION_IDS).every((v) => ids.includes(v))
+        && Object.keys(TRANSITION_IDS).every((l) => labels.includes(l))
+        && el.props.value === 'cut'; // 默认硬切
+    })());
+  rotCheck('默认过场是硬切（未设置时）',
+    JSON.parse(localStorage._store['dsh-wallpaper-engine:selection'] || '{}').switchTransition === undefined
+      || JSON.parse(localStorage._store['dsh-wallpaper-engine:selection'] || '{}').switchTransition === 'cut');
+  pickTransition('交叉淡化');
   if (rotTimer) {
     fireRot(rotTimer); // a → b（直通提交）
     const postLayer = document.getElementById('dsh-wallpaper-engine-layer');
@@ -294,9 +343,10 @@ setTimeout(async () => {
       !!postLayer && postLayer !== preLayer && weKey1.indexOf('/wallpaper-engine/media/def') !== -1);
     rotCheck('rotation fade: old layer marked weFading', !!preLayer && preLayer.dataset.weFading === '1');
     rotCheck('rotation fade: old layer yielded LAYER_ID', !!preLayer && preLayer.id === '');
-    rotCheck('rotation fade: new layer carries fadein classes', !!postLayer
-      && postLayer.className.indexOf('we-layer--fadein') !== -1
-      && postLayer.className.indexOf('we-layer--fadein-on') !== -1);
+    rotCheck('rotation fade: new layer carries the switch classes', !!postLayer
+      && postLayer.className.indexOf('we-layer--switch') !== -1);
+    rotCheck('rotation fade: 交叉淡化基准 = ROTATION_FADE_MS (1800ms)', !!postLayer
+      && postLayer.style._props['--we-switch-ms'] === '1800ms');
     flushPersistWrites();
     rotCheck('rotation prepare: commit persisted (id b)',
       JSON.parse(localStorage._store['dsh-wallpaper-engine:selection']).id === 'b');
@@ -309,19 +359,92 @@ setTimeout(async () => {
       const weKey2 = layer2 && layer2.dataset ? layer2.dataset.weKey : '';
       rotCheck('rotation prepare: second ready-commit wraps (a/media/xyz)',
         !!layer2 && layer2 !== postLayer && weKey2.indexOf('/wallpaper-engine/media/xyz') !== -1);
-      rotCheck('rotation fade: second switch also fades', !!layer2
-        && layer2.className.indexOf('we-layer--fadein') !== -1);
+      rotCheck('rotation fade: second switch also animates', !!layer2
+        && layer2.className.indexOf('we-layer--switch') !== -1);
       rotCheck('rotation fade: previous fading layer retired immediately',
         bodyEl.children.indexOf(preLayer) === -1);
       flushPersistWrites();
+      // ── 动画型过场：推移（方向默认左）+ 旧层同时退场 ──
+      pickTransition('推移');
+      const pushTimer = findRotTimer();
+      rotCheck('rotation timer re-armed for the 推移 case', !!pushTimer);
+      if (pushTimer) {
+        const beforePush = document.getElementById('dsh-wallpaper-engine-layer');
+        fireRot(pushTimer);
+        const pushLayer = document.getElementById('dsh-wallpaper-engine-layer');
+        rotCheck('推移：新层带 switch 类（入场层走通用 transition）', !!pushLayer
+          && pushLayer !== beforePush
+          && pushLayer.className.indexOf('we-layer--switch') !== -1);
+        rotCheck('推移：基准 700ms 写入 --we-switch-ms', !!pushLayer
+          && pushLayer.style._props['--we-switch-ms'] === '700ms');
+        rotCheck('推移：新层终态回到 translate3d(0,0,0)', !!pushLayer
+          && pushLayer.style.transform === 'translate3d(0, 0, 0)');
+        rotCheck('推移：旧层同时位移出场并被压到新层之下', !!beforePush
+          && beforePush.className.indexOf('we-layer--switch-out') !== -1
+          && beforePush.style.transform === 'translate3d(-100%, 0, 0)'
+          && beforePush.style.zIndex === '-3');
+        // 收尾：过场结束必须把新层的临时样式清干净（否则满屏视频永久占合成层）。
+        const cleanup = rotationTimers.find((t) => !t.cleared && !t.fired && t.ms === 760);
+        rotCheck('推移：过场结束后清理定时器已排（ms+60）', !!cleanup);
+        if (cleanup) {
+          cleanup.fired = true; cleanup.fn();
+          rotCheck('推移：收尾后新层回到干净的 we-layer（内联样式清空）',
+            pushLayer.className === 'we-layer'
+            && pushLayer.style.transform === '' && pushLayer.style.clipPath === ''
+            && pushLayer.style._props['--we-switch-ms'] === undefined);
+        }
+        flushPersistWrites();
+        // ── 条带（百叶窗）：终态必须是满屏矩形，且 N 块板都从进入侧（右侧）长出来 ──
+        // 两个易错点都在终态里可判：① 方向反了 → 封闭边/板会跑到左侧；
+        // ② 退回「锯齿扫过」那版（板塌成一条直边、与擦除无异）→ N 块板的深度点消失。
+        pickTransition('条带');
+        const barsTimer = findRotTimer();
+        rotCheck('rotation timer re-armed for the 条带 case', !!barsTimer);
+        if (barsTimer) {
+          fireRot(barsTimer);
+          const barsLayer = document.getElementById('dsh-wallpaper-engine-layer');
+          const clip = barsLayer ? barsLayer.style.clipPath : '';
+          rotCheck('条带：终态覆盖满屏且封闭边在右侧（方向 left）',
+            !!clip && clip.indexOf('polygon(100.00% 0.00%') === 0
+            && clip.indexOf('0.00% 0.00%') !== -1
+            && clip.indexOf('100.00% 100.00%') !== -1);
+          // 板数从产物里读，断言按 4N+1 算 —— 改板数不会误报，但**几何退回
+          // 「锯齿扫过」那版**（点数公式不同）会翻红。
+          const barsN = Number((code.match(/const SWITCH_BARS_TEETH = (\d+)/) || [])[1]);
+          rotCheck('条带：N 块板的深度点都在（百叶窗，不是锯齿擦除）—— 点数 = 4N+1',
+            !!clip && barsN >= 2 && (clip.match(/%/g) || []).length / 2 === 4 * barsN + 1);
+          // 中段「板 + 缝」的几何在下面的单元级断言里直接算产物函数验证（终态看不出）。
+          flushPersistWrites();
+          // ── 硬切：默认值，旧层立即拆除、不排任何过场 ──
+        pickTransition('硬切');
+        const cutTimer = findRotTimer();
+        rotCheck('rotation timer re-armed for the 硬切 case', !!cutTimer);
+        if (cutTimer) {
+          const beforeCut = document.getElementById('dsh-wallpaper-engine-layer');
+          fireRot(cutTimer);
+          const cutLayer = document.getElementById('dsh-wallpaper-engine-layer');
+          rotCheck('硬切：旧层立即拆除（不进过渡路径）', !!beforeCut
+            && bodyEl.children.indexOf(beforeCut) === -1);
+          rotCheck('硬切：新层没有任何 switch 类或临时样式', !!cutLayer
+            && cutLayer !== beforeCut
+            && cutLayer.className.indexOf('we-layer--switch') === -1
+            && cutLayer.style.transform === undefined
+            && cutLayer.dataset.weFading === undefined);
+          flushPersistWrites();
+          // 下面的「手动点选也必须过渡」回归断言走的是交叉淡化这条腿
+          // （历史 bug：只有轮换 commit 才淡、手动点选硬切），这里把过场选回去。
+          pickTransition('交叉淡化');
+        }
+      }
+      }
     }
   }
   console.log('picker renders:', pickerRenders.length > 0);
   if (pickerRenders.length) {
-    // ── Tabbed IA: the picker splits into six tabs (壁纸/外观/字体/吉祥物/效果/
-    //    高级). Each WallpaperPicker instance keeps its active tab in
-    //    localStorage; mock React's useState returns the initializer value, so
-    //    re-seeding the key + re-rendering switches tabs deterministically. ──
+    // ── Tabbed IA: the picker splits into six tabs (壁纸/外观/吉祥物/效果/声音/
+    //    高级 —— 「字体」已并入「外观」). Each WallpaperPicker instance keeps its
+    //    active tab in localStorage; mock React's useState returns the initializer
+    //    value, so re-seeding the key + re-rendering switches tabs deterministically. ──
     const TAB_KEY = 'dsh-wallpaper-engine:picker-tab';
     const setTab = (id) => localStorage.setItem(TAB_KEY, id);
     const renderPicker = () => {
@@ -378,6 +501,21 @@ setTimeout(async () => {
     console.log('other tabs keep their controls out of the tree:',
       !treeText.includes('玻璃透明度') && !treeText.includes('字体自定义') && !treeText.includes('吉祥物大小'));
 
+    // ── 设置页签重组：六个页签 = 壁纸 / 外观 / 吉祥物 / 效果 / 声音 / 高级 ──
+    //    「字体」并入「外观」；「声音」从「效果」里独立出来与「效果」平级。
+    {
+      const tabButtons = [];
+      (function walk(node) {
+        if (!node || typeof node !== 'object') return;
+        if (Array.isArray(node)) { node.forEach(walk); return; }
+        if (node.props && node.props.role === 'tab') tabButtons.push(node);
+        if (Array.isArray(node.children)) node.children.forEach(walk);
+      })(tree);
+      const labels = tabButtons.map((b) => String((b.children || [])[0] || ''));
+      assert.deepEqual(labels, ['壁纸', '外观', '吉祥物', '效果', '声音', '高级'],
+        'tab bar must render exactly 壁纸/外观/吉祥物/效果/声音/高级');
+    }
+
     // ── 外观 tab: swatches / sliders / sidebar-glass group. ──
     setTab('appearance');
     tree = renderPicker();
@@ -418,11 +556,15 @@ setTimeout(async () => {
     console.log('whole-window glass master switch present:', treeText.includes('设置窗口液态玻璃'));
     console.log('window glass tooltip present:', treeText.includes('整个设置窗口'));
 
-    // ── 字体 tab: master switch + conditional trio (颜色/字重/字体族). ──
+    // ── 「字体」已并入「外观」：老的 localStorage 页签值必须迁移过去（不能把用户
+    //    甩回「壁纸」），且字体三件套 + 输入光标都在「外观」里。 ──
     setTab('font');
     tree = renderPicker();
     treeText = JSON.stringify(tree);
-    console.log('font tab has 字体自定义 switch:', treeText.includes('字体自定义'));
+    assert.ok(treeText.includes('玻璃透明度'),
+      'legacy "font" tab value must migrate to 外观 (its own rows must be on screen)');
+    assert.ok(treeText.includes('字体自定义'), '外观 must host the 字体自定义 switch');
+    console.log('legacy font tab migrates into 外观:', treeText.includes('玻璃透明度') && treeText.includes('字体自定义'));
     const fontSwitch = findCtlInput(tree, '字体自定义');
     if (fontSwitch) {
       fontSwitch.props.onChange({ target: { checked: true } });
@@ -430,14 +572,17 @@ setTimeout(async () => {
       treeText = JSON.stringify(tree);
       console.log('font on reveals 颜色/字重/字体族 chips (expect 7):',
         treeText.includes('字体颜色') && treeText.includes('字重') && (treeText.match(/"aria-label":"字体 /g) || []).length === 7);
+      assert.ok(treeText.includes('字体颜色') && (treeText.match(/"aria-label":"字体 /g) || []).length === 7,
+        '外观 tab must reveal the font trio once the master switch is on');
       fontSwitch.props.onChange({ target: { checked: false } });
       tree = renderPicker();
       treeText = JSON.stringify(tree);
     }
 
-    // ── 输入光标（#83）: caret color swatches live on the font tab and are
-    //    INDEPENDENT of the 字体自定义 master switch (visible while it is off). ──
-    console.log('font tab has 输入光标 section:', treeText.includes('输入光标'));
+    // ── 输入光标（#83）: caret color swatches live alongside the font controls
+    //    (same 外观 tab now) and are INDEPENDENT of the 字体自定义 master switch. ──
+    assert.ok(treeText.includes('输入光标'), '外观 must host the 输入光标 section');
+    console.log('appearance tab has 输入光标 section:', treeText.includes('输入光标'));
     console.log('caret swatches (expect 7: 自动 + 6 presets):', (treeText.match(/"aria-label":"光标颜色 /g) || []).length);
     console.log('caret custom color input present:', treeText.includes('自定义光标颜色'));
     const findSwatch = (root, aria) => {
@@ -527,11 +672,20 @@ setTimeout(async () => {
       console.log('mascot rope size slider: false (not found)');
     }
 
-    // ── 效果 tab: 玻璃 slider spans 0–60 px (wallpaper 'a' is active). ──
+    // ── 「边框」「玻璃(→雾化)」已从「效果」移到「外观」的「细节」段：
+    //    在新家要能在、在旧家必须不在（否则就是搬了个寂寞）。 ──
+    setTab('appearance');
+    tree = renderPicker();
+    assert.equal(sliderMax(findSliderRow(tree, '雾化')), '60', '雾化（原「玻璃」）必须在「外观」里，上限 60px');
+    assert.equal(sliderMax(findSliderRow(tree, '边框')), '90', '边框必须在「外观」里，上限 90%');
+    assert.equal(findSliderRow(tree, '玻璃'), null, '「玻璃」这个行名必须已改掉（避免与玻璃颜色/玻璃透明度撞车）');
     setTab('effects');
     tree = renderPicker();
-    console.log('effects tab has empty-state-free sliders:', JSON.stringify(tree).includes('壁纸模糊'));
-    console.log('玻璃 slider max (expect 60):', sliderMax(findSliderRow(tree, '玻璃')));
+    assert.equal(findSliderRow(tree, '雾化'), null, '雾化 不得再留在「效果」');
+    assert.equal(findSliderRow(tree, '边框'), null, '边框 不得再留在「效果」');
+    console.log('边框 / 雾化 已迁到外观（效果里不再有）: ok');
+    // 注意：效果页签的 tooltip 里仍会出现「玻璃」二字（壁纸透明度那条），所以这里
+    // 用**结构化**判定（slider-row 的标签），不能用 treeText.includes('玻璃')。
 
     // ── 壁纸透明度（#82）: slider max 90; 60% → layer opacity 0.4; 0% unsets. ──
     const wpOpacityRow = findSliderRow(tree, '壁纸透明度');
@@ -719,14 +873,66 @@ setTimeout(async () => {
     assert.ok(manualPreLayer.id === '',
       '手动切换：旧层必须让出 LAYER_ID');
     assert.ok(manualPostLayer && manualPostLayer !== manualPreLayer
-      && manualPostLayer.className.indexOf('we-layer--fadein') !== -1,
-      '手动切换：新层必须带 fadein 类淡入（交叉淡化，不是硬切）');
+      && manualPostLayer.className.indexOf('we-layer--switch') !== -1,
+      '手动切换：新层必须带 switch 过场类（交叉淡化，不是硬切）');
     assert.ok(manualPostLayer.dataset.weWid === 'c',
       '新层必须记录 weWid（后续重建按它判定是否换壁纸）');
     tree3 = renderPicker(); // 模态框已关：此时渲染的是 tab 面板（含「画面」section）
+    // 画面来源三行的门禁（2026-09-26 按用户反馈调整）：
+    // 「壁纸画面刷新」换的是 CPU 静态帧 → 只在 live 未生效时出现；「实时帧」（GPU 抓帧
+    // 的重新截 / 清除 / 微缩预览）与「自定义画面」**不受实时渲染开关影响** —— 那张静帧
+    // 正是切换途中与 live 首帧前给用户看的画面，构图不对时必须能立刻重抓。
     assert.ok(JSON.stringify(tree3).includes('壁纸画面刷新'), '选中场景壁纸后面板应出现「壁纸画面刷新」行');
+    assert.ok(JSON.stringify(tree3).includes('自定义画面'),
+      '「自定义画面」行必须可见（live 开着时也要能导入截图）');
+    assert.ok(JSON.stringify(tree3).indexOf('壁纸画面刷新') > JSON.stringify(tree3).indexOf('场景实时渲染'),
+      '「壁纸画面刷新」必须排在「场景实时渲染」开关注下方');
+    // ── 实时帧：重新截 + 微缩预览（当前壁纸实时帧） ──
+    {
+      const gpuText = JSON.stringify(tree3);
+      assert.ok(gpuText.includes('"重新截"'), '面板必须给出「重新截」（实时渲染开着时也能重抓当前帧）');
+      assert.ok(gpuText.includes('实时帧'), '「实时帧」分组必须存在');
+      const shot = (function find(n) {
+        if (!n || typeof n !== 'object') return null;
+        if (Array.isArray(n)) { for (const c of n) { const r = find(c); if (r) return r; } return null; }
+        if (n.type === 'img' && String(n.props && n.props.className).includes('we-picker__frame-shot')) return n;
+        if (Array.isArray(n.children)) { for (const c of n.children) { const r = find(c); if (r) return r; } }
+        return null;
+      })(tree3);
+      assert.ok(shot, '槽里有实时帧时必须给出「当前壁纸实时帧」微缩预览');
+      assert.ok(String(shot.props.src).indexOf('/scene-frame/ccc') !== -1
+        && String(shot.props.src).indexOf('we-prev=') !== -1,
+        '预览必须指向层里正在用的那个 scene-frame URL（+ 缓存破坏参数），否则预览与实屏不一致');
+      assert.ok(gpuText.includes('2488×1376'),
+        '预览旁必须显示实时帧的像素尺寸（宿主 X-WE-GPU-W/H）');
+      // 「重新截」在**没有实时渲染**时的行为：给出可读原因，且**不许**动现有缓存。
+      const deletesBefore = sceneFrameDeleteCalls.length;
+      const recaptureBtn = findBtn(tree3, '重新截');
+      assert.ok(recaptureBtn && typeof recaptureBtn.props.onClick === 'function', '「重新截」必须可点');
+      recaptureBtn.props.onClick();
+      tree3 = renderPicker();
+      assert.ok(JSON.stringify(tree3).includes('拿不到实时画面'),
+        '没有实时渲染时点「重新截」必须说明原因（而不是静默无事发生）');
+      assert.equal(sceneFrameDeleteCalls.length, deletesBefore,
+        '没有实时画面时「重新截」不得删除现有缓存（安全顺序：先抓到才清旧）');
+      console.log('实时帧：重新截 + 微缩预览: ok');
+    }
     assert.equal(animProbeSrcs.length, 0,
       '槽位已有 GPU 帧时不得启动任何 CPU 动画渲染（scene-anim 已删除）');
+    // ── 高级页签：省电三档 + 实时渲染诊断（都从「效果」移来） ──
+    {
+      localStorage.setItem('dsh-wallpaper-engine:picker-tab', 'advanced');
+      const adv = JSON.stringify(renderPicker());
+      assert.ok(adv.includes('省电') && adv.includes('最小化/切页时暂停')
+        && adv.includes('窗口失焦时暂停') && adv.includes('使用电池时暂停'),
+        '高级 must host the 省电 group');
+      assert.ok(adv.includes('实时渲染诊断'), '高级 must host the live 诊断 group');
+      localStorage.setItem('dsh-wallpaper-engine:picker-tab', 'effects');
+      const eff = JSON.stringify(renderPicker());
+      assert.ok(!eff.includes('最小化/切页时暂停'), '省电 must not stay in 效果');
+      assert.ok(!eff.includes('实时渲染诊断'), '实时渲染诊断 must not stay in 效果');
+      console.log('省电 / live 诊断已迁到高级（效果里不再有）: ok');
+    }
     const clearBtn = findBtn(tree3, '清除 GPU 帧');
     assert.ok(clearBtn, 'HEAD 报 X-WE-GPU=1 时面板必须给出「清除 GPU 帧」入口');
     // ── P2-L：宿主回 200 但 removed:false（unlink 失败）时不得当清除成功 ──
@@ -791,18 +997,111 @@ setTimeout(async () => {
       'GPU 抓帧回填必须校验存帧视比（不符 → 清掉按当前视口重抓），行为级见 live-frame-backfill-smoke 的 G/H/I/J');
 
     // ⑤c 两条渐变链路的时长必须各自与常量同步（独立常量，不合并）：
-    // - 轮换交叉淡化（.we-layer--fadein）= ROTATION_FADE_MS（1800ms）：两端都是
-    //   静止画面，越长越柔顺；
+    // - 轮换/手动切壁纸的过场（.we-layer--switch）= 类型基准 × 速度档；其中
+    //   「交叉淡化」的基准直接引用 ROTATION_FADE_MS（1800ms），所以这两者对齐由
+    //   SWITCH_TRANSITIONS 保证（下面按源码断言），CSS 只认内联 --we-switch-ms；
     // - GPU 静帧 → live 首帧（.we-live-iframe）= LIVE_FIRST_FADE_MS（1800ms）：
     //   手动切换壁纸时「静帧 → 实时画面」的缓慢过渡正是这条腿。0.8s 短窗口
     //   实测过渡太急，按用户明确要求回到与轮换同口径的 1.8s。
-    // 两个规则块的 transition 串相同，必须分别锚定断言。
     const liveIframeCss = code.match(/\.we-layer \.we-live-iframe\s*\{[^}]*\}/);
-    const fadeinCss = code.match(/\.we-layer--fadein\s*\{[^}]*\}/);
     assert.ok(code.includes('ROTATION_FADE_MS = 1800') && code.includes('LIVE_FIRST_FADE_MS = 1800')
-      && liveIframeCss && /transition:\s*opacity 1\.8s ease/.test(liveIframeCss[0])
-      && fadeinCss && /transition:\s*opacity 1\.8s ease/.test(fadeinCss[0]),
-      '渐变时长必须与常量同步（fadein=ROTATION_FADE_MS 1.8s / live 首帧=LIVE_FIRST_FADE_MS 1.8s），改常量时同步 CSS');
+      && liveIframeCss && /transition:\s*opacity 1\.8s ease/.test(liveIframeCss[0]),
+      '渐变时长必须与常量同步（live 首帧=LIVE_FIRST_FADE_MS 1.8s），改常量时同步 CSS');
+    // 过场：时长由内联 --we-switch-ms 驱动（类型基准 × 速度档），CSS 侧三属性都读它 ——
+    // 既保证「改基准只动一处」，也避免再出现「常量改了 CSS 忘改」的漂移。
+    const switchCss = code.match(/\.we-layer--switch\s*\{[^}]*\}/);
+    assert.ok(switchCss
+      && ['transform', 'opacity', 'clip-path'].every((pv) =>
+        new RegExp(pv + '\\s+var\\(--we-switch-ms').test(switchCss[0])),
+      '过场必须只动 transform / opacity / clip-path，且时长统一取 --we-switch-ms（合成器友好 + 单一真源）');
+    assert.ok(/\{ id: "fade", label: "交叉淡化", ms: ROTATION_FADE_MS \}/.test(code),
+      '「交叉淡化」的基准必须直接引用 ROTATION_FADE_MS（不写死 1800）');
+
+    // ⑤d 设置键两端对账（#106 那类「宿主白名单漏键 → 客户端设置被静默丢弃」的漂移）：
+    // 客户端 serializeSelection 的每个键都必须被宿主 sanitizeSettings 接受。
+    // 唯一例外是两个纯客户端状态：画面刷新档位 / 自定义画面 —— 宿主完全不读它们
+    // （档位经 scene-frame 的 ?v= 走 URL，不进设置体），故显式列白。
+    {
+      const src = readFileSync(new URL('../src/client.js', import.meta.url), 'utf8');
+      const host = readFileSync(new URL('../lib/index.js', import.meta.url), 'utf8');
+      const fnBody = (source, anchor) => {
+        const i = source.indexOf(anchor);
+        assert.ok(i >= 0, 'anchor missing: ' + anchor);
+        const open = source.indexOf('{', i);
+        let depth = 0;
+        for (let j = open; j < source.length; j++) {
+          if (source[j] === '{') depth++;
+          else if (source[j] === '}') { depth--; if (depth === 0) return source.slice(open + 1, j); }
+        }
+        throw new Error('unbalanced: ' + anchor);
+      };
+      // `key: value` 与简写 `key,` 都要认（简写漏判会造出假阴性）。
+      const keysOf = (body) => new Set([
+        ...[...body.matchAll(/^\s{2,}([A-Za-z_][A-Za-z0-9_]*)\s*:/gm)].map((m) => m[1]),
+        ...[...body.matchAll(/^\s{2,}([A-Za-z_][A-Za-z0-9_]*)\s*,\s*$/gm)].map((m) => m[1]),
+      ]);
+      const clientKeys = keysOf(fnBody(src, 'function serializeSelection('));
+      const hostKeys = keysOf(fnBody(host, 'function sanitizeSettings('));
+      const CLIENT_ONLY = ['frameVariants', 'customFrames'];
+      const dropped = [...clientKeys].filter((k) => !hostKeys.has(k) && !CLIENT_ONLY.includes(k));
+      assert.deepEqual(dropped, [],
+        '客户端设置键必须全部被宿主白名单接受（漏键 = 静默丢弃）：' + dropped.join(', '));
+      for (const k of ['switchTransition', 'switchTransitionDir', 'switchTransitionSpeed']) {
+        assert.ok(clientKeys.has(k) && hostKeys.has(k), '切换过场的设置键必须两端都在：' + k);
+      }
+      // 方向映射钉死：left = 新画面自右进入（擦除从右侧长出来 / 条带从右端长出）。
+      // 这条是纯源码契约 —— 终态看不出方向（起点被 reflow 后的终态覆盖），但方向
+      // 反了用户一眼就能看出，所以必须锁住映射本身。
+      assert.ok(/if \(dir === "up"\) return "inset\(100% 0 0 0\)";/.test(code)
+        && /const fromEnd = dir === "left" \|\| dir === "up";/.test(code)
+        && /const inward = fromEnd \? -1 : 1;/.test(code),
+        '方向映射必须保持「left = 画面向左移动 / 新画面自右进入」（擦除与条带同语义）');
+
+      // 条带几何（单元级）：DOM 里只能看到终态，而「中段有没有板缝」才是百叶窗的
+      // 关键 —— 直接从产物里取出 barsPolygon 在 p=0.5 求值。板缝一旦合并（例如
+      // slat 恒等于 period），中段就退化成一块实心矩形，肉眼看与「擦除」无异
+      // （用户实测反馈：擦除和条带分不出来）。这里把那个退化钉死。
+      {
+        const i = code.indexOf('function barsPolygon(');
+        assert.ok(i >= 0, 'barsPolygon 必须存在');
+        let depth = 0, started = false, srcFn = '';
+        for (let j = i; j < code.length; j++) {
+          if (code[j] === '{') { depth++; started = true; }
+          else if (code[j] === '}') { depth--; if (started && depth === 0) { srcFn = code.slice(i, j + 1); break; } }
+        }
+        const n = Number((code.match(/const SWITCH_BARS_TEETH = (\d+)/) || [])[1]);
+        const fn = new Function('const SWITCH_BARS_TEETH = ' + n + ';\n' + srcFn + '\nreturn barsPolygon;')();
+        const xsOf = (poly) => [...new Set([...poly.matchAll(/([\d.]+)% ([\d.]+)%/g)].map((m) => Number(m[1])))];
+        const ptsOf = (poly) => [...poly.matchAll(/([\d.]+)% ([\d.]+)%/g)].map((m) => [Number(m[1]), Number(m[2])]);
+        for (const p of [0.3, 0.5]) {
+          const pts = ptsOf(fn('left', p));
+          const depthX = 100 * (1 - p);            // dir=left：板从右侧伸进来 p
+          assert.ok(pts.some((q) => Math.abs(q[0] - depthX) < 0.01),
+            '条带 p=' + p + ' 必须有「板深」点 x≈' + depthX.toFixed(1) + '（实际 x：' + JSON.stringify(xsOf(fn('left', p))) + '）');
+          // 缝里那条「脊」必须是有长度的线段：板厚 slat = p/N < 周期 period 时缝才存在。
+          // 板厚一旦等于周期（缝合并），脊上的相邻点 y 相同 → 长度归零 → 中段就是一块
+          // 实心矩形，肉眼与「擦除」无异（用户实测反馈的原始问题）。这条把该退化钉死。
+          const spineYs = pts.filter((q) => q[0] > 99 && q[0] < 100).map((q) => q[1]);
+          // 脊上的点是**成对**发出的（每条缝一对：缝起点 → 缝终点），所以必须成对相减。
+          // 跨缝相减会得到「周期」而恒定非零，那样板厚等于周期也测不出来。
+          const gapLens = [];
+          for (let k = 0; k + 1 < spineYs.length; k += 2) gapLens.push(Math.abs(spineYs[k + 1] - spineYs[k]));
+          assert.ok(gapLens.some((g) => g > 0.5),
+            '条带 p=' + p + ' 的缝必须有非零长度（缝存在 → 百叶窗而非实心擦除）；缝长：' + JSON.stringify(gapLens.slice(0, 6)));
+        }
+        // 两端必须退化：p=0 零面积（什么都没露出）、p=1 满屏（块缝闭合）。
+        const xs0 = xsOf(fn('left', 0)).map(Number);
+        const xs1 = xsOf(fn('left', 1)).map(Number);
+        assert.ok(xs0.every((v) => v > 99.9), '条带 p=0 必须零面积（不能一开始就露出板）');
+        assert.ok(xs1.some((v) => v < 0.1) && xs1.some((v) => v > 99.9),
+          '条带 p=1 必须覆盖满屏（从进入侧一路铺到对侧）');
+        console.log('条带几何（板 + 缝 · 两端退化）: ok');
+      }
+      // 默认 = 硬切（用户裁决：先上零成本零风险，等「最帅的」定了再改这一处）。
+      // 断在**被测产物**（code）上，这样 DSH_MUT_LIB 变异也能验到这条有牙。
+      assert.ok(/switchTransition: "cut"/.test(code), '默认过场必须是硬切（DEFAULTS.switchTransition）');
+      console.log('设置键两端对账（客户端 ' + clientKeys.size + ' 键）: ok');
+    }
 
     // ⑥ 行为级不变量：整条流程（选中 → HEAD 探测 → 抓帧回填 → 清除 → 后续重建）
     // 里 animProbeSrcs 必须恒为 0 —— 一帧 CPU 动画渲染都不许启动（回退走静态帧链）。

@@ -128,7 +128,7 @@ runtime the wallpaper is remembered and degrades to the legacy plain iframe
 
 ### System-audio reaction and Now Playing (song info + cover art)
 
-Two switches in the「效果」tab (both on by default):
+Two switches in the「声音」(sound) tab (both on by default):
 
 | Switch | What it does |
 |---|---|
@@ -469,6 +469,26 @@ mirroring Wallpaper Engine's conservative first-run stance.
 ### Playback speed & horizontal flip
 
 With a video wallpaper selected, the **效果** (effects) tab shows the **倍速** presets (0.5x / 0.75x / 1x / 1.25x / 1.5x / 2x) — driven by the browser's native `playbackRate`, instant, no reload or black flash (wallpaper videos are muted, so there is no audio to keep in sync). The **水平翻转** toggle mirrors the image via CSS `scaleX(-1)` — it works for video, web, and uploaded images/videos alike, with zero main-thread cost.
+
+### Switch transitions
+
+Pick the animation used when the wallpaper changes. **Manual picks and automatic rotation share the same setting** (「壁纸」tab → 「切换过场」). The default is a **hard cut** — zero cost, zero risk, and it is a one-line change (`DEFAULTS.switchTransition`) once the favourite is settled.
+
+| Transition | Look | Baseline |
+|---|---|---|
+| **硬切** hard cut (default) | no animation, instant | — |
+| **交叉淡化** cross-fade | the new picture fades in over the old one | 1800 ms |
+| **推移** push | the new picture slides in while the old one slides out | 700 ms |
+| **擦除** wipe | a hard edge sweeps across to reveal the new picture | 700 ms |
+| **光圈** iris | a circle opens from the centre | 800 ms |
+| **缩放** zoom | the new picture eases in slightly zoomed, the old one pushes forward | 900 ms |
+| **条带** bars (venetian blind) | 7 slats — horizontal for a lateral transition, vertical for a vertical one — open in parallel from the entering side, with gaps that close at the end | 800 ms |
+
+**Direction** only applies to the directional transitions (push / wipe / bars): for push and wipe it picks the entering side; for bars it picks the entering side too, which is also what makes the slats horizontal (lateral) or vertical (up/down). **Duration** is each type’s baseline × fast (0.6×) / normal (1×) / slow (1.6×), with the resulting milliseconds shown on the control.
+
+Three constraints shaped the shortlist: only `transform` / `opacity` / `clip-path` are animated (compositor-friendly — `mask` and `filter` fall off the composited layer on `<video>` and live render `<iframe>`s, which is why 条带 uses a `clip-path` polygon instead of a mask: its N slats are disconnected, so a thin "spine" hugging the entering edge (growing from zero width) joins them into a single connected polygon); the outgoing picture always stays **opaque underneath** the incoming one, because glass `backdrop-filter` silently stops working over a transparent backdrop; and every duration comes from a single source (the inline `--we-switch-ms`, with the cross-fade baseline referencing `ROTATION_FADE_MS`).
+
+With `prefers-reduced-motion: reduce` every transition degrades to a hard cut, and the incoming layer’s temporary inline styles are cleared when the transition ends (a full-screen video would otherwise keep a compositing layer forever).
 
 ### Occlusion pause (battery-saving trio)
 

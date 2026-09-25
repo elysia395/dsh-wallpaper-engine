@@ -88,6 +88,8 @@ const document = {
 const localStorage = {
   _store: { 'dsh-wallpaper-engine:selection': JSON.stringify({
     id:'v', rotationGroupId:'g1', rotationEnabled:true,
+    // 本套测的是「轮换交叉淡化 + 音频闸」，显式选交叉淡化（默认已是硬切）。
+    switchTransition: 'fade',
     videoVolume: 0.6, videoAudioEnabled: true,
     rotationGroups:[{id:'g1',name:'L',interval:5,order:'sequence',wallpaperIds:['v','s']}],
   }), weRotationTestSec: '10' },
@@ -155,7 +157,7 @@ setTimeout(async () => {
   check('首帧轮询定时器已武装（300ms）', !!poll);
   try { fire(poll); } catch(e){ console.log('EXCEPTION on poll fire:', e && e.stack || e); process.exit(1); }
   const layer = byId['dsh-wallpaper-engine-layer'];
-  check('提交后新层带渐变类', !!layer && String(layer.className).includes('we-layer--fadein'),
+  check('提交后新层带过场类（交叉淡化）', !!layer && String(layer.className).includes('we-layer--switch'),
     layer ? String(layer.className) : 'no layer');
   // 核心回归：节点级领养 —— staging 容器直接变成 layer，iframe 从未被搬动
   //（元素级 appendChild 会让 Chromium 重载 browsing context → 首帧超时）。

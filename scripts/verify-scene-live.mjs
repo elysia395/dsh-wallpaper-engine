@@ -621,6 +621,26 @@ const clientChecks = [
     fadeBgBody.includes('--dsw-alias-bg-base')
     && /"#000000" : "#ffffff"/.test(fadeBgBody)
     && !fadeBgBody.includes('--dsw-alias-bg-layer-1')],
+  // 画面来源选项的三条门禁（2026-09-26 按用户反馈调整过）：
+  // - 「壁纸画面刷新」换的是 **CPU 静态帧**，实时画面在跑时它没有任何作用 → 只在
+  //   live 未生效时渲染；
+  // - 「实时帧」（GPU 抓帧：重新截 / 清除 / 微缩预览）与「自定义画面」**live 开着时
+  //   同样显示** —— 那张静帧正是切换途中与 live 首帧前给用户看的画面，构图不对时
+  //   必须能立刻重抓，而不是先关掉实时渲染；导入截图与 live 也互不干扰。
+  ['CPU frame-variant row shows only while live is not effective',
+    /sel\.type === "scene" && sel\.sceneFrameUrl && !liveRenderEnabled\(sel\)/.test(src)],
+  ['live-frame (GPU capture) row is NOT gated on the live switch',
+    /sceneWithFrame && \(gpuPinnedHere \|\| liveRenderEnabled\(sel\)\)/.test(src)],
+  ['custom-frame row is NOT gated on the live switch',
+    /sel\.type === "scene" && React\.createElement\("div", \{ className: "we-picker__ctl" \}/.test(src)],
+  // 「重新截」= force 重抓：必须走「先抓帧 + 内容门禁 → 成功后才清旧帧」的安全顺序，
+  // 抓不到时不许把原来那张删掉（面板上给失败原因）。
+  ['manual re-capture forces a fresh capture through the safe path',
+    /scheduleLiveFrameBackfill\(live, \{ force: true \}\)/.test(src)
+    && /const stale = force \|\| \(hasGpu && arRef > 0/.test(src)],
+  // 微缩预览必须指向层里正在用的那个 URL（同档位）+ 缓存破坏参数。
+  ['frame preview points at the live layer URL',
+    /function framePreviewSrc\(selLike\)[\s\S]{0,500}?frameUrlWithVariant\(selLike && selLike\.sceneFrameUrl, v\)[\s\S]{0,200}?we-prev=/.test(src)],
   ['pointer injection wired', /__wp\.pushPointer|wp\.pushPointer/.test(src) && /pointerLeave/.test(src)],
   ['fit mapping table present', /SCENE_LIVE_FIT = \{ cover: "cover"/.test(src)],
   // 实测踩坑回归（2026-09-22）：渲染页 resume() 会 resetFrameMeter，心跳若

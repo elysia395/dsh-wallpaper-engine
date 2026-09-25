@@ -239,6 +239,9 @@ const scene = (id, tok) => ({ id, title:id.toUpperCase(), type:'scene', playable
 // 与启动延迟无关，统一走不延迟路径，等价于用户已交互之后的状态。
 const selSeed = (ids, cur) => ({ id:cur, rotationGroupId:'g1', rotationEnabled:true, videoVolume:0.6, videoAudioEnabled:true,
   liveBootDelay:0,
+  // 本套断言「渐变退役定时器已武装（ROTATION_FADE_MS + 100ms）」—— 硬切（默认）
+  // 根本不进过渡路径，所以这里显式选交叉淡化。
+  switchTransition:'fade',
   rotationGroups:[{ id:'g1', name:'L', interval:5, order:'sequence', wallpaperIds:ids }] });
 
 // ── H：静态帧形态的场景 BGM —— 卸载必须停播并拆掉 <audio>，不得反而起播 ──────

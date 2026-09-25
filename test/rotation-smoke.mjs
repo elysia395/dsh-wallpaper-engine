@@ -73,6 +73,9 @@ class ImageMock { constructor(){ this.tagName='IMG'; imageEls.push(this); } }
 const localStorage = {
   _store: { 'dsh-wallpaper-engine:selection': JSON.stringify({
     id:'a', rotationGroupId:'g1', rotationEnabled:true,
+    // 切换过场：本套测的是「轮换交叉淡化 + 音频闸」，故显式选交叉淡化。默认已是
+    // 硬切（不进过渡路径、不开音频闸），那套行为在 verify-client 里断言。
+    switchTransition: 'fade',
     // 音量必须非 0，否则「闸内压 0 / 退场后恢复」两条断言数值相同、测不出东西。
     videoVolume: 0.6, videoAudioEnabled: true,
     rotationGroups:[{id:'g1',name:'L',interval:5,order:'sequence',wallpaperIds:['a','b','c']}],
@@ -142,7 +145,7 @@ setTimeout(async () => {
     String(probe.attributes.src || probe.src).includes('/wallpaper-engine/media/bbb') && !probe.poster,
     'src=' + (probe.attributes.src || probe.src) + ' poster=' + probe.poster);
   const layer = byId['dsh-wallpaper-engine-layer'];
-  check('提交后新层带渐变类', !!layer && String(layer.className).includes('we-layer--fadein'),
+  check('提交后新层带过场类（交叉淡化）', !!layer && String(layer.className).includes('we-layer--switch'),
     layer ? String(layer.className) : 'no layer');
   check('新层里的 video 就是刚建的那个元素',
     !!layer && layer.querySelector('video') === probe);

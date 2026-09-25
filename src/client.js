@@ -78,6 +78,16 @@ const DEFAULTS = {
   wallpaperOpacity: 0,
   rotationEnabled: false,
   rotationInterval: 30,
+  // ── 切换过场（手动点选与自动轮播共用）────────────────────────────────
+  // 默认 **硬切**：先上零成本、零风险的切换，等把「最帅的」讨论定下来再改默认
+  // （改默认只需要动这一个值 + 一条断言）。可选：交叉淡化 / 推移 / 擦除 / 光圈 /
+  // 缩放 / 条带。allTransitions 见 SWITCH_TRANSITIONS。
+  switchTransition: "cut",
+  // 方向（只对方向型转场有意义：推移 / 擦除 / 条带）。left = 画面整体向左移动，
+  // 亦即新画面从右侧进入。
+  switchTransitionDir: "left",
+  // 时长档：每类型自带基准毫秒 × 本乘子（SWITCH_SPEEDS）。默认 normal。
+  switchTransitionSpeed: "normal",
   rotationGroupId: "",
   rotationGroups: [],
   rotationSeeded: false,
@@ -360,6 +370,13 @@ function sanitizeSettings(o) {
     backgroundContrast: clampNum(o.backgroundContrast, 40, 200, DEFAULTS.backgroundContrast),
     backgroundSaturate: clampNum(o.backgroundSaturate, 0, 200, DEFAULTS.backgroundSaturate),
     wallpaperOpacity: clampNum(o.wallpaperOpacity, 0, 90, DEFAULTS.wallpaperOpacity),
+    // 切换过场：类型 / 方向 / 速度档都走白名单（未知值回落默认）。
+    switchTransition: SWITCH_TRANSITION_VALUES.includes(o.switchTransition)
+      ? o.switchTransition : DEFAULTS.switchTransition,
+    switchTransitionDir: SWITCH_DIRS.includes(o.switchTransitionDir)
+      ? o.switchTransitionDir : DEFAULTS.switchTransitionDir,
+    switchTransitionSpeed: SWITCH_SPEED_VALUES.includes(o.switchTransitionSpeed)
+      ? o.switchTransitionSpeed : DEFAULTS.switchTransitionSpeed,
     rotationEnabled: o.rotationEnabled === true,
     rotationGroupId: typeof o.rotationGroupId === "string" ? o.rotationGroupId : "",
     rotationGroups: readRotationGroups(o.rotationGroups),
@@ -585,6 +602,9 @@ function serializeSelection() {
     backgroundContrast: selection.backgroundContrast,
     backgroundSaturate: selection.backgroundSaturate,
     wallpaperOpacity: selection.wallpaperOpacity,
+    switchTransition: selection.switchTransition,
+    switchTransitionDir: selection.switchTransitionDir,
+    switchTransitionSpeed: selection.switchTransitionSpeed,
     rotationEnabled: selection.rotationEnabled,
     rotationGroupId: selection.rotationGroupId,
     rotationGroups: selection.rotationGroups,
@@ -1123,9 +1143,138 @@ let pendingStagedLayerNode = null;
 // 加载"的黑屏闪烁。
 let preparedMediaEl = null;
 const ROTATION_PREP_TIMEOUT_MS = 20000; // 单阶段就绪探测上限（超时走兜底，不卡死轮换）
-// 交叉渐变时长（新层淡入 + 旧层宽限移除的基准）。CSS .we-layer--fadein 的
-// transition 必须与之同步。
+// 交叉淡化时长（新层淡入 + 旧层宽限移除的基准）。切换过场表（SWITCH_TRANSITIONS）
+// 里 fade 的基准毫秒直接引用本常量，所以「调交叉淡化时长」只需要改这里一处。
 const ROTATION_FADE_MS = 1800;
+// ── 切换过场（手动点选与自动轮播共用）──────────────────────────────────────
+// 每种过场只动 transform / opacity / clip-path —— 全是合成器友好属性。（本插件在
+// <video> 与 live <iframe> 上踩过 mask / filter 掉出合成层的坑，故一律不用。）
+// 所有过场都守同一条铁律：**旧层保持不透明垫在新层之下**，新层在它之上入场 ——
+// 玻璃的 backdrop-filter 采样到透明背景会静默失效（见 applyEffects 内注释），
+// 所以这里没有「淡到黑再淡出」那种中间态透明的方案。
+// ms = 基准毫秒 × 速度档乘子（SWITCH_SPEEDS）。基准在快档也不为 0，避免「点了没反应」。
+const SWITCH_TRANSITIONS = [
+  { id: "cut", label: "硬切", ms: 0 },
+  { id: "fade", label: "交叉淡化", ms: ROTATION_FADE_MS },
+  { id: "push", label: "推移", ms: 700 },
+  { id: "wipe", label: "擦除", ms: 700 },
+  { id: "iris", label: "光圈", ms: 800 },
+  { id: "zoom", label: "缩放", ms: 900 },
+  { id: "bars", label: "条带", ms: 800 },
+];
+const SWITCH_TRANSITION_VALUES = SWITCH_TRANSITIONS.map((t) => t.id);
+const SWITCH_SPEEDS = [
+  { id: "fast", label: "快", factor: 0.6 },
+  { id: "normal", label: "标准", factor: 1 },
+  { id: "slow", label: "慢", factor: 1.6 },
+];
+const SWITCH_SPEED_VALUES = SWITCH_SPEEDS.map((s) => s.id);
+const SWITCH_DIRS = ["left", "right", "up", "down"];
+const SWITCH_DIR_LABELS = { left: "左", right: "右", up: "上", down: "下" };
+// 只有方向型过场听 switchTransitionDir（条带用它决定竖条 / 横条）。
+const SWITCH_DIRECTIONAL = ["push", "wipe", "bars"];
+// 条带（百叶窗）：板数。横向过场时是 N 块横板，纵向时是 N 块竖板；板数决定缝的
+// 密度 —— 5 块太粗、9 块以上在 4K 上偏碎，7 块实测最像百叶窗。点数恒定
+// （4N+1），polygon() 才可插值 → 动画连续。
+const SWITCH_BARS_TEETH = 7;
+
+/** 当前生效的过场（类型 + 方向 + 实测算出的毫秒）。cut = 不动画。 */
+function switchTransitionOf(selLike) {
+  const id = selLike && SWITCH_TRANSITION_VALUES.includes(selLike.switchTransition)
+    ? selLike.switchTransition : DEFAULTS.switchTransition;
+  const def = SWITCH_TRANSITIONS.find((t) => t.id === id) || SWITCH_TRANSITIONS[0];
+  const speed = SWITCH_SPEEDS.find((s) => s.id === (selLike && selLike.switchTransitionSpeed))
+    || SWITCH_SPEEDS[1];
+  const dir = selLike && SWITCH_DIRS.includes(selLike.switchTransitionDir)
+    ? selLike.switchTransitionDir : DEFAULTS.switchTransitionDir;
+  return {
+    id,
+    dir,
+    directional: SWITCH_DIRECTIONAL.includes(id),
+    ms: def.ms > 0 ? Math.max(60, Math.round(def.ms * speed.factor)) : 0,
+  };
+}
+
+/** 擦除的起始 inset：从新画面「进入」的那一侧长出来（left = 新画面自右进入）。 */
+function wipeInset(dir) {
+  if (dir === "right") return "inset(0 100% 0 0)";
+  if (dir === "up") return "inset(100% 0 0 0)";
+  if (dir === "down") return "inset(0 0 100% 0)";
+  return "inset(0 0 0 100%)"; // left
+}
+
+/**
+ * 条带 / 百叶窗：N 块**独立的板**从「进入侧」一起长出来，板间留缝 —— 这才看得出
+ * 是条带。之前那版是「锯齿扫过」（齿宽只有 7% 且两端收拢成直边），实测肉眼与
+ * 「擦除」分不出来，等于白做。
+ *
+ * 记法：outer = 进入侧（left/up 取 1，right/down 取 0），t 轴是与扫过方向垂直的轴
+ * （left/right 时板是**横板**，up/down 时是竖板）。每块板厚 slat = p/N，深度
+ * depth = p：p=0 时全塌在进入侧边缘（零面积），p=1 时板厚刚好铺满一个周期
+ * （slat = period）→ 缝隙闭合、合成完整矩形。
+ *
+ * ⚠️ clip-path: polygon() 只能画**一个连通区域**，而 N 块板彼此不相连 —— 用一条
+ * 贴在进入侧边缘、宽度 spine（≤0.4%，且随 depth 从 0 一起长起）的「脊」把板串起来。
+ * 脊落在已经露出新画面的那一侧，所以视觉上完全看不出来。
+ *
+ * 点数恒定（4N+1），polygon() 才能平滑插值。
+ */
+function barsPolygon(dir, p) {
+  const horizontal = dir === "left" || dir === "right"; // 横板（沿 x 扫）
+  const fromEnd = dir === "left" || dir === "up";       // 从右端 / 下端长出
+  const outer = fromEnd ? 1 : 0;
+  const inward = fromEnd ? -1 : 1;                      // 往画面里伸的方向
+  const n = SWITCH_BARS_TEETH;
+  const period = 1 / n;
+  const depth = p;
+  const spine = Math.min(0.004, depth);                 // 脊宽（p=0 时也为 0，无残留）
+  const slat = p / n;                                   // 板厚（p=1 → period，缝隙闭合）
+  // 把「距进入侧的距离 a、沿 t 轴的位置 t」映射成坐标。
+  const pt = (a, t) => (horizontal ? [outer + inward * a, t] : [t, outer + inward * a]);
+  const pts = [pt(0, 0)];
+  for (let i = 0; i < n; i++) {
+    const y0 = i * period;
+    pts.push(pt(depth, y0));
+    pts.push(pt(depth, y0 + slat));
+    if (i < n - 1) {
+      pts.push(pt(spine, y0 + slat));                   // 退到脊上
+      pts.push(pt(spine, y0 + period));                 // 沿脊走到下一块板起点
+    }
+  }
+  pts.push(pt(spine, 1));
+  pts.push(pt(0, 1));
+  return "polygon(" + pts.map(([x, y]) =>
+    (x * 100).toFixed(2) + "% " + (y * 100).toFixed(2) + "%").join(", ") + ")";
+}
+
+/** 每种过场的「入场层初态 / 入场层终态 / 退场层终态」，直接写成内联样式。 */
+function switchFrames(id, dir) {
+  const inFrom = { left: "translate3d(100%, 0, 0)", right: "translate3d(-100%, 0, 0)", up: "translate3d(0, 100%, 0)", down: "translate3d(0, -100%, 0)" }[dir];
+  const outTo = { left: "translate3d(-100%, 0, 0)", right: "translate3d(100%, 0, 0)", up: "translate3d(0, -100%, 0)", down: "translate3d(0, 100%, 0)" }[dir];
+  if (id === "push") {
+    return { inFrom: { transform: inFrom }, inTo: { transform: "translate3d(0, 0, 0)" }, outTo: { transform: outTo } };
+  }
+  if (id === "wipe") {
+    return { inFrom: { clipPath: wipeInset(dir) }, inTo: { clipPath: "inset(0)" }, outTo: {} };
+  }
+  if (id === "iris") {
+    // circle(75%) 覆盖全视口（100% 参考长度 = 对角线/√2，角点距离 ≈ 70.7%）。
+    return { inFrom: { clipPath: "circle(0% at 50% 50%)" }, inTo: { clipPath: "circle(75% at 50% 50%)" }, outTo: {} };
+  }
+  if (id === "zoom") {
+    return {
+      inFrom: { transform: "scale(1.06)", opacity: "0" },
+      inTo: { transform: "scale(1)", opacity: "1" },
+      // 旧层只轻微前推、**不改 opacity**（保持不透明，玻璃模糊依赖它）。
+      outTo: { transform: "scale(1.04)" },
+    };
+  }
+  if (id === "bars") {
+    return { inFrom: { clipPath: barsPolygon(dir, 0) }, inTo: { clipPath: barsPolygon(dir, 1) }, outTo: {} };
+  }
+  return { inFrom: { opacity: "0" }, inTo: { opacity: "1" }, outTo: {} }; // fade
+}
+
 // GPU 静帧 → live 首帧的淡入时长（手动切换壁纸时用户面对的正是这条腿：
 // 点选壁纸先出 GPU 静帧，渲染页出首帧后缓慢过渡到实时动态画面）。与轮换
 // 交叉渐变同取 1.8s —— 0.8s 的短窗口实测过渡太急，用户明确要 1.8s 的缓慢
@@ -2967,18 +3116,35 @@ function cancelLiveFrameBackfill() {
   }
   liveFrameBackfill = { token: "", timer: 0 };
 }
-function scheduleLiveFrameBackfill(frame) {
+// 抓一张实时画面回填 <key>_gpu.png。
+// opts.force = 用户在面板上点了「重新截」：即使缓存里已有 GPU 帧也重抓一张，
+// 且失败原因要**告诉用户**（后台自动回填是静默的）。仍然遵守原有的安全顺序：
+// 先抓帧 + 过内容门禁，**成功之后**才清旧帧 —— 抓不到就原样保留，绝不留空槽。
+function scheduleLiveFrameBackfill(frame, opts) {
+  const force = Boolean(opts && opts.force);
   const src = selection.sceneFrameUrl || "";
-  if (!src || src.indexOf("/scene-frame/") === -1 || !frame) return;
+  if (!src || src.indexOf("/scene-frame/") === -1 || !frame) {
+    if (force) { gpuFrameUi.recapturing = false; gpuFrameUi.error = "拿不到实时画面（这个壁纸没有实时渲染）"; try { emit(); } catch { /* ignore */ } }
+    return;
+  }
   if (typeof window === "undefined" || typeof window.setTimeout !== "function") return;
   const token = String(src.split("/scene-frame/").pop() || "").split("?")[0];
-  if (!token || liveFrameBackfill.token === token) return;
+  // force 要能打断「同一 token 已排队/在途」的去重（否则用户点了没反应）。
+  if (!token || (!force && liveFrameBackfill.token === token)) return;
   cancelLiveFrameBackfill();
   liveFrameBackfill.token = token;
   const backfillWid = String(selection.id || "");
   // 本次是否因「存帧几何不符」而重抓（落地后据此刷新屏上静帧 + 留诊断痕迹）。
   let recaptured = false;
   let recaptureSize = "";
+  // 手动重抓的失败原因要落到面板上（后台自动回填失败是静默的，只在 liveLog 留痕）。
+  const forceFail = (msg) => {
+    if (!force) return;
+    liveLog("gpu-frame-recapture-fail", "wid=" + backfillWid + " " + msg);
+    gpuFrameUi.recapturing = false;
+    gpuFrameUi.error = msg;
+    try { emit(); } catch { /* ignore */ }
+  };
   liveFrameBackfill.timer = window.setTimeout(() => {
     liveFrameBackfill.timer = 0;
     (async () => {
@@ -3005,8 +3171,9 @@ function scheduleLiveFrameBackfill(frame) {
       // 未知（旧宿主 + 本会话没抓过）→ 按「可能不符」处理：重抓一次必然正确，
       // 留一张别处视口的帧则会让用户一直看到放大且被裁的构图。判不了当前几何
       // （arRef=0，如无头/极简环境）时反过来保守保留，避免无休止清写。
-      const stale = hasGpu && arRef > 0
-        && (arStored <= 0 || Math.abs(arStored - arRef) > GPU_FRAME_ASPECT_TOL * arRef);
+      // 用户手点「重新截」（force）时一律按需要重抓处理 —— 他就是要换一张。
+      const stale = force || (hasGpu && arRef > 0
+        && (arStored <= 0 || Math.abs(arStored - arRef) > GPU_FRAME_ASPECT_TOL * arRef));
       // 已有 GPU 帧且几何相符（含并发窗口里被别人写入）：无需抓帧，保留 token 免重复。
       if (hasGpu && !stale) {
         // 未知几何的保留要留痕：这是「没有头也没重抓」的唯一解释。
@@ -3018,13 +3185,22 @@ function scheduleLiveFrameBackfill(frame) {
           + (arStored > 0 ? arStored.toFixed(4) : "未知") + " ≠ 当前视口 " + arRef.toFixed(4)
           + " → 清掉按当前视口重抓");
       }
-      if (!canvas || typeof canvas.toBlob !== "function") return false;
+      if (!canvas || typeof canvas.toBlob !== "function") {
+        if (force) forceFail("拿不到实时画面（实时渲染没在运行，或渲染页还没画布）");
+        return false;
+      }
       const blob = await new Promise((resolveBlob) => {
         try { canvas.toBlob(resolveBlob, "image/png"); } catch { resolveBlob(null); }
       });
-      if (!blob || blob.size < LIVE_FRAME_BACKFILL_MIN_BYTES) return false;
+      if (!blob || blob.size < LIVE_FRAME_BACKFILL_MIN_BYTES) {
+        if (force) forceFail("抓到的画面是空的（实时渲染还在启动中？稍等一两秒再试）");
+        return false;
+      }
       // 内容门禁：黑帧/纯色帧判为未渲染 → 放弃（保留 CPU 帧）。
-      if (!liveFrameLooksUsable(canvas, blob)) return false;
+      if (!liveFrameLooksUsable(canvas, blob)) {
+        if (force) forceFail("抓到的画面还没有内容（全黑/纯色）→ 已保留原来那张");
+        return false;
+      }
       // 清旧帧放在抓帧+门禁**之后**：先清后抓一旦抓帧失败（画面没出来/网络断）就
       // 只剩空槽 → 退回 CPU 帧，比留一张旧构图的帧更糟（旧的至少是同一张壁纸）。
       if (stale) {
@@ -3033,6 +3209,7 @@ function scheduleLiveFrameBackfill(frame) {
           // 没删掉（权限/占用/宿主报错）→ PUT 也会 409，本帧没换成；清 token 让下
           // 次挂载重试，并留痕（否则用户只看到构图依旧是旧的，没有任何线索）。
           liveLog("gpu-frame-stale-blocked", "wid=" + backfillWid + " 旧帧未删除 → 本轮放弃，下次挂载重试");
+          if (force) forceFail("旧实时帧删不掉（被占用或宿主报错）→ 没有改动它，可稍后重试");
           return false;
         }
         recaptured = true;
@@ -3045,6 +3222,7 @@ function scheduleLiveFrameBackfill(frame) {
       });
       // 200 写入成功 / 409 已被写入：两种都算「已定局」，不必重试。
       const ok = Boolean(put && (put.ok || put.status === 409));
+      if (!ok && force) forceFail("写入失败（宿主返回 " + (put && put.status) + "）");
       if (ok && arRef > 0) gpuFrameAspectKnown.set(token, arRef);
       return ok;
     })().then((settled) => {
@@ -3052,6 +3230,11 @@ function scheduleLiveFrameBackfill(frame) {
       // 状态更新只对发起时那张壁纸有效 —— 否则会给**当前**壁纸打上「已有 GPU 帧」
       // 的假标记（面板提示错、CPU 渲染门禁在 30s 内误判为 pinned）。host 侧写入
       // 仍落在 token 自己的槽位，下次回到这张壁纸时面板探测自然会读到。
+      if (settled && force) {
+        gpuFrameUi.recapturing = false;
+        gpuFrameUi.error = "";
+        try { emit(); } catch { /* ignore */ }
+      }
       if (String(selection.id || "") !== backfillWid) return;
       if (settled) {
         // 缓存里已有（或刚写入）GPU 帧 → 面板提示「优先于全部档位」。
@@ -3067,8 +3250,10 @@ function scheduleLiveFrameBackfill(frame) {
       }
       // 未定局（拿不到画面、门禁判定未渲染、网络失败）→ 清 token 允许下次重试。
       if (liveFrameBackfill.token === token) liveFrameBackfill.token = "";
+      if (force) forceFail("这次没抓成（拿不到画面或写入失败）→ 原来那张没动");
     }).catch(() => {
       if (liveFrameBackfill.token === token) liveFrameBackfill.token = "";
+      forceFail("抓帧过程出错 → 原来那张没动");
     });
   }, LIVE_FRAME_BACKFILL_DELAY_MS);
 }
@@ -4299,6 +4484,8 @@ function syncLayers() {
   if (selection.url) {
     // live 是否生效只需算一次：它同时决定「media 种类看不看 sceneVideo」与 live 段本身。
     const layerLive = (selection.type === "scene" || selection.type === "web") && liveRenderEnabled(selection);
+    // 本次切换用的过场（类型 + 方向 + 毫秒）也只算一次：startFade 判定与两处调用点共用。
+    const switchTr = switchTransitionOf(selection);
     const wantKey = selection.type + "\u0000" + selection.url + "\u0000"
       + (IS_EDGE && selection.edgeCompat !== false ? "canvas" : "video")
       // Scene wallpapers: the media kind depends on sceneVideo (MP4 <video> vs
@@ -4332,7 +4519,9 @@ function syncLayers() {
       // 同一条 BGM，淡出 + 音频闸会让它断 ~2s，反而更糟。rotationFade（轮换
       // commit 的显式标记）作为兜底保留 —— 覆盖 weWid 缺失或轮换同 wid 极端角落。
       const widChanged = String(existing.dataset.weWid || "") !== String(selection.id || "");
-      startFade = rotationFade || widChanged;
+      // 过场类型为「硬切」时根本不进过渡路径：直接拆旧层（下车的 else 分支），
+      // 音频闸也不开 —— 这正是硬切该有的零延迟表现。（switchTr 在本函数上部算好。）
+      startFade = (rotationFade || widChanged) && switchTr.id !== "cut";
       if (startFade) {
         // 交叉淡化：旧层不立即拆除 —— 标记淡出保留（旧视频/旧 live 渲染页
         // 继续播放，真交叉淡化），新层淡入结束后由定时器移除。任何时刻
@@ -4382,12 +4571,7 @@ function syncLayers() {
         try { startLiveWatch(adoptedLive, selection.id); } catch { /* ignore */ }
       }
       if (startFade && fadingLayerNode) {
-        // 音频闸：新层先静音，等这次渐变的旧层退场后再出声（见 openRotationAudioGate）。
-        openRotationAudioGate(node, fadingLayerNode);
-        node.className = "we-layer we-layer--fadein";
-        void node.offsetWidth; // 强制 reflow，确保 transition 从 0 起跑
-        node.className = "we-layer we-layer--fadein we-layer--fadein-on";
-        scheduleFadingLayerRemoval(fadingLayerNode);
+        startLayerTransition(node, fadingLayerNode, switchTr);
       }
     }
     if (!node) {
@@ -4401,14 +4585,10 @@ function syncLayers() {
       else node.appendChild(built);
       document.body.appendChild(node);
       if (startFade && fadingLayerNode === existing) {
-        // 交叉淡化：新层 opacity 0 起步 → 强制 reflow → 加-on 触发淡入
-        // （时长 = ROTATION_FADE_MS）；旧层保持全透明不动画，淡出等效于被
-        // 新层覆盖，渐变结束统一移除并释放其媒体。
-        openRotationAudioGate(node, existing);
-        node.className = "we-layer we-layer--fadein";
-        void node.offsetWidth; // 强制 reflow，确保 transition 从 0 起跑
-        node.className = "we-layer we-layer--fadein we-layer--fadein-on";
-        scheduleFadingLayerRemoval(existing);
+        // 过场：新层在旧层之上入场（旧层保持不透明垫着，玻璃 backdrop-filter
+        // 依赖不透明背景）；旧层退场 / 音频放行 / 收尾清理都在
+        // startLayerTransition 里统一处理。
+        startLayerTransition(node, existing, switchTr);
       }
     }
     const canvas = node.querySelector("canvas.we-media--canvas");
@@ -4518,7 +4698,8 @@ function retireFadingLayer() {
   // 旧层已退场 → 放行这次渐变的新层音频（不匹配则说明闸属于另一次渐变）。
   releaseRotationAudioGateFor(node);
 }
-function scheduleFadingLayerRemoval(node) {
+function scheduleFadingLayerRemoval(node, ms) {
+  const hold = (typeof ms === "number" && ms > 0 ? ms : ROTATION_FADE_MS) + 100;
   if (typeof window === "undefined" || typeof window.setTimeout !== "function") {
     retireFadingLayer();
     return;
@@ -4533,7 +4714,52 @@ function scheduleFadingLayerRemoval(node) {
     // Edge canvas：只有绘制上下文仍属于旧层时才停（新层已 weStartDraw 接管）。
     if (weDrawCtx && weDrawCtx.canvas && typeof node.contains === "function"
       && node.contains(weDrawCtx.canvas)) weStopDraw();
-  }, ROTATION_FADE_MS + 100);
+  }, hold);
+}
+
+// ── 切换过场：把「新层入场 + 旧层退场」交给选定的过场动画 ────────────────────
+// 只走内联样式 + 一个通用 transition 规则（.we-layer--switch），不写死每种过场的
+// ·-on 类，好处是新增过场只需在 switchFrames 里加一条。
+// cut 不会走到这里：调用方已把 startFade 置假、走「立即拆旧层」的硬切路径。
+function applyInlineStyle(node, style) {
+  if (!node || !node.style) return;
+  for (const k in style) {
+    try { node.style[k] = style[k]; } catch { /* ignore */ }
+  }
+}
+// 过场收尾：新层必须回到「干净」状态 —— 留着内联 transform / clip-path /
+// will-change 会让满屏视频永久占一个合成层（applyEffects 特意避免这种开销）。
+function resetLayerSwitchStyles(node) {
+  if (!node) return;
+  try { node.className = "we-layer"; } catch { /* ignore */ }
+  try {
+    node.style.transform = "";
+    node.style.opacity = "";
+    node.style.clipPath = "";
+    node.style.removeProperty("--we-switch-ms");
+  } catch { /* ignore */ }
+}
+function startLayerTransition(node, outgoing, tr) {
+  // 音频闸先开：新层静音，等旧层这次过场结束后才出声（见 openRotationAudioGate）。
+  openRotationAudioGate(node, outgoing);
+  // 两者默认都是 z-index:-2，谁在上面靠 DOM 顺序（live 的 staging 容器是**提前**
+  // 挂到 body 的，顺序不保证）—— 过场期间显式把旧层压到新层之下。两者都仍在
+  // scrim(-1) 之下，所以不会盖到界面上。
+  try { outgoing.style.zIndex = "-3"; } catch { /* ignore */ }
+  const frames = switchFrames(tr.id, tr.dir);
+  applyInlineStyle(node, frames.inFrom);
+  try { node.style.setProperty("--we-switch-ms", tr.ms + "ms"); } catch { /* ignore */ }
+  node.className = "we-layer we-layer--switch";   // 顺带脱掉 we-layer--staging
+  // 只有需要旧层同时动起来的过场（推移 / 缩放）才给它挂 switch 类；其余过场旧层
+  // 保持不透明静止垫着（玻璃 backdrop-filter 依赖这层不透明背景）。
+  if (tr.id !== "fade") outgoing.className = "we-layer we-layer--switch we-layer--switch-out";
+  void node.offsetWidth;                          // 强制 reflow：让初态成为 transition 起点
+  applyInlineStyle(node, frames.inTo);
+  applyInlineStyle(outgoing, frames.outTo);
+  scheduleFadingLayerRemoval(outgoing, tr.ms);
+  if (typeof window !== "undefined" && typeof window.setTimeout === "function") {
+    window.setTimeout(() => resetLayerSwitchStyles(node), tr.ms + 60);
+  }
 }
 
 // ── Effect application: push the knobs into CSS variables ───────────────────
@@ -5008,14 +5234,16 @@ const PICKER_TAB_KEY = "dsh-wallpaper-engine:picker-tab";
 const PICKER_TABS = [
   { id: "wallpaper", label: "壁纸" },
   { id: "appearance", label: "外观" },
-  { id: "font", label: "字体" },
   { id: "mascot", label: "吉祥物" },
   { id: "effects", label: "效果" },
+  { id: "audio", label: "声音" },
   { id: "advanced", label: "高级" },
 ];
 function readSavedPickerTab() {
   try {
     const v = localStorage.getItem(PICKER_TAB_KEY);
+    // 「字体」页签已并入「外观」（设置页签重组）：老值迁移过去，别把用户甩回「壁纸」。
+    if (v === "font") return "appearance";
     if (v && PICKER_TABS.some((t) => t.id === v)) return v;
   } catch { /* ignore */ }
   return "wallpaper";
@@ -5168,7 +5396,11 @@ let pickerFocusPending = false;
 // GPU 抓帧缓存状态（面板展示用）：wid 对应当前面板壁纸，pinned=缓存里已有
 // <key>_gpu.png。GPU 帧优先于「壁纸画面刷新」全部档位（按用户决策），因此
 // 想切档位/换回 CPU 生成的画面必须先清掉它 —— 面板据此给出提示与清除入口。
-const gpuFrameUi = { wid: "", pinned: false, busy: false, probedAt: 0, error: "" };
+const gpuFrameUi = {
+  wid: "", pinned: false, busy: false, probedAt: 0, error: "",
+  // 实时帧预览用：抓帧的像素尺寸（宿主 HEAD 的 X-WE-GPU-W/H）+ 手动重抓是否在途。
+  w: 0, h: 0, recapturing: false,
+};
 const GPU_FRAME_PROBE_TTL_MS = 30000;
 function gpuFrameToken(frameUrl) {
   const src = String(frameUrl || "");
@@ -5179,6 +5411,16 @@ function markGpuFrameProbed(wid, pinned) {
   gpuFrameUi.wid = String(wid || "");
   gpuFrameUi.pinned = Boolean(pinned);
   gpuFrameUi.probedAt = Date.now();
+}
+// 面板上「当前壁纸实时帧」微缩预览的 URL：与层里正在用的那个 URL **同源**（同一
+// 画面档位；scene-frame 路由在有 _gpu.png 时优先服务它），所以预览看到什么、切换
+// 途中与 live 首帧前显示的就是什么。尾上挂一个缓存破坏参数：probedAt 一变（重抓/
+// 清除后的复检）URL 就变 → <img> 会重新取图，预览立刻跟上。
+function framePreviewSrc(selLike) {
+  const v = Number(selLike && selLike.frameVariants && selLike.frameVariants[String(selLike && selLike.id)]) || 0;
+  const base = frameUrlWithVariant(selLike && selLike.sceneFrameUrl, v);
+  if (!base) return "";
+  return base + (base.indexOf("?") === -1 ? "?" : "&") + "we-prev=" + (gpuFrameUi.probedAt || 0);
 }
 // 探测当前壁纸的静态帧槽位状态（HEAD，纯磁盘探测，不触发 CPU 提取）。带 TTL
 // 去重：syncLayers 调用频繁，同一壁纸 30s 内只探一次；force 用于清除后复检。
@@ -5197,6 +5439,11 @@ function probeGpuFrameState(frameUrl, force) {
       const pinned = Boolean(r && r.ok && r.headers && typeof r.headers.get === "function"
         && r.headers.get("x-we-gpu") === "1");
       gpuFrameUi.pinned = pinned;
+      // 存帧像素尺寸（预览窗口展示用；旧宿主没有这两个头 → 保持 0，预览只显示图）。
+      const gw = pinned ? Number(r.headers.get("x-we-gpu-w")) : 0;
+      const gh = pinned ? Number(r.headers.get("x-we-gpu-h")) : 0;
+      gpuFrameUi.w = Number.isFinite(gw) && gw > 0 ? gw : 0;
+      gpuFrameUi.h = Number.isFinite(gh) && gh > 0 ? gh : 0;
       gpuFrameUi.busy = false;
       if (pinned !== wasPinned) { try { emit(); } catch { /* ignore */ } }
     })
@@ -5386,6 +5633,23 @@ function WallpaperPicker(props) {
   };
   const onBorder = (pct) => { selection.border = pct / 100; persistSelection(); emit(); };
   const onBlur = (px) => { selection.blur = px; persistSelection(); emit(); };
+  // 切换过场（类型 / 方向 / 速度）：只写选择 —— 下一次换壁纸（手动点选或轮换提交）
+  // 生效，不需要重建当前层。
+  const onSwitchTransition = (id) => {
+    if (!SWITCH_TRANSITION_VALUES.includes(id)) return;
+    selection.switchTransition = id;
+    persistSelection(); emit();
+  };
+  const onSwitchTransitionDir = (dir) => {
+    if (!SWITCH_DIRS.includes(dir)) return;
+    selection.switchTransitionDir = dir;
+    persistSelection(); emit();
+  };
+  const onSwitchTransitionSpeed = (id) => {
+    if (!SWITCH_SPEED_VALUES.includes(id)) return;
+    selection.switchTransitionSpeed = id;
+    persistSelection(); emit();
+  };
   const onWallpaperBlur = (px) => { selection.wallpaperBlur = px; persistSelection(); emit(); };
   const onBackgroundBrightness = (pct) => { selection.backgroundBrightness = pct; persistSelection(); emit(); };
   const onBackgroundContrast = (pct) => { selection.backgroundContrast = pct; persistSelection(); emit(); };
@@ -5510,7 +5774,7 @@ function WallpaperPicker(props) {
         } catch { /* 无 body：按 HTTP 状态判 */ }
         if (!r.ok || !declaredRemoved) {
           gpuFrameUi.busy = false;
-          gpuFrameUi.error = !r.ok ? ("宿主返回 " + r.status) : "缓存文件未删除（权限或占用）";
+          gpuFrameUi.error = !r.ok ? ("清除失败：宿主返回 " + r.status) : "清除失败：缓存文件未删除（权限或占用）";
           emit();
           return;
         }
@@ -5529,9 +5793,41 @@ function WallpaperPicker(props) {
       })
       .catch(() => {
         gpuFrameUi.busy = false;
-        gpuFrameUi.error = "清除请求失败";
+        gpuFrameUi.error = "清除失败：请求未完成";
         emit();
       });
+  };
+  // 「重新截」：实时渲染**开着时也要能用** —— GPU 实时帧就是切换途中 / live 首帧
+  // 之前给用户看的那张静帧，构图或时机不对时（黑帧、旧视口、切走时那张）用户必须
+  // 能立刻重抓，而不是先关掉实时渲染再回来。
+  // 走的是自动回填那条同一条安全路径（先抓帧 + 内容门禁 → 成功后才清旧帧 → PUT），
+  // 所以抓不到时**不会**把原来那张删掉；失败原因直接显示在面板上。
+  // 当前 live 渲染页的 iframe（面板「重新截」的抓帧源）。
+  // livePointerFrame 由 syncLayers 每次挂上 live 层时更新；切到非 live 壁纸后它可能
+  // 仍指向已移除的旧元素，所以再用 DOM 查一次兜底。
+  const currentLiveFrame = () => {
+    const ref = livePointerFrame;
+    if (ref && (!("isConnected" in ref) || ref.isConnected)) return ref;
+    try {
+      const node = document.getElementById(LAYER_ID);
+      const f = node && typeof node.querySelector === "function" ? node.querySelector("iframe.we-live-iframe") : null;
+      if (f) return f;
+    } catch { /* ignore */ }
+    return null;
+  };
+  const onRecaptureGpuFrame = () => {
+    if (sel.type !== "scene" || !sel.sceneFrameUrl || gpuFrameUi.recapturing) return;
+    const live = currentLiveFrame();
+    if (!live) {
+      gpuFrameUi.error = "拿不到实时画面（实时渲染没在运行）→ 想抓实时帧请先开「场景实时渲染」";
+      emit();
+      return;
+    }
+    gpuFrameUi.recapturing = true;
+    gpuFrameUi.error = "";
+    emit();
+    // force：即使槽里已有 GPU 帧也重抓一张（用户显式要求换一张）。
+    scheduleLiveFrameBackfill(live, { force: true });
   };
   // 自定义画面（截屏导入）：从 WE 等处截图后导入，成为该壁纸第 5 档显示源。
   const setCustomFrameLocal = (wid, on) => {
@@ -5835,6 +6131,8 @@ function WallpaperPicker(props) {
 
   // ── 页签面板内容（函数声明提升，renderActiveTab 在 return 里先调用）──────
   function renderWallpaperTab() {
+    // 当前过场（类型 + 方向 + 实测算出的毫秒）：一次算好给三行控件用。
+    const switchTr = switchTransitionOf(sel);
     return React.createElement(React.Fragment, null,
       // ── 当前壁纸: vinyl record beside the selection, in both card styles. ──
       React.createElement("div", { className: "we-picker__section" },
@@ -5926,6 +6224,60 @@ function WallpaperPicker(props) {
             className: "we-picker__btn", type: "button",
             onClick: onRefresh, disabled: sel.loading,
           }, sel.loading ? "刷新中…" : "刷新"),
+        ),
+      ),
+      // ── 切换过场（手动点选与自动轮播共用）：类型 / 方向 / 速度 ──
+      // 默认「硬切」（零成本、零风险）；等「最帅的」讨论定下来，改 DEFAULTS 一处
+      // 即可换默认。每种过场只动 transform / opacity / clip-path（见 switchFrames）。
+      React.createElement("div", { className: "we-picker__section" },
+        React.createElement("div", { className: "we-picker__section-head" },
+          React.createElement("span", { className: "we-picker__section-label" }, "切换过场"),
+        ),
+        // 过场动画：**下拉菜单**（不用水平平铺）—— 过场会持续增加，平铺一排按钮
+        // 迟早挤成两行、还会把「方向 / 时长」挤下去；下拉天然可扩展。
+        React.createElement("div", { className: "we-picker__ctl" },
+          ctlText("过场动画", "换壁纸时的转场"),
+          React.createElement("select", {
+            className: "we-picker__select",
+            value: sel.switchTransition,
+            onChange: (e) => onSwitchTransition(e.target.value),
+            "aria-label": "过场动画",
+          },
+            ...SWITCH_TRANSITIONS.map((t) =>
+              React.createElement("option", { key: t.id, value: t.id }, t.label)),
+          ),
+        ),
+        // 方向：只有方向型过场（推移 / 擦除 / 条带）听它；条带用它决定竖条 / 横条。
+        switchTr.directional && React.createElement("div", { className: "we-picker__ctl we-picker__ctl--wrap" },
+          ctlText("方向", "新画面从哪边进"),
+          React.createElement("div", { className: "we-picker__seg" },
+            SWITCH_DIRS.map((d) =>
+              React.createElement("button", {
+                key: d,
+                className: "we-picker__btn we-picker__rate" + (sel.switchTransitionDir === d ? " we-picker__rate--active" : ""),
+                type: "button",
+                onClick: () => onSwitchTransitionDir(d),
+                "aria-pressed": sel.switchTransitionDir === d ? "true" : "false",
+                "aria-label": "过场方向 " + SWITCH_DIR_LABELS[d],
+              }, SWITCH_DIR_LABELS[d]),
+            ),
+          ),
+        ),
+        // 时长档：只影响速度乘子，基准时长写在各过场里（见 SWITCH_TRANSITIONS）。
+        switchTr.ms > 0 && React.createElement("div", { className: "we-picker__ctl we-picker__ctl--wrap" },
+          ctlText("时长", "当前约 " + switchTr.ms + " ms"),
+          React.createElement("div", { className: "we-picker__seg" },
+            SWITCH_SPEEDS.map((s) =>
+              React.createElement("button", {
+                key: s.id,
+                className: "we-picker__btn we-picker__rate" + (sel.switchTransitionSpeed === s.id ? " we-picker__rate--active" : ""),
+                type: "button",
+                onClick: () => onSwitchTransitionSpeed(s.id),
+                "aria-pressed": sel.switchTransitionSpeed === s.id ? "true" : "false",
+                "aria-label": "过场速度 " + s.label,
+              }, s.label),
+            ),
+          ),
         ),
       ),
       // ── 自动轮播（原「轮播列表」）: user-defined carousel lists, each with
@@ -6251,6 +6603,91 @@ function WallpaperPicker(props) {
         swatchRow("玻璃颜色", GLASS_COLOR_PRESETS, sel.glassColor, onGlassColor, { key: "glass-color" }),
         SliderRow("玻璃透明度", 0, 60, 5, sel.glassAlpha, onGlassAlpha, sel.glassAlpha + "%"),
       ),
+      // ── 细节：玻璃雾化深度 + 边框强调（原「效果」页签的两个材质细调项，
+      //    与「主题」同属全局外观，故并入本页签）。──
+      React.createElement("div", { className: "we-picker__section" },
+        React.createElement("div", { className: "we-picker__section-head" },
+          React.createElement("span", { className: "we-picker__section-label" }, "细节"),
+        ),
+        // 「雾化」= 原「玻璃」滑块：控制的只有模糊半径（雾面深度），饱和度是解耦
+        // 的常量材料属性（见 GLASS_SATURATE）。改名是为了不与同组的「玻璃颜色 /
+        // 玻璃透明度」字面撞车。
+        SliderRow("雾化", 0, 60, 1, sel.blur, onBlur, sel.blur + "px", "glass-frost", {
+          tooltip: "玻璃面板（设置窗口、输入栏、气泡、侧栏）的模糊半径 —— 越大越像磨砂玻璃；色彩饱和度不随本滑块变化",
+        }),
+        SliderRow("边框", 0, 90, 5, Math.round(sel.border * 100), onBorder, Math.round(sel.border * 100) + "%", "border-emphasis", {
+          tooltip: "提高边框 / 分割线的对比度（浅色与深色主题通用）",
+        }),
+      ),
+      // ── 字体 (custom typography)：原「字体」页签并入「外观」——总开关（关 =
+      //    恢复 dsh 原生字体）+ 颜色 / 字重 / 字体族，开启时才渲染细节控件。
+      //    #57 精简回归版。 ──
+      React.createElement("div", { className: "we-picker__section" },
+        React.createElement("div", { className: "we-picker__section-head" },
+          React.createElement("span", { className: "we-picker__section-label" }, "全局字体"),
+        ),
+        switchRow("字体自定义", sel.fontCustom, (e) => onToggleFontCustom(e.target.checked), {
+          tooltip: "关闭后恢复 dsh 默认字体外观；开启后可调颜色/字重/字体族",
+        }),
+        sel.fontCustom && React.createElement(React.Fragment, null,
+          React.createElement("div", { className: "we-picker__ctl" },
+            ctlText("字体颜色"),
+            React.createElement("label", { className: "we-picker__swatch-custom" },
+              React.createElement("input", {
+                type: "color",
+                value: sel.fontColor,
+                onInput: (e) => onFontColor(e.target.value),
+                onChange: (e) => onFontColor(e.target.value),
+                title: "自定义字体颜色",
+              }),
+              React.createElement("span", { className: "we-picker__hint we-picker__value" }, sel.fontColor),
+            ),
+          ),
+          SliderRow("字重", 100, 900, 50, sel.fontWeight, onFontWeight, String(sel.fontWeight), "font-weight", {
+            tooltip: "每 50 一档，插件按数值连续补粗细（描边渐变），不再只有常规/粗体两档"
+              + "。单字面中文字体（黑体/宋体等）低于 400 无更细字面；600 起系统合成粗体会再叠一层",
+          }),
+          // 字体族选择：专用胶囊按钮（.we-picker__font-chip），每个选项用它
+          // 自己的字体渲染预览 —— 按钮上看到的字样即应用后的效果。
+          React.createElement("div", { className: "we-picker__ctl we-picker__ctl--wrap" },
+            ctlText("字体", "按钮以自身字体预览"),
+            React.createElement("div", { className: "we-picker__chips" },
+              FONT_FAMILY_LABELS.map((f) =>
+                React.createElement("button", {
+                  key: f.v,
+                  type: "button",
+                  className: "we-picker__font-chip" + (sel.fontFamily === f.v ? " we-picker__font-chip--active" : ""),
+                  style: { fontFamily: fontFamilyStack(f.v) },
+                  title: f.v === "inherit" ? "跟随 dsh 原生字体栈" : FONT_FAMILY_STACKS[f.v],
+                  onClick: () => onFontFamily(f.v),
+                  "aria-pressed": sel.fontFamily === f.v ? "true" : "false",
+                  "aria-label": "字体 " + f.label,
+                }, f.label),
+              ),
+            ),
+          ),
+        ),
+      ),
+      // ── 输入光标（#83）：光标色与壁纸相近时会隐形，这里给它一个独立于字体
+      //    自定义的颜色项。「自动」= 不注入任何规则，跟随 dsh 原生表现。──
+      React.createElement("div", { className: "we-picker__section" },
+        React.createElement("div", { className: "we-picker__section-head" },
+          React.createElement("span", { className: "we-picker__section-label" }, "输入光标"),
+        ),
+        swatchRow("光标颜色", CARET_COLOR_PRESETS, sel.caretColor, onCaretColor, {
+          key: "caret-color",
+          hint: "输入框光标看不清时换个颜色",
+          auto: React.createElement("button", {
+            key: "auto",
+            className: "we-picker__swatch we-picker__swatch--auto" + (sel.caretColor === "" ? " we-picker__swatch--active" : ""),
+            type: "button",
+            title: "跟随 dsh 原生光标颜色",
+            onClick: () => onCaretColor(""),
+            "aria-label": "光标颜色 自动",
+          }, "自动"),
+          colorValue: sel.caretColor || "#4f8cff",
+        }),
+      ),
       // ── 窗口与侧栏：两套液态玻璃总开关，细节控件缩进一级并随开关显隐 ──
       React.createElement("div", { className: "we-picker__section" },
         React.createElement("div", { className: "we-picker__section-head" },
@@ -6308,74 +6745,50 @@ function WallpaperPicker(props) {
     );
   }
 
-  function renderFontTab() {
+  function renderAudioTab() {
+    // 声音（原「效果」页签里的一段，独立成页签与「效果」平级）：壁纸音轨
+    // （视频 / 场景内嵌 MP4 / 场景包内音频共用一套设置）+ 系统音频 / 媒体集成。
     return React.createElement(React.Fragment, null,
-      // ── 字体 (custom typography): 总开关（关 = 恢复 dsh 原生字体）+
-      //    颜色 / 字重 / 字体族，开启时才渲染细节控件。#57 精简回归版。 ──
       React.createElement("div", { className: "we-picker__section" },
         React.createElement("div", { className: "we-picker__section-head" },
-          React.createElement("span", { className: "we-picker__section-label" }, "全局字体"),
+          React.createElement("span", { className: "we-picker__section-label" }, "声音"),
         ),
-        switchRow("字体自定义", sel.fontCustom, (e) => onToggleFontCustom(e.target.checked), {
-          tooltip: "关闭后恢复 dsh 默认字体外观；开启后可调颜色/字重/字体族",
+        SliderRow("音量", 0, 100, 5,
+          Math.round((Number(sel.videoVolume) || 0) * 100), onVideoVolume,
+          Math.round((Number(sel.videoVolume) || 0) * 100) + "%"),
+        switchRow("壁纸音轨", sel.videoAudioEnabled !== false, () => onToggleAudio(), {
+          hint: "关闭=静音（保留音量数值）· 开启时音量 0 自动 50%",
+          tooltip: "视频壁纸与场景壁纸（内嵌 MP4 音轨 / 包内独立音频）共用；默认静音，开启时若音量为 0 会自动提到 50%",
         }),
-        sel.fontCustom && React.createElement(React.Fragment, null,
-          React.createElement("div", { className: "we-picker__ctl" },
-            ctlText("字体颜色"),
-            React.createElement("label", { className: "we-picker__swatch-custom" },
-              React.createElement("input", {
-                type: "color",
-                value: sel.fontColor,
-                onInput: (e) => onFontColor(e.target.value),
-                onChange: (e) => onFontColor(e.target.value),
-                title: "自定义字体颜色",
-              }),
-              React.createElement("span", { className: "we-picker__hint we-picker__value" }, sel.fontColor),
-            ),
-          ),
-          SliderRow("字重", 100, 900, 50, sel.fontWeight, onFontWeight, String(sel.fontWeight), "font-weight", {
-            tooltip: "每 50 一档，插件按数值连续补粗细（描边渐变），不再只有常规/粗体两档"
-              + "。单字面中文字体（黑体/宋体等）低于 400 无更细字面；600 起系统合成粗体会再叠一层",
-          }),
-          // 字体族选择：专用胶囊按钮（.we-picker__font-chip），每个选项用它
-          // 自己的字体渲染预览 —— 按钮上看到的字样即应用后的效果。
-          React.createElement("div", { className: "we-picker__ctl we-picker__ctl--wrap" },
-            ctlText("字体", "按钮以自身字体预览"),
-            React.createElement("div", { className: "we-picker__chips" },
-              FONT_FAMILY_LABELS.map((f) =>
-                React.createElement("button", {
-                  key: f.v,
-                  type: "button",
-                  className: "we-picker__font-chip" + (sel.fontFamily === f.v ? " we-picker__font-chip--active" : ""),
-                  style: { fontFamily: fontFamilyStack(f.v) },
-                  title: f.v === "inherit" ? "跟随 dsh 原生字体栈" : FONT_FAMILY_STACKS[f.v],
-                  onClick: () => onFontFamily(f.v),
-                  "aria-pressed": sel.fontFamily === f.v ? "true" : "false",
-                  "aria-label": "字体 " + f.label,
-                }, f.label),
-              ),
-            ),
-          ),
-        ),
       ),
-      // ── 输入光标（#83）：光标色与壁纸相近时会隐形，这里给它一个独立于字体
-      //    自定义的颜色项。「自动」= 不注入任何规则，跟随 dsh 原生表现。
       React.createElement("div", { className: "we-picker__section" },
         React.createElement("div", { className: "we-picker__section-head" },
-          React.createElement("span", { className: "we-picker__section-label" }, "输入光标"),
+          React.createElement("span", { className: "we-picker__section-label" }, "系统声音与媒体"),
         ),
-        swatchRow("光标颜色", CARET_COLOR_PRESETS, sel.caretColor, onCaretColor, {
-          key: "caret-color",
-          hint: "输入框光标看不清时换个颜色",
-          auto: React.createElement("button", {
-            key: "auto",
-            className: "we-picker__swatch we-picker__swatch--auto" + (sel.caretColor === "" ? " we-picker__swatch--active" : ""),
-            type: "button",
-            title: "跟随 dsh 原生光标颜色",
-            onClick: () => onCaretColor(""),
-            "aria-label": "光标颜色 自动",
-          }, "自动"),
-          colorValue: sel.caretColor || "#4f8cff",
+        switchRow("系统音频反应", sel.audioSource !== "off", (e) => {
+          selection.audioSource = e.target.checked ? "auto" : "off";
+          persistSelection();
+          emit();
+        }, {
+          hint: "壁纸随系统声音律动 · 拿不到音频时回落模拟",
+          tooltip: "把系统正在播放的声音频谱喂给壁纸的音频可视化（采集系统输出/loopback，不是麦克风）。三平台都内置：macOS 走 CoreAudio、Windows 走 WASAPI 回环、Linux 走 PulseAudio/PipeWire —— 不需要额外安装，也不再需要「立体声混音」之类虚拟声卡；仅 macOS 首次使用会要一次「音频录制」授权。拿不到音频时自动回落壁纸内置的模拟频谱",
+        }),
+        switchRow("媒体信息", sel.mediaIntegration !== false, (e) => {
+          selection.mediaIntegration = e.target.checked;
+          persistSelection();
+          emit();
+        }, {
+          hint: "歌名 / 歌手 / 专辑 / 封面 / 进度 → 壁纸的媒体监听器",
+          tooltip: "把系统正在播放的歌曲信息推给壁纸（wallpaperMediaIntegration）：macOS 走 MediaRemote、Windows 走系统媒体会话（GSMTC）、Linux 走 MPRIS —— 三平台都内置，不需要安装 media-control / playerctl。没有正在播放的媒体时壁纸保持自身静态态",
+        }),
+        sel.mediaIntegration !== false && switchRow("在线歌词", sel.mediaLyricsOnline === true, (e) => {
+          selection.mediaLyricsOnline = e.target.checked;
+          persistSelection();
+          emit();
+        }, {
+          key: "media-lyrics-online",
+          hint: "本地找不到时联网查一次（lrclib.net）",
+          tooltip: "歌词优先取本地的（音频同目录的 .lrc、以及已经缓存过的歌词）；开启后，本地没有才会向 lrclib.net 查一次 —— 那次请求会把歌名/歌手/专辑发出去，所以默认关闭。本地歌词不受这个开关影响",
         }),
       ),
     );
@@ -6444,67 +6857,17 @@ function WallpaperPicker(props) {
         }, "选择壁纸"),
       );
     }
+    // 画面来源相关的判定算一次给下面几行用：
+    // - sceneWithFrame：有静态帧可换/可抓的场景壁纸；
+    // - gpuPinnedHere：当前面板这张壁纸的槽里确实有实时帧（探测带 TTL，见
+    //   probeGpuFrameState）—— 跨壁纸的 pinned 状态不能拿来显示。
+    const sceneWithFrame = sel.type === "scene" && Boolean(sel.sceneFrameUrl);
+    const gpuPinnedHere = gpuFrameUi.wid === String(sel.id) && gpuFrameUi.pinned;
     return React.createElement(React.Fragment, null,
       // ── 画面：壁纸层滤镜与边框细调 ──
       React.createElement("div", { className: "we-picker__section" },
         React.createElement("div", { className: "we-picker__section-head" },
           React.createElement("span", { className: "we-picker__section-label" }, "画面"),
-        ),
-        // ── 壁纸画面刷新（用户方案）：场景静态帧生成逻辑手动轮换 ──
-        // 显示异常时逐档刷新；未导入自定义画面时 4 档，导入后 5 档（第 5 档=
-        // 用户截屏）。档位按壁纸记忆；beta 渲染不参与。读数实时显示档位与总数。
-        sel.type === "scene" && sel.sceneFrameUrl && React.createElement("div", { className: "we-picker__ctl" },
-          ctlText("壁纸画面刷新", "显示异常时换一种生成逻辑",
-            "场景壁纸静态帧生成逻辑：合成 / 主纹理 / 作者原画 / 预览图（+导入后的自定义画面）。每点一次换一种，选择记忆在当前壁纸上；可反复刷新直到满意。不包含 beta 渲染"),
-          React.createElement("button", {
-            className: "we-picker__btn", type: "button",
-            onClick: onRefreshFrame,
-            "aria-label": "刷新壁纸画面生成逻辑",
-          }, "刷新"),
-          React.createElement("span", { className: "we-picker__hint we-picker__value" },
-            "第 " + ((Number(sel.frameVariants && sel.frameVariants[String(sel.id)]) || 0) + 1)
-              + "/" + frameVariantCount(sel, String(sel.id)) + " 秡 · "
-              + FRAME_VARIANTS[Number(sel.frameVariants && sel.frameVariants[String(sel.id)]) || 0].label
-              + " · 共 " + frameVariantCount(sel, String(sel.id)) + " 种"),
-        ),
-        // ── GPU 抓帧缓存：实时渲染抓的帧优先于上面全部档位（用户决策），
-        // 因此切档位前必须先清除它 —— 这里给出状态提示与唯一清除入口。
-        sel.type === "scene" && sel.sceneFrameUrl
-          && gpuFrameUi.wid === String(sel.id) && gpuFrameUi.pinned
-          && React.createElement("div", { className: "we-picker__ctl" },
-            ctlText("GPU 实时帧",
-              "已缓存，优先于全部画面档位",
-              "实时渲染成功后自动抓帧缓存了这张壁纸的静态画面（<key>_gpu.png），它优先于「壁纸画面刷新」的所有档位 —— 想切档位或换回 CPU 生成的画面，先点「清除 GPU 帧」删掉这份缓存，之后刷新档位立即生效。"),
-            React.createElement("button", {
-              className: "we-picker__btn", type: "button",
-              onClick: onClearGpuFrame,
-              "aria-label": "清除 GPU 实时帧缓存",
-            }, gpuFrameUi.busy ? "清除中…" : "清除 GPU 帧"),
-            gpuFrameUi.error
-              && React.createElement("div", { className: "we-picker__hint" },
-                "清除失败：" + gpuFrameUi.error + "（缓存仍在，画面仍是 GPU 帧）"),
-          ),
-        // ── 自定义画面（截屏导入）：无法静态生成的壁纸（骨骼拼装场景，预览
-        // gif 仅 160px）由用户从 WE 截图导入，画质=截图分辨率；作为第 5 档。
-        sel.type === "scene" && React.createElement("div", { className: "we-picker__ctl" },
-          ctlText("自定义画面",
-            "手动给电脑桌面截图，导入截图解决错误壁纸",
-            "手动对电脑桌面截图（壁纸显示效果的分辨率即最终展示画质），再回来点「导入画面…」选中该截图；导入后自动切换为该图，可随刷新档位切回其他生成逻辑"),
-          React.createElement("button", {
-            className: "we-picker__btn", type: "button",
-            onClick: () => { if (customFrameInput) customFrameInput.click(); },
-          }, frameVariantCount(sel, String(sel.id)) === FRAME_VARIANTS.length ? "替换图片…" : "导入画面…"),
-          frameVariantCount(sel, String(sel.id)) === FRAME_VARIANTS.length && React.createElement("button", {
-            className: "we-picker__btn", type: "button",
-            onClick: onClearCustomFrame,
-          }, "清除"),
-          React.createElement("input", {
-            type: "file",
-            accept: "image/png,image/jpeg,image/webp",
-            style: { display: "none" },
-            ref: (el) => { customFrameInput = el; },
-            onChange: onCustomFrameFile,
-          }),
         ),
         SliderRow("壁纸模糊", 0, 60, 1, sel.wallpaperBlur, onWallpaperBlur, sel.wallpaperBlur + "px"),
         SliderRow("亮度", 40, 160, 5, sel.backgroundBrightness, onBackgroundBrightness, sel.backgroundBrightness + "%"),
@@ -6518,46 +6881,6 @@ function WallpaperPicker(props) {
           tooltip: "壁纸向原生底色淡出（浅色纯白 / 深色纯黑）；透明生效时壁纸层会垫这层原生底色，以保证玻璃模糊不被透明背景破坏。场景壁纸的垫底静态帧会在实时画面出场后退场，不会在淡出时透出来",
         }),
         SliderRow("暗化", 0, 90, 5, Math.round(sel.scrim * 100), onScrim, Math.round(sel.scrim * 100) + "%"),
-        SliderRow("边框", 0, 90, 5, Math.round(sel.border * 100), onBorder, Math.round(sel.border * 100) + "%"),
-        SliderRow("玻璃", 0, 60, 1, sel.blur, onBlur, sel.blur + "px"),
-        // ── 声音：壁纸音轨（视频 / 场景内嵌 MP4 / 场景包内音频共用一套设置）──
-        React.createElement("div", { className: "we-picker__section" },
-          React.createElement("div", { className: "we-picker__section-head" },
-            React.createElement("span", { className: "we-picker__section-label" }, "声音"),
-          ),
-          SliderRow("音量", 0, 100, 5,
-            Math.round((Number(sel.videoVolume) || 0) * 100), onVideoVolume,
-            Math.round((Number(sel.videoVolume) || 0) * 100) + "%"),
-          switchRow("系统音频反应", sel.audioSource !== "off", (e) => {
-            selection.audioSource = e.target.checked ? "auto" : "off";
-            persistSelection();
-            emit();
-          }, {
-            hint: "壁纸随系统声音律动 · 拿不到音频时回落模拟",
-            tooltip: "把系统正在播放的声音频谱喂给壁纸的音频可视化（采集系统输出/loopback，不是麦克风）。三平台都内置：macOS 走 CoreAudio、Windows 走 WASAPI 回环、Linux 走 PulseAudio/PipeWire —— 不需要额外安装，也不再需要「立体声混音」之类虚拟声卡；仅 macOS 首次使用会要一次「音频录制」授权。拿不到音频时自动回落壁纸内置的模拟频谱",
-          }),
-          switchRow("媒体信息", sel.mediaIntegration !== false, (e) => {
-            selection.mediaIntegration = e.target.checked;
-            persistSelection();
-            emit();
-          }, {
-            hint: "歌名 / 歌手 / 专辑 / 封面 / 进度 → 壁纸的媒体监听器",
-            tooltip: "把系统正在播放的歌曲信息推给壁纸（wallpaperMediaIntegration）：macOS 走 MediaRemote、Windows 走系统媒体会话（GSMTC）、Linux 走 MPRIS —— 三平台都内置，不需要安装 media-control / playerctl。没有正在播放的媒体时壁纸保持自身静态态",
-          }),
-          sel.mediaIntegration !== false && switchRow("在线歌词", sel.mediaLyricsOnline === true, (e) => {
-            selection.mediaLyricsOnline = e.target.checked;
-            persistSelection();
-            emit();
-          }, {
-            key: "media-lyrics-online",
-            hint: "本地找不到时联网查一次（lrclib.net）",
-            tooltip: "歌词优先取本地的（音频同目录的 .lrc、以及已经缓存过的歌词）；开启后，本地没有才会向 lrclib.net 查一次 —— 那次请求会把歌名/歌手/专辑发出去，所以默认关闭。本地歌词不受这个开关影响",
-          }),
-          switchRow("壁纸音轨", sel.videoAudioEnabled !== false, () => onToggleAudio(), {
-            hint: "关闭=静音（保留音量数值）· 开启时音量 0 自动 50%",
-            tooltip: "视频壁纸与场景壁纸（内嵌 MP4 音轨 / 包内独立音频）共用；默认静音，开启时若音量为 0 会自动提到 50%",
-          }),
-        ),
         // ── 场景实时渲染（WebWallGL）：scene.pkg 壁纸的实时 WebGL 形态，默认
         // 开启。失败（首帧超时/运行失联）按壁纸记忆并自动降级回内嵌 MP4 →
         // 静态帧；重开本开关清空全部失败记忆（显式重试入口）。
@@ -6608,23 +6931,83 @@ function WallpaperPicker(props) {
             ),
           ),
         ),
-        // live 诊断日志（本会话有效，不落盘）：默认只记关键事件（准备就绪/领养/
-        // 首帧确认/判失败，每轮轮换 2–3 条，写在控制台与宿主诊断缓冲
-        // `/wallpaper-engine/diag-log`）；这里开的是**逐秒心跳读数**（fps/running/
-        // 暂停原因），排查「为什么没出帧」时用。
-        (sel.type === "scene" || sel.type === "web") && sel.sceneLive !== false && switchRow(
-          "live 诊断日志", liveDiagVerbose(), () => {
-            liveDiagOn = !liveDiagVerbose();
-            // 开关本身也要留痕（强制档：不受本开关影响），否则事后无法判断当时是否在记
-            liveLog("diag-" + (liveDiagOn ? "on" : "off"),
-              liveDiagOn ? "逐秒心跳日志已开启（本会话有效，刷新后失效）" : "逐秒心跳日志已关闭");
-            emit();
-          }, {
-            key: "scene-live-diag",
-            hint: "本会话有效 · 逐秒心跳读数",
-            tooltip: "开启后每秒记录一次渲染页心跳读数（fps / running / 暂停原因）与准备、领养、判失败事件；"
-              + "同时写入浏览器控制台和宿主诊断缓冲（GET /wallpaper-engine/diag-log）。排查 live 掉帧/降级时用，平时关着。",
+        // ── 壁纸画面刷新：**只在实时渲染未生效时**出现 —— 它换的是 CPU 生成的静态帧，
+        //    实时画面在跑时它没有任何作用（换实时帧用下面的「重新截」）。──
+        sel.type === "scene" && sel.sceneFrameUrl && !liveRenderEnabled(sel)
+          && React.createElement("div", { className: "we-picker__ctl" },
+          ctlText("壁纸画面刷新", "显示异常时换一种生成逻辑",
+            "场景壁纸静态帧生成逻辑：合成 / 主纹理 / 作者原画 / 预览图（+导入后的自定义画面）。每点一次换一种，选择记忆在当前壁纸上；可反复刷新直到满意。实时渲染生效时本行不显示（那时画面来自实时渲染，换档位不会生效）"),
+          React.createElement("button", {
+            className: "we-picker__btn", type: "button",
+            onClick: onRefreshFrame,
+            "aria-label": "刷新壁纸画面生成逻辑",
+          }, "刷新"),
+          React.createElement("span", { className: "we-picker__hint we-picker__value" },
+            "第 " + ((Number(sel.frameVariants && sel.frameVariants[String(sel.id)]) || 0) + 1)
+              + "/" + frameVariantCount(sel, String(sel.id)) + " 秡 · "
+              + FRAME_VARIANTS[Number(sel.frameVariants && sel.frameVariants[String(sel.id)]) || 0].label
+              + " · 共 " + frameVariantCount(sel, String(sel.id)) + " 种"),
+        ),
+        // ── GPU 实时帧（抓帧缓存 + 重新截 + 微缩预览）：**实时渲染开着时同样显示**。
+        //    它是切换途中 / live 首帧之前给用户看的那张静帧 —— 构图不对（黑帧、旧视口、
+        //    切走瞬间抓的）时用户必须能立刻重抓，而不是先关掉实时渲染再回来。
+        //    预览窗口指向的就是**层上正在用的那个 URL**（同一档位 + 缓存破坏参数），
+        //    所以「预览看到什么，切换途中就是什么」。──
+        sceneWithFrame && (gpuPinnedHere || liveRenderEnabled(sel))
+          && React.createElement("div", { className: "we-picker__ctl we-picker__ctl--wrap" },
+          ctlText("实时帧",
+            gpuPinnedHere
+              ? "已抓帧 · 优先于全部画面档位"
+              : "实时渲染中 · 可随时抓一张",
+            "实时渲染成功后会自动抓帧缓存这一帧（<key>_gpu.png），它优先于「壁纸画面刷新」的全部档位；切换壁纸途中、以及 live 首帧出来之前，屏幕上显示的就是它。「重新截」会按**当前**画面重抓一张（已存在的缓存会被替换，抓不到则原样保留）；「清除 GPU 帧」删掉缓存、回到 CPU 生成的静态帧。"),
+          // 微缩预览：只有槽里真有实时帧时才显示（否则这里会显示成 CPU 档位帧，误导）。
+          gpuPinnedHere && React.createElement("img", {
+            className: "we-picker__frame-shot",
+            src: framePreviewSrc(sel),
+            alt: "当前壁纸实时帧预览",
+            title: "当前壁纸的实时帧（就是切换途中 / live 首帧前显示的那张静帧）"
+              + (gpuFrameUi.w > 0 && gpuFrameUi.h > 0 ? " · " + gpuFrameUi.w + "×" + gpuFrameUi.h : ""),
           }),
+          React.createElement("button", {
+            className: "we-picker__btn", type: "button",
+            onClick: onRecaptureGpuFrame,
+            disabled: gpuFrameUi.recapturing,
+            "aria-label": "重新截取当前壁纸实时帧",
+          }, gpuFrameUi.recapturing ? "抓帧中…" : "重新截"),
+          gpuPinnedHere && React.createElement("button", {
+            className: "we-picker__btn", type: "button",
+            onClick: onClearGpuFrame,
+            "aria-label": "清除 GPU 实时帧缓存",
+          }, gpuFrameUi.busy ? "清除中…" : "清除 GPU 帧"),
+          gpuPinnedHere && gpuFrameUi.w > 0
+            && React.createElement("span", { className: "we-picker__hint we-picker__value" },
+              gpuFrameUi.w + "×" + gpuFrameUi.h),
+          gpuFrameUi.error
+            && React.createElement("div", { className: "we-picker__hint" }, gpuFrameUi.error),
+        ),
+        // ── 自定义画面（截屏导入）：无法静态生成的壁纸（骨骼拼装场景，预览 gif 仅
+        //    160px）由用户从 WE 截图导入，画质=截图分辨率；作为第 5 档。
+        //    同样**不受实时渲染开关影响**（导入/清除与 live 互不干扰）。──
+        sel.type === "scene" && React.createElement("div", { className: "we-picker__ctl" },
+          ctlText("自定义画面",
+            "手动给电脑桌面截图，导入截图解决错误壁纸",
+            "手动对电脑桌面截图（壁纸显示效果的分辨率即最终展示画质），再回来点「导入画面…」选中该截图；导入后自动切换为该图，可随刷新档位切回其他生成逻辑。实时渲染生效时它仍会作为「壁纸画面刷新」的第 5 档、以及降级回退时的静态帧"),
+          React.createElement("button", {
+            className: "we-picker__btn", type: "button",
+            onClick: () => { if (customFrameInput) customFrameInput.click(); },
+          }, frameVariantCount(sel, String(sel.id)) === FRAME_VARIANTS.length ? "替换图片…" : "导入画面…"),
+          frameVariantCount(sel, String(sel.id)) === FRAME_VARIANTS.length && React.createElement("button", {
+            className: "we-picker__btn", type: "button",
+            onClick: onClearCustomFrame,
+          }, "清除"),
+          React.createElement("input", {
+            type: "file",
+            accept: "image/png,image/jpeg,image/webp",
+            style: { display: "none" },
+            ref: (el) => { customFrameInput = el; },
+            onChange: onCustomFrameFile,
+          }),
+        ),
         // Playback speed — native playbackRate, instant, no media reload. Video
         // wallpapers only (web/iframe and scene wallpapers have no playbackRate).
         sel.type === "video"
@@ -6730,20 +7113,6 @@ function WallpaperPicker(props) {
         // web (iframe) and (later) uploaded image wallpapers alike.
         switchRow("水平翻转", sel.flip, (e) => { selection.flip = e.target.checked; persistSelection(); emit(); }, { key: "flip" }),
       ),
-      // ── 省电：遮挡暂停（借鉴 Wallpaper Engine 的「被遮挡时暂停」）──
-      React.createElement("div", { className: "we-picker__section" },
-        React.createElement("div", { className: "we-picker__section-head" },
-          React.createElement("span", {
-            className: "we-picker__section-label",
-            title: "类似 WE 的遮挡暂停：最小化、切到其它应用或使用电池供电时视频暂停、GPU 解码归零；回到界面 / 接通电源自动继续（网页壁纸仅随页面隐藏被浏览器节流）",
-          }, "省电"),
-        ),
-        switchRow("最小化/切页时暂停", sel.pauseOnHidden, (e) => { selection.pauseOnHidden = e.target.checked; persistSelection(); emit(); }, { key: "pause-hidden" }),
-        switchRow("窗口失焦时暂停", sel.pauseOnBlur, (e) => { selection.pauseOnBlur = e.target.checked; persistSelection(); emit(); }, { key: "pause-blur" }),
-        switchRow("使用电池时暂停", sel.pauseOnBattery, (e) => { selection.pauseOnBattery = e.target.checked; persistSelection(); emit(); }, { key: "pause-battery" }),
-        React.createElement("span", { className: "we-picker__hint" },
-          "被遮挡或用电池时暂停视频、解码归零；回到界面自动继续"),
-      ),
     );
   }
 
@@ -6773,14 +7142,51 @@ function WallpaperPicker(props) {
           tooltip: "Edge 兼容：视频壁纸改用 canvas 渲染，避免浏览器自带的「下载 / 投屏」悬浮工具栏；关闭则始终使用原生 <video>",
         }),
       ),
+      // ── 省电：遮挡暂停（借鉴 Wallpaper Engine 的「被遮挡时暂停」）──
+      React.createElement("div", { className: "we-picker__section" },
+        React.createElement("div", { className: "we-picker__section-head" },
+          React.createElement("span", {
+            className: "we-picker__section-label",
+            title: "类似 WE 的遮挡暂停：最小化、切到其它应用或使用电池供电时视频暂停、GPU 解码归零；回到界面 / 接通电源自动继续（网页壁纸仅随页面隐藏被浏览器节流）",
+          }, "省电"),
+        ),
+        switchRow("最小化/切页时暂停", sel.pauseOnHidden, (e) => { selection.pauseOnHidden = e.target.checked; persistSelection(); emit(); }, { key: "pause-hidden" }),
+        switchRow("窗口失焦时暂停", sel.pauseOnBlur, (e) => { selection.pauseOnBlur = e.target.checked; persistSelection(); emit(); }, { key: "pause-blur" }),
+        switchRow("使用电池时暂停", sel.pauseOnBattery, (e) => { selection.pauseOnBattery = e.target.checked; persistSelection(); emit(); }, { key: "pause-battery" }),
+      ),
+      // ── 实时渲染诊断（本会话有效，不落盘；从「效果」页签移来）：只对**能走实时
+      //    渲染**的壁纸（场景 / 网页）显示 —— 视频、图片壁纸没有渲染页，摆出来是空的。──
+      (sel.type === "scene" || sel.type === "web") && sel.sceneLive !== false
+        && React.createElement("div", { className: "we-picker__section" },
+          React.createElement("div", { className: "we-picker__section-head" },
+            React.createElement("span", { className: "we-picker__section-label" }, "实时渲染诊断"),
+          ),
+          // live 诊断日志（本会话有效，不落盘）：默认只记关键事件（准备就绪/领养/
+          // 首帧确认/判失败，每轮轮换 2–3 条，写在控制台与宿主诊断缓冲
+          // `/wallpaper-engine/diag-log`）；这里开的是**逐秒心跳读数**（fps/running/
+          // 暂停原因），排查「为什么没出帧」时用。
+          switchRow(
+            "live 诊断日志", liveDiagVerbose(), () => {
+              liveDiagOn = !liveDiagVerbose();
+              // 开关本身也要留痕（强制档：不受本开关影响），否则事后无法判断当时是否在记
+              liveLog("diag-" + (liveDiagOn ? "on" : "off"),
+                liveDiagOn ? "逐秒心跳日志已开启（本会话有效，刷新后失效）" : "逐秒心跳日志已关闭");
+              emit();
+            }, {
+              key: "scene-live-diag",
+              hint: "本会话有效 · 逐秒心跳读数",
+              tooltip: "开启后每秒记录一次渲染页心跳读数（fps / running / 暂停原因）与准备、领养、判失败事件；"
+                + "同时写入浏览器控制台和宿主诊断缓冲（GET /wallpaper-engine/diag-log）。排查 live 掉帧/降级时用，平时关着。",
+            }),
+        ),
     );
   }
 
   const renderActiveTab = () => {
     if (activeTab === "appearance") return renderAppearanceTab();
-    if (activeTab === "font") return renderFontTab();
     if (activeTab === "mascot") return renderMascotTab();
     if (activeTab === "effects") return renderEffectsTab();
+    if (activeTab === "audio") return renderAudioTab();
     if (activeTab === "advanced") return renderAdvancedTab();
     return renderWallpaperTab();
   };
@@ -7580,15 +7986,29 @@ const CSS = `
   }
   .we-layer .we-live-iframe.we-live-on { --we-live-fade: 1; }
 
-  /* 轮换「就绪后切换 + 渐变」：
+  /* 切换过场（手动点选与自动轮播共用）：
      - staging：live 渲染页预载驻留层 —— opacity 0 但 in-DOM 且几何满视口，
        渲染页按正常分辨率初始化出首帧，就绪后 iframe 被移动进正式层；
-     - fadein：轮换提交时新层 opacity 0 起步，reflow 后加-on 触发交叉淡入
-       （时长与 ROTATION_FADE_MS 同步，当前 1800ms）；旧层不动画（被新层
-       覆盖等效淡出），渐变结束移除。 */
+     - switch：入场层的初态/终态由 startLayerTransition 用内联样式写入（每种过场
+       的初态见 switchFrames），这里只提供**一条通用 transition**：transform /
+       opacity / clip-path 都是合成器友好属性（mask/filter 在 <video> 与 live
+       <iframe> 上会掉出合成层，故不用）。时长由内联 --we-switch-ms 决定
+       （= 类型基准 × 速度档，见 SWITCH_TRANSITIONS / SWITCH_SPEEDS）。
+     - switch-out：退场层（旧壁画）；只有需要它同时动起来的过场（推移 / 缩放）
+       才会加这个类 —— 其余过场旧层保持不透明静止，垫在新层之下（玻璃
+       backdrop-filter 依赖这层不透明背景，所以没有任何过场让中间态透明）。 */
   .we-layer--staging { opacity: 0; }
-  .we-layer--fadein { opacity: 0; transition: opacity 1.8s ease; }
-  .we-layer--fadein.we-layer--fadein-on { opacity: 1; }
+  .we-layer--switch {
+    transition:
+      transform var(--we-switch-ms, 700ms) var(--we-switch-ease, cubic-bezier(0.22, 0.61, 0.36, 1)),
+      opacity var(--we-switch-ms, 700ms) var(--we-switch-ease, cubic-bezier(0.22, 0.61, 0.36, 1)),
+      clip-path var(--we-switch-ms, 700ms) var(--we-switch-ease, cubic-bezier(0.22, 0.61, 0.36, 1));
+    will-change: transform, opacity, clip-path;
+  }
+  /* 减少动态效果偏好：过场一律退化成即时切换（不覆盖用户选择，只是把动画关掉）。 */
+  @media (prefers-reduced-motion: reduce) {
+    .we-layer--switch { transition: none !important; }
+  }
 
   /* Scrim: sits ABOVE the wallpaper (z-index -1 > -2, so it never depends on
      DOM insertion order — the wallpaper element is re-appended on wallpaper
@@ -8287,6 +8707,13 @@ const CSS = `
   .we-picker select:hover { background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.12)); }
   .we-picker select:disabled { opacity: 0.45; cursor: default; }
   .we-picker__hint { font-size: 0.8em; color: var(--we-ink-3, rgba(128, 128, 128, 0.75)); }
+  /* 「当前壁纸实时帧」微缩预览：就是切换途中 / live 首帧前显示的那张静帧。
+     固定 16:9 小图 + 细边框，居中放在控件行里（行已 --wrap，窄面板会自动折行）。 */
+  .we-picker__frame-shot {
+    display: block; width: 168px; height: 94.5px; object-fit: cover;
+    border-radius: 6px; border: 1px solid var(--dsw-alias-border-l1, rgba(128, 128, 128, 0.28));
+    background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.1));
+  }
   /* 数字读数等宽：页码 / 计数 / fps / 百分比切换时不再跳动。 */
   .we-picker__pager .we-picker__hint, .we-picker__card-badge, .we-picker__value {
     font-variant-numeric: tabular-nums;
