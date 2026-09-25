@@ -32,7 +32,7 @@ const check = (label, cond, detail = '') => {
 };
 
 /** 启动一个独立 client 实例并跑到「回填定时器已触发」为止。 */
-async function runScenario({ mode = 'varied', blobSize = 120000, gpuAlreadyPinned = false, toBlobFails = false, liveStall = false, betaSceneAnim = false, gpuAspect = null, viewport = { w: 1920, h: 1080 }, canvasSize = { w: 1920, h: 1080 }, clearFails = false }) {
+async function runScenario({ mode = 'varied', blobSize = 120000, gpuAlreadyPinned = false, toBlobFails = false, liveStall = false, gpuAspect = null, viewport = { w: 1920, h: 1080 }, canvasSize = { w: 1920, h: 1080 }, clearFails = false }) {
   const byId = {};
   const timers = [];
   const intervals = [];
@@ -41,7 +41,7 @@ async function runScenario({ mode = 'varied', blobSize = 120000, gpuAlreadyPinne
   const putCalls = [];
   const clearCalls = [];
   const slotOrder = []; // 槽位端点上的方法顺序：DELETE 必须早于 PUT
-  const progCalls = []; // scene-anim 渲染进度轮询（P2-M 判据）
+  const progCalls = []; // 已删除路线的进度轮询探针：必须恒为空（P2-M/场景 F 判据）
   const blobStub = { get size() { return blobSize; } };
   const make2d = () => ({
     drawImage() {},
@@ -114,7 +114,7 @@ async function runScenario({ mode = 'varied', blobSize = 120000, gpuAlreadyPinne
     documentElement: makeEl('html'),
   };
   const localStorage = {
-    _store: { 'dsh-wallpaper-engine:selection': JSON.stringify(betaSceneAnim ? { id:'s', betaSceneAnim:true } : { id:'s' }) },
+    _store: { 'dsh-wallpaper-engine:selection': JSON.stringify({ id: 's' }) },
     getItem(k){ return this._store[k] ?? null; }, setItem(k,v){ this._store[k]=v; }, removeItem(k){ delete this._store[k]; },
   };
   const fetch = (url, opts) => {
@@ -166,9 +166,9 @@ async function runScenario({ mode = 'varied', blobSize = 120000, gpuAlreadyPinne
     location: { origin: 'http://localhost' },
     setInterval:(fn,ms)=>{ const t={fn,ms,cleared:false}; intervals.push(t); return t; },
     clearInterval:(t)=>{ if(t)t.cleared=true; },
-    // 全局 setTimeout/clearTimeout：client 的 scene-anim 升级路径用裸 setTimeout
-    //（渲染兜底 8 分钟），此前 sandbox 只给了 window.setTimeout → 该路径在场景 F
-    // 首次被触发时抛 ReferenceError（暴露出的 harness 缺口，不是产品缺陷）。
+    // 全局 setTimeout/clearTimeout：client 里有若干走裸全局的定时器路径（转码
+    // 元数据兜底、live 轮询），sandbox 不给就会在首次触发时抛 ReferenceError
+    //（暴露出的 harness 缺口，不是产品缺陷）。
     setTimeout:(fn,ms)=>{ const t={fn,ms,cleared:false}; timers.push(t); return t; },
     clearTimeout:(t)=>{ if(t)t.cleared=true; },
   };
@@ -188,8 +188,9 @@ async function runScenario({ mode = 'varied', blobSize = 120000, gpuAlreadyPinne
   const watchTick = intervals.find((t) => !t.cleared && t.ms === 1000);
   watchTick.fn(); // 首帧确认 → 调度回填
   const backfill = timers.find((t) => !t.cleared && t.ms === 2500);
-  // P2-M 前置：让 live 运行期失联（连续无帧 ≥ LIVE_STALL_TICKS*2）→ 降级回静态帧
-  // → beta 开着时 CPU scene-anim 渲染启动（进度轮询 1500ms 可观测）。
+  // P2-M 前置：让 live 运行期失联（连续无帧 ≥ LIVE_STALL_TICKS*2）→ 降级回静态帧。
+  // 目标形态里回退链**没有任何 CPU 动画渲染**（scene-anim / APNG 已删除），所以这里
+  // 记录的两个计数只用来断言它们恒为 0（若 1500ms 轮询重新出现，说明该路线复活了）。
   let animPollBefore = 0, animPollAfter = 0, progBefore = 0;
   const tickPoll = async () => {
     const t = intervals.filter((x) => !x.cleared && x.ms === 1500).pop();
@@ -204,8 +205,8 @@ async function runScenario({ mode = 'varied', blobSize = 120000, gpuAlreadyPinne
       if (t) t.fn();
     }
     await new Promise((r) => setTimeout(r, 60));
-    // liveFail 只 syncLayers，不会重排 CPU 渲染路径 —— 再点一次该壁纸卡片走
-    // applySelection，才会按「beta 开 + live 已失败」排队 CPU scene-anim 渲染。
+    // liveFail 只 syncLayers；这里再点一次该壁纸卡片走一遍 applySelection，确认
+    // 重新应用选中也不会拉起任何 CPU 渲染路径（场景 F 的零请求断言）。
     const collect = (root, pred) => {
       const out = [];
       (function walk(node) {
@@ -329,17 +330,20 @@ console.log('K. 渲染器把画布比夹到别的比例（画布比 ≠ 窗口�
     'clear=' + r.clearCalls.length + ' put=' + r.putCalls.length);
 }
 
-console.log('F. P2-M：GPU 静帧落地必须作废在跑的 CPU 渲染');
+console.log('F. P2-M：GPU 静帧落地后不得有任何 CPU 渲染（该路线已删除）');
 {
-  const r = await runScenario({ mode: 'varied', blobSize: 120000, liveStall: true, betaSceneAnim: true });
-  check('前置：live 失联降级后 CPU scene-anim 渲染已在跑（进度轮询在发请求）',
-    r.animPollBefore > 0 && r.progBefore > 0,
+  const r = await runScenario({ mode: 'varied', blobSize: 120000, liveStall: true });
+  // 目标形态：场景动画只保留 WebWallGL 一条路线，回退链是
+  // MP4 → 静态帧 → 单张大图 → 内嵌图，**没有 CPU 动画渲染**（scene-anim / APNG 已删除）。
+  // 因此原先「降级后 CPU 渲染在跑 → 落地时必须取消它」的前提不复存在；这里断的是新的
+  // 不变量：整条流程里一帧 CPU 渲染都不许起（进度轮询/探针恒为 0）。
+  check('live 失联降级后没有任何 CPU 动画渲染在跑（scene-anim 已删除）',
+    r.animPollBefore === 0 && r.progBefore === 0,
     'poll=' + r.animPollBefore + ' prog=' + r.progBefore);
   check('回填 PUT 成功（GPU 静帧已落地）', r.putCalls.length === 1, 'put=' + r.putCalls.length);
-  check('落地后必须取消在跑的渲染（轮询已清，再敲不得发进度请求）',
-    r.animPollAfter === 0 && r.progCalls.length === r.progBefore,
-    'poll=' + r.animPollAfter + ' prog=' + r.progCalls.length + '/' + r.progBefore + ' id=' + r.selectedId
-     );
+  check('落地后仍无任何 CPU 渲染请求（轮询恒为 0）',
+    r.animPollAfter === 0 && r.progCalls.length === 0,
+    'poll=' + r.animPollAfter + ' prog=' + r.progCalls.length + ' id=' + r.selectedId);
 }
 
 console.log('');

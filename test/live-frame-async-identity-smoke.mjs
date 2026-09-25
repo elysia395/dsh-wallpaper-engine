@@ -135,7 +135,7 @@ const localStorage = {
     'dsh-wallpaper-engine:selection': JSON.stringify({
       id: 'a', rotationEnabled: true, rotationGroupId: 'g1',
       rotationGroups: [{ id: 'g1', name: 'L', interval: 5, order: 'sequence', wallpaperIds: ['a', 'b'] }],
-      videoVolume: 0.6, videoAudioEnabled: true, betaSceneAnim: true,
+      videoVolume: 0.6, videoAudioEnabled: true,
       // liveBootDelay: 0 —— 「重启恢复」期的启动延迟会把 iframe 的挂载推迟到
       // scheduleLiveMount，而 startLiveWatch 只对已进文档的 iframe 生效
       //（frame.isConnected 守卫）→ 延迟期间 fire('load') 不会武装心跳。
@@ -216,6 +216,10 @@ exportsObj.apply({ slots: { inject: (k, cb) => cb(), register: () => {} }, effec
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 const fireLatest = (ms) => { const t = timers.filter((x) => !x.cleared && x.ms === ms).pop(); if (t) { t.cleared = true; t.fn(); } return t; };
 const animCount = (tok) => animSrcs.filter((s) => s.includes('/scene-anim/' + tok)).length;
+// 「B 的槽位有没有被误记账」的新观测点：gpuFrameUi 的槽位探测是 HEAD /scene-frame/<token>，
+// 误记账会让 TTL 内的缓存命中、从而**跳过**这次探测 —— 所以「有没有探测」等价于「有没有被
+// 误记账」。（CPU 动画渲染路线已删除，旧观测点 animCount 只剩「零请求」这一用途。）
+const headCount = (tok) => headCalls.filter((u) => String(u).includes('/scene-frame/' + tok)).length;
 // 持久化有 200ms 防抖：断言落库前先冲掉写盘定时器（同 rotation-smoke 的做法）。
 const flushPersist = () => timers.filter((t) => !t.cleared && t.ms === 200).forEach((t) => { t.cleared = true; t.fn(); });
 const persistedId = () => { flushPersist(); return JSON.parse(localStorage._store['dsh-wallpaper-engine:selection']).id; };
@@ -244,27 +248,31 @@ check('① 抓帧上传已发出且挂住（PUT 未落地）', putCalls.length =
 fireLatest(10000);
 await sleep(40);
 check('② 上传期间已切到 B', persistedId() === 'b', 'id=' + persistedId());
-const bProbesAfterFirstArrival = animCount('bbb');
-check('② 首次到 B 时 CPU 渲染正常启动（门禁放行；B 的 token 此时未被记账）',
-  bProbesAfterFirstArrival >= 1, 'bbb 探针=' + bProbesAfterFirstArrival);
+const bHeadsAfterFirstArrival = headCount('bbb');
+check('② 首次到 B 时客户端照常 HEAD 探测 B 的槽位（未被误记账成已 pinned 而跳过）',
+  bHeadsAfterFirstArrival >= 1, 'bbb HEAD=' + bHeadsAfterFirstArrival);
 
 // ③ 上传此刻落地 —— 这是被评审的窗口
 if (putResolve) putResolve();
 await sleep(40);
 
-// ④ B → A → B：回到 B 时门禁必须仍然放行（旧实现会把 B 的 token 标成 pinned）
-const before = animCount('bbb');
+// ④ B → A → B：回到 B 时槽位探测必须照常发生（旧实现会把 B 的 token 标成 pinned，
+//    于是 TTL 内缓存命中 → 跳过这次 HEAD 探测）
+const before = headCount('bbb');
 fireLatest(10000);          // B → A（live 准备）
 await sleep(20);
 fireLatest(300);            // live 首帧 poll → 提交到 A
 await sleep(40);
 fireLatest(10000);          // A → B
 await sleep(40);
-const after = animCount('bbb');
+const after = headCount('bbb');
 check('④ 已再次回到 B', persistedId() === 'b', 'id=' + persistedId());
-check('上传落地不得给「当前壁纸 B」记上 GPU 帧 —— 回到 B 时 CPU 渲染必须照常启动',
-  after === before + 1,
-  '/scene-anim/bbb 探针 ' + before + ' → ' + after + '（旧实现停在 ' + before + '）');
+check('上传落地不得给「当前壁纸 B」记上 GPU 帧 —— 回到 B 时槽位探测必须照常发生',
+  after > before,
+  'bbb HEAD ' + before + ' → ' + after + '（旧实现因误记账命中缓存而停在 ' + before + '）');
+// 顺带钉死：整条流程里仍然一帧 CPU 动画渲染都没有（该路线已删除）。
+check('全流程零 CPU 动画渲染请求（scene-anim 已删除）', animCount('bbb') === 0,
+  '/scene-anim/bbb 探针=' + animCount('bbb'));
 
 console.log('');
 console.log(failures === 0 ? 'A4 行为级复现：PASS（身份校验生效）' : failures + ' CHECK(S) FAILED（身份校验缺失 → 已复现误记账）');

@@ -70,10 +70,11 @@ const DEFAULTS = {
   backgroundBrightness: 100,
   backgroundContrast: 100,
   backgroundSaturate: 100,
-  // 壁纸透明度（#82，0–90%，0 = 不动）：壁纸层整体的 element opacity，越大越
-  // 透（与本插件其他「透明度」滑块同语义）。淡出时壁纸融向页面底色 —— IDEA
-  // 背景图式「看得见但喧宾不夺主」。作用于 .we-layer 整层，视频/图片/网页/
-  // 画布壁纸统一生效；暗化（scrim）叠在壁纸之上，建议先降到 0 再调本滑块。
+  // 壁纸透明度（#82，0–90%，0 = 不动）：媒体叶子的 element opacity，越大越透
+  // （与本插件其他「透明度」滑块同语义）。淡出时壁纸融向**原生外观**（浅色纯白 /
+  // 深色纯黑）—— IDEA 背景图式「看得见但不喧宾夺主」。作用在 .we-layer 的媒体
+  // 叶子（视频/图片/网页/画布统一生效），层本身垫这层原生底色以保住玻璃模糊；
+  // 暗化（scrim）叠在壁纸之上，建议先降到 0 再调本滑块。
   wallpaperOpacity: 0,
   rotationEnabled: false,
   rotationInterval: 30,
@@ -91,14 +92,8 @@ const DEFAULTS = {
   // 解码占用随帧率线性下降）。与倍速完全解耦 —— 倍速照常叠加在抽帧版上。
   // 无 ffmpeg 或转码失败时自动回退原片（transcodeState: "fallback"）。
   fpsCap: 0,
-  // Scene 壁纸动画化: 静态帧的 frameUrl (供 fpsCap 变更时重渲染动画) + 渲染进度
-  // (0-100; 后台渲染 scene-anim 视频期间轮询, 完成置 null)。
+  // Scene 壁纸的静态帧 URL（供页面刷新 / 档位切换时重挂静态帧）。
   sceneFrameUrl: null,
-  sceneAnimProgress: null,
-  // beta场景动画: 默认关闭 — 关闭时 scene 壁纸只渲染静态帧 (稳定), 不启动
-  // scene-anim 视频后台渲染; 开启后才走动画化升级 (CPU 渲染试验性, 可能有
-  // 组件错误), 渲染期间进度条 + 完成自动切换视频。
-  betaSceneAnim: false,
   // 场景实时渲染（WebWallGL live WebGL）：scene.pkg 壁纸由 vendored WebWallGL
   // 渲染页实时渲染（粒子/脚本/视差/包内音频），默认开启；加载失败或运行
   // 失联时按壁纸记忆失败并自动降级回 sceneVideo → 静态帧链（见
@@ -376,7 +371,6 @@ function sanitizeSettings(o) {
     videoVolume: clampNum(o.videoVolume, 0, 1, DEFAULTS.videoVolume),
     videoAudioEnabled: o.videoAudioEnabled !== false,
     fpsCap: FPS_CAP_VALUES.includes(o.fpsCap) ? o.fpsCap : DEFAULTS.fpsCap,
-    betaSceneAnim: o.betaSceneAnim === true,
     sceneLive: o.sceneLive !== false,
     sceneLiveFps: SCENE_LIVE_FPS_VALUES.includes(o.sceneLiveFps) ? o.sceneLiveFps : DEFAULTS.sceneLiveFps,
     liveBootDelay: clampNum(o.liveBootDelay, 0, 30, DEFAULTS.liveBootDelay),
@@ -600,7 +594,6 @@ function serializeSelection() {
     videoVolume: selection.videoVolume,
     videoAudioEnabled: selection.videoAudioEnabled,
     fpsCap: selection.fpsCap,
-    betaSceneAnim: selection.betaSceneAnim,
     sceneLive: selection.sceneLive,
     sceneLiveFps: selection.sceneLiveFps,
     liveBootDelay: selection.liveBootDelay,
@@ -690,16 +683,16 @@ function schedulePersist() {
 
 // Flush a pending write when the page goes away (tab close / navigate), and
 // retry a failed PUT when the page becomes visible again.
-if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
-  window.addEventListener("pagehide", () => {
-    if (persistTimer && typeof window.clearTimeout === "function") {
-      window.clearTimeout(persistTimer);
-      flushPersist();
-    }
-  });
-  document.addEventListener("visibilitychange", () => {
-    if (!document.hidden && persistDirty && !persistTimer) schedulePersist();
-  });
+// 监听器改为具名函数, 由 apply 的 ctx.effect 注册/注销: 模块作用域注册的监听器
+// 每次 client-plugin 重载/HMR 重新求值 bundle 都会再叠一对, 且永远无法移除。
+function onPageHideFlush() {
+  if (persistTimer && typeof window.clearTimeout === "function") {
+    window.clearTimeout(persistTimer);
+    flushPersist();
+  }
+}
+function onVisibilityResyncPersist() {
+  if (!document.hidden && persistDirty && !persistTimer) schedulePersist();
 }
 
 function persistSelection() {
@@ -846,6 +839,35 @@ async function loadInventory() {
   // covers the rating/type filters): drop vanished/no-longer-matching
   // selections, then restore rotation state.
   revalidateSelection();
+  scheduleSceneVideoResync();
+}
+
+// ── sceneVideo 诚实化的时序补拉 ────────────────────────────────────────────────
+// 宿主侧 sceneVideo 现在是**真探测**的结果（遍历 .tex 找内嵌 MP4）：未命中缓存时
+// 先给 null（不猜）并把探测投到后台（整库约 1–3 秒出定论），绝不再用 hasFrame
+// 冒充。而客户端只在启动 / 手动刷新 / 目录变更后重拉 inventory ⇒ **首次加载**时
+// 真正内嵌 MP4 的场景会先落到静态帧（本机实测 3/35 个场景，探测本身 ~0.9s）。
+// 这里对每一批「新的场景集合」补拉一次，把窗口收掉：只在库里有场景壁纸时补、
+// 每批只补一次（补拉结果不会自触发成轮询）。
+const SCENE_VIDEO_RESYNC_MS = 3000;
+let sceneVideoResyncTimer = null;
+let sceneVideoResyncedKey = ""; // 已补拉过的场景 id 集合指纹
+function sceneVideoResyncKey() {
+  const list = (selection.inventory && selection.inventory.wallpapers) || [];
+  const ids = [];
+  for (const w of list) if (w.type === "scene") ids.push(String(w.id));
+  return ids.sort().join(",");
+}
+function scheduleSceneVideoResync() {
+  if (typeof window === "undefined" || typeof window.setTimeout !== "function") return;
+  const key = sceneVideoResyncKey();
+  if (!key || key === sceneVideoResyncedKey) return; // 没有场景壁纸 / 这批已补过
+  if (sceneVideoResyncTimer) return; // 已在等待
+  sceneVideoResyncTimer = window.setTimeout(() => {
+    sceneVideoResyncTimer = null;
+    sceneVideoResyncedKey = key; // 先记账：这次补拉不会再排一个定时器
+    loadInventory().catch(() => { /* 失败保持现状，用户仍可手动刷新 */ });
+  }, SCENE_VIDEO_RESYNC_MS);
 }
 
 // ── Content-rating + type filters ───────────────────────────────────────────
@@ -1306,8 +1328,8 @@ function prepareWallpaper(w, prep, onReady, onFail) {
     return;
   }
   if (w.type === "scene") {
-    // 优先级不变量（与 buildMedia 一致）：live > sceneVideo > scene-anim >
-    // 静态帧。live 探测失败回退 sceneVideo（host 对每个 scene 都 mint
+    // 优先级不变量（与 buildMedia 一致）：live > sceneVideo > 静态帧。
+    // live 探测失败回退 sceneVideo（host 对每个 scene 都 mint
     // sceneVideo URL，是否有内嵌视频只有请求后才知道），404/解码失败再降
     // 静态帧；静态帧提取失败 → preview → onFail 跳过。
     const liveSel = {
@@ -1716,9 +1738,6 @@ function applySelection(id, opts) {
   // 释放），并丢弃任何滞留的就绪元素。轮换提交（fromRotation）例外 ——
   // 就绪元素正是本次调用要带进新层的资产。
   if (!opts || !opts.fromRotation) { cancelRotationPrepare(); disposePreparedMedia(); }
-  // 切换壁纸 (任意类型): 终止旧的 scene 动画升级 — 旧轮询 timer 停止写进度,
-  // 旧 probe 下载断开 → 服务端 res close → 取消渲染 (worker/ffmpeg 释放 CPU)。
-  cancelSceneAnimUpgrade();
   // GPU 抓帧回填的目标壁纸随切换作废（新壁纸的 live 首帧会重新调度）。
   cancelLiveFrameBackfill();
   // 手动切换不走渐变 → 立即放行轮换音频闸（轮换提交由旧层退场放行）。
@@ -1779,14 +1798,10 @@ function applySelection(id, opts) {
   }
   selection.type = w.type;
   selection.blockedNote = "";
-  // Scene 壁纸动画化: 先显示静态帧 (frameUrl, 立即), 后台预渲染动画视频
-  // (scene-anim 路由 ?fmt=mp4, 首次分钟级) 完成后无缝切换 — video 元素提供
-  // 播放/暂停/倍速 控制, 与视频壁纸同款。sceneFrameUrl 供 fpsCap 变更时重渲染。
+  // 静态帧 URL (frameUrl, 立即上屏)：供页面刷新 / 档位切换时重挂。
   selection.sceneFrameUrl = w.type === "scene" ? (w.frameUrl || null) : null;
   // Scene wallpapers with an embedded animation (host-extracted MP4) play it
   // as a hardware-decoded <video>; scenes without one stay on the static frame.
-  // 有内嵌 MP4 (sceneVideo) 的场景直接用硬件解码播放 — 不再触发 CPU scene-anim
-  // 升级 (避免重复动画 + 浪费 CPU, 且 scene-anim 完成后会覆盖 sceneVideo)。
   selection.sceneVideo = w.type === "scene" ? (w.sceneVideo || null) : null;
   // 轮换提交以准备期【实测】为准：sceneVideo 探测已 404/解码失败（kind 落到
   // static）时不得按 inventory 原样复活它 —— 否则新层 <video> 必然再次
@@ -1815,13 +1830,6 @@ function applySelection(id, opts) {
         try { emit(); } catch { /* ignore */ }
       }
     }).catch(() => { /* 无音频/探测失败：按钮保持隐藏 */ });
-  }
-  // live 渲染生效时不启动 scene-anim 后台 CPU 渲染（实时管线已覆盖动画，
-  // 双跑只浪费 CPU；live 失败降级后此处条件转真，升级路径照常可用）。
-  // 槽位已有 GPU 抓帧时同样不跑：GPU 帧优先于任何 CPU 生成的画面（用户决策），
-  // 否则分钟级 CPU 渲染完成后会把 GPU 帧覆盖掉。判据见 maybeQueueSceneAnimUpgrade。
-  if (w.type === "scene" && w.frameUrl && !selection.sceneVideo && !liveRenderEnabled(selection)) {
-    maybeQueueSceneAnimUpgrade(w.frameUrl, w.id);
   }
   // Keep the preview around so a failed static frame can fall back to it.
   selection.previewUrl = w.preview || null;
@@ -2125,120 +2133,11 @@ function weStartDraw(canvas, video, customFit) {
   weResizeObs.observe(canvas);
 }
 
-// ── Scene 壁纸动画化: 静态帧 → 后台预渲染视频 → 无缝切换 ──────
-// scene-anim 路由 (?fmt=mp4) 有落盘缓存 + 并发去重; 首次渲染分钟级, 故先显示
-// 静态帧 (frameUrl), 用隐藏 <video> 预加载动画视频 (触发宿主渲染), 完成后
-// 替换当前壁纸 URL — video 元素原生提供 播放/暂停/倍速/进度 控制,
-// 与视频壁纸同款配置。渲染期间轮询 /scene-anim-progress 显示进度条。
-// 切换壁纸 / fpsCap 变更会调用本函数: 必须终止旧升级 (轮询 timer + probe
-// 下载) — 否则旧 timer 继续把旧壁纸进度写进共享 selection (进度条跳变),
-// 且旧 probe 的下载保持服务端渲染任务活跃 (worker + ffmpeg 占满 CPU)。
-let sceneAnimUpgrade = null; // {pollTimer, probe, frameUrl, maxWait} — 当前活跃的升级
-function cancelSceneAnimUpgrade() {
-  const u = sceneAnimUpgrade;
-  sceneAnimUpgrade = null;
-  if (!u) return;
-  if (u.pollTimer) { clearInterval(u.pollTimer); }
-  if (u.maxWait) { clearTimeout(u.maxWait); }
-  if (u.probe) {
-    // 清 src 触发浏览器 abort 下载 → 服务端 res close → 渲染任务取消
-    try { u.probe.removeAttribute("src"); u.probe.load(); } catch { /* ignore */ }
-    try { u.probe.remove(); } catch { /* ignore */ }
-  }
-  if (selection.sceneAnimProgress != null) selection.sceneAnimProgress = null;
-}
-function queueSceneAnimUpgrade(frameUrl, wid) {
-  cancelSceneAnimUpgrade(); // 旧升级终止 (旧壁纸渲染随服务端 res close 取消)
-  // beta场景动画开关: 默认关闭 → scene 壁纸只显示静态帧, 不进入动画化升级。
-  // 关闭状态下即使 sceneFrameUrl 变更 (fpsCap 点击) 也不启动后台渲染。
-  if (selection.betaSceneAnim !== true) return;
-  // fps 取帧率上限 (fpsCap>0 时重渲染对应帧率, 与视频抽帧同款语义)
-  const fps = selection.fpsCap > 0 ? Math.min(30, Math.max(2, selection.fpsCap)) : 12;
-  // 分辨率按屏幕 + devicePixelRatio (上限 1920×1080, CPU 渲染成本受限) —
-  // 提高分辨率避免动画放大模糊 (对比静态帧 3840 全分辨率)
-  const dpr = Math.min(2, window.devicePixelRatio || 1);
-  const vw = Math.min(1920, Math.max(320, Math.round((window.innerWidth || 1920) * dpr)));
-  const vh = Math.min(1080, Math.max(180, Math.round((window.innerHeight || 1080) * dpr)));
-  const q = "?fps=" + fps + "&fmt=mp4&w=" + vw + "&h=" + vh;
-  // host 只 mint /scene-frame/<token>；万一 URL 换了形态（前缀不含 /scene-frame/），
-  // replace 会静默不生效 → animUrl 变成「frameUrl + ?fps=…」这种坏 URL：既可能被切
-  // 上屏，也会让 trySwitch 的基路径判定把 frameBase 当成 animBase（评审 P4-①）。
-  if (String(frameUrl).indexOf("/scene-frame/") === -1) return;
-  const animUrl = frameUrl.replace("/scene-frame/", "/scene-anim/") + q;
-  // 渲染进度轮询 (首次分钟级; 缓存命中时第一次轮询即 100)
-  const token = frameUrl.split("?")[0].split("/").pop();
-  const progUrl = "/wallpaper-engine/scene-anim-progress/" + token + q;
-  selection.sceneAnimProgress = 0;
-  emit(); // 立即反映新进度 (fpsCap 变更路径的调用方 emit 在前, 这里补一次)
-  let pollTimer = null, maxWait = null;
-  const stopPoll = () => {
-    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
-    if (maxWait) { clearTimeout(maxWait); maxWait = null; }
-    if (sceneAnimUpgrade && sceneAnimUpgrade.pollTimer === pollTimer) sceneAnimUpgrade = null;
-    if (selection.sceneAnimProgress != null) { selection.sceneAnimProgress = null; emit(); }
-  };
-  // 渲染完成切换的主动路径: 轮询到 100% 直接切换 — 不依赖 probe 的
-  // onloadeddata (渲染分钟级时浏览器 video 请求长时间挂起, onloadeddata
-  // 可能不触发/被中断 → 之前"渲染后仍显示静态帧")。
-  // 判定按**基路径**而不是全等：起点可能是带画面档位的静态帧（…?v=3），也可能
-  // 是已经在上屏的旧档位 /scene-anim/ URL（面板改「帧率上限」触发重渲染）——
-  // 原全等判定（selection.url === frameUrl）在这两种情况下都恒不成立，产物永远
-  // 不上屏（评审发现：点档位按钮白烧一次分钟级渲染，画面纹丝不动）。
-  const frameBase = String(frameUrl).split("?")[0];
-  const animBase = frameBase.replace("/scene-frame/", "/scene-anim/");
-  const widKey = String(wid || "");
-  const trySwitch = () => {
-    const cur = String(selection.url || "");
-    if (!cur) return;
-    if (widKey && String(selection.id || "") !== widKey) return; // 期间已切到别的壁纸
-    const curBase = cur.split("?")[0];
-    if (curBase !== frameBase && curBase !== animBase) return;    // 当前不是这张的画面
-    if (cur === animUrl) return;                                  // 已经是目标档位
-    selection.url = animUrl;
-    syncLayers();
-  };
-  pollTimer = setInterval(async () => {
-    try {
-      const r = await fetch(progUrl, { cache: "no-store" });
-      const j = await r.json();
-      const pct = Number(j && j.percent);
-      selection.sceneAnimProgress = Number.isFinite(pct) ? pct : 100;
-      emit();
-      if (pct >= 100) {
-        clearInterval(pollTimer);
-        if (maxWait) { clearTimeout(maxWait); maxWait = null; }
-        trySwitch();
-        if (selection.sceneAnimProgress != null) { selection.sceneAnimProgress = null; emit(); }
-      }
-    } catch { /* 网络错误: 保持上次进度 */ }
-  }, 1500);
-  // 渲染超时兜底: 8 分钟未完成 → 停止轮询 (进度条消失, 保持静态帧)
-  maxWait = setTimeout(() => {
-    if (pollTimer) { clearInterval(pollTimer); pollTimer = null; }
-    if (selection.sceneAnimProgress != null) { selection.sceneAnimProgress = null; emit(); }
-  }, 8 * 60 * 1000);
-  // probe video: 触发服务端渲染 (probe.src 请求)。必须挂 DOM + load(),
-  // detached video 设 src 不保证加载 → onloadeddata 不触发 (静止根因)。
-  // onloadeddata 是快路径 (渲染快时提前切换); 慢渲染由轮询 100% 兜底。
-  const probe = document.createElement("video");
-  probe.muted = true;
-  probe.preload = "auto";
-  probe.style.cssText = "position:absolute;left:-100000px;top:0;width:1px;height:1px;opacity:0;pointer-events:none;";
-  probe.onloadeddata = () => {
-    trySwitch();
-    stopPoll();
-  };
-  probe.onerror = () => { /* 渲染慢挂起超时 → 保持轮询, 由进度 100 主动切换 */ };
-  probe.src = animUrl;
-  try { document.body.appendChild(probe); probe.load(); } catch { /* ignore */ }
-  sceneAnimUpgrade = { pollTimer, probe, frameUrl, maxWait };
-}
-
-// 「有 GPU 抓帧就完全不跑 CPU 渲染」的判据（用户决策）：探测该壁纸静态帧槽位
-// 是否有 _gpu.png —— HEAD 是纯磁盘探测，不触发 CPU 提取。带 TTL 与 in-flight
+// 「有 GPU 抓帧就优先于 CPU 生成的画面」的判据（用户决策）：探测该壁纸静态帧
+// 槽位是否有 _gpu.png —— HEAD 是纯磁盘探测，不触发 CPU 提取。带 TTL 与 in-flight
 // 去重（同一壁纸反复进出只探一次）；探测失败/无 token 按「无 GPU 帧」处理：
-// 显示侧本来就会优先服务 GPU 帧，这里失败放开只影响「是否白跑一次 CPU 渲染」，
-// 不该让动画能力因一次网络抖动而消失。
+// 显示侧本来就会优先服务 GPU 帧，这里失败放开只影响一次多余探测，不该让判定
+// 因一次网络抖动而反转。
 const GPU_FRAME_PIN_TTL_MS = 30000;
 const gpuFramePins = new Map();        // token -> { pinned, at }
 const gpuFramePinInflight = new Map(); // token -> Promise<boolean>
@@ -2269,38 +2168,6 @@ function forgetGpuFramePin(token) {
 function markGpuFramePin(token, pinned) {
   const key = String(token || "");
   if (key) gpuFramePins.set(key, { pinned: Boolean(pinned), at: Date.now() });
-}
-// CPU scene-anim 动画渲染的启动门禁（live 可用时早已不跑，见 applySelection）：
-// 槽位已有 GPU 抓帧 → 完全不跑（GPU 静帧优先；想恢复 CPU 渲染先在面板点
-// 「清除 GPU 帧」，清除路径会 forgetGpuFramePin 并重新走这里）。探测是 HEAD +
-// 毫秒级，故把启动推迟一拍；期间的守卫保证切了壁纸/换了档/live 恢复时不误启动。
-function maybeQueueSceneAnimUpgrade(frameUrl, wid) {
-  const url = String(frameUrl || "");
-  const id = String(wid || "");
-  if (!url || !id) return;
-  probeGpuFramePin(gpuFrameToken(url), false).then((pinned) => {
-    if (pinned) {
-      // 决策「GPU 帧优先于全部档位」→ 不重渲染。但必须把这件事说给用户：否则点
-      // 档位只有 chip 高亮变化、画面没动、也没有任何解释（评审 P4-②）。
-      gpuFrameUi.wid = id;
-      gpuFrameUi.gateHint = "该壁纸槽位已有 GPU 帧：改档位不会重新渲染，需先点上方「清除 GPU 帧」";
-      try { emit(); } catch { /* ignore */ }
-      return;
-    }
-    gpuFrameUi.gateHint = "";
-    if (String(selection.id || "") !== id) return;                       // 期间切了壁纸
-    if (liveRenderEnabled(selection)) return;                            // 期间 live 恢复
-    if (selection.sceneVideo) return;                                    // 期间有了内嵌 MP4
-    if (String(selection.sceneFrameUrl || "") !== url) return;            // 期间换了档/壁纸
-    // 启动失败（例如极端裁剪的运行环境缺 setInterval）只该让动画不启动，
-    // 不该把整个壁纸切换拖下水 —— 这里兜住并留一条可诊断的告警。
-    try { queueSceneAnimUpgrade(url, id); }
-    catch (e) {
-      try {
-        if (typeof console !== "undefined" && console.warn) console.warn("[wallpaper-engine] scene-anim 启动失败", e);
-      } catch { /* ignore */ }
-    }
-  }).catch(() => { /* 探测异常：保持不启动（探测本身已 fail-open） */ });
 }
 
 // ── 场景实时渲染（WebWallGL live WebGL）─────────────────────────────────────
@@ -2982,7 +2849,7 @@ function liveFail(reason) {
 // ── live GPU 抓帧回填静态帧缓存 ─────────────────────────────────────────────
 // 渲染页的显示 canvas 在 DOM 内（data-webwallgl-gl 标记）且 WebGL2 上下文带
 // preserveDrawingBuffer:true —— 父页面同源即可随时 toBlob 抓当前帧，无需渲染
-// 页/上游配合。首帧确认后 2.5s（场景动画进稳态）HEAD 探测静态帧槽位：
+// 页/上游配合。首帧确认后 2.5s（实时画面进稳态）HEAD 探测静态帧槽位：
 // - 已有 GPU 帧（X-WE-GPU=1）→ 不动；
 // - 空槽（404）或 CPU 提取/预览帧（204+0）→ 抓帧 PUT 回填：GPU 帧升级覆盖
 //   CPU 提取的残破帧（host 每壁纸只接受一次，见 /scene-frame-cache）。
@@ -3189,11 +3056,7 @@ function scheduleLiveFrameBackfill(frame) {
       if (settled) {
         // 缓存里已有（或刚写入）GPU 帧 → 面板提示「优先于全部档位」。
         markGpuFrameProbed(backfillWid, true);
-        markGpuFramePin(token, true); // 该 token 槽位刚写入 GPU 帧：门禁同步生效，无需再探
-        // GPU 静帧落地 → 作废在跑的 CPU 渲染：门禁只挡「启动」，挡不住已经开始的那
-        // 一次；它会跑完并按基路径把层切到 /scene-anim/，把刚落地的 GPU 静帧覆盖掉
-        //（评审 P2-M）。取消会断开探针下载，宿主侧渲染进程随之释放。
-        cancelSceneAnimUpgrade();
+        markGpuFramePin(token, true); // 该 token 槽位刚写入 GPU 帧：探测缓存同步生效，无需再探
         if (recaptured) {
           liveLog("gpu-frame-recaptured", "wid=" + backfillWid + " 已按当前视口重抓（" + recaptureSize + "）");
           // 屏上若正显示这张静帧（静态帧壁纸 / live 垫底 poster）→ 就地重挂取回新图。
@@ -3722,13 +3585,10 @@ function buildMedia(sel) {
   //      web 挂载 + 宿主注入的 WE shim，严格沙箱隔离）。心跳判定失败后自动
   //      降级，见 startLiveWatch/liveFail。
   //   2. sceneVideo — 场景内嵌 MP4 (作者主分支, 硬件解码 <video>, poster=静态帧)
-  //   3. scene-anim — beta 动画升级 (本分支 CPU 渲染视频, URL 含 /scene-anim/)
-  //   4. 静态帧 img (frameUrl) / 网页壁纸的裸 iframe 兼容路径
-  // 未升级时仍是静态帧 img。
+  //   3. 静态帧 img (frameUrl) / 网页壁纸的裸 iframe 兼容路径
   const isLive = (sel.type === "scene" || sel.type === "web") && liveRenderEnabled(sel);
   const isSceneVideo = sel.type === "scene" && Boolean(sel.sceneVideo) && !isLive;
-  const isSceneAnim = sel.type === "scene" && sel.url && sel.url.indexOf("/scene-anim/") !== -1;
-  const isStill = sel.type === "image" || (sel.type === "scene" && !isLive && !isSceneVideo && !isSceneAnim);
+  const isStill = sel.type === "image" || (sel.type === "scene" && !isLive && !isSceneVideo);
   if (isLive) {
     reportClientDiag("live-build", "type=" + sel.type + " delay=" + sel.liveBootDelay + " boot=" + bootRestore);
     // 轮换提交不走这里：live 的领养是节点级（staging 容器整体转为新层，
@@ -3751,7 +3611,7 @@ function buildMedia(sel) {
   // iframes (web wallpapers) don't read object-fit, so they skip the class.
   const fitClass = " we-media--fit";
   let media;
-  if (sel.type === "video" || isSceneAnim) {
+  if (sel.type === "video") {
     // 轮换领养：就绪元素（已 canplay/预播中）直接进层，绝不重赋 src（重赋
     // 即使同值也会触发 resource selection 重新加载 = 黑屏闪烁源）。
     const prepared = consumePreparedMedia("VIDEO", sel.url);
@@ -3762,7 +3622,7 @@ function buildMedia(sel) {
       // 视频类壁纸不设 —— WE 视频壁纸的预览常是动图（preview.gif），当 poster
       // 会先播一段预览、再停在视频首帧、最后才进正片，用户看到的是「跑完整
       // 加载流程」；0.7.5 是选中即播（加载期黑帧，由交叉渐变盖住）。场景内嵌
-      // MP4 / scene-anim 的 poster 是静态帧，是「先静帧后动态」的既有设计，保留。
+      // MP4 的 poster 是静态帧，是「先静帧后动态」的既有设计，保留。
       if (sel.previewUrl && sel.type !== "video") media.poster = sel.previewUrl;
     }
     media.autoplay = true;
@@ -4062,8 +3922,7 @@ function syncSceneAudio(selLike) {
     && !selLike.sceneVideo
     // live 渲染心跳已过 → 包内音频由 WebWallGL 音频组件自播（音量走
     // __wp.setVolume），外置 <audio> 不启动，避免双声道叠加。
-    && !selLike.sceneLiveActive
-    && !(selLike.url && String(selLike.url).indexOf("/scene-anim/") !== -1))
+    && !selLike.sceneLiveActive)
     ? selLike.sceneAudioUrl : null;
   if (!wantUrl) {
     stopSceneAudioEl();
@@ -4138,15 +3997,25 @@ let mediaInfoToken = "";
 // come back with fps ≤ cap (no transcode needed). Without this guard every
 // wallpaper selection used to trigger a throwaway host-side ffmpeg run.
 let mediaInfoInFlight = "";
+// 在途探测的 AbortController: token 变更或强制刷新时终止上一次 fetch — 否则被
+// 取代的探测会一直跑 (结果只靠 mediaInfoToken 检查丢弃), fiber 卸载时也要 abort。
+let mediaInfoAbort = null;
 async function refreshMediaInfo(force) {
   const token = selection.type === "video" && selection.url
     ? selection.url.split("/").pop()
     : null;
   if (!token || (!force && token === mediaInfoToken)) return;
+  // 旧探测的结果一定没用了 (token 变了, 或被 force 重刷取代) → 立刻断开
+  if (mediaInfoAbort) { try { mediaInfoAbort.abort(); } catch { /* ignore */ } mediaInfoAbort = null; }
+  // AbortController 可能不存在 (无计时器/无 fetch 设施的验证环境): 为 null 时退化为旧行为
+  const ctrl = typeof AbortController === "function" ? new AbortController() : null;
+  mediaInfoAbort = ctrl;
   mediaInfoToken = token;
   mediaInfoInFlight = token;
   try {
-    const res = await fetch("/wallpaper-engine/media-info/" + encodeURIComponent(token), { cache: "no-store" });
+    const init = { cache: "no-store" };
+    if (ctrl) init.signal = ctrl.signal;
+    const res = await fetch("/wallpaper-engine/media-info/" + encodeURIComponent(token), init);
     const data = await res.json().catch(() => ({}));
     if (mediaInfoToken === token) {
       selection.mediaInfo = (data && data.info) || null;
@@ -4163,9 +4032,12 @@ async function refreshMediaInfo(force) {
       }
     }
   } catch {
-    if (mediaInfoToken === token) selection.mediaInfo = null;
+    // abort 掉的探测不写状态 (它已被更新的探测取代)
+    if (!(ctrl && ctrl.signal.aborted) && mediaInfoToken === token) selection.mediaInfo = null;
   }
-  if (mediaInfoInFlight === token) mediaInfoInFlight = "";
+  const ownsAbort = mediaInfoAbort === ctrl; // 仍是本次探测 (没被更新的探测取代)
+  if (ownsAbort) mediaInfoAbort = null;
+  if (ownsAbort && mediaInfoInFlight === token) mediaInfoInFlight = "";
   // Settle → single re-emit so a deferred transcode decision (see
   // mediaInfoInFlight) runs against the final mediaInfo, success or failure.
   if (mediaInfoToken === token) emit();
@@ -4184,8 +4056,19 @@ let upgradePollTimer = null; // progress poller while the transcode fetch pends
 function clearUpgradePoll() {
   if (upgradePollTimer) { clearInterval(upgradePollTimer); upgradePollTimer = null; }
 }
+// 15s metadata 兜底 timer (见 maybeUpgradeToTranscoded): 必须挂到升级状态上,
+// abortTranscodeUpgrade 才能清掉它 — 否则被取代的请求超时后回调仍会跑在已
+// detach 的 <video> 上 (重新赋 src, 元素再也释放不掉)。
+let upgradeMetaTimer = null;
+function clearUpgradeMeta() {
+  if (upgradeMetaTimer && typeof window !== "undefined" && typeof window.clearTimeout === "function") {
+    window.clearTimeout(upgradeMetaTimer);
+  }
+  upgradeMetaTimer = null;
+}
 function abortTranscodeUpgrade() {
   clearUpgradePoll();
+  clearUpgradeMeta();
   if (upgradeAbort) { upgradeAbort.abort(); upgradeAbort = null; }
   upgradeToken = "";
   upgradeFps = 0;
@@ -4244,8 +4127,11 @@ function maybeUpgradeToTranscoded(video, token) {
   // then frame-based transcode % + ETA). Cleared on settle/abort. The timer is
   // ALSO kept in this closure so THIS request's completion only ever clears its
   // OWN timer — a stale request must not kill the newer request's poller.
+  let pollPending = false; // 上一 tick 未返回 → 跳过本次 (宿主高负载时避免 fetch 堆积)
   const pollProgress = () => {
     if (ctrl.signal.aborted) return;
+    if (pollPending) return;
+    pollPending = true;
     fetch("/wallpaper-engine/transcode-progress/" + encodeURIComponent(token) + "?fps=" + cap, { cache: "no-store" })
       .then((r) => r.json().catch(() => ({})))
       .then((d) => {
@@ -4264,7 +4150,8 @@ function maybeUpgradeToTranscoded(video, token) {
           }
         }
       })
-      .catch(() => { /* transient poll failure: ignore */ });
+      .catch(() => { /* transient poll failure: ignore */ })
+      .then(() => { pollPending = false; }); // 成功/失败都释放 in-flight 标记
   };
   clearUpgradePoll();
   const pollTimer = setInterval(pollProgress, 500);
@@ -4320,6 +4207,8 @@ function maybeUpgradeToTranscoded(video, token) {
           if (metaTimer && typeof window !== "undefined" && typeof window.clearTimeout === "function") {
             window.clearTimeout(metaTimer);
           }
+          // 同步清掉升级状态上的引用 (只清自己的, 否则会抹掉更新请求的 timer)
+          if (upgradeMetaTimer === metaTimer) upgradeMetaTimer = null;
           metaTimer = null;
         };
         const onErr = () => {
@@ -4351,6 +4240,7 @@ function maybeUpgradeToTranscoded(video, token) {
             video.removeEventListener("loadedmetadata", onMeta);
             onErr();
           }, 15000);
+          upgradeMetaTimer = metaTimer; // 挂到升级状态: abortTranscodeUpgrade 也要能清
         }
       }
     })
@@ -4407,18 +4297,25 @@ function syncLayers() {
   // 1. Wallpaper element.
   const existing = document.getElementById(LAYER_ID);
   if (selection.url) {
+    // live 是否生效只需算一次：它同时决定「media 种类看不看 sceneVideo」与 live 段本身。
+    const layerLive = (selection.type === "scene" || selection.type === "web") && liveRenderEnabled(selection);
     const wantKey = selection.type + "\u0000" + selection.url + "\u0000"
       + (IS_EDGE && selection.edgeCompat !== false ? "canvas" : "video")
       // Scene wallpapers: the media kind depends on sceneVideo (MP4 <video> vs
       // static-frame <img>), and the 404 fallback nulls sceneVideo — the key
       // must reflect it so the fallback rebuilds the layer.
-      + "\u0000" + (selection.sceneVideo || "")
+      // ⚠️ live 生效期间不算它：buildMedia 的 isSceneVideo 已被 isLive 短路，此时
+      // sceneVideo 只影响「live 失败后的回退」，进 key 只会白白冷启动渲染页 ——
+      // 「sceneVideo 诚实化」的时序补拉（scheduleSceneVideoResync）落地时正好会
+      // 触发这种无意义重建。live 一失效，下面的 live 段就变化 → 仍会重建，且那一次
+      // 会用上当时的 sceneVideo 值（回退路径因此照旧正确）。
+      + "\u0000" + (layerLive ? "" : (selection.sceneVideo || ""))
       + "\u0000" + (selection.sceneAudioUrl || "")
       // Scene live render: entering/leaving live（开关切换、按壁纸失败记忆、
       // 帧率档变更 → iframe query 变化）都必须重建层；fit/音量不进 key ——
       // 它们经 __wp.setFit/setVolume 热切，无需重载渲染页。
       + "\u0000" + ((selection.type === "scene" || selection.type === "web")
-        ? (liveRenderEnabled(selection)
+        ? (layerLive
           // weAssetsAvailable 进 key：素材目录开关切换时 live iframe URL 的
           // localAssets 参数变化，必须重建渲染页才生效。
           ? "live\u0000" + (selection.sceneLiveSrc || selection.webLiveSrc) + "\u0000" + selection.sceneLiveFps
@@ -4601,8 +4498,8 @@ function syncLayers() {
   //    随后 buildMedia 的 isLive 仍为 true），两者不一致时槽里那个元素既不上
   //    屏、也没有任何路径能释放它：detached 的 <video> 是解码器根，失去句柄后
   //    仍满速解码到页面关闭（实测 4K ≈35% 单核/个，gc() 收不走），且它属于
-  //    **上一张壁纸** —— 之后的非提交重建（liveFail / fps 档位切换 / scene-anim
-  //    完成等）会按 tag 命中并把它领养进当前层 → 画面串味；
+  //    **上一张壁纸** —— 之后的非提交重建（liveFail / fps 档位切换等）会按 tag
+  //    命中并把它领养进当前层 → 画面串味；
   // ② 节点级领养（pendingStagedLayerNode）整条绕过 buildMedia，同样不收编。
   // 放在函数收尾（本函数无提前 return）：无论走哪条建层/领养路径、无论
   // buildMedia 是否被调用，退出时槽位必空。空槽位调用是 no-op。
@@ -4841,17 +4738,22 @@ function removeCaretStyles() {
   if (st) st.remove();
 }
 
-// 壁纸淡出底色：优先取主题实心层级 token；拿不到/仍是透明时按主题回退
-// 固定色。垫在 .we-layer 上让透明化壁纸的合成像素保持不透明（见 applyEffects
-// 内 --we-wallpaper-opacity 注释：透明 backdrop 会让 backdrop-filter 失效）。
+// 壁纸淡出底色 = **原生外观**（浅色纯白 / 深色纯黑）。这是「壁纸透明度」拉高时
+// 应该露出来的那一层：垫在 .we-layer 上让透明化壁纸的合成像素保持不透明（见
+// applyEffects 内 --we-wallpaper-opacity 注释：透明 backdrop 会让 backdrop-filter
+// 失效）。
+// ⚠️ 刻意**不**用 --dsw-alias-bg-layer-1：那是面板底色（深色下是深蓝灰），淡出后
+// 会留下一块与原生外观不符的主题色（用户实测反馈：期望露出纯黑 / 纯白）。
+// 外壳自己的「页面基色」token 若可用就尊重它（没有壁纸时页面本来就是这个颜色）；
+// 插件在壁纸激活时把它置为 transparent，因此正常路径就是下面的纯黑 / 纯白。
 function resolveWallpaperFadeBg() {
   try {
-    const t1 = getComputedStyle(document.body).getPropertyValue("--dsw-alias-bg-layer-1").trim();
-    if (t1 && t1 !== "transparent" && t1 !== "rgba(0, 0, 0, 0)" && t1 !== "#00000000") return t1;
+    const t = getComputedStyle(document.body).getPropertyValue("--dsw-alias-bg-base").trim();
+    if (t && t !== "transparent" && t !== "rgba(0, 0, 0, 0)" && t !== "#00000000") return t;
   } catch { /* ignore */ }
   try {
-    return document.body.hasAttribute("data-ds-dark-theme") ? "#0e1116" : "#f3f4f6";
-  } catch { return "#0e1116"; }
+    return document.body.hasAttribute("data-ds-dark-theme") ? "#000000" : "#ffffff";
+  } catch { return "#000000"; }
 }
 
 function applyEffects() {
@@ -4981,6 +4883,20 @@ function applyEffects() {
   if (selection.sidebarContentColor) s.setProperty("--we-content-surface-color", selection.sidebarContentColor);
   else s.removeProperty("--we-content-surface-color");
 
+  // 左侧工作区（增强模式）的 Mica 能力钩子（#73，见 detectMicaSupport）：Windows
+  // 上无 Mica（Win10 / build < 22621 / 探测不到）时挂 data-we-mica="off"，CSS 用
+  // 插件自己的近不透明玻璃面接管 .dshDesktopSidebarSurface，替代对系统材质的依赖；
+  // 支持或不适用（非 Windows）时移除，保持原生。探测结果缓存，这里只做同步读写。
+  if (detectMicaSupport() === false) document.body.setAttribute("data-we-mica", "off");
+  else document.body.removeAttribute("data-we-mica");
+
+  // 软件渲染钩子（#95，见 detectSoftwareRender）：@supports 只做语法检查，软件
+  // 合成下 backdrop-filter 被静默忽略时它依然为真，所以近不透明回退必须靠运行时
+  // 探测来挂载。命中时 CSS（body[data-we-glass-fallback]）让面板/侧栏/内容面/
+  // 弹层改用与 @supports 回退完全相同的配方，并显式 backdrop-filter: none。
+  if (detectSoftwareRender()) document.body.setAttribute("data-we-glass-fallback", "1");
+  else document.body.removeAttribute("data-we-glass-fallback");
+
   // 字体自定义（#57 精简回归版）：开关关闭 → 清空变量与样式表，恢复原生外观。
   if (selection.fontCustom) {
     s.setProperty("--we-font-color", selection.fontColor);
@@ -5061,6 +4977,8 @@ function clearEffects() {
   s.removeProperty("--we-sidebar-color");
   s.removeProperty("--we-sidebar-tint");
   document.body.removeAttribute("data-we-sidebar-glass");
+  document.body.removeAttribute("data-we-mica"); // #73 Mica 能力钩子随 fiber 注销
+  document.body.removeAttribute("data-we-glass-fallback"); // #95 软件渲染回退钩子同上
   s.removeProperty("--we-content-surface-alpha");
   s.removeProperty("--we-content-surface-color");
   s.removeProperty("--we-font-color");
@@ -5210,6 +5128,12 @@ function swatchRow(label, presets, value, onPick, opts) {
 // the "CD player" presentation the author liked. Pure presentational: cover =
 // the current wallpaper's preview URL (or null), playing drives the spin.
 // Shown in BOTH settings layouts and in the picker modal head.
+// 旋转是挂在 backdrop-filter 玻璃面上的无限动画: 页面不可见时 (后台标签/最小化)
+// 它仍会驱动合成器反复重绘 backdrop。document.hidden 期间不转 — 元素此刻本来
+// 就看不见, visibilitychange (apply 的 occlusion 监听 → emit) 会立刻转回来。
+function vinylSpinVisible() {
+  return typeof document === "undefined" || document.hidden !== true;
+}
 function VinylRecord(props) {
   const cover = props.cover;
   const title = props.title || "未选择壁纸";
@@ -5244,7 +5168,7 @@ let pickerFocusPending = false;
 // GPU 抓帧缓存状态（面板展示用）：wid 对应当前面板壁纸，pinned=缓存里已有
 // <key>_gpu.png。GPU 帧优先于「壁纸画面刷新」全部档位（按用户决策），因此
 // 想切档位/换回 CPU 生成的画面必须先清掉它 —— 面板据此给出提示与清除入口。
-const gpuFrameUi = { wid: "", pinned: false, busy: false, probedAt: 0, error: "", gateHint: "" };
+const gpuFrameUi = { wid: "", pinned: false, busy: false, probedAt: 0, error: "" };
 const GPU_FRAME_PROBE_TTL_MS = 30000;
 function gpuFrameToken(frameUrl) {
   const src = String(frameUrl || "");
@@ -5310,15 +5234,14 @@ function WallpaperPicker(props) {
   // copy suppresses its own so two identical modals never stack.
   const isRepoPanelCopy = Boolean(props && props.repoPanel);
   const sel = useStore();
-  // 视频类壁纸（原生视频 + 内嵌 MP4 场景 + scene 动画视频）: 只有它们有
+  // 视频类壁纸（原生视频 + 内嵌 MP4 场景）: 只有它们有
   // 「真实播放态」的概念。实时渲染（live iframe）形态必须排除在外：它没有
   // <video> 元素可回写真实状态，且 sceneVideo 在 live 形态下非空（降级备用），
   // 沿用视频类判定会让 playbackLive 恒为 videoPlaying=true —— 「暂停」后按钮
   // 永不变「播放」（2026-09-22 实测）。
   const isLiveScene = (sel.type === "scene" || sel.type === "web") && liveRenderEnabled(sel);
   const isVideoLike = !isLiveScene && (sel.type === "video"
-    || (sel.type === "scene" && Boolean(sel.sceneVideo))
-    || (sel.type === "scene" && Boolean(sel.url) && sel.url.indexOf("/scene-anim/") !== -1));
+    || (sel.type === "scene" && Boolean(sel.sceneVideo)));
   // 卡片上显示/按钮用的播放态（#84）: 视频类壁纸以 <video> 元素的真实状态为准。
   // 意图为「播放」但元素被拒/解码失败时，面板必须说「已暂停」并把按钮显示成
   // 「播放」，否则用户面对一张冻住的壁纸却只有「暂停」可点 —— 没有「继续」。
@@ -5560,8 +5483,7 @@ function WallpaperPicker(props) {
     const map = Object.assign({}, selection.frameVariants || {});
     map[wid] = next;
     selection.frameVariants = map;
-    // 刷新作用于静态帧：若壁纸当前停在 scene-anim/beta 视频上，一并退回静态帧档位。
-    cancelSceneAnimUpgrade();
+    // 刷新作用于静态帧：把层切回当前档位的静态帧。
     selection.url = frameUrlWithVariant(sel.sceneFrameUrl, next);
     persistSelection(); syncLayers(); emit();
   };
@@ -5593,7 +5515,6 @@ function WallpaperPicker(props) {
           return;
         }
         gpuFrameUi.error = "";
-        gpuFrameUi.gateHint = "";
         markGpuFrameProbed(wid, false);
         forgetGpuFramePin(token);
         gpuFrameAspectKnown.delete(token); // 槽位已空：几何记忆一并作废
@@ -5602,15 +5523,9 @@ function WallpaperPicker(props) {
         // 「当前帧 URL + 旧壁纸的档位」→ 画面与面板读数不一致，评审 P2）。
         if (String(selection.id || "") !== wid) { gpuFrameUi.busy = false; emit(); return; }
         gpuFrameUi.busy = false;
-        cancelSceneAnimUpgrade();
         const variant = Number(selection.frameVariants && selection.frameVariants[wid]) || 0;
         selection.url = frameUrlWithVariant(sel.sceneFrameUrl, variant);
         persistSelection(); syncLayers(); emit();
-        // GPU 帧没了 → CPU 渲染恢复可用（面板提示「想在切档位/换回 CPU 生成的
-        // 画面，先点清除」的兑现点；live 可用时门禁内部会再挡一次）。
-        if (sel.sceneFrameUrl && !selection.sceneVideo && !liveRenderEnabled(selection)) {
-          maybeQueueSceneAnimUpgrade(sel.sceneFrameUrl, wid);
-        }
       })
       .catch(() => {
         gpuFrameUi.busy = false;
@@ -5644,7 +5559,6 @@ function WallpaperPicker(props) {
       // 上传可能花掉秒级（截屏多 MB）：期间用户切走就只记账到发起时那张壁纸，
       // 不改当前壁纸的 URL（否则当前壁纸会被套上旧壁纸的档位 4，评审 P2）。
       if (String(selection.id || "") !== wid) { persistSelection(); emit(); return; }
-      cancelSceneAnimUpgrade();
       if (sel.sceneFrameUrl) selection.url = frameUrlWithVariant(sel.sceneFrameUrl, 4);
       persistSelection(); syncLayers(); emit();
     }).catch(() => { /* 导入失败保持现状 */ });
@@ -5930,7 +5844,7 @@ function WallpaperPicker(props) {
         React.createElement("div", { className: "we-picker__current" },
           React.createElement(VinylRecord, {
             cover: current && current.preview, title: current ? current.title : "",
-            playing: playbackLive && Boolean(sel.url),
+            playing: playbackLive && Boolean(sel.url) && vinylSpinVisible(),
           }),
           React.createElement("div", { className: "we-picker__current-info" },
             React.createElement("div", { className: "we-picker__current-title", title: current ? current.title : "" },
@@ -6596,11 +6510,12 @@ function WallpaperPicker(props) {
         SliderRow("亮度", 40, 160, 5, sel.backgroundBrightness, onBackgroundBrightness, sel.backgroundBrightness + "%"),
         SliderRow("对比度", 40, 200, 5, sel.backgroundContrast, onBackgroundContrast, sel.backgroundContrast + "%"),
         SliderRow("饱和度", 0, 200, 5, sel.backgroundSaturate, onBackgroundSaturate, sel.backgroundSaturate + "%"),
-        // 壁纸透明度（#82）：越大越透，淡出后壁纸融向页面底色（IDEA 背景图式）。
-        // 与暗化互补 —— 一个减淡壁纸本身，一个压暗整体画面；上限 90% 避免调到
-        // 「壁纸完全不可见但暗化还在」的诡异状态（想关壁纸直接关掉即可）。
+        // 壁纸透明度（#82）：越大越透，淡出后壁纸融向**原生外观**（浅色纯白 /
+        // 深色纯黑，IDEA 背景图式）。与暗化互补 —— 一个减淡壁纸本身，一个压暗
+        // 整体画面；上限 90% 避免调到「壁纸完全不可见但暗化还在」的诡异状态
+        // （想关壁纸直接关掉即可）。
         SliderRow("壁纸透明度", 0, 90, 5, sel.wallpaperOpacity, onWallpaperOpacity, sel.wallpaperOpacity + "%", "wallpaper-opacity", {
-          tooltip: "壁纸向页面底色淡出；透明生效时壁纸层会垫主题实色，以保证玻璃模糊不被透明背景破坏",
+          tooltip: "壁纸向原生底色淡出（浅色纯白 / 深色纯黑）；透明生效时壁纸层会垫这层原生底色，以保证玻璃模糊不被透明背景破坏。场景壁纸的垫底静态帧会在实时画面出场后退场，不会在淡出时透出来",
         }),
         SliderRow("暗化", 0, 90, 5, Math.round(sel.scrim * 100), onScrim, Math.round(sel.scrim * 100) + "%"),
         SliderRow("边框", 0, 90, 5, Math.round(sel.border * 100), onBorder, Math.round(sel.border * 100) + "%"),
@@ -6710,58 +6625,9 @@ function WallpaperPicker(props) {
             tooltip: "开启后每秒记录一次渲染页心跳读数（fps / running / 暂停原因）与准备、领养、判失败事件；"
               + "同时写入浏览器控制台和宿主诊断缓冲（GET /wallpaper-engine/diag-log）。排查 live 掉帧/降级时用，平时关着。",
           }),
-        // beta场景动画: 默认关闭 → scene 壁纸只渲染静态帧 (稳定, 与官方静态帧
-        // 一致); 开启后才启动 scene-anim 视频后台渲染 (CPU 渲染试验性, 可能有
-        // 组件错误)。关闭时若已在播放动画视频 → 回退静态帧并取消进行中的渲染。
-        sel.type === "scene" && switchRow("beta场景动画", sel.betaSceneAnim === true, (e) => {
-          selection.betaSceneAnim = e.target.checked;
-          const enable = e.target.checked;
-          persistSelection();
-          if (!enable) {
-            // 关闭: 取消动画升级 (渲染任务随 probe abort 取消), 回退静态帧
-            cancelSceneAnimUpgrade();
-            if (sel.type === "scene" && sel.sceneFrameUrl
-              && selection.url && selection.url.indexOf("/scene-anim/") !== -1) {
-              // 回退静态帧要按该壁纸记住的**画面档位**（与选壁纸/轮换同一表达式），
-              // 否则画面掉回档位 0 而面板标签仍显示记着的档位 —— 读数≠画面（评审 P3-①）。
-              selection.url = frameUrlWithVariant(sel.sceneFrameUrl,
-                Number(selection.frameVariants && selection.frameVariants[String(sel.id)]) || 0);
-              syncLayers();
-            }
-          } else if (sel.type === "scene" && sel.sceneFrameUrl && !sel.sceneVideo) {
-            // 开启: 先把 beta 持久化到宿主端 (宿主 /scene-anim 路由按 config.json
-            // 门控 — 防抖的 PUT 落地前渲染请求会先到宿主 → 403 → 进度卡 0)。
-            // 跳过防抖立即冲刷, 等 PUT 落盘完成 (宿主「响应即已持久化」) 再触发升级。
-            if (persistTimer) { clearTimeout(persistTimer); persistTimer = null; }
-            writeLocalCache();
-            const p = pushPersisted();
-            // 走同一道 GPU 帧门禁（见 maybeQueueSceneAnimUpgrade）：槽位已有 GPU 抓帧
-            // 时即使手动打开开关也不跑 CPU 渲染 —— 否则分钟级渲染完成后会把 GPU 帧
-            // 覆盖掉，与「GPU 帧优先」的决策矛盾（面板提示先点「清除 GPU 帧」）。
-            const startAnimIfIdle = () => {
-              if (selection.betaSceneAnim && sel.sceneFrameUrl && !sel.sceneVideo) {
-                maybeQueueSceneAnimUpgrade(sel.sceneFrameUrl, sel.id);
-              }
-            };
-            (p && typeof p.then === "function" ? p : Promise.resolve())
-              .then(startAnimIfIdle)
-              .catch(startAnimIfIdle);
-          }
-          emit();
-        }, {
-          key: "beta-scene",
-          hint: "实验性场景渲染 · 谨慎开启",
-          tooltip: "实验性场景壁纸渲染引擎，不要开启（除非你知道自己在干什么）",
-        }),
-      ),
-      // ── 播放：倍速 / 帧率 / 适配 / 翻转（按当前壁纸类型显隐）──
-      React.createElement("div", { className: "we-picker__section" },
-        React.createElement("div", { className: "we-picker__section-head" },
-          React.createElement("span", { className: "we-picker__section-label" }, "播放与适配"),
-        ),
         // Playback speed — native playbackRate, instant, no media reload. Video
-        // and scene-animation wallpapers (web/iframe wallpapers have no playbackRate).
-        (sel.type === "video" || (sel.type === "scene" && sel.url && sel.url.indexOf("/scene-anim/") !== -1))
+        // wallpapers only (web/iframe and scene wallpapers have no playbackRate).
+        sel.type === "video"
           && React.createElement("div", { className: "we-picker__ctl", key: "rate" },
           ctlText("倍速"),
           React.createElement("div", { className: "we-picker__seg" },
@@ -6778,8 +6644,7 @@ function WallpaperPicker(props) {
         // 解码帧率上限（抽帧转码）：host 一次性把源视频重编码为上限帧率（时间线
         // 1.0x 正常速度，解码占用随帧率线性下降），与倍速解耦。首次转码需等待，
         // 播放中原片、转好自动切换；无 ffmpeg 自动回退原片。
-        // scene 动画: fps 参数在渲染时决定 (scene-anim ?fps=..), 变更后重渲染。
-        (sel.type === "video" || (sel.type === "scene" && sel.url && sel.url.indexOf("/scene-anim/") !== -1))
+        sel.type === "video"
           && React.createElement("div", { className: "we-picker__ctl", key: "fps" },
           ctlText("帧率上限", "抽帧转码 · 降低解码占用"),
           React.createElement("div", { className: "we-picker__seg" },
@@ -6790,38 +6655,11 @@ function WallpaperPicker(props) {
                 type: "button",
                 onClick: () => {
                   selection.fpsCap = cap; persistSelection(); refreshMediaInfo(true); emit();
-                  // scene 动画: fpsCap 变更 → 以新帧率重新渲染动画视频
-                  // (sceneVideo 内嵌 MP4 的场景不重渲染 — 硬件解码不受 fpsCap 影响)
-                  // 走同一道 GPU 帧门禁（评审发现此前的直调是门禁的唯一旁路：
-                  // 槽位已有 GPU 抓帧时仍会跑一次分钟级 CPU 渲染，与「有 GPU 帧就
-                  // 不跑 CPU 渲染」的决策矛盾）。
-                  if (sel.type === "scene" && sel.sceneFrameUrl && !sel.sceneVideo) {
-                    maybeQueueSceneAnimUpgrade(sel.sceneFrameUrl, sel.id);
-                  }
                 },
               }, cap === 0 ? "无限制" : cap + "fps"),
             ),
-            // 门禁拒绝过档位改动时必须解释（评审 P4-②）：否则用户只看到 chip 高亮
-            // 变化、画面没动、也没有任何提示。文案由点击路径自己置位，不依赖面板
-            // 探测缓存是否新鲜。
-            gpuFrameUi.wid === String(sel.id) && gpuFrameUi.gateHint
-              && React.createElement("div", { className: "we-picker__hint" }, gpuFrameUi.gateHint),
           ),
         ),
-        // Scene 动画渲染进度: 首次渲染分钟级, 后台渲染期间显示进度条
-        // (轮询 /scene-anim-progress; 完成或切换壁纸后置 null)。
-        sel.type === "scene" && sel.sceneAnimProgress != null && sel.sceneAnimProgress < 100
-          && React.createElement("div", { className: "we-picker__row we-picker__prog", key: "scene-prog" },
-            React.createElement("div", { className: "we-picker__prog-track" },
-              React.createElement("div", {
-                className: "we-picker__prog-bar",
-                style: { width: Math.max(2, Math.min(100, sel.sceneAnimProgress || 0)) + "%" },
-              }),
-            ),
-            React.createElement("span", { className: "we-picker__hint" },
-              "场景动画渲染中 " + (sel.sceneAnimProgress || 0) + "%",
-            ),
-          ),
         // Source metadata + transcode status (host moov probe / transcode lifecycle).
         sel.type === "video" && sel.mediaInfo && React.createElement("span", { className: "we-picker__hint", key: "media-info" },
           "源 " + sel.mediaInfo.width + "×" + sel.mediaInfo.height
@@ -7000,7 +6838,7 @@ function WallpaperPicker(props) {
             React.createElement("div", { className: "we-picker__modal-head-left" },
               React.createElement(VinylRecord, {
                 cover: current && current.preview, title: current ? current.title : "",
-                playing: playbackLive && Boolean(sel.url), sm: true,
+                playing: playbackLive && Boolean(sel.url) && vinylSpinVisible(), sm: true,
               }),
               React.createElement("span", { className: "we-picker__modal-title" }, "选择壁纸"),
             ),
@@ -7642,12 +7480,50 @@ function UpdateNotice() {
   );
 }
 
+// ── Text-surface readability floor (upstream #82) ───────────────────────────
+// The wallpaper may be dimmed/blended so it "does not dominate", but TEXT MUST
+// STAY READABLE. IDEA's background-image feature has ONE knob (image opacity)
+// and still "just works" because the image always sits BEHIND the editor /
+// tool-window surfaces, which keep a background of their own
+// (https://www.jetbrains.com/help/idea/setting-background-image.html). This
+// plugin lacked exactly that structural property: every text-bearing surface
+// was painted as `glass colour @ --we-glass-alpha`, and in dark mode that alpha
+// is additionally multiplied by 0.4 — worst case 0.03 × 0.4 = 0.012, i.e. no
+// frost at all, so conversation text scrolling behind the composer read
+// straight through.
+//
+// The floor is a THEME-BASE LAYER composited OVER that glass tint at a fixed
+// weight no slider can lower: the tint's alpha only scales the other operand,
+// so the effective coverage is floor + a·(1−floor) ≥ floor. Clamping the tint
+// alpha itself with max() cannot work here — in dark mode the tint is a WHITE
+// glaze, so over the brightest plausible wallpaper pixel the surface composites
+// to white at ANY alpha and white body text keeps exactly 1.00:1 (the measured
+// before row below). In light mode such a clamp would work but would have to
+// sit at 0.44, above every alpha the slider can reach (max 0.25) — it would
+// flatten the slider completely. The theme-base layer fixes both themes and
+// keeps the slider alive above the floor.
+//
+// Both values come from measurement (scripts/verify-readability.mjs recomputes
+// the same grid): 玻璃透明度 {0,15,30,45,60} × theme {light,dark} ×
+// 壁纸透明度 {0,50,90}, theme text colour (light #000 / dark #fff) against the
+// surface composited onto the worst-case backdrop (light: darkest plausible
+// wallpaper pixel #000; dark: brightest #fff):
+//   light  exact 0.44194 → 0.45   worst case 4.63:1  (bubble @ 玻璃透明度=60)
+//   dark   exact 0.58136 → 0.59   worst case 4.63:1  (settings layer-3 @ 0)
+// The floor is independent of 壁纸透明度: it never reads --we-wallpaper-opacity,
+// which keeps affecting .we-layer only. Values are interpolated into the CSS
+// below so the stylesheet and this comment can never drift apart.
+const READABILITY_FLOOR = 0.45;
+const READABILITY_FLOOR_DARK = 0.59;
+
 // ── Styles ──────────────────────────────────────────────────────────────────
 const CSS = `
   /* Wallpaper layer: a fixed child of <body>, sunk BELOW the app frame.
-     壁纸透明度（#82）走整层 element opacity —— 对 <video>/<img>/<iframe>/canvas
-     四类媒体统一生效，也无需逐媒体处理 fit/transform 的相互作用；变量缺省 1
-     （opacity:1 不产生合成层，见 applyEffects）。 */
+     壁纸透明度（#82）作用在**媒体叶子**（.we-layer .we-media）上 —— 对
+     <video>/<img>/<iframe>/canvas 四类媒体统一生效，也无需逐媒体处理
+     fit/transform 的相互作用；层自身垫一层**原生底色**
+     （--we-wallpaper-fade-bg，浅色纯白 / 深色纯黑）保持不透明合成（透明
+     backdrop 会让玻璃 backdrop-filter 静默失效）。变量缺省 1。 */
   .we-layer { position: fixed; inset: 0; z-index: -2; overflow: hidden; pointer-events: none; opacity: 1; background-color: var(--we-wallpaper-fade-bg, transparent); }
   /* Blurring via CSS filter darkens/thins the edges, so the layer is scaled up
      (--we-wallpaper-scale tracks blur) to hide the transparent fringe the blur
@@ -7655,9 +7531,9 @@ const CSS = `
   .we-layer .we-media {
     width: 100%; height: 100%; object-fit: cover; display: block;
     background: transparent; border: 0;
-    /* 壁纸透明度（#82）作用于媒体叶子而非 .we-layer 整层：layer 垫实色
-       （--we-wallpaper-fade-bg）保持不透明合成，避免透明 backdrop 让玻璃
-       backdrop-filter 失效（见 applyEffects 注释）。 */
+    /* 壁纸透明度（#82）作用于媒体叶子而非 .we-layer 整层：layer 垫**原生底色**
+       （--we-wallpaper-fade-bg，浅色纯白 / 深色纯黑）保持不透明合成，避免透明
+       backdrop 让玻璃 backdrop-filter 失效（见 applyEffects 注释）。 */
     opacity: var(--we-wallpaper-opacity, 1);
     /* Blur is applied ONLY when > 0 (see --we-media-filter in applyEffects):
        a permanent blur(0px) would still force an offscreen filter layer on
@@ -7684,6 +7560,17 @@ const CSS = `
   .we-layer .we-live-poster {
     position: absolute; inset: 0; width: 100%; height: 100%;
     background-size: cover; background-position: center; background-repeat: no-repeat;
+  }
+  /* live 首帧点亮后，垫底静态帧必须**整块退场**（1.8s，与 iframe 淡入同步）。
+     ⚠️ 它在 DOM 里是 iframe 的**下层**，而「壁纸透明度」是把上层 iframe 变半透明
+     —— 一个 0.1 的 alpha 会让静态帧以 a(1−a)≈0.09 的强度重新透出来：实测症状就是
+     「壁纸透明度高时显现静态帧」，而预期是只该看到原生底色 + 淡出的实时画面。
+     首帧确认前 / 降级回静态帧后本规则不匹配，垫底照旧负责盖住加载窗口。
+     transition 写在**这条规则里**：状态翻转时淡出，翻回时立即恢复；live 生效期间
+     这里的 opacity 是字面量 0，与「壁纸透明度」滑块无关 —— 不会拖慢滑块手感。 */
+  .we-layer:has(.we-live-iframe.we-live-on) .we-live-poster {
+    opacity: 0;
+    transition: opacity 1.8s ease;
   }
   .we-layer .we-live-iframe {
     position: absolute; inset: 0; width: 100%; height: 100%;
@@ -7740,6 +7627,21 @@ const CSS = `
     --dsw-alias-border-l2-darkmode-thin: rgba(180, 180, 180, var(--we-border-alpha, 0.35));
   }
 
+  /* #73 增强模式 + Win10（无 Mica）：桌面外壳只在系统材质可用时让左侧工作区
+     (.dshDesktopSidebarSurface) 保持透明（壁纸透出）；material 回退 off 时它改用
+     --dsw-alias-bg-layer-1 实心绘制该区域，并把内部 sidebar 的
+     --dsw-specific-sidebar-fill 也改成实心色 —— 壁纸在这里完全不生效，只剩一块与
+     系统材质绑定的死底色。detectMicaSupport() 把「无 Mica」作为稳定钩子挂到
+     body[data-we-mica="off"]，这里用插件自己的近不透明玻璃面接管该区域：配方与
+     无 backdrop-filter 的内容面回退完全一致（主题面板色 + --we-content-surface-alpha，
+     由「内容面透明度 / 内容面底色」控制，默认 70% 不透明，壁纸仍有一层微光），
+     同时放行内部 fill token，让这块面重新与壁纸 + 暗化层同步。Mica 可用时该属性
+     不存在，本规则不参与匹配，行为与今天逐字节相同。 */
+  body[data-we-mica="off"][data-we-wallpaper] .dshDesktopSidebarSurface {
+    --dsw-specific-sidebar-fill: transparent !important;
+    background-color: color-mix(in srgb, var(--we-content-surface-color, var(--dsw-alias-bg-layer-1, #1e1f26)) max(calc(var(--we-readability-floor) * 100%), var(--we-content-surface-alpha, 88%)), transparent) !important;
+  }
+
   /* ── Light-scheme text contrast boost ──────────────────────────────────────
      In light mode the grays (tertiary/caption/secondary) were tuned against a
      near-white page. Over a busy wallpaper + light scrim they lose contrast, so
@@ -7753,6 +7655,28 @@ const CSS = `
     --dsw-alias-label-tertiary: rgb(70, 73, 79);
     --dsw-alias-label-caption: rgb(110, 114, 120);
     --dsw-alias-label-dimmed: rgb(50, 52, 56);
+  }
+
+  /* ── 文字面可读性下限 (text-surface readability floor, #82) ───────────────
+     动机、IDEA 模型与 4.5:1 目标见 JS 的 READABILITY_FLOOR 注释（数值的唯一
+     来源，下面用模板插值注入，二者不会漂移）。写法：每个承载文字的面都从
+         <原玻璃色 @ 原 alpha>
+     变成
+         color-mix(in srgb, <主题底色> floor%, <原玻璃色 @ 原 alpha> (1-floor)%)
+     —— color-mix 在预乘空间按权重插值，权重会乘上操作数自身的 alpha，
+     所以这条声明恰好等于「主题底色 @floor 压在 原玻璃色 之上」：
+         effective alpha = floor + a_glass × (1 − floor) ≥ floor
+     玻璃透明度 与 暗主题的 ×0.4 只改 a_glass（另一项权重），floor 这一项
+     固定不动 —— 下限因此不可能被滑杆削弱；floor 之上仍是原来的玻璃配方，
+     只是压了一层主题底色（壁纸在亮/暗极端像素处不再吃掉文字）。
+     --we-wallpaper-opacity 不参与本层：壁纸透明度仍只作用于 .we-layer。 */
+  body {
+    --we-readability-floor: ${READABILITY_FLOOR};
+    --we-readability-base: #ffffff;
+  }
+  body[data-ds-dark-theme] {
+    --we-readability-floor: ${READABILITY_FLOOR_DARK};
+    --we-readability-base: #0d1524;
   }
 
   /* ── iOS liquid glass ──────────────────────────────────────────────────────
@@ -7780,14 +7704,26 @@ const CSS = `
      token, so the blur itself still needs an element selector — [data-composer-card]
      is authored in the shell source and survives rebuilds. Bubbles carry no such
      attribute, so they fall back to the module-CSS suffix convention; if that
-     ever stops matching the bubble stays translucent, just without the blur. */
+     ever stops matching the bubble stays translucent, just without the blur.
+     Both tokens carry text, so both go through the readability floor (the
+     composer card AND the tool popups that read --dsw-specific-input-major). */
   body[data-we-wallpaper] {
-    --dsw-specific-input-major: rgba(255, 255, 255, var(--we-glass-alpha, 0.15));
-    --dsw-specific-bubble: rgba(255, 255, 255, calc(var(--we-glass-alpha, 0.15) * 0.8));
+    --dsw-specific-input-major: color-mix(in srgb,
+      var(--we-readability-base) calc(var(--we-readability-floor) * 100%),
+      rgba(255, 255, 255, var(--we-glass-alpha, 0.15)) calc((1 - var(--we-readability-floor)) * 100%));
+    --dsw-specific-bubble: color-mix(in srgb,
+      var(--we-readability-base) calc(var(--we-readability-floor) * 100%),
+      rgba(255, 255, 255, calc(var(--we-glass-alpha, 0.15) * 0.8)) calc((1 - var(--we-readability-floor)) * 100%));
   }
   body[data-ds-dark-theme][data-we-wallpaper] {
-    --dsw-specific-input-major: rgba(255, 255, 255, calc(var(--we-glass-alpha, 0.15) * 0.4));
-    --dsw-specific-bubble: rgba(255, 255, 255, calc(var(--we-glass-alpha, 0.15) * 0.33));
+    /* The ×0.4 / ×0.33 factors below only scale the TINT operand; the floor
+       keeps its own weight, so the dark-theme undercut cannot happen. */
+    --dsw-specific-input-major: color-mix(in srgb,
+      var(--we-readability-base) calc(var(--we-readability-floor) * 100%),
+      rgba(255, 255, 255, calc(var(--we-glass-alpha, 0.15) * 0.4)) calc((1 - var(--we-readability-floor)) * 100%));
+    --dsw-specific-bubble: color-mix(in srgb,
+      var(--we-readability-base) calc(var(--we-readability-floor) * 100%),
+      rgba(255, 255, 255, calc(var(--we-glass-alpha, 0.15) * 0.33)) calc((1 - var(--we-readability-floor)) * 100%));
   }
   body[data-we-wallpaper] [data-composer-card],
   body[data-we-wallpaper] [class*="_bubble"],
@@ -7816,6 +7752,33 @@ const CSS = `
       inset 0 -1px 0 rgba(255, 255, 255, 0.08),
       inset 0 0 0 0.5px rgba(255, 255, 255, 0.08),
       0 12px 40px rgba(0, 0, 0, var(--we-glass-shadow, 0.12));
+  }
+  /* ── composer card: the blur must not live on the card itself ─────────────
+     [data-composer-card] contains position:fixed descendants: @dsh-external/
+     dsh-webui mounts the "AI 浏览器" seat (.dsh-browser-seat-wrap) inside it with a
+     hard-coded position:fixed. A non-none backdrop-filter makes the element a
+     containing block for its fixed descendants, so that button stops being
+     viewport-anchored and drops ~522px below the card. The seat then carries
+     543px of phantom overflow, which becomes extra scrollable content in the
+     conversation scroller: by the time you reach the bottom the sticky travel is
+     already spent, so the composer is left stranded above it (#89).
+     Hosting the blur on ::before fixes it — a pseudo-element has no DOM
+     descendants, so it can never become a containing block. Same blur radius,
+     same --we-* tokens, same inset/radius → visually identical.
+     把模糊改由 ::before 伪元素承载：伪元素没有 DOM 后代，不会成为 fixed 后代的包含块。 */
+  body[data-we-wallpaper] [data-composer-card] {
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  body[data-we-wallpaper] [data-composer-card]::before {
+    content: "";
+    position: absolute;
+    inset: 0;
+    border-radius: inherit;
+    pointer-events: none;
+    z-index: -1;
+    -webkit-backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
+    backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
   }
   /* Note (anti-flicker): the composer/bubbles keep ONLY the backdrop-filter
      glass. Extra always-on layers (transform/will-change/contain) were removed —
@@ -7875,7 +7838,11 @@ const CSS = `
      base too; the blur lives on the root panels (one blur per shell). */
   body[data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_boundaryError"],
   body[data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_panel"] {
-    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) var(--we-sidebar-tint, 20%), transparent) !important;
+    /* 侧栏面板同样承载文字 → 同一层可读性下限（--we-sidebar-tint 是这里的
+       玻璃色权重，只在另一项上生效）。 */
+    background-color: color-mix(in srgb,
+      var(--we-readability-base) calc(var(--we-readability-floor) * 100%),
+      color-mix(in srgb, var(--we-sidebar-color, #ffffff) var(--we-sidebar-tint, 20%), transparent) calc((1 - var(--we-readability-floor)) * 100%)) !important;
     /* Specular sheen + refraction highlights follow --we-sidebar-sheen
        (= min(1, alpha/0.2236)): at default (12%) and any MORE solid setting
        the sheen keeps the ORIGINAL design strength (0.14/0.04/0.01,
@@ -7900,11 +7867,15 @@ const CSS = `
   body[data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_gitHeader"],
   body[data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_browserBar"],
   body[data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_terminalWrap"] {
-    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) calc(var(--we-sidebar-tint, 20%) * 0.75), transparent) !important;
+    background-color: color-mix(in srgb,
+      var(--we-readability-base) calc(var(--we-readability-floor) * 100%),
+      color-mix(in srgb, var(--we-sidebar-color, #ffffff) calc(var(--we-sidebar-tint, 20%) * 0.75), transparent) calc((1 - var(--we-readability-floor)) * 100%)) !important;
   }
   body[data-ds-dark-theme][data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_boundaryError"],
   body[data-ds-dark-theme][data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_panel"] {
-    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) calc(var(--we-sidebar-tint, 20%) * 0.65), transparent) !important;
+    background-color: color-mix(in srgb,
+      var(--we-readability-base) calc(var(--we-readability-floor) * 100%),
+      color-mix(in srgb, var(--we-sidebar-color, #ffffff) calc(var(--we-sidebar-tint, 20%) * 0.65), transparent) calc((1 - var(--we-readability-floor)) * 100%)) !important;
   }
   body[data-ds-dark-theme][data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_pane"],
   body[data-ds-dark-theme][data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_tabBar"],
@@ -7914,7 +7885,9 @@ const CSS = `
   body[data-ds-dark-theme][data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_gitHeader"],
   body[data-ds-dark-theme][data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_browserBar"],
   body[data-ds-dark-theme][data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_terminalWrap"] {
-    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) calc(var(--we-sidebar-tint, 20%) * 0.5), transparent) !important;
+    background-color: color-mix(in srgb,
+      var(--we-readability-base) calc(var(--we-readability-floor) * 100%),
+      color-mix(in srgb, var(--we-sidebar-color, #ffffff) calc(var(--we-sidebar-tint, 20%) * 0.5), transparent) calc((1 - var(--we-readability-floor)) * 100%)) !important;
   }
   /* No backdrop-filter support: fall back to near-opaque tinted surfaces so
      sidebar text never sits directly on a busy wallpaper (same policy as the
@@ -7965,7 +7938,9 @@ const CSS = `
     background-color: var(--dsw-alias-bg-layer-1, #1e1f26);
   }
   body[data-we-sidebar-glass] [data-sidebar-right-panel][data-sidebar-right-open] {
-    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) var(--we-sidebar-tint, 20%), transparent) !important;
+    background-color: color-mix(in srgb,
+      var(--we-readability-base) calc(var(--we-readability-floor) * 100%),
+      color-mix(in srgb, var(--we-sidebar-color, #ffffff) var(--we-sidebar-tint, 20%), transparent) calc((1 - var(--we-readability-floor)) * 100%)) !important;
     background-image: linear-gradient(180deg,
       rgba(255, 255, 255, calc(var(--we-sidebar-sheen, 1) * 0.14)),
       rgba(255, 255, 255, calc(var(--we-sidebar-sheen, 1) * 0.04)) 38%,
@@ -7978,7 +7953,9 @@ const CSS = `
       inset 0 0 0 0.5px rgba(255, 255, 255, calc(var(--we-sidebar-sheen, 1) * 0.06));
   }
   body[data-ds-dark-theme][data-we-sidebar-glass] [data-sidebar-right-panel][data-sidebar-right-open] {
-    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) calc(var(--we-sidebar-tint, 20%) * 0.65), transparent) !important;
+    background-color: color-mix(in srgb,
+      var(--we-readability-base) calc(var(--we-readability-floor) * 100%),
+      color-mix(in srgb, var(--we-sidebar-color, #ffffff) calc(var(--we-sidebar-tint, 20%) * 0.65), transparent) calc((1 - var(--we-readability-floor)) * 100%)) !important;
   }
   /* Closed state: the host's own container carries no background — keep ours
      off too, whatever the master-switch state (#107). */
@@ -8024,7 +8001,7 @@ const CSS = `
   body[data-we-sidebar-glass] [data-dsh-better-sidebar] .xterm,
   body[data-we-sidebar-glass] [data-sidebar-right-panel] .cm-editor,
   body[data-we-sidebar-glass] [data-sidebar-right-panel] .xterm {
-    background-color: color-mix(in srgb, var(--we-content-surface-color, var(--dsw-alias-bg-layer-1, #1e1f26)) var(--we-content-surface-alpha, 88%), transparent) !important;
+    background-color: color-mix(in srgb, var(--we-content-surface-color, var(--dsw-alias-bg-layer-1, #1e1f26)) max(calc(var(--we-readability-floor) * 100%), var(--we-content-surface-alpha, 88%)), transparent) !important;
   }
 
   /* Picker chrome. */
@@ -8074,10 +8051,17 @@ const CSS = `
     /* Glass surface alphas (light scheme): the base tint is --we-glass-color
        (玻璃颜色) mixed with transparent at the 玻璃透明度-driven alpha, so the
        whole window glass can be tinted to any color. Default (no custom color)
-       = white glass, the stock look. */
-    --dsw-alias-bg-layer-1: color-mix(in srgb, var(--we-glass-color, #ffffff) calc(var(--we-glass-alpha, 0.5) * 0.9 * 100%), transparent);
-    --dsw-alias-bg-layer-2: color-mix(in srgb, var(--we-glass-color, #ffffff) calc(var(--we-glass-alpha, 0.5) * 1.0 * 100%), transparent);
-    --dsw-alias-bg-layer-3: color-mix(in srgb, var(--we-glass-color, #ffffff) calc(var(--we-glass-alpha, 0.5) * 1.1 * 100%), transparent);
+       = white glass, the stock look. 这三层同样是文字面（导航 + 原生分区），
+       所以每层都压在可读性下限的主题底色之下。 */
+    --dsw-alias-bg-layer-1: color-mix(in srgb,
+      var(--we-readability-base) calc(var(--we-readability-floor) * 100%),
+      color-mix(in srgb, var(--we-glass-color, #ffffff) calc(var(--we-glass-alpha, 0.5) * 0.9 * 100%), transparent) calc((1 - var(--we-readability-floor)) * 100%));
+    --dsw-alias-bg-layer-2: color-mix(in srgb,
+      var(--we-readability-base) calc(var(--we-readability-floor) * 100%),
+      color-mix(in srgb, var(--we-glass-color, #ffffff) calc(var(--we-glass-alpha, 0.5) * 1.0 * 100%), transparent) calc((1 - var(--we-readability-floor)) * 100%));
+    --dsw-alias-bg-layer-3: color-mix(in srgb,
+      var(--we-readability-base) calc(var(--we-readability-floor) * 100%),
+      color-mix(in srgb, var(--we-glass-color, #ffffff) calc(var(--we-glass-alpha, 0.5) * 1.1 * 100%), transparent) calc((1 - var(--we-readability-floor)) * 100%));
     /* Nav + interactive states tinted with the accent. */
     --dsw-specific-sidebar-nav-item-active: color-mix(in srgb, var(--we-accent, #4f8cff) 26%, rgba(255, 255, 255, 0.08));
     --dsw-specific-sidebar-nav-item-hover: color-mix(in srgb, var(--we-accent, #4f8cff) 13%, rgba(255, 255, 255, 0.05));
@@ -8113,9 +8097,16 @@ const CSS = `
   /* Dark scheme: deep translucent base instead of white. The default glass
      color is deep navy; a user-picked 玻璃颜色 overrides it in both themes. */
   body[data-ds-dark-theme][data-we-glass-window] [role="dialog"]:has([data-slot="settings.section"]) {
-    --dsw-alias-bg-layer-1: color-mix(in srgb, var(--we-glass-color, #0d1524) calc(var(--we-glass-alpha, 0.5) * 0.9 * 100%), transparent);
-    --dsw-alias-bg-layer-2: color-mix(in srgb, var(--we-glass-color, #0d1524) calc(var(--we-glass-alpha, 0.5) * 1.0 * 100%), transparent);
-    --dsw-alias-bg-layer-3: color-mix(in srgb, var(--we-glass-color, #0d1524) calc(var(--we-glass-alpha, 0.5) * 1.1 * 100%), transparent);
+    /* 设置窗口的整块面板（导航 + 每个原生分区）都承载文字 → 同样过下限。 */
+    --dsw-alias-bg-layer-1: color-mix(in srgb,
+      var(--we-readability-base) calc(var(--we-readability-floor) * 100%),
+      color-mix(in srgb, var(--we-glass-color, #0d1524) calc(var(--we-glass-alpha, 0.5) * 0.9 * 100%), transparent) calc((1 - var(--we-readability-floor)) * 100%));
+    --dsw-alias-bg-layer-2: color-mix(in srgb,
+      var(--we-readability-base) calc(var(--we-readability-floor) * 100%),
+      color-mix(in srgb, var(--we-glass-color, #0d1524) calc(var(--we-glass-alpha, 0.5) * 1.0 * 100%), transparent) calc((1 - var(--we-readability-floor)) * 100%));
+    --dsw-alias-bg-layer-3: color-mix(in srgb,
+      var(--we-readability-base) calc(var(--we-readability-floor) * 100%),
+      color-mix(in srgb, var(--we-glass-color, #0d1524) calc(var(--we-glass-alpha, 0.5) * 1.1 * 100%), transparent) calc((1 - var(--we-readability-floor)) * 100%));
     --dsw-specific-sidebar-nav-item-active: color-mix(in srgb, var(--we-accent, #4f8cff) 30%, rgba(255, 255, 255, 0.06));
     --dsw-specific-sidebar-nav-item-hover: color-mix(in srgb, var(--we-accent, #4f8cff) 14%, rgba(255, 255, 255, 0.04));
     background-image: linear-gradient(
@@ -9080,7 +9071,9 @@ const CSS = `
 
   /* One-time update notice — a floating glass toast (bottom-center) that tells
      immersive/kiosk-window users about the white flash and its one fix. High
-     z-index so it sits above the chat; buttons reuse the flat picker style. */
+     z-index so it sits above the chat; buttons reuse the flat picker style.
+     底板跟着主题底色走（max(下限, 82%) 保住原来的 82% 衬底）：明主题白衬黑字、
+     暗主题深蓝衬白字，不再是一块写死的深色板。 */
   .we-update-notice {
     position: fixed; left: 50%; bottom: 26px; z-index: 1100;
     transform: translateX(-50%);
@@ -9088,7 +9081,7 @@ const CSS = `
     box-sizing: border-box;
     display: flex; flex-direction: column; gap: 10px;
     padding: 16px 18px; border-radius: 14px;
-    background-color: color-mix(in srgb, var(--we-glass-color, #ffffff) calc(var(--we-glass-alpha, 0.5) * 90%), rgba(24, 28, 40, 0.82));
+    background-color: color-mix(in srgb, var(--we-glass-color, #ffffff) calc(var(--we-glass-alpha, 0.5) * 90%), var(--we-readability-base) calc(max(var(--we-readability-floor), 0.82) * 100%));
     background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.14), rgba(255, 255, 255, 0.03) 40%, rgba(255, 255, 255, 0.01));
     -webkit-backdrop-filter: blur(var(--we-blur, 16px)) saturate(1.2);
     backdrop-filter: blur(var(--we-blur, 16px)) saturate(1.2);
@@ -9135,7 +9128,10 @@ const CSS = `
      layer is a known Chromium white-flash-on-repaint source). */
   .we-repo-panel--open {
     border-left: 1px solid rgba(255, 255, 255, 0.22);
-    background-color: color-mix(in srgb, var(--we-glass-color, #ffffff) calc(var(--we-glass-alpha, 0.5) * 72%), transparent);
+    /* 插件自己的抽屉同样是文字面 → 同一层可读性下限。 */
+    background-color: color-mix(in srgb,
+      var(--we-readability-base) calc(var(--we-readability-floor) * 100%),
+      color-mix(in srgb, var(--we-glass-color, #ffffff) calc(var(--we-glass-alpha, 0.5) * 72%), transparent) calc((1 - var(--we-readability-floor)) * 100%));
     background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.05) 38%, rgba(255, 255, 255, 0.02));
     -webkit-backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
     backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
@@ -9210,7 +9206,10 @@ const CSS = `
     height: 100dvh; max-height: 100dvh;
     border-radius: 0;
     border: 0; border-left: 1px solid rgba(255, 255, 255, 0.22);
-    background-color: color-mix(in srgb, var(--we-glass-color, #ffffff) calc(var(--we-glass-alpha, 0.5) * 80%), transparent);
+    /* 仓库抽屉的右四分之一弹窗同样是文字面 → 同一层可读性下限。 */
+    background-color: color-mix(in srgb,
+      var(--we-readability-base) calc(var(--we-readability-floor) * 100%),
+      color-mix(in srgb, var(--we-glass-color, #ffffff) calc(var(--we-glass-alpha, 0.5) * 80%), transparent) calc((1 - var(--we-readability-floor)) * 100%));
     background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.05) 38%, rgba(255, 255, 255, 0.02));
     -webkit-backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
     backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
@@ -9236,6 +9235,89 @@ const CSS = `
       backdrop-filter: none; -webkit-backdrop-filter: none;
     }
   }
+
+  /* ── 软件渲染回退（upstream #95，运行时探测）───────────────────────────────
+     有些第三方桌面外壳（增强 / 扩展窗口模式，通常走软件合成）根本不执行
+     backdrop-filter，但属性语法是认的 —— 所以上面那些
+     @supports not ((backdrop-filter: blur(1px)) or (…)) 回退永远为真、永不启用，
+     玻璃面板只剩全透明（「过透」）。detectSoftwareRender() 在运行时探测软件光栅器
+     并把结果挂到 body[data-we-glass-fallback]，下面把同一批回退配方原样再挂一次：
+     相同的 --we-* token、相同的 color-mix 近不透明声明（不新增任何 token /
+     机制），只多一条显式的 backdrop-filter: none（语法检查通过时 @supports
+     做不到这件事）。选择器与上面 @supports 回退逐条对应，并保留各自的总开关
+     (data-we-sidebar-glass / data-we-glass-window)，所以关掉开关仍然是原生外观。
+     输入框卡片按上游 #94 的 ::before 载体单独覆盖（见下方规则）。
+     手动覆盖：?we-glassfallback=on|off（见 detectSoftwareRender）。 ── */
+  body[data-we-glass-fallback][data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_boundaryError"],
+  body[data-we-glass-fallback][data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_panel"],
+  body[data-we-glass-fallback][data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_pane"],
+  body[data-we-glass-fallback][data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_tabBar"],
+  body[data-we-glass-fallback][data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_paneCard"],
+  body[data-we-glass-fallback][data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_editorHeader"],
+  body[data-we-glass-fallback][data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_explorerHeader"],
+  body[data-we-glass-fallback][data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_gitHeader"],
+  body[data-we-glass-fallback][data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_browserBar"],
+  body[data-we-glass-fallback][data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_terminalWrap"] {
+    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) 92%, transparent) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  body[data-we-glass-fallback][data-we-sidebar-glass] [data-sidebar-right-panel] {
+    background-color: color-mix(in srgb, var(--we-sidebar-color, #ffffff) 92%, transparent) !important;
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  /* 内容面（编辑器/终端）本来就是近不透明底板（--we-content-surface-alpha，默认
+     88%），这里把同一条声明再挂一遍，让软件渲染下三块侧栏区域落在同一个规则块里。 */
+  body[data-we-glass-fallback][data-we-sidebar-glass] [data-dsh-better-sidebar] .cm-editor,
+  body[data-we-glass-fallback][data-we-sidebar-glass] [data-dsh-better-sidebar] .xterm,
+  body[data-we-glass-fallback][data-we-sidebar-glass] [data-sidebar-right-panel] .cm-editor,
+  body[data-we-glass-fallback][data-we-sidebar-glass] [data-sidebar-right-panel] .xterm {
+    background-color: color-mix(in srgb, var(--we-content-surface-color, var(--dsw-alias-bg-layer-1, #1e1f26)) max(calc(var(--we-readability-floor) * 100%), var(--we-content-surface-alpha, 88%)), transparent) !important;
+  }
+  /* 设置窗口：把三层面板 token 钉回实色（@supports 回退里的同一条 token 覆写），
+     并显式关掉不会生效的 backdrop-filter。 */
+  body[data-we-glass-fallback][data-we-glass-window] [role="dialog"]:has([data-slot="settings.section"]) {
+    --dsw-alias-bg-layer-1: var(--we-glass-color, #ffffff);
+    --dsw-alias-bg-layer-2: var(--we-glass-color, #ffffff);
+    --dsw-alias-bg-layer-3: var(--we-glass-color, #ffffff);
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  body[data-ds-dark-theme][data-we-glass-fallback][data-we-glass-window] [role="dialog"]:has([data-slot="settings.section"]) {
+    --dsw-alias-bg-layer-1: var(--we-glass-color, #0d1524);
+    --dsw-alias-bg-layer-2: var(--we-glass-color, #0d1524);
+    --dsw-alias-bg-layer-3: var(--we-glass-color, #0d1524);
+  }
+  /* 输入框卡片（issue #95 报「过透」的那块界面）：上游 #94 已把模糊从卡片本体搬到
+     [data-composer-card]::before 载体（卡片上的 backdrop-filter 会成为 fixed 后代的
+     包含块，#89）——载体上没有背景，卡片自身的底色只有 --we-glass-alpha（默认 15%），
+     所以只关掉 backdrop-filter 仍然过透。这里让 ::before 自己变成近不透明底板：
+     载体是同一块表面，模糊没了就由它兜住底色，配方与上面 .we-repo-panel 逐字相同
+     （同一个 --we-glass-color / 92%，未新增 token 或机制）。 */
+  body[data-we-glass-fallback][data-we-wallpaper] [data-composer-card]::before {
+    background-color: color-mix(in srgb, var(--we-glass-color, #ffffff) 92%, transparent);
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
+  /* 仓库抽屉 / 面板弹窗：与 @supports 回退逐字相同的 92% / 94% 近不透明配方。 */
+  body[data-we-glass-fallback] .we-repo-panel {
+    background-color: color-mix(in srgb, var(--we-glass-color, #ffffff) 92%, transparent);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  body[data-we-glass-fallback] .we-picker__modal--panel {
+    background-color: color-mix(in srgb, var(--we-glass-color, #ffffff) 94%, transparent);
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+  }
+  /* 弹层遮罩 / 一次性通知：底色本身已经接近不透明（55% 黑 / 82% 深色底衬），
+     不需要换配方，只把永远不生效的 backdrop-filter 关掉。 */
+  body[data-we-glass-fallback] .we-picker__modal-overlay,
+  body[data-we-glass-fallback] .we-update-notice {
+    backdrop-filter: none !important;
+    -webkit-backdrop-filter: none !important;
+  }
   @media (prefers-reduced-motion: reduce) {
     .we-rope--settle, .we-repo-panel, .we-picker__modal--panel, .we-repo-panel__modal-scrim { transition: none !important; }
     .we-picker__modal--panel { animation: none !important; }
@@ -9248,14 +9330,26 @@ const CSS = `
 // old stylesheet tag from a previous bundle (TAG_ID dedupes the injection; a
 // static id would leave stale CSS rules active and new rules missing).
 const TAG_ID = "dsh-wallpaper-engine/styles-v3";
-if (typeof document !== "undefined" &&
-    document.querySelector("style[data-plugin-css=" + JSON.stringify(TAG_ID) + "]") === null) {
-  const tag = document.createElement("style");
-  tag.dataset.plugin = "dsh-wallpaper-engine";
-  tag.dataset.pluginCss = TAG_ID;
-  tag.textContent = CSS;
-  document.head.appendChild(tag);
+// 本次 bundle 求值的代际标记: cleanup 只移除自己这一代的 <style>, HMR 里
+// "新版已挂载、旧版才卸载"的顺序下不会误删新版仍在用的样式表。
+const CSS_GEN = Date.now() + ":" + Math.random().toString(36).slice(2);
+// 注入抽成函数: fiber cleanup (见 apply) 会移除这个 <style>, 所以 effect 挂载时
+// 必须能再注入一次 — 否则同一页面内 disable→enable 后整个界面无样式。
+function ensurePluginCss() {
+  if (typeof document === "undefined") return null;
+  let tag = document.querySelector("style[data-plugin-css=" + JSON.stringify(TAG_ID) + "]");
+  if (tag === null) {
+    tag = document.createElement("style");
+    tag.dataset.plugin = "dsh-wallpaper-engine";
+    tag.dataset.pluginCss = TAG_ID;
+    document.head.appendChild(tag);
+  }
+  // 同 id 的旧标签可能带的是上一个 bundle 的 CSS → 按当前 bundle 的内容刷新
+  if (tag.textContent !== CSS) tag.textContent = CSS;
+  tag.dataset.pluginCssGen = CSS_GEN;
+  return tag;
 }
+ensurePluginCss();
 
 // ── Plugin exports ──────────────────────────────────────────────────────────
 const inject = ["slots"];
@@ -9353,6 +9447,74 @@ function useLegacySaturateCoupling() {
   return legacySaturateCoupling;
 }
 
+// ── 软件光栅化探测（upstream #95）───────────────────────────────────────────
+// 某些第三方桌面外壳（增强 / 扩展窗口模式，通常是软件合成）里 `backdrop-filter`
+// 被静默忽略：属性语法仍然被接受，所以 `@supports not (backdrop-filter: …)`
+// 永远为真 —— 那条回退根本不会启用，玻璃面板就变成「过透」（全透）。这里改为
+// 运行时探测：真的去建一个 WebGL 上下文并读渲染器字符串，如果它是软件光栅器
+// （或连上下文都建不出来），就把 body[data-we-glass-fallback] 挂上，让 CSS 用
+// 既有的近不透明配方接管（见 CSS 里那一段）。
+// 手动覆盖（用户排障 / 维护者无 GPU 环境复现）：
+//   ?we-glassfallback=on|1  → 强制回退 · off|0 → 强制关闭 · 其他值 = 自动探测
+// 只探测一次并缓存 —— applyEffects 每次设置变动都会读它。
+// 全程 typeof 守卫 + try/catch：非浏览器 / 验证沙箱里绝不抛出，也绝不改变行为。
+const SOFT_RENDER_RE = /swiftshader|software|llvmpipe|softpipe|microsoft basic render|angle \(software|stack-gl/i;
+let softRenderFallback; // undefined = 未探测 · true = 软件/无 WebGL · false = 硬件
+function detectSoftwareRender() {
+  if (softRenderFallback !== undefined) return softRenderFallback;
+  softRenderFallback = false;
+  try {
+    // 手动覆盖优先于一切探测（缓存最终决定）。
+    if (typeof location !== "undefined" && location && typeof location.search === "string") {
+      let raw = "";
+      if (typeof URLSearchParams === "function") {
+        raw = new URLSearchParams(location.search).get("we-glassfallback") || "";
+      } else {
+        const m = /[?&]we-glassfallback=([^&]*)/.exec(location.search);
+        raw = m ? decodeURIComponent(m[1]) : "";
+      }
+      const flag = String(raw).toLowerCase();
+      if (flag === "on" || flag === "1") return (softRenderFallback = true);
+      if (flag === "off" || flag === "0") return (softRenderFallback = false);
+    }
+    if (typeof document === "undefined" || !document
+        || typeof document.createElement !== "function") return softRenderFallback;
+    const canvas = document.createElement("canvas");
+    if (!canvas || typeof canvas.getContext !== "function") return (softRenderFallback = true);
+    let gl = null;
+    try { gl = canvas.getContext("webgl"); } catch { /* ignore */ }
+    if (!gl) { try { gl = canvas.getContext("experimental-webgl"); } catch { /* ignore */ } }
+    // 连 WebGL 上下文都拿不到 → 没有硬件合成，backdrop-filter 必定不生效。
+    if (!gl) return (softRenderFallback = true);
+    let renderer = "";
+    let vendor = "";
+    try {
+      const dbg = typeof gl.getExtension === "function" && gl.getExtension("WEBGL_debug_renderer_info");
+      if (dbg && typeof gl.getParameter === "function") {
+        renderer = gl.getParameter(dbg.UNMASKED_RENDERER_WEBGL) || "";
+        vendor = gl.getParameter(dbg.UNMASKED_VENDOR_WEBGL) || "";
+      }
+      // 没有调试扩展（或被隐私设置屏蔽）时退回公开的 RENDERER / VENDOR。
+      if (!renderer && typeof gl.getParameter === "function" && gl.RENDERER !== undefined) {
+        renderer = gl.getParameter(gl.RENDERER) || "";
+      }
+      // VENDOR 只是同一判定的第二个可读串（实测：本仓库自带的 supreium-headless-gl
+      // 是软件光栅器，但 RENDERER 只报裸 "ANGLE"，软件线索只出现在 VENDOR="stack-gl"，
+      // 且它不暴露 WEBGL_debug_renderer_info）—— 浏览器硬件链路不会因此误判。
+      if (!vendor && typeof gl.getParameter === "function" && gl.VENDOR !== undefined) {
+        vendor = gl.getParameter(gl.VENDOR) || "";
+      }
+    } catch { /* 读不到渲染器字符串：不判定为软件渲染 */ }
+    softRenderFallback = SOFT_RENDER_RE.test(String(renderer) + " " + String(vendor));
+    // 礼貌释放：只探测一次，但也不给页面永久占一个 WebGL 槽位。
+    try {
+      const lose = typeof gl.getExtension === "function" && gl.getExtension("WEBGL_lose_context");
+      if (lose && typeof lose.loseContext === "function") lose.loseContext();
+    } catch { /* ignore */ }
+  } catch { /* 探测异常：保持 false（不改变既有行为） */ }
+  return softRenderFallback;
+}
+
 function apply(ctx) {
   // Mark immersive/app-window mode so the CSS can stabilise the compositor there.
   try {
@@ -9380,6 +9542,20 @@ function apply(ctx) {
           ocListeners.push(t);
         }
       }
+      // 持久化监听器: pagehide → 立即 flush 未落盘的设置; visibilitychange →
+      // 页面回到前台时重试失败过的 PUT。注册在这里 (而不是模块作用域) 才能随
+      // fiber 注销 — 否则每次插件重载/HMR 都会在同一页面再叠一对, 永不释放。
+      let pageHideBound = false, visBound = false;
+      if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
+        window.addEventListener("pagehide", onPageHideFlush);
+        pageHideBound = true;
+      }
+      if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
+        document.addEventListener("visibilitychange", onVisibilityResyncPersist);
+        visBound = true;
+      }
+      // 样式标签也按 fiber 生命周期注入 (dispose 会移除, 见下方 cleanup)
+      ensurePluginCss();
       // Battery optimization (省电暂停): navigator.getBattery is deprecated but
       // still functional in Chromium; feature-detected so other engines just
       // no-op. 'chargingchange' covers plug/unplug; onOcclusionChange re-applies
@@ -9405,6 +9581,10 @@ function apply(ctx) {
         unsubEffects();
         if (typeof window !== "undefined" && typeof window.removeEventListener === "function") {
           for (const t of ocListeners) window.removeEventListener(t, onOcclusionChange);
+          if (pageHideBound) window.removeEventListener("pagehide", onPageHideFlush);
+        }
+        if (visBound && typeof document !== "undefined" && typeof document.removeEventListener === "function") {
+          document.removeEventListener("visibilitychange", onVisibilityResyncPersist);
         }
         if (batteryCleanup) { batteryCleanup(); batteryCleanup = null; }
         weBattery = null;
@@ -9430,6 +9610,19 @@ function apply(ctx) {
         cancelLiveFrameBackfill(); // 卸载后不再发 HEAD/PUT（评审：此前会漏一次）
         stopLiveWatch();
         abortTranscodeUpgrade(); // 含 clearUpgradePoll + AbortController.abort（否则卸载后 500ms 轮询永久泄漏）
+        // 模块级 persistTimer 不属于 fiber: 卸载时清掉, 否则 200ms 后仍会跑一次
+        // flushPersist()（对已卸载的插件写入状态）。
+        if (persistTimer && typeof window !== "undefined" && typeof window.clearTimeout === "function") {
+          window.clearTimeout(persistTimer);
+          persistTimer = null;
+        }
+        // media-info 探测的 AbortController 也要断开 (token 可能永远不再变化)
+        if (mediaInfoAbort) { try { mediaInfoAbort.abort(); } catch { /* ignore */ } mediaInfoAbort = null; }
+        // sceneVideo 时序补拉: 卸载后不该再拉 inventory (也不该钉住本次求值的闭包)
+        if (sceneVideoResyncTimer && typeof window !== "undefined" && typeof window.clearTimeout === "function") {
+          window.clearTimeout(sceneVideoResyncTimer);
+        }
+        sceneVideoResyncTimer = null;
         weStopDraw();
         const node = document.getElementById(LAYER_ID);
         if (node) { releaseLayerMedia(node); node.remove(); }
@@ -9437,6 +9630,13 @@ function apply(ctx) {
         if (scrim) scrim.remove();
         clearEffects();
         document.body.removeAttribute(ACTIVE_ATTR);
+        // 主样式标签: 之前每个 bundle 求值都注入一次且从不移除 (HMR 后旧 <style>
+        // 永久留在 <head>)。只移除本次求值这一代, 重挂载由 ensurePluginCss() 补回。
+        if (typeof document !== "undefined" && typeof document.querySelector === "function") {
+          const cssTag = document.querySelector("style[data-plugin-css=" + JSON.stringify(TAG_ID) + "]");
+          if (cssTag && cssTag.dataset && cssTag.dataset.pluginCssGen === CSS_GEN
+              && typeof cssTag.remove === "function") cssTag.remove();
+        }
       };
     });
   }

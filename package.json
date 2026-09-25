@@ -40,9 +40,9 @@
     "lib/scene-renderer.js",
     "lib/scene-render-worker.mjs",
     "lib/we-renderer/",
-    "lib/apng-encode.js",
     "lib/font-render.js",
     "lib/scene-scripts.js",
+    "lib/scene-script-apis.js",
     "lib/scene-manifest.js",
     "lib/scene-player.js",
     "lib/media/",
@@ -54,6 +54,7 @@
     "cordis.patch.yml",
     "README.md",
     "README.en.md",
+    "README.beginner.md",
     "lib/vendor/"
   ],
   "dsh": {
@@ -71,7 +72,7 @@
   "license": "MIT",
   "scripts": {
     "build": "node scripts/build-client.mjs",
-    "verify": "node scripts/verify-client.mjs && node scripts/verify-transcode-state.mjs && node scripts/verify-playback-controls.mjs && node scripts/verify-scene.mjs && node scripts/verify-scene-live.mjs && node scripts/verify-media-bridge.mjs",
+    "verify": "node scripts/verify-client.mjs && node scripts/verify-transcode-state.mjs && node scripts/verify-playback-controls.mjs && node scripts/verify-scene.mjs && node scripts/verify-scene-live.mjs && node scripts/verify-media-bridge.mjs && node scripts/verify-softrender.mjs && node scripts/verify-readability.mjs && node scripts/verify-package-files.mjs",
     "verify:bridge": "node scripts/verify-media-bridge.mjs --provision",
     "verify:e2e": "node scripts/e2e-web-media-origin.mjs",
     "smoke": "node test/rotation-smoke.mjs && node test/rotation-live-smoke.mjs && node test/rotation-prepared-leak-smoke.mjs && node test/live-frame-backfill-smoke.mjs && node test/live-frame-async-identity-smoke.mjs",
@@ -93,5 +94,8 @@
   "dependencies": {
     "jpeg-js": "^0.4.4",
     "@shaderfrog/glsl-parser": "^7.0.1"
+  },
+  "overrides": {
+    "js-yaml": "4.3.2"
   }
 }

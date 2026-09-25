@@ -24,8 +24,8 @@ let byId = {};
 const rotationTimers = [];
 const sceneFrameHeadCalls = [];
 const sceneFrameDeleteCalls = [];
-// CPU scene-anim 后台渲染的探针：queueSceneAnimUpgrade 建的 <video>.src 指向
-// /scene-anim/<token>?fmt=mp4 —— 它出现就代表「CPU 渲染真的启动了」。
+// 已删除的 CPU 动画渲染（scene-anim / APNG）的**反向**探针：任何 <video>.src
+// 指向 /scene-anim/<token> 都说明那条路线复活了 —— 断言必须恒为空。
 const animProbeSrcs = [];
 // 同一个 src 赋值也记录**元素**：用于区分「探测视频」与「上屏的层内视频」
 // （层内视频的 _parent 是 LAYER_ID 那个层节点）。
@@ -89,10 +89,7 @@ const localStorage = {
     rotationGroups: [
       { id: 'g1', name: 'My list', interval: 5, order: 'sequence', wallpaperIds: ['a', 'b'] },
     ],
-    // 打开实验性场景动画：CPU scene-anim 升级路径必须被走到，才能验证
-    // 「槽位已有 GPU 帧 → 不跑 CPU 渲染」这条门禁。
-    betaSceneAnim: true,
-    // 场景 C 记着画面档位 3：锁定「回退静态帧必须按该壁纸记住的档位加载」。
+    // 场景 C 记着画面档位 3：锁定「静态帧必须按该壁纸记住的档位加载」。
     frameVariants: { c: 3 },
   }) },
   getItem(k) { return this._store[k] ?? null; },
@@ -103,9 +100,11 @@ const localStorage = {
 let cccGpuPinned = true;
 // P2-L：宿主 unlink 失败时回 200 + removed:false（文件其实还在磁盘上）。
 let cccClearUnlinkFails = false;
+const inventoryCalls = []; // /inventory 请求次数（sceneVideo 时序补拉断言用）
 const fetch = (url, opts) => {
   const u = String(url);
   const method = (opts && opts.method) || 'GET';
+  if (u.includes('/wallpaper-engine/inventory')) inventoryCalls.push(u);
   // GPU 抓帧缓存的 HEAD 探测 / DELETE 清除（面板提示与清除入口）：
   // 场景 C（/scene-frame/ccc）假装缓存里已有 _gpu.png。
   if (method === 'HEAD') {
@@ -128,8 +127,8 @@ const fetch = (url, opts) => {
     if (u.includes('/scene-frame-cache/ccc')) cccGpuPinned = false;
     return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ ok: true, removed: true }) });
   }
-  // scene-anim 进度轮询：直接报 100% → 触发「渲染完成切换」主动路径
-  //（trySwitch）。修复前该判定的全等比较在这些情形下恒不成立，产物永不上屏。
+  // 已删除路线的进度端点：这里保留一个应答，用来**证明客户端从不请求它**
+  // （真请求了就会在 animProbeSrcs 之外留下痕迹，故一并把它当作陷阱）。
   if (u.includes('/scene-anim-progress/')) {
     return Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve({ percent: 100 }) });
   }
@@ -191,8 +190,8 @@ const sandbox = {
   },
   document, localStorage, fetch, React,
   // 浏览器里裸 setTimeout/setInterval 就是 window 上的 —— 沙箱必须同样提供：
-  // 只用裸全局的代码路径（scene-anim 进度轮询、live 心跳）否则会静默抛错，
-  // 让「CPU 渲染是否启动」这类断言变成假绿。
+  // 只用裸全局的代码路径（live 心跳、转码进度轮询）否则会静默抛错，
+  // 让这类行为断言变成假绿。
   setTimeout: (fn, ms) => {
     const token = { fn, ms, cleared: false };
     rotationTimers.push(token);
@@ -727,7 +726,7 @@ setTimeout(async () => {
     tree3 = renderPicker(); // 模态框已关：此时渲染的是 tab 面板（含「画面」section）
     assert.ok(JSON.stringify(tree3).includes('壁纸画面刷新'), '选中场景壁纸后面板应出现「壁纸画面刷新」行');
     assert.equal(animProbeSrcs.length, 0,
-      '槽位已有 GPU 帧时不得启动 CPU scene-anim 渲染（分钟级 CPU 渲染会把 GPU 帧覆盖掉）');
+      '槽位已有 GPU 帧时不得启动任何 CPU 动画渲染（scene-anim 已删除）');
     const clearBtn = findBtn(tree3, '清除 GPU 帧');
     assert.ok(clearBtn, 'HEAD 报 X-WE-GPU=1 时面板必须给出「清除 GPU 帧」入口');
     // ── P2-L：宿主回 200 但 removed:false（unlink 失败）时不得当清除成功 ──
@@ -753,62 +752,31 @@ setTimeout(async () => {
       '点击清除必须 DELETE /scene-frame-cache/<token>');
     tree3 = renderPicker();
     assert.ok(!findBtn(tree3, '清除 GPU 帧'), '清除成功后提示行必须消失');
-    assert.ok(animProbeSrcs.some((s2) => s2.includes('/scene-anim/ccc')),
-      '清除 GPU 帧后 CPU 渲染必须恢复启动（面板提示「换回 CPU 生成的画面」的兑现点）');
+    // 目标形态：场景动画只保留 WebWallGL live 一条路线，回退链是
+    // MP4 → 静态帧 → 单张大图 → 内嵌图；**没有 CPU 动画渲染**（scene-anim / APNG
+    // 已删除）。清除 GPU 抓帧后画面回落静态帧链即可，不得再启动分钟级的 CPU 渲染。
+    assert.equal(animProbeSrcs.length, 0,
+      '清除 GPU 帧后不得启动 CPU scene-anim 渲染（该路线已删除）');
     console.log('GPU 帧提示 + 清除入口链路: ok');
-    console.log('GPU 帧优先于 CPU 渲染（门禁 + 清除后恢复）: ok');
+    console.log('GPU 帧优先于静态帧（清除后回落静态帧链，不再有 CPU 渲染）: ok');
 
-    // ── 帧率档位（fpsCap）路径 ────────────────────────────────────────────
-    // 两条要求：① 这条路径也必须走「槽位有 GPU 帧就不跑 CPU 渲染」的门禁
-    // （此前它是唯一旁路：直调 queueSceneAnimUpgrade）；② 重渲染的产物必须真的
-    // 上屏（原 trySwitch 的 `selection.url === frameUrl` 全等判定在这些情形下
-    // 恒不成立 → 点一次档位只是白烧一次分钟级 CPU 渲染，画面纹丝不动）。
-    const fireProgress = async () => {
-      const tk = rotationTimers.filter((x) => x && !x.cleared && x.ms === 1500).pop();
-      if (tk && typeof tk.fn === 'function') tk.fn();
-      await new Promise((r) => setTimeout(r, 30));
-      return tk;
-    };
-    const layerAnimSrcs = () => animVideoEls
-      .filter((e) => e.el && e.el._parent && e.el._parent.id === 'dsh-wallpaper-engine-layer')
-      .map((e) => e.src);
+    // ── CPU 动画渲染路线已删除：这里改为**钉死删除** ──────────────────────
+    // 目标形态：场景动画只保留 WebWallGL live 一条路线，回退链是
+    // MP4 → 静态帧 → 单张大图 → 内嵌图；**没有 CPU 动画渲染**（scene-anim / APNG，
+    // 分钟级 CPU 渲染且会把 live 抓帧的静帧覆盖掉）。原先这一段逐条断言「点帧率档位
+    // 会启动 CPU 重渲染、产物上屏、有 GPU 帧时被门禁挡住」，那些能力连同 /scene-anim
+    // 路由一起删了 —— 现在反过来把这些入口钉死，删掉的东西不得悄悄复活。
+    for (const [what, needle] of [
+      ['queueSceneAnimUpgrade', 'queueSceneAnimUpgrade'],
+      ['maybeQueueSceneAnimUpgrade', 'maybeQueueSceneAnimUpgrade'],
+      ['cancelSceneAnimUpgrade', 'cancelSceneAnimUpgrade'],
+      ['/scene-anim 路由', '/scene-anim/'],
+      ['sceneAnimProgress 状态', 'sceneAnimProgress'],
+      ['betaSceneAnim 开关', 'betaSceneAnim'],
+    ]) {
+      assert.ok(!code.includes(needle), 'CPU 动画渲染路线已删除，不得复活：' + what);
+    }
 
-    // ① 首次 CPU 渲染完成 → 画面切到 /scene-anim/（此后「帧率上限」行才可见）
-    assert.ok(await fireProgress(), 'CPU 渲染启动后必须武装 1500ms 进度轮询');
-    assert.ok(layerAnimSrcs().some((s) => s.includes('/scene-anim/ccc') && s.includes('fps=12')),
-      '进度 100% 后层内视频必须换成 scene-anim 动画（默认 12fps）');
-
-    // ② 点「帧率上限 24fps」→ 必须启动新帧率的 CPU 渲染
-    tree3 = renderPicker();
-    const fpsBtn = findBtn(tree3, '24fps');
-    assert.ok(fpsBtn, '当前画面已是 scene-anim 时必须渲染「帧率上限」控件');
-    const probesBefore = animProbeSrcs.length;
-    fpsBtn.props.onClick();
-    await new Promise((r) => setTimeout(r, 30)); // 等门禁探测的 promise 回来
-    assert.ok(animProbeSrcs.slice(probesBefore).some((s) => s.includes('/scene-anim/ccc') && s.includes('fps=24')),
-      '点「帧率上限」必须按新帧率启动 CPU 渲染');
-
-    // ③ 产物必须上屏（按基路径判定）——顺带断言**同壁纸内部重建不得交叉淡化**：
-    // scene-anim 完成换层是 selection.url 变化、weWid 相同的重建，硬切立即换；
-    // 若误走淡出，同一条 BGM/画面族会被音频闸断 ~2s（与换壁纸的交叉淡化区分）。
-    const animPreLayer = document.getElementById('dsh-wallpaper-engine-layer');
-    await fireProgress();
-    const animPostLayer = document.getElementById('dsh-wallpaper-engine-layer');
-    assert.ok(animPostLayer && animPostLayer !== animPreLayer,
-      'scene-anim 完成必须重建层（url 切到 /scene-anim/）');
-    assert.ok(bodyEl.children.indexOf(animPreLayer) === -1 && !animPreLayer.dataset.weFading,
-      '同壁纸重建（scene-anim 换层）不得淡出：旧层立即移除');
-    assert.ok(layerAnimSrcs().some((s) => s.includes('/scene-anim/ccc') && s.includes('fps=24')),
-      '重渲染完成后层必须切到新帧率的动画（否则这次点击只是白烧一次渲染）');
-    console.log('帧率档位：产物上屏 + 走门禁: ok');
-
-    // ④ 旁路不得回来：queueSceneAnimUpgrade 只允许「定义」+「门禁内部」两处。
-    const directCalls = [];
-    code.split('\n').forEach((line, i) => {
-      if (/[^\w.]queueSceneAnimUpgrade\(/.test(line)) directCalls.push(i + 1);
-    });
-    assert.equal(directCalls.length, 2,
-      'queueSceneAnimUpgrade 只允许函数定义 + maybeQueueSceneAnimUpgrade 内部各一处（fps 档位按钮不得直调），实际行: ' + directCalls.join(','));
 
     // ⑤ 抓帧回填落地必须校验「发起时那张壁纸」，不得把状态记到当前壁纸头上。
     assert.ok(code.includes('if (String(selection.id || "") !== backfillWid) return;'),
@@ -836,64 +804,32 @@ setTimeout(async () => {
       && fadeinCss && /transition:\s*opacity 1\.8s ease/.test(fadeinCss[0]),
       '渐变时长必须与常量同步（fadein=ROTATION_FADE_MS 1.8s / live 首帧=LIVE_FIRST_FADE_MS 1.8s），改常量时同步 CSS');
 
-    // ⑥ 行为级：按钮路径必须真的走门禁（④ 只是源码级 lint，改坏行为保留字符串即可绿）。
-    // 把判据缓存熬过 30s TTL → 冷缓存 → 真 HEAD 报 pinned → 点档位必须被拒。
-    cccGpuPinned = true;  // 槽位又有 GPU 抓帧（例如 live 抓帧回填刚写入）
-    nowOffset += 31000;   // 跨过 probeGpuFramePin 的 30s TTL
+    // ⑥ 行为级不变量：整条流程（选中 → HEAD 探测 → 抓帧回填 → 清除 → 后续重建）
+    // 里 animProbeSrcs 必须恒为 0 —— 一帧 CPU 动画渲染都不许启动（回退走静态帧链）。
+    // 这条替代了原先「点帧率档位会启动 CPU 重渲染 / 关 beta场景动画按档位回退」的
+    // 用例：那些开关与整条 CPU 渲染路线一起删了，留下的不变量是「不再有 CPU 渲染」。
     tree3 = renderPicker();
-    const fps30 = findBtn(tree3, '30fps');
-    assert.ok(fps30, '画面已是 scene-anim 时必须渲染「帧率上限」控件（30fps 档）');
-    const probes3 = animProbeSrcs.length;
-    fps30.props.onClick();
-    await new Promise((r) => setTimeout(r, 60)); // 等门禁 HEAD 探测的 promise 回来
-    assert.equal(animProbeSrcs.slice(probes3).filter((s2) => s2.includes('/scene-anim/ccc')).length, 0,
-      '槽位已有 GPU 帧时点「帧率上限」不得启动 CPU 渲染（面板按钮必须走同一道门禁）');
-    // P4-②：拒绝必须解释 —— 否则用户只看到 chip 高亮变化、画面没动、没有任何提示。
-    assert.ok(JSON.stringify(renderPicker()).includes('改档位不会重新渲染'),
-      'P4-②：门禁拒绝档位改动时面板必须解释（chip 高亮 ≠ 画面帧率，且需指引清除）');
-    console.log('帧率按钮走门禁（行为级）+ 拒绝时给出解释: ok');
+    assert.equal(animProbeSrcs.length, 0,
+      'CPU 动画渲染已删除：全流程不得出现任何 /scene-anim 请求');
+    console.log('CPU 动画渲染路线已删除（源码钉死 + 行为级零请求）: ok');
 
-    // ⑦ 关「beta场景动画」回退静态帧时必须按该壁纸记住的档位（?v=3）—— 否则画面掉回
-    // 档位 0 而面板标签仍显示记着的档位，与 A2 是同一条「读数 = 画面」不变量。
-    const layerImgSrcs = () => imgEls
-      .filter((e) => e.el && e.el._parent && e.el._parent.id === 'dsh-wallpaper-engine-layer')
-      .map((e) => e.src);
-    // 本地版 findCtlInput（另一段 if 块里的同名 helper 不在本作用域）：
-    // 找到提到该文字的 .we-picker__ctl 行，再取行内带 onChange 的 input。
-    const switchInput = (root, text) => {
-      let row = null;
-      (function walk(node) {
-        if (row || !node || typeof node !== 'object') return;
-        if (Array.isArray(node)) { node.forEach(walk); return; }
-        const cls = typeof node.props?.className === 'string' ? node.props.className : '';
-        if (cls.includes('we-picker__ctl') && JSON.stringify(node).includes(text)) { row = node; return; }
-        if (Array.isArray(node.children)) node.children.forEach(walk);
-      })(root);
-      let hit = null;
-      (function find(node) {
-        if (hit || !node || typeof node !== 'object') return;
-        if (Array.isArray(node)) { node.forEach(find); return; }
-        if (node.type === 'input' && node.props && typeof node.props.onChange === 'function') { hit = node; return; }
-        if (Array.isArray(node.children)) node.children.forEach(find);
-      })(row);
-      return hit;
-    };
-    tree3 = renderPicker();
-    const betaInput = switchInput(tree3, 'beta场景动画');
-    assert.ok(betaInput && typeof betaInput.props.onChange === 'function',
-      '面板必须有「beta场景动画」开关（回退静态帧路径的入口）');
-    betaInput.props.onChange({ target: { checked: false } });
-    await new Promise((r) => setTimeout(r, 30));
-    // 判据用层的 weKey（它含 selection.url）：静态帧的 img 可能来自准备槽（src 由
-    // prepareSceneStaticStage 决定），所以只有 weKey 能反映回退时写进 selection.url
-    // 的档位 —— 而「selection.url 必须等于 frameUrlWithVariant(frameUrl, 档位)」正是
-    // A2 那条不变量（面板标签读的也是 frameVariants）。
-    const layerKey = (document.getElementById('dsh-wallpaper-engine-layer') || {}).dataset?.weKey || '';
-    assert.ok(String(layerKey).includes('/scene-frame/ccc') && String(layerKey).includes('v=3'),
-      '关 beta 回退静态帧必须按该壁纸记住的档位（?v=3）—— 否则画面掉回档位 0 而面板'
-        + '标签仍显示记着的档位。层 weKey: ' + String(layerKey).slice(-90)
-        + ' / img: ' + JSON.stringify(layerImgSrcs().slice(-2)));
-    console.log('关 beta 回退静态帧按档位: ok');
+    // ── sceneVideo 诚实化的时序补拉 ────────────────────────────────────────
+    // 宿主对 sceneVideo 改为「按 pkg 真探测」：未命中缓存时先给 null（不猜）并把探测
+    // 投到后台，而客户端启动时那次 inventory 必然早于定论 ⇒ 必须有一次延迟补拉，
+    // 否则真正内嵌 MP4 的场景首屏会掉到静态帧（本机实测 3/35 个场景）。
+    {
+      const before = inventoryCalls.length;
+      const tick = rotationTimers.filter((t) => !t.cleared && t.ms === 3000);
+      assert.ok(tick.length >= 1,
+        '启动加载完 inventory 后必须安排一次 sceneVideo 时序补拉（3000ms 定时器）');
+      for (const t of tick) { t.cleared = true; t.fn(); }
+      await new Promise((r) => setTimeout(r, 40));
+      assert.equal(inventoryCalls.length, before + 1,
+        'sceneVideo 补拉必须真的重拉一次 inventory');
+      assert.ok(!rotationTimers.some((t) => !t.cleared && t.ms === 3000),
+        'sceneVideo 补拉只做一次：补拉自身不得再排定时器（否则变成轮询）');
+      console.log('sceneVideo 时序补拉（一次 · 不自触发）: ok');
+    }
   }
   console.log('effects ran:', effects.length);
   console.log('\nALL CLIENT CHECKS DONE');

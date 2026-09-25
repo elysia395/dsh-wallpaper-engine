@@ -567,6 +567,26 @@ skin-center design):
 > back to a high-opacity solid so text stays readable. All controls apply
 > instantly and persist in `localStorage`.
 
+> **Text-surface readability floor (on by default, not user-adjustable in this
+> version)** — every surface that carries text (composer card & tool popups,
+> message bubbles, all three settings-window layers, sidebar panels and the
+> editor/terminal content plate, the plugin's own wallpaper-repository drawer and
+> panel modal) now composites a layer of the **theme base colour** — white in
+> light mode, deep navy in dark mode — underneath the glass tint at a fixed
+> weight of 45 % (59 % in dark). The values are the smallest that keep body text
+> at **WCAG 4.5:1** across the measured grid (glass transparency {0,15,30,45,60}
+> × theme × wallpaper opacity {0,50,90}), with the worst case taken at the
+> darkest plausible wallpaper pixel (light) and the brightest (dark): worst-case
+> body-text contrast improves from **1.00:1 to 4.63:1**. Raising **玻璃透明度** to
+> its maximum, or raising **壁纸透明度**, can therefore no longer make text
+> illegible — those two sliders only move the glass-tint half of the weight, the
+> floor half stays fixed. Semantics are unchanged: glass transparency still means
+> "higher = more transparent" and still applies monotonically (you can still make
+> a panel clearer or more solid), it just cannot go below the floor; wallpaper
+> opacity still drives only the wallpaper layer (`.we-layer` stays opaque; the
+> fade lands on the media leaf) and still means
+> "blend into the page base colour", with no coupling to the floor.
+
 ### Mascot (chat pull-cord)
 
 The **吉祥物** (mascot) tab controls the chat **pull-cord** (a draggable rope pinned to the top edge; pulling it down slides out the **wallpaper repo** drawer). The **form** picker renders as cards — each card draws the actual artwork scaled by the current **吉祥物大小** slider, so choosing a form and judging its size happen in one place:
@@ -624,7 +644,7 @@ The **效果** (effects) tab — available while a wallpaper is active — offer
 | **亮度** (brightness) | Wallpaper brightness (media filter) | 40–160 % | 100 % |
 | **对比度** (contrast) | Wallpaper contrast (media filter) | 40–200 % | 100 % |
 | **饱和度** (saturate) | Wallpaper saturation (media filter) | 0–200 % | 100 % |
-| **壁纸透明度** (wallpaper opacity) | Transparency of the whole wallpaper layer (higher = more transparent): fading it out blends the wallpaper into the page base colour — the IDEA background-image style of "visible but not overpowering". Complements **暗化** (scrim): one fades the wallpaper itself, the other darkens the whole picture; for the blend-into-base look, combine higher opacity with a lower scrim | 0–90 % | 0 % |
+| **壁纸透明度** (wallpaper opacity) | Transparency of the wallpaper layer (higher = more transparent): fading it out blends the wallpaper into the **native base colour** (**pure white in light, pure black in dark**) — the IDEA background-image style of "visible but not overpowering". Complements **暗化** (scrim): one fades the wallpaper itself, the other darkens the whole picture; for the blend-into-base look, combine higher opacity with a lower scrim. For scene wallpapers the static-frame underlay retires once the live renderer is on, so it can no longer show through the faded live picture | 0–90 % | 0 % |
 | **暗化** (scrim) | Darkens the overlay between wallpaper and text | 0–90 % | 25 % |
 | **边框** (border) | Raises border/divider contrast | 0–90 % | 35 % |
 | **玻璃** (glass) | Blur radius of the frosted-glass panels (composer, bubbles) | 0–60 px | 16 |
@@ -637,6 +657,13 @@ The **效果** (effects) tab — available while a wallpaper is active — offer
 > (and optionally add a little **壁纸模糊**) until it is comfortable; if the
 > wallpaper is too loud instead, raise **壁纸透明度** to let it recede into the
 > base colour. All eight sliders apply instantly — no page refresh needed.
+>
+> **Text surfaces always keep a floor** — every surface that carries text
+> (composer, bubbles, settings window, sidebar & content plate, the plugin's own
+> drawer / panel modal) keeps a **readability floor** (on by default, not
+> adjustable): a fixed theme-base layer sits under the glass tint, so the sliders
+> above can no longer push body text below legibility (worst case 4.63:1 — see
+> the "Text-surface readability floor" note above).
 
 ## Configuration
 

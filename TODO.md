@@ -6,6 +6,15 @@
 > 源码、OBJ 源几何、场景数据与 preview 渲染验证。
 > 渲染保持 worker 非阻塞 + 静态帧缓存。
 
+> ⚠️ **状态说明（本轮更新）**：本文件是**历史记录**。其中所有与
+> 「场景动画 / `scene-anim` / 多帧 APNG / `betaSceneAnim` 开关」相关的条目
+> （散见第二、三章）描述的是**已整条删除**的 CPU 预渲染视频路线：
+> 宿主 `/scene-anim`、`/scene-anim-progress` 路由、`lib/apng-encode.js`、
+> worker 的多帧协议、`selection.betaSceneAnim` 设置键与客户端进度条/升级机
+> 都已不存在（结论：该路线已被 WebWallGL 实时渲染完全取代，且其产物会把 live
+> 抓帧的静帧覆盖掉）。场景动画现在**只保留 WebWallGL 实时渲染一条路线**，
+> 相关条目只作历史留档，不要按「现状」阅读。
+
 ---
 
 ## 一、已实现组件（验证依据：引擎源码 / 数值对比 / preview 像素统计）
@@ -113,18 +122,12 @@ workshop 场景：scene.pkg 解析 + 渲染全通过（含 puppet/文本/纯色/
       后台预渲染 **MP4/WebM 动画视频**（scene-anim `?fmt=mp4`，宿主 ffmpeg
       合成 x264/VP9，缓存复用）→ `<video>` 播放 —— **与视频壁纸同款控制**：
       播放/暂停（遮挡暂停同生效）、倍速（0.5-2x playbackRate）、进度、循环。
-- [x] **渐进加载**：`queueSceneAnimUpgrade` — 隐藏 `<video>` 预加载
-      `/scene-anim/<token>?fps=..&fmt=mp4`（触发宿主渲染+缓存），完成后校验
-      当前 URL 仍为该静态帧才切换（防轮播误升级）；失败保持静态帧。
-- [x] **倍速 / 帧率限制**：UI 对 scene 动画放开（同 video）；`fpsCap` 变更 →
-      以新帧率重渲染动画视频（scene-anim `?fps=`，与视频抽帧同语义）。
-- [x] **渲染进度条**：worker 逐帧上报 → 宿主写 `.prog` 进度文件 →
-      `/scene-anim-progress/<token>?fps&fmt` 端点 → 客户端轮询 + UI 进度条
-      （"场景动画渲染中 X%"）。
+- [x] ~~**渐进加载 / 倍速帧率 / 渲染进度条**~~：已**删除** —— 这条 CPU 预渲染视频
+      路线（`queueSceneAnimUpgrade` + `/scene-anim` + `/scene-anim-progress`）随
+      beta 场景动画整体移除；场景动画只保留 WebWallGL 实时渲染一条路线。
 - [x] **音频策略**（决策）：保持无音频 — 预渲染频谱是快照，scene 动画的
       实时音频响应是固有限制（video 壁纸才有）。
-- [ ] **视频纹理逐帧**（可选）：多帧动画中视频纹理逐帧播放（SceneRenderer
-      复用单实例时 videoFrames 静态，需按 time 重取）——当前多帧用首帧。
+- [x] ~~**视频纹理逐帧**（可选）~~：多帧（APNG）渲染本身已移除，本项作废。
 
 ### 中期
 - [x] **属性动画 {animation}**：WE 属性动画按 t 线性插值烘焙
@@ -295,19 +298,10 @@ workshop 场景：scene.pkg 解析 + 渲染全通过（含 puppet/文本/纯色/
   ——3582367840/3554161528/3461168300 的"蓝黑块"经源图对比为贴图本身
   暗色（srcPixel 与渲染一致）系误报；4 个壁纸渲染失败（NSL "Event ID
   does not exist" 既有问题，3660962877 同类，未修）。
-- [x] **beta场景动画开关（sf38g）**：用户反馈"动态效果不可靠"（scene-anim
-  CPU 渲染试验性，部分壁纸组件错误），要求默认只渲染静态帧、动画化改为
-  显式开启。实现：
-  - `selection.betaSceneAnim`（默认 false）+ sanitizeSettings 客户端/服务端
-    双镜像（src/client.js + lib/index.js，保持同步）
-  - `queueSceneAnimUpgrade` 开头 gate：`betaSceneAnim !== true` 时直接
-    return（cancel 旧升级后）——applySelection / fpsCap 变更 / 开关切换
-    三条路径全部经过该 gate，关闭时 scene 壁纸只显示静态帧 (frameUrl)
-  - 壁纸效果区新增"beta场景动画"checkbox（scene 类型显示）：关闭时若
-    已在播放 scene-anim 视频 → 回退静态帧并取消渲染；开启时从静态帧
-    启动动画化升级
-  - build 后 lib/client.js 185449 bytes；verify-client 报 react-dom mock
-    缺失为既有问题（与本次改动无关）
+- [x] ~~**beta场景动画开关（sf38g）**~~：已**删除** —— `betaSceneAnim` 设置键、
+  `queueSceneAnimUpgrade` gate、壁纸效果区的 checkbox 与宿主 `/scene-anim*` 路由
+  随整条 CPU 动画渲染路线一起移除（结论：WebWallGL 实时渲染已覆盖动画，且这条路线的
+  产物会把 live 抓帧的静帧覆盖掉）。
 - [x] **占位文本处理（sf38h）**：用户反馈"壁纸中大部分文本是需要接其它
   组件的占位文本（可关闭作者声明、实时时钟等）"。全量扫描 14 个壁纸的
   text 对象分类：①**脚本驱动**（`{script, value}`，时钟/日期/星期/时辰/

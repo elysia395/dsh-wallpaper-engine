@@ -589,6 +589,14 @@ console.log('Level C2 — custom storage scan (WE project dirs under uploads)');
 // ── Level D: client source contract ─────────────────────────────────────────
 console.log('Level D — client source wiring (src/client.js)');
 const src = readFileSync(join(root, 'src', 'client.js'), 'utf8');
+/** `function name() { … }` 的函数体源码（用于按内容而非脆弱的跨行正则断言）。 */
+function fnBody(source, name) {
+  const i = source.indexOf('function ' + name + '(');
+  if (i < 0) return '';
+  const j = source.indexOf('\n}', i);
+  return j < 0 ? source.slice(i) : source.slice(i, j);
+}
+const fadeBgBody = fnBody(src, 'resolveWallpaperFadeBg');
 const clientChecks = [
   ['live is the top priority for scenes and web', /const isLive = \(sel\.type === "scene" \|\| sel\.type === "web"\) && liveRenderEnabled\(sel\)/.test(src)],
   ['sceneVideo yields to live', /Boolean\(sel\.sceneVideo\) && !isLive/.test(src)],
@@ -597,6 +605,22 @@ const clientChecks = [
   ['failure memory persists', /sceneLiveFailures/.test(src) && /function liveFail/.test(src)],
   ['audio mux honours live', /!selLike\.sceneLiveActive/.test(src)],
   ['syncLayers key carries live state', /"live\\u0000" \+ \(selection\.sceneLiveSrc \|\| selection\.webLiveSrc\)/.test(src)],
+  // sceneVideo 只在**非 live** 形态下进 key：live 生效时 buildMedia 已把 isSceneVideo
+  // 短路，把 sceneVideo 算进 key 会让「sceneVideo 诚实化的时序补拉」
+  //（scheduleSceneVideoResync 落地时 sceneVideo 由 null 变 URL）在 live 播放中
+  // 冷启动一次渲染页 —— 无意义重建，用户会看到画面重新加载。
+  ['sceneVideo stays out of the layer key while live renders',
+    /\(layerLive \? "" : \(selection\.sceneVideo \|\| ""\)\)/.test(src)],
+  // 垫底静态帧是 iframe 的**下层**：只要 iframe 半透明（壁纸透明度一高），它就会以
+  // a(1−a) 的强度透出来（实测「壁纸透明度高时显现静态帧」）。首帧点亮后必须整块退场。
+  ['the static-frame underlay retires once the live frame is on',
+    /:has\(\.we-live-iframe\.we-live-on\) \.we-live-poster\s*\{[^}]*opacity:\s*0/.test(src)],
+  // 淡出底色必须是**原生外观**（纯黑/纯白），不能是主题面板色 —— 否则拉高「壁纸
+  // 透明度」会露出一块与原生外观不符的主题色（用户实测反馈）。
+  ['the wallpaper fade base is the native black/white, not the panel token',
+    fadeBgBody.includes('--dsw-alias-bg-base')
+    && /"#000000" : "#ffffff"/.test(fadeBgBody)
+    && !fadeBgBody.includes('--dsw-alias-bg-layer-1')],
   ['pointer injection wired', /__wp\.pushPointer|wp\.pushPointer/.test(src) && /pointerLeave/.test(src)],
   ['fit mapping table present', /SCENE_LIVE_FIT = \{ cover: "cover"/.test(src)],
   // 实测踩坑回归（2026-09-22）：渲染页 resume() 会 resetFrameMeter，心跳若
