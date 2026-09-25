@@ -4658,6 +4658,10 @@ let lastScrimCss = "";
 //   state-* 与 link 令牌刻意排除 → 报错红字/链接色天然保住（替代旧规则 2 的
 //   revert —— 实测 revert 回滚整个 author 源，会把宿主自己的错误色声明一并
 //   取消，见 #91 讨论）；
+// - 字族另有源头令牌映射（规则 2b）：宿主每一个文字令牌都由
+//   `font:<size>/<lh> var(--dsw-font-family)` 组成，映射这条源头令牌即可覆盖
+//   所有「自带字族声明」的文字面，不必再按选择器补漏；字重仍是继承默认
+//   （宿主把字重烘进每个令牌的字面里，强行改写会压平标题层级，见 #91）。
 // - 注入前把宿主原值快照进 --we-host-*（只取一次，防自我污染），供
 //   [data-we-font-ignore] 子树契约「还原宿主原值」使用：自定义属性可被子树
 //   遮蔽，第三方一行属性即可声明「这块我自管颜色」（#91 建议 2）；
@@ -4709,9 +4713,13 @@ function snapshotHostFontDefaults() {
   } catch { /* ignore */ }
 }
 
-function applyFontStyles() {
+function applyFontStyles(fontFamily) {
   try {
     snapshotHostFontDefaults();
+    // 字族源头令牌的值：只有用户选了「非 inherit」的具体字族时才注入（规则 2b）。
+    // inherit 是 CSS 全量关键字，写进 font 简写会让整条简写失效、连字号/行高
+    // 一起丢，所以那种情况下必须让宿主的 --dsw-font-family 保持原值。
+    const familyStack = fontFamilyStack(fontFamily);
     let st = document.getElementById("we-font-patch");
     if (!st) {
       st = document.createElement("style");
@@ -4752,6 +4760,23 @@ function applyFontStyles() {
       '  --dsw-alias-label-tertiary:var(--we-font-color) !important;',
       '  --dsw-alias-label-dimmed:var(--we-font-color) !important;',
       '}',
+      /* 2b) 字族源头令牌映射（#91 后续）：宿主把每一个文字令牌都写成
+            `font:<size>/<lh> var(--dsw-font-family)` 简写（外加
+            `-font-family: var(--dsw-font-family)` 子令牌），等于每个文字面都
+            「自带字族声明」——body 的继承默认永远压不过它，这正是「只有部分
+            字体跟着用户改」的原因（规则 1b 的 markdown 三处就是这么补的）。
+            与其继续按选择器补漏，直接改字族的源头令牌：宿主全部 --dsw-font-*
+            都经它组成，映射一次即全站生效，与颜色半边（--dsw-alias-label-*
+            白名单）同一套令牌层思路，也不会碰第三方自己的 font-family 声明。
+            仅在用户选了具体字族时注入：inherit 是全量关键字，写进 font 简写
+            会让整条简写失效（字号/行高一起丢），那时必须保持宿主原值；
+            代码字族 --ds-font-family-code 刻意不动（代码块保持等宽）。 */
+      familyStack === "inherit" ? "" : [
+        'body {',
+        '  --dsw-font-family:' + familyStack + ' !important;',
+        '}',
+      ].join('\n'),
+
       /* 3) 退出契约（#91 建议 2）：data-we-font-ignore 子树还原宿主原值。
             :where() 零特异性 —— 还原声明足以压过 body 继承（声明 > 继承），
             但子树内自带的任何颜色/字重声明仍按正常级联压过还原值（即"我自管"
@@ -4995,7 +5020,7 @@ function applyEffects() {
       ? ((selection.fontWeight - 400) / 500) * 0.045 : 0;
     s.setProperty("--we-font-stroke", strokeEm.toFixed(4) + "em");
     s.setProperty("--we-font-family", fontFamilyStack(selection.fontFamily));
-    applyFontStyles();
+    applyFontStyles(selection.fontFamily);
   } else {
     s.removeProperty("--we-font-color");
     s.removeProperty("--we-font-weight");

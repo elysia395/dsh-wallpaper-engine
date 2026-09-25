@@ -431,6 +431,37 @@ setTimeout(async () => {
       treeText = JSON.stringify(tree);
       console.log('font on reveals 颜色/字重/字体族 chips (expect 7):',
         treeText.includes('字体颜色') && treeText.includes('字重') && (treeText.match(/"aria-label":"字体 /g) || []).length === 7);
+
+      // ── 字族源头令牌映射：宿主每个文字令牌都由 --dsw-font-family 组成，
+      //    用户选了具体字族就必须改这条源头令牌（只靠 body 继承只会"部分生效"）；
+      //    选 inherit 时绝不能注入 —— inherit 写进 font 简写会让整条简写失效。
+      const findAria = (root, aria) => {
+        let hit = null;
+        (function walk(node) {
+          if (hit || !node || typeof node !== 'object') return;
+          if (Array.isArray(node)) { node.forEach(walk); return; }
+          if (node.props && node.props['aria-label'] === aria) { hit = node; return; }
+          if (Array.isArray(node.children)) node.children.forEach(walk);
+        })(root);
+        return hit;
+      };
+      const patchCss = () => String((document.getElementById('we-font-patch') || {}).textContent || '');
+      const kaiChip = findAria(tree, '字体 楷体');
+      const defaultChip = findAria(tree, '字体 默认');
+      assert.ok(kaiChip && defaultChip, 'font family chips must render while 字体自定义 is on');
+      kaiChip.props.onClick();
+      tree = renderPicker();
+      assert.equal(p['--we-font-family'], 'KaiTi, serif', '楷体 chip must arm --we-font-family');
+      assert.ok(patchCss().includes('--dsw-font-family:KaiTi, serif !important'),
+        'picking a concrete family must map the host family source token --dsw-font-family');
+      assert.ok(!patchCss().includes('--ds-font-family-code:'),
+        'the code family token must stay untouched so code blocks keep monospace');
+      console.log('font family token mapping injected:', patchCss().includes('--dsw-font-family:KaiTi, serif !important'));
+      defaultChip.props.onClick();
+      tree = renderPicker();
+      assert.ok(!patchCss().includes('--dsw-font-family:'),
+        'inherit must NOT map --dsw-font-family (an inherit value would break the font shorthands)');
+      console.log('inherit keeps the host family token:', !patchCss().includes('--dsw-font-family:'));
       fontSwitch.props.onChange({ target: { checked: false } });
       tree = renderPicker();
       treeText = JSON.stringify(tree);
