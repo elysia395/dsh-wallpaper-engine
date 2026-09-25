@@ -7789,7 +7789,7 @@ function RopeDock() {
 // so it survives DSH Desktop's random --port restarts and never re-shows
 // after being closed. Bump NOTICE_VERSION next release to announce something
 // new again.
-const NOTICE_VERSION = "0.7.8";
+const NOTICE_VERSION = "1.0.1";
 
 function UpdateNotice() {
   const sel = useStore();
@@ -7807,7 +7807,7 @@ function UpdateNotice() {
   };
   if (!show) return null;
   return React.createElement("div", { className: "we-update-notice", role: "alert" },
-    React.createElement("div", { className: "we-update-notice__title" }, "🎉 v0.7.8 重大更新：场景壁纸实时渲染全面上线（视差 · 透视 · 粒子 · 音频频谱）"),
+    React.createElement("div", { className: "we-update-notice__title" }, "🎉 v1.0.1 里程碑更新：场景壁纸实时渲染全面上线（视差 · 透视 · 粒子 · 音频频谱）"),
     React.createElement("div", { className: "we-update-notice__body" },
       React.createElement("p", { className: "we-update-notice__hint" },
         "⚠️ 窗口模式提示（请先阅读）：本次适配了 dsh-desktop 2.0.14 的三种窗口模式——",
@@ -7821,6 +7821,10 @@ function UpdateNotice() {
         "⚠️ 效果诚实声明：视差 / 透视 / 粒子 / 频谱等效果由场景作者在壁纸内制作，本插件负责把渲染引擎完整跑起来——",
         React.createElement("strong", null, "壁纸本身没有制作对应效果的话不会凭空出现"),
         "；个别场景渲染不动时自动回落静态帧，不会黑屏。"),
+      React.createElement("p", { className: "we-update-notice__hint" },
+        "💡 Tips：",
+        React.createElement("strong", null, "设置面板中部分暂未生效的选项为后续版本的待更新内容"),
+        "，会随更新逐步开放，敬请期待。"),
       React.createElement("p", null,
         "自 0.7.5 以来的全部更新（0.7.5 的字体重做、静态帧修复、包内音频等已全部包含）。本次是场景壁纸的一次重大版本升级：从「只能以静态帧呈现」升级为 ",
         React.createElement("strong", null, "90% 以上的场景效果都能完整实时呈现"),
@@ -7854,6 +7858,11 @@ function UpdateNotice() {
       React.createElement("p", null,
         "⑨ ", React.createElement("strong", null, "dsh-desktop 2.0.14 全面适配"),
         "：修复升级 2.0.14 后的插件加载失败、右栏玻璃关闭态露灰板、增强模式左栏灰面板遮挡壁纸等问题；建议搭配 dsh-desktop 2.0.14 及以上版本使用。"),
+      React.createElement("p", null,
+        "⑩ ", React.createElement("strong", null, "「扩展模式」兼容修复"),
+        "：修复扩展模式下壁纸不显示、以及壁纸「正常几秒后失效成静态图」的问题——",
+        React.createElement("strong", null, "兼容 / 增强 / 扩展三种窗口模式下壁纸与全部效果均可用"),
+        "，无需再切换窗口模式。"),
       React.createElement("p", { className: "we-update-notice__hint" },
         "前置条件不变：DSH 内核最新（DSH Desktop ≥ 2.0.7 / harness 0.1.5-rc.1+）且 dsh-better-sidebar ≥ 0.19.0。本提示每个新版本只出现一次，点下方按钮关闭后不再弹出。"),
     ),
