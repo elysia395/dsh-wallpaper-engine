@@ -304,6 +304,11 @@ const CSS = `
     --dsw-alias-markdown-code-segment-selected: color-mix(in srgb,
       var(--we-readability-base) calc(var(--we-readability-floor) * 100%),
       rgba(var(--we-surface-tint-rgb-light, 255, 255, 255), calc(var(--we-glass-alpha, 0.15) * 1.15)) calc((1 - var(--we-readability-floor)) * 100%));
+    /* Composer「+」命令钮读 --dsw-specific-selector（深色是实心 bluish-800）。
+       不能在卡片内再叠 backdrop-filter（#89 祖先已有模糊）。令牌改成同一张玻璃配方。 */
+    --dsw-specific-selector: color-mix(in srgb,
+      var(--we-readability-base) calc(var(--we-readability-floor) * 100%),
+      color-mix(in srgb, var(--we-surface-tint-light, #ffffff) calc(var(--we-glass-alpha, 0.5) * 1.15 * 100%), transparent) calc((1 - var(--we-readability-floor)) * 100%));
     /* Border emphasis: neutral gray so it reads on both light and dark themes;
        alpha is driven by the "边框" slider through --we-border-alpha. */
     --dsw-alias-border-l1: rgba(180, 180, 180, var(--we-border-alpha, 0.35));
@@ -390,6 +395,9 @@ const CSS = `
     --dsw-alias-markdown-code-segment-selected: color-mix(in srgb,
       var(--we-readability-base) calc(var(--we-readability-floor) * 100%),
       rgba(var(--we-surface-tint-rgb-dark, 13, 21, 36), calc(var(--we-glass-alpha, 0.15) * 1.15)) calc((1 - var(--we-readability-floor)) * 100%));
+    --dsw-specific-selector: color-mix(in srgb,
+      var(--we-readability-base) calc(var(--we-readability-floor) * 100%),
+      color-mix(in srgb, var(--we-surface-tint-dark, #0d1524) calc(var(--we-glass-alpha, 0.5) * 1.15 * 100%), transparent) calc((1 - var(--we-readability-floor)) * 100%));
     --dsw-alias-border-l1: rgba(180, 180, 180, var(--we-border-alpha, 0.35));
     --dsw-alias-border-l2: rgba(180, 180, 180, var(--we-border-alpha, 0.35));
     --dsw-alias-border-l2-darkmode-thin: rgba(180, 180, 180, var(--we-border-alpha, 0.35));
@@ -522,6 +530,21 @@ const CSS = `
       var(--we-chat-readability-base) calc(var(--we-chat-readability-floor) * 100%),
       rgba(var(--we-chat-surface-tint-rgb-dark, 255, 255, 255), calc(var(--we-glass-alpha, 0.15) * 0.33)) calc((1 - var(--we-chat-readability-floor)) * 100%));
   }
+  /* Chat glass is explicitly transparent: use the user's tint alpha once.
+     Shared host tokens retain their floors for popups and other app surfaces. */
+  body[data-we-wallpaper] {
+    --we-chat-glass-fill: rgba(var(--we-surface-tint-rgb-light, 255, 255, 255), var(--we-glass-alpha, 0.15));
+    --we-capsule-glass-fill: rgba(255, 255, 255, var(--we-inline-code-alpha, 0.10));
+    --we-tool-glass-fill: rgba(var(--we-surface-tint-rgb-light, 255, 255, 255), calc(var(--we-glass-alpha, 0.15) + 0.06));
+  }
+  body[data-ds-dark-theme][data-we-wallpaper] {
+    --we-chat-glass-fill: rgba(var(--we-surface-tint-rgb-dark, 13, 21, 36), var(--we-glass-alpha, 0.15));
+    --we-tool-glass-fill: rgba(var(--we-surface-tint-rgb-dark, 13, 21, 36), calc(var(--we-glass-alpha, 0.15) + 0.06));
+  }
+  body[data-we-wallpaper] [data-composer-card],
+  body[data-we-wallpaper] [class*="_bubble"] {
+    background-color: var(--we-chat-glass-fill) !important;
+  }
   body[data-we-wallpaper] [data-composer-card],
   body[data-we-wallpaper] [class*="_bubble"],
   /* Interactive tool popup cards read the SAME --dsw-specific-input-major
@@ -577,10 +600,177 @@ const CSS = `
     -webkit-backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
     backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
   }
+  /* 「+」叠在已磨砂的输入卡上。令牌哪怕改成玻璃配方，深色下限仍是 ~59% 海军蓝，
+     28px 圆看起来就是黑点。这里铺一层很淡的白釉、不加 blur，让 ::before 的霜透出来。 */
+  body[data-we-wallpaper] [data-composer-card] [class*="_add"] {
+    background: color-mix(in srgb, rgba(255, 255, 255, 0.14) 100%, transparent) !important;
+    box-shadow: inset 0 0 0 0.5px rgba(255, 255, 255, 0.22);
+  }
+  body[data-we-wallpaper] [data-composer-card] [class*="_add"]:hover:not(:disabled) {
+    background: color-mix(in srgb, rgba(255, 255, 255, 0.24) 100%, transparent) !important;
+  }
   /* Note (anti-flicker): the composer/bubbles keep ONLY the backdrop-filter
      glass. Extra always-on layers (transform/will-change/contain) were removed —
      they did not stop the white flash and instead added compositing layers. The
      flash was traced to the rope's permanent CSS filter, which is now gone. */
+
+  /* Reasoning and file bars are fully clear; message fences and tool
+     results use glass plates. Inner bodies never stack another background. */
+  body[data-we-wallpaper][data-we-thinking-glass] {
+    --dsw-alias-markdown-inline-code: var(--we-capsule-glass-fill);
+  }
+  body[data-we-wallpaper][data-we-thinking-glass] [data-turn-trigger],
+  body[data-we-wallpaper][data-we-thinking-glass] [data-vcp-reasoning],
+  body[data-we-wallpaper][data-we-thinking-glass] [data-changed-files],
+  body[data-we-wallpaper][data-we-thinking-glass] [data-presented-file] {
+    background: transparent !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+  body[data-we-wallpaper][data-we-thinking-glass] [data-chat-flow] .md-code-block,
+  body[data-we-wallpaper][data-we-thinking-glass] [data-vcp-rawhtml] > div > div:has(> pre > code):has(> div > button[title="复制代码"]) {
+    background: var(--we-chat-glass-fill) !important;
+    -webkit-backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
+    backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
+  }
+  body[data-we-wallpaper][data-we-thinking-glass] [data-vcp-reasoning-body] {
+    background: transparent !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+  /* September 24 inline capsules: ten-percent white mist and independent 8px frost.
+     Host padding/radius and text colour stay intact; fences are excluded. */
+  body[data-we-wallpaper][data-we-thinking-glass] [data-chat-flow] :not(pre) > code,
+  body[data-we-wallpaper][data-we-thinking-glass] [data-vcp-rawhtml] :not(pre) > code {
+    background: var(--dsw-alias-markdown-inline-code) !important;
+    background-image: none !important;
+    -webkit-backdrop-filter: blur(var(--we-inline-code-blur, 8px)) saturate(var(--we-saturate, 1.3)) brightness(var(--we-glass-brightness, 1.04));
+    backdrop-filter: blur(var(--we-inline-code-blur, 8px)) saturate(var(--we-saturate, 1.3)) brightness(var(--we-glass-brightness, 1.04));
+    border-color: rgba(255, 255, 255, 0.14) !important;
+  }
+  /* The two chat navigation buttons reuse capsule mist and frost.
+     Local fill tokens preserve native hover/disabled states and hit areas. */
+  body[data-we-wallpaper][data-we-thinking-glass] [data-dsh-navbar] > button[data-vlln-load-older],
+  body[data-we-wallpaper][data-we-thinking-glass] [data-slot="conversation.view"] button[class*="_toBottom"] {
+    --dsw-alias-bg-layer-2: var(--we-capsule-glass-fill);
+    --dsw-alias-interactive-bg-hover: color-mix(in srgb, var(--we-capsule-glass-fill) 96%, white);
+    --dsw-alias-button-floating-fill: var(--we-capsule-glass-fill);
+    --dsw-alias-button-floating-hover: color-mix(in srgb, var(--we-capsule-glass-fill) 96%, white);
+    -webkit-backdrop-filter: blur(var(--we-inline-code-blur, 8px)) saturate(var(--we-saturate, 1.3)) brightness(var(--we-glass-brightness, 1.04));
+    backdrop-filter: blur(var(--we-inline-code-blur, 8px)) saturate(var(--we-saturate, 1.3)) brightness(var(--we-glass-brightness, 1.04));
+  }
+  /* The sidebar's new-session button uses the same thin capsule glass.
+     Scope the expanded button; keep its label, shortcut and collapsed state. */
+  body[data-we-wallpaper][data-we-thinking-glass] [data-slot="sidebar"] :not([class*="_collapsed"]) > button[class*="_newSession"] {
+    background: var(--we-capsule-glass-fill) !important;
+    border-color: rgba(255, 255, 255, 0.14) !important;
+    -webkit-backdrop-filter: blur(var(--we-inline-code-blur, 8px)) saturate(var(--we-saturate, 1.3)) brightness(var(--we-glass-brightness, 1.04));
+    backdrop-filter: blur(var(--we-inline-code-blur, 8px)) saturate(var(--we-saturate, 1.3)) brightness(var(--we-glass-brightness, 1.04));
+  }
+  body[data-we-wallpaper][data-we-thinking-glass] [data-slot="sidebar"] :not([class*="_collapsed"]) > button[class*="_newSession"]:hover {
+    background: color-mix(in srgb, var(--we-capsule-glass-fill) 96%, white) !important;
+  }
+  body[data-we-glass-fallback][data-we-wallpaper][data-we-thinking-glass] [data-slot="sidebar"] :not([class*="_collapsed"]) > button[class*="_newSession"],
+  body[data-we-glass-fallback][data-we-wallpaper][data-we-thinking-glass] [data-chat-flow] :not(pre) > code,
+  body[data-we-glass-fallback][data-we-wallpaper][data-we-thinking-glass] [data-vcp-rawhtml] :not(pre) > code,
+  body[data-we-glass-fallback][data-we-wallpaper][data-we-thinking-glass] [data-dsh-navbar] > button[data-vlln-load-older],
+  body[data-we-glass-fallback][data-we-wallpaper][data-we-thinking-glass] [data-slot="conversation.view"] button[class*="_toBottom"] {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+  /* Seven inline tool-result bodies: one plate, six percentage points
+     more coverage than a bubble. Root-local tokens clear headers/copy buttons
+     without touching diff line highlights, syntax colours or sidebar tools. */
+  body[data-we-wallpaper][data-we-thinking-glass] [data-chat-flow] [data-chat-flow-kind="context"] [data-context-injection-body],
+  body[data-we-wallpaper][data-we-thinking-glass] [data-chat-flow] [data-slot="tool.call.toolview"]:has([data-sample="bash"]) [data-terminal],
+  body[data-we-wallpaper][data-we-thinking-glass] [data-chat-flow] [data-slot="tool.call.toolview"] [data-tool="read"] [data-read],
+  body[data-we-wallpaper][data-we-thinking-glass] [data-chat-flow] [data-slot="tool.call.toolview"] [data-tool="grep"] [data-search="matches"],
+  body[data-we-wallpaper][data-we-thinking-glass] [data-chat-flow] [data-slot="tool.call.toolview"] [data-variant="others"] [class*="_ioCard"],
+  body[data-we-wallpaper][data-we-thinking-glass] [data-chat-flow] [data-slot="tool.call.toolview"] [data-tool="glob"] [data-search="paths"],
+  body[data-we-wallpaper][data-we-thinking-glass] [data-chat-flow] [data-slot="tool.call.toolview"] [data-tool="write"] [data-diff] {
+    --dsw-alias-markdown-code-block: transparent;
+    --dsw-alias-markdown-code-block-banner: transparent;
+    --dsl-code-block-background: transparent;
+    background-color: var(--we-tool-glass-fill) !important;
+    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.05) 38%, rgba(255, 255, 255, 0.02));
+    -webkit-backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
+    backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
+  }
+  body[data-we-glass-fallback][data-we-wallpaper][data-we-thinking-glass] [data-chat-flow] [data-chat-flow-kind="context"] [data-context-injection-body],
+  body[data-we-glass-fallback][data-we-wallpaper][data-we-thinking-glass] [data-chat-flow] [data-slot="tool.call.toolview"]:has([data-sample="bash"]) [data-terminal],
+  body[data-we-glass-fallback][data-we-wallpaper][data-we-thinking-glass] [data-chat-flow] [data-slot="tool.call.toolview"] [data-tool="read"] [data-read],
+  body[data-we-glass-fallback][data-we-wallpaper][data-we-thinking-glass] [data-chat-flow] [data-slot="tool.call.toolview"] [data-tool="grep"] [data-search="matches"],
+  body[data-we-glass-fallback][data-we-wallpaper][data-we-thinking-glass] [data-chat-flow] [data-slot="tool.call.toolview"] [data-variant="others"] [class*="_ioCard"],
+  body[data-we-glass-fallback][data-we-wallpaper][data-we-thinking-glass] [data-chat-flow] [data-slot="tool.call.toolview"] [data-tool="glob"] [data-search="paths"],
+  body[data-we-glass-fallback][data-we-wallpaper][data-we-thinking-glass] [data-chat-flow] [data-slot="tool.call.toolview"] [data-tool="write"] [data-diff] {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+
+  /* Navbar history/message tips share one portal; native turn previews have
+     their own root. Both reuse the tool plate without frosting child text. */
+  body[data-we-wallpaper][data-we-thinking-glass] > [data-vlln-preview],
+  body[data-we-wallpaper][data-we-thinking-glass] [data-slot="conversation.view"] [class*="_preview"]:has(> [class*="_previewPrompt"]) {
+    background: var(--we-tool-glass-fill) !important;
+    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.05) 38%, rgba(255, 255, 255, 0.02)) !important;
+    -webkit-backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
+    backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
+  }
+  body[data-we-glass-fallback][data-we-wallpaper][data-we-thinking-glass] > [data-vlln-preview],
+  body[data-we-glass-fallback][data-we-wallpaper][data-we-thinking-glass] [data-slot="conversation.view"] [class*="_preview"]:has(> [class*="_previewPrompt"]) {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+  /* Chromium's native scrollbar does not paint backdrop blur (stripe probe).
+     Tint only this thumb, avoiding inherited tokens on nested scroll areas. */
+  body[data-we-wallpaper][data-we-thinking-glass] [data-conversation-scroll]::-webkit-scrollbar-thumb {
+    background-color: rgba(255, 255, 255, var(--we-inline-code-alpha, 0.10));
+  }
+  body[data-we-wallpaper][data-we-thinking-glass] [data-conversation-scroll]::-webkit-scrollbar-thumb:hover,
+  body[data-we-wallpaper][data-we-thinking-glass] [data-conversation-scroll]::-webkit-scrollbar-thumb:active {
+    background-color: rgba(255, 255, 255, calc(var(--we-inline-code-alpha, 0.10) + 0.04));
+  }
+
+  /* Native fences include assistant markdown, not just user bubbles. Keep
+     Shiki token foregrounds and clear all host background painting nodes. */
+  body[data-we-wallpaper][data-we-thinking-glass] [data-chat-flow] .md-code-block {
+    --dsl-code-block-background: transparent;
+    --dsl-code-block-banner-background-color: transparent;
+  }
+  body[data-we-wallpaper][data-we-thinking-glass] [data-chat-flow] .md-code-block > :has(> [data-code-block-banner]),
+  body[data-we-wallpaper][data-we-thinking-glass] [data-chat-flow] .md-code-block [data-code-block-banner],
+  body[data-we-wallpaper][data-we-thinking-glass] [data-chat-flow] .md-code-block pre,
+  body[data-we-wallpaper][data-we-thinking-glass] [data-chat-flow] .md-code-block pre > code {
+    background: transparent !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+  /* A user bubble already supplies the single glass plate and frost. */
+  body[data-we-wallpaper][data-we-thinking-glass] [data-chat-flow] [class*="_bubble"] .md-code-block {
+    background: transparent !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+  /* VCP uses inline fixed colours; its plain text follows the theme once its
+     opaque canvas is removed. Native Shiki foregrounds above stay untouched. */
+  body[data-we-wallpaper][data-we-thinking-glass] [data-vcp-rawhtml] > div > div:has(> pre > code):has(> div > button[title="复制代码"]) > pre {
+    background: transparent !important;
+    color: var(--dsw-alias-label-primary) !important;
+  }
+  body[data-we-wallpaper][data-we-thinking-glass] [data-vcp-rawhtml] > div > div:has(> pre > code):has(> div > button[title="复制代码"]) > div {
+    background: transparent !important;
+    color: var(--dsw-alias-label-secondary) !important;
+  }
+  body[data-we-wallpaper][data-we-thinking-glass] [data-vcp-rawhtml] > div > div:has(> pre > code):has(> div > button[title="复制代码"]) > div > button {
+    color: inherit !important;
+  }
+  body[data-we-wallpaper][data-we-thinking-glass] [data-changed-files] {
+    --changes-fill: transparent;
+    --changes-hover: rgba(255, 255, 255, 0.05);
+  }
+  body[data-we-wallpaper][data-we-thinking-glass] [data-changed-files] > button {
+    background: transparent !important;
+  }
 
   /* ── 原生左栏在 extended/advanced 窗口模式下的不透明底 ─────────────────────
      harness 的壳层样式表带一条模式门控规则：mode 为 extended/advanced 且
@@ -1069,6 +1259,16 @@ const CSS = `
       --dsw-alias-bg-layer-2: var(--we-panel-color, #ffffff);
       --dsw-alias-bg-layer-3: var(--we-panel-color, #ffffff);
       --dsw-alias-button-elevated-fill: var(--we-panel-color, #ffffff);
+      --dsw-specific-selector: var(--we-panel-color, #ffffff);
+    }
+  }
+
+  @supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+    body[data-we-wallpaper],
+    body[data-ds-dark-theme][data-we-wallpaper] {
+      --we-chat-glass-fill: color-mix(in srgb, var(--we-readability-base) 92%, transparent);
+      --we-tool-glass-fill: var(--we-chat-glass-fill);
+      --we-capsule-glass-fill: var(--we-chat-glass-fill);
     }
   }
 
@@ -2382,6 +2582,7 @@ const CSS = `
     --dsw-alias-bg-layer-2: var(--we-panel-color, #ffffff);
     --dsw-alias-bg-layer-3: var(--we-panel-color, #ffffff);
     --dsw-alias-button-elevated-fill: var(--we-panel-color, #ffffff);
+    --dsw-specific-selector: var(--we-panel-color, #ffffff);
   }
   /* 输入框卡片（issue #95 报「过透」的那块界面）：上游 #94 已把模糊从卡片本体搬到
      [data-composer-card]::before 载体（卡片上的 backdrop-filter 会成为 fixed 后代的
@@ -2393,6 +2594,26 @@ const CSS = `
     background-color: color-mix(in srgb, var(--we-surface-tint-light, #ffffff) 92%, transparent);
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
+  }
+  /* A near-opaque canvas is only the no-frost fallback, never normal chat. */
+  body[data-we-glass-fallback][data-we-wallpaper],
+  body[data-ds-dark-theme][data-we-glass-fallback][data-we-wallpaper] {
+    --we-chat-glass-fill: color-mix(in srgb, var(--we-readability-base) 92%, transparent);
+    --we-tool-glass-fill: var(--we-chat-glass-fill);
+    --we-capsule-glass-fill: var(--we-chat-glass-fill);
+  }
+  body[data-we-glass-fallback][data-we-wallpaper] [class*="_bubble"] {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+  body[data-we-glass-fallback][data-we-wallpaper][data-we-thinking-glass] [data-turn-trigger],
+  body[data-we-glass-fallback][data-we-wallpaper][data-we-thinking-glass] [data-vcp-reasoning],
+  body[data-we-glass-fallback][data-we-wallpaper][data-we-thinking-glass] [data-changed-files],
+  body[data-we-glass-fallback][data-we-wallpaper][data-we-thinking-glass] [data-presented-file],
+  body[data-we-glass-fallback][data-we-wallpaper][data-we-thinking-glass] [data-chat-flow] .md-code-block,
+  body[data-we-glass-fallback][data-we-wallpaper][data-we-thinking-glass] [data-vcp-rawhtml] > div > div:has(> pre > code):has(> div > button[title="复制代码"]) {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
   }
   /* 仓库抽屉：与 @supports 回退逐字相同的 92% 近不透明配方。 */
   body[data-we-glass-fallback] .we-repo-panel {

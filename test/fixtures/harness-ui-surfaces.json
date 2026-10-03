@@ -14,7 +14,8 @@
         "--dsw-specific-input-major / --dsw-specific-bubble → 同一张表（输入卡片 / 消息气泡）",
         "全表面玻璃第二批（#71，收编报告者 glass-patch.css 的 token 表）→ bg-overlay（1.3）/ bg-module-platform（1.15）/ bg-multi-select（1.2）/ button-floating-fill（1.1）/ button-ghost-active-fill（0.9）/ button-tool-bar-fill（1.0）/ interactive-bg-active（0.9）/ interactive-bg-hover-solid（1.0）/ markdown-citation（0.9）/ markdown-placeholder（1.1），深浅两主题逐条同形",
         "--dsw-alias-markdown-code-block / -banner（0.8）/ -inline-code / -tag / -code-segment-unselected（1.0）/ -code-segment-selected（1.15）→ 同一张玻璃配方（**原 declined 改判**，第二批 #71 用户现场口径「代码块和重点文字背景也需要和对话框背景一样进行玻璃化覆盖」：底纳入可读性下限、shiki 前景色一个不动；深色档曾漏、后补齐）",
-        "body[data-we-left-sidebar] 的原生左栏 → 选择器级玻璃（默认关；锚点 = 座位出口 [data-slot=\"sidebar\"] 的父元素，因为那一列只有 CSS 模块哈希类名）：玻璃色 @ 透明度压可读性下限 + --we-blur + --dsw-alias-border-l3 + accent 映射"
+        "body[data-we-left-sidebar] 的原生左栏 → 选择器级玻璃（默认关；锚点 = 座位出口 [data-slot=\"sidebar\"] 的父元素，因为那一列只有 CSS 模块哈希类名）：玻璃色 @ 透明度压可读性下限 + --we-blur + --dsw-alias-border-l3 + accent 映射",
+        "body[data-we-thinking-glass] → 思考区与文件卡完全清底；行内胶囊、新会话与导航按钮使用10%白雾/8px背景雾化；聊天代码围栏与七类工具结果使用一层主题玻璃，保留前景与差异色。开关默认关闭。"
       ],
       "declined": [],
       "fallback": "无 backdrop-filter（@supports not）或软件光栅器（body[data-we-glass-fallback]）下，上表 mapped 的令牌一律钉回插件自己的不透明面板色（--we-panel-color）—— 半透明 + 无霜等于文字直接压在壁纸上。",

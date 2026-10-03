@@ -4,7 +4,7 @@
 > **怎么用**：改了 `src/` 或 `lib/` 的某个模块，在「模块 → 守卫」那张表里查该跑哪几条。
 > 口径：只统计守卫**代码**里真正碰到的模块（先剥注释），并区分"直接读源文件"与"隔着产物 `lib/client.js`"。
 
-模块面 52 个 · 守卫 44 个
+模块面 52 个 · 守卫 45 个
 
 ## 守卫 → 模块
 
@@ -54,12 +54,13 @@
 | `verify-theme-layer.mjs` | `lib/settings-schema.js` `src/client.js` `src/effects.js` `src/font/apply.js` `src/font/color-roles.js` `src/font/typography.js` `src/panel-tabs.js` | ✅ |
 | `verify-transcode-state.mjs` | `src/video-layer.js` | ✅ |
 | `verify-types.mjs` | `lib/index.js` `src/client.js` | ✅ |
+| `verify-windows-caption.mjs` | — | ✅ |
 
 ## 模块 → 守卫
 
 | 模块 | 守卫数 | 守卫 |
 |---|---:|---|
-| `lib/client.js` | 32 | `fontset-load-smoke` `live-frame-async-identity-smoke` `live-frame-backfill-smoke` `rotation-live-smoke` `rotation-prepared-leak-smoke` `rotation-smoke` `verify-about` `verify-api-client` `verify-body-caps` `verify-client-sync` `verify-client` `verify-component-fonts` `verify-fontset` `verify-glass-compositing` `verify-host-paint-scope` `verify-i18n` `verify-module-layout` `verify-package-files` `verify-package-publish` `verify-picker-model` `verify-picker-props` `verify-picker-upload` `verify-playback-controls` `verify-reachability` `verify-readability` `verify-scene-live` `verify-scene` `verify-softrender` `verify-theme-follow` `verify-theme-layer` `verify-transcode-state` `verify-types` |
+| `lib/client.js` | 33 | `fontset-load-smoke` `live-frame-async-identity-smoke` `live-frame-backfill-smoke` `rotation-live-smoke` `rotation-prepared-leak-smoke` `rotation-smoke` `verify-about` `verify-api-client` `verify-body-caps` `verify-client-sync` `verify-client` `verify-component-fonts` `verify-fontset` `verify-glass-compositing` `verify-host-paint-scope` `verify-i18n` `verify-module-layout` `verify-package-files` `verify-package-publish` `verify-picker-model` `verify-picker-props` `verify-picker-upload` `verify-playback-controls` `verify-reachability` `verify-readability` `verify-scene-live` `verify-scene` `verify-softrender` `verify-theme-follow` `verify-theme-layer` `verify-transcode-state` `verify-types` `verify-windows-caption` |
 | `lib/http-body.js` | 2 | `verify-body-caps` `verify-package-files` |
 | `lib/index.js` | 14 | `e2e-web-media-origin` `verify-about` `verify-adapter` `verify-contracts` `verify-fontset` `verify-logging` `verify-module-layout` `verify-package-files` `verify-package-publish` `verify-reachability` `verify-route-index` `verify-scene-live` `verify-scene` `verify-types` |
 | `lib/log.js` | 1 | `verify-logging` |

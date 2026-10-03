@@ -1,4 +1,4 @@
-// Verify the TEXT-SURFACE READABILITY FLOOR (upstream #82).
+// Verify protected host floors and the explicitly transparent chat surfaces.
 //
 // Why this suite exists: the wallpaper may be dimmed/blended so it "does not
 // dominate", but TEXT MUST STAY READABLE. IDEA's background-image feature has a
@@ -22,6 +22,9 @@
 // floor IS a literal max() clamp, which leaves the user's value above the floor
 // byte-identical.
 //
+// Chat element overrides intentionally bypass shared-token floors at the user
+// glass-alpha setting. F2c–F2g check those overrides and their single plate;
+// the remaining floor checks still protect settings, popups, sidebars/editors.
 // Assertions (all derived from the BUILT lib/client.js — nothing re-typed):
 //   F1  the floor is an explicit named constant + CSS token pair, and the
 //       stylesheet copy matches the JS constant (no drift).
@@ -367,6 +370,95 @@ function main() {
     veilMisses.length === 0,
     surfaceSpecs.length + ' surface(s) checked · missing/broken=' + veilMisses.length
       + (veilMisses.length ? ' · ' + JSON.stringify(veilMisses) : ''));
+
+  // The user's chat surfaces must transmit wallpaper at the slider alpha.
+  // Keep protected host-token floor checks above; test the actual overrides
+  // rather than calling an 88% code canvas "transparent glass".
+  {
+    const clean = CSS.replace(/\/\*[\s\S]*?\*\//g, '');
+    const all = [...clean.matchAll(/([^{}]+)\{([^{}]*)\}/g)]
+      .map((m) => ({ header: m[1].trim(), body: m[2] }));
+    const normal = all.filter((r) => !r.header.includes('data-we-glass-fallback')
+      && !r.header.includes('@supports'));
+    const fill = (value) => /rgba\(var\(--we-surface-tint-rgb-(?:light|dark),/.test(value || '')
+      && /var\(--we-glass-alpha,/.test(value || '')
+      && !/readability-floor|max\(/.test(value || '');
+    const fills = normal.filter((r) => r.header === 'body[data-we-wallpaper]'
+      || r.header === 'body[data-ds-dark-theme][data-we-wallpaper]')
+      .map((r) => declValue(r.body, '--we-chat-glass-fill')).filter(Boolean);
+    check('F2c chat fill uses the slider directly in both themes, no opacity floor',
+      fills.length === 2 && fills.every(fill));
+    check('negative control: the rejected 88% canvas fails the transparency contract',
+      fills.length === 2 && !fill(fills[0].replace(/var\(--we-glass-alpha, [^)]+\)/, '0.88')));
+    const roots = ['[data-composer-card]', '[class*="_bubble"]',
+      '[data-chat-flow] .md-code-block', ':has(> pre > code)'];
+    check('F2d composer, bubble and message fences retain their slider fill',
+      roots.every((anchor) => normal.some((r) => r.header.includes(anchor)
+        && /background(?:-color)?: var\(--we-chat-glass-fill\)/.test(r.body))));
+    const clear = (body) => /background: transparent !important/.test(body)
+      && /(?:^|[;\s])backdrop-filter: none !important/.test(body)
+      && /-webkit-backdrop-filter: none !important/.test(body)
+      && !/(?:^|[;\s])opacity\s*:/.test(body);
+    check('F2d2 reasoning and both file-card roots have no tint or backdrop blur',
+      ['[data-turn-trigger]', '[data-vcp-reasoning]', '[data-changed-files]', '[data-presented-file]']
+        .every((anchor) => normal.some((r) => r.header.includes(anchor) && clear(r.body))));
+    check('negative control: a tinted reasoning/file bar is not fully transparent',
+      !clear('background: rgba(28, 28, 28, 0.19) !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important;'));
+    const chip = normal.find((r) => r.header.includes('[data-chat-flow] :not(pre) > code')
+      && r.header.includes('[data-vcp-rawhtml] :not(pre) > code'));
+    check('F2d3 inline capsules restore ten-percent white mist and independent 8px frost',
+      normal.some((r) => r.header === 'body[data-we-wallpaper][data-we-thinking-glass]'
+        && declValue(r.body, '--dsw-alias-markdown-inline-code') === 'var(--we-capsule-glass-fill)')
+      && normal.some((r) => r.header === 'body[data-we-wallpaper]'
+        && declValue(r.body, '--we-capsule-glass-fill') === 'rgba(255, 255, 255, var(--we-inline-code-alpha, 0.10))')
+      && !!chip && /background: var\(--dsw-alias-markdown-inline-code\) !important/.test(chip.body)
+      && declValue(chip.body, 'backdrop-filter') === 'blur(var(--we-inline-code-blur, 8px)) saturate(var(--we-saturate, 1.3)) brightness(var(--we-glass-brightness, 1.04))'
+      && declValue(chip.body, '-webkit-backdrop-filter') === declValue(chip.body, 'backdrop-filter')
+      && declValue(chip.body, 'background-image') === 'none !important'
+      && declValue(chip.body, 'border-color') === 'rgba(255, 255, 255, 0.14) !important'
+      && !/(?:^|[;\s])(?:color|filter|opacity)\s*:/.test(chip.body));
+    const tools = normal.find((r) => declValue(r.body, 'background-color') === 'var(--we-tool-glass-fill) !important');
+    const toolScope = (header) => header.split(',').every((selector) =>
+      selector.includes('[data-we-wallpaper][data-we-thinking-glass]') && selector.includes('[data-chat-flow]')
+      && (selector.includes('[data-slot="tool.call.toolview"]') || selector.includes('[data-chat-flow-kind="context"]')));
+    check('F2d4 all seven tool result bodies are scoped to their chat slots and gates',
+      !!tools && tools.header.split(',').length === 7 && toolScope(tools.header)
+      && ['[data-context-injection-body]', '[data-terminal]', '[data-read]', '[data-search="matches"]',
+        '[data-variant="others"]', '[data-search="paths"]', '[data-diff]'].every((a) => tools.header.includes(a)));
+    check('F2d4b generic IO glass covers the others family in normal and fallback modes',
+      all.filter((r) => r.header.includes('[class*="_ioCard"]')).length === 2
+      && all.filter((r) => r.header.includes('[class*="_ioCard"]'))
+        .every((r) => r.header.includes('[data-variant="others"]') && !r.header.includes('[data-tool="tool_call"]')));
+    check('negative control: tool glass without its chat-slot boundary is rejected',
+      !!tools && !toolScope(tools.header.replaceAll('[data-slot="tool.call.toolview"]', '')));
+    check('F2d5 tool bodies retain theme tint, add six opacity points and clear nested canvases',
+      ['light', 'dark'].every((theme) => normal.some((r) =>
+        new RegExp('--we-tool-glass-fill: rgba\\(var\\(--we-surface-tint-rgb-' + theme + ',').test(r.body)
+        && /calc\(var\(--we-glass-alpha, 0\.15\) \+ 0\.06\)/.test(r.body)))
+      && !!tools && declValue(tools.body, '--dsw-alias-markdown-code-block') === 'transparent'
+      && declValue(tools.body, '--dsw-alias-markdown-code-block-banner') === 'transparent'
+      && declValue(tools.body, '--dsl-code-block-background') === 'transparent'
+      && !/(?:^|[;\s])(?:color|filter|opacity)\s*:/.test(tools.body));
+    const fences = all.filter((r) => r.header.includes('.md-code-block') || r.header.includes(':has(> pre > code)'));
+    const gated = (h) => h.split(',').every((s) => s.includes('[data-we-wallpaper]') && s.includes('[data-we-thinking-glass]'));
+    check('F2e fence rules are opt-in and message-scoped',
+      fences.length >= 5 && fences.every((r) => gated(r.header))
+      && fences.every((r) => r.header.includes('[data-chat-flow]') || r.header.includes('[data-vcp-rawhtml]')));
+    check('negative control: unguarded fence rules are rejected',
+      !!fences[0] && !gated(fences[0].header.replaceAll('[data-we-thinking-glass]', '')));
+    const native = normal.filter((r) => r.header.includes('.md-code-block') && !r.header.includes('> pre {'));
+    check('F2f native Shiki foregrounds remain untouched; inner canvas is transparent',
+      native.every((r) => !/(?:^|[;\s])(?:color|filter|opacity|mix-blend-mode)\s*:/.test(r.body))
+      && normal.some((r) => r.header.includes('.md-code-block pre')
+        && /background: transparent !important/.test(r.body) && /backdrop-filter: none !important/.test(r.body))
+      && normal.some((r) => r.header.includes('[data-vcp-reasoning-body]')
+        && /background: transparent !important/.test(r.body) && /backdrop-filter: none !important/.test(r.body)));
+    check('F2g VCP plain code follows theme foreground; 92% plate is fallback-only',
+      normal.some((r) => r.header.includes('[data-vcp-rawhtml]') && r.header.endsWith('> pre')
+        && /color: var\(--dsw-alias-label-primary\) !important/.test(r.body))
+      && all.some((r) => r.header.includes('data-we-glass-fallback')
+        && /--we-chat-glass-fill: color-mix\(in srgb, var\(--we-readability-base\) 92%, transparent\)/.test(r.body)));
+  }
 
   // 负对照（DEV-GUIDE §4.7 约定 5：变异输入必须喂进**同一条判据**）：把一条真实声明改坏
   // （把下限那一项换成玻璃色）后，`hasVeil` 必须判不合格 —— 否则 F2a 可能是空转的

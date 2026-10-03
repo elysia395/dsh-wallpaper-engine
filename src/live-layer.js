@@ -1906,6 +1906,22 @@ function probeWallpaperOnScreen(source) {
   } catch { /* 诊断是增强：失败不影响壁纸 */ }
 }
 
+// The official Windows preload observes body.style, but not ACTIVE_ATTR.
+// Keep its measured native caption colour in step with the wallpaper gate.
+// The plugin-owned marker only wakes that existing observer; it paints nothing.
+function setWallpaperActive(active) {
+  const body = document.body;
+  if (active) body.setAttribute(ACTIVE_ATTR, "on");
+  else body.removeAttribute(ACTIVE_ATTR);
+  if (document.documentElement?.dataset?.windowsTitlebar === undefined) return;
+  const marker = "--we-caption-active";
+  if (active) {
+    if (body.style.getPropertyValue(marker) !== "1") body.style.setProperty(marker, "1");
+  } else if (body.style.getPropertyValue(marker)) {
+    body.style.removeProperty(marker);
+  }
+}
+
 function syncLayers() {
   // 失败记忆的管线核对放在最前：它可能把 `sceneLiveFailures` 清掉，而本函数下面就要用它
   // 算层键（清掉 ⇒ 这一跳直接重建回 live，用户不必手动重开开关）。
@@ -2134,10 +2150,10 @@ function syncLayers() {
       s.className = "we-scrim";
       document.body.appendChild(s);
     }
-    document.body.setAttribute(ACTIVE_ATTR, "on");
+    setWallpaperActive(true);
   } else {
     if (scrim) scrim.remove();
-    document.body.removeAttribute(ACTIVE_ATTR);
+    setWallpaperActive(false);
   }
 
   // 3. GPU 抓帧缓存状态（面板提示 + 清除入口）：场景壁纸才可能被抓帧。

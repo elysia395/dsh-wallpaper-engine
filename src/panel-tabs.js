@@ -852,7 +852,7 @@
   }
 
   function renderAppearanceWindowSidebarSection(ctx) {
-    const { onGlassWindow, onSidebarAlpha, onSidebarBlur, onSidebarColor, onSidebarContentAlpha, onSidebarContentColor, onSidebarGlass, sel, surface } = ctx;
+    const { onThinkingGlass, onGlassWindow, onSidebarAlpha, onSidebarBlur, onSidebarColor, onSidebarContentAlpha, onSidebarContentColor, onSidebarGlass, sel, surface } = ctx;
     const sidebarSurface = surface === "sidebar";
     return React.createElement(React.Fragment, null,
     // ── 窗口与侧栏：两套液态玻璃总开关，细节控件缩进一级并随开关显隐 ──
@@ -867,6 +867,11 @@
         key: "window-glass",
         hint: weT("整个设置窗口跟随配色与透明度"),
         tooltip: weT("整个设置窗口（含 General / 模型 / 插件等全部原生分区）跟随配色与透明度；关闭则恢复原生样式"),
+      }),
+      switchRow(weT("思考块液态玻璃"), sel.thinkingGlass === true, onThinkingGlass, {
+        key: "thinking-glass",
+        hint: weT("思考区与文件卡清底，文字胶囊与七类工具内容玻璃；默认关"),
+        tooltip: weT("打开后，思考区与文件卡底栏百分百透明；文字胶囊、新会话、加载更早历史与回到底部按钮使用10%白色薄雾和8px雾化；上下文注入、运行命令、读取、搜索文件内容、工具调用、查找文件、写入的展开内容使用同款玻璃，底色覆盖度比气泡增加6个百分点。导航与轮次悬浮预览采用工具内容同款玻璃；聊天滚动条使用10%白色薄雾。代码块随玻璃透明度透出壁纸。默认关。"),
       }),
       // 侧栏玻璃（dsh-better-sidebar 适配）：与设置窗口玻璃同级的一套独立细粒度
       // 控制 —— 总开关 + 专用模糊 + 专用透明度 + 玻璃基底色调，全部只作用于

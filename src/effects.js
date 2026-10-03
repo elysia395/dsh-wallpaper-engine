@@ -345,6 +345,10 @@ function applyEffects(opts) {
   if (selection.leftSidebarGlass) document.body.setAttribute("data-we-left-sidebar", "on");
   else document.body.removeAttribute("data-we-left-sidebar");
 
+  // 思考玻璃只控制指定聊天表面；关闭时清除门控属性。
+  if (selection.thinkingGlass) document.body.setAttribute("data-we-thinking-glass", "on");
+  else document.body.removeAttribute("data-we-thinking-glass");
+
   // dsh-better-sidebar 液态玻璃：一套独立于会话玻璃的细粒度控制（侧栏模糊 /
   // 侧栏透明度 / 侧栏玻璃颜色 + 总开关）。变量只作用于 [data-dsh-better-sidebar]
   // 子树（CSS 见下），关闭总开关时侧栏恢复原生外观。
@@ -464,6 +468,7 @@ function clearEffects() {
   s.removeProperty("--we-surface-tint-rgb-dark");
   document.body.removeAttribute("data-we-glass-window");
   document.body.removeAttribute("data-we-left-sidebar");
+  document.body.removeAttribute("data-we-thinking-glass");
   s.removeProperty("--we-sidebar-blur");
   s.removeProperty("--we-sidebar-saturate");
   s.removeProperty("--we-sidebar-alpha");

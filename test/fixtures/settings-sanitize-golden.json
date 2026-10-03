@@ -66,7 +66,8 @@
         "sceneLiveFailures": {},
         "customFrames": {},
         "caretColor": "",
-        "adapterTarget": "auto"
+        "adapterTarget": "auto",
+        "thinkingGlass": false
       },
       "host": {
         "id": "",
@@ -127,7 +128,8 @@
         "fontCustom": false,
         "sceneLiveFailures": {},
         "caretColor": "",
-        "themeFollow": false
+        "themeFollow": false,
+        "thinkingGlass": false
       }
     },
     {
@@ -193,7 +195,8 @@
         "caretColor": "",
         "videoVolume": 0,
         "videoAudioEnabled": true,
-        "adapterTarget": "auto"
+        "adapterTarget": "auto",
+        "thinkingGlass": false
       },
       "host": "__null__"
     },
@@ -260,7 +263,8 @@
         "caretColor": "",
         "videoVolume": 0,
         "videoAudioEnabled": true,
-        "adapterTarget": "auto"
+        "adapterTarget": "auto",
+        "thinkingGlass": false
       },
       "host": "__null__"
     },
@@ -327,7 +331,8 @@
         "caretColor": "",
         "videoVolume": 0,
         "videoAudioEnabled": true,
-        "adapterTarget": "auto"
+        "adapterTarget": "auto",
+        "thinkingGlass": false
       },
       "host": "__null__"
     },
@@ -396,7 +401,8 @@
         "sceneLiveFailures": {},
         "customFrames": {},
         "caretColor": "",
-        "adapterTarget": "auto"
+        "adapterTarget": "auto",
+        "thinkingGlass": false
       },
       "host": {
         "id": "",
@@ -457,7 +463,8 @@
         "fontCustom": false,
         "sceneLiveFailures": {},
         "caretColor": "",
-        "themeFollow": false
+        "themeFollow": false,
+        "thinkingGlass": false
       }
     },
     {
@@ -582,7 +589,8 @@
         "sceneLiveFailures": {},
         "customFrames": {},
         "caretColor": "",
-        "adapterTarget": "auto"
+        "adapterTarget": "auto",
+        "thinkingGlass": false
       },
       "host": {
         "id": "",
@@ -643,7 +651,8 @@
         "fontCustom": false,
         "sceneLiveFailures": {},
         "caretColor": "",
-        "themeFollow": false
+        "themeFollow": false,
+        "thinkingGlass": false
       }
     },
     {
@@ -813,7 +822,8 @@
         "sceneLiveFailures": {},
         "customFrames": {},
         "caretColor": "",
-        "adapterTarget": "auto"
+        "adapterTarget": "auto",
+        "thinkingGlass": false
       },
       "host": {
         "id": "",
@@ -874,7 +884,8 @@
         "fontCustom": false,
         "sceneLiveFailures": {},
         "caretColor": "",
-        "themeFollow": false
+        "themeFollow": false,
+        "thinkingGlass": false
       }
     },
     {
@@ -943,7 +954,8 @@
         "sceneLiveFailures": {},
         "customFrames": {},
         "caretColor": "",
-        "adapterTarget": "auto"
+        "adapterTarget": "auto",
+        "thinkingGlass": false
       },
       "host": {
         "id": "",
@@ -1004,7 +1016,8 @@
         "fontCustom": false,
         "sceneLiveFailures": {},
         "caretColor": "",
-        "themeFollow": false
+        "themeFollow": false,
+        "thinkingGlass": false
       }
     },
     {
@@ -1087,7 +1100,8 @@
         "sceneLiveFailures": {},
         "customFrames": {},
         "caretColor": "",
-        "adapterTarget": "auto"
+        "adapterTarget": "auto",
+        "thinkingGlass": false
       },
       "host": {
         "id": "",
@@ -1148,7 +1162,8 @@
         "fontCustom": false,
         "sceneLiveFailures": {},
         "caretColor": "",
-        "themeFollow": false
+        "themeFollow": false,
+        "thinkingGlass": false
       }
     },
     {
@@ -1231,7 +1246,8 @@
         "sceneLiveFailures": {},
         "customFrames": {},
         "caretColor": "",
-        "adapterTarget": "auto"
+        "adapterTarget": "auto",
+        "thinkingGlass": false
       },
       "host": {
         "id": "",
@@ -1292,7 +1308,8 @@
         "fontCustom": false,
         "sceneLiveFailures": {},
         "caretColor": "",
-        "themeFollow": false
+        "themeFollow": false,
+        "thinkingGlass": false
       }
     },
     {
@@ -1362,7 +1379,8 @@
         "sceneLiveFailures": {},
         "customFrames": {},
         "caretColor": "",
-        "adapterTarget": "auto"
+        "adapterTarget": "auto",
+        "thinkingGlass": false
       },
       "host": {
         "id": "",
@@ -1423,7 +1441,8 @@
         "fontCustom": false,
         "sceneLiveFailures": {},
         "caretColor": "",
-        "themeFollow": false
+        "themeFollow": false,
+        "thinkingGlass": false
       }
     },
     {
@@ -1498,7 +1517,8 @@
         "sceneLiveFailures": {},
         "customFrames": {},
         "caretColor": "",
-        "adapterTarget": "auto"
+        "adapterTarget": "auto",
+        "thinkingGlass": false
       },
       "host": {
         "id": "",
@@ -1559,7 +1579,8 @@
         "fontCustom": false,
         "sceneLiveFailures": {},
         "caretColor": "",
-        "themeFollow": false
+        "themeFollow": false,
+        "thinkingGlass": false
       }
     },
     {
@@ -1631,7 +1652,8 @@
         "sceneLiveFailures": {},
         "customFrames": {},
         "caretColor": "",
-        "adapterTarget": "auto"
+        "adapterTarget": "auto",
+        "thinkingGlass": false
       },
       "host": {
         "id": "",
@@ -1692,7 +1714,8 @@
         "fontCustom": false,
         "sceneLiveFailures": {},
         "caretColor": "",
-        "themeFollow": false
+        "themeFollow": false,
+        "thinkingGlass": false
       }
     },
     {
@@ -1771,7 +1794,8 @@
         "sceneLiveFailures": {},
         "customFrames": {},
         "caretColor": "",
-        "adapterTarget": "auto"
+        "adapterTarget": "auto",
+        "thinkingGlass": false
       },
       "host": {
         "id": "",
@@ -1832,7 +1856,8 @@
         "fontCustom": false,
         "sceneLiveFailures": {},
         "caretColor": "",
-        "themeFollow": false
+        "themeFollow": false,
+        "thinkingGlass": false
       }
     },
     {
@@ -1980,7 +2005,8 @@
           "y": true
         },
         "caretColor": "",
-        "adapterTarget": "auto"
+        "adapterTarget": "auto",
+        "thinkingGlass": false
       },
       "host": {
         "id": "",
@@ -2065,7 +2091,8 @@
           "c": "stall"
         },
         "caretColor": "",
-        "themeFollow": false
+        "themeFollow": false,
+        "thinkingGlass": false
       }
     },
     {
@@ -2133,7 +2160,8 @@
         "sceneLiveFailures": {},
         "customFrames": {},
         "caretColor": "",
-        "adapterTarget": "auto"
+        "adapterTarget": "auto",
+        "thinkingGlass": false
       },
       "host": {
         "id": "",
@@ -2194,7 +2222,8 @@
         "fontCustom": false,
         "sceneLiveFailures": {},
         "caretColor": "",
-        "themeFollow": false
+        "themeFollow": false,
+        "thinkingGlass": false
       }
     },
     {
@@ -2262,7 +2291,8 @@
         "sceneLiveFailures": {},
         "customFrames": {},
         "caretColor": "",
-        "adapterTarget": "auto"
+        "adapterTarget": "auto",
+        "thinkingGlass": false
       },
       "host": {
         "id": "wallpaper-42",
@@ -2323,7 +2353,8 @@
         "fontCustom": false,
         "sceneLiveFailures": {},
         "caretColor": "",
-        "themeFollow": false
+        "themeFollow": false,
+        "thinkingGlass": false
       }
     },
     {
@@ -2392,7 +2423,8 @@
         "sceneLiveFailures": {},
         "customFrames": {},
         "caretColor": "",
-        "adapterTarget": "auto"
+        "adapterTarget": "auto",
+        "thinkingGlass": false
       },
       "host": {
         "id": "",
@@ -2453,7 +2485,8 @@
         "fontCustom": false,
         "sceneLiveFailures": {},
         "caretColor": "",
-        "themeFollow": false
+        "themeFollow": false,
+        "thinkingGlass": false
       }
     }
   ]
