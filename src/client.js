@@ -13,7 +13,7 @@
  *      app frame + sidebar backgrounds are made transparent so the wallpaper
  *      shows through the whole frame while the scrim keeps text readable.
  *   3. Applies four user-adjustable effects, each with its own slider:
- *      - 壁纸模糊 (wallpaper blur) → `--we-wallpaper-blur`
+ *      - 壁纸模糊 (wallpaper blur) → `--we-media-filter`（blur() 项）
  *      - 暗化 (scrim strength)      → `--we-scrim-color`
  *      - 边框 (border emphasis)     → `--dsw-alias-border-l1/l2` alpha
  *      - 玻璃 (glass blur on panels)→ `--we-blur` + frosted-glass backgrounds
@@ -113,7 +113,7 @@ const ACCENT_PRESETS = [
   "#CBE77D", // 黄绿 (success)
 ];
 
-// 玻璃颜色 presets for the settings-window glass BASE tint (--we-glass-color).
+// 玻璃颜色 presets for the settings-window glass BASE tint (--we-surface-tint-light/dark).
 // The first two are the stock-look defaults (white in light mode, deep navy in
 // dark); picking any preset (or a custom color) tints the glass in BOTH themes.
 const GLASS_COLOR_PRESETS = [
@@ -374,6 +374,22 @@ function commitLiveSetting(field, value, live) {
   if (live) applyEffects({ live: true });
   else emit();
 }
+
+/**
+ * schema 的**取值域**（与 `readOne` 的 `num` 档同源；`min` / `max` 允许写成 `CONSTS` 的名字）。
+ *
+ * 为什么必须有它：滑块一类的处理器要自己钳一次（控件值可能来自键盘 / 粘贴），而**手写**那对
+ * 数字会与 `KINDS` 漂移。⚠️ 这不是理论风险 —— R4 把刻度改成 0–100 时改了 `KINDS` 与面板量程，
+ * 漏了这里手写的四处；后果比"钳错"更糟：`clampNum` 是**越界即回落到默认值**，于是一旦拖过旧上限，
+ * 滑块就**跳回默认值**（用户实测：「玻璃透明度」最多只能拉到 20% —— 20 正是默认值）。
+ * ⇒ 取值域只从 schema 取，不在这里出现数字。守卫 `verify-client` 对账这两者。
+ */
+const schemaRange = (key) => {
+  const m = KINDS[key] || {};
+  const lo = typeof m.min === "string" ? CONSTS[m.min] : m.min;
+  const hi = typeof m.max === "string" ? CONSTS[m.max] : m.max;
+  return [lo, hi];
+};
 
 // ── 破坏性动作的「面板内确认」（**唯一机制**，五个动作共用）─────────────────────
 // 为什么禁用原生模态（`window.confirm` / `alert`）：本插件跑在**同一个渲染页**里，原生
@@ -1118,7 +1134,7 @@ function saveEditingGroup() {
   const cleaned = {
     id: draft.id,
     name: typeof draft.name === "string" && draft.name.trim() ? draft.name.trim() : weT("轮播列表"),
-    interval: clampNum(draft.interval, 1, 1440, DEFAULTS.rotationInterval),
+    interval: clampNum(draft.interval, ...schemaRange("rotationInterval"), DEFAULTS.rotationInterval),
     order: draft.order === "random" ? "random" : "sequence",
     wallpaperIds: Array.isArray(draft.wallpaperIds)
       ? draft.wallpaperIds.filter((x) => typeof x === "string" && x)
@@ -2638,7 +2654,7 @@ function onEditName(e) {
 }
 function onEditInterval(e) {
   if (!selection.editing) return;
-  selection.editing.interval = clampNum(Number(e.target.value), 1, 1440, DEFAULTS.rotationInterval);
+  selection.editing.interval = clampNum(Number(e.target.value), ...schemaRange("rotationInterval"), DEFAULTS.rotationInterval);
   emit();
 }
 function onEditOrder(e) {
@@ -2667,8 +2683,23 @@ function onCancelEditWeAssetsDir() {
 
 // ── 外观 / 播放 / 系统页签的处理器（同上一条：渲染器只读值 + 调这些）────────────
 function onLeftSidebarGlass(e) { setSetting("leftSidebarGlass", e.target.checked); emit(); }
-function onGlassWindow(e) { setSetting("glassWindow", e.target.checked); emit(); }
 function onSidebarGlass(e) { setSetting("sidebarGlass", e.target.checked); emit(); }
+
+// ── 「玻璃 UI」各子项的「独立配置」开关（W1；R3b-ii 起写的是**模式**）─────────────
+// ⚠️ R3b-ii 之前这里是"布尔开关 + 一张手抄的能力表"两个键；现在只有 `glassMode` 一个键：
+//    能读自己的值这件事，由"注册表 params ↔ 接线点"（守卫 ④）与"写了必须被 CSS 读到"（⑬）保证。
+function onToggleChildIndependent(id, on) {
+  const next = Object.assign({}, selection.glassMode);
+  if (on) next[id] = "custom"; else delete next[id];
+  setSetting("glassMode", next);
+  emit();
+}
+/** 某一个子项的「独立配置」是否已开（**只看模式**）。 */
+function childIndependentOn(id) {
+  return !!(selection.glassMode && selection.glassMode[id] === "custom");
+}
+// 子 UI 独立参数：直接写它自己的键（键名由 childGlassKey 生成，与 schema 同源）。
+function onGlassChildParam(id, param, value) { setSetting(childGlassKey(id, param), value); emit(); }
 // 场景 / 网页实时渲染的总开关就是**显式重试入口**：除写设置外还要清空全部失败记忆
 //（含**会话内**的传输类软失败 —— 它不在设置里），并重建层与音频互斥态。
 // 五件事必须一起发生，所以它是一个处理器，而不是渲染器里的五行。
@@ -2896,7 +2927,7 @@ function onNextWallpaper() {
 const onScrim = (pct, live) => commitLiveSetting("scrim", pct / 100, live);
   // 壁纸透明度：存 %，applyEffects 换算成 element opacity（可拖范围见 clampNum 的实参，真源是 lib/settings-schema.js 的 KINDS）。
 const onWallpaperOpacity = (pct, live) =>
-  commitLiveSetting("wallpaperOpacity", clampNum(pct, 0, 90, DEFAULTS.wallpaperOpacity), live);
+  commitLiveSetting("wallpaperOpacity", clampNum(pct, ...schemaRange("wallpaperOpacity"), DEFAULTS.wallpaperOpacity), live);
 const onBorder = (pct, live) => commitLiveSetting("border", pct / 100, live);
 const onBlur = (px, live) => commitLiveSetting("blur", px, live);
 const onWallpaperBlur = (px, live) => commitLiveSetting("wallpaperBlur", px, live);
@@ -2905,7 +2936,7 @@ const onBackgroundContrast = (pct, live) => commitLiveSetting("backgroundContras
 const onBackgroundSaturate = (pct, live) => commitLiveSetting("backgroundSaturate", pct, live);
 // 配色 (accent color) + 玻璃透明度 (glass transparency) + 玻璃颜色 (glass base
 // tint): applied instantly through applyEffects() (--we-accent /
-// --we-glass-alpha / --we-glass-color), persisted so the settings page keeps
+// --we-glass-alpha / --we-surface-tint-light/dark), persisted so the settings page keeps
 // its custom look across reloads.
 const onAccent = (hex, live) => {
   if (!/^#[0-9a-f]{6}$/i.test(hex)) return;
@@ -2916,15 +2947,15 @@ const onGlassColor = (hex, live) => {
   commitLiveSetting("glassColor", hex, live);
 };
 const onGlassAlpha = (pct, live) =>
-  commitLiveSetting("glassAlpha", clampNum(pct, 0, 60, DEFAULTS.glassAlpha), live);
+  commitLiveSetting("glassAlpha", clampNum(pct, ...schemaRange("glassAlpha"), DEFAULTS.glassAlpha), live);
 // 玻璃保真度（默认 100 = 完整可读性红线）：唯一的「颜色 vs 可读」权衡旋钮，
 // 数学入口在 effects.js 的 weClampSurfaceColor 第三参 + --we-glass-fidelity。
 const onGlassFidelity = (pct, live) =>
-  commitLiveSetting("glassFidelity", clampNum(pct, 0, 100, DEFAULTS.glassFidelity), live);
+  commitLiveSetting("glassFidelity", clampNum(pct, ...schemaRange("glassFidelity"), DEFAULTS.glassFidelity), live);
 // 对话栏玻璃保真度（默认 100）：独立于全局的第二把尺子，只作用对话栏玻璃面
 // （气泡 / 输入卡片 / 对话内 markdown 家族 —— styles.js 消费 --we-chat-readability-*）。
 const onChatGlassFidelity = (pct, live) =>
-  commitLiveSetting("chatGlassFidelity", clampNum(pct, 0, 100, DEFAULTS.chatGlassFidelity), live);
+  commitLiveSetting("chatGlassFidelity", clampNum(pct, ...schemaRange("chatGlassFidelity"), DEFAULTS.chatGlassFidelity), live);
 // 主题随壁纸（**默认关**）：开关本身只写设置；**打开时**立刻按当前壁纸补判一次，
 // 不等下一次换壁纸（补判走与换壁纸同一条入口；关时那条入口整体空转，不写主题）。
 const onToggleThemeFollow = (v) => {
@@ -2975,7 +3006,7 @@ function WallpaperPicker() {
   const onGroupInterval = (e) => {
     const group = activeRotationGroup();
     if (!group) return;
-    group.interval = clampNum(Number(e.target.value), 1, 1440, DEFAULTS.rotationInterval);
+    group.interval = clampNum(Number(e.target.value), ...schemaRange("rotationInterval"), DEFAULTS.rotationInterval);
     persistSelection();
     syncRotationTimer();
     emit();
@@ -3082,9 +3113,9 @@ function fontSetCtx() {
   // 侧栏玻璃（dsh-better-sidebar）：独立于会话玻璃的一套细粒度控制，各自立即
   // 生效并持久化（--we-sidebar-blur / --we-sidebar-alpha / --we-sidebar-color）。
   const onSidebarBlur = (px, live) =>
-    commitLiveSetting("sidebarBlur", clampNum(px, 0, 200, DEFAULTS.sidebarBlur), live);
+    commitLiveSetting("sidebarBlur", clampNum(px, ...schemaRange("sidebarBlur"), DEFAULTS.sidebarBlur), live);
   const onSidebarAlpha = (pct, live) =>
-    commitLiveSetting("sidebarAlpha", clampNum(pct, 0, 200, DEFAULTS.sidebarAlpha), live);
+    commitLiveSetting("sidebarAlpha", clampNum(pct, ...schemaRange("sidebarAlpha"), DEFAULTS.sidebarAlpha), live);
   const onSidebarColor = (hex, live) => {
     if (!/^#[0-9a-f]{6}$/i.test(hex)) return;
     commitLiveSetting("sidebarColor", hex, live);
@@ -3103,7 +3134,7 @@ function fontSetCtx() {
   };
   // 内容面（编辑器/终端）近不透明玻璃底：透明度滑块 + 底色（空 = 跟随主题）。
   const onSidebarContentAlpha = (pct, live) =>
-    commitLiveSetting("sidebarContentAlpha", clampNum(pct, 0, 80, DEFAULTS.sidebarContentAlpha), live);
+    commitLiveSetting("sidebarContentAlpha", clampNum(pct, ...schemaRange("sidebarContentAlpha"), DEFAULTS.sidebarContentAlpha), live);
   const onSidebarContentColor = (hex, live) => {
     if (hex === "") {
       // 跟随主题面板色：清键 + 落盘（拖动档不会走到这里 —— 色盘的「跟随」是按钮）。
@@ -3534,7 +3565,9 @@ const officialColorOf = (tokens) => {
     if (activeTab === "appearance") return renderAppearanceTab({
       setSetting, setTransient,
       fontSet: fontSetCtx(),
-      officialColorOf, onAccent, onBlur, onBorder, onCaretColor, onChatGlassFidelity, onComponentFamily, onComponentFont, onFontAdvanced, onFontResetAll, onGlassAlpha, onGlassColor, onGlassFidelity, onGlassWindow, onLeftSidebarGlass, onSidebarAlpha, onSidebarBlur, onSidebarColor, onSidebarContentAlpha, onSidebarContentColor, onSidebarGlass, onThemeColor, onThemeColorClear, onThemeDarkSeparate, onThemeFamily, onThemeSize, onThemeTypeOnly, onThemeWeight, onToggleFontCustom, onToggleThemeFollow, sel,
+      officialColorOf, onAccent, onBlur, onBorder, onCaretColor, onChatGlassFidelity, onComponentFamily, onComponentFont, onFontAdvanced, onFontResetAll, onGlassAlpha, onGlassColor, onGlassFidelity, onLeftSidebarGlass, onSidebarAlpha, onSidebarBlur, onSidebarColor, onSidebarContentAlpha, onSidebarContentColor, onSidebarGlass, onThemeColor, onThemeColorClear, onThemeDarkSeparate, onThemeFamily, onThemeSize, onThemeTypeOnly, onThemeWeight, onToggleFontCustom, onToggleThemeFollow, sel,
+      // 玻璃 UI 子项开关 + 独立配置 + 独立参数（见 onToggleChildIndependent 那段注释）
+      onToggleChildIndependent, onGlassChildParam, childIndependentOn,
     });
     if (activeTab === "playback") return React.createElement(React.Fragment, null,
       renderEffectsTab({

@@ -188,5 +188,26 @@
       "verdict": "native",
       "note": "工作区行同样读 --dsw-alias-button-elevated-fill（重命名输入框的抬高面），随 tokenScope 的映射一起变玻璃；无逐面选择器适配"
     }
+  },
+  "interfaces": {
+    "_why": "接口棘轮（test/compat-harness-surfaces.mjs 第 ③ 组）的豁免表：本插件依赖、但**不属于 DSH** 的接口。它们不会出现在已装 harness 里，所以必须在这里显式豁免并写明理由 —— 新豁免 = 一条需要人复核的裁定。",
+    "_method": "依赖清单本身**从 src/** 抽**（不手抄）：--dsw-* 令牌、[data-*] 属性、[class*=\"_x\"] 后缀、以及 data-slot 的取值（槽名）。",
+    "exempt": [
+      {
+        "match": "^data-dsh-better-sidebar$",
+        "kind": "attribute",
+        "why": "第三方插件 dsh-better-sidebar 的私有属性（DSH 产物里 0 命中）；侧栏美化的落点，随该插件漂移"
+      },
+      {
+        "match": "^data-dsh-desktop-mode$",
+        "kind": "attribute",
+        "why": "桌面壳的 URL 查询参数（?dsh-desktop-mode=），由本插件 src/adapter.js 写到 body；不是 DSH 客户端产物里的接口"
+      },
+      {
+        "match": "^_boundaryError$|^_browserBar$|^_explorerHeader$|^_gitHeader$|^_pane$|^_paneCard$|^_tabBar$|^_terminalWrap$",
+        "kind": "class-suffix",
+        "why": "dsh-better-sidebar 的类名后缀（DSH 产物里不存在）；只在这两个侧栏面板族上使用，随该插件漂移"
+      }
+    ]
   }
 }

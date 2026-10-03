@@ -348,8 +348,6 @@ setTimeout(async () => {
   console.log('--we-scrim-color:', JSON.stringify(p['--we-scrim-color']));
   console.log('--we-border-alpha:', JSON.stringify(p['--we-border-alpha']));
   console.log('--we-blur:', JSON.stringify(p['--we-blur']));
-  console.log('--we-wallpaper-blur:', JSON.stringify(p['--we-wallpaper-blur']));
-  console.log('--we-wallpaper-scale:', JSON.stringify(p['--we-wallpaper-scale']));
   console.log('--we-wallpaper-opacity (default 0% → unset):', JSON.stringify(p['--we-wallpaper-opacity']));
   assert.equal(p['--we-wallpaper-opacity'], undefined, 'wallpaper opacity must stay untouched by default (no identity-opacity compositing layer)');
   console.log('--we-accent:', JSON.stringify(p['--we-accent']));
@@ -820,10 +818,16 @@ setTimeout(async () => {
     assert.ok(treeText.includes('type":"color"'), 'custom color input present:');
     assert.ok(treeText.includes('玻璃透明度'), 'glass transparency slider row present:');
     assert.ok(treeText.includes('侧栏液态玻璃'), 'sidebar-glass master switch present:');
-    assert.ok(treeText.includes('侧栏模糊'), 'sidebar blur slider present:');
-    assert.ok(treeText.includes('侧栏透明度'), 'sidebar alpha slider present:');
-    assert.equal((treeText.match(/"aria-label":"侧栏玻璃颜色 /g) || []).length, 6, '侧栏玻璃颜色预设应有 6 个色板');
-    assert.ok(treeText.includes('自定义侧栏玻璃颜色'), 'sidebar glass color custom input present:');
+    // ⚠️ 本批（wip §10.24）：侧栏家族与内容面的滑块挂在**各自的「独立配置」**下面 ——
+    //    登记表那四个子面一直是这个口径（参数只在独立配置打开后才出现），而这两个既有面
+    //    原先**没有开关**、滑块是**死的**；补上入口后行为与那四个统一。
+    //    判据用 `findSliderRow`（**精确标签**）而不是 `treeText.includes` —— 后者会被别处的
+    //    tooltip 文本骗过：雾化那条 tooltip 里就写着「侧栏有自己的「侧栏模糊」」，实测骗过一次。
+    assert.ok(findCtlInput(tree, '侧栏玻璃·独立配置'), 'sidebar independent-config switch present:');
+    assert.ok(findCtlInput(tree, '内容面玻璃·独立配置'), 'content independent-config switch present:');
+    assert.equal(findSliderRow(tree, '侧栏模糊'), null, '独立配置关着时不该画「侧栏模糊」');
+    assert.equal(findSliderRow(tree, '侧栏透明度'), null, '独立配置关着时不该画「侧栏透明度」');
+    assert.equal(findSliderRow(tree, '内容面透明度'), null, '内容面独立配置关着时不该画「内容面透明度」');
     // The three detail knobs (侧栏模糊 / 侧栏透明度 / 侧栏玻璃颜色) are
     // conditional on the 侧栏液态玻璃 master switch: off → hidden, on →
     // restored, in the SAME render pass (the toggle re-emits synchronously).
@@ -832,22 +836,46 @@ setTimeout(async () => {
       sidebarSwitch.props.onChange({ target: { checked: false } });
       assert.equal(bodyEl.attributes['data-we-sidebar-glass'], undefined, 'sidebar master off must restore native surfaces');
       tree = renderPicker();
-      const offText = JSON.stringify(tree);
-      console.log('switch off hides the three detail knobs:',
-        !offText.includes('侧栏模糊') && !offText.includes('侧栏透明度') && !offText.includes('侧栏玻璃颜色'));
-      assert.ok(offText.includes('侧栏液态玻璃'), 'switch itself stays visible when off:');
+      assert.ok(JSON.stringify(tree).includes('侧栏液态玻璃'), 'switch itself stays visible when off:');
+      assert.ok(!JSON.stringify(tree).includes('侧栏玻璃·独立配置'), 'master off also hides the independent switch:');
       sidebarSwitch.props.onChange({ target: { checked: true } });
       assert.equal(bodyEl.attributes['data-we-sidebar-glass'], 'on', 'sidebar master on must re-arm sidebar surfaces');
       tree = renderPicker();
-      console.log('switch back on restores the detail knobs:',
-        JSON.stringify(tree).includes('侧栏模糊') && JSON.stringify(tree).includes('侧栏透明度') && JSON.stringify(tree).includes('侧栏玻璃颜色'));
-    } else {
-      console.log('switch off hides the three detail knobs: false (switch not found)');
+      assert.ok(findCtlInput(tree, '侧栏玻璃·独立配置'), 'master on restores the independent switch:');
     }
-    assert.equal(sliderMax(findSliderRow(tree, '侧栏模糊')), '200', '侧栏模糊上限必须是 200px');
-    assert.equal(sliderMax(findSliderRow(tree, '侧栏透明度')), '200', '侧栏透明度上限必须是 200');
-    assert.ok(treeText.includes('设置窗口液态玻璃'), 'whole-window glass master switch present:');
-    assert.ok(treeText.includes('整个设置窗口'), 'window glass tooltip present:');
+    // 打开「侧栏玻璃·独立配置」⇒ 它自己的三个滑块出现，且量程与 KINDS 一致。
+    // R4 量纲统一（wip §10.19）：侧栏家族的量程从 0–200 收到**规范刻度**
+    //（模糊 0–60 px 与全局雾化同刻度；透明度 0–100 %）。这里钉住"面板与规范刻度一致"。
+    findCtlInput(tree, '侧栏玻璃·独立配置').props.onChange({ target: { checked: true } });
+    tree = renderPicker();
+    assert.equal(sliderMax(findSliderRow(tree, '侧栏模糊')), '60', '侧栏模糊上限必须是 60px（与全局雾化同刻度，R4）');
+    assert.equal(sliderMax(findSliderRow(tree, '侧栏透明度')), '100', '侧栏透明度上限必须是 100（规范刻度，R4）');
+    assert.equal((JSON.stringify(tree).match(/"aria-label":"侧栏玻璃颜色 /g) || []).length, 6, '侧栏玻璃颜色预设应有 6 个色板');
+    assert.ok(JSON.stringify(tree).includes('自定义侧栏玻璃颜色'), 'sidebar glass color custom input present:');
+    // 内容面同样：它的开关打开后才画透明度 / 底色两行。
+    findCtlInput(tree, '内容面玻璃·独立配置').props.onChange({ target: { checked: true } });
+    tree = renderPicker();
+    treeText = JSON.stringify(tree);
+    assert.equal(sliderMax(findSliderRow(tree, '内容面透明度')), '100', '内容面透明度上限必须是 100（规范刻度，R4）');
+    // §10.27：新增的「思考触发条玻璃·独立配置」—— 打开后才画它自己的两项，量程同样钉在
+    // 规范刻度上（这正是"拖过 60 跳回 20"那次事故的两侧之一：**面板量程**那一侧）。
+    findCtlInput(tree, '思考触发条玻璃·独立配置').props.onChange({ target: { checked: true } });
+    tree = renderPicker();
+    assert.equal(sliderMax(findSliderRow(tree, '思考触发条玻璃·玻璃透明度')), '100',
+      '思考触发条透明度上限必须是 100（规范刻度）');
+    assert.equal(sliderMax(findSliderRow(tree, '思考触发条玻璃·雾化')), '60',
+      '思考触发条雾化上限必须是 60px（与全局雾化同刻度）');
+    // ⚠️ 全局「玻璃透明度」的量程必须与 KINDS 一致（100）。这一条是为一个**真实事故**补的：
+    //    处理器里手写的钳制漏改时，面板量程是 100 而钳制是 0–60，`clampNum` 又"越界即回落默认值"
+    //    ⇒ 拖过 60 就跳回 20（用户实测"最多只能拉到 20%"）。面板量程 + 处理器取值域**两边都要钉**，
+    //    加上第 ⑦ 组钉住 KINDS 本身，三者同源才闭环。
+    assert.equal(sliderMax(findSliderRow(tree, '玻璃透明度')), '100', '玻璃透明度上限必须是 100（与 KINDS 同源）');
+    // 本批（wip §10.20）：「设置窗口液态玻璃」这个 master 开关**已退役** ——
+    // 它的功能由「设置窗口玻璃·独立配置」接管（行为与开启时逐位一致）。这里两头都钉：
+    // 退役的开关**不许**再出现，接管的那个独立配置**必须**在。
+    assert.ok(!treeText.includes('设置窗口液态玻璃'), 'retired「设置窗口液态玻璃」switch must be gone:');
+    assert.ok(treeText.includes('设置窗口玻璃·独立配置'), 'the child independent switch takes over:');
+    assert.ok(treeText.includes('整个设置窗口'), 'window glass hint stays (now on the child switch):');
 
     // ── 「字体」已并入「外观」：老的 localStorage 页签值必须迁移过去（不能把用户
     //    甩回「壁纸」），且字体三件套 + 输入光标都在「外观」里。 ──
@@ -1608,7 +1636,12 @@ setTimeout(async () => {
     assert.equal(bodyEl.attributes['data-we-wallpaper'], undefined, 'wallpaper marker must clear');
     assert.equal(bodyEl.attributes['data-we-sidebar-glass'], 'on', 'sidebar glass must remain enabled');
     assert.equal(typeof p['--we-sidebar-color'], 'string', 'sidebar color variable must remain available');
-    assert.equal(typeof p['--we-sidebar-alpha'], 'string', 'sidebar alpha variable must remain available');
+    // 这里原本还有一条 `--we-sidebar-alpha`。它被删掉是因为该变量是**死码**：
+    // 整份样式表里精确出现 1 次、且那次在注释里，没有任何 CSS 消费者（登记表实测确认）。
+    // 断言"一个没人读的变量必须继续存在"守的是保真度的反面（adr/0007 第 4 问）。
+    // 侧栏透明度真正接线的是它的两个下游：--we-sidebar-sheen / --we-sidebar-tint。
+    assert.equal(typeof p['--we-sidebar-sheen'], 'string', 'sidebar sheen variable must remain available');
+    assert.equal(typeof p['--we-sidebar-tint'], 'string', 'sidebar tint variable must remain available');
     assert.equal(typeof p['--we-sidebar-blur'], 'string', 'sidebar blur variable must remain available');
     console.log('sidebar glass remains armed without an active wallpaper: true');
   }
@@ -2816,6 +2849,39 @@ setTimeout(async () => {
     '负对照：抬手档必须重建字体样式表（fontCustom=true ⇒ snapshot + apply）');
   assert.ok(full.named.includes('syncSceneAudio'), '负对照：抬手档必须同步场景音频');
   assert.ok(full.named.includes('removeWallpaperFadeBg') === false, '（防呆：名字记录器本身工作正常）');
+}
+
+// ── 滑块的取值域必须**同源于 schema**（为一个真实事故补的判据）────────────────────
+// 事故（用户实测）：R4 把刻度改成 0–100 时改了 `KINDS` 与面板量程，**漏了处理器里手写的四处**；
+// 而 `clampNum` 是"**越界即回落到默认值**"（不是截断）⇒ 拖过旧上限的瞬间滑块**跳回默认值**
+// —— 用户看到的就是"「玻璃透明度」最多只能拉到 20%"（20 正是 `DEFAULTS.glassAlpha`）。
+// 判据口径：凡 `clampNum(…, DEFAULTS.<键>)` 的调用，取值域必须写成 `...schemaRange("<键>")`
+// （两处都要、且键名必须与被钳的那个键一致）⇒ 以后改 `KINDS` 不会再有第二处要改。
+{
+  const src = readFileSync(new URL('../src/client.js', import.meta.url), 'utf8');
+  // ⚠️ 正则要同时认得**两种形态**：修好的 `clampNum(v, ...schemaRange("k"), DEFAULTS.k)` 源码里只有
+  //    三个实参（spread 在运行期展开成两个），而写手的旧形态是四个（`v, 0, 60, DEFAULTS.k`）。
+  //    所以按"最后一个实参是 DEFAULTS.<键>"来切，把它前面的部分整体当"取值域"。
+  const grab = (text) => [...text.matchAll(/clampNum\(\s*([^;]*?),\s*DEFAULTS\.([A-Za-z0-9_]+)\s*\)/g)]
+    .map((m) => {
+      const parts = m[1].split(',').map((s) => s.trim());
+      return { key: m[2], value: parts[0], range: parts.slice(1).join(', ') };
+    });
+  const calls = grab(src);
+  // 违规口径：取值域里出现**数字字面量**（那才会与 KINDS 漂移）。
+  // ⚠️ 具名常量（`ROPE_SCALE_MIN` / `ROPE_SCALE_MAX`）**不算违规**：schema 的 KINDS 引用的就是
+  //    这两个名字（`min: 'ROPE_SCALE_MIN'`）⇒ 改常量时两边一起改，本来就是同源。
+  const bad = calls.filter((c) => /\d/.test(c.range) && c.range !== '...schemaRange("' + c.key + '")');
+  assert.ok(calls.length >= 6, '覆盖面：至少 6 处处理器钳制带 DEFAULTS 回退（防判据空转），实测 ' + calls.length);
+  assert.equal(bad.length, 0, '取值域不许出现数字字面量（必须走 schemaRange 或具名常量，否则改 KINDS 会漏改）—— 违规：'
+    + bad.map((c) => c.key + '(' + c.range + ')').join(', '));
+  // 负对照（喂**同一个** grab）：`0, 60` 这种数字字面量必须判出；`...schemaRange(...)` 与具名常量不判出。
+  const synth = grab('clampNum(pct, 0, 60, DEFAULTS.glassAlpha)')[0];
+  const good = grab('clampNum(pct, ...schemaRange("glassAlpha"), DEFAULTS.glassAlpha)')[0];
+  const named = grab('clampNum(scale, ROPE_SCALE_MIN, ROPE_SCALE_MAX, DEFAULTS.ropeScale)')[0];
+  assert.ok(synth && /\d/.test(synth.range) && good && !/\d/.test(good.range)
+    && named && !/\d/.test(named.range),
+    'negative control: `0, 60` 判出；`...schemaRange(...)` 与具名常量不判出');
 }
 
 console.log('\nALL CLIENT CHECKS DONE');

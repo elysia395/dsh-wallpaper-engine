@@ -361,8 +361,9 @@
           && React.createElement("div", { className: "we-qp__propsview we-qp__propsview--drill" }, renderUserPropsPanel()),
         !(qpTab === "wallpaper" && userPropsPanelOpen() && propsAvailable) && (qpTab === "appearance"
           ? renderAppearanceTab(sidebarRenderCtx({
-            setSetting, sel,
-            onAccent, onBlur, onBorder, onChatGlassFidelity, onGlassAlpha, onGlassColor, onGlassFidelity, onGlassWindow, onLeftSidebarGlass, onSidebarGlass, onToggleThemeFollow,
+            setSetting, setTransient, sel,
+            onAccent, onBlur, onBorder, onChatGlassFidelity, onGlassAlpha, onGlassColor, onGlassFidelity, onLeftSidebarGlass, onSidebarGlass, onToggleThemeFollow,
+            onToggleChildIndependent, onGlassChildParam, childIndependentOn,
           }))
           : qpTab === "playback"
             ? React.createElement(React.Fragment, null,

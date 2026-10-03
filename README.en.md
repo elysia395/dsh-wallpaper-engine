@@ -184,7 +184,7 @@ The **外观** tab controls the look of the **entire native DSH settings window*
 | **玻璃颜色** | The **base tint** of the settings-window glass (6 presets + custom picker) | white (light) / deep navy (dark) |
 | **玻璃透明度** | Opacity of the glass surfaces (settings window, composer, bubbles, sidebar panels); higher = more transparent | see the control |
 | **左侧栏覆盖** (Left sidebar override) | Makes the host's native **left sidebar** (the session / workspace column) follow Accent / Glass color / Glass opacity / Frost / Border too — off means that column keeps showing the **raw** wallpaper (no frost, no base tint) | off |
-| **雾化** | Glass blur radius — **the same adjustment** drives the settings window and the composer / bubbles | see the control |
+| **雾化** | Glass blur radius — **the same adjustment** drives the conversation cards, the left-sidebar override, the settings window and the plugin popovers (the sidebar is the exception: it has its own 「侧栏模糊」) | see the control |
 | **Text-surface readability floor** | Every text-bearing surface composites a theme base layer under the glass tint (body text stays ≥4.5:1); **on by default, no switch** | on |
 | **Theme follows the wallpaper** | **A switch, off by default.** With it on, a switch of wallpaper picks the global light/dark theme from the wallpaper (author scheme colour → the picture's most-occupied colour (preview and real frame vote; disagreement ⇒ dark) → leave it alone; an author value of exactly `0 0 0` counts as unfilled; light theme only for clearly bright colours — the 外观 → 主题 row shows the last verdict's source and luminance); changing the theme by hand in DSH stops it for that wallpaper and the next switch resumes | off |
 

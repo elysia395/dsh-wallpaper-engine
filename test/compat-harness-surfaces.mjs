@@ -23,7 +23,7 @@
  * 用 `DSH_WE_HARNESS_ROOT` 指定 dsh 包目录可绕过自动探测。
  */
 import { execSync } from 'node:child_process';
-import { existsSync, readFileSync, readdirSync } from 'node:fs';
+import { existsSync, readFileSync, readdirSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -140,6 +140,73 @@ if (check('dsh-client-ui-sidebar-right 在已装 harness 中（我们 25 处选�
   check('隐藏机制仍是已知形态之一（translate 滑出 / visibility 切换；都不在 = 机制换代）',
     mechanism.length > 0, mechanism.length ? '命中：' + mechanism.join(' + ')
       : '已知标记全不在 —— 上游换了隐藏机制，美化适配需复核（#107 型回归）');
+}
+
+// ── ③ 接口棘轮：我们依赖的令牌 / 锚点 / 槽名必须仍存在于已装 harness ──────────────
+// 为什么单开这一组：①② 回答的是"有哪些面、某个面的锚点在不在"，而**我们到底钉了哪些接口**
+// 散在 src/** 里（设计令牌、数据属性、类名后缀、槽名）。宿主改掉一个令牌名或槽名，①② 都不会响。
+// 口径三条：
+//   · 依赖清单**从我们自己的源码抽**（不手抄 ⇒ 不会与实现漂移）；
+//   · 逐条在已装 harness 的 **UI 表面包**的 JS 里找（设计令牌由 dsh-client-ui-theme 定义、
+//     各面包消费 ⇒ 表面包这一层足够；找不到 = 红）；
+//   · **第三方**接口（better-sidebar / dsh-webui / 桌面壳 URL 参数）走台账 `interfaces.exempt`
+//     豁免，且必须写明理由 —— 豁免是**需要人复核的裁定**，不是静默跳过。
+const ifaceLedger = inventory && inventory.interfaces ? inventory.interfaces : null;
+const exemptRules = Array.isArray(ifaceLedger && ifaceLedger.exempt) ? ifaceLedger.exempt : [];
+const exemptHit = new Set();
+const isExempt = (name) => {
+  for (const rule of exemptRules) {
+    if (!rule || typeof rule.match !== 'string') continue;
+    if (new RegExp(rule.match).test(name)) { exemptHit.add(rule.match); return rule; }
+  }
+  return null;
+};
+if (check('台账带 interfaces 豁免表（第三方接口不许静默混进棘轮）',
+  Boolean(ifaceLedger) && exemptRules.length > 0 && exemptRules.every((r) => r.why && r.why.length > 10),
+  ifaceLedger ? exemptRules.length + ' 条豁免（每条都写了理由）' : '缺 interfaces 段')) {
+  // 依赖清单：从 src/** 抽（含 CSS 与 JS；lib/client.js 是产物，跳过）
+  const ourSrc = walkJs(join(ROOT, 'src')).map((f) => readFileSync(f, 'utf8')).join('\n');
+  // ⚠️ 两类**不能进清单**的东西（否则是假红）：
+  //   · 我们自己写的属性：`data-we-*`（玻璃门控）、`data-webwallgl-gl`（渲染页画布标记）、
+  //     `data-plugin-css`（我们自己那块 <style> 的标记）；
+  //   · **动态拼名**的令牌前缀（源码里写成 `--dsw-font-${x}` 这种，末尾带 `-`）——
+  //     它们没有确定的名字，逐个当接口去查必然查不到。
+  const OURS_PREFIX = /^data-we-|^data-webwallgl-|^data-plugin-css$/;
+  // ⚠️ `concrete` 还挡掉两类非接口：**动态拼名前缀**（末尾 `-`）与**注释里引用的写法**
+  //    （形如 `data-slot="<slotKey>"` —— 那是我们在注释里解释宿主怎么写的，不是我们钉的值）。
+  //    真实接口名不会含 `<>{}` 这类字符。
+  const concrete = (n) => n.length > 4 && !n.endsWith('-') && !/[<>{}]/.test(n);
+  const tokens = [...new Set([...ourSrc.matchAll(/--dsw-[a-z0-9-]+/g)].map((m) => m[0]))].filter(concrete).sort();
+  const attrs = [...new Set([...ourSrc.matchAll(/\[(data-[a-z0-9-]+)/g)].map((m) => m[1]))]
+    .filter((a) => !OURS_PREFIX.test(a) && concrete(a)).sort();
+  const suffixes = [...new Set([...ourSrc.matchAll(/\[class\*="(_[A-Za-z0-9]+)"\]/g)].map((m) => m[1]))]
+    .filter(concrete).sort();
+  const slots = [...new Set([...ourSrc.matchAll(/data-slot="([^"]+)"/g)].map((m) => m[1]))]
+    .filter(concrete).sort();
+  // 已装 harness 的 UI 表面源码（一次读完，逐条 includes 判定）
+  const harnessSrc = [...surfaces.values()].flatMap((dir) => walkJs(dir))
+    .filter((f) => { try { return statSync(f).size < 8 * 1024 * 1024; } catch { return false; } })
+    .map((f) => readFileSync(f, 'utf8')).join('\n');
+  const hunt = (list, label, needleOf) => {
+    const miss = list.filter((n) => !isExempt(n) && !harnessSrc.includes(needleOf(n)));
+    return check('我们依赖的' + label + '仍存在于已装 harness（' + list.length + ' 项）',
+      list.length >= 3 && miss.length === 0,
+      miss.length ? '已消失：' + miss.join(', ') : list.length + ' 项全部命中');
+  };
+  hunt(tokens, '设计令牌', (n) => n);
+  hunt(attrs, '数据属性锚点', (n) => n);
+  hunt(suffixes, '类名后缀锚点', (n) => n);
+  // 槽名要按**调用形状**找（值本身在多处出现，裸子串会把普通字符串算成槽）
+  const slotShapes = (n) => [`renderSlot("${n}")`, `renderSlotChain("${n}")`, `entriesOf("${n}")`,
+    `slotKey: "${n}"`, `registerSlot("${n}")`, `slots.register("${n}")`].some((s) => harnessSrc.includes(s));
+  const slotMiss = slots.filter((n) => !isExempt(n) && !slotShapes(n));
+  check('我们钉的槽名仍是宿主槽（按调用形状判定；' + slots.length + ' 个）',
+    slots.length >= 1 && slotMiss.length === 0,
+    slotMiss.length ? '不再是槽：' + slotMiss.join(', ') : slots.join(', ') + ' 全部仍是槽名');
+  // 负面自检：豁免表若把**所有**依赖都豁免掉，这一组就退化成恒真 —— 必须留下非豁免项。
+  check('覆盖面：接口棘轮的非豁免项足够多（防空转）',
+    tokens.length + attrs.length + suffixes.length + slots.length - exemptHit.size >= 20,
+    '非豁免接口 ' + (tokens.length + attrs.length + suffixes.length + slots.length - exemptHit.size) + ' 项');
 }
 
 const failed = results.filter((ok) => !ok).length;

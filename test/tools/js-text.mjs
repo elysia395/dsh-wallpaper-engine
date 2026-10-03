@@ -117,7 +117,11 @@ function stripComments(src) {
  * @returns {string} 去掉 `export { … }` 块与 `export ` 关键字后的正文
  */
 function stripExportBlocks(text) {
-  return String(text).replace(/^\s*export\s*\{[\s\S]*?\};?\s*$/m, '').replace(/^\s*export\s+/gm, '');
+  // ⚠️ `g` 是必需的：一个文本里可能有**多个**模块拼在一起（玻璃重构 R3b 起，
+  // `verify-glass-surfaces` 要把 `src/glass.js` + `src/effects.js` 拼成一个沙箱源码）。
+  // 少了 `g` 只剥第一个块，剩下的那个会退化成一个裸的 `{ a, b, };` ⇒ `new Function` 报
+  // `Unexpected token '}'`（实测踩过，报错位置还落在拼接后的第 735 行，很难一眼看出根因）。
+  return String(text).replace(/^\s*export\s*\{[\s\S]*?\};?\s*$/gm, '').replace(/^\s*export\s+/gm, '');
 }
 
 /**
@@ -211,6 +215,12 @@ function selftest() {
     stripExportBlocks('const a = 1;\n') === 'const a = 1;\n');
   ok('负对照：正文里的 `wrapper.export` 之类的词不受影响',
     stripExportBlocks('const x = obj.export;\n').includes('obj.export'));
+  ok('正判据：**两个模块拼在一起**时两个导出块都要剥掉（R3b 起 glass.js + effects.js 的沙箱形态）',
+    (() => {
+      const out = stripExportBlocks('const a = 1;\nexport { a };\nconst b = 2;\nexport {\n  b,\n};\n');
+      if (/^\s*export\b/m.test(out)) return false;
+      try { new Function(out + '\nreturn [a, b];'); return true; } catch { return false; }
+    })());
 
   // ⑦ 行尾安全的切行（改注释的脚本必用；见 splitLinesSafe 的注释里那次实测）
   ok('正判据：CRLF 原文切行后行尾不带 `\\r`，拼回去仍是 CRLF',

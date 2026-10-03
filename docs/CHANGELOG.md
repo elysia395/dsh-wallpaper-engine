@@ -18,6 +18,27 @@
 
 > v1.2.0 之后的增量（本地未发布，逐提交可查）：
 
+- **玻璃配置收成「每个面一个独立配置开关」**（用户可见的取值管道重构，宿主端设置表 + 浏览器端渲染）。
+  ① 退役「设置窗口液态玻璃」与「子 UI 玻璃」两层开关 —— 实测那个"关"做不到回原生纯色（那些面上还有一批
+  不挂门控的底色改写）；② 每个玻璃面只留一个「独立配置」（开 = 用自己那套釉层参数覆盖全局，关 = 跟随全局），
+  其中**侧栏 / 内容面是新补的入口**（此前它们的滑杆没有 UI 入口 ⇒ 拖了没有任何变化）；③ 各面刻度统一成
+  一把（观感不变：存量值按"归一化位置"一次性换算，`settingsVersion` → 5）；④「窗口与侧栏」节撤销、内容并进
+  「玻璃 UI」（没装 better-sidebar 的机器上它原本是一个只有标题的空节）；⑤ 删掉面板上**从来没人读**的六行
+  死控件。判据：`test/verify-glass-surfaces.mjs`（登记表 ↔ 接线 ↔ 语义三方对账，每条带负对照）+
+  `verify-readability` / `verify-glass-compositing` / `verify-softrender`。取舍与被证伪的方案见
+  [`adr/0008`](./adr/0008-glass-config-two-state.md)，全过程取证见
+  [`archive/wip/GLASS-CONFIG-REFACTOR.md`](./archive/wip/GLASS-CONFIG-REFACTOR.md)。⚠️ 需重启 DSH 生效。
+- **新增：思考触发条（`section[data-turn-trigger]`）也吃玻璃，并带自己的「独立配置」**。宿主给这一面一个
+  **专属底色令牌**（`--dsw-alias-turn-trigger-bg` 与其 `-hover`），本插件**接管那两个令牌**（hover 档必须
+  一起接管，否则鼠标一悬停就被不透明灰盖掉）而不是去匹配宿主的哈希类名，并在锚点元素上挂模糊载体。
+  它是**可独立配置的玻璃面**：「思考触发条玻璃·独立配置」开 = 用自己那套**模糊 / 透明度**覆盖全局，关 = 跟随
+  全局（`glass.js` 写 `--we-thinking-trigger-blur` / `-alpha`；刻度与全局同一把，0–60 px / 0–100 %）。
+  可读性走**全局**那对变量（用对话栏那对会被 `verify-readability` 的 F2c 判出）；软件光栅
+  （`data-we-glass-fallback`）下把令牌钉回不透明面板色并显式关掉模糊。判据：`verify-glass-surfaces` 的登记表
+  把这一面从 `pending` 摘除并改判 `tier: private`（第 ③ 组随之从"pending 豁免"转为"锚点必须在"，并新增
+  "global 面不得藏着私有变量族"的反向检查）+ `verify-readability` F2a/F2c + `verify-softrender` E2/E3 +
+  `verify-client` 的面板量程断言 + 设置黄金夹具（两个新键）。
+
 - **修复（issue #129）：场景载荷的媒体源对非本机客户端不可达，且那次失败会把本机一起拉黑**。
   1.2.0 把场景载荷的源换成了宿主起的独立 loopback 媒体源（`inventory.sceneMediaBase`，
   `http://127.0.0.1:<port>`）—— 对**任何不在这台电脑上运行的客户端**（远程桌面 / 代理进来的

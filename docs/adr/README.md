@@ -60,3 +60,4 @@ ADR 里**不写会随代码漂移的具体数值**（条数、行数、体积、
 | [0005](./0005-media-loopback-origin.md) | 媒体由宿主自建的独立 loopback 源提供 | Accepted |
 | [0006](./0006-comment-discipline-as-written-convention.md) | 注释与文档纪律改为纯写作约定，撤掉文档类机器守卫 | Accepted |
 | [0007](./0007-machine-checks-target-code-not-prose.md) | 机器判据只针对代码与磁盘，不针对散文（给出四问判定程序 + 保留/撤除清单） | Accepted |
+| [0008](./0008-glass-config-two-state.md) | 玻璃配置收成"每面两态 + 一把刻度 + 门控分两类"；放弃按面变量间接层与"关即回原生纯色" | Accepted |

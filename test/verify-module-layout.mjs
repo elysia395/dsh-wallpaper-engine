@@ -530,6 +530,7 @@ console.log('⑥ `src/` 子目录成员数 ≥3');
     'test/tools/js-text.mjs',             // 共享实现内含一条**反面参照**（证明缺陷真实存在）
     'test/tools/audit-guard-teeth.mjs',    // 判据 F 的**检测器**：就是靠这个正则找可疑区间
     'test/verify-glass-compositing.mjs',   // CSS 专用
+    'test/verify-glass-surfaces.mjs',      // CSS 专用（玻璃面登记表：同样从产物取样式表并剥注释）
     'test/verify-readability.mjs',         // CSS 专用
     'test/verify-softrender.mjs',          // CSS 专用
   ];

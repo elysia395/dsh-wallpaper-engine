@@ -519,9 +519,9 @@
 
 
   function renderAppearanceThemeSection(ctx) {
-    const { onAccent, onChatGlassFidelity, onGlassAlpha, onGlassColor, onGlassFidelity, onLeftSidebarGlass, onToggleThemeFollow, sel } = ctx;
+    const { onAccent, onToggleThemeFollow, sel } = ctx;
     return React.createElement(React.Fragment, null,
-    // ── 主题：配色（accent）+ 玻璃基底（颜色/透明度）──
+    // ── 主题：配色（accent）**只留配色** —— 玻璃四件套已归入「玻璃 UI」节 ──
     React.createElement("div", { className: "we-picker__section" },
       React.createElement("div", { className: "we-picker__section-head" },
         React.createElement("span", { className: "we-picker__section-label" }, weT("主题")),
@@ -538,57 +538,31 @@
         && React.createElement("div", { className: "we-picker__hint", key: "theme-follow-line" },
           weT("当前：{line}", { line: weT(sel.themeFollowLine) })),
       swatchRow(weT("配色"), ACCENT_PRESETS, sel.accent, onAccent, { key: "accent" }),
-      // 玻璃颜色: the settings-window glass BASE tint. Defaults keep the stock
-      // look (white light / deep navy dark); picking any preset or a custom
-      // color tints the whole window glass in BOTH themes.
-      swatchRow(weT("玻璃颜色"), GLASS_COLOR_PRESETS, sel.glassColor, onGlassColor, { key: "glass-color" }),
-      SliderRow(weT("玻璃透明度"), 0, 60, 5, sel.glassAlpha, onGlassAlpha, sel.glassAlpha + "%"),
-      // 玻璃保真度（默认 100 = 完整可读性红线）：唯一的「颜色 vs 可读」权衡旋钮。
-      // 100 = 玻璃色经亮度钳制保正文 ≥4.5:1（深色压暗 / 浅色提亮的现状）；拉低 =
-      // 釉色向用户原色线性回退（单调，中间档不会更黑/更白）+ 地板层覆盖度同比例
-      // 减薄，正文在极端壁纸上可读性让位；0 = 原色直出不钳制。数学入口
-      // weClampSurfaceColor 第三参 + --we-glass-fidelity。
-      SliderRow(weT("玻璃保真度"), 0, 100, 5, sel.glassFidelity, onGlassFidelity, sel.glassFidelity + "%", "glass-fidelity", {
-        tooltip: weT("100 = 完整可读性红线（默认）：自定义玻璃色经亮度钳制，正文对比度始终 ≥4.5:1 —— 深色主题下颜色被压暗、浅色主题下被提亮。拉低后颜色更贴你选的原色，但正文在极端明暗的壁纸上可能看不清；看不清字时把本项拉回 100，或按「看不清字三步」调节。"),
-      }),
-      // 对话栏玻璃保真度（默认 100）：独立于全局保真度的第二把尺子，只作用对话栏
-      // 的**框架**玻璃面（气泡 / 输入卡片含工具弹卡 —— styles.js 里消费
-      // --we-chat-readability-* 的声明）。正文里的 markdown 内容面（代码块 / 行内
-      // 代码 / 引用）跟随全局保真度，不跟本旋钮（用户口径：代码块不和输入框一起）。
-      SliderRow(weT("对话栏玻璃保真度"), 0, 100, 5, sel.chatGlassFidelity, onChatGlassFidelity, sel.chatGlassFidelity + "%", "chat-glass-fidelity", {
-        tooltip: weT("只作用对话栏的框架面：消息气泡、输入卡片（含工具弹卡）。对话正文里的代码块 / 行内代码 / 引用等内容渲染面**不跟本项**——它们与侧边栏一起跟随上面的「玻璃保真度」。本项与「玻璃保真度」互不干涉。100 = 气泡与输入卡按完整可读性红线钳制（默认）；拉低 = 这两块颜色更贴原色、文字在极端壁纸上可能看不清。"),
-      }),
-      // 左侧栏覆盖（默认关）：宿主原生左栏（会话列表 / 工作区那一列）在壁纸下只是
-      // 「透明的洞」—— 壁纸原样透出，本页的玻璃参数一个都到不了它。打开后这一列也
-      // 走同一张配方表（配色 / 玻璃颜色 / 玻璃透明度 / 雾化 / 边框），细节见
-      // styles.js 的「左侧栏覆盖」段；默认关 = 今天的样子，逐字节不变。
-      switchRow(weT("左侧栏覆盖"), sel.leftSidebarGlass === true, onLeftSidebarGlass, {
-        key: "left-sidebar-glass",
-        hint: weT("左侧栏也跟随玻璃配方（配色 / 玻璃颜色 / 透明度 / 雾化 / 边框）"),
-        tooltip: weT("宿主原生左侧栏（会话列表 / 工作区那一列）默认直接透出壁纸、不吃玻璃参数。打开后它变成与其余界面同款的玻璃面板，跟随「配色 / 玻璃颜色 / 玻璃透明度 / 雾化 / 边框」；关闭即恢复原生观感。默认关。"),
-      }),
     ),
     );
   }
 
   function renderAppearanceDetailSection(ctx) {
-    const { onBlur, onBorder, sel } = ctx;
+    const { onBorder, onGlassChildParam, onLeftSidebarGlass, onToggleChildIndependent, childIndependentOn, sel, surface } = ctx;
+    // ⚠️ 简化配置 vs 复杂配置（wip §10.22 的规则）：**「独立配置」层属复杂配置**
+    //    ⇒ 侧栏那一档不画它（本节其余项照旧两档都画：左侧栏覆盖本身是乙类显示开关）。
+    const sidebarSurface = surface === "sidebar";
     return React.createElement(React.Fragment, null,
-    // ── 细节：玻璃雾化深度 + 边框强调（原「效果」页签的两个材质细调项，
-    //    与「主题」同属全局外观，故并入本页签）。──
+    // ── 细节：边框强调 + 左侧栏覆盖（原「效果」页签的材质细调项与本页的左侧栏项）──
+    // 玻璃四件套与「雾化」已归入「玻璃 UI」节；本节的「边框」是**非釉层**参数
+    //（边框 / 分割线对比度），不属于玻璃配方，故留在细节。
     React.createElement("div", { className: "we-picker__section" },
       React.createElement("div", { className: "we-picker__section-head" },
         React.createElement("span", { className: "we-picker__section-label" }, weT("细节")),
       ),
-      // 「雾化」= 原「玻璃」滑块：控制的只有模糊半径（雾面深度），饱和度是解耦
-      // 的常量材料属性（见 GLASS_SATURATE）。改名是为了不与同组的「玻璃颜色 /
-      // 玻璃透明度」字面撞车。
-      SliderRow(weT("雾化"), 0, 60, 1, sel.blur, onBlur, sel.blur + "px", "glass-frost", {
-        tooltip: weT("玻璃面板（设置窗口、输入栏、气泡、侧栏）的模糊半径 —— 越大越像磨砂玻璃；色彩饱和度不随本滑块变化"),
-      }),
       SliderRow(weT("边框"), 0, 90, 5, Math.round(sel.border * 100), onBorder, Math.round(sel.border * 100) + "%", "border-emphasis", {
         tooltip: weT("提高边框 / 分割线的对比度（浅色与深色主题通用）"),
       }),
+      // ── 「左侧栏覆盖」及其子项**已搬进「玻璃 UI」节**（用户口径，见 §10.25）──
+      // 为什么现在可以并进去：它当初被排除，是因为「玻璃 UI」那节里有"关 = 回原生纯色"的显示开关
+      // （乙类语义冲突）；那一层已在 §10.20 整体退役 ⇒ 冲突消失，面控件与其余玻璃配置同处更顺。
+      // 门槛照旧（`leftSidebarGlass` 前提 + `!sidebarSurface` 的复杂配置边界），见 `src/glass-panel.js`。
+      // 本节只剩「边框」——它是**非釉层**参数（边框 / 分割线对比度），不属于玻璃配方，故留在细节。
     ),
     );
   }
@@ -851,58 +825,16 @@
     );
   }
 
-  function renderAppearanceWindowSidebarSection(ctx) {
-    const { onGlassWindow, onSidebarAlpha, onSidebarBlur, onSidebarColor, onSidebarContentAlpha, onSidebarContentColor, onSidebarGlass, sel, surface } = ctx;
-    const sidebarSurface = surface === "sidebar";
-    return React.createElement(React.Fragment, null,
-    // ── 窗口与侧栏：两套液态玻璃总开关，细节控件缩进一级并随开关显隐 ──
-    !sidebarSurface && React.createElement("div", { className: "we-picker__section" },
-      React.createElement("div", { className: "we-picker__section-head" },
-        React.createElement("span", { className: "we-picker__section-label" }, weT("窗口与侧栏")),
-      ),
-      // 设置窗口液态玻璃 master switch: turns the WHOLE native settings window
-      // (nav + every native section, not just this page) into liquid glass with
-      // the accent + transparency above; off restores the stock shell look.
-      switchRow(weT("设置窗口液态玻璃"), sel.glassWindow, onGlassWindow, {
-        key: "window-glass",
-        hint: weT("整个设置窗口跟随配色与透明度"),
-        tooltip: weT("整个设置窗口（含 General / 模型 / 插件等全部原生分区）跟随配色与透明度；关闭则恢复原生样式"),
-      }),
-      // 侧栏玻璃（dsh-better-sidebar 适配）：与设置窗口玻璃同级的一套独立细粒度
-      // 控制 —— 总开关 + 专用模糊 + 专用透明度 + 玻璃基底色调，全部只作用于
-      // dsh-better-sidebar 子树，不动会话玻璃（玻璃 / 玻璃透明度）的设置。
-      // 仅在 host 检测到 dsh-better-sidebar 已安装且启用时显示（sidebarPresent）。
-      // 开关本体 + 一句话说明始终显示；细节滑块以「侧栏液态玻璃」开关为前提
-      // —— 关闭时隐藏，开启后随 emit 重渲染实时出现。
-      sel.sidebarPresent && switchRow(weT("侧栏液态玻璃"), sel.sidebarGlass, onSidebarGlass, {
-        key: "sidebar-glass-toggle",
-        hint: weT("dsh-better-sidebar 侧栏毛玻璃适配"),
-        tooltip: weT("dsh-better-sidebar 侧栏（文件 / 终端 / Git 等面板）的毛玻璃适配；关闭则恢复其原生外观"),
-      }),
-      sel.sidebarPresent && sel.sidebarGlass && [
-      SliderRow(weT("侧栏模糊"), 0, 200, 1, sel.sidebarBlur, onSidebarBlur, sel.sidebarBlur + "px", "sb-blur"),
-      SliderRow(weT("侧栏透明度"), 0, 200, 1, sel.sidebarAlpha, onSidebarAlpha, sel.sidebarAlpha + "%", "sb-alpha"),
-      swatchRow(weT("侧栏玻璃颜色"), GLASS_COLOR_PRESETS, sel.sidebarColor, onSidebarColor, { key: "sb-color" }),
-      // 内容面（编辑器 / 终端）近不透明玻璃底：透明度 + 底色。固定调色板
-      // （语法高亮 / ANSI）为不透明底设计，全透毛玻璃下注释灰不可读；这里
-      // 在"玻璃感"与"可读性"之间取平衡——透明度越大越透，底色空 = 跟随主题。
-      SliderRow(weT("内容面透明度"), 0, 80, 5, sel.sidebarContentAlpha, onSidebarContentAlpha, sel.sidebarContentAlpha + "%", "content-alpha"),
-      swatchRow(weT("内容面底色"), GLASS_COLOR_PRESETS, sel.sidebarContentColor, onSidebarContentColor, {
-        key: "content-color",
-        auto: React.createElement("button", {
-          key: "auto",
-          className: "we-picker__swatch we-picker__swatch--auto" + (sel.sidebarContentColor === "" ? " we-picker__swatch--active" : ""),
-          type: "button",
-          title: weT("跟随主题面板色"),
-          onClick: () => onSidebarContentColor(""),
-          "aria-label": weT("内容面底色 跟随主题"),
-        }, weT("主题")),
-        colorValue: sel.sidebarContentColor || "#1e1f26",
-      }),
-      ],
-    ),
-    );
-  }
+  // ── 「窗口与侧栏」节**已撤销**（§10.25）：它的内容全部并进「玻璃 UI」节 ──
+  // 原委：那节**只在宿主上报 `sidebarPresent`（装了 dsh-better-sidebar）时才画得出内容**，
+  // 没装的机器上它就是一个**只有标题的空节**；而它同时是侧栏家族唯一的家 ⇒ 单纯删掉会让那些
+  // 控件无处可去。并进「玻璃 UI」之后：所有玻璃配置同处一节，空节消失，
+  // 且「左侧栏覆盖」终于与其余面控件放在一起（它当初被排除的理由——与那节"关即回原生纯色"
+  // 的乙类语义冲突——已随 §10.20 的退役消失）。
+  // 实现见 `src/glass-panel.js` 的 renderAppearanceGlassSection（门槛一个都没放松）。
+  // ── 「玻璃 UI」节的渲染器已抽到 src/glass-panel.js（wip §10.13）：
+  //    它与其余页签只共享模块级纯助手 ⇒ 抽出去不需要 ctx 样板，这里按名字调用即可。
+
   // 这一层不再自己画，只**按顺序组装**各节（"有哪几节、什么顺序"一眼可读；
   // 判据按真渲染的节序列钉住，见 verify-scene-live 的节顺序一节）。
   function renderAppearanceTab(ctx) {
@@ -910,9 +842,10 @@
     return React.createElement(React.Fragment, null,
       renderAppearanceThemeSection(ctx),
       renderAppearanceDetailSection(ctx),
+      renderAppearanceGlassSection(ctx),
       renderAppearanceFontSection(ctx),
       renderAppearanceCaretSection(ctx),
-      renderAppearanceWindowSidebarSection(ctx),
+      // 「窗口与侧栏」节已撤销（内容并进「玻璃 UI」，见上面的说明与 §10.25）。
     );
   }
 

@@ -367,8 +367,12 @@ function main() {
 
     // The recipes below are quoted VERBATIM from the @supports fallbacks; each
     // one must also appear inside a data-we-glass-fallback rule.
+    // ⚠️ R2（玻璃后端重构，wip §10.11）去掉了**按面变量**的内层兜底 ⇒ 第一条配方里的
+    //    `var(--we-sidebar-color, #ffffff)` 变成 `var(--we-sidebar-color)`。
+    //    **契约没变**（两支仍逐字共用同一段配方），变的是承载它的文本 ⇒ 这条抄本跟着更新。
+    //    其余三条读的是**全局**变量（`--we-surface-tint-*`），R2 刻意没动，所以原样保留。
     const recipes = [
-      'color-mix(in srgb, var(--we-sidebar-color, #ffffff) 92%, transparent)',
+      'color-mix(in srgb, var(--we-sidebar-color) 92%, transparent)',
       'color-mix(in srgb, var(--we-surface-tint-light, #ffffff) 92%, transparent)',
       '--dsw-alias-bg-layer-1: var(--we-surface-tint-light, #ffffff)',
       '--dsw-alias-bg-layer-1: var(--we-surface-tint-dark, #0d1524)',

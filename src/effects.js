@@ -221,8 +221,11 @@ function applyEffects(opts) {
     ? String(1.15 + selection.blur * 0.028)
     : String(GLASS_SATURATE));
   s.setProperty("--we-glass-brightness", "1.04");
-  // Wallpaper blur strength in px (blurs the wallpaper itself).
-  s.setProperty("--we-wallpaper-blur", selection.wallpaperBlur + "px");
+  // ── R4 死码清理：这里曾写 `--we-wallpaper-blur` / `--we-wallpaper-scale` /
+  //   `--we-wallpaper-flip` 三个变量 —— 整份样式表**没有任何 var() 消费者**
+  //   （模糊真的落在下面的 `--we-media-filter` 上，scale+flip 真的落在
+  //   `--we-wallpaper-transform` 上）。三个都是那次重构留下的中间量，已删
+  //   （守卫第 ⑭ 组："经 setProperty 写出的变量必须有人读"）。
   // Background media filter: blur() plus the brightness/contrast/saturate
   // knobs, omitting untouched terms. Kept "none" while every knob is at its
   // default (see .we-media above) so no offscreen filter layer is forced on
@@ -235,10 +238,6 @@ function applyEffects(opts) {
   s.setProperty("--we-media-filter", filterTerms.length ? filterTerms.join(" ") : "none");
   // Compensate for the fringe the blur reveals by scaling the layer up.
   const scale = (1 + selection.wallpaperBlur * 0.006).toFixed(4);
-  s.setProperty("--we-wallpaper-scale", scale);
-  // Horizontal mirror: composed with the blur-compensation scale on the same
-  // transform (scaleX(-1) is a pure compositor operation).
-  s.setProperty("--we-wallpaper-flip", selection.flip ? "-1" : "1");
   // Single transform var, "none" when identity (no blur, no flip): an identity
   // scale(1) scaleX(1) still forces the full-screen wallpaper <video> onto a
   // transform compositing layer at default — one less always-on layer for the
@@ -293,11 +292,15 @@ function applyEffects(opts) {
   //   through), lower = closer to solid. 0% → ~0.25 (frosted, solid-ish),
   //   60% → ~0.10 (轻霜 —— 染色地板下限不再让颜色在拉满端消失，旧值 0.03 会让
   //   玻璃色份额塌到 ~1%、只剩主题底色 = 用户报的"拉满变黑/变白")。
-  const glassAlpha = Math.max(0.10, 0.25 - (selection.glassAlpha / 60) * 0.15);
+  const glassAlpha = Math.max(0.10, 0.25 - (selection.glassAlpha / 100) * 0.15);
   s.setProperty("--we-glass-alpha", String(glassAlpha));
-  // - --we-glass-color: glass base tint of the settings window. The stock
-  //   defaults live in CSS (white glass light / deep navy dark); once the user
-  //   picks a color (玻璃颜色), both themes use it.
+  // ── R4：这个变量**曾被列入死码清理**，最后决定**保留**（wip §10.18）─────────────
+  // 它确实没有 CSS 消费者（配方早改读下面钳制出来的 `--we-surface-tint-light/dark`），
+  // 但 `test/compat-harness-pages.mjs` 把它当**页面观察量**断言（`getComputedStyle(body)`
+  // 读它、并要求非空 + DSH 的设置窗口 token 与之同源）。那个 harness 不在任何 npm 脚本里
+  // （要浏览器页面），所以我**无法在此验证**改动它之后的结局 —— 先删写入 = 静默破坏一个
+  // 未经验证的观察者。正确顺序是：先把 harness 的观察点改成 `--we-surface-tint-light`，
+  // 再删这里的写入。在那之前它由守卫第 ⑭ 组的 `OBSERVED_ONLY` 登记表**显式豁免**。
   s.setProperty("--we-glass-color", selection.glassColor);
   // - 玻璃保真度（0–100，默认 100 = 完整红线）：同一标量喂两处消费 —— styles.js
   //   的 --we-readability-floor（地板覆盖度）与 weClampSurfaceColor（釉色向原色
@@ -312,64 +315,13 @@ function applyEffects(opts) {
   s.setProperty("--we-surface-tint-light", weClampSurfaceColor(selection.glassColor, "light", glassFidelity));
   s.setProperty("--we-surface-tint-dark", weClampSurfaceColor(selection.glassColor, "dark", glassFidelity));
   // RGB 三元组形式：给 rgba() 槽位用（消息气泡 / 输入框的白釉染色）。
-  // ⚠️ 下标 [0,2,4] —— 6 位 hex 不带 '#'，[1,3,5] 是带 '#' 时代的错位写法。
-  const toRgbTriple = (hex) => {
-    const m = /^#?([0-9a-fA-F]{6})$/.exec(String(hex || ""));
-    return m ? [0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16)).join(", ") : "255, 255, 255";
-  };
   s.setProperty("--we-surface-tint-rgb-light", toRgbTriple(weClampSurfaceColor(selection.glassColor, "light", glassFidelity)));
   s.setProperty("--we-surface-tint-rgb-dark", toRgbTriple(weClampSurfaceColor(selection.glassColor, "dark", glassFidelity)));
-  // - 对话栏玻璃保真度（chatGlassFidelity，默认 100）：**独立于全局保真度**的第二把
-  //   尺子，只喂对话栏的**框架**玻璃面（气泡 / 输入卡片含工具弹卡 —— styles.js 里
-  //   消费 --we-chat-readability-* 的那批声明）。正文里的 markdown 内容面（代码块 /
-  //   行内代码 / 引用等）刻意**不**跟本旋钮：内容渲染面与侧边栏一起跟全局保真度
-  //   （用户口径：代码块不和输入框一起）。tint 钳制与地板权重都按本档单独算。
-  const chatFidNum = Number(selection.chatGlassFidelity);
-  const chatGlassFidelity = Number.isFinite(chatFidNum) ? Math.min(1, Math.max(0, chatFidNum / 100)) : 1;
-  s.setProperty("--we-chat-glass-fidelity", String(chatGlassFidelity));
-  s.setProperty("--we-chat-surface-tint-light", weClampSurfaceColor(selection.glassColor, "light", chatGlassFidelity));
-  s.setProperty("--we-chat-surface-tint-dark", weClampSurfaceColor(selection.glassColor, "dark", chatGlassFidelity));
-  s.setProperty("--we-chat-surface-tint-rgb-light", toRgbTriple(weClampSurfaceColor(selection.glassColor, "light", chatGlassFidelity)));
-  s.setProperty("--we-chat-surface-tint-rgb-dark", toRgbTriple(weClampSurfaceColor(selection.glassColor, "dark", chatGlassFidelity)));
-  // - Master switch for the WHOLE native settings window: when on, the dialog
-  //   (nav + every native section) becomes liquid glass with the accent +
-  //   transparency above. Toggled instantly via a body attribute the scoped
-  //   CSS below keys on; off restores the shell's stock look.
-  if (selection.glassWindow) document.body.setAttribute("data-we-glass-window", "on");
-  else document.body.removeAttribute("data-we-glass-window");
 
-  // 左侧栏覆盖：原生左栏（会话列表 / 工作区那一列）默认只是"透明的洞"——壁纸原样
-  // 透出，没有霜、也不吃玻璃参数。打开后 CSS 给那一列刷上与其余面板同一张配方表
-  // （配色 / 玻璃颜色 / 玻璃透明度 / 雾化 / 边框），关掉即逐字节恢复。
-  // 变量与开关节点的落点同玻璃窗口：body 属性 + 样式表规则，切换不需要重建任何东西。
-  if (selection.leftSidebarGlass) document.body.setAttribute("data-we-left-sidebar", "on");
-  else document.body.removeAttribute("data-we-left-sidebar");
-
-  // dsh-better-sidebar 液态玻璃：一套独立于会话玻璃的细粒度控制（侧栏模糊 /
-  // 侧栏透明度 / 侧栏玻璃颜色 + 总开关）。变量只作用于 [data-dsh-better-sidebar]
-  // 子树（CSS 见下），关闭总开关时侧栏恢复原生外观。
-  s.setProperty("--we-sidebar-blur", selection.sidebarBlur + "px");
-  s.setProperty("--we-sidebar-saturate", String(1.15 + Math.min(selection.sidebarBlur, 60) * 0.028));
-  // 透明度语义：越大越透。0 → alpha 0.32（最实/最密），200 → alpha 0.015（最透）。
-  const sidebarAlpha = Math.max(0.015, 0.32 - (selection.sidebarAlpha / 200) * 0.305);
-  s.setProperty("--we-sidebar-alpha", String(sidebarAlpha));
-  s.setProperty("--we-sidebar-sheen", String(Math.min(1, sidebarAlpha / 0.2236)));
-  s.setProperty("--we-sidebar-color", selection.sidebarColor);
-  // 侧栏玻璃颜色的混入强度（%）：**独立于 alpha 的可见性曲线** —— alpha 在高透档
-  // 趋近 0，混色若跟着 alpha 走，颜色滑杆在最高档就等于失效（低于可感知阈值）。
-  // 因此随透明度滑杆线性映射 20%–48%：最透档也有可感知色染，往实调颜色越来越浓。
-  const sidebarTint = 20 + (200 - Math.min(Math.max(selection.sidebarAlpha, 0), 200)) / 200 * 28;
-  s.setProperty("--we-sidebar-tint", sidebarTint.toFixed(1) + "%");
-  if (selection.sidebarGlass) document.body.setAttribute("data-we-sidebar-glass", "on");
-  else document.body.removeAttribute("data-we-sidebar-glass");
-  // 内容面（编辑器/终端）近不透明玻璃底：透明度滑块 0–80 → 不透明度 100%–20%
-  // （越大越透，与玻璃透明度同语义；低于 ~40% 不透明度注释可读性会再次变差，
-  // 留给用户自行权衡）；底色空 = 跟随主题面板色，选定后自定义。
-  // 注意 color-mix 的百分比槽位要求带单位的 token —— 变量值必须含 "%"，
-  // 否则整个 color-mix 失效、底色规则被丢弃（编辑器回退到纯透明毛玻璃）。
-  s.setProperty("--we-content-surface-alpha", Math.max(20, 100 - selection.sidebarContentAlpha) + "%");
-  if (selection.sidebarContentColor) s.setProperty("--we-content-surface-color", selection.sidebarContentColor);
-  else s.removeProperty("--we-content-surface-color");
+  // ── 玻璃管线已抽到 src/glass.js（wip §10.13）：取值解析 / 各面釉层变量 / 门控属性 ──
+  //    这里只留**一行调用**；本文件继续负责全局玻璃量（--we-glass-* / --we-surface-tint-*）
+  //    与其余非玻璃效果（accent / 可读性 / 光标 / 壁纸 / 字体）。
+  applyGlass(selection, s);
 
   // 适配目标钩子（src/adapter.js）：把最终目标挂到 <body>，外壳材质类选择器
   // 一律经 [data-we-adapter^="desktop-"] 门控 —— 原生浏览器形态永远不吃桌面壳
@@ -446,10 +398,7 @@ function clearEffects() {
   s.removeProperty("--we-blur");
   s.removeProperty("--we-saturate");
   s.removeProperty("--we-glass-brightness");
-  s.removeProperty("--we-wallpaper-blur");
   s.removeProperty("--we-media-filter");
-  s.removeProperty("--we-wallpaper-scale");
-  s.removeProperty("--we-wallpaper-flip");
   s.removeProperty("--we-object-fit");
   s.removeProperty("--we-wallpaper-opacity");
   s.removeProperty("--we-wallpaper-fade-bg");
@@ -464,9 +413,14 @@ function clearEffects() {
   s.removeProperty("--we-surface-tint-rgb-dark");
   document.body.removeAttribute("data-we-glass-window");
   document.body.removeAttribute("data-we-left-sidebar");
+  // ⚠️ W5 新增的三个门控属性**也必须在这里撤掉**（与上面两个同批）：
+  //    漏掉它们 ⇒ 插件被禁用 / HMR 卸载后，宿主 DOM 上仍留着 `data-we-glass-chat` /
+  //    `data-we-glass-floaters`，而挂在这些属性上的规则组**照旧生效** ——
+  //    表现为"插件已卸载，但玻璃还在"。这类残留只有卸载路径才暴露，日常切换看不出来。
+  document.body.removeAttribute("data-we-glass-chat");
+  document.body.removeAttribute("data-we-glass-floaters");
   s.removeProperty("--we-sidebar-blur");
   s.removeProperty("--we-sidebar-saturate");
-  s.removeProperty("--we-sidebar-alpha");
   s.removeProperty("--we-sidebar-sheen");
   s.removeProperty("--we-sidebar-color");
   s.removeProperty("--we-sidebar-tint");
@@ -476,6 +430,19 @@ function clearEffects() {
   document.body.removeAttribute("data-we-glass-fallback"); // #95 软件渲染回退钩子同上
   s.removeProperty("--we-content-surface-alpha");
   s.removeProperty("--we-content-surface-color");
+  // ⚠️ W2–W4 新增的**按面釉层变量**同样要撤（否则卸载后残留的变量值会继续被
+  //    那几条规则读到 —— 与属性残留是同一类问题）。逐面列出，不用循环：
+  //    它们分散在三个面、名字不同，显式列出比"一个前缀循环"更不容易漏。
+  for (const v of [
+    "--we-settings-window-blur", "--we-settings-window-alpha",
+    "--we-left-sidebar-blur", "--we-left-sidebar-alpha",
+    "--we-floaters-blur", "--we-floaters-alpha",
+    // ⚠️ 对话栏那一族（`--we-chat-*`）**提交态就没在撤** —— 既有缺陷，本次一并补上：
+    //    它们是对话栏专属釉层变量，卸载后残留同样会被那几条规则读到。
+    //    （判据"清理对称性"把这一组和上面 6 个一起抓了出来。）
+    "--we-chat-glass-fidelity", "--we-chat-surface-tint-light", "--we-chat-surface-tint-dark",
+    "--we-chat-surface-tint-rgb-light", "--we-chat-surface-tint-rgb-dark",
+  ]) s.removeProperty(v);
   // 画布兜底色写在根元素上（见 src/live-layer.js 的 refreshUnderlayColor）：它不在
   // body 的变量表里，必须显式撤掉 —— 否则禁用插件后根元素会一直带着上一张壁纸的颜色。
   clearUnderlayColor();

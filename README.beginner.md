@@ -90,7 +90,7 @@ dsh plugin --profile web add dsh-plugin-wallpaper-engine
 | **壁纸透明度** | 把壁纸整层调淡、融进页面底色 | 见控件本身 |
 | **暗化** | 加深壁纸和文字之间的遮罩 | 见控件本身 |
 | **边框**（外观页签） | 让边框/分割线更醒目 | 见控件本身 |
-| **雾化**（外观页签） | 玻璃面板（输入栏、气泡、设置窗口）的模糊半径 | 见控件本身 |
+| **雾化**（外观页签） | 玻璃面板（对话栏卡片、左侧栏、设置窗口、插件浮层）的模糊半径（侧栏除外：它有独立的「侧栏模糊」） | 见控件本身 |
 
 > 各个滑条的确切范围与默认值**直接看控件本身**（拖动时控件上就有读数）。
 
@@ -254,7 +254,7 @@ You will see a **liquid-glass card** holding every wallpaper-related control.
 
 ### How do I tune the picture sliders?
 
-With a wallpaper active, the **「效果」 (effects)** tab has the picture sliders; **边框 (border)** and **雾化 (glass blur)** live in the **「外观」 (appearance)** tab's 「细节」 group. **All of them apply instantly — no page refresh**:
+With a wallpaper active, the **「效果」 (effects)** tab has the picture sliders; **边框 (border)** and **雾化 (conversation glass blur)** live in the **「外观」 (appearance)** tab's 「细节」 group. **All of them apply instantly — no page refresh**:
 
 | Slider | What it does | Default |
 |---|---|---|
@@ -263,7 +263,7 @@ With a wallpaper active, the **「效果」 (effects)** tab has the picture slid
 | **壁纸透明度** (wallpaper opacity) | Fades the whole wallpaper layer toward the page base color | see the control |
 | **暗化** (scrim) | Darkens the overlay between wallpaper and text | see the control |
 | **边框** (border, appearance tab) | Makes borders / dividers stand out | see the control |
-| **雾化** (glass blur, appearance tab) | Blur radius of the glass panels (composer, bubbles, settings window) | see the control |
+| **雾化** (conversation glass blur, appearance tab) | Blur radius of the conversation glass panels (composer, message bubbles, tool popovers). **The sidebar and the settings window have their own blur controls and are not affected by this one** | see the control |
 
 > 👀 **If text is hard to read**: raise the 「暗化」 (effects tab) and 「边框」 (appearance tab) sliders first; if that is not enough, add a little 「壁纸模糊」. You can also switch DSH between its **light / dark** themes — different wallpapers suit different modes.
 

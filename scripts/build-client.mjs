@@ -146,8 +146,15 @@ const INLINE_MODULES = [
     markers: ['function deleteLabel(row)', 'function renderFontSetEditor(ctx)'],
   },
   {
+    // 「玻璃 UI」节的渲染器（wip §10.13）：与其余页签只共享**模块级纯助手**，
+    // 所以抽出去不需要 ctx 传参样板。
+    file: 'src/glass-panel.js',
+    why: '「玻璃 UI」节渲染器（注册表驱动：GLASS_CHILDREN + childGlassKey；只读 ctx、动作经 on* 处理器）',
+    markers: ['function renderAppearanceGlassSection(ctx) {', 'const CHILD_CN = {'],
+  },
+  {
     file: 'src/panel-tabs.js',
-    why: '面板七个页签的渲染器（wallpaper/appearance/audio/mascot/effects/advanced/about）—— 显式 ctx 取外界',
+    why: '面板七个页签的渲染器（wallpaper/appearance/audio/mascot/effects/advanced/about）—— 显式 ctx 取外界（「玻璃 UI」节已抽到 src/glass-panel.js）',
     markers: ['function renderWallpaperTab(ctx)', 'function renderAppearanceTab(ctx)',
       'function renderAudioTab(ctx)', 'function renderMascotTab(ctx)',
       'function renderEffectsTab(ctx)', 'function renderAdvancedTab(ctx)',
@@ -209,10 +216,19 @@ const INLINE_MODULES = [
       'const apiJson = ', 'const apiHead = '],
   },
   {
+    // 玻璃后端的唯一落点（wip §10.13）：从 `effects.js` 抽出的那一段 ——
+    // 输入输出封闭（只要 `selection` + `body.style`），所以抽出来之后
+    // ⑪/⑫/⑬ 三组守卫读的"写了什么"有了单一归属，R3b 的形状改动也只落在这里。
+    file: 'src/glass.js',
+    why: '玻璃后端：取值解析 / 各面釉层变量 / 门控属性（无条件写，值槽位与开关正交）',
+    markers: ['const toRgbTriple = (hex) => {', 'function applyGlass(selection, s) {',
+      'const glassValue = (surface, param, profileValue, globalValue) =>'],
+  },
+  {
     file: 'src/effects.js',
-    why: '效果应用层（设置 → DOM；契约见文件头，见 P1-7 后半）',
-    markers: ['let lastScrimCss = "";', 'function applyEffects(', 'function clearEffects()',
-      'function resolveWallpaperFadeBg()'],
+    why: '效果应用层（设置 → DOM；契约见文件头，见 P1-7 后半）—— 玻璃那一段已抽到 src/glass.js',
+    markers: ['let lastScrimCss = "";', 'function applyEffects(', 'applyGlass(selection, s);',
+      'function clearEffects()', 'function resolveWallpaperFadeBg()'],
   },
 ];
 
