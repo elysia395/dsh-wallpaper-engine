@@ -661,6 +661,9 @@ setTimeout(async () => {
       return hit;
     };
     const sliderMax = (row) => (row ? JSON.stringify(row).match(/"max":"(\d+)"/)?.[1] : null);
+    // 下限（可负的滑块要用它）：`"min":"-400"` —— 负号必须一起判，否则"范围丢了负半边"
+    // 这种回归在只判 max 的断言下完全看不见（位置偏移就是第一个可负的滑块）。
+    const sliderMin = (row) => (row ? JSON.stringify(row).match(/"min":"(-?\d+)"/)?.[1] : null);
     const findRangeInput = (row) =>
       (Array.isArray(row?.children) ? row.children : [])
         .find((c) => c && typeof c === 'object' && c.type === 'input');
@@ -669,16 +672,17 @@ setTimeout(async () => {
     localStorage.removeItem(TAB_KEY);
     let tree = renderPicker();
     let treeText = JSON.stringify(tree);
-    assert.ok(countMatches(tree, /"role":"tab"/g) === 5, 'tab bar renders (5 tabs):');
+    assert.ok(countMatches(tree, /"role":"tab"/g) === 6, 'tab bar renders (6 tabs):');
     assert.ok(treeText.includes('"we-tabs__tab we-tabs__tab--active"') && treeText.includes('自动轮播'), 'default tab is 壁纸库:');
     assert.ok(treeText.includes('"选择壁纸"'), 'library tab has 选择壁纸:');
     assert.ok(treeText.includes('自定义壁纸'), 'library tab has 自定义壁纸:');
     console.log('other tabs keep their controls out of the tree:',
       !treeText.includes('玻璃透明度') && !treeText.includes('字体自定义') && !treeText.includes('吉祥物大小'));
 
-    // ── 设置页签重组（UI 重构）：五个页签 = 壁纸库 / 外观 / 播放 / 系统 / 关于 ──
+    // ── 设置页签重组（UI 重构）：六个页签 = 壁纸库 / 外观 / 播放 / 系统 / 扩展 / 关于 ──
     //    原六页签合并：壁纸 → 壁纸库；效果+声音 → 播放；吉祥物+高级 → 系统；外观原样；
-    //    「关于」是后加的静态页（**排在最后**，且是唯一不读面板状态的那一个）。
+    //    「扩展」是后加的**模块容器**（注册表在 src/panel-tabs.js 的 extensionModules()，
+    //    排在「关于」之前）；「关于」是后加的静态页（**排在最后**，唯一不读面板状态的那个）。
     {
       const tabButtons = [];
       (function walk(node) {
@@ -688,11 +692,391 @@ setTimeout(async () => {
         if (Array.isArray(node.children)) node.children.forEach(walk);
       })(tree);
       const labels = tabButtons.map((b) => String((b.children || [])[0] || ''));
-      assert.deepEqual(labels, ['壁纸库', '外观', '播放', '系统', '关于'],
-        'tab bar must render exactly 壁纸库/外观/播放/系统/关于');
+      assert.deepEqual(labels, ['壁纸库', '外观', '播放', '系统', '扩展', '关于'],
+        'tab bar must render exactly 壁纸库/外观/播放/系统/扩展/关于');
       // 指示胶囊的宽度按页签数现算 —— 加/减页签忘改这里会当场错位（且只在视觉上错）。
-      assert.ok(JSON.stringify(tree).includes('calc((100% - 6px) / 5)'),
-        'tab pill width must be derived from PICKER_TABS.length (5)');
+      assert.ok(JSON.stringify(tree).includes('calc((100% - 6px) / 6)'),
+        'tab pill width must be derived from PICKER_TABS.length (6)');
+    }
+
+    // ── 「扩展」页签（第六个）：一个**模块容器** —— 表里没模块时只画空态 ──
+    //    它的价值在"容器还在、模块真的按注册表上架、且没跟别的页签串内容"：后续功能都只往
+    //    src/panel-tabs.js 的 extensionModules() 里加一项，页签本身不该再改。
+    //    现有三项：一号 = 硬件资源监控柱状图，二号 = 点击效果与拖尾效果，
+    //    三号 = 3D 效果（三张卡共用本块）。
+    {
+      setTab('extensions');
+      const extTree = renderPicker();
+      const extText = JSON.stringify(extTree);
+      // 容器 + 三个模块的标题与总开关都得在。
+      for (const anchorText of ['扩展模块', '硬件资源监控柱状图', '启用资源柱状图',
+        '点击效果与拖尾效果', '启用点击与拖尾效果', '3D 效果', '启用 3D 效果']) {
+        assert.ok(extText.includes(anchorText), '「扩展」页签必须包含「' + anchorText + '」');
+      }
+      // 模块槽位的类名必须真的在树上（CSS 段与渲染器对不上是肉眼可见的回归）。
+      assert.ok(extText.includes('"we-ext"') && extText.includes('"we-ext__module"'),
+        '「扩展」页签必须画出模块容器 we-ext 与模块卡 we-ext__module');
+      // 注册表**非空** ⇒ 空态不该再画（两者是互斥形态，留着会让用户以为没装上）。
+      assert.ok(!extText.includes('还没有可用的扩展模块'), '注册表非空时不得再画空态');
+      // 三条注册表项 ⇒ 恰好三张模块卡（漏一个模块、或把别的东西当模块画进去都会现形）。
+      assert.equal((extText.match(/"we-ext__module"/g) || []).length, 3,
+        '注册表里三项 ⇒ 「扩展」页签必须画出三张模块卡');
+      // 一号模块的总开关**默认开**（这一版把维护者实际调好的那套参数固化成默认值，见
+      // lib/settings-schema.js 的 metrics 段）⇒ 它那一串参数一进面板就在；另两个模块仍默认关，
+      // 关着就不该出现参数控件，否则会给人"关着也生效"的错觉（这两条同时钉住默认值没被误改成 true）。
+      assert.ok(extText.includes('荧光强度') && extText.includes('柱配色'),
+        '一号模块总开关默认开 ⇒ 它的参数控件必须直接画出来');
+      assert.ok(!extText.includes('点击样式') && !extText.includes('拖尾光晕'),
+        '二号模块总开关关闭时不得画出任何参数控件');
+      assert.ok(!extText.includes('背景缓动距离') && !extText.includes('缓动平滑'),
+        '三号模块总开关关闭时不得画出任何参数控件');
+      // 默认已开（上面已判）；这里再走一次它自己的 onChange 证明处理器真的接上了，
+      // 随后位置与大小 + 柱形 + 阈值 + 观感四项 + 柱形/配色 + 序列名称 + 五条序列都得在。
+      const metricsOn = findCtlInput(extTree, '启用资源柱状图');
+      assert.ok(metricsOn, '扩展岛必须画出总开关（findCtlInput 能取到它的 onChange）');
+      assert.equal(metricsOn && metricsOn.props.checked, true, '一号模块的总开关默认必须是开的');
+      if (metricsOn) {
+        metricsOn.props.onChange({ target: { checked: true } });
+        flushPersistWrites();
+        const onTree = renderPicker();
+        const onText = JSON.stringify(onTree);
+        for (const t of ['高度', '水平偏移', '垂直偏移', '柱宽', '柱间距', '指标间隔', '阈值', '细白横线',
+          '不透明度', '混合模式', '极黑柱不透明度', '描边宽度', '荧光强度',
+          '平滑', '时间窗', '实心柱', '柱配色', '跟随主题色', '分色', '单色', '序列名称',
+          '正常', '正片叠底', '叠加', '滤色', '柔光', '变暗', '变亮',
+          '内存', '显卡', '网络', '磁盘']) {
+          assert.ok(onText.includes(t), '打开总开关后「扩展」页签必须有「' + t + '」');
+        }
+        // 滑块上限必须与 lib/settings-schema.js 的 KINDS 一致（改范围要同时改两处）。
+        assert.equal(sliderMax(findSliderRow(onTree, '高度')), '320', '柱状图高度上限必须是 320px');
+        assert.equal(sliderMax(findSliderRow(onTree, '水平偏移')), '400', '水平偏移上限必须是 400px');
+        assert.equal(sliderMax(findSliderRow(onTree, '垂直偏移')), '400', '垂直偏移上限必须是 400px');
+        // 偏移是**可负**的：下限必须真的是负数（只判 max 会让"忘了负号"悄悄溜过去）。
+        assert.equal(sliderMin(findSliderRow(onTree, '水平偏移')), '-400', '水平偏移下限必须是 -400px');
+        assert.equal(sliderMin(findSliderRow(onTree, '垂直偏移')), '-400', '垂直偏移下限必须是 -400px');
+        assert.equal(sliderMax(findSliderRow(onTree, '柱宽')), '16', '柱宽上限必须是 16px');
+        assert.equal(sliderMax(findSliderRow(onTree, '柱间距')), '16', '柱间距上限必须是 16px');
+        assert.equal(sliderMax(findSliderRow(onTree, '指标间隔')), '40', '行间隔上限必须是 40px');
+        assert.equal(sliderMax(findSliderRow(onTree, '阈值')), '100', '阈值上限必须是 100%');
+        assert.equal(sliderMax(findSliderRow(onTree, '时间窗')), '240', '时间窗上限必须是 240s');
+        assert.equal(sliderMax(findSliderRow(onTree, '描边宽度')), '5', '描边宽度上限必须是 5px');
+        // 极黑档的倍率（用户口径："该值也允许自定义"）：范围必须与 KINDS 的 10..100 一致。
+        assert.equal(sliderMax(findSliderRow(onTree, '极黑柱不透明度')), '100', '极黑柱不透明度上限必须是 100%');
+        assert.equal(sliderMin(findSliderRow(onTree, '极黑柱不透明度')), '10', '极黑柱不透明度下限必须是 10%');
+        // 滑块**右侧**要回显"当前值 + 单位"（用户口径："滑动条右侧显示数值"）——
+        // 这是 SliderRow 第三格 .we-picker__value 的文本；拖动期由 liveFill 就地改写，
+        // 这里判的是静态渲染那一份（值来自 sel，格式由 suffix 决定）。
+        const readoutOf = (labelText) => {
+          const row = findSliderRow(onTree, labelText);
+          if (!row) return null;
+          const hits = (row.children || []).filter((c) =>
+            typeof c?.props?.className === 'string' && c.props.className.includes('we-picker__value'));
+          return hits.length === 1 ? String((hits[0].children || [])[0] ?? '') : null;
+        };
+        assert.equal(readoutOf('高度'), '262px', '滑动条右侧必须回显「值 + 单位」：高度默认 262px');
+        assert.equal(readoutOf('水平偏移'), '0px', '偏移默认 0 也必须回显（0px，而不是空白）');
+        assert.equal(readoutOf('垂直偏移'), '286px', '垂直偏移默认 286px 同样回显（固化后的默认值）');
+        assert.equal(readoutOf('柱宽'), '13px', '柱宽默认 13px 必须回显在滑块右侧');
+        assert.equal(readoutOf('柱间距'), '2px', '柱间距默认 2px 必须回显在滑块右侧');
+        assert.equal(readoutOf('阈值'), '82%', '阈值回显带 % 单位（默认 82%）');
+        assert.equal(readoutOf('不透明度'), '100%', '不透明度默认 100% 必须回显在滑块右侧');
+        assert.equal(readoutOf('荧光强度'), '100%', '荧光强度默认 100% 必须回显在滑块右侧');
+        assert.equal(readoutOf('时间窗'), '60s', '时间窗回显带 s 单位（默认 60）');
+        assert.equal(readoutOf('极黑柱不透明度'), '30%', '极黑档倍率默认 30% 必须回显在滑块右侧');
+        // ── 细白横线（标尺）：默认**开**（metricsGuides: true），且是独立一层画的 ──
+        //    它必须由自己的开关控制：关了以后柱子/行名还在（层是分开的，见 src/metrics-layer.js）。
+        const guides = findCtlInput(onTree, '细白横线');
+        assert.ok(guides, '扩展岛必须画出「细白横线」开关（findCtlInput 能取到它的 onChange）');
+        if (guides) assert.equal(guides.props.checked, true, '细白横线默认开（metricsGuides: true）');
+        // ── 混合模式：8 档平铺会被等分宽度的 .we-picker__seg 挤成一团 ⇒ 必须是下拉 ──
+        const findSelect = (root, aria) => {
+          let hit = null;
+          (function walk(node) {
+            if (hit || !node || typeof node !== 'object') return;
+            if (Array.isArray(node)) { node.forEach(walk); return; }
+            if (node.type === 'select' && node.props && node.props['aria-label'] === aria) { hit = node; return; }
+            if (Array.isArray(node.children)) node.children.forEach(walk);
+          })(root);
+          return hit;
+        };
+        const blend = findSelect(onTree, '混合模式');
+        assert.ok(blend, '扩展岛必须画出「混合模式」下拉（8 档不能平铺）');
+        if (blend) {
+          assert.equal(blend.props.value, 'auto', '混合模式默认必须是「自动」');
+          assert.equal(typeof blend.props.onChange, 'function', '混合模式下拉必须接上处理器');
+          const blendText = JSON.stringify(blend);
+          // 档位必须与 lib/settings-schema.js 的 METRICS_BLEND_VALUES 逐字对齐（值 + 条数一起判）。
+          for (const v of ['auto', 'normal', 'multiply', 'overlay', 'screen', 'soft-light', 'darken', 'lighten']) {
+            assert.ok(blendText.includes('"value":"' + v + '"'), '混合模式下拉缺少档位 ' + v);
+          }
+          assert.equal((blendText.match(/"type":"option"/g) || []).length, 8,
+            '混合模式下拉必须恰好 8 个档位（与 METRICS_BLEND_VALUES 对齐）');
+          // ── 极黑档的倍率（用户口径："该值也允许自定义"）：**只在「自动」档出现** ──
+          //    别的档根本不会判极黑 ⇒ 摆着只会让人以为还有用（与「分色」档的取色器同一条理由）。
+          //    这里走控件自己的 onChange 真改一次设置，再重渲染看它消失 / 回来。
+          const deepRow = () => findSliderRow(renderPicker(), '极黑柱不透明度');
+          assert.ok(deepRow(), '混合模式为「自动」时必须画出「极黑柱不透明度」');
+          blend.props.onChange({ target: { value: 'screen' } });
+          flushPersistWrites();
+          assert.ok(!deepRow(), '手选「滤色」后「极黑柱不透明度」必须消失（极黑判定不参与）');
+          const backToAuto = findSelect(renderPicker(), '混合模式');
+          assert.equal(backToAuto && backToAuto.props.value, 'screen', '切档后下拉必须回显手选的那一档');
+          backToAuto.props.onChange({ target: { value: 'auto' } });
+          flushPersistWrites();
+          assert.ok(deepRow(), '切回「自动」后「极黑柱不透明度」必须回来');
+        }
+        // ── 五条序列各自的自定义颜色：**只在「分色」档出现** ──
+        //    别的档一根柱子用什么色由主题/亮度决定，这时候摆五个取色器等于骗人（拖了没反应）。
+        const findButton = (root, label) => {
+          let hit = null;
+          (function walk(node) {
+            if (hit || !node || typeof node !== 'object') return;
+            if (Array.isArray(node)) { node.forEach(walk); return; }
+            if (node.type === 'button' && String((node.children || [])[0]) === label) { hit = node; return; }
+            if (Array.isArray(node.children)) node.children.forEach(walk);
+          })(root);
+          return hit;
+        };
+        const collectColorInputs = (root) => {
+          const out = [];
+          (function walk(node) {
+            if (!node || typeof node !== 'object') return;
+            if (Array.isArray(node)) { node.forEach(walk); return; }
+            if (node.type === 'input' && node.props && node.props.type === 'color') out.push(node);
+            if (Array.isArray(node.children)) node.children.forEach(walk);
+          })(root);
+          return out;
+        };
+        assert.equal(collectColorInputs(onTree).length, 0, '「跟随主题色」档下不得出现自定义取色器');
+        const spectrumBtn = findButton(onTree, '分色');
+        assert.ok(spectrumBtn, '必须画出取色档「分色」');
+        if (spectrumBtn) {
+          spectrumBtn.props.onClick();
+          flushPersistWrites();
+          const specTree = renderPicker();
+          const specText = JSON.stringify(specTree);
+          for (const t of ['CPU颜色', '内存颜色', '显卡颜色', '网络颜色', '磁盘颜色']) {
+            assert.ok(specText.includes(t), '分色档下必须画出「' + t + '」取色行');
+          }
+          const colorInputs = collectColorInputs(specTree);
+          assert.equal(colorInputs.length, 5, '分色档下必须恰好五条序列各一个取色器');
+          // 默认值 = 各序列的出厂色相（用户还没改过时画面逐像素不变）。
+          assert.deepEqual(colorInputs.map((c) => String(c.props.value)),
+            ['#4f8cff', '#35d07f', '#ff5c8a', '#ffb020', '#a06bff'],
+            '五条取色器的默认值必须是各序列的出厂色相');
+          // 拖动色盘走"只写值 + 应用样式、不 emit"的 live 档 ⇒ 两个回调都得挂上。
+          assert.equal(typeof colorInputs[0].props.onInput, 'function', '取色器必须挂上 onInput（拖动期实时）');
+          assert.equal(typeof colorInputs[0].props.onChange, 'function', '取色器必须挂上 onChange（抬手落盘）');
+          // 复位：切回「跟随主题色」，别把"分色"留给后面的判据。
+          const accentBtn = findButton(specTree, '跟随主题色');
+          if (accentBtn) accentBtn.props.onClick();
+          flushPersistWrites();
+          assert.equal(collectColorInputs(renderPicker()).length, 0, '切回「跟随主题色」后取色器必须消失');
+        }
+        // 复位：把总开关关掉（这一版它**默认是开的**，这里只为不把"开着"的姿态留给后面的判据；
+        //        关掉这一下顺带证明那一串参数真的会收起来），flush 掉 debounce 的落盘。
+        const metricsOff = findCtlInput(onTree, '启用资源柱状图');
+        if (metricsOff) metricsOff.props.onChange({ target: { checked: false } });
+        flushPersistWrites();
+        assert.ok(!JSON.stringify(renderPicker()).includes('柱配色'),
+          '关掉一号模块总开关后它那一串参数必须收起来');
+      }
+      // ── 二号模块（点击效果与拖尾效果）：默认关 ⇒ 只画总开关 + 说明；开了才长参数 ──
+      //    它与一号模块共用一个页签，判据的重点是"两张卡各自独立"：一号的参数不该在二号
+      //    的开关下长出来，反之亦然；各自两个子开关（点击 / 拖尾）关掉时只收起自己那一串。
+      const fxOn = findCtlInput(extTree, '启用点击与拖尾效果');
+      assert.ok(fxOn, '二号模块必须画出总开关（findCtlInput 能取到它的 onChange）');
+      if (fxOn) {
+        fxOn.props.onChange({ target: { checked: true } });
+        flushPersistWrites();
+        const fxTree = renderPicker();
+        const fxText = JSON.stringify(fxTree);
+        for (const t of ['点击效果', '在点击处炸开一圈光效', '点击样式', '点击时炸开的样子',
+          '涟漪', '从点击处扩散的圆环', '星火', '向四周飞散的亮点', '两者', '圆环与星火一起',
+          '半径', '点击光晕',
+          '拖尾效果', '光标划过时留下会淡出的轨迹', '拖尾样式', '轨迹的样子',
+          '彗尾', '一条渐隐的光带', '星尘', '留在原地的亮点',
+          '拖尾时长', '拖尾粗细', '拖尾光晕', '不透明度', '混合模式',
+          '正常', '正片叠底', '叠加', '滤色', '变亮',
+          '效果配色', '跟随主题色', '彩虹', '自定义']) {
+          assert.ok(fxText.includes(t), '打开二号模块后「扩展」页签必须有「' + t + '」');
+        }
+        // 一号模块的参数**不得**因为二号模块开着而出现（两个模块各管各的）。
+        assert.ok(!fxText.includes('启用资源柱状图') || !fxText.includes('柱宽'),
+          '一号模块关着时，二号模块开着也不该画出柱状图的参数');
+        // 滑块范围必须与 lib/settings-schema.js 的 KINDS 一致（改范围要同时改两处）。
+        assert.equal(sliderMin(findSliderRow(fxTree, '半径')), '40', '点击半径下限必须是 40px');
+        assert.equal(sliderMax(findSliderRow(fxTree, '半径')), '400', '点击半径上限必须是 400px');
+        assert.equal(sliderMax(findSliderRow(fxTree, '点击光晕')), '100', '点击光晕上限必须是 100%');
+        assert.equal(sliderMin(findSliderRow(fxTree, '拖尾时长')), '80', '拖尾时长下限必须是 80ms');
+        assert.equal(sliderMax(findSliderRow(fxTree, '拖尾时长')), '2000', '拖尾时长上限必须是 2000ms');
+        assert.equal(sliderMin(findSliderRow(fxTree, '拖尾粗细')), '1', '拖尾粗细下限必须是 1px');
+        assert.equal(sliderMax(findSliderRow(fxTree, '拖尾粗细')), '12', '拖尾粗细上限必须是 12px');
+        assert.equal(sliderMax(findSliderRow(fxTree, '拖尾光晕')), '100', '拖尾光晕上限必须是 100%');
+        assert.equal(sliderMin(findSliderRow(fxTree, '不透明度')), '10', '不透明度下限必须是 10%');
+        assert.equal(sliderMax(findSliderRow(fxTree, '不透明度')), '100', '不透明度上限必须是 100%');
+        // 单位回显：ms 是本轮新增的第三种后缀（px / % / s 之外）—— 回显漏了它就会显示成裸数字。
+        const fxReadoutOf = (labelText) => {
+          const row = findSliderRow(fxTree, labelText);
+          if (!row) return null;
+          const hits = (row.children || []).filter((c) =>
+            typeof c?.props?.className === 'string' && c.props.className.includes('we-picker__value'));
+          return hits.length === 1 ? String((hits[0].children || [])[0] ?? '') : null;
+        };
+        assert.equal(fxReadoutOf('半径'), '140px', '半径回显带 px 单位（默认 140）');
+        assert.equal(fxReadoutOf('拖尾时长'), '420ms', '拖尾时长回显带 ms 单位（默认 420）');
+        assert.equal(fxReadoutOf('不透明度'), '85%', '不透明度回显带 % 单位（默认 85）');
+        // ── 混合模式：这一层**没有「自动」档**（它刻意不采样壁纸像素）⇒ 5 档、默认滤色 ──
+        const fxFindSelect = (root, aria) => {
+          let hit = null;
+          (function walk(node) {
+            if (hit || !node || typeof node !== 'object') return;
+            if (Array.isArray(node)) { node.forEach(walk); return; }
+            if (node.type === 'select' && node.props && node.props['aria-label'] === aria) { hit = node; return; }
+            if (Array.isArray(node.children)) node.children.forEach(walk);
+          })(root);
+          return hit;
+        };
+        const fxBlend = fxFindSelect(fxTree, '混合模式');
+        assert.ok(fxBlend, '二号模块必须画出「混合模式」下拉（5 档平铺会挤成一团）');
+        if (fxBlend) {
+          assert.equal(fxBlend.props.value, 'screen', '二号模块的混合模式默认必须是「滤色」');
+          const fxBlendText = JSON.stringify(fxBlend);
+          for (const v of ['screen', 'normal', 'overlay', 'multiply', 'lighten']) {
+            assert.ok(fxBlendText.includes('"value":"' + v + '"'), '二号模块的混合模式缺少档位 ' + v);
+          }
+          assert.equal((fxBlendText.match(/"type":"option"/g) || []).length, 5,
+            '二号模块的混合模式必须恰好 5 个档位（与 FX_BLEND_VALUES 对齐）');
+        }
+        // ── 取色器**只在「自定义」档出现**（别的档颜色由主题或色相决定，摆着就是骗人） ──
+        const fxFindButton = (root, label) => {
+          let hit = null;
+          (function walk(node) {
+            if (hit || !node || typeof node !== 'object') return;
+            if (Array.isArray(node)) { node.forEach(walk); return; }
+            if (node.type === 'button' && String((node.children || [])[0]) === label) { hit = node; return; }
+            if (Array.isArray(node.children)) node.children.forEach(walk);
+          })(root);
+          return hit;
+        };
+        const fxColorInputs = (root) => {
+          const out = [];
+          (function walk(node) {
+            if (!node || typeof node !== 'object') return;
+            if (Array.isArray(node)) { node.forEach(walk); return; }
+            if (node.type === 'input' && node.props && node.props.type === 'color') out.push(node);
+            if (Array.isArray(node.children)) node.children.forEach(walk);
+          })(root);
+          return out;
+        };
+        assert.equal(fxColorInputs(fxTree).length, 0, '「跟随主题色」档下不得出现自定义取色器');
+        const fxCustomBtn = fxFindButton(fxTree, '自定义');
+        assert.ok(fxCustomBtn, '二号模块必须画出配色档「自定义」');
+        if (fxCustomBtn) {
+          fxCustomBtn.props.onClick();
+          flushPersistWrites();
+          const fxCustomTree = renderPicker();
+          const fxCustomText = JSON.stringify(fxCustomTree);
+          assert.ok(fxCustomText.includes('自定义颜色'), '「自定义」档下必须画出「自定义颜色」取色行');
+          const fxColors = fxColorInputs(fxCustomTree);
+          assert.equal(fxColors.length, 1, '「自定义」档下必须恰好一个取色器');
+          assert.equal(String(fxColors[0].props.value), '#4f8cff', '取色器默认值必须是 fxColor 的默认色');
+          assert.equal(typeof fxColors[0].props.onInput, 'function', '取色器必须挂上 onInput（拖动期实时）');
+          assert.equal(typeof fxColors[0].props.onChange, 'function', '取色器必须挂上 onChange（抬手落盘）');
+          const fxAccentBtn = fxFindButton(renderPicker(), '跟随主题色');
+          if (fxAccentBtn) fxAccentBtn.props.onClick();
+          flushPersistWrites();
+          assert.equal(fxColorInputs(renderPicker()).length, 0, '切回「跟随主题色」后取色器必须消失');
+        }
+        // ── 两个子开关各自收起自己那一串参数（"关掉了还能拖它的参数"是错觉） ──
+        const clickOff = findCtlInput(renderPicker(), '在点击处炸开一圈光效');
+        assert.ok(clickOff, '二号模块必须画出「点击效果」子开关');
+        if (clickOff) {
+          clickOff.props.onChange({ target: { checked: false } });
+          flushPersistWrites();
+          const noClickText = JSON.stringify(renderPicker());
+          assert.ok(!noClickText.includes('点击样式') && !noClickText.includes('点击光晕'),
+            '关掉「点击效果」后它自己那一串参数必须收起来');
+          assert.ok(noClickText.includes('拖尾样式') && noClickText.includes('拖尾光晕'),
+            '关掉「点击效果」不该动到拖尾那一串参数');
+        }
+        const trailOff = findCtlInput(renderPicker(), '光标划过时留下会淡出的轨迹');
+        assert.ok(trailOff, '二号模块必须画出「拖尾效果」子开关');
+        if (trailOff) {
+          trailOff.props.onChange({ target: { checked: false } });
+          flushPersistWrites();
+          const noTrailText = JSON.stringify(renderPicker());
+          assert.ok(!noTrailText.includes('拖尾样式') && !noTrailText.includes('拖尾光晕'),
+            '关掉「拖尾效果」后它自己那一串参数必须收起来');
+        }
+        // 复位：总开关关掉（子开关那两条留在关着的档里没关系，总开关关着就都不画）。
+        const fxOff = findCtlInput(renderPicker(), '启用点击与拖尾效果');
+        if (fxOff) fxOff.props.onChange({ target: { checked: false } });
+        flushPersistWrites();
+      }
+      // ── 三号模块（3D 效果）：默认关 ⇒ 只画总开关 + 说明；开了才长四个参数 ──
+      //    它跟另两个模块最大的不同是**它一个 DOM 节点都不建**（行为层只往 body 写 CSS
+      //    变量，位移在 src/styles.js 的视差段里算）⇒ 岛这一侧的判据只盯"控件真的按开关
+      //    长出来、关掉就收起"，屏上真的挪了多少像素由 verify-scene-live 的源码口径与
+      //    样式段判据钉住（无头环境看不见像素）。
+      const parOn = findCtlInput(extTree, '启用 3D 效果');
+      assert.ok(parOn, '三号模块必须画出总开关（findCtlInput 能取到它的 onChange）');
+      assert.equal(parOn && parOn.props.checked, false, '三号模块的总开关默认必须是关的');
+      if (parOn) {
+        parOn.props.onChange({ target: { checked: true } });
+        flushPersistWrites();
+        const parTree = renderPicker();
+        const parText = JSON.stringify(parTree);
+        for (const t of ['3D 效果', '光标移动时，壁纸、吉祥物与柱状图沿屏幕中心的对称方向轻轻偏移：整块界面不动',
+          '背景缓动距离', '图表缓动距离', '吉祥物跟随', '挂件也按「背景缓动距离」一起挪', '缓动平滑']) {
+          assert.ok(parText.includes(t), '打开三号模块后「扩展」页签必须有「' + t + '」');
+        }
+        // 另两个模块的参数**不得**因为三号开着而出现（三张卡各管各的）。
+        assert.ok(!parText.includes('柱宽') && !parText.includes('拖尾粗细'),
+          '另两个模块关着时，三号模块开着也不该画出它们的参数');
+        // 滑块范围必须与 lib/settings-schema.js 的 KINDS 一致（改范围要同时改两处）。
+        assert.equal(sliderMin(findSliderRow(parTree, '背景缓动距离')), '0', '背景缓动距离下限必须是 0%');
+        assert.equal(sliderMax(findSliderRow(parTree, '背景缓动距离')), '10', '背景缓动距离上限必须是 10%');
+        assert.equal(sliderMin(findSliderRow(parTree, '图表缓动距离')), '0', '图表缓动距离下限必须是 0%');
+        assert.equal(sliderMax(findSliderRow(parTree, '图表缓动距离')), '20', '图表缓动距离上限必须是 20%');
+        assert.equal(sliderMin(findSliderRow(parTree, '缓动平滑')), '0', '缓动平滑下限必须是 0%');
+        assert.equal(sliderMax(findSliderRow(parTree, '缓动平滑')), '98', '缓动平滑上限必须是 98%');
+        // 默认回显：背景与图表都是 1%（用户口径里写明的默认值 —— 改大了就是"一开就很晃"）。
+        const parReadoutOf = (labelText) => {
+          const row = findSliderRow(parTree, labelText);
+          if (!row) return null;
+          const hits = (row.children || []).filter((c) =>
+            typeof c?.props?.className === 'string' && c.props.className.includes('we-picker__value'));
+          return hits.length === 1 ? String((hits[0].children || [])[0] ?? '') : null;
+        };
+        assert.equal(parReadoutOf('背景缓动距离'), '1%', '背景缓动距离默认必须是 1%');
+        assert.equal(parReadoutOf('图表缓动距离'), '1%', '图表缓动距离默认必须是 1%');
+        assert.equal(parReadoutOf('缓动平滑'), '85%', '缓动平滑默认必须是 85%');
+        // 吉祥物子开关默认**开**（用户口径第 4 条："如果可以，让吉祥物也参与"）：它只管
+        // "挂件要不要跟着挪"，关掉只是不挪自己，不影响壁纸与柱状图。
+        const parMascot = findCtlInput(parTree, '挂件也按「背景缓动距离」一起挪');
+        assert.ok(parMascot, '三号模块必须画出「吉祥物跟随」子开关');
+        assert.equal(parMascot && parMascot.props.checked, true, '「吉祥物跟随」默认必须是开的');
+        // 复位：总开关关掉（后续判据要的是"默认态"）。
+        const parOff = findCtlInput(renderPicker(), '启用 3D 效果');
+        if (parOff) parOff.props.onChange({ target: { checked: false } });
+        flushPersistWrites();
+        assert.ok(!JSON.stringify(renderPicker()).includes('背景缓动距离'),
+          '关掉三号模块总开关后它那一串参数必须收起来');
+      }
+      // 唯一激活的页签是「扩展」：只数类名不看文案，能同时挡住"没切过去"与"两个都亮"。
+      const activeTabs = [];
+      (function walk(node) {
+        if (!node || typeof node !== 'object') return;
+        if (Array.isArray(node)) { node.forEach(walk); return; }
+        const cls = typeof node.props?.className === 'string' ? node.props.className : '';
+        if (cls.split(/\s+/).includes('we-tabs__tab--active')) activeTabs.push(String((node.children || [])[0] || ''));
+        if (Array.isArray(node.children)) node.children.forEach(walk);
+      })(extTree);
+      assert.deepEqual(activeTabs, ['扩展'], '点开「扩展」后恰好只有它处于激活态');
+      // 负对照：别的页签的控件不得漏进「扩展」（合并渲染器最容易犯的错）。
+      assert.ok(!extText.includes('选择壁纸') && !extText.includes('玻璃透明度') && !extText.includes('吉祥物大小'),
+        '「扩展」页签不得混进别页签的控件');
     }
 
     // ── 「关于」页签：静态页 —— 简介 / 致谢 / 仓库与 Star / 两张交流群二维码 ──
@@ -714,7 +1098,7 @@ setTimeout(async () => {
         return out;
       };
       const tabs = collectByClass(tree, 'we-tabs__tab');
-      assert.ok(tabs.length === 5 && String(String(tabs[4].children[0])) === '关于',
+      assert.ok(tabs.length === 6 && String(String(tabs[5].children[0])) === '关于',
         '「关于」必须是最后一枚页签');
       assert.ok(treeText.includes('"we-tabs__tab we-tabs__tab--active"')
         && collectByClass(tree, 'we-tabs__tab--active').length === 1
@@ -2578,7 +2962,8 @@ setTimeout(async () => {
     // 同一批"搬出去的渲染器"必须**同一条口径**，否则接缝纪律只对其中两个文件成立。
     { file: '../src/panel-tabs.js', user: '页签',
       anchor: ['function renderWallpaperTab(ctx)', 'function renderAppearanceTab(ctx)',
-        'function renderEffectsTab(ctx)', 'function renderAdvancedTab(ctx)'] },
+        'function renderEffectsTab(ctx)', 'function renderAdvancedTab(ctx)',
+        'function renderExtensionsTab(ctx)'] },
   ];
   for (const r of RENDERERS) {
     const src = readFileSync(new URL(r.file, import.meta.url), 'utf8');
@@ -2725,6 +3110,13 @@ setTimeout(async () => {
     'SliderRow 的 input 必须走拖动档（live=true）并就地更新 --we-fill');
   assert.ok(clientSrc.includes('onChange: (e) => onInput(Number(e.target.value), false),'),
     'SliderRow 的 change 必须是抬手档（live=false）');
+  // 滑块右侧那格必须是**数值回显**（值 + 单位），不是只印一个单位 —— 拖动期由 liveFill
+  // 就地改写同一格（面板全域生效：每个走 SliderRow 的控件都受益）。
+  assert.ok(clientSrc.includes('const readout = (v) => (v == null || v === "" ? "" : String(v) + unit);')
+    && clientSrc.includes('}, readout(value)),'),
+    'SliderRow 第三格必须回显「当前值 + 单位」（readout(value)，不是裸 suffix）');
+  assert.ok(clientSrc.includes('if (out) out.textContent = readout(el.value);'),
+    'SliderRow 拖动期必须就地把右侧数值改成同一个格式（liveFill → readout）');
   assert.ok(clientSrc.includes('onInput: (e) => onPick(e.target.value, true),')
     && clientSrc.includes('onChange: (e) => onPick(e.target.value, false),'),
     'swatchRow 的自定义色盘必须同样分 input / change 两档');

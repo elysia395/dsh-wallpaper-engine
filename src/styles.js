@@ -2453,6 +2453,114 @@ const CSS = `
   }
   .we-about__qr-hint { font-size: 0.7em; color: var(--we-ink-3, rgba(128, 128, 128, 0.65)); text-align: center; }
   .we-about__foot { text-align: center; }
+
+  /* ── 「扩展」页签：模块槽位（注册表见 panel-tabs.js 的 extensionModules()）──
+     每个模块一张卡：极薄的玻璃底衬 + 圆角，与「关于」页的二维码卡同一口径
+     （不新造颜色，只取主题墨色 / 边框 token）。表里一张模块都没有时只画空态，
+     所以下面这几条在没有模块的版本里没有渲染对象。 */
+  .we-ext { display: flex; flex-direction: column; gap: 10px; }
+  .we-ext__module {
+    display: flex; flex-direction: column; gap: 6px; padding: 10px;
+    border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.28));
+    border-radius: 12px; background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.08));
+  }
+  .we-ext__module-head { display: flex; align-items: center; gap: 8px; }
+  .we-ext__module-title { font-size: 0.85em; font-weight: 600; color: var(--we-ink, inherit); }
+
+  /* ── 「扩展」一号模块：屏幕下方的资源柱状图（画布层见 src/metrics-layer.js）──
+     它与 .we-layer / .we-scrim 同族：body 级的整屏浮层 ⇒ 必须
+     pointer-events: none + -webkit-app-region: initial !important（后者是上游 #120
+     的硬要求：darwin 壳把 body 下每个非 #root 直接子元素当 no-drag 矩形**几何挖除**，
+     值必须是 initial 而不是 none、且必须带 !important，见 test/verify-host-paint-scope.mjs H3）。
+     ⚠️ 本文件整份 CSS 是一个模板字面量 ⇒ 注释里**不许出现反引号**（会当场截断 CSS，
+     2026-03 那次就是这么把 test/verify-i18n.mjs 的判据 ① 弄红的）。
+     z-index -1 与遮罩层同层、靠文档序压过它 ⇒ 「画在壁纸之上、全部界面之下」。
+     几何是**居中**的：宽高与 left / bottom 都由画布层按设置与视口每帧内联写死
+     （宽 = 格数 × 柱距、高 = 高度，四边各留 20px ⇒ bottom = 20、left 居中），
+     这里的 left: 0 与 height 只是"内联还没写下去"那一瞬的兜底。
+     body 上没有壁纸层标记时整层不画（连空画布都不留）。
+
+     这一族是**三层 + 分段宿主**（同一套类名，各自一个画布，DOM 顺序 = 柱层各段 → 名称层 → 标尺层）：
+       #we-metrics-layer      柱层第 1 段（柱子）；柱层是"一段一条"（自动混色要逐段定档），
+                              其余段是 #we-metrics-layer-2 / -3 …，每段各画自己那一段的像素；
+       #we-metrics-labels     名称层（行名），位置尺寸同步，**混合模式恒为 normal** ——
+                              主题字色接近纯白，跟着正片叠底会被乘没（用户口径"标注文字难以辨别"），
+                              字色亮度另由画布层钳在 20%–80%；
+       #we-metrics-guides     标尺层（细白横线），位置尺寸同步，**混合模式恒为 normal** ——
+                          正片叠底会把白线乘没，而白线在亮背景和暗背景上都要看得见。
+     分开是为了解耦：柱层每秒换帧时名称层与标尺层不用跟着重画；以后做"随光标位置响应的 3D 纵深"
+     时各层也能各自 transform。混合模式必须写在**宿主**上（写在画布上只跟宿主自己的
+     stacking context 混合 = 不生效），所以这里不给 .we-metrics 写死 mix-blend-mode。 */
+  .we-metrics { display: none; }
+  body[data-we-wallpaper="on"] .we-metrics {
+    display: block;
+    position: fixed; left: 0; right: auto; bottom: 0; height: 120px;
+    z-index: -1; overflow: hidden;
+    pointer-events: none; -webkit-app-region: initial !important;
+  }
+  .we-metrics__canvas { display: block; width: 100%; height: 100%; }
+
+  /* ── 「扩展」二号模块：点击效果与拖尾效果（画布层见 src/fx-layer.js）──
+     与 .we-layer / .we-scrim / .we-metrics 同族：body 级的整屏浮层 ⇒ 同样必须
+     pointer-events: none + -webkit-app-region: initial !important（同族的硬要求，
+     见上面 .we-metrics 那段注释与 test/verify-host-paint-scope.mjs H3）。
+     z-index -1、靠文档序插在资源柱状图**之前**（柱状图压在特效之上），
+     所以这一层是"壁纸之上、暗化层之上、柱状图之下、全部界面之下"。
+     宽高恒为整屏：点击/拖尾的坐标直接取指针的视口坐标，不用做偏移换算。
+     opacity（不透明度）与 mix-blend-mode（混合模式）由画布层按设置内联写在宿主上 ——
+     写在画布上只跟宿主自己的 stacking context 混合 = 不生效，这里两者都不写死。
+     body 上没有壁纸层标记时整层不画（连空画布都不留）。 */
+  .we-fx { display: none; }
+  body[data-we-wallpaper="on"] .we-fx {
+    display: block;
+    position: fixed; left: 0; top: 0; width: 100%; height: 100%;
+    z-index: -1; overflow: hidden;
+    pointer-events: none; -webkit-app-region: initial !important;
+  }
+  .we-fx__canvas { display: block; width: 100%; height: 100%; }
+
+  /* ── 「扩展」三号模块：3D 效果（视差；行为层见 src/parallax-layer.js）──
+     这一层与前面几层刚好相反：**它一个 DOM 节点都不建**。视差层只写自定义属性：5 个"各层要乘的
+     系数"写在 body 上（只在设置变了时写一次），-x / -y 这两个"光标偏离屏幕中心的步长"写在
+     **要动的那几层自己**身上（每帧写 —— 自定义属性是继承的，写在 body 上等于每帧让整棵文档树
+     重算样式），另加一个开关属性 data-we-parallax；位移、放大倍数与"谁跟着动"全在这里用 calc 算。
+     这么写有两个好处：① 不新增节点 ⇒ 不参与 stacking、不会被别的层顺手清掉；
+     ② 关掉总开关时连属性都不在 ⇒ 屏上一点痕迹都没有（下面每条规则都挂在开关属性下）。
+     硬约束：**只能用 CSS 独立属性 translate / scale，不能用 transform** —— 壁纸层的过场
+     （src/live-layer.js 的 resetLayerSwitchStyles）与 .we-layer--repaint 会内联写 / 清
+     transform，独立属性才与它们叠加，而不是互相覆盖。
+     系数口径：光标走完一整条对角线时，该层挪"它那个系数"个百分点的对角线（推导见行为层
+     文件头）。壁纸层同时放大 1 + 系数/100 补边：横向最大位移 = 系数/100 × 半屏宽，
+     放大同样多就不会在边上露出底色。柱状图三层各一个系数（柱层 = 图表系数、行名 +1、
+     白线 +2，见 src/parallax-layer.js 的 parallaxRatios）。
+     兜底都是 0px / 0：变量还没写上时位移为零（例如刚开开关、第一帧还没跑）。
+     **点击与拖尾那一层刻意不参与**（用户口径：特效不跟着偏移）。 */
+  body[data-we-parallax="on"] .we-layer {
+    translate: calc(var(--we-parallax-x, 0px) * var(--we-parallax-bg, 0))
+      calc(var(--we-parallax-y, 0px) * var(--we-parallax-bg, 0));
+    scale: calc(1 + var(--we-parallax-bg, 0) / 100);
+  }
+  body[data-we-parallax="on"] .we-rope {
+    translate: calc(var(--we-parallax-x, 0px) * var(--we-parallax-mascot, 0))
+      calc(var(--we-parallax-y, 0px) * var(--we-parallax-mascot, 0));
+  }
+  body[data-we-parallax="on"] .we-metrics {
+    translate: calc(var(--we-parallax-x, 0px) * var(--we-parallax-metrics, 0))
+      calc(var(--we-parallax-y, 0px) * var(--we-parallax-metrics, 0));
+  }
+  body[data-we-parallax="on"] .we-metrics--labels {
+    translate: calc(var(--we-parallax-x, 0px) * var(--we-parallax-labels, 0))
+      calc(var(--we-parallax-y, 0px) * var(--we-parallax-labels, 0));
+  }
+  body[data-we-parallax="on"] .we-metrics--guides {
+    translate: calc(var(--we-parallax-x, 0px) * var(--we-parallax-guides, 0))
+      calc(var(--we-parallax-y, 0px) * var(--we-parallax-guides, 0));
+  }
+  /* 只有"正在动的那几帧"才把它们提成独立合成层：提上去之后每帧只是挪现成的纹理，
+     合成器直接做，不必把满屏壁纸重绘一遍。类由行为层在起帧时加上、到位收工与关掉总开关时
+     摘掉 —— 本仓刻意不留**常驻**合成层（见 .we-layer--repaint 的两帧微推）。
+     只提示 translate：scale 是静态的，不提它就不会被冻结栅格化倍率。 */
+  body[data-we-parallax="on"] .we-parallax--moving { will-change: translate; }
 `;
 
 export { READABILITY_FLOOR, READABILITY_FLOOR_DARK, CSS };

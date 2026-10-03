@@ -148,7 +148,84 @@ runtime the wallpaper is remembered and degrades to the legacy plain iframe (no 
      **The authoritative list (each route's source line, registration shape and context contract) is [`ROUTE-INDEX.md`](../ROUTE-INDEX.md)** — this file no longer hand-writes the path table *or a route count* (hand-writing always rots: that table long listed `/scene-runtime`, `/scene-manifest` and `/scene-resource`, **all three deleted**, while missing most of the routes that existed; the count drifted the same way).
 - **Client half** (`lib/client.js`): a browser module that fetches the inventory and renders the selected
   wallpaper into a fixed layer *behind* the app columns; it registers the first-level settings page
-  **「壁纸引擎」** (Wallpaper Engine) with four tabs (library / appearance / playback / system), where
+  **「壁纸引擎」** (Wallpaper Engine) with six tabs (library / appearance / playback / system /
+  extensions / about — **extensions** is the module container for later features: its registry comes
+  lazily from `extensionModules()` in `src/panel-tabs.js` (never a top-level reference to a sibling
+  module's symbol — importing that source file on its own would throw a ReferenceError), an empty
+  registry renders an empty state, and the modules registered today are **hardware monitor bars**
+  (its factory defaults were re-baked in a later round to the maintainer's own tuned set: the master
+  switch is **on by default** and ten keys — height / offsets / bar width / row gap / threshold / opacity /
+  the black-band opacity / glow / outline — carry those values; the numbers live in
+  `lib/settings-schema.js` and are not copied here):
+  descriptor `src/ext-metrics.js` (draws the island, owns the appearance controls), canvas layer
+  `src/metrics-layer.js` (the glow bars stepping, centered, in the lower part of the screen: one row per
+  series, stacked vertically, adjustable bar width / bar gap / row gap and a horizontal / vertical offset
+  for the whole block, each row's **English short tag** centered over it (CPU / RAM / GPU / NET / DISK,
+  fading from top to bottom), anything above the threshold in red, **thin white rules** across the whole
+  block at each row's 50% height and between rows as a scale, and a **blend mode** that can be picked by
+  hand or left on Auto — Auto cuts the whole block **into a few bands, one per group of bars**, samples the
+  **brightness actually on screen** behind each band and picks multiply for bright areas / overlay for dark
+  ones / **Lighten with the bars' opacity cut down for almost black ones** (on pure black only Lighten lets a bar
+  show its own colour, and a full-strength Lighten would smear the block into one glowing band; that cut is the
+  **Bar opacity on black** control in the extension island, 50% by default = half, 100% = no cut, and it touches
+  the bars layer only, never the labels or the rules) (not the brightness of the wallpaper image itself: the plugin's own background brightness / contrast,
+  the fade color behind a translucent wallpaper and the `scrim` darkening are undone first — `drawImage`
+  reads raw image pixels, so without that the mode flips exactly where a bright wallpaper has been dimmed;
+  `mix-blend-mode` is element-level, so per-pixel switching is impossible and bands are the approximation),
+  falling back to the last hand-picked mode for any band it cannot sample; in the "Distinct hues" mode each
+  of the five series takes its own custom color),
+  data from the host's `lib/routes/metrics.js` → `lib/metrics.js`). The canvas layer mounts **three host
+  layers**: the bars (one host **per band** in Auto mode — that is where the blend mode and opacity are
+  written), the row labels, and the white rules — the latter two always blending normally (multiply would
+  wipe the white text and lines out), and the label ink is additionally clamped to 20%–80% lightness so a
+  near-white theme color stays legible; the three stay independent (their own repaint timing, blend mode and
+  opacity), which the upcoming cursor-driven 3D depth effect builds on. The whole block must also stay
+  **above the scrim**: the three host families and `.we-scrim` are all `z-index: -1` body-level overlays, so
+  their stacking comes from document order, and the scrim is only appended once a wallpaper becomes active —
+  the layer therefore checks that every frame and moves itself back up when it is covered. The registry also
+  holds a **second module, click & trail effects**: descriptor `src/ext-fx.js` (the island — one master
+  switch plus a sub-switch each for clicks and the trail, alongside their style, size, glow, duration,
+  width, opacity, blend mode and colors), canvas layer `src/fx-layer.js` (**client-only, no host half**) — it
+  only listens passively to `pointermove` / `pointerdown` on `document` (the host is a `pointer-events: none`
+  overlay, so it never captures input; a click whose target sits inside
+  `button, a, input, select, textarea, label, [role="button"], [contenteditable="true"], .we-picker, .we-modal`
+  is dropped, so clicking the plugin's own controls never also bursts a ripple) and paints into a body-level
+  `.we-fx` canvas (`z-index: -1`; document order keeps it above the wallpaper and below the scrim and the bars,
+  re-checked every frame with `compareDocumentPosition`). The loop is **content-driven**: clicks draw two
+  spreading rings (the second one starting 18% of the lifetime later) or a cluster of **unequal** flying dots
+  plus a white flash at the center, and the trail either tapers a round-capped band segment by segment or
+  leaves dots behind at a fixed step — both fade by age and are dropped once spent (a resting pointer still
+  fades out), and the loop stops itself when there is nothing left to draw (zero frames while idle). It
+  deliberately never reads wallpaper pixels (hence no Auto mode), writes opacity and blend mode on the
+  **host element** (on the canvas they would only blend against the host's own stacking context), composites
+  with `lighter` inside, and takes its color from the theme accent / rainbow (a hue per instance, drifting
+  over time) / custom.
+  The registry also holds a **third module, 3D depth**: behaviour layer `src/parallax-layer.js` plus
+  descriptor `src/ext-parallax.js` — the opposite of the two above, it **builds no DOM node at all**. It
+  only listens passively to `pointermove` on `document` and `resize` on `window`, turning the cursor's
+  offset from the screen center into a few CSS variables: the five per-layer multipliers plus a
+  `data-we-parallax` switch attribute go on the body (written once per settings change), while the
+  per-frame displacement step goes on **the layers that actually move** (custom properties inherit, so
+  writing it on the body would re-resolve styles for the whole document every frame) — the displacement,
+  the up-scaling and the multipliers themselves are computed by the parallax section of `src/styles.js`
+  with `calc()`. The wallpaper / mascot / bars each multiply their own
+  percentage (1% for the wallpaper, 1% for the bars layer, the row labels 1 more and the white rules 2,
+  the mascot sharing the wallpaper's value), the direction is negated so the shift is **mirrored about
+  the screen center** (cursor to the top right moves everything to the bottom left), the easing is an
+  exponential approach per frame (`parallaxSmooth`, 0 = instant), and the loop stops itself as soon as the
+  displacement left on screen no longer shows (zero frames while idle; frames are capped at 60Hz so a
+  high-refresh display runs every other frame, "arrived" is judged from the remaining step times the
+  largest multiplier and loosened to 1px once the cursor has been still for 180ms, no frame is scheduled
+  at all when every multiplier is 0, and the moving layers are promoted to compositor layers only while
+  the loop runs, the hint being dropped the moment it settles — this repo deliberately keeps no always-on
+  compositor layer). The wallpaper layer is also scaled up by the same amount
+  (`1 + pct / 100`) so no base color shows at the edges, and the displacement uses the CSS
+  **independent properties `translate` / `scale`** rather than `transform` — the wallpaper transition's
+  `resetLayerSwitchStyles` writes and clears an inline `transform`, so only the independent properties
+  compose with it. The click & trail layer deliberately does not move, and neither does any of the
+  interface (drawer, panels).
+  On the settings
+  page that hosts it,
   picking wallpapers is an in-panel drill-in view (no modals) alongside hide/restore, transitions /
   playback speed / flip, accent color + glass transparency, the font system, and custom-upload management.
   A separate **quick playback panel** (current wallpaper / rotation / fast list switching / sound, with

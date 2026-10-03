@@ -2365,11 +2365,13 @@ function keySegBrief(v) {
 // 因此下面这些 applyEffects() / clearEffects() 调用点无需改动（契约见该文件头）。
 
 // ── Picker tabs ─────────────────────────────────────────────────────────────
-// 调节面板的信息架构：五个页签互斥展示（壁纸库 / 外观 / 播放 / 系统 / 关于）—— 前四个
+// 调节面板的信息架构：六个页签互斥展示（壁纸库 / 外观 / 播放 / 系统 / 扩展 / 关于）—— 前四个
 // 由原六个页签（壁纸/外观/吉祥物/效果/声音/高级）合并而来：效果+声音 → 播放、吉祥物+
 // 高级 → 系统、壁纸 → 壁纸库；「关于」是后加的页面（简介 / 仓库与 Star / 交流群 / 致谢，
 // 不读面板状态、不写设置；外部输入只有两样：那行 star 数与两张二维码 PNG，后者经
-// 宿主路由 /about-qr/<文件名> 直出，客户端只存路径）。最后停留
+// 宿主路由 /about-qr/<文件名> 直出，客户端只存路径）；「扩展」在「关于」**之前**、是后加的
+// **模块容器**（页签栏里它排第 5、致谢仍压尾）：内容是一张注册表，见 src/panel-tabs.js 的
+// extensionModules()。最后停留
 // 的页签记在 localStorage（仅 UI 状态，不进 config.json，也不需要 sanitize / serialize）。
 const PICKER_TAB_KEY = "dsh-wallpaper-engine:picker-tab";
 const PICKER_TABS = [
@@ -2377,6 +2379,7 @@ const PICKER_TABS = [
   { id: "appearance", get label() { return weT("外观"); } },
   { id: "playback", get label() { return weT("播放"); } },
   { id: "system", get label() { return weT("系统"); } },
+  { id: "extensions", get label() { return weT("扩展"); } },
   { id: "about", get label() { return weT("关于"); } },
 ];
 // 旧页签 id → 新 id 的迁移（「字体」更早并入了「外观」）：别把老用户甩回第一页。
@@ -2436,14 +2439,19 @@ function starCountLabel() {
 // ARRAY (the sidebar-glass group) — React requires keys there.
 function SliderRow(label, min, max, step, value, onInput, suffix, key, opts) {
   opts = opts || {};
-  // 拖动期的轨道填充：就地改这一行的 --we-fill（**局部样式写，不触发 React 渲染**）。
-  // 数值文本（.we-picker__value）留给抬手那一次 emit —— 与「壁纸属性」面板同一口径
-  //（拖动中不重渲染，见 src/picker-props-panel.js 的 onPropInput）。
+  const unit = suffix == null ? "" : String(suffix);
+  const readout = (v) => (v == null || v === "" ? "" : String(v) + unit);
+  // 拖动期的轨道填充与**数值回显**：就地改这一行的 --we-fill 与右侧数值文本
+  //（**局部 DOM 写，不触发 React 渲染**）。抬手那一次仍走完整 emit（含落盘），
+  // 于是慢帧下也不会出现"数字跟不上滑块"的空档。
   const liveFill = (el) => {
     try {
       const lo = Number(el.min); const hi = Number(el.max); const v = Number(el.value);
       const pct = hi > lo ? Math.max(0, Math.min(100, ((v - lo) / (hi - lo)) * 100)) : 0;
       el.style.setProperty("--we-fill", pct + "%");
+      const row = el.parentNode;
+      const out = row && typeof row.querySelector === "function" ? row.querySelector(".we-picker__value") : null;
+      if (out) out.textContent = readout(el.value);
     } catch { /* 回显是增强，失败不影响取值 */ }
   };
   return React.createElement("div", { className: "we-picker__row we-picker__slider-row", key: key },
@@ -2467,7 +2475,9 @@ function SliderRow(label, min, max, step, value, onInput, suffix, key, opts) {
       // on release); onInput above is what makes the knob feedback instant.
       onChange: (e) => onInput(Number(e.target.value), false),
     }),
-    React.createElement("span", { className: "we-picker__hint we-picker__value" }, suffix),
+    // 右侧数值 = 当前值 + 单位（用户口径："滑动条右侧显示数值"）。它是**回显**，
+    // 真值永远在设置里；liveFill 在拖动中就地把这行文本换成同一个格式。
+    React.createElement("span", { className: "we-picker__hint we-picker__value" }, readout(value)),
   );
 }
 
@@ -2697,6 +2707,66 @@ function onPauseOnHidden(e) { setSetting("pauseOnHidden", e.target.checked); emi
 function onPauseOnBlur(e) { setSetting("pauseOnBlur", e.target.checked); emit(); }
 function onPauseOnBattery(e) { setSetting("pauseOnBattery", e.target.checked); emit(); }
 function onToggleLiveDiag() { toggleLiveDiag(); emit(); }
+// ── 「扩展」页签（一号模块：硬件资源监控柱状图）的处理器 ──────────────────────
+// 形状与上面一致：控件只报事件，写设置 + 重渲染都在这里。柱状图的**视觉参数**不受 emit
+// 影响（src/metrics-layer.js 每帧现读设置、画前比一次签名）⇒ 滑块走 commitLiveSetting 的
+// live 档即时可见，抬手时才走完整路径（含落盘与一次 emit）。
+function onMetricsEnabled(e) { setSetting("metricsEnabled", e.target.checked); emit(); }
+function onMetricsColorMode(mode) { setSetting("metricsColorMode", mode); emit(); }
+function onMetricsFill(e) { setSetting("metricsFill", e.target.checked); emit(); }
+function onMetricsLabels(e) { setSetting("metricsLabels", e.target.checked); emit(); }
+// 细白横线（每行 50% 高度一条 + 每两行之间一条，单独一层画，见 src/metrics-layer.js）。
+function onMetricsGuides(e) { setSetting("metricsGuides", e.target.checked); emit(); }
+// 混合模式走下拉（8 档，平铺会挤成一团）：与 onAdapterTarget 同一形状 —— 控件报事件、这里取值。
+function onMetricsBlend(e) { setSetting("metricsBlend", e.target.value); emit(); }
+// 五条序列的显隐开关共用一个处理器：字段名从渲染器传来的（都是 settings-schema 里的键）。
+function onMetricsSeries(key, value) { setSetting(key, value); emit(); }
+// 五条序列各自的颜色（「分色」档的取色器）：与别的视觉参数一样走 live 档，拖动取色时即时可见。
+function onMetricsColor(key, value, live) { commitLiveSetting(key, value, live); }
+function onMetricsHeight(v, live) { commitLiveSetting("metricsHeight", v, live); }
+// 位置（可负）：整块的左右 / 上下偏移，见 src/metrics-layer.js 的 metricsFrame。
+function onMetricsOffsetX(v, live) { commitLiveSetting("metricsOffsetX", v, live); }
+function onMetricsOffsetY(v, live) { commitLiveSetting("metricsOffsetY", v, live); }
+function onMetricsBarWidth(v, live) { commitLiveSetting("metricsBarWidth", v, live); }
+function onMetricsBarGap(v, live) { commitLiveSetting("metricsBarGap", v, live); }
+function onMetricsStackGap(v, live) { commitLiveSetting("metricsStackGap", v, live); }
+function onMetricsThreshold(v, live) { commitLiveSetting("metricsThreshold", v, live); }
+function onMetricsOpacity(v, live) { commitLiveSetting("metricsOpacity", v, live); }
+// 极黑档的倍率（自动档判成极黑背景时柱层再乘这个比例，默认 50%）：与其它视觉参数同一档，
+// 拖动时即时可见（见 src/metrics-layer.js 的 deepAlpha）。
+function onMetricsDeepOpacity(v, live) { commitLiveSetting("metricsDeepOpacity", v, live); }
+function onMetricsLineWidth(v, live) { commitLiveSetting("metricsLineWidth", v, live); }
+function onMetricsGlow(v, live) { commitLiveSetting("metricsGlow", v, live); }
+function onMetricsSmooth(v, live) { commitLiveSetting("metricsSmooth", v, live); }
+function onMetricsWindow(v, live) { commitLiveSetting("metricsWindow", v, live); }
+// ── 「扩展」页签（二号模块：点击效果与拖尾效果）的处理器 ──────────────────────
+// 与上面同形：控件只报事件，写设置 + 重渲染都在这里。那一层没有网络往返、"点了就有反应"是
+// 每帧现读设置 ⇒ 开关与档位走 emit 的完整路径，滑块走 commitLiveSetting 的 live 档
+// （拖动时即时可见，抬手才落盘 + emit）。
+function onFxEnabled(e) { setSetting("fxEnabled", e.target.checked); emit(); }
+function onFxClick(e) { setSetting("fxClick", e.target.checked); emit(); }
+function onFxTrail(e) { setSetting("fxTrail", e.target.checked); emit(); }
+function onFxClickStyle(id) { setSetting("fxClickStyle", id); emit(); }
+function onFxTrailStyle(id) { setSetting("fxTrailStyle", id); emit(); }
+function onFxColorMode(id) { setSetting("fxColorMode", id); emit(); }
+function onFxBlend(e) { setSetting("fxBlend", e.target.value); emit(); }
+function onFxColor(value, live) { commitLiveSetting("fxColor", value, live); }
+function onFxClickSize(v, live) { commitLiveSetting("fxClickSize", v, live); }
+function onFxClickGlow(v, live) { commitLiveSetting("fxClickGlow", v, live); }
+function onFxTrailLength(v, live) { commitLiveSetting("fxTrailLength", v, live); }
+function onFxTrailWidth(v, live) { commitLiveSetting("fxTrailWidth", v, live); }
+function onFxTrailGlow(v, live) { commitLiveSetting("fxTrailGlow", v, live); }
+function onFxOpacity(v, live) { commitLiveSetting("fxOpacity", v, live); }
+// ── 「扩展」页签（三号模块：3D 效果）的处理器 ───────────────────────────────
+// 与上面两组同形：控件只报事件，写设置 + 重渲染都在这里。视差层没有网络往返与画布，
+// 它每帧现读设置 ⇒ 开关走 emit 的完整路径，滑块走 commitLiveSetting 的 live 档
+// （拖动时即时可见，抬手才落盘 + emit）。方向不是设置项（口径是"关于屏幕中心对称"），
+// 要换向改 src/parallax-layer.js 的 PARALLAX_DIRECTION。
+function onParallaxEnabled(e) { setSetting("parallaxEnabled", e.target.checked); emit(); }
+function onParallaxMascot(e) { setSetting("parallaxMascot", e.target.checked); emit(); }
+function onParallaxBg(v, live) { commitLiveSetting("parallaxBg", v, live); }
+function onParallaxMetrics(v, live) { commitLiveSetting("parallaxMetrics", v, live); }
+function onParallaxSmooth(v, live) { commitLiveSetting("parallaxSmooth", v, live); }
 /**
  * 适配方式（覆盖 / 填充 / 居中 / 拉伸）：除写设置外，Edge 的 canvas 渲染路径把 fit 存在
  * `weDrawCtx` 上，而 `syncLayers` 的 same-canvas 守卫不会重建 draw loop ⇒ 这里要直接更新并重绘。
@@ -3424,8 +3494,8 @@ const officialColorOf = (tokens) => {
     }
   }, []);
 
-  // ── 页签状态：调节面板分五个页签（壁纸库/外观/播放/系统/关于 —— 前四个由原六域
-  //    合并，「关于」后加），每份实例独立记忆（设置页与仓库抽屉互不影响）；只存
+  // ── 页签状态：调节面板分六个页签（壁纸库/外观/播放/系统/扩展/关于 —— 前四个由原六域
+  //    合并，「扩展」「关于」后加），每份实例独立记忆（设置页与仓库抽屉互不影响）；只存
   //    localStorage，不进 config.json。useState 必须在下方早退分支之前调用（Rules of Hooks）。 ──
   const [activeTab, setActiveTab] = React.useState(readSavedPickerTab);
   const switchTab = (id) => {
@@ -3527,10 +3597,25 @@ const officialColorOf = (tokens) => {
   // 渲染器只拿值 + 回调（同模态框那条契约）。判定就一句：
   // token 变了且不在加载中才重拉。
   // ── 页签面板内容（函数声明提升，renderActiveTab 在 return 里先调用）──────
-  // 五页签 = 两个单渲染器（「外观」「关于」）+ 两个合并渲染器（「播放」= 效果 + 声音，
-  // 「系统」= 吉祥物 + 高级）+ 壁纸库。「关于」不取任何 ctx 字段（静态页）。
+  // 六页签 = 三个单渲染器（「外观」「扩展」「关于」）+ 两个合并渲染器（「播放」= 效果 + 声音，
+  // 「系统」= 吉祥物 + 高级）+ 壁纸库。「关于」不取任何 ctx 字段（静态页）；「扩展」自己也不读
+  // 字段，但要把 ctx **整包转交**给注册表里的模块（每个模块的控件由它自己的渲染器画）。
+  const extensionCtx = () => ({
+    sel: selection,
+    onMetricsEnabled, onMetricsColorMode, onMetricsFill, onMetricsLabels, onMetricsSeries,
+    onMetricsGuides, onMetricsBlend, onMetricsColor,
+    onMetricsHeight, onMetricsOffsetX, onMetricsOffsetY,
+    onMetricsBarWidth, onMetricsBarGap, onMetricsStackGap, onMetricsThreshold,
+    onMetricsOpacity, onMetricsDeepOpacity, onMetricsLineWidth, onMetricsGlow,
+    onMetricsSmooth, onMetricsWindow,
+    onFxEnabled, onFxClick, onFxClickStyle, onFxClickSize, onFxClickGlow,
+    onFxTrail, onFxTrailStyle, onFxTrailLength, onFxTrailWidth, onFxTrailGlow,
+    onFxOpacity, onFxBlend, onFxColorMode, onFxColor,
+    onParallaxEnabled, onParallaxBg, onParallaxMetrics, onParallaxMascot, onParallaxSmooth,
+  });
   const renderActiveTab = () => {
     if (activeTab === "about") return renderAboutTab({});
+    if (activeTab === "extensions") return renderExtensionsTab(extensionCtx());
     if (activeTab === "appearance") return renderAppearanceTab({
       setSetting, setTransient,
       fontSet: fontSetCtx(),
@@ -3613,7 +3698,7 @@ const officialColorOf = (tokens) => {
       React.createElement("span", { className: "we-picker__card-badge" }, String(playableList.length)),
       React.createElement("span", { className: "we-picker__card-desc" }, weT("本地 Wallpaper Engine 壁纸 · 液态玻璃主题")),
     ),
-    // ── 页签栏（分段式）：五个页签互斥展示，替代三十控件的单列长滚动。
+    // ── 页签栏（分段式）：六个页签互斥展示，替代三十控件的单列长滚动。
     //    指示胶囊随 activeTab 平移（transform 合成器属性，不引发布局）；宽度按
     //    PICKER_TABS.length 现算 ⇒ 加页签只改那张表，这里零改动。 ──
     React.createElement("div", { className: "we-tabs", role: "tablist", "aria-label": weT("壁纸引擎设置分区") },
@@ -4243,6 +4328,19 @@ function apply(ctx) {
     ctx.effect(() => {
       const unsub = subscribe(syncLayers);
       const unsubEffects = subscribe(applyEffects);
+      // 「扩展」页签一号模块（硬件资源监控柱状图）的画布层：它自己读设置、自己轮询宿主，
+      // 所以接法与壁纸层同形 —— 每次 emit 重判一次"该不该活"（启用与否 / 有没有壁纸层 /
+      // 五条序列是不是全关）。参数不在这里传：那一层每帧现读 `selection`。
+      const unsubMetrics = subscribe(syncMetricsLayer);
+      // 「扩展」页签二号模块（点击效果与拖尾效果）的画布层：接法同上。它只在"总开关开着且
+      // 点击或拖尾至少一个没关"时才活，并且**内容驱动**——没有轨迹点、没有存活的特效时
+      // 它自己停下 rAF 并清空画布，光标不动就不耗帧。
+      const unsubFx = subscribe(syncFxLayer);
+      // 「扩展」页签三号模块（3D 效果）的视差层：接法同上，但它是**唯一不建 DOM 的一层** ——
+      // 只写 CSS 变量（各层系数落在 body 上、每帧变的位移步长落在要动的那几层自己身上）与一个
+      // 开关属性，位移由 src/styles.js 的视差段算出来。它只在"总开关开着"时才活，并且
+      // **收敛驱动**——屏上剩下的位移看不出来就停 rAF，光标不动不耗帧（帧率封顶 60Hz）。
+      const unsubParallax = subscribe(syncParallaxLayer);
       // Occlusion pause: re-apply the effective playing state whenever the
       // page hides/shows or the window loses/gains focus (see occlusionActive).
       // Fires syncLayers → play/pause on the video; decode drops to 0 while
@@ -4355,10 +4453,16 @@ function apply(ctx) {
       }
       syncLayers();
       applyEffects();
+      syncMetricsLayer();
+      syncFxLayer();
+      syncParallaxLayer();
       return () => {
         disposed = true;
         unsub();
         unsubEffects();
+        unsubMetrics();
+        unsubFx();
+        unsubParallax();
         if (ocWatch) { try { clearInterval(ocWatch); } catch { /* ignore */ } ocWatch = 0; }
         if (typeof window !== "undefined" && typeof window.removeEventListener === "function") {
           for (const t of ocListeners) window.removeEventListener(t, onOcclusionChange);
@@ -4391,6 +4495,15 @@ function apply(ctx) {
         disposePreparedMedia();
         // 预热槽位同一条纪律：留着就是一个没有句柄的解复用器（页面关闭前不会自己走）。
         disposeWarmVideo();
+        // 资源柱状图的画布层：DOM 节点、1 Hz 采样与 rAF 循环都在那一层自己手里
+        // （宿主采样器会因为它不再来取数而在 30 s 后自停）。
+        disposeMetricsLayer();
+        // 点击与拖尾效果的画布层：DOM 节点、指针监听与 rAF 循环同样在那一层自己手里
+        // （它的 rAF 只在自己还有内容时续帧，所以这里主要是摘节点 + 解绑监听）。
+        disposeFxLayer();
+        // 3D 效果的视差层：它没有 DOM 节点与画布，收尾就是把监听、rAF 与 body 上的
+        // 那几个 CSS 变量 / 开关属性一起摘掉（否则换过一次重挂还会残留着上一份位移）。
+        disposeParallaxLayer();
         // 关掉音频闸并退役渐变中的旧层：禁用/重挂时旧层不能被留在屏上等退役定时器
         // （≤1.3s 的可见残留），闸也不该跨过一次重挂活着（准备链的 BGM 起播会被它
         // 推迟到那个定时器触发为止）。这两条收尾本身是正确性要求：跨过一次重挂活着的闸

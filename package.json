@@ -41,6 +41,7 @@
     "lib/index.js",
     "lib/log.js",
     "lib/notice.js",
+    "lib/metrics.js",
     "lib/routes/",
     "lib/fontsets/",
     "lib/about/",

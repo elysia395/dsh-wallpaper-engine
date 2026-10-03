@@ -118,6 +118,8 @@ graph LR
     IDX --> R6["lib/routes/upload.js<br/>上传"]
     IDX --> R7["lib/routes/about-qr.js<br/>「关于」页二维码（随包 PNG 直出）"]
     IDX --> R8["lib/routes/github-stars.js<br/>仓库 star 数（带缓存；全插件唯一出站请求）"]
+    IDX --> R9["lib/routes/metrics.js<br/>资源柱状图（只读取数）"]
+    R9 --> M4["lib/metrics.js<br/>资源采样器：CPU / 内存差分 + 常驻 typeperf 腿（懒启动、闲置自停）"]
     IDX --> M1["lib/media/supervisor.js<br/>中间件生命周期"]
     IDX --> M2["lib/media/provision.js<br/>按需下载 + 校验"]
     IDX --> M3["lib/media/legacy.js<br/>内置回落实现"]
@@ -171,8 +173,8 @@ graph LR
     subgraph SRC["src/**（手写真源，浏览器侧唯一真源）"]
         C["src/client.js<br/>正文"]
         A["src/styles.js<br/>纯数据：整份样式表"]
-        B["src/panel-tabs.js · src/picker-*.js<br/>UI 面"]
-        D["src/live-layer.js · src/video-layer.js · src/layer-core.js · src/media-prep.js<br/>行为面"]
+        B["src/panel-tabs.js · src/picker-*.js · src/ext-metrics.js · src/ext-fx.js · src/ext-parallax.js<br/>UI 面"]
+        D["src/live-layer.js · src/video-layer.js · src/metrics-layer.js · src/fx-layer.js · src/parallax-layer.js · src/layer-core.js · src/media-prep.js<br/>行为面"]
         E["src/font/*<br/>字体系统"]
         F["lib/settings-schema.js<br/>唯一共享内核"]
     end
@@ -210,8 +212,8 @@ graph LR
 | 角色 | 模块 | 谁给它外界 |
 |---|---|---|
 | **状态真源 + 装配（门面）** | `src/client.js`（正文） | 自己持有：设置 store（`selection`）、持久化、`apiFetch`、`weT` 接线、React 根、`ctx` 的组装点 |
-| **接收 `ctx` 的渲染 / 行为层** | `live-layer` · `panel-tabs` · `sidebar-right` · `picker-modal` · `picker-props-panel` · `theme-follow` · `fontset-editor` · `font/apply` · `font/color-roles` | **门面在调用点组装 `ctx` 传进来** —— 这一层里**不**直接读 `selection` |
-| **基座（无 `ctx`，读扁平符号）** | `media-prep` · `picker-model` · `video-layer` · `effects` · `quick-panel` · `i18n` · `api-client` · `adapter` · `we-cond` · `persistence` · `fontset-store` | 直接读**同作用域**的符号；自己的符号反过来被正文读 |
+| **接收 `ctx` 的渲染 / 行为层** | `live-layer` · `panel-tabs` · `ext-metrics` · `ext-fx` · `ext-parallax` · `sidebar-right` · `picker-modal` · `picker-props-panel` · `theme-follow` · `fontset-editor` · `font/apply` · `font/color-roles` | **门面在调用点组装 `ctx` 传进来** —— 这一层里**不**直接读 `selection` |
+| **基座（无 `ctx`，读扁平符号）** | `media-prep` · `picker-model` · `video-layer` · `metrics-layer` · `fx-layer` · `parallax-layer` · `effects` · `quick-panel` · `i18n` · `api-client` · `adapter` · `we-cond` · `persistence` · `fontset-store` | 直接读**同作用域**的符号；自己的符号反过来被正文读 |
 | **纯数据 / 常量表** | `styles.js`（整份样式表）· `i18n-copy.js`（词表）· `about-assets.js` · `font/typography.js` · `font/components.js` | 无外界 |
 | **通道 / 工具** | `layer-core`（两条通道共用的切换核心） · `nav-icon` · `persistence` · `fontset-store` | 见各自文件头 |
 
@@ -235,8 +237,11 @@ graph LR
 |---|---|---|---|
 | **字体子系统** | `font/apply` · `font/components` · `font/color-roles` · `font/typography` | `components → apply` ×13 · `→ color-roles` ×10 | ✅ `src/font/`（门槛① 4 个成员 + 门槛② [`FONT-SYSTEM.md`](./FONT-SYSTEM.md)） |
 | **picker** | `picker-model`（纯函数、零外界） · `picker-modal` · `picker-props-panel` · `quick-panel` | `modal → model` ×30 | 平铺（见下） |
-| **渲染器层** | `panel-tabs` · `picker-modal` · `picker-props-panel` · `fontset-editor` | **互相零读取**（只读门面与纯函数工具） | 平铺 |
+| **渲染器层** | `panel-tabs` · `picker-modal` · `picker-props-panel` · `fontset-editor` · `ext-metrics` | **互相零读取**（只读门面与纯函数工具；`ext-metrics` 只多读 `metrics-layer` 的序列表） | 平铺 |
 | **媒体管线** | `live-layer` · `video-layer` · `media-prep` · `layer-core` · `effects` | `live-layer` → 家族内 | 平铺 |
+| **资源柱状图（「扩展」一号模块的两半）** | `metrics-layer`（画布层：零 `ctx`、只读 `selection`） · `ext-metrics`（扩展岛：收 `ctx`，动作走具名 `on*`） | `ext-metrics → metrics-layer`（读 `METRICS_SERIES` ×1） | 平铺 |
+| **点击与拖尾（「扩展」二号模块的两半）** | `fx-layer`（画布层：零 `ctx`、只读 `selection`、自带输入监听与内容驱动的 rAF） · `ext-fx`（扩展岛：收 `ctx`，动作走具名 `on*`） | 两者**互相零读取**（岛不读画布层的任何符号；画布层只在帧里现读 `selection`） | 平铺 |
+| **3D 纵深（「扩展」三号模块的两半）** | `parallax-layer`（行为层：零 `ctx`、只读 `selection`、**一个 DOM 节点都不建**，只把光标位置写成 CSS 变量 —— 5 个"各层系数"落 body、每帧变的"位移步长"落**要动的那几层自己**身上） · `ext-parallax`（扩展岛：收 `ctx`，动作走具名 `on*`） | 两者**互相零读取**（岛不读行为层的任何符号；行为层只在帧里现读 `selection`，百分比同样来自 `selection`） | 平铺 |
 | **设置与宿主通道** | `persistence` · `fontset-store` · `adapter` · `api-client` · `i18n` | 互读少 | 平铺 |
 
 **为什么不给上表除 `src/font/` 之外任何一族建目录**（一次性裁决，别再重新讨论）：
@@ -246,6 +251,9 @@ graph LR
 | **picker** | 门槛②需要**新建一份权威文档**（`FONT-SYSTEM.md` 的对应物）；四个成员里 `picker-model` 是纯数据层、`quick-panel` 是组件，**形态不同**，是否同收取决于"选择器"被定义为数据 + 视图还是再加一层外壳。收益上限只是"一眼看出是一伙的"，而成本见 §4 第 1 条的"搬动的成本" |
 | **渲染器层** | 它是同一**架构层**，不是一伙人（成员**互相零读取**）。且与 picker **归属冲突**（`picker-modal` / `picker-props-panel` 同属两族），而规则没写优先级 ⇒ **同一优先级只开一个** |
 | **媒体管线** | `src/video-layer.js` 头注释写明它独立的**全部理由**就是"**不**在实时那条路里"（真机踩过十几秒纯色帧）；`src/layer-core.js` 的围栏专门钉"与壁纸类型无关"。收进同一目录**正好从目录上抹掉这条边界** |
+| **资源柱状图** | 两个成员是**两半**而不是同类：一半零 `ctx`（`metrics-layer`）、一半收 `ctx`（`ext-metrics`），归属上同时落在"行为面"与"渲染器层"两张角色清单里 ⇒ 同 `picker` / 渲染器层那条"归属冲突只开一个"。它们的共同点已经由**文件名 + 设置键前缀（`metrics*`）+ 扩展岛**三处表达 |
+| **点击与拖尾** | 同上一条：`fx-layer` 零 `ctx`、`ext-fx` 收 `ctx`，两半跨两张角色清单。共同点同样由**文件名前缀（`fx-`）+ 设置键前缀（`fx*`）+ 扩展岛**表达；额外理由：画布层是**纯客户端**的（不读任何宿主路由），与宿主那半边毫无关系，收成目录反而会暗示"这两半要一起改" |
+| **3D 纵深** | 同前两条：`parallax-layer` 零 `ctx`、`ext-parallax` 收 `ctx`，两半跨两张角色清单。共同点由**文件名前缀（`parallax-`）+ 设置键前缀（`parallax*`）+ 扩展岛**表达；额外理由：行为层连 DOM 都不建（只写 CSS 变量 —— 系数落 body、每帧的步长落要动的那几层自己身上；位移算式住在 `src/styles.js`），与岛那半边**连"运行时对象"都没有一个**，收成目录只会暗示它们必须一起改 |
 | **设置与宿主通道** | `src/fontset-store.js` 头注释写明"**另立一条**而不是并进 `persistence.js`"（真源/键集/失败语义都不同）；目录名会传递"这些是一回事"的**误读** |
 
 **四条通用反例**（同样适用于今后新增的族）：按**文件名前缀**机械分组（`video-layer` 与 `live-layer`

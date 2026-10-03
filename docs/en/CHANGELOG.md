@@ -15,6 +15,395 @@
 
 > Increment after **v1.2.0** (local, unreleased; per-commit):
 
+- **The first module's defaults are now the maintainer's own tuned set** (user's words: "make the settings
+  currently in the hardware monitor bars extension the default configuration" ⇒ clarified as "bake the
+  values I have dialled in now into the defaults").
+  **What**: ten keys in `DEFAULTS` of `lib/settings-schema.js` changed value — `metricsEnabled` now
+  defaults to **on**, plus height / vertical offset / bar width / row gap / threshold / opacity / the
+  black-band opacity / glow / outline width (the numbers live in that file and are not copied here). The
+  key set and their order are unchanged (the one edit besides values is the kind of `metricsEnabled`:
+  `boolFalse` ⇒ `boolTrue` — a kind encodes the "value when absent" (`boolFalse` is `v === true`, so an
+  absent value lands on false), which means changing `DEFAULTS` alone would be sanitised back), every other
+  `KINDS` range is untouched, and the other nineteen keys already matched
+  the tuned set (horizontal offset 0 / bar gap 2 / thin white rules on / blend mode Auto / smoothness 60 /
+  window 60 / solid bars on / series names on / three series on, network and disk off), so they stay put.
+  **Why**: these ten are not factory guesses but the look that was dialled in by hand — baking them in means
+  a fresh install or a reset lands on that look instead of re-dragging every slider; the master switch
+  follows, because the bars are the whole point of that module.
+  **Guards**: the "Extensions" block of `test/verify-client.mjs` now asserts "default on ⇒ the parameter
+  controls are drawn straight away" (the other two modules stay default-off and keep their "off ⇒ no
+  parameters" pin), the default slider read-outs are re-pinned to the baked values, and a new assertion
+  covers "turning the master switch off collapses that whole parameter list"; in `test/verify-scene-live.mjs`
+  the "off" half of the extension-island comparison now passes an **explicit** `metricsEnabled: false`
+  (it used to hand `DEFAULTS` in as the "off" sample, which turned that comparison into a tautology the
+  moment the default flipped — the guard caught itself first); the golden fixture was
+  re-stamped to the new defaults (`.test-cache/regen-golden-metrics.mjs` gained a ten-key `RESTAMPED` list:
+  the key set is unchanged and only values moved, so it re-stamps instead of adding slots — it reported
+  `added 0 key slots across 18 cases`, with every other key acting as the zero-drift safety valve).
+  **No new setting key** (count, order and ranges unchanged) ⇒ `docs/ROUTE-INDEX.md` and `lib/types/` stay
+  untouched.
+
+- **Optimised: the cost of the "3D depth" motion** (user feedback: the effect is good, but the motion
+  costs too much).
+  **What**: all of it lives in `src/parallax-layer.js` and the parallax section of `src/styles.js`, and
+  **no new setting key** was added (so the golden fixture and `docs/ROUTE-INDEX.md` stay untouched).
+  ① **Narrower variable scope**: the per-frame displacement step `--we-parallax-x / -y` moved from the
+  body to **the layers that actually move** (`.we-layer` / `.we-rope` / `.we-metrics`, rescanned with
+  `document.querySelectorAll` every 250ms, each record holding the step it last wrote so nothing is read
+  back from the DOM), leaving only the five per-layer multipliers on the body (written once per settings
+  change) — custom properties inherit, so writing the step on the body re-resolved styles for the whole
+  document every frame. ② **Frame rate capped at 60Hz** (`PARALLAX_MIN_FRAME_MS` = 0.75 of a frame): the
+  extra frames on a high-refresh display now only reschedule instead of writing variables, and the easing
+  was always normalised to 60fps. ③ **"Arrived" is now judged by visible displacement**:
+  `settle = max(PARALLAX_SETTLE_PX, remaining visible pixels / largest multiplier)` — 0.25px normally and
+  1px once the cursor has been still for 180ms, which retires the last dozen frames of the tail in one go
+  (under 1px of movement at the moment it snaps, so nothing shows). ④ **The viewport is read only on
+  start and on resize** (no more asking `window` every frame). ⑤ **No frame at all when every multiplier
+  is 0** (one placement and done). ⑥ **Compositor layers only while moving**: the loop adds
+  `.we-parallax--moving` to those layers (the stylesheet gives it `will-change: translate` — translate
+  only, so scale's raster scale is never frozen) and it is removed the moment the loop settles or the
+  module stops — this repo deliberately keeps no always-on compositor layer (same reasoning as the
+  two-frame nudge of `.we-layer--repaint`).
+  **Why**: this layer lives entirely on the input path, so its cost is exactly three things — how wide
+  each frame's style invalidation reaches, how many frames one gesture runs, and whether every frame has
+  to repaint the full-screen wallpaper. Those six items cut one of the three apiece, and not a single
+  pixel of the effect itself changed.
+  **Checks**: the source-shaped check in `test/verify-scene-live.mjs` gains a ⑧ performance group (scoped
+  writes / 60Hz cap / visible-displacement thresholds / zero-multiplier fast path / the compositor hint
+  being added and dropped), plus a new **behavioural** check that builds a minimal fake DOM
+  (`querySelectorAll` returning three fake elements, a fake rAF driven by hand) and really runs frames,
+  asserting that the step lands on those elements only, that the body carries just the five multipliers,
+  that the compositor hint class is present while moving and gone once settled, and that a stop cleans up
+  both sides; the `src/styles.js` check gains
+  `body[data-we-parallax="on"] .we-parallax--moving { will-change: translate; }`.
+- **Added: a third Extensions module, "3D depth" — parallax that follows the cursor**.
+  **What**: five new setting keys (`lib/settings-schema.js`, DEFAULTS + KINDS) — `parallaxEnabled`
+  (`boolFalse`, off by default), `parallaxBg` (`num 0..10`, default `1`, wallpaper and mascot),
+  `parallaxMetrics` (`num 0..20`, default `1`, the bars layer), `parallaxMascot` (`boolTrue`) and
+  `parallaxSmooth` (`num 0..98`, default `85`). Two new files: behaviour layer `src/parallax-layer.js`
+  (a base module: zero `ctx`, reads `selection` only) and descriptor `src/ext-parallax.js` (a five-row
+  island); `src/panel-tabs.js` gains a third registry entry; `src/client.js` gains five named handlers,
+  the `extensionCtx()` entries and `subscribe(syncParallaxLayer)` / `disposeParallaxLayer()`;
+  `src/styles.js` gains a "third Extensions module: 3D depth (parallax)" section; `src/i18n-copy.js`
+  registers 12 keys; the build table gains both modules.
+  **It builds no DOM node at all**: it only listens passively to `pointermove` on `document` and `resize`
+  on `window`, turning the cursor's offset from the screen center into seven CSS variables plus a
+  `data-we-parallax` switch attribute on the body, and the stylesheet multiplies everything with `calc()`
+  — `.we-layer` translates by `--we-parallax-bg` and scales by `calc(1 + var / 100)`, `.we-rope` by
+  `--we-parallax-mascot`, `.we-metrics` by `--we-parallax-metrics`, and `.we-metrics--labels` /
+  `.we-metrics--guides` take the bars value plus 1% / 2%. One unit: for a cursor offset `u` from the
+  screen center the target displacement is `PARALLAX_DIRECTION × u × percentage / 100` (crossing the whole
+  longest diagonal moves that layer by its own percentage of that diagonal — exactly the user's
+  definition); `PARALLAX_DIRECTION = -1` means **mirrored about the screen center** (opposite the cursor);
+  the easing is an exponential approach per frame (`parallaxSmooth`, `0` = instant) and the loop stops once
+  the target is reached (zero frames while idle; only `parallaxKick()` schedules one).
+  **Why**: the user's request — "add an extension: 3D effect: as the cursor moves, the components and the
+  wallpaper background ease along the direction symmetric about the center… the background travel defaults
+  to 1% of the longest diagonal, and [hardware monitor bars] also supports a custom travel (chart component
+  only, its other components add 1% each on top of that value)… click & trail effects must not shift… make
+  the mascot widget take part too, if possible". Three trade-offs: ① the displacement uses the **CSS
+  independent properties `translate` / `scale`** rather than `transform` — the wallpaper transition's
+  `resetLayerSwitchStyles()` writes and clears an inline `transform`, and only the independent properties
+  compose with it instead of overwriting each other; ② the wallpaper must be **scaled up** by
+  `1 + pct / 100` (max horizontal displacement = pct × viewport width / 2, so without the up-scale the base
+  color shows at the edges); ③ the **click & trail layer deliberately does not take part** (the user's third
+  point), nor does the drawer / quick panel / settings panel (they sit under the pointer, so moving them
+  would ruin aiming).
+  **Checks**: `test/verify-scene-live.mjs` gained two registration checks (each new module appears once in
+  `INLINE_MODULES` and once in the bundle), a single-file import of `src/parallax-layer.js` with three
+  `syncParallaxLayer()` states (on / out-of-range values / off) plus `disposeParallaxLayer()` — **no rAF in
+  the environment, zero throws, zero DOM side effects** — a source-contract check (the direction constant
+  and both formula lines, the `typeof document` guard in `parallaxBody()`, the `requestAnimationFrame` early
+  return, `LABEL_STEP` / `GUIDE_STEP`, both passive listeners, plus **negative** assertions that it builds no
+  DOM and never touches `we-fx`) and a styles-section check (the five `body[data-we-parallax="on"]` rules, the
+  `translate` / `scale` `calc()`, plus **negative** assertions that this section contains no `transform:` and
+  no `.we-fx`), and the third module's island check (order-sensitive: off ⇒ only the master switch row, on ⇒
+  the four parameter rows); `test/verify-client.mjs` gained the island behaviour assertions (three module
+  cards, master switch off by default, the four row labels and slider ranges 0..10, 0..20, 0..98, the default
+  readouts `1%`, `1%`, `85%`, the mascot switch on by default, and a negative assertion that no other module's
+  controls leak in).
+  **Fixtures**: five new setting keys ⇒ `test/fixtures/settings-sanitize-golden.json` re-recorded by
+  "behaviour at introduction" (`added 165 key slots across 18 cases`); `docs/ROUTE-INDEX.md` untouched
+  (pure client side, no new route).
+- **Fix: Auto blend on an almost black background now uses Lighten with the bars' opacity cut down (the factor is customizable)**.
+  **What**: the Auto stop in `src/metrics-layer.js` goes from two tiers to three — new
+  `METRICS_BLEND_NIGHT = 'lighten'` / `METRICS_LUMA_DEEP = 0.15`; the
+  **first** line of `metricsBlendForLuma` tests for almost black (actually-shown luma < `METRICS_LUMA_DEEP`)
+  ⇒ that band takes Lighten, and the **bars layer** (`band.host.style.opacity`) has its opacity multiplied by
+  a customizable factor (the user's "opacity -50%"). Each entry of the per-band plan is therefore `{ mode, dim }`
+  instead of a bare string, and `dim` comes **only** from that almost-black rule — a hand-picked Lighten carries
+  no `dim` (the user's own choice is not cut, so the flag cannot be derived from `mode === 'lighten'`); the
+  fallback used when the wallpaper cannot be sampled is the new `metricsBlendFallback()` (never cut); the
+  **label layer and the rules layer keep the plain opacity** (they always blend `normal`, so cutting them would
+  only turn white text and lines grey). The island's Blend mode hint and both word lists follow.
+  The factor itself is a **setting key**: the user then asked "the opacity -50% just mentioned should also be
+  customizable", so the hard-coded `METRICS_DEEP_ALPHA = 0.5` became the new key `metricsDeepOpacity`
+  (`50` by default, range `10..100`, `kind: 'num'`), read in the frame as
+  `const deepAlpha = metricsClamp(selection.metricsDeepOpacity, 10, 100, 50) / 100;`. The key states the
+  **result** (how much opacity the bars layer keeps on an almost black background) rather than "how much to
+  subtract" — `100` naturally means "turn this almost-black rule off", so no extra switch is needed; the island
+  row is called **"Bar opacity on black"** and appears **only while Blend mode is Auto** (no other stop can ever
+  pick the almost-black rule, so showing it there would lie — the same reason the five colour pickers only show
+  up in "Distinct hues").
+  **Why**: the user's report — "fix [hardware monitor bars]: for an almost black background, Auto should use
+  Lighten + bars opacity -50%". On pure black `multiply` is ×0 (it wipes the bars out) and `overlay` barely
+  lifts them; only `lighten` (per-channel max) lets a bar show its **own colour** — but a full-strength Lighten
+  glows into a mush, one smeared band, hence the opacity cut (50% by default, adjustable). The threshold `0.15` is a look-and-feel value and
+  must stay **far below** `METRICS_LUMA_SPLIT` (`0.5`), otherwise it swallows the dark tier.
+  **Checks**: the `metrics-layer.js` source-contract check in `test/verify-scene-live.mjs` grew 8 assertions (the
+  two constants, the first-line test, `metricsBlendFallback`, the hand-picked `{ mode: manual, dim: false }`, the
+  `deepAlpha` line that reads the setting key and the `entry.dim ? deepOpacity : opacity` write); the Extensions
+  block of `test/verify-client.mjs` checks the new slider's range (10..100), its default read-out (`50%`) and that
+  it shows up **only on Auto** (switching to another stop hides it, switching back brings it back). **One new
+  setting key** ⇒ the golden fixture was recorded as it behaves on introduction (`added 33 key slots across 18
+  cases`); `docs/ROUTE-INDEX.md` stays untouched (client-only, no new route).
+
+- **New: the second Extensions module — click & trail effects**.
+  **What**: ① two new files: the island `src/ext-fx.js` (one master switch plus a sub-switch each for clicks
+  and the trail, with their own style, size, glow, duration, width, opacity, blend mode and colours — either
+  sub-switch alone is enough, and turning one off folds its own group of controls away) and the canvas layer
+  `src/fx-layer.js` (a body-level `.we-fx` canvas at `z-index: -1` that only listens **passively** to
+  `pointermove` / `pointerdown` on `document` — the host is `pointer-events: none`, so it captures no input;
+  clicks whose target is one of the plugin's own controls are dropped, so clicking a button never also bursts
+  a ripple). ② Clicks draw two spreading rings (the second starting 18% of the lifetime later), a cluster of
+  **unequal** flying dots plus one white flash, or both; the trail is either a round-capped band that tapers
+  segment by segment or dots left behind at a fixed step — both fade by age and are dropped once spent, so a
+  resting pointer still fades out. ③ The frame loop is **content-driven**: `fxStart()` returns immediately when
+  there is no `requestAnimationFrame` (hence zero DOM side effects in the test sandbox), it only keeps
+  scheduling while something is alive and stops itself once the canvas is empty (zero frames while idle); right
+  after the loop's only early return it calls the idempotent `fxEnsureHost()`, so the deadlock the bars layer
+  once shipped (treating "host not created yet" as a reason to return) cannot come back. ④ Opacity and the
+  **blend mode** are written on the **host element** (on the canvas they would only blend against the host's
+  own stacking context) and the layer composites with `lighter` inside; the colour follows the theme accent /
+  rainbow (a hue per instance that also drifts over time) / custom. ⑤ Stacking comes from document order: the
+  layer sits above the wallpaper and below the scrim and the bars, re-checked every frame with
+  `compareDocumentPosition`. ⑥ 14 new `fx*` setting keys (`lib/settings-schema.js`: DEFAULTS + KINDS + four
+  value tables; the master switch defaults to **off**), and the swatch picker only appears in the Custom mode.
+  **Why**: the user asked to start the next extension — "click effects and trail effects", explicitly as an
+  example, free to design. The layer deliberately **never samples wallpaper pixels** (hence no Auto mode) and
+  leaves blending to the default Screen or a hand-picked mode; every other choice aims at looks first (two
+  rings instead of one, unequal dots instead of equal, age-based removal instead of smearing).
+  **Tests**: the Extensions block in verify-client pins two module cards, no parameter labels while the master
+  switch is off, then 34 labels / ten slider bounds / the `140px` · `420ms` · `85%` readouts / five blend-mode
+  options / a swatch picker that only appears in Custom mode and defaults to `#4f8cff` / each sub-switch
+  folding away its own group; verify-scene-live pins that each new file appears exactly once in the bundle,
+  that `fx-layer.js` imports standalone with **no throws and no side effects without rAF** (its export set is
+  exactly `disposeFxLayer,syncFxLayer`), the source form (`FX_HOST_ID`, the content-driven loop, the
+  `fxEnsureHost()` right after `if (!fxOn || !st.on) return;`, both `insertBefore` stacking paths,
+  `mix-blend-mode` and `opacity` on the host, `globalCompositeOperation = 'lighter'`,
+  `target.closest(FX_UI_SELECTOR)`, `{ passive: true }`) and the island's 12 parameters in order with the
+  swatch picker only in Custom mode. Docs (README / HOW-IT-WORKS / this file) are mirrored between the two
+  languages; `docs/ROUTE-INDEX.md` is untouched (client-only, no new route); the i18n dictionary and the golden
+  fixture pick up the new keys.
+
+- **Fix: Auto blend mode now reads the brightness actually on screen, the three host families stay above the
+  scrim, and the rules layer sizes its own canvas**.
+  **What**: ① Auto no longer judges by the wallpaper's **raw image** brightness — `drawImage` returns source
+  pixels, which neither see the CSS filters this plugin issues nor the darkening layer stacked on top of the
+  wallpaper, so a bright wallpaper dimmed to mid grey still counted as bright and took multiply (bars = bar
+  colour × dark backdrop, i.e. lost in the background). The plugin's own effects are now undone first
+  (`metricsDisplayLuma`: the `brightness()` factor, `contrast()` stretched around 0.5, the fade colour and the
+  leaf opacity of a translucent wallpaper, then the `scrim` darkening — every step clamped to the schema
+  ranges), those four keys plus the fade colour feed a signature (`metricsDisplaySig`) so dragging a setting
+  recomputes the displayed brightness immediately instead of waiting for the sampling cache, and the sampled
+  raw values are kept as `metricsLumaRaw` while everything downstream sees the displayed one. ② The three host
+  families (bars / labels / rules) and the darkening layer `.we-scrim` are all `z-index: -1` body-level
+  overlays, so their stacking comes from document order — and the scrim is only appended **when a wallpaper
+  becomes active**, so a layer that starts earlier (extensions on at boot, wallpaper applied later) ended up
+  covered by it; the layer now checks document order every frame and moves the three families back above the
+  scrim in their original order (`metricsRaiseAboveScrim`). ③ The rules layer **never sized its canvas**: the
+  band canvases and the label layer both called `metricsSizeCanvas`, the rules one did not, so its bitmap
+  stayed at the HTML default 300×150, stretched by the CSS `width/height: 100%` — with a block narrower than
+  300 only the left part of each rule was drawn, taller than 150 the lower rules were cut off and everything
+  was stretched vertically (the user's report: the white rules did not show fully). Both layers now size their
+  canvas whenever the geometry changes and clear their own repaint signature.
+  **Why**: the user's report — ① the bars are hard to make out because on bright backgrounds multiply is
+  applied and then the background plugin's own darkening dims them further; the suggestion was to read the
+  values this plugin has configured, compute the area's actual displayed brightness from them, and pick the
+  mode from that; ② the white rules did not show fully.
+  **Tests**: the canvas-layer source assertions in verify-scene-live now cover `metricsDisplayLuma` /
+  `metricsFadeBaseLuma` / `metricsDisplaySig` / the four `selection.*` keys that go into the reversal /
+  `metricsRaiseAboveScrim` and its per-frame call / the "clear my signature when sizing succeeds" shape of
+  both layers (asserting that a line was painted cannot catch a missing size call). **No new setting keys**, so
+  the i18n table and the golden fixture are untouched; the `METRICS_BLEND_VALUES` comment in
+  `lib/settings-schema.js` now says the decision uses the displayed brightness. Chinese and English docs
+  (README / HOW-IT-WORKS / this file) kept in sync.
+
+- **Fix + new: the row labels get their own layer with their ink clamped to 20%–80% lightness, and Auto
+  blend mode now switches per band of wallpaper brightness**.
+  **What**: ① the series names move **out of** the blending bars layer into a third host layer
+  (`#we-metrics-labels`) that always blends `normal` — the previous version kept the labels in the bars'
+  layer, where `multiply` crushed a near-white theme colour into near-invisibility (the user's report: the
+  labels had become hard to make out, likely because they are white and multiply wiped them); the colour is
+  still the Appearance one but passes through `metricsClampInk()`, which clamps the HSL **lightness** into
+  20%–80% (`METRICS_INK_MIN` / `METRICS_INK_MAX`) — pure white lands on 80%, pure black on 20%, and the text
+  reads on both bright and dark wallpapers; ② Auto no longer takes one average brightness for the whole
+  block: it is cut horizontally into at most `METRICS_BAND_MAX` bands (**one host per band, each carrying its
+  own stop**), each band samples the wallpaper brightness behind its own bars and picks multiply for bright
+  areas and overlay for dark ones — CSS `mix-blend-mode` is element-level, so per-pixel switching is
+  impossible and bands are the approximation; the cuts always fall in the middle of a bar gap
+  (`metricsBands`), so no bar is ever sliced in half; a band that cannot be sampled (iframe, cross-origin,
+  no video frame yet) still falls back to the last hand-picked mode; the probe changed from a 24 × 24 square
+  to a single row of `bands × 1` pixels, its cache key carries the band count and the block's horizontal
+  position/width share, and the band count is **decided by geometry alone** (manual mode is always one band,
+  so the DOM is never rebuilt per frame).
+  **Why**: the user asked ① to clamp the label colour's lightness to 20%–80% while still letting the plugin
+  control it, and ② whether it could be smarter and detect regions whose background brightness is above or
+  below 50%, using multiply on bright areas and overlay on dark ones.
+  **Guards**: verify-scene-live's bundle check went from "two independent paint paths" to **three** (bars /
+  labels / rules exactly once each — collapsing them back would mean the three layers stuck together again
+  and the decoupling is gone), and its canvas-source assertions gained `METRICS_LABEL_HOST_ID` /
+  `METRICS_BAND_MAX` / `METRICS_INK_MIN` / `METRICS_INK_MAX` / `metricsClampInk` / `metricsBlendPlan` /
+  `metricsBands` / `metricsSyncHosts` / `metricsPaintLabels` / the per-band blend write
+  (`metricsNodeStyle(band.host, 'mix-blend-mode', mode)`) / the gradient using the clamped ink.
+  **No new setting keys** ⇒ neither the copy table nor the golden fixture changes. Chinese and English docs
+  (README / HOW-IT-WORKS / this file) are in sync.
+
+- **New: the resource bars can set their layer blend mode (including an automatic mode that reads the
+  wallpaper's brightness), a thin-white-rule scale, and a custom colour per series**.
+  **What**: ① a new setting key `metricsBlend` (an enum, default `auto`) decides how the bars fuse with the
+  wallpaper — the manual stops are CSS `mix-blend-mode` (normal / multiply / overlay / screen / soft-light /
+  darken / lighten), while **Auto** samples the wallpaper image and picks multiply when the sampled average
+  is bright and overlay when it is dark; when the image cannot be sampled (Web and Scene wallpapers are
+  iframes, the video has no frame yet, a cross-origin canvas is tainted) it **falls back to the last mode
+  picked by hand** instead of something arbitrary, and the sample is cached with a TTL so pixels are not
+  read every frame; ② a new setting key `metricsGuides` (thin white rules, default on) draws a 1px white
+  line across the whole block at **each row's 50% height** and **between every two rows** (a constant 35%
+  opacity), turning the bars into a readable scale; ③ the canvas layer now mounts **two host layers** —
+  bars and row labels in one (the blend mode and opacity are written on that one) and the white rules in
+  **their own** (blending stays `normal`: in the bars' layer multiply would wipe the lines out); the rules'
+  repaint signature **excludes the data timestamp**, so the per-second bar frames never redraw them, and
+  the two layers' visibility and blending stay independent — exactly the seam the upcoming cursor-driven
+  3D depth effect needs; ④ the "Distinct hues" mode no longer uses built-in fixed hues: five new setting
+  keys `metricsColorCpu` / `metricsColorMem` / `metricsColorGpu` / `metricsColorNet` / `metricsColorDisk`
+  (type `hex`, defaulting to the old factory hues, so anyone who never touched a colour sees the same
+  picture) take over, and the panel only grows the five colour pickers in that mode (preset dots plus a
+  custom colour wheel whose drag writes live and whose release persists).
+  **Why**: the user asked ① whether the layer blend mode of this overlay could be changed ("multiply on a
+  bright background, overlay on a dark one"), ② to "add thin white lines, one at each bar chart's 50%
+  height and one between every two bars", ③ to "keep the labels/bars and the white lines decoupled,
+  because the next extension I plan is a cursor-driven 3D depth effect", ④ to "allow custom bar colours".
+  **Judgements**: verify-client's Extensions block gains nine labels (thin white rules / blend mode / the
+  seven blend stop names), pins the rules switch as on by default and the blend control as a **dropdown**
+  (eight stops laid out flat would be crushed by the equal-width `.we-picker__seg`) defaulting to `auto`,
+  with stops checked verbatim against `METRICS_BLEND_VALUES` (values and option count together), and adds a
+  behaviour round: no colour input in the accent stop → after clicking "Distinct hues" exactly five colour
+  rows whose defaults are the series' factory hues → switching back removes them again; the
+  verify-scene-live island judgement now expects **17 parameters + 5 series switches**, plus a new check
+  using a recording stub (this host's `swatchRow` is a noop) to pin "called exactly five times, only in the
+  spectrum stop, each time with that series' factory hue", and the canvas source assertions add both host
+  ids, the rule opacity, the two Auto stops, `metricsResolveBlend`, `metricsSampleLuma`,
+  `metricsSeriesColor`, `metricsPaintBars` and `metricsPaintGuides`; the settings-sanitization golden
+  fixture takes the seven new keys under "behaviour at introduction" (script
+  `.test-cache/regen-golden-metrics.mjs`, safety valve = zero drift on every other host-side key).
+  Chinese and English copy (README / HOW-IT-WORKS / this file) updated together.
+
+- **Changed: the resource bars are labelled in English, the label fades vertically, and the whole block
+  can be offset left/right and up/down**.
+  **What**: ① the line drawn over each row is no longer the translated metric name but a **fixed English
+  short tag** — CPU / RAM / GPU / NET / DISK (the canvas layer's `METRICS_SERIES[].tag`, a plain ASCII
+  constant that **never enters the vocabulary**; the panel switches still use the translated names, so the
+  two now own one place each); ② that line goes from "30% opacity all over" to a **vertical linear
+  gradient**: 30% at the top of the glyphs and fully transparent at the bottom, with the gradient span
+  taken from the text's own line box (not the whole row band, so the fade looks the same however tall the
+  rows are); ③ two new sign-capable setting keys `metricsOffsetX` / `metricsOffsetY` move **the whole
+  block** away from the centered position (positive = right / up), and dragging it off screen clamps it
+  back inside the margins — an offset is a nudge, it should not be able to lose the decoration.
+  **Why**: the user asked for labels that read as part of the graphic (English tags that the UI language
+  cannot rewrite), for text that is "default colour at the top and transparent at the bottom, evenly
+  graded", and to "allow setting its position (left/right, up/down offset)".
+  **Judgements**: verify-client's Extensions block gains the `水平偏移` / `垂直偏移` labels, their slider
+  maximum `400` and **minimum `-400`** (with a new `sliderMin` helper: for a sign-capable slider a
+  max-only assertion cannot see "the negative half was dropped"), plus `0px` readouts for both; the
+  verify-scene-live island judgement now expects **15 parameters + 5 series switches**, and the canvas
+  source assertions add the offset constant (`METRICS_OFFSET_MAX`), `rows[ri].def.tag`,
+  `createLinearGradient` and "bottom stop fully transparent"; the settings-sanitization golden fixture
+  takes the two new keys under "behaviour at introduction" (script
+  `.test-cache/regen-golden-metrics.mjs`, safety valve = zero drift on every other host-side key).
+  Chinese and English copy (README / HOW-IT-WORKS / this file) updated together.
+
+- **Changed: the resource bars are centered with a margin on all four sides; new "bar gap" and
+  "series names" knobs; sliders now show their value on the right**.
+  **What**: ① the bars no longer hug the bottom-right corner — the whole block is **centered
+  horizontally** in the lower part of the screen with a fixed margin on every side (its height is also
+  clamped against the viewport, so a short window cannot push it off the edge); ② a new setting key
+  `metricsBarGap` controls **the gap between neighbouring bars in the same row**, so bar width, bar gap
+  and row gap each own one dimension; ③ a new setting key `metricsLabels` (series names, on by default)
+  draws each row's name **centered in that row** in the font set under Appearance — bold, in
+  Appearance's text color, at **30% opacity**, as tall as the row (if the row is too short or no text
+  color is available nothing is drawn: it is decoration, and no label beats a noisy one); ④ the last
+  cell of `SliderRow` no longer prints just the unit but **echoes the current value plus unit**, rewritten
+  in place while dragging (this applies to the whole settings panel, not only the bar module).
+  **Why**: the user's framing is "this is a wallpaper plugin, so looks come first" — hugging the edge
+  looks cheap, bars fused into a block hide how many slots there are, and a slider with no readout forces
+  guessing; the name overlay answers "which row is which metric", and 30% opacity is the trade-off that
+  keeps the bars readable through it.
+  **Judgements**: verify-client's Extensions block gains the `柱间距` / `序列名称` labels, the bar-gap
+  slider maximum, and **value-readout** assertions (height `120px`, bar gap `2px`, threshold `80%`, time
+  window `60s`, read from the `we-picker__value` cell), plus SliderRow shape assertions that the third
+  cell is `readout` (not a bare `suffix`) and that dragging rewrites it in place; verify-scene-live's
+  extension-island judgement now reads **13 params + 5 series switches** and adds a canvas-layer source
+  assertion (centering/margin constants, the bar gap folded into the pitch, the row-label painter); the
+  settings-sanitize golden fixture records the two new keys by "behaviour at introduction"
+  (`.test-cache/regen-golden-metrics.mjs`, safety valve = zero drift for every other host key). Chinese
+  and English copy (README / HOW-IT-WORKS / this file) kept in sync.
+
+- **New: the first Extensions module — hardware monitor bars (live resource bars in the bottom-right
+  corner of the screen)**. **What**: the Extensions tab now renders one module card whose controls
+  (enable, height, bar width, row gap, threshold, opacity, outline width, glow, smoothing, time window,
+  solid bars, colors, and which of the five series are shown) all live inside it — glow bars that
+  **step** along the bottom-right of the screen, **one row per series** (CPU / memory / GPU / network /
+  disk stacked top to bottom, with an adjustable gap), **bars only**: no ticks, no headers, no axes.
+  Bar width sets how wide one slot is and the time window sets how many slots fit, so "length" and
+  "width" are two independent knobs; any bar **above the threshold** (a share of that metric's full
+  scale; 0 turns it off) turns red. The values are the machine's current resources:
+  **CPU** (`os.cpus()` time delta) and **memory** (`os.freemem()`) need no subprocess at all, while
+  **GPU / network / disk** share one resident `typeperf -si 1` (`GPU Engine(*engtype_3D)` /
+  `Network Interface(*)` / `PhysicalDisk(_Total)`) that starts lazily, **only on Windows**, stops
+  itself after 30 s without a client, and drops out as a whole if it fails (a metric the host cannot
+  read is simply not drawn — never a fake bar). The bars sit above the wallpaper layer (canvas
+  after the wallpaper and the glass scrim, with a negative `z-index` and `pointer-events: none`, the
+  block right-aligned and sized by its slot count), and their colors follow the Appearance accent by
+  default. **Why**: this is the **first** case of "later features are added as modules under the
+  Extensions tab", and it walks the whole add-a-module path (descriptor in its own file, every action
+  through a named handler, the source of truth still `lib/settings-schema.js`); bars rather than a line
+  chart is the user's call — one slot per second reads better and removes the continuous animation
+  (so no "reduced motion" fallback is needed). **Judgements**: verify-client's Extensions block asserts
+  the anchor texts (section label / module name / switch), that the `we-ext` container is really in the
+  tree, that the appearance controls are **absent** while the switch is off (pinning the default), that
+  all 18 controls appear once it is on, that slider maxima match KINDS (height / bar width / row gap /
+  threshold / window / outline width), and that it resets afterwards; the settings-sanitize golden
+  fixture gains the 17 `metrics*` keys by "behaviour at introduction" (three of them new with the bar
+  rework; `.test-cache/regen-golden-metrics.mjs`, safety valve = zero drift on every other host key);
+  the route index is recomputed (`lib/routes/metrics.js` is a new route). All
+  four new modules (`lib/metrics.js` / `lib/routes/metrics.js` / `src/ext-metrics.js` /
+  `src/metrics-layer.js`) gained **real judgements** instead of an entry in the zero-coverage exception
+  table of `docs/GUARD-MAP.md` (that table may only shrink): verify-scene-live now imports both
+  browser-side modules directly and really renders the extension island once, plus one behavioural
+  judgement for the sampler and one for that read-only route.
+  Chinese and English copy (README / HOW-IT-WORKS / this file) are in sync.
+  **Also**: the registry went from a top-level constant to the **lazy** `extensionModules()` — a
+  top-level reference to a sibling module's symbol made verify-scene-live's standalone
+  `import src/panel-tabs.js` throw a ReferenceError (the first version was caught by exactly that
+  judgement), and the lazy form both imports on its own and no longer depends on injection order.
+
+- **New: a sixth tab, "Extensions" — the module container for later features (placed before "About")**.
+  **What**: the settings page goes from five tabs to six; the new **Extensions** tab is nothing but a
+  registry, `extensionModules()` (`src/panel-tabs.js`, shape `{ id, title, desc?, render? }`; it began
+  as the top-level constant `EXTENSION_MODULES` and became a lazy function together with the first
+  module, see the entry above) — every
+  module listed there renders one card, and an empty registry renders an empty state (section label +
+  title + one line). **Why**: until now every new feature had to touch the tab bar, the
+  `renderActiveTab` dispatch and a whole string of judgements and copy that hard-coded "five tabs";
+  with this page a later feature **only adds one entry to the registry** — the tab, the tab bar and the
+  pill indicator stay untouched. **Why before "About"**: credits stay last (「关于」/ About is still the
+  final tab), so **Extensions** takes slot 5. **Judgements**: verify-client's tab count / label
+  sequence / pill width 5→6 (About is still checked as `tabs[5]`), plus a new behaviour assertion for
+  the Extensions tab (section label + empty-state copy + the `we-ext` container really being in the
+  tree + exactly one tab active + no other tab's controls leaking in); verify-scene-live's `TAB_FNS`
+  picks up `renderExtensionsTab`; the build markers pick up the same function. Chinese and English copy
+  (README / HOW-IT-WORKS / this file) updated together.
+
 - **Fix (issue #129): the scene payload origin is unreachable for any non-local client, and that
   failure then blacklists the host too.** 1.2.0 switched the scene payload origin to the host's
   dedicated loopback media server (`inventory.sceneMediaBase`, `http://127.0.0.1:<port>`) — for any

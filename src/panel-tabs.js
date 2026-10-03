@@ -1,10 +1,12 @@
 /**
  * panel-tabs.js — 面板页签的**渲染器**（七个域：壁纸 / 外观 / 吉祥物 / 效果 / 声音 / 高级 / 关于，
- * 组合成五页签 壁纸库 / 外观 / 播放 / 系统 / 关于，装配点见 src/client.js 的 renderActiveTab）。
+ * 再加一个**模块容器**「扩展」；组合成六页签 壁纸库 / 外观 / 播放 / 系统 / 扩展 / 关于，
+ * 装配点见 src/client.js 的 renderActiveTab）。
  *
  * 为什么单独一个文件：这些渲染器**读**面板状态、**调**面板处理器，但自己不持有状态 ——
  * 正是最适合独立出去的一层。这样面板组件体只剩"状态 + 处理器 + 装配"，页签怎么画看这里。
- * （「关于」是唯一连面板状态都不读的渲染器：静态文案 + 两张随包二维码。）
+ * （「关于」是唯一连面板状态都不读的渲染器：静态文案 + 两张随包二维码。「扩展」读得更少：
+ * 它只画 `extensionModules()` 里登记过的模块，一张都没登记就画空态。）
  *
  * 契约（构建期由 scripts/build-client.mjs 内联进 bundle 的工厂作用域，"外部作用域"=
  * 同一 prelude / src/client.js 的顶层）：
@@ -1424,6 +1426,75 @@
       renderAdvancedDiagSection(ctx),
     );
   }
+  // ── 「扩展」页签：后续功能的**模块容器** ─────────────────────────────────────
+  // 这一页刻意只放一张**注册表**：加一个功能 = 往 EXTENSION_MODULES 里加一项，页签本身
+  // 不用改（"接下来的功能追加都以模块形式放在该 tab 下"是用户的明确口径，见 CHANGELOG）。
+  // 注册表为空时页签照旧在、只画空态 —— 页签栏是稳定的，用户不会因为"现在还没有模块"
+  // 就找不到这一页的入口。
+  //
+  // 每一项的**描述符住在它自己的 src/<语义名>.js 里**（渲染器不膨胀）。取用一律走下面这个
+  // **惰性**函数：顶层直接写 `const EXTENSION_MODULES = [SYMBOL]` 会踩两个坑 ——
+  //   ① 内联后 prelude 求值期就要读兄弟模块的常量，模块顺序成了隐式契约；
+  //   ② test/verify-scene-live.mjs 是**单独 import 本文件**、再喂 `globalThis` 的，
+  //      顶层一引用别处的符号就当场 ReferenceError（第一版写法就是被这条判据咬住的）。
+  // 写成函数后两个坑都没了：求值发生在"画这一页"的时候，那时兄弟模块早就内联好了。
+  //
+  // 模块形状（给未来加功能的自己）：
+  //   { id, title, desc?, render? }
+  //   · `id`    React key，稳定且唯一；
+  //   · `title` / `desc` 取到的就是**译文**（描述符里写成 getter，见下）。写法上有个硬约束：
+  //     **不能直接写成 `title: "…"`** —— 那在 test/verify-i18n.mjs 的判据 ① 里是
+  //     "没进 weT(...) 的裸中文"；也不能写成顶层 `title: weT("…")`，那会在内联后的
+  //     prelude 求值期撞 TDZ。既有写法是**getter**：
+  //       get title() { return weT("硬件资源监控柱状图"); }
+  //     这样 `weT(...)` 就落在字面量的最内层调用帧上，且取译文发生在渲染时（照抄
+  //     src/ext-metrics.js 的 METRICS_EXTENSION_MODULE 即可）—— 因此**本文件不再套一层
+  //     weT**（套了就成了拿译文再查一次词表）。
+  //   · `render(ctx)` 可选：给了就在这个模块的位置画它自己的控件；没给就只显示
+  //     title + desc —— "功能还没做完"的模块可以先上架占位。
+  //   · 模块**不得**自己写设置 / 发通知 / 持有状态：本文件是渲染器（契约见文件头），
+  //     要动状态就把动作做成 src/client.js 的具名处理器、经 ctx 传进来。
+  // 现有三项：一号 = 硬件资源监控柱状图（src/ext-metrics.js + src/metrics-layer.js）、
+  // 二号 = 点击效果与拖尾效果（src/ext-fx.js + src/fx-layer.js）、
+  // 三号 = 3D 效果（src/ext-parallax.js + src/parallax-layer.js，只有变量与事件、不建 DOM）。
+  // 加第四项照抄这三份。
+  function extensionModules() {
+    return [METRICS_EXTENSION_MODULE, FX_EXTENSION_MODULE, PARALLAX_EXTENSION_MODULE];
+  }
+
+  // 这一页自己不读 ctx 的任何字段：整包（sel + 具名 on* 处理器）转交给各模块的 render。
+  // ⚠️ 判据口径：`const { … } = ctx;` 必须是函数体的**第一条语句**（前面连注释行都不许有），
+  // 所以说明文字只能写在函数外面 —— 见 test/verify-scene-live.mjs 的『每个页签首行都从 ctx 解构』。
+  function renderExtensionsTab(ctx) {
+    const { } = ctx;
+    const modules = extensionModules();
+    return React.createElement(React.Fragment, null,
+      React.createElement("div", { className: "we-picker__section" },
+        React.createElement("div", { className: "we-picker__section-head" },
+          React.createElement("span", { className: "we-picker__section-label" }, weT("扩展模块")),
+        ),
+        React.createElement("div", { className: "we-ext" },
+          modules.length === 0
+            ? React.createElement("div", { className: "we-picker__empty" },
+                React.createElement("span", { className: "we-picker__empty-title" },
+                  weT("还没有可用的扩展模块")),
+                React.createElement("span", { className: "we-picker__hint" },
+                  weT("后续新增的功能会以模块形式收在这里，每个模块自带它的控件")),
+              )
+            : modules.map((mod) => React.createElement("div", {
+                key: mod.id, className: "we-ext__module",
+              },
+                React.createElement("div", { className: "we-ext__module-head" },
+                  React.createElement("span", { className: "we-ext__module-title" }, mod.title),
+                ),
+                mod.desc ? React.createElement("span", { className: "we-picker__hint" }, mod.desc) : null,
+                mod.render ? mod.render(ctx) : null,
+              )),
+        ),
+      ),
+    );
+  }
+
   // ── 「关于」页签：项目简介 / 仓库与 Star / 交流群二维码 / 贡献者致谢（压尾）──────
   // 这是**唯一不读面板状态**的页签：内容全是静态文案 + 两张内联二维码（数据在
   // src/about-assets.js，构建期随 prelude 内联）。但契约是**逐页签**的 ——
@@ -1550,5 +1621,5 @@
 
 export {
   renderWallpaperTab, renderAppearanceTab, renderAudioTab, renderMascotTab, renderEffectsTab, renderAdvancedTab,
-  renderAboutTab,
+  renderExtensionsTab, renderAboutTab,
 };

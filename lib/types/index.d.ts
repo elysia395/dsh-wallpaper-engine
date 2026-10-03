@@ -2,7 +2,7 @@
  * dsh-wallpaper-engine — host half type surface.
  *
  * The host plugin contributes no public Cordis services and registers no model
- * tool. It serves 36 same-origin HTTP routes through `ctx.webServer` and unwinds
+ * tool. It serves 37 same-origin HTTP routes through `ctx.webServer` and unwinds
  * them on unload; `docs/ROUTE-INDEX.md` is the generated table of those routes
  * and stays authoritative for their paths and handlers.
  *

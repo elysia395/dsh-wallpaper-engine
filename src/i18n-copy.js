@@ -90,6 +90,7 @@ const WE_I18N_EN = {
   "播放": "Playback",
   "play\u0000播放": "Play",
   "系统": "System",
+  "扩展": "Extensions",
   "自定义{label}": "Custom {label}",
   "自定义": "Custom",
   "未选择壁纸": "No wallpaper selected",
@@ -592,6 +593,128 @@ const WE_I18N_EN = {
   "深色": "Dark",
   "{label} · 来源：{source}（亮度 {lum}）": "{label} · Source: {source} (luminance {lum})",
   "{label} · 来源：{source}": "{label} · Source: {source}",
+
+  // ── src/panel-tabs.js · 「扩展」页签（模块注册表 + 空态）──
+  //    页签标签「扩展」本身在 src/client.js 的 PICKER_TABS 里，键登记在上面的
+  //    `// ── src/client.js ──` 段（一张表，两处共用）。
+  "扩展模块": "Extension modules",
+  "还没有可用的扩展模块": "No extension modules yet",
+  "后续新增的功能会以模块形式收在这里，每个模块自带它的控件": "Features added later are collected here as modules, each with its own controls",
+
+  // ── src/metrics-layer.js · 资源柱状图画布层（「扩展」一号模块的绘制侧）──
+  //    这四条是**面板开关**的名字（= METRICS_SERIES 的 label，顺带与 METRICS_SERIES 同序）；
+  //    屏上压在柱子上的那行字取的是 METRICS_SERIES 的 `tag`（CPU / RAM / GPU / NET / DISK 这类
+  //    固定英文缩写，纯 ASCII 常量）—— 它是图形的一部分，不随界面语言变，**因此不进词表**。
+  "内存": "Memory",
+  "显卡": "GPU",
+  "网络": "Network",
+  "磁盘": "Disk",
+
+  // ── src/ext-metrics.js · 「扩展」页签一号模块（硬件资源监控柱状图）──
+  //    范围/默认值不在这里写死：真源是 lib/settings-schema.js 的 29 个 `metrics*` 键。
+  "硬件资源监控柱状图": "Hardware monitor bars",
+  "屏幕底部的实时资源柱状图（CPU / 内存 / 显卡 / 网络 / 磁盘）": "Live resource bars at the bottom of the screen (CPU / memory / GPU / network / disk)",
+  "启用资源柱状图": "Enable resource bars",
+  "在屏幕下方居中叠加随时间流动的荧光柱状图：只有柱子，没有刻度、表头与坐标轴": "Centers scrolling glow bars in the lower part of the screen: bars only, with no ticks, headers or axes",
+  "高度": "Height",
+  "水平偏移": "Horizontal offset",
+  "正值向右，负值向左": "Positive moves right, negative moves left",
+  "垂直偏移": "Vertical offset",
+  "正值向上，负值向下": "Positive moves up, negative moves down",
+  "柱宽": "Bar width",
+  "柱间距": "Bar gap",
+  "指标间隔": "Row gap",
+  "阈值": "Threshold",
+  "按各指标满格的比例算，超过就标红（0 = 不标红）": "Measured as a share of each metric's full scale; anything above it turns red (0 = no red)",
+  "细白横线": "Thin white rules",
+  "每行 50% 高度一条、每两行之间一条（单独一层画，不跟随柱子的混合模式）": "One at each row's 50% height, plus one between every two rows (drawn in its own layer, not following the bars' blend mode)",
+  "不透明度": "Opacity",
+  "混合模式": "Blend mode",
+  "与壁纸的融合方式：自动会按壁纸明暗切换（亮背景用正片叠底、暗背景用叠加、极黑背景用变亮并把柱子透明度按下面的设置压低）；采不到壁纸画面时退回上一次手选的档": "How the bars fuse with the wallpaper: Auto switches by wallpaper brightness (multiply on light, overlay on dark, and Lighten on an almost black background with the bars at the opacity set just below); when the wallpaper image cannot be sampled it falls back to the last mode you picked by hand",
+  "极黑柱不透明度": "Bar opacity on black",
+  "自动档判定为极黑背景时，柱子只剩这个不透明度（100% = 不减）": "In Auto, when the background counts as almost black the bars layer keeps only this opacity (100% = no reduction)",
+  "正常": "Normal",
+  "正片叠底": "Multiply",
+  "叠加": "Overlay",
+  "滤色": "Screen",
+  "柔光": "Soft light",
+  "变暗": "Darken",
+  "变亮": "Lighten",
+  "描边宽度": "Outline width",
+  "荧光强度": "Glow strength",
+  "平滑": "Smoothing",
+  "时间窗": "Time window",
+  "实心柱": "Solid bars",
+  "关掉只画柱子的轮廓": "Off leaves just the bar outlines",
+  "柱配色": "Bar colors",
+  "柱子的取色方式": "How the bars pick their colors",
+  "跟随主题色": "Follow theme color",
+  "每根柱子都用外观里的主题色": "Every bar uses the accent color from Appearance",
+  "分色": "Distinct hues",
+  "每条序列用下面为它选的颜色": "Each series uses the color picked for it below",
+  "{label}颜色": "{label} color",
+  "单色": "Single color",
+  "同色，靠亮度区分": "One color, separated by brightness",
+  "序列名称": "Series names",
+  "在每行居中用「外观」里设置的字体画出该行名称（英文缩写，加粗、上深下浅渐变、与行等高）": "Draws each row's name (an English short tag) centered in the row, in the font set in Appearance (bold, fading from top to bottom, as tall as the row)",
+  "宿主取不到的指标不会画出来（例如没有 N 卡、或没有性能计数器权限时）": "Metrics the host cannot read are left out (for example without an NVIDIA GPU, or without permission to read the performance counters)",
+
+  // ── src/ext-fx.js · 「扩展」页签二号模块（点击效果与拖尾效果）──
+  //    范围/默认值不在这里写死：真源是 lib/settings-schema.js 的 14 个 `fx*` 键。
+  //    下面几条与一号模块共用（**不重复登记**）：不透明度 / 混合模式 / 滤色 / 正常 / 叠加 /
+  //    正片叠底 / 变亮 / 跟随主题色 / 自定义（后者在更上面的通用段里）。
+  "点击效果与拖尾效果": "Click and trail effects",
+  "在壁纸之上叠加随光标响应的点击与拖尾效果：整层在界面之后，不会挡到任何控件": "Overlays click and trail effects that follow the cursor on top of the wallpaper: the whole layer sits behind the interface, so it never blocks a control",
+  "启用点击与拖尾效果": "Enable click and trail effects",
+  "点击效果": "Click effect",
+  "在点击处炸开一圈光效": "Bursts a ring of light where you click",
+  "点击样式": "Click style",
+  "点击时炸开的样子": "How the click bursts",
+  "涟漪": "Ripple",
+  "从点击处扩散的圆环": "Rings spreading out from the click",
+  "星火": "Sparks",
+  "向四周飞散的亮点": "Bright dots flying outward",
+  "两者": "Both",
+  "圆环与星火一起": "Rings and sparks together",
+  "半径": "Radius",
+  "点击光晕": "Click glow",
+  "拖尾效果": "Trail effect",
+  "光标划过时留下会淡出的轨迹": "Leaves a fading path as the cursor sweeps across",
+  "拖尾样式": "Trail style",
+  "轨迹的样子": "The shape of the path",
+  "彗尾": "Comet",
+  "一条渐隐的光带": "A single fading band of light",
+  "星尘": "Stardust",
+  "留在原地的亮点": "Bright dots left behind in place",
+  "拖尾时长": "Trail duration",
+  "光标停下后，轨迹在这段时间里淡完": "After the cursor stops, the path fades away over this long",
+  "拖尾粗细": "Trail width",
+  "拖尾光晕": "Trail glow",
+  "与壁纸的融合方式：默认的滤色只让画面变亮、最像霓虹；想让它更像实体贴纸就换手选档": "How the effects fuse with the wallpaper: the default Screen only brightens, which looks most like neon; pick another mode by hand to make them feel more like a solid sticker",
+  "效果配色": "Effect colors",
+  "光效的取色方式": "How the effects pick their colors",
+  "用「外观」里选的配色": "Uses the accent color from Appearance",
+  "彩虹": "Rainbow",
+  "每次效果的色相都不一样": "Every effect gets a different hue",
+  "用下面选的那一个颜色": "Uses the single color picked below",
+  "自定义颜色": "Custom color",
+
+  // ── src/ext-parallax.js · 「扩展」页签三号模块（3D 效果）──
+  //    范围/默认值不在这里写死：真源是 lib/settings-schema.js 的 5 个 `parallax*` 键。
+  //    这一节刻意不登记 `%`（SliderRow 的单位后缀是代码里的字面量，不进词表），
+  //    也没有与另两个模块共用的键 —— 文案都是这一个模块自己的。
+  "3D 效果": "3D effect",
+  "光标移动时，壁纸、吉祥物与柱状图沿屏幕中心的对称方向轻轻偏移（视差纵深）": "Shifts the wallpaper, the mascot and the chart gently along the direction mirrored about the screen center as the cursor moves (parallax depth)",
+  "启用 3D 效果": "Enable 3D effect",
+  "光标移动时，壁纸、吉祥物与柱状图沿屏幕中心的对称方向轻轻偏移：整块界面不动": "As the cursor moves, the wallpaper, the mascot and the chart drift gently in the direction mirrored about the screen center: the interface itself never moves",
+  "背景缓动距离": "Background travel",
+  "光标走完一整条对角线时，壁纸挪动的距离占该对角线的百分比（壁纸会同时放大同样多，免得边上露出底色）": "How far the wallpaper travels, as a percentage of the longest diagonal, when the cursor crosses that whole diagonal (the wallpaper is scaled up by the same amount, so no base color shows at the edges)",
+  "图表缓动距离": "Chart travel",
+  "柱状图柱层的距离；行名再加 1%、细白横线再加 2%（柱状图那个扩展开着时才看得见）": "How far the chart's bar layer travels; the row labels add 1 more percent and the thin white rules 2 (only visible while the hardware monitor extension is on)",
+  "吉祥物跟随": "Mascot follows",
+  "挂件也按「背景缓动距离」一起挪": "The mascot drifts along using the background travel distance",
+  "缓动平滑": "Easing smoothness",
+  "0 = 立刻跟手，越大越柔和（跟得越慢、停下后还会飘一小段才归位）": "0 = follows the cursor instantly; higher values are softer (it trails behind and keeps drifting a little after the cursor stops)",
 
   // ── src/panel-tabs.js · 「关于」页签（简介 / 致谢 / 仓库 / 交流群）──
   //    人名与项目标识不译（oneincase / YV3507 / WebWallGL / media-bridge / scene-gl…）；
