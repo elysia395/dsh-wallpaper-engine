@@ -2476,6 +2476,7 @@ const PICKER_TABS = [
   { id: "playback", get label() { return weT("播放"); } },
   { id: "system", get label() { return weT("系统"); } },
   { id: "extensions", get label() { return weT("扩展"); } },
+  { id: "avatar", get label() { return weT("头像"); } },
   { id: "about", get label() { return weT("关于"); } },
 ];
 // 旧页签 id → 新 id 的迁移（「字体」更早并入了「外观」）：别把老用户甩回第一页。
@@ -2937,6 +2938,18 @@ function onFxTrailLength(v, live) { commitLiveSetting("fxTrailLength", v, live);
 function onFxTrailWidth(v, live) { commitLiveSetting("fxTrailWidth", v, live); }
 function onFxTrailGlow(v, live) { commitLiveSetting("fxTrailGlow", v, live); }
 function onFxOpacity(v, live) { commitLiveSetting("fxOpacity", v, live); }
+// ── 「头像」页签的处理器 ─────────────────────────────────────────────────────
+// 与上面几组同形：控件只报事件，写设置 + 重渲染都在这里。头像层每次设置变化只重写一张
+// 样式表 ⇒ 开关与上传/清除走 emit 的完整路径，滑块走 commitLiveSetting 的 live 档
+//（拖动时即时可见，抬手才落盘 + emit）。上传传的是 FileReader 读出的 data URI。
+function onAvatarEnabled(e) { setSetting("avatarEnabled", e.target.checked); emit(); }
+function onAvatarSize(v, live) { commitLiveSetting("avatarSize", v, live); }
+function onAvatarGap(v, live) { commitLiveSetting("avatarGap", v, live); }
+function onAvatarRadius(v, live) { commitLiveSetting("avatarRadius", v, live); }
+function onAvatarAssistant(dataUri) { setSetting("avatarAssistant", dataUri); emit(); }
+function onAvatarUser(dataUri) { setSetting("avatarUser", dataUri); emit(); }
+function onAvatarClearAssistant() { setSetting("avatarAssistant", ""); emit(); }
+function onAvatarClearUser() { setSetting("avatarUser", ""); emit(); }
 // ── 「扩展」页签（三号模块：3D 效果）的处理器 ───────────────────────────────
 // 与上面两组同形：控件只报事件，写设置 + 重渲染都在这里。视差层没有网络往返与画布，
 // 它每帧现读设置 ⇒ 开关走 emit 的完整路径，滑块走 commitLiveSetting 的 live 档
@@ -3844,6 +3857,11 @@ const officialColorOf = (tokens) => {
   const renderActiveTab = () => {
     if (activeTab === "about") return renderAboutTab({});
     if (activeTab === "extensions") return renderExtensionsTab(extensionCtx());
+    if (activeTab === "avatar") return renderAvatarTab({
+      sel: selection,
+      onAvatarEnabled, onAvatarSize, onAvatarGap, onAvatarRadius,
+      onAvatarAssistant, onAvatarUser, onAvatarClearAssistant, onAvatarClearUser,
+    });
     if (activeTab === "appearance") return renderAppearanceTab({
       setSetting, setTransient,
       fontSet: fontSetCtx(),
@@ -4569,6 +4587,10 @@ function apply(ctx) {
       // 开关属性，位移由 src/styles.js 的视差段算出来。它只在"总开关开着"时才活，并且
       // **收敛驱动**——屏上剩下的位移看不出来就停 rAF，光标不动不耗帧（帧率封顶 60Hz）。
       const unsubParallax = subscribe(syncParallaxLayer);
+      // 「头像」页签的行为层：接法同上，但它连 rAF 都不开——每次设置变化只重写**一张**样式表
+      // 的 textContent（头像由 ::before 伪元素画，不建 DOM、不碰 dsh 原生的消息结构）。
+      // 总开关关掉时它直接摘掉那张样式表，屏上零残留。
+      const unsubAvatar = subscribe(syncAvatarLayer);
       // Occlusion pause: re-apply the effective playing state whenever the
       // page hides/shows or the window loses/gains focus (see occlusionActive).
       // Fires syncLayers → play/pause on the video; decode drops to 0 while
@@ -4684,6 +4706,7 @@ function apply(ctx) {
       syncMetricsLayer();
       syncFxLayer();
       syncParallaxLayer();
+      syncAvatarLayer();
       return () => {
         disposed = true;
         unsub();
@@ -4691,6 +4714,8 @@ function apply(ctx) {
         unsubMetrics();
         unsubFx();
         unsubParallax();
+        unsubAvatar();
+        disposeAvatarLayer();
         if (ocWatch) { try { clearInterval(ocWatch); } catch { /* ignore */ } ocWatch = 0; }
         if (typeof window !== "undefined" && typeof window.removeEventListener === "function") {
           for (const t of ocListeners) window.removeEventListener(t, onOcclusionChange);

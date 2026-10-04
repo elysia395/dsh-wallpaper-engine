@@ -201,6 +201,20 @@ const INLINE_MODULES = [
     markers: ['const PARALLAX_EXTENSION_MODULE = {', 'function renderParallaxIsland(ctx)'],
   },
   {
+    // 「头像」页签的行为层：给每条助手回复挂左侧头像、每条用户消息挂右侧头像。做法是往
+    // 页面里注入**一张**样式表（不建 DOM、不碰 dsh 原生的 markdown / 推理折叠 / 反馈 / 统计），
+    // 头像由 ::before 伪元素画。基座模块：只读 selection、零 ctx；排在 panel-tabs 之前。
+    file: 'src/avatar-layer.js',
+    why: '「消息头像」层：往聊天消息行注入 ::before 头像（基座模块：只读 selection、零 ctx、只更新一张样式表）',
+    markers: ['const AVATAR_STYLE_ID = ', 'function buildAvatarCss(',
+      'function syncAvatarLayer()', 'function disposeAvatarLayer()'],
+  },
+  {
+    file: 'src/picker-avatar.js',
+    why: '「头像」页签的渲染器（总开关 + 两张头像的上传/清除 + 尺寸/间距/圆角滑块；显式 ctx 取外界）',
+    markers: ['function renderAvatarTab(ctx)', 'function avatarUploadRow('],
+  },
+  {
     file: 'src/system-fonts.js',
     why: '本机字体清单的客户端通道：宿主那次进程扫描的唯一读者（清单 / 缓存 / 失败文案 / 本浏览器能否匹配的探针），与字体集通道同形',
     markers: ['const SYSTEM_FONTS_CACHE_KEY = ', 'function readCachedSystemFonts()',

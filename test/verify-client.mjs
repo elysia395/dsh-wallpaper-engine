@@ -670,17 +670,18 @@ setTimeout(async () => {
     localStorage.removeItem(TAB_KEY);
     let tree = renderPicker();
     let treeText = JSON.stringify(tree);
-    assert.ok(countMatches(tree, /"role":"tab"/g) === 6, 'tab bar renders (6 tabs):');
+    assert.ok(countMatches(tree, /"role":"tab"/g) === 7, 'tab bar renders (7 tabs):');
     assert.ok(treeText.includes('"we-tabs__tab we-tabs__tab--active"') && treeText.includes('自动轮播'), 'default tab is 壁纸库:');
     assert.ok(treeText.includes('"选择壁纸"'), 'library tab has 选择壁纸:');
     assert.ok(treeText.includes('自定义壁纸'), 'library tab has 自定义壁纸:');
     console.log('other tabs keep their controls out of the tree:',
       !treeText.includes('玻璃透明度') && !treeText.includes('字体自定义') && !treeText.includes('吉祥物大小'));
 
-    // ── 设置页签重组（UI 重构）：六个页签 = 壁纸库 / 外观 / 播放 / 系统 / 扩展 / 关于 ──
+    // ── 设置页签重组（UI 重构）：七个页签 = 壁纸库 / 外观 / 播放 / 系统 / 扩展 / 头像 / 关于 ──
     //    原六页签合并：壁纸 → 壁纸库；效果+声音 → 播放；吉祥物+高级 → 系统；外观原样；
-    //    「扩展」是后加的**模块容器**（注册表在 src/panel-tabs.js 的 extensionModules()，
-    //    排在「关于」之前）；「关于」是后加的静态页（**排在最后**，唯一不读面板状态的那个）。
+    //    「扩展」是后加的**模块容器**（注册表在 src/panel-tabs.js 的 extensionModules()）；
+    //    「头像」是后加的**消息头像**页签（渲染器 src/picker-avatar.js，行为层 src/avatar-layer.js）；
+    //    「关于」是静态页（**排在最后**，唯一不读面板状态的那个）。
     {
       const tabButtons = [];
       (function walk(node) {
@@ -690,11 +691,11 @@ setTimeout(async () => {
         if (Array.isArray(node.children)) node.children.forEach(walk);
       })(tree);
       const labels = tabButtons.map((b) => String((b.children || [])[0] || ''));
-      assert.deepEqual(labels, ['壁纸库', '外观', '播放', '系统', '扩展', '关于'],
-        'tab bar must render exactly 壁纸库/外观/播放/系统/扩展/关于');
+      assert.deepEqual(labels, ['壁纸库', '外观', '播放', '系统', '扩展', '头像', '关于'],
+        'tab bar must render exactly 壁纸库/外观/播放/系统/扩展/头像/关于');
       // 指示胶囊的宽度按页签数现算 —— 加/减页签忘改这里会当场错位（且只在视觉上错）。
-      assert.ok(JSON.stringify(tree).includes('calc((100% - 6px) / 6)'),
-        'tab pill width must be derived from PICKER_TABS.length (6)');
+      assert.ok(JSON.stringify(tree).includes('calc((100% - 6px) / 7)'),
+        'tab pill width must be derived from PICKER_TABS.length (7)');
     }
 
     // ── 「扩展」页签（第六个）：一个**模块容器** —— 表里没模块时只画空态 ──
@@ -1096,7 +1097,7 @@ setTimeout(async () => {
         return out;
       };
       const tabs = collectByClass(tree, 'we-tabs__tab');
-      assert.ok(tabs.length === 6 && String(String(tabs[5].children[0])) === '关于',
+      assert.ok(tabs.length === 7 && String(String(tabs[6].children[0])) === '关于',
         '「关于」必须是最后一枚页签');
       assert.ok(treeText.includes('"we-tabs__tab we-tabs__tab--active"')
         && collectByClass(tree, 'we-tabs__tab--active').length === 1

@@ -134,7 +134,15 @@
         "parallaxMascot": true,
         "parallaxMetrics": 1,
         "parallaxSmooth": 85,
-        "sidebarFullClear": false
+        "sidebarFullClear": false,
+        "avatarEnabled": false,
+        "avatarSize": 42,
+        "avatarGap": 12,
+        "avatarRadius": 0,
+        "avatarLeftInset": 0,
+        "avatarRightInset": 0,
+        "avatarAssistant": "",
+        "avatarUser": ""
       },
       "host": {
         "id": "",
@@ -262,7 +270,15 @@
         "parallaxBg": 1,
         "parallaxMetrics": 1,
         "parallaxMascot": true,
-        "parallaxSmooth": 85
+        "parallaxSmooth": 85,
+        "avatarEnabled": false,
+        "avatarSize": 42,
+        "avatarGap": 12,
+        "avatarRadius": 0,
+        "avatarLeftInset": 0,
+        "avatarRightInset": 0,
+        "avatarAssistant": "",
+        "avatarUser": ""
       }
     },
     {
@@ -406,7 +422,15 @@
         "parallaxMascot": true,
         "parallaxMetrics": 1,
         "parallaxSmooth": 85,
-        "sidebarFullClear": false
+        "sidebarFullClear": false,
+        "avatarEnabled": false,
+        "avatarSize": 42,
+        "avatarGap": 12,
+        "avatarRadius": 0,
+        "avatarLeftInset": 0,
+        "avatarRightInset": 0,
+        "avatarAssistant": "",
+        "avatarUser": ""
       },
       "host": "__null__"
     },
@@ -551,7 +575,15 @@
         "parallaxMascot": true,
         "parallaxMetrics": 1,
         "parallaxSmooth": 85,
-        "sidebarFullClear": false
+        "sidebarFullClear": false,
+        "avatarEnabled": false,
+        "avatarSize": 42,
+        "avatarGap": 12,
+        "avatarRadius": 0,
+        "avatarLeftInset": 0,
+        "avatarRightInset": 0,
+        "avatarAssistant": "",
+        "avatarUser": ""
       },
       "host": "__null__"
     },
@@ -696,7 +728,15 @@
         "parallaxMascot": true,
         "parallaxMetrics": 1,
         "parallaxSmooth": 85,
-        "sidebarFullClear": false
+        "sidebarFullClear": false,
+        "avatarEnabled": false,
+        "avatarSize": 42,
+        "avatarGap": 12,
+        "avatarRadius": 0,
+        "avatarLeftInset": 0,
+        "avatarRightInset": 0,
+        "avatarAssistant": "",
+        "avatarUser": ""
       },
       "host": "__null__"
     },
@@ -833,7 +873,15 @@
         "parallaxMascot": true,
         "parallaxMetrics": 1,
         "parallaxSmooth": 85,
-        "sidebarFullClear": false
+        "sidebarFullClear": false,
+        "avatarEnabled": false,
+        "avatarSize": 42,
+        "avatarGap": 12,
+        "avatarRadius": 0,
+        "avatarLeftInset": 0,
+        "avatarRightInset": 0,
+        "avatarAssistant": "",
+        "avatarUser": ""
       },
       "host": {
         "id": "",
@@ -961,7 +1009,15 @@
         "parallaxBg": 1,
         "parallaxMetrics": 1,
         "parallaxMascot": true,
-        "parallaxSmooth": 85
+        "parallaxSmooth": 85,
+        "avatarEnabled": false,
+        "avatarSize": 42,
+        "avatarGap": 12,
+        "avatarRadius": 0,
+        "avatarLeftInset": 0,
+        "avatarRightInset": 0,
+        "avatarAssistant": "",
+        "avatarUser": ""
       }
     },
     {
@@ -1154,7 +1210,15 @@
         "parallaxMascot": true,
         "parallaxMetrics": 1,
         "parallaxSmooth": 85,
-        "sidebarFullClear": false
+        "sidebarFullClear": false,
+        "avatarEnabled": false,
+        "avatarSize": 42,
+        "avatarGap": 12,
+        "avatarRadius": 0,
+        "avatarLeftInset": 0,
+        "avatarRightInset": 0,
+        "avatarAssistant": "",
+        "avatarUser": ""
       },
       "host": {
         "id": "",
@@ -1282,7 +1346,15 @@
         "parallaxBg": 1,
         "parallaxMetrics": 1,
         "parallaxMascot": true,
-        "parallaxSmooth": 85
+        "parallaxSmooth": 85,
+        "avatarEnabled": false,
+        "avatarSize": 42,
+        "avatarGap": 12,
+        "avatarRadius": 0,
+        "avatarLeftInset": 0,
+        "avatarRightInset": 0,
+        "avatarAssistant": "",
+        "avatarUser": ""
       }
     },
     {
@@ -1520,7 +1592,15 @@
         "parallaxMascot": true,
         "parallaxMetrics": 1,
         "parallaxSmooth": 85,
-        "sidebarFullClear": false
+        "sidebarFullClear": false,
+        "avatarEnabled": false,
+        "avatarSize": 42,
+        "avatarGap": 12,
+        "avatarRadius": 0,
+        "avatarLeftInset": 0,
+        "avatarRightInset": 0,
+        "avatarAssistant": "",
+        "avatarUser": ""
       },
       "host": {
         "id": "",
@@ -1648,7 +1728,15 @@
         "parallaxBg": 1,
         "parallaxMetrics": 1,
         "parallaxMascot": true,
-        "parallaxSmooth": 85
+        "parallaxSmooth": 85,
+        "avatarEnabled": false,
+        "avatarSize": 42,
+        "avatarGap": 12,
+        "avatarRadius": 0,
+        "avatarLeftInset": 0,
+        "avatarRightInset": 0,
+        "avatarAssistant": "",
+        "avatarUser": ""
       }
     },
     {
@@ -1785,7 +1873,15 @@
         "parallaxMascot": true,
         "parallaxMetrics": 1,
         "parallaxSmooth": 85,
-        "sidebarFullClear": false
+        "sidebarFullClear": false,
+        "avatarEnabled": false,
+        "avatarSize": 42,
+        "avatarGap": 12,
+        "avatarRadius": 0,
+        "avatarLeftInset": 0,
+        "avatarRightInset": 0,
+        "avatarAssistant": "",
+        "avatarUser": ""
       },
       "host": {
         "id": "",
@@ -1913,7 +2009,15 @@
         "parallaxBg": 1,
         "parallaxMetrics": 1,
         "parallaxMascot": true,
-        "parallaxSmooth": 85
+        "parallaxSmooth": 85,
+        "avatarEnabled": false,
+        "avatarSize": 42,
+        "avatarGap": 12,
+        "avatarRadius": 0,
+        "avatarLeftInset": 0,
+        "avatarRightInset": 0,
+        "avatarAssistant": "",
+        "avatarUser": ""
       }
     },
     {
@@ -2064,7 +2168,15 @@
         "parallaxMascot": true,
         "parallaxMetrics": 1,
         "parallaxSmooth": 85,
-        "sidebarFullClear": false
+        "sidebarFullClear": false,
+        "avatarEnabled": false,
+        "avatarSize": 42,
+        "avatarGap": 12,
+        "avatarRadius": 0,
+        "avatarLeftInset": 0,
+        "avatarRightInset": 0,
+        "avatarAssistant": "",
+        "avatarUser": ""
       },
       "host": {
         "id": "",
@@ -2192,7 +2304,15 @@
         "parallaxBg": 1,
         "parallaxMetrics": 1,
         "parallaxMascot": true,
-        "parallaxSmooth": 85
+        "parallaxSmooth": 85,
+        "avatarEnabled": false,
+        "avatarSize": 42,
+        "avatarGap": 12,
+        "avatarRadius": 0,
+        "avatarLeftInset": 0,
+        "avatarRightInset": 0,
+        "avatarAssistant": "",
+        "avatarUser": ""
       }
     },
     {
@@ -2343,7 +2463,15 @@
         "parallaxMascot": true,
         "parallaxMetrics": 1,
         "parallaxSmooth": 85,
-        "sidebarFullClear": false
+        "sidebarFullClear": false,
+        "avatarEnabled": false,
+        "avatarSize": 42,
+        "avatarGap": 12,
+        "avatarRadius": 0,
+        "avatarLeftInset": 0,
+        "avatarRightInset": 0,
+        "avatarAssistant": "",
+        "avatarUser": ""
       },
       "host": {
         "id": "",
@@ -2471,7 +2599,15 @@
         "parallaxBg": 1,
         "parallaxMetrics": 1,
         "parallaxMascot": true,
-        "parallaxSmooth": 85
+        "parallaxSmooth": 85,
+        "avatarEnabled": false,
+        "avatarSize": 42,
+        "avatarGap": 12,
+        "avatarRadius": 0,
+        "avatarLeftInset": 0,
+        "avatarRightInset": 0,
+        "avatarAssistant": "",
+        "avatarUser": ""
       }
     },
     {
@@ -2609,7 +2745,15 @@
         "parallaxMascot": true,
         "parallaxMetrics": 1,
         "parallaxSmooth": 85,
-        "sidebarFullClear": false
+        "sidebarFullClear": false,
+        "avatarEnabled": false,
+        "avatarSize": 42,
+        "avatarGap": 12,
+        "avatarRadius": 0,
+        "avatarLeftInset": 0,
+        "avatarRightInset": 0,
+        "avatarAssistant": "",
+        "avatarUser": ""
       },
       "host": {
         "id": "",
@@ -2737,7 +2881,15 @@
         "parallaxBg": 1,
         "parallaxMetrics": 1,
         "parallaxMascot": true,
-        "parallaxSmooth": 85
+        "parallaxSmooth": 85,
+        "avatarEnabled": false,
+        "avatarSize": 42,
+        "avatarGap": 12,
+        "avatarRadius": 0,
+        "avatarLeftInset": 0,
+        "avatarRightInset": 0,
+        "avatarAssistant": "",
+        "avatarUser": ""
       }
     },
     {
@@ -2880,7 +3032,15 @@
         "parallaxMascot": true,
         "parallaxMetrics": 1,
         "parallaxSmooth": 85,
-        "sidebarFullClear": false
+        "sidebarFullClear": false,
+        "avatarEnabled": false,
+        "avatarSize": 42,
+        "avatarGap": 12,
+        "avatarRadius": 0,
+        "avatarLeftInset": 0,
+        "avatarRightInset": 0,
+        "avatarAssistant": "",
+        "avatarUser": ""
       },
       "host": {
         "id": "",
@@ -3008,7 +3168,15 @@
         "parallaxBg": 1,
         "parallaxMetrics": 1,
         "parallaxMascot": true,
-        "parallaxSmooth": 85
+        "parallaxSmooth": 85,
+        "avatarEnabled": false,
+        "avatarSize": 42,
+        "avatarGap": 12,
+        "avatarRadius": 0,
+        "avatarLeftInset": 0,
+        "avatarRightInset": 0,
+        "avatarAssistant": "",
+        "avatarUser": ""
       }
     },
     {
@@ -3148,7 +3316,15 @@
         "parallaxMascot": true,
         "parallaxMetrics": 1,
         "parallaxSmooth": 85,
-        "sidebarFullClear": false
+        "sidebarFullClear": false,
+        "avatarEnabled": false,
+        "avatarSize": 42,
+        "avatarGap": 12,
+        "avatarRadius": 0,
+        "avatarLeftInset": 0,
+        "avatarRightInset": 0,
+        "avatarAssistant": "",
+        "avatarUser": ""
       },
       "host": {
         "id": "",
@@ -3276,7 +3452,15 @@
         "parallaxBg": 1,
         "parallaxMetrics": 1,
         "parallaxMascot": true,
-        "parallaxSmooth": 85
+        "parallaxSmooth": 85,
+        "avatarEnabled": false,
+        "avatarSize": 42,
+        "avatarGap": 12,
+        "avatarRadius": 0,
+        "avatarLeftInset": 0,
+        "avatarRightInset": 0,
+        "avatarAssistant": "",
+        "avatarUser": ""
       }
     },
     {
@@ -3423,7 +3607,15 @@
         "parallaxMascot": true,
         "parallaxMetrics": 1,
         "parallaxSmooth": 85,
-        "sidebarFullClear": false
+        "sidebarFullClear": false,
+        "avatarEnabled": false,
+        "avatarSize": 42,
+        "avatarGap": 12,
+        "avatarRadius": 0,
+        "avatarLeftInset": 0,
+        "avatarRightInset": 0,
+        "avatarAssistant": "",
+        "avatarUser": ""
       },
       "host": {
         "id": "",
@@ -3551,7 +3743,15 @@
         "parallaxBg": 1,
         "parallaxMetrics": 1,
         "parallaxMascot": true,
-        "parallaxSmooth": 85
+        "parallaxSmooth": 85,
+        "avatarEnabled": false,
+        "avatarSize": 42,
+        "avatarGap": 12,
+        "avatarRadius": 0,
+        "avatarLeftInset": 0,
+        "avatarRightInset": 0,
+        "avatarAssistant": "",
+        "avatarUser": ""
       }
     },
     {
@@ -3762,7 +3962,15 @@
         "parallaxMascot": true,
         "parallaxMetrics": 1,
         "parallaxSmooth": 85,
-        "sidebarFullClear": false
+        "sidebarFullClear": false,
+        "avatarEnabled": false,
+        "avatarSize": 42,
+        "avatarGap": 12,
+        "avatarRadius": 0,
+        "avatarLeftInset": 0,
+        "avatarRightInset": 0,
+        "avatarAssistant": "",
+        "avatarUser": ""
       },
       "host": {
         "id": "",
@@ -3914,7 +4122,15 @@
         "parallaxBg": 1,
         "parallaxMetrics": 1,
         "parallaxMascot": true,
-        "parallaxSmooth": 85
+        "parallaxSmooth": 85,
+        "avatarEnabled": false,
+        "avatarSize": 42,
+        "avatarGap": 12,
+        "avatarRadius": 0,
+        "avatarLeftInset": 0,
+        "avatarRightInset": 0,
+        "avatarAssistant": "",
+        "avatarUser": ""
       }
     },
     {
@@ -4050,7 +4266,15 @@
         "parallaxMascot": true,
         "parallaxMetrics": 1,
         "parallaxSmooth": 85,
-        "sidebarFullClear": false
+        "sidebarFullClear": false,
+        "avatarEnabled": false,
+        "avatarSize": 42,
+        "avatarGap": 12,
+        "avatarRadius": 0,
+        "avatarLeftInset": 0,
+        "avatarRightInset": 0,
+        "avatarAssistant": "",
+        "avatarUser": ""
       },
       "host": {
         "id": "",
@@ -4178,7 +4402,15 @@
         "parallaxBg": 1,
         "parallaxMetrics": 1,
         "parallaxMascot": true,
-        "parallaxSmooth": 85
+        "parallaxSmooth": 85,
+        "avatarEnabled": false,
+        "avatarSize": 42,
+        "avatarGap": 12,
+        "avatarRadius": 0,
+        "avatarLeftInset": 0,
+        "avatarRightInset": 0,
+        "avatarAssistant": "",
+        "avatarUser": ""
       }
     },
     {
@@ -4314,7 +4546,15 @@
         "parallaxMascot": true,
         "parallaxMetrics": 1,
         "parallaxSmooth": 85,
-        "sidebarFullClear": false
+        "sidebarFullClear": false,
+        "avatarEnabled": false,
+        "avatarSize": 42,
+        "avatarGap": 12,
+        "avatarRadius": 0,
+        "avatarLeftInset": 0,
+        "avatarRightInset": 0,
+        "avatarAssistant": "",
+        "avatarUser": ""
       },
       "host": {
         "id": "wallpaper-42",
@@ -4442,7 +4682,15 @@
         "parallaxBg": 1,
         "parallaxMetrics": 1,
         "parallaxMascot": true,
-        "parallaxSmooth": 85
+        "parallaxSmooth": 85,
+        "avatarEnabled": false,
+        "avatarSize": 42,
+        "avatarGap": 12,
+        "avatarRadius": 0,
+        "avatarLeftInset": 0,
+        "avatarRightInset": 0,
+        "avatarAssistant": "",
+        "avatarUser": ""
       }
     },
     {
@@ -4579,7 +4827,15 @@
         "parallaxMascot": true,
         "parallaxMetrics": 1,
         "parallaxSmooth": 85,
-        "sidebarFullClear": false
+        "sidebarFullClear": false,
+        "avatarEnabled": false,
+        "avatarSize": 42,
+        "avatarGap": 12,
+        "avatarRadius": 0,
+        "avatarLeftInset": 0,
+        "avatarRightInset": 0,
+        "avatarAssistant": "",
+        "avatarUser": ""
       },
       "host": {
         "id": "",
@@ -4707,7 +4963,15 @@
         "parallaxBg": 1,
         "parallaxMetrics": 1,
         "parallaxMascot": true,
-        "parallaxSmooth": 85
+        "parallaxSmooth": 85,
+        "avatarEnabled": false,
+        "avatarSize": 42,
+        "avatarGap": 12,
+        "avatarRadius": 0,
+        "avatarLeftInset": 0,
+        "avatarRightInset": 0,
+        "avatarAssistant": "",
+        "avatarUser": ""
       }
     }
   ]

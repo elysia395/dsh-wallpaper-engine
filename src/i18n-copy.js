@@ -91,6 +91,9 @@ const WE_I18N_EN = {
   "play\u0000播放": "Play",
   "系统": "System",
   "扩展": "Extensions",
+  // 「头像」页签的标签（src/client.js 的 PICKER_TABS 用；词条正文在下面 avatar-layer 那段，
+  // 这里只登记一次，JS 对象字面量重复键会静默去重 ⇒ 两处都写会被 verify-i18n 判红）。
+  "头像": "Avatar",
   "自定义{label}": "Custom {label}",
   "自定义": "Custom",
   "未选择壁纸": "No wallpaper selected",
@@ -594,6 +597,22 @@ const WE_I18N_EN = {
   "扩展模块": "Extension modules",
   "还没有可用的扩展模块": "No extension modules yet",
   "后续新增的功能会以模块形式收在这里，每个模块自带它的控件": "Features added later are collected here as modules, each with its own controls",
+
+  // ── src/avatar-layer.js + src/picker-avatar.js · 「头像」页签（消息头像）──
+  //    页签标签「头像」本身在 src/client.js 的 PICKER_TABS 里，键登记在上面的
+  //    `// ── src/client.js ──` 段（一张表，两处共用）。
+  "启用消息头像": "Enable message avatars",
+  "给助手回复与你的消息各挂一个头像": "Put an avatar beside every assistant reply and yours beside every message",
+  "用纯 CSS 画在消息旁边，不改动对话内容本身：默认关闭，打开后立刻生效": "Drawn with pure CSS next to the messages, without touching the conversation itself; off by default, applies immediately",
+  "助手头像": "Assistant avatar",
+  "用户头像": "Your avatar",
+  "显示在每条助手回复的左侧；没有头像时用灰白剪影占位": "Shown to the left of every assistant reply; falls back to a gray placeholder when unset",
+  "显示在你发出的每条消息的右侧；没有头像时用灰白剪影占位": "Shown to the right of every message you send; falls back to a gray placeholder when unset",
+  "上传…": "Upload…",
+  "未设置": "Not set",
+  "头像尺寸": "Avatar size",
+  "头像间距": "Avatar gap",
+  "圆角": "Corner radius",
 
   // ── src/metrics-layer.js · 资源柱状图画布层（「扩展」一号模块的绘制侧）──
   //    这四条是**面板开关**的名字（= METRICS_SERIES 的 label，顺带与 METRICS_SERIES 同序）；
