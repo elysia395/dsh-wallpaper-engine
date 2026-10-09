@@ -890,6 +890,13 @@ const WE_I18N_EN = {
   "保存当前为预设…": "Save current as preset…",
   "把当前这套玻璃观感存成一份你自己的预设（之后从预设行一键取回）": "Save the current glass look as your own preset (recall it with one click from the preset row)",
   "预设名字，回车保存": "Preset name, press Enter to save",
+  // ── 玻璃预设的导出 / 导入（本次新增；与字体集那一段逐条对应）──────────────
+  "下载这份预设（可分享 / 可再导入）": "Download this preset (shareable / re-importable)",
+  "导入预设…": "Import preset…",
+  "从「导出」得到的 .json 导入一份预设（重名会自动让位，导入后不会自动应用）": "Import a preset from a .json obtained via \"Export\" (a duplicate name yields to a free one; importing does not apply it)",
+  "这不是 JSON 文件（预设是导出出来的 .json）": "This is not a JSON file (a preset is an exported .json)",
+  "这不是预设文件（需要 {tag} 标记 —— 只有从「导出」拿到的文件才有）": "This is not a preset file (requires the {tag} marker — only files obtained from \"Export\" have it)",
+  "重名已让位，导入为「{name}」": "Name collision resolved — imported as “{name}”",
 };
 
 // ── 宿主文案（lib/** 里由客户端显示的那些原文）────────────────────────────────
@@ -926,6 +933,10 @@ const WE_I18N_HOST_EN = {
   "预设数量已达上限": "Preset limit reached",
   "已存在同名的预设（换个名字再存）": "A preset with the same name already exists (choose another name)",
   "预设数量已达上限（最多 8 个 —— 删除不需要的预设腾位）": "Preset limit reached (8 max — delete presets you no longer need to free a slot)",
+  // 导出/导入新增：只登记**字面量在 lib/** 里逐字存在**的那些（拼接出来的那句
+  // —— `'无法读取的预设版本（需要 ' + GLASS_PRESET_SCHEMA_TAG + ' 标记 …）'` —— 不进来：
+  // 判据要求键在源码里逐字命中，而它是运行时才拼成的；与字体集族同一条现状）。
+  "预设文件必须是一个 JSON 对象": "Preset file must be a JSON object",
 };
 
 export {

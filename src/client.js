@@ -244,6 +244,10 @@ const selection = {
   glassPresetBusy: false,
   glassPresetSaving: false,
   glassPresetDraftName: "",
+  // 导入让位提示（重名时宿主把名字落成了「X (2)」）—— 瞬态文案，不进设置。
+  // ⚠️ 它**不是** `setTransient` 点名的字段（刻意）：store 那边两处裸直写因此落在
+  //    verify-client ①e-2 的 `UNREGISTERED_DIRECT_WRITES` 登记表里（新字段 = 一次可见的改动）。
+  glassPresetImportNote: "",
   url: null,
   type: null,
   previewUrl: null,
@@ -3848,7 +3852,17 @@ function glassPresetCtx() {
     error: selection.glassPresetError,
     saving: selection.glassPresetSaving === true,
     draftName: selection.glassPresetDraftName,
+    // 导入让位提示（`重名已让位，导入为「X (2)」`）：store 写、这里只读，面板直接显示。
+    importNote: selection.glassPresetImportNote,
     armedId: armedIdOf("gpreset"),
+    // 导出链接的 href（普通 `<a download>`；宿主带 attachment 头应答）。渲染期只读。
+    exportUrl: glassPresetExportUrl,
+    onImport: (file) => {
+      // 导入会改清单（多一格）⇒ 与保存同一条"在途标记 + 完成后 emit"的路。
+      // 也让位提示由 store 写在 selection 上，这里不重复搬。
+      disarmConfirm();
+      busy(importGlassPreset(file));
+    },
     onApply: (id) => {
       disarmConfirm();
       busy(applyGlassPreset(id));

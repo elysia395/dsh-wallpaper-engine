@@ -14,7 +14,7 @@
 
 | # | 路径 | 来源 | 形态 | 依赖（闭包状态 / `c` 字段） | 守卫提及 |
 |---|---|---|---|---|---|
-| 1 | `/inventory` | lib/index.js:2969 | async 箭头 | webServer disposers mediaOriginApi buildInventory | 22 |
+| 1 | `/inventory` | lib/index.js:3005 | async 箭头 | webServer disposers mediaOriginApi buildInventory | 22 |
 | 2 | `/media-info` | lib/routes/media-derived.js:57 | 箭头 | disposers base mediaMap log getMediaInfo faststartVariant …(+1) | 9 |
 | 3 | `/transcode-progress` | lib/routes/media-derived.js:100 | 箭头 | disposers base mediaMap transcodeJobs | 2 |
 | 4 | `/transcoded` | lib/routes/media-derived.js:153 | 箭头 | disposers base mediaMap serveFile transcodeToFps registerTranscodeWaiter | 1 |
@@ -47,7 +47,7 @@
 | 31 | `/remove` | lib/routes/upload.js:218 | 箭头 | disposers base CONTROL_JSON_MAX_BYTES ensureUploadDir removeUploadMeta resolveUploadFile …(+1) | 1 |
 | 32 | `/upload-dir` | lib/routes/upload.js:275 | 箭头 | disposers base CONTROL_JSON_MAX_BYTES setUploadDir normalizeUserDir armBodyIdleTimeout | 2 |
 | 33 | `/fontsets` | lib/routes/fontsets.js:245 | async 箭头 | disposers base readFontSetId | 6 |
-| 34 | `/glass-presets` | lib/routes/presets.js:259 | async 箭头 | disposers base | 2 |
+| 34 | `/glass-presets` | lib/routes/presets.js:403 | async 箭头 | disposers base | 2 |
 | 35 | `/star-count` | lib/routes/github-stars.js:107 | async 箭头 | disposers base repoSlug log | 2 |
 | 36 | `/system-fonts` | lib/routes/system-fonts.js:457 | async 箭头 | disposers base | 4 |
 | 37 | `/about-qr` | lib/routes/about-qr.js:65 | 箭头 | disposers base aboutDir serveFile | 3 |

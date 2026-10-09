@@ -362,13 +362,30 @@ const waitBoot = () => new Promise((r) => setTimeout(r, 50));
   };
   const e = mount({ fetchImpl: statefulHost, store: eStore });
   await waitBoot();
-  /** 编辑器（含导入 input）在不在树上；顺带把整棵树的文案拼出来看失败态。 */
+  /**
+   * 编辑器（含导入 input）在不在树上；顺带把整棵树的文案拼出来看失败态。
+   *
+   * ⚠️ 导入 input **必须按本编辑器的容器定位**，不能取"整棵树里第一个 `accept` 含 `.json`
+   * 的隐藏 input"：2026-10-10 玻璃预设族补上导出/导入之后，同一棵面板里**同时存在两个**
+   * 同款 input（字体集那个在侧栏外观页，玻璃预设那个在设置页外观页签），先到先得的 `find`
+   * 会稳定地把文件喂给**另一个**导入入口 —— 症状是"字体集导入点了没反应"（实测：本节 4 条
+   * 判据整组变红，而"读不出文件 / 不是 JSON"两条仍绿，因为那两条与喂给谁无关）。
+   * 锚点取同一个容器里的「导入字体集…」按钮（那是本编辑器独有的文案）；容器解析不到就
+   * **不给 input**（本节判据照红），绝不退回"随便挑一个"。
+   * 口径与 `test/verify-fontset.mjs` §⑩ 的"按编辑器子树找那个 input"一致。
+   */
   const editorTree = () => {
     const all = e.renderPanel().flatMap((t) => collectTree(t));
+    const importButton = all.find((n) => n.type === 'button'
+      && Array.isArray(n.children) && n.children.join('') === '导入字体集…');
+    const container = importButton
+      ? all.find((n) => Array.isArray(n.children) && n.children.includes(importButton))
+      : null;
     return {
       all,
       text: panelText(e),
-      fileInput: all.find((n) => n.type === 'input' && String((n.props || {}).accept || '').includes('.json')),
+      fileInput: (container ? collectTree(container) : [])
+        .find((n) => n.type === 'input' && String((n.props || {}).accept || '').includes('.json')),
     };
   };
   check('「字体集预设」开关可驱动（面板上真的有这个 checkbox）', openFontSetEditor(e));

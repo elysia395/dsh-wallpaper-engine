@@ -23,7 +23,7 @@
  * 需要的外界：无。Usage: node test/verify-presets.mjs
  */
 
-import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync } from 'node:fs';
+import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -47,6 +47,16 @@ process.env.DSH_WE_UPLOAD_DIR = join(ISO, 'uploads');
 process.env.DSH_WE_STEAM_ROOT = join(ISO, 'steam');
 process.env.HOME = ISO_HOME;           // POSIX
 process.env.USERPROFILE = ISO_HOME;    // Windows
+// 归属（ownerId）走**真解析路径**：把 DSH_HOME 一起挪进工作区，再写一份测试身份文件。
+// ⚠️ 不覆盖 DSH_HOME 的话，本进程会去读**真机**的 `$DSH_HOME/.anonymous-user-id`
+//    （本仓的守卫常在 DSH 环境里跑，那个变量通常已经存在）⇒ 判据随机器而变。
+// 两个身份都要：一个"我"、一个"别人"（用来验 owned=false 那一档）。
+const TEST_USER_ID = 'aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee';
+const FOREIGN_USER_ID = 'ffffffff-1111-4222-8333-444444444444';
+const ISO_DSH_HOME = join(ISO_HOME, '.dsh');
+mkdirSync(ISO_DSH_HOME, { recursive: true });
+writeFileSync(join(ISO_DSH_HOME, '.anonymous-user-id'), TEST_USER_ID + '\n');
+process.env.DSH_HOME = ISO_DSH_HOME;
 
 let passed = 0;
 let failed = 0;
@@ -265,6 +275,173 @@ const del = (id) => callRoute(route, fakeReq('/wallpaper-engine/glass-presets/' 
     [mk2.__state.status, delUser.__state.status, delGone.__state.status, missing.__state.status,
       escape.__state.status, badId.__state.status, nightGone.__state.status].join('/'));
   check('包内目录全程字节不变（删除只落用户层墓碑）', dirDigest(BUILTIN) === digestBefore);
+
+  // ── ③b 导出 / 导入 / 归属（ownerId）──────────────────────────────────────
+  // 形态对齐 test/verify-fontset.mjs 同名一节：导出 200 + attachment 头 + `$schema` 逐字，
+  // 导入 → **新 id**、往返正文 canon 相等，坏版本 422 且清单标 broken。
+  //
+  // ⚠️ 名额账（本族的硬上限是 8）：③ 结束时活跃 = 5 套出厂。本节先删掉两套出厂腾出余量，
+  //    再按"造 → 验 → 删"分段推进 —— 上限是**活跃**预设计，任何一步超了都是 409 假红。
+  const exportReq = (id) => callRoute(route, fakeReq('/wallpaper-engine/glass-presets/' + id + '/export', 'GET'));
+  const importDoc = (doc) => callRoute(route, fakeReq('/wallpaper-engine/glass-presets/import', 'POST',
+    typeof doc === 'string' ? doc : JSON.stringify(doc)));
+  const byId = async (id) => (await getList()).presets.find((r) => r.id === id) || null;
+  await del('factory-clear');
+  await del('factory-vivid'); // 腾出两个名额（随包目录字节不变由下方判据兜住）
+  await del(bodyJson(freed).id); // 上一段"腾位后创建"留下的那份，本节不再需要
+
+  // 造一份"可导出"的用户预设（快照里放两个非默认值，往返才有意义）。
+  const src = await create('导出用的预设', { glassAlpha: 37, blur: 21 }, 'preset-exp-1');
+  const exp = await exportReq('preset-exp-1');
+  const expText = exp.__state.body.toString('utf8');
+  const expDoc = bodyJson(exp);
+  check('导出 200 + attachment + no-store + `$schema` 逐字（正文由读到的值重建）',
+    src.__state.status === 200 && exp.__state.status === 200
+    && String(exp.__state.headers['Content-Disposition'] || '').includes('attachment')
+    && String(exp.__state.headers['Content-Disposition'] || '').includes('preset-exp-1.json')
+    && exp.__state.headers['Cache-Control'] === 'no-store'
+    && String(exp.__state.headers['Content-Type'] || '').includes('application/json')
+    && expDoc.$schema === schema.GLASS_PRESET_SCHEMA_TAG
+    && expDoc.id === 'preset-exp-1' && expDoc.name === '导出用的预设'
+    && expDoc.values.glassAlpha === 37 && expDoc.values.blur === 21
+    // 归属随导出走（分享出去的文件自带"谁的"），且是**本次测试注入的那个用户**。
+    && expDoc.ownerId === TEST_USER_ID,
+    'schema=' + expDoc.$schema + ' owner=' + expDoc.ownerId);
+  check('导出的正文是完整快照、以换行收尾（可再导入的形状）',
+    Object.keys(expDoc.values).length === schema.GLASS_PRESET_KEYS.length && /\n$/.test(expText));
+
+  // 往返：把导出的正文原样导回去。id 与名字都已被占用 ⇒ **两条都顺延**（不是覆盖、也不是 409）。
+  const reimport = await importDoc(expDoc);
+  const reimportData = bodyJson(reimport);
+  check('导入 200：id 撞占用时顺延（新 id ≠ 源 id），正文往返 canon 相等',
+    reimport.__state.status === 200
+    && typeof reimportData.id === 'string' && reimportData.id !== 'preset-exp-1'
+    && JSON.stringify(reimportData.values) === JSON.stringify(expDoc.values),
+    'id=' + reimportData.id);
+  const regot = bodyJson(await callRoute(route, fakeReq('/wallpaper-engine/glass-presets/' + reimportData.id, 'GET')));
+  check('导入后的那份可读回，values 与导出的一致（往返闭合）',
+    regot && regot.ok === true && JSON.stringify(regot.values) === JSON.stringify(expDoc.values));
+  const srcStill = bodyJson(await callRoute(route, fakeReq('/wallpaper-engine/glass-presets/preset-exp-1', 'GET')));
+  check('导入不覆盖源预设（两份并存）', srcStill && srcStill.ok === true && srcStill.id === 'preset-exp-1');
+
+  // 名字**不撞**时一个字都不改（让位是兜底，不是习惯性改名）。
+  const freeDoc = Object.assign({}, expDoc, { id: 'preset-imp-9', name: '进口的预设' });
+  const importedFree = await importDoc(freeDoc);
+  const freeData = bodyJson(importedFree);
+  check('名字不撞时原样保留：id 用文件里的、name 一个字不动、renamed=false',
+    importedFree.__state.status === 200 && freeData.renamed === false
+    && freeData.id === 'preset-imp-9' && freeData.name === '进口的预设',
+    'renamed=' + freeData.renamed + ' id=' + freeData.id);
+
+  // 重名让位：同一份文档再导一次 ⇒ 名字继续顺延（源那份仍占着原名）。
+  const third = await importDoc(expDoc);
+  const thirdData = bodyJson(third);
+  check('重名让位：名字顺延为「… (3)」且 renamed=true（不 409、不静默改名）',
+    third.__state.status === 200 && thirdData.renamed === true
+    && thirdData.name === '导出用的预设 (3)'
+    && thirdData.id !== 'preset-exp-1' && thirdData.id !== reimportData.id,
+    'name=' + thirdData.name + ' id=' + thirdData.id);
+  check('第一次导入的名字也让位了（源那份一直占着原名）',
+    reimportData.renamed === true && reimportData.name === '导出用的预设 (2)',
+    'name=' + reimportData.name);
+  // 让位出来的名字**不再**与活跃清单里的任何名字撞（否则只是把 409 推给别人）。
+  {
+    const names = (await getList()).presets.map((r) => String(r.name).trim().toLowerCase());
+    check('顺延后的名字在活跃清单里唯一', new Set(names).size === names.length, names.join('|'));
+  }
+
+  // 归属：源预设属于本用户 ⇒ owned=true；把磁盘上那份改成**别人的** ⇒ 照常列出、但 owned=false；
+  // 去掉 ownerId（旧文件形状）⇒ 无主、算"我的"（这是零迁移的全部依据）。
+  {
+    const before = await byId('preset-exp-1');
+    const userFile = join(USER, 'preset-exp-1.json');
+    const onDisk = JSON.parse(readFileSync(userFile, 'utf8'));
+    writeFileSync(userFile, JSON.stringify(Object.assign({}, onDisk, { ownerId: FOREIGN_USER_ID }), null, 2) + '\n');
+    const after = await byId('preset-exp-1');
+    writeFileSync(userFile, JSON.stringify({
+      $schema: schema.GLASS_PRESET_SCHEMA_TAG, id: 'preset-exp-1', name: '导出用的预设', values: onDisk.values,
+    }, null, 2) + '\n');
+    const legacy = await byId('preset-exp-1');
+    check('归属标注：本人 owned=true / 别人 owned=false（仍列出）/ 无主旧文件 owned=true',
+      before && before.owned === true && before.ownerId === TEST_USER_ID
+      && after && after.owned === false && after.ownerId === FOREIGN_USER_ID
+      && legacy && legacy.owned === true && legacy.ownerId === null,
+      [before && before.owned, after && after.owned, legacy && legacy.owned].join('/'));
+    const builtinRow = (await getList()).presets.find((r) => r.origin === 'builtin');
+    check('随包预设永远无主且 owned=true（不属于任何用户）',
+      builtinRow && builtinRow.ownerId === null && builtinRow.owned === true);
+    // 导入**盖当前用户**，不信文件里那个（一份来自别人的文件导入后就是你的）。
+    const adopted = bodyJson(await importDoc(Object.assign({}, expDoc, { ownerId: FOREIGN_USER_ID })));
+    const adoptedRow = adopted && adopted.id ? await byId(adopted.id) : null;
+    check('导入的归属由宿主盖章（文件里的 ownerId 不被采信）',
+      adopted && adopted.ownerId === TEST_USER_ID && adoptedRow && adoptedRow.owned === true,
+      'owner=' + (adopted && adopted.ownerId));
+    await del(adopted.id);
+  }
+
+  // 名额腾回来：导入产物删掉，给下面的保留段用例留位置。
+  await del(reimportData.id);
+  await del(thirdData.id);
+  await del(freeData.id);
+  await del('preset-exp-1');
+
+  // 异常与边界（预检都在**名额判定之前**，所以这一组不受上限影响）。
+  {
+    const badSchema = await importDoc({ $schema: 'dsh-we/fontset@1', name: 'x', values: {} });
+    const notObject = await importDoc('"just a string"');
+    const badJson = await importDoc('{ not json');
+    const noValues = await importDoc({ $schema: schema.GLASS_PRESET_SCHEMA_TAG, name: 'x' });
+    check('导入预检：$schema 不符 400 / 非对象 400 / 坏 JSON 400 / 缺 values 400',
+      badSchema.__state.status === 400 && notObject.__state.status === 400
+      && badJson.__state.status === 400 && noValues.__state.status === 400,
+      [badSchema.__state.status, notObject.__state.status, badJson.__state.status, noValues.__state.status].join('/'));
+    check('$schema 不符时的文案点明**要哪个标记**（用户手里可能是任意 .json）',
+      String((bodyJson(badSchema) || {}).error || '').includes(schema.GLASS_PRESET_SCHEMA_TAG));
+    // 导入是 POST 段：别的动词一律 405（它是保留段，不会被当成 id）。
+    const importGet = await callRoute(route, fakeReq('/wallpaper-engine/glass-presets/import', 'GET'));
+    check('保留段 import 只收 POST（GET 405，不会被当成一台预设）', importGet.__state.status === 405);
+    // 非法 / 未知 / 读不懂的导出，三种各自的码；穿越与非 GET 各一条。
+    const badExportId = await exportReq('not%20a%20valid%20id!');
+    const unknownExport = await exportReq('preset-nope');
+    const escapedExport = await callRoute(route, fakeReq('/wallpaper-engine/glass-presets/..%2F..%2Fconfig.json/export', 'GET'));
+    const wrongMethod = await callRoute(route, fakeReq('/wallpaper-engine/glass-presets/preset-exp-1/export', 'POST'));
+    check('导出：非法 id 400 / 未知 404 / 穿越 4xx / 非 GET 405',
+      badExportId.__state.status === 400 && unknownExport.__state.status === 404
+      && escapedExport.__state.status >= 400 && wrongMethod.__state.status === 405,
+      [badExportId.__state.status, unknownExport.__state.status, escapedExport.__state.status, wrongMethod.__state.status].join('/'));
+    // 保留段：三个段名**永远不能当 id** —— 否则那台文件会变成"点不动的预设"。
+    // 两条不同的机制，两条都要钉住：
+    //   · `create` 过得了 id 白名单（`[A-Za-z0-9_-]{1,64}`），是**历史漏洞**（段名先匹配 ⇒ 占了
+    //     它的文件永远读不到）—— 由本族 `PRESET_RESERVED_IDS` 的占用域补上，id 顺延成 `create-2`；
+    //   · `import` / `export` 更早一步就被 id 白名单本身拒了（`FONTSET_RESERVED_IDS`，
+    //     与字体集族共用同一条）⇒ 客户端给的这两个词当**非法**处理，落成兜底 base。
+    const reservedCreate = await create('保留段 create', { glassAlpha: 11 }, 'create');
+    const reservedImport = await create('保留段 import', { glassAlpha: 12 }, 'import');
+    const reservedExport = await create('保留段 export', { glassAlpha: 13 }, 'export');
+    const rids = [bodyJson(reservedCreate).id, bodyJson(reservedImport).id, bodyJson(reservedExport).id];
+    check('保留段不可占用：create 顺延成 create-2；import / export 连 id 白名单都过不了',
+      rids[0] === 'create-2'
+      && rids.every((id) => schema.isGlassPresetId(id) && !['create', 'import', 'export'].includes(id))
+      && rids[1] !== rids[2],
+      rids.join('/'));
+    // 顺延出来的那几份仍然**点得动**（路由段与 id 段不打架）。
+    const reservedReads = [];
+    for (const id of rids) reservedReads.push((await callRoute(route, fakeReq('/wallpaper-engine/glass-presets/' + id, 'GET'))).__state.status);
+    check('顺延后的 id 都是真路由（不是被段名吞掉的死文件）',
+      reservedReads.every((s) => s === 200), reservedReads.join('/'));
+    // 读不懂的预设：导出必须**拒绝**（不把坏文件导成"看起来能分享"的东西），清单标 broken。
+    const brokenFile = join(USER, 'preset-broken.json');
+    writeFileSync(brokenFile, JSON.stringify({ $schema: 'dsh-we/glass-preset@999', id: 'preset-broken', values: {} }) + '\n');
+    const brokenExport = await exportReq('preset-broken');
+    const brokenRow = await byId('preset-broken');
+    check('读不懂的预设：导出 422 { reason }，清单里如实标 broken（不静默）',
+      brokenExport.__state.status === 422 && bodyJson(brokenExport).reason === 'bad-version'
+      && brokenRow && brokenRow.broken === 'bad-version',
+      'status=' + brokenExport.__state.status + ' reason=' + (bodyJson(brokenExport) || {}).reason);
+    rmSync(brokenFile, { force: true });
+    for (const id of rids) await del(id);
+  }
+  check('导出/导入全程包内目录字节不变', dirDigest(BUILTIN) === digestBefore);
 }
 
 
@@ -279,9 +456,15 @@ section('④ 客户端形态棘轮：应用走设置通道 / 无第二持久化 
     /persistSelection\(\);[\s\S]{0,80}applyEffects\(\);/.test(storeSrc));
   check('预设通道不直接写 localStorage（缓存归 settings 通道管）',
     !/localStorage/.test(storeSrc));
-  check('写请求只有 create 与 DELETE（预设没有 PUT / activate）',
-    (storeSrc.match(/method:\s*"(POST|PUT|DELETE)"/g) || []).join(',') === 'method: "POST",method: "DELETE"',
-    (storeSrc.match(/method:\s*"(POST|PUT|DELETE)"/g) || []).join(','));
+  // 写请求的口径（2026-10-10 起 import 也是写）：**没有 PUT** 仍是本族的定义性约束
+  // （预设没有"编辑一份"的流程），POST 恰好两处 = create + import，DELETE 一处。
+  // 导出**不是**写请求 —— 它是宿主带 attachment 头应答的普通 GET 链接（下方另有判据）。
+  // 按**计数**而不是出现顺序判：顺序只是文件里的书写次序，不是契约。
+  const writeMethods = storeSrc.match(/method:\s*"(POST|PUT|DELETE)"/g) || [];
+  const countOf = (m) => writeMethods.filter((x) => x === 'method: "' + m + '"').length;
+  check('写请求：无 PUT；POST = create + import 两处；DELETE 一处',
+    countOf('PUT') === 0 && countOf('POST') === 2 && countOf('DELETE') === 1,
+    writeMethods.join(','));
   check('预设 UI 无原生模态、无 blob 通道（代码级）',
     !/window\.confirm/.test(stripComments(panelSrc))
     && !/createObjectURL|new Blob|showSaveFilePicker/.test(storeSrc + panelSrc));
@@ -378,6 +561,57 @@ section('④ 客户端形态棘轮：应用走设置通道 / 无第二持久化 
       && String(confirm3.question).includes('不可恢复'), confirm3 && String(confirm3.question).slice(0, 40));
     const tree4 = renderGlassPresetsBlock(ctxOf('no-such-id'));
     check('negative control: 令牌指向不存在的 id 时确认行不渲染（不空转）', !findConfirm(tree4));
+
+    // ── 导出 / 导入的真渲染判据（2026-10-10 新增）───────────────────────────
+    // 上面那套 ctx **不给** exportUrl / onImport —— 那正是"新字段缺席时不许炸"的形态判据；
+    // 这里补上它们，钉住"给了就一定要长出来"，两条互为对照（缺任一条都会让另一条空转）。
+    const findNodes = (tree, pred) => collect(tree, []).filter(pred);
+    const fakeInput = { clicked: 0, click() { this.clicked += 1; } };
+    let importedFile = null;
+    /** 带上导出/导入两枚新字段的 ctx（`present:false` = 负对照：字段缺席）。 */
+    const ctxExport = (importNote, present = true) => Object.assign(ctxOf(''), present ? {
+      exportUrl: (id) => '/wallpaper-engine/glass-presets/' + id + '/export',
+      onImport: (f) => { importedFile = f; },
+      importNote,
+    } : {});
+
+    const treeE = renderGlassPresetsBlock(ctxExport('重名已让位，导入为「乙 (2)」'));
+    const links = findNodes(treeE, (n) => n.type === 'a');
+    check('用户预设行有导出链接（出厂行没有：导出随包发布物没有意义）',
+      links.length === 1 && links[0].props.href === '/wallpaper-engine/glass-presets/user-1/export'
+      && links[0].props.download === 'user-1.json',
+      links.map((l) => l.props.href).join(',') || '（一条都没有）');
+    check('导出是**普通链接**（不是按钮 + 不是 blob 通道）',
+      links.length === 1 && !links.some((l) => /^(javascript|blob):/.test(String(l.props.href || ''))));
+
+    const inputNode = findNodes(treeE, (n) => n.type === 'input' && n.props.type === 'file')[0];
+    check('导入的隐藏 file input：只收 .json、隐藏、有 ref 供按钮去 click()',
+      Boolean(inputNode) && String(inputNode.props.accept).includes('.json')
+      && inputNode.props.style && inputNode.props.style.display === 'none'
+      && typeof inputNode.props.ref === 'function',
+      inputNode ? JSON.stringify(inputNode.props.accept) : '缺失');
+    if (inputNode && typeof inputNode.props.ref === 'function') inputNode.props.ref(fakeInput);
+    const importBtn = findButtons(treeE).find((b) => String(b.props.title || '').includes('导入一份预设'));
+    check('导入按钮在场且文案点明"重名会让位 / 不会自动应用"',
+      Boolean(importBtn) && String(importBtn.props.title).includes('重名会自动让位')
+      && String(importBtn.props.title).includes('不会自动应用'));
+    if (importBtn) importBtn.props.onClick();
+    check('点导入按钮 ⇒ 真的去 click() 那个 file input（接线不是摆设）', fakeInput.clicked === 1,
+      'clicked=' + fakeInput.clicked);
+    // 选文件 ⇒ onImport 拿到那个 File（读文件与校验在 store 里，渲染器只负责"选"）。
+    if (inputNode) inputNode.props.onChange({ target: { files: [{ name: 'x.json' }], value: 'x' } });
+    check('file input 的 onChange 把 File 交给 onImport（且清空 input.value 以便重选同一个文件）',
+      importedFile && importedFile.name === 'x.json', importedFile && importedFile.name);
+    check('让位提示行如实渲染（静默改名最恼人）',
+      findNodes(treeE, (n) => n.type === 'div' && typeof n.children[0] === 'string'
+        && n.children[0].includes('重名已让位')).length === 1);
+
+    // 负对照：两枚字段都缺席时，上面那三样一个都不许出现（否则"给了才画"这条只是巧合）。
+    const treeN = renderGlassPresetsBlock(ctxExport('', false));
+    check('negative control: exportUrl / onImport 缺席 ⇒ 导出链接与导入按钮都不渲染（不炸、不空转）',
+      findNodes(treeN, (n) => n.type === 'a').length === 0
+      && !findButtons(treeN).some((b) => String(b.props.title || '').includes('导入一份预设'))
+      && !collect(treeN, []).some((n) => n.type === 'input' && n.props.type === 'file'));
   }
 }
 

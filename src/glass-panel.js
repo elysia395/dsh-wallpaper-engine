@@ -43,14 +43,29 @@
  *   · **出厂预设的删除 = 永久删除**（两步确认点明不可恢复；宿主落墓碑遮蔽，无恢复通道）；
  *   · **读不懂的预设禁用**但保留删除（删掉坏文件是唯一出路）；
  *   · 失败态给**可判定原因**（selection.glassPresetError，宿主原话 + weT 查英文表）。
+ *   · **导出 = 普通链接**（`<a download>`，宿主带 attachment 头应答）—— 与字体集**逐字同形**：
+ *     不引入 blob、不造保存通道；只在**用户层**那一行给入口（导出随包发布物没有意义，
+ *     宿主路由并不设卡）；
+ *   · **导入 = 隐藏 input + 一个按钮**（同字体集 / 自定义画面）：读文件与校验都在
+ *     `importGlassPreset`（src/preset-store.js）里，本渲染器只负责"选文件"；
+ *   · **重名让位的名字如实显示**（`importNote`）：宿主把 "甲" 落成 "甲 (2)" 时，
+ *     界面必须说出来 —— 静默改名比拒绝更恼人。
  * 本渲染器**只画**：网络与状态全部经 ctx（store 在 src/preset-store.js，接线在 client.js 的
  * glassPresetCtx）。
  */
+
+/**
+ * 导入用的隐藏 file input（与字体集 / 自定义画面同形：模块级 ref + 一个按钮去 `.click()`）。
+ * ⚠️ 刻意**不引用**工厂作用域里的任何兄弟名字：本文件被 verify-scene-live 当真模块 import、
+ * 被 verify-presets 用 `new Function` 求值 ⇒ 引用外部绑定就是渲染期 ReferenceError。
+ */
+let gpImportInput = null;
+
 function renderGlassPresetsBlock(gp) {
   const {
-    presets, loading, error, saving, draftName, armedId,
+    presets, loading, error, saving, draftName, armedId, importNote,
     onApply, onOpenSave, onDraftName, onSaveCommit, onCancelSave,
-    onArmDelete, onDisarm, onDelete,
+    onArmDelete, onDisarm, onDelete, exportUrl, onImport,
   } = gp || {};
   if (!presets) return null; // ctx 缺席时不画（渲染器不抛，也不画半个块）
   const rows = Array.isArray(presets) ? presets : [];
@@ -86,35 +101,67 @@ function renderGlassPresetsBlock(gp) {
     const broken = typeof row.broken === "string" && row.broken;
     const isUser = row.origin === "user";
     const armed = armedId === row.id;
+    // 导出链接：**只有用户层那一行**给入口（导出随包发布物没有意义），读不懂的行不给
+    //（宿主那边也会 422 —— 界面上不摆一个必然报错的链接）。
+    // ⚠️ `exportUrl` 缺席（严格的 ctx 替身）时一律不画，不去调 undefined。
+    const expHref = (isUser && !broken && typeof exportUrl === "function") ? exportUrl(row.id) : "";
+    const cells2 = [];
+    cells2.push(React.createElement("button", {
+      className: "we-picker__btn", type: "button",
+      disabled: Boolean(broken) || loading === true,
+      title: broken
+        ? weT("这份预设读不出来：{reason}", { reason: broken })
+        : weT("应用「{name}」：整组玻璃观感立即生效，之后可以继续微调", { name: labelOf(row) }),
+      onClick: () => onApply(row.id),
+    }, labelOf(row)));
+    if (expHref) {
+      cells2.push(React.createElement("a", {
+        key: "exp", className: "we-picker__btn we-picker__preset-exp",
+        href: expHref, download: row.id + ".json",
+        title: weT("下载这份预设（可分享 / 可再导入）"),
+      }, weT("导出")));
+    }
+    cells2.push(React.createElement("button", {
+      className: "we-picker__btn we-picker__preset-del", type: "button",
+      disabled: loading === true,
+      title: armed
+        ? weT("已经问过你了 —— 在下面那一行选「确认」或「取消」")
+        : (isUser
+          ? weT("删除这个预设（会再问一次）")
+          : weT("删除这个出厂预设（不可恢复）")),
+      onClick: () => { if (!armed) onArmDelete(row.id); },
+    }, "×"));
     cells.push(React.createElement("div", {
       key: row.id,
       className: "we-picker__preset-cell" + (armed ? " we-picker__preset-cell--armed" : ""),
-    },
-      React.createElement("button", {
-        className: "we-picker__btn", type: "button",
-        disabled: Boolean(broken) || loading === true,
-        title: broken
-          ? weT("这份预设读不出来：{reason}", { reason: broken })
-          : weT("应用「{name}」：整组玻璃观感立即生效，之后可以继续微调", { name: labelOf(row) }),
-        onClick: () => onApply(row.id),
-      }, labelOf(row)),
-      // ⚠️ 删除键对**所有格**都有（用户口径：出厂预设可删，删除即永久、
-      //    不可恢复），统一固定在每格最右侧；文案按 origin 分。
-      React.createElement("button", {
-        className: "we-picker__btn we-picker__preset-del", type: "button",
-        disabled: loading === true,
-        title: armed
-          ? weT("已经问过你了 —— 在下面那一行选「确认」或「取消」")
-          : (isUser
-            ? weT("删除这个预设（会再问一次）")
-            : weT("删除这个出厂预设（不可恢复）")),
-        onClick: () => { if (!armed) onArmDelete(row.id); },
-      }, "×"),
-    ));
+    }, cells2));
   }
   const chipRow = React.createElement("div", { className: "we-picker__preset-grid", key: "gp-grid" }, cells);
   // 「保存当前为预设」：网格下方的独立行（不在格子里 —— 格子属于预设本身）；
   // 满 8 个禁用并指路（删除腾位）。
+  // 同一行右侧是「导入预设…」：它**不占**预设位（导入是"把文件里的那份加进来"，
+  // 加不进来是宿主的 409 —— 界面上照常可点，原因由 error 行如实说）。
+  const importControls = typeof onImport === "function" ? [
+    React.createElement("input", {
+      key: "gp-import-input",
+      className: "we-picker__file", type: "file",
+      // 只做文件对话框的提示（真正的门是 `$schema`，宿主权威校验）—— 同字体集。
+      accept: ".json,application/json",
+      style: { display: "none" },
+      ref: (el) => { gpImportInput = el; },
+      onChange: (e) => {
+        const f = e.target.files && e.target.files[0];
+        try { e.target.value = ""; } catch { /* ignore */ }
+        if (f) onImport(f);
+      },
+    }),
+    React.createElement("button", {
+      key: "gp-import", className: "we-picker__btn", type: "button",
+      disabled: loading === true,
+      title: weT("从「导出」得到的 .json 导入一份预设（重名会自动让位，导入后不会自动应用）"),
+      onClick: () => { if (gpImportInput && typeof gpImportInput.click === "function") gpImportInput.click(); },
+    }, weT("导入预设…")),
+  ] : [];
   const openSaveRow = saving
     ? null
     : React.createElement("div", { className: "we-picker__ctl we-picker__ctl--wrap", key: "gp-save-open" },
@@ -125,7 +172,8 @@ function renderGlassPresetsBlock(gp) {
           ? weT("已达预设上限（8 个）—— 删除不需要的预设后再存")
           : weT("把当前这套玻璃观感存成一份你自己的预设（之后从预设行一键取回）"),
         onClick: () => onOpenSave(),
-      }, weT("保存当前为预设…")));
+      }, weT("保存当前为预设…")),
+      importControls);
   // 删除的两步确认行（令牌族 "gpreset:"；`!token` 退化不渲染 —— renderConfirmRow 的不变量）。
   const armedRow = armedId ? rows.find((r) => r.id === armedId) : null;
   const armedQuestion = armedRow && (armedRow.origin === "user"
@@ -160,6 +208,9 @@ function renderGlassPresetsBlock(gp) {
     // ⚠️ reason 必须再过一次 weT：它可能来自宿主回包（lib/routes/presets.js 的中文 error），
     //    原样塞进去会让英文界面露出中文 —— 与 fontset-editor 的 error 行同款纪律。
     error ? React.createElement("div", { className: "we-picker__hint" }, weT("预设不可用：{reason}", { reason: weT(error) })) : null,
+    // 导入让位提示：宿主把重名的那份落成了别的名字 —— 说出来（静默改名最恼人）。
+    // 与 error 行并列但**不同色语义**：一个是失败，一个是成功后的实情。
+    importNote ? React.createElement("div", { className: "we-picker__hint" }, importNote) : null,
     rows.length === 0 && !loading
       ? React.createElement("div", { className: "we-picker__hint" }, weT("还没有任何预设 —— 出厂那几套加载失败或宿主未重挂。"))
       : null,

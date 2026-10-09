@@ -13,6 +13,7 @@
  *   GLASS_PRESET_KEYS / sanitizeGlassPresetValues / isGlassPresetId ← lib/settings-schema.js
  *   BASE / apiFetch                             ← src/api-client.js（宿主 API 唯一出入口）
  *   hostFailureReason                           ← src/client.js（失败原因的唯一翻译出口）
+ *   readFileText                                ← src/fontset-store.js（File → 文本的唯一读法）
  *   persistSelection                            ← src/persistence.js（应用预设 = 走设置通道落盘）
  *   applyEffects                                ← src/effects.js
  *   emit                                        ← 单向重渲染
@@ -24,12 +25,16 @@
  *                                  且无信封）翻译成"宿主还是没有这条路由"
  * 提供的入口：
  *   loadGlassPresets()             启动加载：清单 → selection.glassPresets（失败不挡启动，只留原因）
- *   refreshGlassPresets()          重读清单（保存 / 删除后调用）
+ *   refreshGlassPresets()          重读清单（保存 / 删除 / 导入后调用）
  *   applyGlassPreset(id)           **应用**：读回 values → 整快照合并进 selection →
  *                                  persistSelection()（debounce PUT）→ applyEffects()（立即落效）
  *   saveGlassPreset(name)          以当前玻璃值新建一份用户预设（重名 ⇒ selection.glassPresetError）
  *   deleteGlassPreset(id)          删预设（出厂或用户皆可；出厂删了即永久 ——
  *                                  墓碑遮蔽，没有恢复通道）
+ *   glassPresetExportUrl(id)       导出 = **普通链接**（宿主带 `Content-Disposition: attachment`
+ *                                  应答）—— 不引入 blob，也不自己造保存通道（同字体集）
+ *   importGlassPreset(file)        导入一份**导出出来的** .json：本地三道预检 → 宿主权威校验
+ *                                  → 回读清单。**不自动应用**（"导入"不等于"立刻用"）
  *
  * 不变量：
  *   · **整套采用或整套不动**：应用预设只有拿到宿主那份完整正文（消毒产物）才写进
@@ -194,5 +199,72 @@ async function deleteGlassPreset(id) {
     setPresetError(weT("宿主不可达（请求未完成）"));
     emit();
     return false;
+  }
+}
+
+/**
+ * 导出链接（**普通链接**，与字体集同一条腿）：宿主带 `Content-Disposition: attachment`
+ * 应答 ⇒ 交给浏览器 / 桌面壳的下载管理器，插件**不**造保存通道、也不引入 blob。
+ * 非法 id 给空串（面板那边 `href=""` 不会发请求 —— 与 `exportFontSetUrl` 同一口径）。
+ *
+ * 出厂预设也有链接（宿主路由不设卡：能读就能导）；面板只在**用户层**那一行给入口
+ * （导出随包发布物没有意义），但这里不区分 —— 判定归界面，通道保持单纯。
+ */
+function glassPresetExportUrl(id) {
+  return isGlassPresetId(id) ? glassPresetUrl(id) + "/export" : "";
+}
+
+/**
+ * 导入一份**导出出来的**预设 .json。三道**本地**预检各给一句可判定文案，再交给宿主做
+ * 权威校验（宿主还会查 `$schema`、限量上限、按占用情况分配新 id、重名时让位顺延）：
+ *   ① 文件读不出来 ⇒ "读不出这个文件"；② 不是 JSON ⇒ 点明；③ `$schema` 不对 ⇒ 点明**要哪个标记**
+ *   （这条最关键：用户可能拖进来任意 .json，笼统说"导入失败"等于什么都没说）。
+ * 成功 = 回读清单（新那一格就是反馈）；**不自动应用**（同字体集："导入"不等于"立刻用"）。
+ * 宿主改了名字（重名让位）时把**实际落下的名字**写进 `glassPresetImportNote`，
+ * 面板如实显示 —— 静默改名比拒绝更恼人。
+ * @returns 新的 id（失败给空串）
+ */
+async function importGlassPreset(file) {
+  selection.glassPresetImportNote = "";
+  let text = "";
+  try {
+    text = await readFileText(file);
+  } catch {
+    setPresetError(weT("读不出这个文件（换一个 .json 再试）"));
+    return "";
+  }
+  let doc = null;
+  try {
+    doc = JSON.parse(text);
+  } catch {
+    setPresetError(weT("这不是 JSON 文件（预设是导出出来的 .json）"));
+    return "";
+  }
+  if (!doc || typeof doc !== "object" || Array.isArray(doc) || doc.$schema !== GLASS_PRESET_SCHEMA_TAG) {
+    setPresetError(weT("这不是预设文件（需要 {tag} 标记 —— 只有从「导出」拿到的文件才有）", { tag: GLASS_PRESET_SCHEMA_TAG }));
+    return "";
+  }
+  try {
+    // 正文**原样转发**（不重新序列化）：宿主是权威校验方，中间再拼一次只会多一处失真面。
+    const res = await gpFetch(glassPresetsUrl() + "/import", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: text,
+    });
+    if (!res.ok) {
+      setPresetError(glassPresetFailureReason(res));
+      return "";
+    }
+    const data = res.data || {};
+    setPresetError("");
+    if (data.renamed === true && typeof data.name === "string" && data.name) {
+      selection.glassPresetImportNote = weT("重名已让位，导入为「{name}」", { name: data.name });
+    }
+    await refreshGlassPresets();
+    emit();
+    return typeof data.id === "string" ? data.id : "";
+  } catch {
+    setPresetError(weT("宿主不可达（请求未完成）"));
+    return "";
   }
 }

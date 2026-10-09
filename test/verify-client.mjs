@@ -2808,9 +2808,12 @@ setTimeout(async () => {
           fields: ['fontSetActive', 'fontSetError', 'fontSets'],
         },
         'src/preset-store.js': {
-          why: '玻璃预设通道内部的清单投影（活跃清单；已删除的出厂不回来，无隐藏形态）；错误文案已收口到 setPresetError 单写点（verify-client ①e 棘轮）',
-          fields: ['glassPresets'],
-        },        'src/live-layer.js': {
+          why: '玻璃预设通道内部的清单投影（活跃清单；已删除的出厂不回来，无隐藏形态）与导入让位提示'
+            + '（宿主把重名的那份落成了「X (2)」时如实转达的文案）；错误文案已收口到 setPresetError 单写点'
+            + '（verify-client ①e 棘轮）',
+          fields: ['glassPresets', 'glassPresetImportNote'],
+        },
+        'src/live-layer.js': {
           why: '实时看护的会话内标志；`startLiveWatch` / `stopLiveWatch` 是它的两个入口',
           fields: ['sceneLiveActive'],
         },
