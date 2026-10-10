@@ -1,0 +1,38 @@
+{
+  "$schema": "dsh-we/glass-preset@1",
+  "id": "factory-fish",
+  "name": "黑客绿(Fish)",
+  "values": {
+    "glassColor": "#0d1524",
+    "glassAlpha": 80,
+    "blur": 9,
+    "glassFidelity": 35,
+    "glassMode": {
+      "sidebar": "inherit",
+      "sidebarContent": "custom",
+      "settingsWindow": "inherit",
+      "conversation": "custom",
+      "floaters": "inherit"
+    },
+    "leftSidebarGlass": true,
+    "thinkingGlass": false,
+    "capsuleBlur": 6,
+    "capsuleColor": "#ffffff",
+    "sidebarGlass": true,
+    "sidebarFullClear": false,
+    "sidebarFollowGlobal": true,
+    "sidebarBlur": 8,
+    "sidebarAlpha": 85,
+    "sidebarColor": "#ffffff",
+    "sidebarContentAlpha": 20,
+    "sidebarContentColor": "#ffffff",
+    "settingsWindowTransparency": 90,
+    "settingsWindowBlur": 8,
+    "conversationColor": "#ffffff",
+    "chatGlassFidelity": 0,
+    "floatersTransparency": 90,
+    "floatersBlur": 8,
+    "leftSidebarTransparency": 90,
+    "leftSidebarBlur": 8
+  }
+}
