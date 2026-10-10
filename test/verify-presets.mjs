@@ -286,7 +286,7 @@ section('④ 客户端形态棘轮：应用走设置通道 / 无第二持久化 
     !/window\.confirm/.test(stripComments(panelSrc))
     && !/createObjectURL|new Blob|showSaveFilePicker/.test(storeSrc + panelSrc));
   check('出厂预设名字走 weT 词表（就地字面量，不是数据直出）',
-    /"factory-default": weT\("出厂默认"\)/.test(panelSrc));
+    /"factory-default": weT\("黑客绿\(Fish\)"\)/.test(panelSrc));
   // 2026-10-04 口径再收紧：出厂预设删除 = **永久删除**（不可恢复）—— 判据从"隐藏语义"
   // 改为"两个来源各有一句删除语义文案"（文本级；行为级见下方真渲染判据）。
   check('删除按钮文案按 origin 分语义（出厂=永久删除 / 用户=删除）',

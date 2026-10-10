@@ -58,7 +58,7 @@ function renderGlassPresetsBlock(gp) {
   // i18n 判据是文本扫描，只认 weT("…") 字面量；数据里的名字扫描看不见）。
   // 两侧靠 id 对齐；漏了的出厂 id 回落显示文件里的原名（渐进式，不炸）。
   const FACTORY_PRESET_CN = {
-    "factory-default": weT("出厂默认"),
+    "factory-default": weT("黑客绿(Fish)"),
     "factory-clear": weT("清透速览"),
     "factory-frosted": weT("重磨砂"),
     "factory-night": weT("暗夜釉色"),

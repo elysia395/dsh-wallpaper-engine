@@ -19,6 +19,11 @@
 
 > v1.3.0-r2 之后的增量；`NOTICE_VERSION` 哨兵同步 `1.3.1`（公告改版 ⇒ 看过 r2 公告的用户会再看到一次），；`package.json` 版本号已同步 `1.3.1`。
 
+- **变更：出厂预设「出厂默认」换成新预设并改名「黑客绿(Fish)」（PR [#171](https://github.com/elysia395/dsh-wallpaper-engine/pull/171) 的预设值，改为**替换**而非新增）**。
+  **做法**：直接改写 `lib/glass-presets/factory-default.json` 的值与名字，而不是照 PR #171 新增第 8 套（`factory-fish`）——保持**出厂仍七套**，好让装机后 8 个预设位里还留一个给用户。取值与 PR #171 一致：整体同「作者自用」（`factory-author`），`sidebarContentColor` 由 `#0d1524`（深色内容底）改为 `#ffffff`；PR 里那 7 处与 `factory-author` 的差异都是新版本 schema 新增的键且取值恰为默认值，本文件按出厂预设的稀疏写法省略，读入时由 `sanitizeGlassPresetValues` 补齐。
+  **连带**：`src/glass-panel.js` 的 `FACTORY_PRESET_CN` 把 `factory-default` 的词表名改为 `"黑客绿(Fish)"`（出厂名必须走词表字面量，i18n 判据是文本扫描、数据里的 name 扫描看不见）；`src/i18n-copy.js` 同步改键（旧键「出厂默认 / Factory default」移除，避免孤儿键）。`test/verify-presets.mjs` 的对应判据跟上。
+  **影响面**：出厂预设数量不变（7 套）、数量上限不变（8）、不新增设置键。**只改客户端 ⇒ 刷新页面即生效**。预先存过「出厂默认」的用户预设重名规则不变（同名禁止针对活跃清单，出厂名变化不影响已存用户预设）。
+
 - **修复：网页壁纸周期性抢走输入焦点（issue [#148](https://github.com/elysia395/dsh-wallpaper-engine/issues/148)）—— 元素级焦点围栏 + 宿主侧焦点交还（C11 + C12 合并）**。
   **根因**：网页 / 场景壁纸里的脚本会反复 `focus()`，把输入光标从对话输入框搬走。插件原有的围栏只做**帧级**判定（壁纸帧整体拿不到键盘焦点），拦不住两类抢焦：壁纸文档里元素级的 `el.focus()`，以及**跨源 WindowProxy** 的 `top.focus()` / `parent.focus()` 与宿主文档内部的 `autofocus` / `dialog.showModal()` / `label` 转发 —— 壁纸文档里的守卫根本够不到这些路径。
   **修法**：① `lib/we-focus-guard.js` 保留帧级判定不变，新增**元素级围栏**：`HTMLElement.prototype.focus` 只在"最近一次真实交互"后的 `gestureWindowMs`（**1000 ms**）窗口内放行，窗口外吞掉并计数（`window.__weFocusGuard` 的 `elCalls` / `elAllowed` / `elBlocked` / `elLastBlockedAt` / `elLastBlockedStack`，便于作者页复现时取证）。**手势窗口不能省**：壁纸层是 `pointer-events: none`，用户真点壁纸时由 shim 合成 `isTrusted === false` 的 pointer / mouse 事件 —— 壁纸自带编辑框靠这次点击拿焦点是正当行为，一刀切会把它毁掉（总计划 §3.5 明列"不要做"）。② 新增 `src/focus-handback.js`，跑在**宿主文档**里把被搬走的焦点交还：`focusout` 来自被记住的元素、`document.activeElement` 是 `iframe.we-iframe`、且最近 1000 ms 无真实手势 ⇒ 交还；另有 `STALE_MS` / `MIN_GAP_MS` 两道保险，`window.__weFocusHandback.{handbacks,skipped}` 可观测。③ `scripts/build-client.mjs` 登记新模块、`src/client.js` 的 2e 段挂 `ctx.effect`。宿主半不能省：壁纸文档里的守卫改不了跨源 WindowProxy，也拦不住 `autofocus` / `dialog.showModal()` / `label` 转发。
