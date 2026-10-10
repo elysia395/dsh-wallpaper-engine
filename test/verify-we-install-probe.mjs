@@ -270,12 +270,9 @@ check('D2 探测走 isWallpaperEngineRootP（逐标记探存在性），且返�
     // 独立安装（非 Steam）那条候选也没被删掉。
     && hostSrc.includes("candidates.push(wslPath('C:\\\\Program Files (x86)\\\\Wallpaper Engine'));"));
 
-// 负对照：下面 D3/D4 用到的两条「旧写法」字面量必须能认出旧写法本身，否则那两条判据恒真。
+// "字面量 contains 字面量"式判据一律不写：它对任何实现都真（覆盖点在 D4 / D5）。
 const STALE_TOPLEVEL_ONLY = "pathExistsP(join(dir, 'wallpaper32.exe'))";
 const STALE_OWNING_DIR = "pathExistsP(join(probe, 'steamapps', 'common', 'wallpaper_engine'))";
-check('D3 负对照：两条旧写法各自能被 D4/D5 的字面量判据认出来',
-  "if (await pathExistsP(join(dir, 'wallpaper32.exe'))) return dir;".includes(STALE_TOPLEVEL_ONLY)
-    && "if (await pathExistsP(join(probe, 'steamapps', 'common', 'wallpaper_engine'))) libs.push(probe);".includes(STALE_OWNING_DIR));
 
 check('D4 「只认顶层 exe」不再是安装判据',
   !hostSrc.includes(STALE_TOPLEVEL_ONLY));

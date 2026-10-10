@@ -35,6 +35,55 @@ const SURFACE_PREFIX = 'dsh-client-ui-';
 // `visibility:hidden`（上游 #107）。两条都不在 = 隐藏机制换代 ⇒ 红。
 const HIDE_MARKERS = ['translate(100%)', 'visibility:hidden', 'visibility: hidden'];
 
+// 面板锚点：这两个属性是**面板专属**，只有它们能证明一条规则属于右栏面板。
+const PANEL_ANCHORS = ['data-sidebar-right-panel', 'data-sidebar-right-open'];
+
+// 只认「赋值号后面的双引号串」为 CSS 文本（上游把 module.css 内联成 const css = "..."）。
+// 不这么切、直接在 JS 源码上找 `{`/`}`，会被 JS 自己的对象字面量与模板串带偏（实测会算错选择器）。
+const cssBlobsIn = (src) => {
+  const blobs = [];
+  for (const m of src.matchAll(/=\s*"((?:\\.|[^"\\])*)"/gs)) {
+    const text = m[1].replace(/\\(.)/g, '$1');
+    if (text.includes('{') && text.includes('}')) blobs.push(text);
+  }
+  return blobs;
+};
+
+// 把 CSS 文本切成 { selector, body }（按 `{`/`}` 配平，兼容 @media 嵌套）。
+const cssRulesIn = (src) => {
+  const rules = [];
+  for (const text of cssBlobsIn(src)) {
+    let i = 0;
+    while (i < text.length) {
+      const open = text.indexOf('{', i);
+      if (open === -1) break;
+      const prelude = text.slice(text.lastIndexOf('}', open) + 1, open);
+      const selector = prelude.slice(prelude.lastIndexOf(';') + 1).trim();
+      let depth = 1, j = open + 1;
+      while (j < text.length && depth > 0) { if (text[j] === '{') depth++; else if (text[j] === '}') depth--; j++; }
+      if (selector) rules.push({ selector, body: text.slice(open + 1, j - 1) });
+      i = j;
+    }
+  }
+  return rules;
+};
+
+const classesIn = (selector) => [...selector.matchAll(/\.([A-Za-z0-9_-]+)/g)].map((c) => c[1]);
+
+// 标记是否出现在**面板作用域**的规则里：选择器直接点名面板锚点，或与锚点规则共用同一个 CSS-module
+// 类（上游隐藏规则写的是 `.JRZOga_panel [data-dockkit-host=dock]`，不含属性字面量；只有面板容器规则
+// `.JRZOga_panel[data-sidebar-right-open]` 才点名锚点 ⇒ 必须两段合起来判）。
+const hideMechanismIn = (src, markers) => {
+  const rules = cssRulesIn(src);
+  const panelClasses = new Set();
+  for (const r of rules) {
+    if (PANEL_ANCHORS.some((a) => r.selector.includes(a))) for (const c of classesIn(r.selector)) panelClasses.add(c);
+  }
+  const scoped = rules.filter((r) => PANEL_ANCHORS.some((a) => r.selector.includes(a))
+    || classesIn(r.selector).some((c) => panelClasses.has(c)));
+  return markers.filter((m) => scoped.some((r) => r.body.includes(m)));
+};
+
 const results = [];
 function check(name, ok, detail) {
   results.push(Boolean(ok));
@@ -136,7 +185,9 @@ if (check('dsh-client-ui-sidebar-right 在已装 harness 中（我们 25 处选�
     src.includes('data-sidebar-right-panel'));
   check('属性锚点 data-sidebar-right-open 仍在源码中（开合态选择器直接钉它）',
     src.includes('data-sidebar-right-open'));
-  const mechanism = HIDE_MARKERS.filter((m) => src.includes(m));
+  // 口径：标记必须落在**面板作用域**的规则里才算命中 —— 出现在无关规则里的同名标记
+  // （如分隔线 / 提示框自己的 visibility:hidden）不能算命中。
+  const mechanism = hideMechanismIn(src, HIDE_MARKERS);
   check('隐藏机制仍是已知形态之一（translate 滑出 / visibility 切换；都不在 = 机制换代）',
     mechanism.length > 0, mechanism.length ? '命中：' + mechanism.join(' + ')
       : '已知标记全不在 —— 上游换了隐藏机制，美化适配需复核（#107 型回归）');
@@ -153,11 +204,12 @@ if (check('dsh-client-ui-sidebar-right 在已装 harness 中（我们 25 处选�
 //     豁免，且必须写明理由 —— 豁免是**需要人复核的裁定**，不是静默跳过。
 const ifaceLedger = inventory && inventory.interfaces ? inventory.interfaces : null;
 const exemptRules = Array.isArray(ifaceLedger && ifaceLedger.exempt) ? ifaceLedger.exempt : [];
-const exemptHit = new Set();
+const exemptHit = new Set();   // 存**实际被豁免的依赖名**（不是命中的规则名）：一条宽规则可以豁免 74 项，
+// 而 exemptHit.size 若只数规则，就是拿代理计数 ⇒ 加宽一条规则照样过（B2）。下面第二条地板数的是项。
 const isExempt = (name) => {
   for (const rule of exemptRules) {
     if (!rule || typeof rule.match !== 'string') continue;
-    if (new RegExp(rule.match).test(name)) { exemptHit.add(rule.match); return rule; }
+    if (new RegExp(rule.match).test(name)) { exemptHit.add(name); return rule; }
   }
   return null;
 };
@@ -204,9 +256,13 @@ if (check('台账带 interfaces 豁免表（第三方接口不许静默混进棘
     slots.length >= 1 && slotMiss.length === 0,
     slotMiss.length ? '不再是槽：' + slotMiss.join(', ') : slots.join(', ') + ' 全部仍是槽名');
   // 负面自检：豁免表若把**所有**依赖都豁免掉，这一组就退化成恒真 —— 必须留下非豁免项。
+  // 地板按**被豁免的项**（exemptHit 存的是依赖名）从实际清单里减，不能拿"命中了 N 条规则"当代理：
+  // 加宽一条规则就能豁免几十项，规则计数不变、清单其实已空转。
+  const exemptNames = new Set([...tokens, ...attrs, ...suffixes, ...slots].filter((n) => isExempt(n)));
   check('覆盖面：接口棘轮的非豁免项足够多（防空转）',
-    tokens.length + attrs.length + suffixes.length + slots.length - exemptHit.size >= 20,
-    '非豁免接口 ' + (tokens.length + attrs.length + suffixes.length + slots.length - exemptHit.size) + ' 项');
+    tokens.length + attrs.length + suffixes.length + slots.length - exemptNames.size >= 20,
+    '非豁免接口 ' + (tokens.length + attrs.length + suffixes.length + slots.length - exemptNames.size) + ' 项'
+      + '（豁免 ' + exemptNames.size + ' 项 / 规则 ' + exemptRules.length + ' 条）');
 }
 
 const failed = results.filter((ok) => !ok).length;

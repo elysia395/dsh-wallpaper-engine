@@ -1403,11 +1403,41 @@ section('⑨ 字体集编辑器（面板可驱动：意图映射 / confirm 门�
       // 后半句是**牙齿**：同一判据必须看得见编辑态那个输入框（否则"零个"是空转）
       return idle === 0 && editing === 1;
     })());
-  check('负对照：名字生成是确定性的（同样的清单给同样的名字，且避开已占用的）',
+  // ⚠️ 口径：这一条**真跑** `src/client.js` 里的 `nextFontSetName()` —— 从源码文本里按花括号
+  //    配平提取那个具名函数，喂桩执行，再对返回值断言。不许用源码 grep 代替执行：三个正则
+  //    匹配不代表生成逻辑正确（把循环改成永远 `return base` 它照样绿），而「同样的清单给同样的
+  //    名字」与「避开已占用」是两条**行为**契约。名字在**面板层**生成（`src/client.js` 的
+  //    `createFontSet(nextFontSetName())`，编辑器侧 `onCreate` 不带参数、观测不到名字），
+  //    所以只能这样跑实现。
+  check('名字生成（真跑实现）：同清单同名字，且取**第一个**空位（不是"最大+1"）、空/错名字不算占用',
+    (() => {
+      const code = stripComments(readFileSync(join(root, 'src', 'client.js'), 'utf8'));
+      const at = code.indexOf('function nextFontSetName(');
+      if (at < 0) return false;
+      const open = code.indexOf('{', at);
+      if (open < 0) return false;
+      let depth = 0, end = -1;
+      for (let i = open; i < code.length; i++) {
+        if (code[i] === '{') depth++;
+        else if (code[i] === '}' && --depth === 0) { end = i + 1; break; }
+      }
+      if (end < 0) return false;
+      const fn = code.slice(at, end);
+      const gen = (names) => new Function('weT', 'selection', fn + '\nreturn nextFontSetName;')(
+        (s) => s, { fontSets: names.map((name, i) => ({ id: 's' + i, name })) })();
+      const base = '我的字体集';
+      return gen([]) === base                                   // 清单里没有 ⇒ 基础名
+        && gen([base]) === base + ' 2'                          // 基础名被占 ⇒ 后缀 2
+        && gen([base, base + ' 2']) === base + ' 3'             // 依次往后
+        && gen([base, base + ' 2', base + ' 4']) === base + ' 3'  // 取**第一个**空位（"最大+1"会给 5）
+        && gen(['别的名字']) === base                             // 无关的占用不影响
+        && gen([base, null, undefined, '']) === base + ' 2'      // 空/错名字不算占用（与实现里的 filter(Boolean) 一致）
+        && gen([base, base + ' 2']) === gen([base, base + ' 2']); // 同清单同结果（确定性）
+    })());
+  check('接线（**源码形状**判据，不是行为判据）：面板新建走 createFontSet(nextFontSetName())，不先问名字',
     (() => {
       const src = readFileSync(join(root, 'src', 'client.js'), 'utf8');
-      return /function nextFontSetName\(\)/.test(src) && /taken\.has\(base\)/.test(src)
-        && /createFontSet\(nextFontSetName\(\)\)/.test(src);
+      return /createFontSet\(nextFontSetName\(\)\)/.test(src);
     })());
   check('「重命名」逐行进入编辑态；编辑态下出输入框（带草稿名）+ 保存/取消，且该行不再出「重命名」',
     (() => {
@@ -1507,8 +1537,6 @@ section('⑨ 字体集编辑器（面板可驱动：意图映射 / confirm 门�
       check('accept 只提示 .json（不把图片/音视频也列进对话框）',
         /\.json/.test(String(fileInput.props.accept)) && !/image\/|video\/|audio\//.test(String(fileInput.props.accept)),
         String(fileInput.props.accept));
-      check('负对照：同一判据对"accept 里混进 image/*"有牙',
-        /image\//.test('image/png,image/jpeg,.json'));
       // 选中文件 ⇒ 交给 onImport（并把 input 清空：同一个文件能再选一次）
       const before = r.calls.length;
       const file = { name: '我的字体集.json' };

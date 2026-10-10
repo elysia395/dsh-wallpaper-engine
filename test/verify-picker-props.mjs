@@ -499,8 +499,6 @@ console.log('0. 挂载台自检');
 {
   check('挂载：settings.section 注册了 picker 渲染回调（否则后面每条判据都在空跑）',
     hasPickerRender(pickerRenders), 'render 回调 ' + pickerRenders.length + ' 个');
-  check('负对照：空渲染回调列表被同一条判据判为未注册',
-    !hasPickerRender([]) && hasPickerRender([() => null]));
   check('夹具：启动链确实拉过库存（判据读的是真渲染，不是空树）',
     inventoryCalls.length >= 1, inventoryCalls.length + ' 次 /inventory');
 }

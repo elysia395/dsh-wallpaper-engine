@@ -57,6 +57,12 @@ function makeEl(tag) {
     addEventListener(ev,fn){ (listeners[ev] ||= []).push(fn); },
     removeEventListener(ev,fn){ const l=listeners[ev]; if(l){const i=l.indexOf(fn); if(i>=0)l.splice(i,1);} },
     __fire(ev){ (listeners[ev]||[]).slice().forEach(f=>f()); },
+    // 真 DOM 语义：`play()/pause()` 会同时改 **`paused`**（产品读的是它，见 applyVideoPlayback
+    // 的 `!video.paused` 短路）—— 只记 `__paused` 会让"夺回焦点后自动恢复"这条路在测试里
+    // 永远走不到 play()（`!undefined === true` 早退），与真机行为分叉。
+    // 取真值语义：媒体未播放时 `paused === true`，play() 后 false，pause() 后 true。
+    get paused(){ return this.__paused !== false; },
+    set paused(v){ this.__paused = !!v; },
     play(){ this.__plays = (this.__plays || 0) + 1; this.__paused = false; return Promise.resolve(); },
     pause(){ this.__paused = true; },
     load(){ this.__loads = (this.__loads || 0) + 1; },
@@ -277,11 +283,16 @@ setTimeout(async () => {
       diagText(diagBefore).includes('occlusion-recheck') && diagText(diagBefore).includes('playing=false'),
       diagText(diagBefore).slice(0, 90));
     const diagBefore2 = diagPosts.length;
+    const playsBeforeResume = live.__plays || 0;
     focusOn = true;                        // 焦点回来了，同样**不派发事件**
     tick();
-    check('焦点回来且事件没送达 ⇒ 复核把判定翻回"可播"（这就是"只剩重载能救"的那一档）',
-      diagText(diagBefore2).includes('occlusion-recheck') && diagText(diagBefore2).includes('playing=true'),
-      diagText(diagBefore2).slice(0, 90));
+    // ⚠️ 断言里必须带上「**真的恢复了播放**」：只查诊断文本的话，替身丢 `paused` 语义
+    //    （`!undefined === true` 早退）时这条照样绿 ⇒ 替身必须带真属性，而这条断言
+    //    正是 `get paused()` 要守住的东西。
+    check('焦点回来且事件没送达 ⇒ 复核把判定翻回"可播"并**真的恢复播放**（这就是"只剩重载能救"的那一档）',
+      diagText(diagBefore2).includes('occlusion-recheck') && diagText(diagBefore2).includes('playing=true')
+        && (live.__plays || 0) > playsBeforeResume,
+      diagText(diagBefore2).slice(0, 90) + ' · plays ' + playsBeforeResume + '→' + (live.__plays || 0));
     // 负对照：不动焦点时复核**不产生**额外动作（判据不是恒真，也不会 churn）。
     const diagBefore3 = diagPosts.length;
     const playsBefore3 = live.__plays || 0;
@@ -303,9 +314,6 @@ setTimeout(async () => {
     check('unhandledrejection 同样落痕（异步路径的异常不丢）',
       diagText(before2).includes('unhandledrejection') && diagText(before2).includes('promise blew up'),
       diagText(before2).slice(0, 96));
-    check('两种监听器都挂上了',
-      (winListeners.error || []).length > 0 && (winListeners.unhandledrejection || []).length > 0,
-      Object.keys(winListeners).join(','));
   }
 
   console.log('');

@@ -75,6 +75,71 @@ console.log('\n② 无门控白名单封闭（M1 的止损线）');
     thinking.length === 1 && ungatedReason(thinking[0].chain) !== null);
 }
 
+console.log('\n②b 独立锚点表（A1：口径不能自己证明自己）');
+{
+  // ⚠️ 这张表是**人工独立来源**的 oracle，不是跑工具抄结果（抄结果 = 退回 A1）。
+  //    期望值逐条从产品/文档约定推出，来源写在 `why` 里：
+  //      · 无门控封闭白名单 = thinking-native + `.we-layer` 两处
+  //        （docs/COEXISTENCE.md §审计、docs/adr/0010-*:17-19、docs/wip/COEXISTENCE-AUDIT.md:198）；
+  //      · 玻璃门 = 链上有 `[data-we-glass-*]`（docs/CHANGELOG.md「页面玻璃锚点 data-we-glass-page」、
+  //        docs/HOW-IT-WORKS.md、src/styles.js 的 `body[data-we-glass-page]` 块）；
+  //      · 壁纸门 = 只有 `[data-we-wallpaper]`（src/styles.js 里 bg-base/侧栏填充那两条）；
+  //      · 契约口径只收 `--dsw-*`（docs/TOKEN-CONTRACT.md 的口径段；`--we-*` 是插件自有变量族）。
+  //    工具口径若被放宽（例如把 `:root` 或 `@media` 也当门控/白名单），这张表当场红。
+  const ANCHORS = [
+    {
+      label: '裸 `:root` 里的 `--dsw-*` 声明',
+      css: 'const CSS = `\n  :root { --dsw-anchor-root: red; }\n`;\n',
+      decls: 1, bucket: 'ungated', reason: null,
+      why: '无门控白名单只开 thinking-native 与 `.we-layer` 两处 ⇒ `:root` 既无门控也不在白名单，'
+        + '`ungatedReason` 必须为 null（② 会把它判成 stray）—— 这是白名单**封闭性**的锚点',
+    },
+    {
+      label: '顶层 `.we-layer` 里的 `--dsw-*` 声明',
+      css: 'const CSS = `\n  .we-layer { --dsw-anchor-layer: red; }\n`;\n',
+      decls: 1, bucket: 'ungated', reason: 'we-layer',
+      why: '白名单的正向面：`.we-layer` 是插件自有元素（卸载即消失）⇒ 无门控但必须给出理由',
+    },
+    {
+      label: '挂在已知门控选择器 `body[data-we-glass-page]` 下',
+      css: 'const CSS = `\n  body[data-we-glass-page] { --dsw-anchor-glass: red; }\n`;\n',
+      decls: 1, bucket: 'glass', reason: null,
+      why: '`data-we-glass-*` 即玻璃门（src/styles.js 的整页玻璃锚点）⇒ 有门控，`ungatedReason` 为空',
+    },
+    {
+      label: '只挂壁纸门 `body[data-we-wallpaper]`',
+      css: 'const CSS = `\n  body[data-we-wallpaper] { --dsw-anchor-wall: red; }\n`;\n',
+      decls: 1, bucket: 'wallpaper', reason: null,
+      why: '只有 `[data-we-wallpaper]` ⇒ 壁纸桶（bg-base「页面让开」那半边）⇒ 有门控，白名单不适用',
+    },
+    {
+      label: '`@media` 里、没有任何门控选择器的声明',
+      css: 'const CSS = `\n  @media (min-width: 1px) { :root { --dsw-anchor-media: red; } }\n`;\n',
+      decls: 1, bucket: 'ungated', reason: null,
+      why: '既有约定：`@media` 是前提不是门控（bucketOf 只认 `data-we-glass-*` / `data-we-wallpaper`）'
+        + '⇒ 该声明仍算无门控且不在白名单 —— 防止「塞进 @media 就绕过封闭白名单」',
+    },
+    {
+      label: '`--we-*` 声明（插件自有变量，不在契约口径内）',
+      css: 'const CSS = `\n  body[data-we-wallpaper] { --we-anchor-knob: red; }\n`;\n',
+      decls: 0,
+      why: '契约口径只收 `--dsw-*` 属性位声明（docs/TOKEN-CONTRACT.md 口径段；styles.js 里 `--we-*` 成族存在）'
+        + '⇒ 扫描结果必须是 0 条，`--we-*` 不得混进契约',
+    },
+  ];
+  const anchorProblems = ANCHORS.filter((a) => {
+    const ds = scanTokenDecls(a.css);
+    if (a.decls === 0) return ds.length !== 0;
+    if (ds.length !== a.decls) return true;
+    if (bucketOf(ds[0].chain) !== a.bucket) return true;
+    return Boolean(ungatedReason(ds[0].chain)) !== Boolean(a.reason);
+  }).map((a) => a.label + '（' + a.why + '）');
+  check('覆盖面：独立锚点表非空且逐条被工具口径复现',
+    ANCHORS.length >= 4 && anchorProblems.length === 0,
+    anchorProblems.length ? anchorProblems.join(' | ')
+      : ANCHORS.length + ' 条人工锚点全部被口径复现（来源见各条 why）');
+}
+
 console.log('\n③ `--dsw-alias-bg-base` 归壁纸半边（审计 §三.3 的关键前提）');
 {
   const bg = decls.filter((d) => d.token === '--dsw-alias-bg-base');
@@ -165,12 +230,33 @@ console.log('\n⑥ 门控计数自洽（A1-3：工具曾把每格算成 0，而�
   const problems = gateProblems(text, tokens);
   check('产物里每格门控计数 > 0、之和 = 条数、组数 = 桶数', problems.length === 0,
     problems.length ? problems.slice(0, 3).join(' | ') : tokens.length + ' 个令牌全部自洽');
-  // 负对照：把某一格改成 0 —— 同一条判据必须判出（否则它只是"恒真的空转"）
-  const nonzero = text.match(/\(([1-9]\d*)\)/);
-  const doctored = nonzero ? text.replace(nonzero[0], '(0)') : text;
-  check('负对照：某一格计数被改成 0 会被判出自洽性失败',
-    nonzero !== null && gateProblems(doctored, tokens).length > 0,
-    nonzero ? '探针 ' + nonzero[0] + ' → 判出 ' + gateProblems(doctored, tokens).length + ' 处' : '产物里找不到非零计数');
+  // 负对照：从 **⑥ 自己那个解析器（rowsOf）产出的门控计数格**里挑一格改成 0 —— 同一条判据
+  // 必须判出（否则它只是"恒真的空转"）。⚠️ 不能拿全文本第一个 `(N)` 下手：那命中的是
+  // 说明行「探针 (2)」之类的文字，压根没落在门控格上（A4：探针必须穿过主判据真正用的解析器）。
+  // 探针找不到门控格 ⇒ 判红，不许静默通过。
+  const gateCellProbe = (docText, tokenList) => {
+    const lines = docText.split('\n');
+    const rowRe = /^\|\s*`([^`]+)`\s*\|\s*(\d+)\s*\|\s*([^|]*?)\s*\|/;
+    for (let i = 0; i < lines.length; i++) {
+      const m = rowRe.exec(lines[i]);
+      // 只认**全量令牌表**里那几行（tokenList 是 ⑥ 正在核对的那份名单），
+      // 别把无门控白名单表的行（第二格是 `styles.js:96`）或说明行当成计数格。
+      if (!m || !tokenList.some((t) => t.token === m[1])) continue;
+      const gm = /\(([1-9]\d*)\)/.exec(m[3]);
+      if (!gm) continue;
+      const doctored = lines.slice(0, i).concat(lines[i].replace(gm[0], '(0)'), lines.slice(i + 1)).join('\n');
+      return { token: m[1], rowLine: i + 1, gates: m[3], hit: gm[0], doctored };
+    }
+    return null;
+  };
+  const probe = gateCellProbe(text, tokens);
+  const probeProblems = probe ? gateProblems(probe.doctored, tokens) : [];
+  check('负对照：门控计数格被改成 0 会被判出自洽性失败',
+    probe !== null && probeProblems.length > 0,
+    probe
+      ? '探针 全量表第 ' + probe.rowLine + ' 行 `' + probe.token + '` 的门控格「' + probe.gates
+        + '」里 ' + probe.hit + ' → 判出 ' + probeProblems.length + ' 处（' + probeProblems[0] + '）'
+      : '产物里找不到可下手的门控计数格（探针失效 ⇒ 判红）');
 }
 
 console.log('');

@@ -295,13 +295,14 @@ node test/tools/host-route-index.mjs --write   # 重算并写入 docs/ROUTE-INDE
 ⚠️ **平台覆盖是不对称的**：某些判据有 posix / win32 分支，跑在 Windows 上时 posix 那几条
 **根本没有被执行**（输出会写"这是覆盖差异，不是通过"）。改动涉及平台分支时，别只看本机绿灯。
 
-### 4.5 怎么写一条新判据（最短路径 + 八条约定）
+### 4.5 怎么写一条新判据（最短路径 + 十条约定）
 
 **最短路径**：
 
 1. **决定放哪一层**（§4.1 + §4.7 约定 1）：行为 → 冒烟；真浏览器 → e2e；结构 → 守卫。
 2. **正负对照成对**，且**共用同一个判据函数**（§4.7 约定 5）——这是最常写错的一条。
-3. **先断言域非空**，否则"零残留"这类判据会在空域上恒真。
+3. **先断言域非空**（且地板本身要写在 `if (x) { … }` **外面** —— 写进条件块里同样恒真），
+   否则"零残留"这类判据会在空域上恒真。
 4. **剥注释用字符串感知实现**（`test/tools/js-text.mjs`），别用朴素块注释正则。
 5. **验证判据本身有效**：把判据中和成"永远说没问题"，负对照**必须变红**（§4.7 约定 8）。
 6. 新工具 / `compat-*` 要在 §4.6 点名（守卫会判"不许有没人知道的工具"）。
@@ -334,12 +335,13 @@ node test/tools/host-route-index.mjs --write   # 重算并写入 docs/ROUTE-INDE
 | `audit-fixture-coverage.mjs` | **夹具是不是把被测行为中和掉了** | `node test/tools/audit-fixture-coverage.mjs` |
 | `audit-guard-teeth.mjs` | 守卫"牙齿"普查 A–F（对照没被评估 / log 式伪判据 / 零引用判据 / 恒真 / 无红出口 / 朴素剥注释吃代码）—— **只给候选** | `node test/tools/audit-guard-teeth.mjs` |
 | `audit-import-closure.mjs` | `lib/` 的**运行时导入闭包** vs `package.json` 的 `files`（缺文件 ⇒ registry 装上就崩） | `node test/tools/audit-import-closure.mjs` |
-| `branch-notify.mjs` | **分支级**"改了 store 却没通知" | `node test/tools/branch-notify.mjs audit` |
+| `branch-notify.mjs` | **分支级**"改了 store 却没通知" —— **只印候选供人读**：改动 `src/client.js` 的 store 处理器之后跑一遍，逐条判"这条路径该不该通知"（该通知 ⇒ 改代码；误报 ⇒ 属文件头「已知边界」那几类）。真正的判据是 `verify-client` ①h/①i（与本工具共用同一份实现） | `node test/tools/branch-notify.mjs audit` |
 | `diagnose-web-blank.mjs` | 网页壁纸「白屏」排查台（无头真浏览器） | `node test/tools/diagnose-web-blank.mjs` |
 | `guard-targets.mjs` | **「哪个守卫管哪个模块」的派生映射**（从守卫**代码**里派生，不维护清单）：`--write` 重算生成物 `docs/GUARD-MAP.md`；改了某模块后查"该跑哪几条"就看它 | `node test/tools/guard-targets.mjs [--write] [--json]` |
 | `host-route-index.mjs` | 生成 / 核对**宿主路由索引**（产出 `docs/ROUTE-INDEX.md`） | `node test/tools/host-route-index.mjs [--write]` |
 | `i18n-scan.mjs` | 源码里的**中文字面量**扫描（判"进没进 `weT(...)`"；迁移与 `verify-i18n` 共用同一实现） | `node test/tools/i18n-scan.mjs [--json] [paths…]` · `selftest` |
 | `js-text.mjs` | JS/TS 源码的**文本级**工具（字符串 / 正则感知的剥注释） | `node test/tools/js-text.mjs selftest` |
+| `regen-golden.mjs` | **设置 golden 夹具的漂移核对与重录**：逐侧列出与当前 `lib/settings-schema.js` 的差异（host 侧的值有判据管、client 侧没有），写入必须先声明意图（`--intend`）—— 防止把缺陷输出自动录成"期望" | `node test/tools/regen-golden.mjs [--write --intend <host\|client>:<键>]` |
 | `sidebar-props-scroll-rig.mjs` | 侧栏「壁纸属性」下钻的**真浏览器滚动判定台**：属性多的壁纸能不能滚到底（官方壳的页签内容区固定高 + overflow:hidden，面板必须自带滚动） | `node test/tools/sidebar-props-scroll-rig.mjs [bundle.js] [label]` |
 | `sync-webwallgl.mjs` | 从本地 `webwallgl-github` 仓库构建 WebWallGL 渲染页（vendored 同步） | 见文件头 |
 | `token-contract.mjs` | **`--dsw-*` 令牌契约的生成与核对**（共存审计 S2）：从 `src/styles.js` 的 CSS 模板现算「改写了哪些 token、在哪个门控下」，`--write` 重算生成物 `docs/TOKEN-CONTRACT.md`（守卫 `verify-token-contract` 逐字节比对） | `node test/tools/token-contract.mjs [--write] [--stats]` |
@@ -351,7 +353,7 @@ node test/tools/host-route-index.mjs --write   # 重算并写入 docs/ROUTE-INDE
 > 另有 **`test/warn-only.mjs`**（不在本清单里）：两档共用的**入口包装** —— 降级退出码
 > 与"本环境起不了子进程就显式 SKIP"。它自己不是判据，所以没有独立守卫覆盖它。
 
-### 4.7 约定（八条，守卫会判）
+### 4.7 约定（十条，守卫会判）
 
 1. **新写的守卫放 `test/`，手动工具放 `test/tools/`，harness 适配探活放 `test/compat-*`** —— 别放回
    `scripts/`：那里只留「用户与发布流程真的会跑」的脚本（`build-client.mjs` / `prepare.mjs` /
@@ -376,6 +378,15 @@ node test/tools/host-route-index.mjs --write   # 重算并写入 docs/ROUTE-INDE
    BOM ⇒ 批量改写用 `[System.IO.File]::WriteAllText($p, $t, (New-Object System.Text.UTF8Encoding($false)))`。
 8. **怎么验证"判据本身有效"**：把判据**中和**成"永远说没问题"，对应的负对照**必须变红** ——
    此时正判据会照过（空转），所以负对照是唯一能抓这类失效的那条。
+9. **期望值不许与被测对象同源**：判据的期望值要么来自**独立来源**（规格、夹具、真跑产品、独立的第二实现），
+   要么明确声明成**漂移棘轮** —— 只证明"没有无理由地变化"，不证明取值正确，且这句话要写进断言文案 /
+   夹具的 `note` 里（范式：`test/fixtures/settings-sanitize-golden.json` 的 `note` 与
+   `test/verify-client.mjs` 的漂移断言）。在测试里**重打一份产品算术 / 正则 / 文案**再拿它当期望，
+   是约定 5 ② 的孪生形态：产品改了，两份一起改，判据永远绿。
+10. **逃生门必须带覆盖面地板，且跳过不得与通过同形**：`--allow-skip` / 环境跳过 / `warn-only` 这类出口要
+   同时满足两条 —— ① 真跑过多少条判据有个**下界**（前置不足 ⇒ 非零退出）；② 跳过在输出里**点名**
+   （范式：`test/compat-harness-pages.mjs` 的 `SKIP_MIN_CHECKS`、
+   `test/e2e-web-media-origin.mjs` 的 `PRE_BROWSER_MIN_CHECKS`、`test/warn-only.mjs` 的具名 SKIP）。
 
 ---
 

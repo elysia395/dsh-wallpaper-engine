@@ -9,8 +9,9 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 // 剥注释：共享的字符串感知实现（test/tools/js-text.mjs）。
 import { stripComments, stripExportBlocks } from './tools/js-text.mjs';
-// 分支级"改了 store 却没通知"的分析与审计工具**同源**（避免两份判据分叉）。
-import { pathNotifications } from './tools/branch-notify.mjs';
+// 分支级"改了 store 却没通知"的分析与审计工具**同源**（避免两份判据分叉）；
+// `DEF`/`defName` 也从工具导入 —— 定义形态只有一份，形态补齐时两处一起动。
+import { pathNotifications, definitionsOf, DEF, defName } from './tools/branch-notify.mjs';
 
 const React = {
   Fragment: 'Fragment',
@@ -1350,6 +1351,7 @@ setTimeout(async () => {
     // conditional on the 侧栏液态玻璃 master switch: off → hidden, on →
     // restored, in the SAME render pass (the toggle re-emits synchronously).
     const sidebarSwitch = findCtlInput(tree, '"侧栏液态玻璃"');  // 带引号精确匹配：新标签「左侧栏液态玻璃」是它的超串
+    assert.ok(sidebarSwitch, '侧栏液态玻璃主开关缺失 ⇒ 下面三条断言零覆盖');
     if (sidebarSwitch) {
       sidebarSwitch.props.onChange({ target: { checked: false } });
       assert.equal(bodyEl.attributes['data-we-sidebar-glass'], undefined, 'sidebar master off must restore native surfaces');
@@ -1520,8 +1522,14 @@ setTimeout(async () => {
       fontSwitch.props.onChange({ target: { checked: true } });
       tree = renderSidePane();
       treeText = JSON.stringify(tree);
-      assert.ok(/文字颜色角色/.test(code) && /排版角色/.test(code) && /恢复默认/.test(code),
+      // 域是**渲染树**（与下面「默认字体」断言同源）：源码里有这三个控件不等于它们真被画出来。
+      const fontControlsDrawn = (text) => text.includes('恢复默认') && text.includes('文字颜色')
+        && text.includes('排版');
+      assert.ok(fontControlsDrawn(treeText),
     '字体节必须揭示字体控件组（角色色组 + 排版角色组 + 恢复默认）—— 单一「字体颜色」行与全局字重/字族都已移除');
+      // 对照：把这三个控件从渲染树里摘掉后，同一谓词必须判否（否则阳性判据恒真）。
+      assert.ok(!fontControlsDrawn(treeText.replace('恢复默认', '').replace('文字颜色', '').replace('排版', '')),
+    '对照：三个控件不在渲染树里时同一谓词必须判否（M1 的阳性判据不是恒真）');
       assert.ok(treeText.includes('默认字体'), '展开态下字体族两行（默认字体 / 终端字体）必须在场');
       fontSwitch.props.onChange({ target: { checked: false } });
       tree = renderSidePane();
@@ -1716,11 +1724,13 @@ setTimeout(async () => {
     const wpOpacityRow = findSliderRow(tree, '壁纸透明度');
     assert.equal(sliderMax(wpOpacityRow), '90', '壁纸透明度上限必须是 90%');
     const wpOpacityInput = findRangeInput(wpOpacityRow);
+    assert.ok(wpOpacityInput, '壁纸透明度契约唯一覆盖：滑杆输入缺失 ⇒ 下面两条断言零覆盖（绝不删）');
     if (wpOpacityInput) {
       wpOpacityInput.props.onInput({ target: { value: '60' } });
       tree = renderPicker();
       assert.equal(p['--we-wallpaper-opacity'], '0.4', '壁纸透明度 60% must drive layer opacity 0.4');
       const wpReset = findRangeInput(findSliderRow(tree, '壁纸透明度'));
+      assert.ok(wpReset, '壁纸透明度契约唯一覆盖：0% 重置输入缺失 ⇒ 最后一条断言零覆盖');
       if (wpReset) wpReset.props.onInput({ target: { value: '0' } });
       tree = renderPicker();
       assert.equal(p['--we-wallpaper-opacity'], undefined, '壁纸透明度 0% must unset the variable (identity opacity)');
@@ -2982,14 +2992,14 @@ setTimeout(async () => {
         .matchAll(/file:\s*'([^']+)'/g)].map((m) => m[1]);
       const panelSrcs = [...new Set(['src/client.js', ...inlineFiles])]
         .map((f) => { try { return readFileSync(new URL('../' + f, import.meta.url), 'utf8'); } catch { return ''; } });
-      const defRe = /^(\s*)(?:function\s+([\w$]+)\s*\(|const\s+([\w$]+)\s*=\s*(?:async\s*)?\([^)]*\)\s*=>|(on[A-Z][\w$]*)\s*:)/;
+      const defRe = DEF; // 定义形态正则与 branch-notify 共用：形态只许定义一次，各抄一份会在补齐时分叉
       const defsOf = (text) => {
         const ls = stripComments(String(text)).split('\n');
         const out = [];
         ls.forEach((l, i) => {
           const m = defRe.exec(l);
           if (!m) return;
-          const name = m[2] || m[3] || m[4];
+          const name = defName(m);
           // ⚠️ 单行定义（`const onX = (v) => { … };`）必须就地收尾：否则会一路吞掉**后面的处理器**，
           //    把它们的 `emit()` 算到这个身上 —— 那是假阴性（反向探针实测过）。
           const opens = (l.match(/\{/g) || []).length;
@@ -3075,6 +3085,15 @@ setTimeout(async () => {
         .filter((n) => !panelSrcs.some((t) => defsOf(t).some((d) => d.name === n)));
       assert.deepEqual(staleBranchExempt, [],
         'BRANCH_NOTIFY_ELSEWHERE 里已不存在的定义该删：' + staleBranchExempt.join(', '));
+      // 覆盖面地板（棘轮，与扫描逻辑**无关**的绝对数）：①i 的判据形态是"扫描器输出 − 豁免表 ⇒ 空"，
+      // 于是扫描器一旦退化（定义形态认不出 / 定义域解析成空），这条断言会**静默恒真**。
+      // 380 = 扫描面上"处理器形态定义"的实测下限（正文 + INLINE_MODULES 共 41 个文件）。
+      // 定义形态识别退化（少认一种形态）会让 ①h/①i 一起空转，所以这个数只降不升：
+      // 真删处理器时才跟着改小。路径展开行为由下方的正/负对照钉住。
+      const handlerDefCount = panelSrcs.reduce((n, t) =>
+        n + definitionsOf(t).filter((d) => /^(?:on[A-Z]|set[A-Z]|change[A-Z]|toggle[A-Z])/.test(d.name)).length, 0);
+      assert.ok(handlerDefCount >= 380,
+        '①i 覆盖面地板：扫描面上的处理器形态定义 ≥380（防定义形态识别退化后 ①h/①i 一起空转）—— 得 ' + handlerDefCount);
       // 负对照就是**历史缺陷形态**（无条件写 + `if` 只有一支通知）—— 反向探针实测过：它会被判出。
       assert.deepEqual(
         pathNotifications('const onX = (v) => {\n  setTransient("a", v);\n  if (v) busy(p);\n  else { /* 什么都不做 */ }\n};\n')
@@ -3101,9 +3120,18 @@ setTimeout(async () => {
       assert.equal(handWritten, 0,
         '宿主不得再手写逐键白名单（发现 ' + handWritten + ' 处）—— 手抄正是漂移的来源');
 
-      // ③ golden：设置规范化的**行为快照**夹具（逐键固定值）。夹具体积小、人可读，
-      //    任何"顺手改了某个范围/默认值"的改动都会在这里现形；确属有意修改时，
-      //    连同夹具一起更新。
+      // ③ golden：设置规范化的**漂移棘轮**夹具（逐键固定值）。它的期望值录自**录制当时实现
+      //    输出**（补键时按「引入时行为」重钉），
+      //    所以它只证明「输出没有无理由地变化」，**不证明这些取值本身正确** —— 取值该不该
+      //    是这样，看 `lib/settings-schema.js` 的 DEFAULTS / KINDS 与各键的设计意图。
+      //    ⚠️ 本段只比对 **host** 侧的值；夹具里 `client` 侧的值**没有任何判据比对**
+      //    （④ 在活值上钉住 client == host、⑥ 只用键集）⇒ client 侧与当前 schema 的差异
+      //    是提示、不是失败。重录走 `node test/tools/regen-golden.mjs`：不带
+      //    `--write --intend <侧>:<键>` 只能报告，且除声明键外的漂移会被拒绝写入
+      //    （期望值不许与被测对象同源 —— 重录 = 承认漂移，提交信息里要写明意图）。
+      //    键的**存在性**另有 `test/verify-glass-surfaces.mjs` 的 ⑥ 键集快照管：它比的是
+      //    夹具自身逐用例的自洽（某用例漏补会红），**一个键在所有用例里都没补则抓不到**
+      //    —— 那一类只有 `test/tools/regen-golden.mjs` 报。
       const golden = JSON.parse(readFileSync(
         new URL('../test/fixtures/settings-sanitize-golden.json', import.meta.url), 'utf8'));
       const canon = (o) => JSON.stringify(o && typeof o === 'object' && !Array.isArray(o)
@@ -3114,7 +3142,9 @@ setTimeout(async () => {
         if (canon(sanitizeFromSchema(c.input, 'host')) !== canon(want)) goldenDrift.push(c.name);
       }
       assert.deepEqual(goldenDrift, [],
-        '宿主设置规范化必须与 P1-5 前的实现逐键一致（漂移用例：' + goldenDrift.join(', ') + '）');
+        '宿主设置规范化与夹具快照不一致 —— 夹具是**漂移棘轮**（期望值录自录制当时的实现输出，'
+        + '只证明"没有无理由地变化"、不证明取值正确）：先判断这次漂移是不是有意的，'
+        + '有意则连同夹具一起更新并写明意图。漂移用例：' + goldenDrift.join(', '));
 
       // ③b #159② 玻璃色的形状规则（迁移 + 读容忍 + 半对补齐）。每条各钉一条真实的
       //     静默失败路径，而不是"函数返回了个对象"：
@@ -3262,6 +3292,7 @@ setTimeout(async () => {
         // 两端必须退化：p=0 零面积（什么都没露出）、p=1 满屏（块缝闭合）。
         const xs0 = xsOf(fn('left', 0)).map(Number);
         const xs1 = xsOf(fn('left', 1)).map(Number);
+        assert.ok(xs0.length > 0, 'barsPolygon 未抽出任何值 ⇒ .every() 恒真');
         assert.ok(xs0.every((v) => v > 99.9), '条带 p=0 必须零面积（不能一开始就露出板）');
         assert.ok(xs1.some((v) => v < 0.1) && xs1.some((v) => v > 99.9),
           '条带 p=1 必须覆盖满屏（从进入侧一路铺到对侧）');
@@ -3513,8 +3544,8 @@ setTimeout(async () => {
     'renderPickerHiddenBody', 'renderPickerNormalBody', 'renderPickerModalHead', 'renderPickerModalTabs',
     'renderPickerModalFoot', 'renderPickerBatchBar', 'renderPickerFilterRow'];
   for (const n of SUB_RENDERERS) {
-    assert.ok(src.includes('function ' + n + '(') && src.includes(n + '('),
-      '库视图子渲染器 ' + n + ' 必须存在（工厂作用域声明）且有调用点');
+    assert.ok(src.includes('function ' + n + '('),
+      '库视图子渲染器 ' + n + ' 必须存在（工厂作用域声明）');
   }
   const assy = bodyOf('renderPickerModal');
   assert.ok(assy.includes('renderPickerModalHead(ctx)') && assy.includes('renderPickerHiddenBody(ctx, hiddenWin)')
@@ -3549,8 +3580,8 @@ setTimeout(async () => {
   assert.ok(qpStart > 0, '找不到 QuickPanel（判据不得空转）');
   for (const n of SUB_RENDERERS) {
     const at = src.indexOf('function ' + n + '(');
-    assert.ok(at >= 0 && at < qpStart && src.includes(n + '('),
-      '快捷面板子渲染器 ' + n + ' 必须在 QuickPanel 之前声明（工厂作用域）且有调用点');
+    assert.ok(at >= 0 && at < qpStart,
+      '快捷面板子渲染器 ' + n + ' 必须在 QuickPanel 之前声明（工厂作用域）');
   }
   const assy = bodyOf('QuickPanel');
   assert.ok(assy.includes('qpRenderCurrent(sel, current, playbackLive)')
@@ -3583,8 +3614,8 @@ setTimeout(async () => {
   const HELPERS = ['renderFontGlobalFamily', 'renderFontColorRoles', 'renderFontTypeRoles',
     'renderFontComponents', 'renderFontSet', 'renderMascotFormCards', 'renderTranscodeProgress'];
   for (const n of HELPERS) {
-    assert.ok(src.includes('function ' + n + '(') && src.includes(n + '('),
-      '设置页子渲染器 ' + n + ' 必须存在（工厂作用域声明）且有调用点');
+    assert.ok(src.includes('function ' + n + '('),
+      '设置页子渲染器 ' + n + ' 必须存在（工厂作用域声明）');
   }
   const GROUPS = [
     { consumer: 'renderAppearanceFontSection', calls: ['renderFontGlobalFamily(sel, onGlobalFamily',
@@ -3896,6 +3927,8 @@ setTimeout(async () => {
     '#159①：切到深色后拖动档必须重算到 #000000（缓存被失效）');
   fxMod.clearEffects();
   assert.ok(watch.disconnected, '#159①：clearEffects 必须断开主题观察者（否则卸载后它还挂在宿主 DOM 上）');
+  // 装置自检（**不是**产品判据）：上一条断言的是桩的标志位，只有先证明"没调过 disconnect 的
+  // 观察者不会被判成已断开"，上一条才可能是假的（DEV-GUIDE §4.7 约定 8：判据被中和时必须变红）。
   const neverDisconnected = new FakeMutationObserver(() => {});
   neverDisconnected.observe(fxBody, {});
   assert.ok(neverDisconnected.disconnected === false,

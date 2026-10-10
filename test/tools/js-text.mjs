@@ -233,8 +233,8 @@ function selftest() {
       const s = splitLinesSafe('a\nb\n');
       return s.eol === 'LF' && s.join(s.lines) === 'a\nb\n';
     })());
-  ok('negative control: 朴素的 `split("\\n")` + `join("\\r\\n")` 会造出 `\\r\\r\\n`（这就是那次事故）',
-    'a\r\n'.split('\n').join('\r\n') === 'a\r\r\n');
+  // 不要拿"朴素 split/join 会造出 `\r\r\n`"当对照：它只复述 JS 的 `split`/`join` 语义，
+  // 对任何实现都真。真实契约（CRLF/LF 原文往返不串行尾）由上面两条 `splitLinesSafe` 正判据钉。
 
   let failed = 0;
   for (const r of results) {

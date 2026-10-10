@@ -23,6 +23,12 @@
   **做法**：直接改写 `lib/glass-presets/factory-default.json` 的值与名字，而不是照 PR #171 新增第 8 套（`factory-fish`）——保持**出厂仍七套**，好让装机后 8 个预设位里还留一个给用户。取值与 PR #171 一致：整体同「作者自用」（`factory-author`），`sidebarContentColor` 由 `#0d1524`（深色内容底）改为 `#ffffff`；PR 里那 7 处与 `factory-author` 的差异都是新版本 schema 新增的键且取值恰为默认值，本文件按出厂预设的稀疏写法省略，读入时由 `sanitizeGlassPresetValues` 补齐。
   **连带**：`src/glass-panel.js` 的 `FACTORY_PRESET_CN` 把 `factory-default` 的词表名改为 `"黑客绿(Fish)"`（出厂名必须走词表字面量，i18n 判据是文本扫描、数据里的 name 扫描看不见）；`src/i18n-copy.js` 同步改键（旧键「出厂默认 / Factory default」移除，避免孤儿键）。`test/verify-presets.mjs` 的对应判据跟上。
   **影响面**：出厂预设数量不变（7 套）、数量上限不变（8）、不新增设置键。**只改客户端 ⇒ 刷新页面即生效**。预先存过「出厂默认」的用户预设重名规则不变（同名禁止针对活跃清单，出厂名变化不影响已存用户预设）。
+- **测试框架反模式审计与加固（纯测试与文档改动，产品行为不变）**。
+  **范围**：`test/` 全部 72 个 `.mjs`（顶层 57 + `test/tools/` 15）与 `test/fixtures/` 两份夹具，按三类反模式（面向结果编程 A1–A4 / 无意义测试 B1–B4 / 自欺欺人 C1–C6）逐条审出 **106 处**并全部定案：重写 47 / 加固 33 / 删除 19 / 不改·声明 5 / 取消 2，未决 0。
+  **修法**：① **重写** —— 判据的被测对象从测试自己的字面量、桩或镜像挪回产品真源码（`test/verify-fontset.mjs` 的字体集默认名改为从 `src/client.js` 提取实现真跑；`test/e2e-web-media-origin.mjs` 的库视图判据改读 `src/panel-tabs.js`）；② **加固** —— 覆盖面地板一律写在 `if (x) { … }` **外面**，静默吞掉的失败改成可见失败（`test/compat-harness-pages.mjs` 的 `SKIP_MIN_CHECKS`、`test/verify-media-bridge.mjs` 的就绪判据）；③ **删除** —— 任何输入都真、且该失效模式已被别处覆盖的恒真判据。
+  ④ **声明**（5 处"不改·声明"的**准确性**）：`test/tools/regen-golden.mjs` 入库作为设置夹具的重录闸门（默认只报告；`--write` 必须先 `--intend <侧>:<键>` 声明意图，除声明键外的漂移**拒绝写入**）、夹具 `note` 改写成"哪一侧真被守着"（只有 host 侧的值被判据比对）、`test/verify-logging.mjs` 新增 N7③ 把「同步 rig 的 `BASE_PATH` / 产物绝对引用 / 宿主注册前缀」三者对齐（4 条负对照）、`docs/DEV-GUIDE.md` §4.6 写明两个人读工具（`branch-notify.mjs` / `regen-golden.mjs`）怎么用。
+  **判据**：`npm run verify` / `npm run verify:docs` / `npm run smoke` exit 0（`test/verify-fontset.mjs` 157 条）；口径与逐条现状见 [`archive/audits/TEST-ANTIPATTERN-AUDIT.md`](./archive/audits/TEST-ANTIPATTERN-AUDIT.md)，遗留与风险见 [`archive/audits/TEST-ANTIPATTERN-FIX-PLAN.md`](./archive/audits/TEST-ANTIPATTERN-FIX-PLAN.md)；`docs/DEV-GUIDE.md` §4.7 新增约定 9（期望值不许与被测对象同源）与约定 10（逃生门必须带覆盖面地板，且跳过不得与通过同形）。
+  **范围说明**：只动 `test/`、`docs/` 与夹具 `note`，`src/` / `lib/` / `scripts/` / `package.json` 零改动 ⇒ 不需要重启 `dsh web`。
 
 - **修复：网页壁纸周期性抢走输入焦点（issue [#148](https://github.com/elysia395/dsh-wallpaper-engine/issues/148)）—— 元素级焦点围栏 + 宿主侧焦点交还（C11 + C12 合并）**。
   **根因**：网页 / 场景壁纸里的脚本会反复 `focus()`，把输入光标从对话输入框搬走。插件原有的围栏只做**帧级**判定（壁纸帧整体拿不到键盘焦点），拦不住两类抢焦：壁纸文档里元素级的 `el.focus()`，以及**跨源 WindowProxy** 的 `top.focus()` / `parent.focus()` 与宿主文档内部的 `autofocus` / `dialog.showModal()` / `label` 转发 —— 壁纸文档里的守卫根本够不到这些路径。

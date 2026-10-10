@@ -45,8 +45,8 @@
 //       read --we-wallpaper-opacity, the effective alpha is identical for
 //       {0,50,90}, and that token still only drives .we-layer.
 //   C4  above the floor the slider is NOT flattened: the alpha still changes
-//       monotonically with 玻璃透明度, and for the content plate every user
-//       alpha above the floor passes through unchanged.
+//       monotonically with 玻璃透明度 (the content plate's own max() clamp is
+//       pinned structurally by F3).
 //   C5  the dark-theme ×0.4 tint factor cannot undercut the floor (the veil
 //       weight is independent of it) — proven against the extracted factor.
 //   M1  the measurement has discriminating power: the UN-floored tint fails
@@ -726,15 +726,12 @@ function main() {
       + ' · .we-layer .we-media opacity=' + JSON.stringify(mediaFadeRule && declValue(mediaFadeRule.body, 'opacity')));
 
   // ── C4: the slider is not flattened above the floor ──────────────────────
+  // 内容面自身的 max() 夹逼（地板以上的用户 α 逐字穿过去）由 F3 结构性钉住：那条判据
+  // 钉的是产品 CSS 里真实的夹逼表达式 `max(calc(var(--we-readability-floor) * 100%),
+  // var(--we-content-surface-alpha, 88%))`，覆盖同一个内容面集合（.cm-editor / xterm /
+  // .dshDesktopSidebarSurface）。这里**不复刻**产品的夹逼算术：把产品夹逼用 Math.max 重实现
+  // 一遍再断它自己，测的是测试自己的算盘，不是产品。
   const strictlyDecreasing = (arr) => arr.every((v, i) => i === 0 || v < arr[i - 1]);
-  // content plate: user alphas above the floor must pass through unchanged.
-  const userAlphas = [20, 30, 45, 50, 70, 88, 100];
-  const clamped = userAlphas.map((p) => Math.max(FLOOR.light * 100, p));
-  const passThrough = userAlphas.every((p, i) => p <= FLOOR.light * 100 || clamped[i] === p);
-  const everAboveFloor = userAlphas.some((p) => p > FLOOR.light * 100);
-  check('C4a the content plate is not flattened: user alphas above the floor pass through unchanged',
-    passThrough && everAboveFloor && clamped.every((v) => v >= FLOOR.light * 100),
-    'user=' + userAlphas.join('/') + ' → effective=' + clamped.join('/') + ' (floor ' + (FLOOR.light * 100) + '%)');
   check('C4b 玻璃透明度 still changes the effective alpha monotonically (no flattening)',
     strictlyDecreasing(alphaTable.light) && strictlyDecreasing(alphaTable.dark),
     'light ' + alphaTable.light.join(' > ') + ' · dark ' + alphaTable.dark.join(' > '));

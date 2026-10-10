@@ -144,11 +144,11 @@ check('A2 只认 POST：GET 出 405（当前值经 /inventory.cacheDir 下发，
     res.__state.status === 400 && /无法在该路径创建目录/.test(String(body.error)),
     body.error);
 }
-// 校验语与实现同源：A3/A5 断的两条文案就是路由模块里声明的那两条（改文案会在这里露头）。
+// 只断行为项：两条 400 文案已由 A3/A5 在**运行时响应**上断过（同上同源），这里再 includes
+// 一次源码字面量只会产生"改了文案就假红"的复述 —— 删掉，保留"不缓存缓存根副本"这条行为项。
 const cacheRouteSrc = readFileSync(join(root, 'lib', 'routes', 'cache-dir.js'), 'utf8');
-check('A6 路由模块声明了这两条 400 文案，且不缓存缓存根的副本（跨族共享可变量须每次现问）',
-  cacheRouteSrc.includes('请输入有效的绝对路径') && cacheRouteSrc.includes('无法在该路径创建目录')
-    && /effective: cacheBaseDir\(\)/.test(cacheRouteSrc)
+check('A6 路由模块不缓存缓存根的副本（跨族共享可变量须每次现问）',
+  /effective: cacheBaseDir\(\)/.test(cacheRouteSrc)
     && !/const cacheDir = cacheBaseDir\(\)/.test(cacheRouteSrc));
 
 // ── B. 解析顺序：env → config → <数据目录>/cache ─────────────────────────────

@@ -46,6 +46,24 @@ const FILES = [...walk('lib'), ...walk('src'), ...walk('scripts'), ...walk('test
   .sort();
 const read = (rel) => readFileSync(ROOT + rel, 'utf8');
 
+// ── 覆盖面地板：本脚本下面每一条判据都是"**在扫描面里**找不到退役词"。
+//    扫描面一旦退化（目录改名、`walk` 的过滤写错，或某条线的 walk 返回空），那些断言会**恒真**：
+//    零命中不是"干净"，而是"根本没看"。所以先钉住面本身（本仓库实测：lib 43 / src 40 /
+//    test 71 / scripts 3，合计 157；这里按每条线各自的地板卡，防的是"某一条线整体掉出面"）。
+{
+  const faces = { lib: 0, src: 0, scripts: 0, test: 0 };
+  for (const f of FILES) {
+    const top = f.split('/')[0];
+    if (top in faces) faces[top]++;
+  }
+  const floors = { lib: 30, src: 30, test: 40, scripts: 2 };
+  const thin = Object.entries(floors).filter(([k, n]) => faces[k] < n);
+  check('覆盖面地板：扫描面四条线各自非空（空面会让下面的"零残留"全部恒真）',
+    thin.length === 0 && FILES.length >= 140,
+    FILES.length + ' 个文件（' + Object.entries(faces).map(([k, n]) => k + ' ' + n).join(' / ') + '）'
+      + (thin.length ? ' ⇒ 过薄：' + thin.map(([k, n]) => k + ' < ' + n).join(', ') : ''));
+}
+
 // ── ① 旧场景播放器线：零残留 ─────────────────────────────────────────────────
 // `scene-manifest.js` 的 manifest 构建器曾拼 `/scene-resource/` 的 URL（它的消费者
 // `/scene-manifest` 路由已在 P0-3 下线）。P2-12 阶段 2 把那整块无引用声明（约 2,000 行）
@@ -86,15 +104,12 @@ const LEGACY_FORBIDDEN = [
     residueSpread.length === 0,
     residue.length ? '仅出现在 ' + residue.join(', ') : '干净（连检验者也不再提它）');
 
-  // 负对照：把"某个文件"喂给**同一个**判据，必须被判为扩散。
-  // ⚠️ 名单为空之后，这条对照更要紧：豁免面消失后，"零残留"有可能退化成**恒真断言**
-  //    （例如某天这条 needle 的常量被删掉，扫描就再也找不到任何东西而永远绿）。
-  //    因此额外钉住"被扫的 needle 确实是有内容的字面量、且本文件确实在点名它"。
+  // ⚠️ 名单为空之后，"零残留"有可能退化成**恒真断言**（这条 needle 的常量若被删掉，扫描就再也
+  //    找不到任何东西而永远绿）。覆盖点就是本节主判据 `residueSpread.length === 0`（同一 needle
+  //    对全部文件断言零残留）；"把某个文件喂给豁免过滤器"式的负对照在这里没有鉴别力
+  //    （`RESIDUE_INSPECTORS = []` 时它只是 `1 === 1 && 0 === 0`），所以改为钉住被扫的 needle
+  //    确实是有内容的字面量、且本文件确实在点名它。
   {
-    const probe = (files) => files.filter((f) => !RESIDUE_INSPECTORS.includes(f));
-    check('negative control: 名单外文件被判为扩散（豁免面为空时仍然有牙）',
-      probe(['lib/elsewhere.js']).length === 1
-      && probe(RESIDUE_INSPECTORS).length === 0);
     check('needle 非空且本文件确实点名它（防"零残留"退化成恒真）',
       LEGACY_RESOURCE_URL.length > 0 && read('test/verify-retired-lines.mjs').includes(LEGACY_RESOURCE_URL));
   }
@@ -140,18 +155,6 @@ const SF_BASELINE = [];
   const missing = SF_BASELINE.filter((f) => !existsSync(ROOT + f));
   if (missing.length) console.log('  INFO 基线中已删除的文件（P2-12 进度，请同步收紧名单）：' + missing.join(', '));
 
-  // 负对照：把退役词塞进一个不在基线里的文件，必须被判为蔓延
-  const simulated = new Map([...found, ['src/client.js', ['extractSceneMainImage']]]);
-  check('negative control: 基线外文件出现退役词会被判不合格',
-    [...simulated.keys()].some((f) => !SF_BASELINE.includes(f)));
-  // 正对照：基线内的命中不该被判为蔓延。
-  // ⚠️ 基线已空 ⇒ 断言分两支，否则这条对照会**恒假**（空 Map 里不存在"基线内命中"）：
-  //    有基线文件时按原义验；基线为空时验"同一个判据对基线内文件确实放行"。
-  check('positive control: 基线内的命中不算蔓延',
-    [...found.keys()].every((f) => SF_BASELINE.includes(f))
-    && (SF_BASELINE.length === 0
-      ? [...new Map([['test/implied.js', ['x']]]).keys()].every((f) => !SF_BASELINE.includes(f))
-      : found.size > 0));
 }
 
 // ── ④ TEX 抽取线：`lib/pkg-extract.js` 整体退役（零残留）──────────────────────

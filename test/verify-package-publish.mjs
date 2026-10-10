@@ -172,7 +172,13 @@ const published = walk(ROOT).filter(publishSet);
 const devLeak = published.filter((r) => isDevLeak(r));
 check('展开后的发布集里没有开发目录文件（白名单为空）', devLeak.length === 0,
   devLeak.length ? devLeak.slice(0, 5).join(', ') + (devLeak.length > 5 ? ` … 共 ${devLeak.length}` : '') : published.length + ' 个文件');
-check('白名单是棘轮（为空，不许回填）', SHIPPED_DEV_FILES.size === 0);
+// 棘轮的地板必须显式写成「当前确实为空」并带计数 —— 空集上 `every(...)`
+// 恒真，回填白名单后仍会绿；`size === 0` 才是「被填上就主动变红」的那道闸。
+// 构建必须挂在 `prepack`：`prepare` 在 git 直装时会被 pnpm 的 allowBuilds 闸拒，
+// 安装期一个仓库脚本都不跑 ⇒ 发布集里**任何**开发面文件都是泄漏，没有豁免名额。
+check('白名单是棘轮（当前确实为空，回填即红）', SHIPPED_DEV_FILES.size === 0,
+  '白名单 ' + SHIPPED_DEV_FILES.size + ' 条：'
+    + ([...SHIPPED_DEV_FILES].join(', ') || '（无豁免：安装期不跑任何仓库脚本）'));
 check('负对照：开发目录判据对 src/ 与 scripts/ 有牙（含 prepare.mjs —— 它已不随包）',
   isDevLeak('src/client.js') && isDevLeak('scripts/build-client.mjs')
   && isDevLeak('scripts/prepare.mjs') && !isDevLeak('lib/index.js'));
@@ -181,19 +187,29 @@ check('负对照：开发目录判据对 src/ 与 scripts/ 有牙（含 prepare.
 section('③ 发布文本里没有真实的用户目录路径');
 // 占位符不算：`<你的用户名>` / `<your-user>` / `xxx` / `%USERPROFILE%` / `$HOME` 之类。
 const PLACEHOLDER = /^(<.*>|x{2,}|your[-_]?user|yourname|username|user|name|%[A-Za-z_]+%|\$\{?[A-Za-z_]+\}?)$/i;
+const USER_PATH_RE = /[A-Za-z]:\\Users\\([^\\\s"']+)|\/Users\/([^/\s"']+)|\/home\/([^/\s"']+)/g;
+/** 从任意文本里抽出「真实用户名」分量；命中 `PLACEHOLDER` 的占位符不算命中。 */
+const userPathHits = (text) => [...String(text).matchAll(USER_PATH_RE)]
+  .map((m) => m[1] || m[2] || m[3] || '')
+  .filter((who) => who && !PLACEHOLDER.test(who));
 const pathHits = [];
 for (const r of published) {
   if (!/\.(js|mjs|cjs|json|yml|yaml|md|swift|ts)$/.test(r)) continue;
   if (r === 'package.json') continue;
-  const text = readFileSync(join(ROOT, r), 'utf8');
-  for (const m of text.matchAll(/[A-Za-z]:\\Users\\([^\\\s"']+)|\/Users\/([^/\s"']+)|\/home\/([^/\s"']+)/g)) {
-    const who = m[1] || m[2] || m[3] || '';
-    if (PLACEHOLDER.test(who)) continue;
-    pathHits.push(r + ' → ' + who);
-  }
+  for (const who of userPathHits(readFileSync(join(ROOT, r), 'utf8'))) pathHits.push(r + ' → ' + who);
 }
 check('发布文本里没有真实用户目录路径（占位符不算）', pathHits.length === 0,
   pathHits.length ? [...new Set(pathHits)].join('; ') : '干净');
+// 发布集干净是**期望**，所以「零命中」本身不能证明抽取器还在工作 —— 必须拿正/负
+// 样本把同一个抽取器喂一遍，否则正则退化（例如加了行首锚或要求整行匹配）时会静默恒真。
+const pathSampleReal = 'const p = "C:\\Users\\some-real-user\\AppData";';
+const pathSamplePlaceholder = 'const p = "C:\\Users\\%USERPROFILE%\\AppData";';
+const realSampleHits = userPathHits(pathSampleReal);
+const placeholderSampleHits = userPathHits(pathSamplePlaceholder);
+check('覆盖面：路径抽取器在正样本上命中、在占位符样本上不命中（抽取器退化 ⇒ 当场红，不静默恒真）',
+  realSampleHits.length === 1 && realSampleHits[0] === 'some-real-user' && placeholderSampleHits.length === 0,
+  '正样本 ' + realSampleHits.length + ' 命中（' + (realSampleHits.join(',') || '无') + '）/ 占位符样本 '
+    + placeholderSampleHits.length + ' 命中（' + (placeholderSampleHits.join(',') || '无') + '）');
 check('负对照：路径判据放行占位符、拦住真实用户名',
   PLACEHOLDER.test('<你的用户名>') && PLACEHOLDER.test('xxx') && PLACEHOLDER.test('%USERPROFILE%')
   && !PLACEHOLDER.test('some-real-user'));
@@ -208,9 +224,14 @@ const unused = deps.filter((d) => !usedByClosure(d));
 const unexpected = unused.filter((d) => !(d in DEP_UNUSED_ALLOW));
 check('没有"声明了但活代码从不加载"的依赖', unexpected.length === 0,
   unexpected.join(', ') || deps.join(', ') || '（无声明）');
-check('棘轮只许缩小：白名单里的依赖必须仍未被使用（删干净后请一并清掉本条）',
-  Object.keys(DEP_UNUSED_ALLOW).every((d) => deps.includes(d) && unused.includes(d)),
-  '白名单 ' + Object.keys(DEP_UNUSED_ALLOW).length + ' 条');
+// `every` 在空白名单上恒真 ⇒ 显式要求「当前确实为空」并带计数与理由，
+// 一旦有人登记豁免（白名单不再为空）这条就当场变红，而不是继续静默放行。
+const depAllowKeys = Object.keys(DEP_UNUSED_ALLOW);
+check('棘轮只许缩小：白名单当前确实为空（登记项必须仍未被使用；填上即红）',
+  depAllowKeys.length === 0
+  && depAllowKeys.every((d) => deps.includes(d) && unused.includes(d)),
+  '白名单 ' + depAllowKeys.length + ' 条' + (depAllowKeys.length ? '：' + depAllowKeys.join(', ') : '')
+    + '（理由：声明了却从不加载的依赖必须当场删掉，不许登记豁免）');
 check('负对照：依赖使用判据对合成输入有牙',
   usedByClosure('left-pad', ['left-pad/sub'])     // 子路径算用到
   && !usedByClosure('left-pad', ['left-padx'])    // 近失：前缀必须落在路径边界上
@@ -280,8 +301,10 @@ section('⑦ 安装期不得跑任何仓库脚本（无构建钩子 + 不引用�
     && unshippedRefs('node lib/index.js').length === 0
     && unshippedRefs('node myscripts/thing.mjs').length === 0); // 近失：前缀必须落在路径边界上
   // 安装期钩子是**用户侧**会跑的：谁把它塞进 DEV_ONLY（为了让上面那条闭嘴）就等于放行"装完就炸"
-  check('负对照：安装期钩子不得被 DEV_ONLY 放行',
-    INSTALL_HOOKS.every((h) => !DEV_ONLY.includes(h)), INSTALL_HOOKS.join(' '));
+  // `every` 的域必须非空 —— 清单被清空（或写错名）时 `[].every(...)` 恒真，这条会静默失去覆盖。
+  check('负对照：安装期钩子不得被 DEV_ONLY 放行（清单非空才算数）',
+    INSTALL_HOOKS.length >= 4 && INSTALL_HOOKS.every((h) => !DEV_ONLY.includes(h)),
+    '安装期钩子 ' + INSTALL_HOOKS.length + ' 个：' + INSTALL_HOOKS.join(' '));
   // #141 不变量：这四类钩子在 package.json 里一个都不许有（有 ⇒ git 直装被 pnpm 的安全闸拒）。
   const bannedHooks = INSTALL_HOOKS.filter((h) => h in (pkg.scripts || {}));
   check('无安装期构建钩子（prepare / preinstall / install / postinstall）—— git 直装不得要求 allowBuilds（issue #141）',

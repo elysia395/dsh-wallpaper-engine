@@ -146,7 +146,11 @@ const CAN_FAIL_RES = [
   [/\bassert\.\w+\(/, 'assert.*'],
 ];
 function cannotFail(src) {
-  const code = src.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1 ');
+  // ⚠️ 必须走**字符串/正则感知**的共享剥离器（`test/tools/js-text.mjs:45-103`）——判据 F（`:177`）存在的
+  //    理由就是朴素正则不认字符串与正则字面量：`// 面 = \`test/**\`` 后面再跟一段文档注释，朴素剥法会从
+  //    那个 `/*` 一路吃到文档注释的 `*/`，把夹在中间的 `process.exit(...)` 一起删掉，于是"有会红出口"的
+  //    守卫被判成恒绿（实测假阳性：`test/verify-i18n.mjs:1`，而该文件 `:433` 就是 `process.exit(failed ? 1 : 0)`）。
+  const code = stripComments(src);
   for (const [re] of CAN_FAIL_RES) if (re.test(code)) return null;
   return '既无 process.exit(1|2) / exitCode，也无 throw / assert';
 }
@@ -235,6 +239,10 @@ const SELF = [
     cannotFail("if (failed) process.exit(1);\nconsole.log('PASSED');\n") === null],
   ['E 不误伤 process.exit(failed ? 1 : 0) 型守卫',
     cannotFail("process.exit(failed ? 1 : 0);\n") === null],
+  // 对照：注释/字符串里的 `/*` + 后面的 `*/` 之间夹着真退出语句 —— 共享剥离器必须保住那个出口。
+  // 朴素剥法会连同出口一起吃掉 ⇒ 这条在换回朴素实现时会红。
+  ['E 不误伤"行注释里的 `/*` 与后面的文档注释夹住真出口"',
+    cannotFail("// 面 = `test/**`\nif (failed) process.exit(1);\n/** 文档 */\n") === null],
   ['F 能抓到"注释里的 /* 挖出多行空洞"（吃掉真代码）',
     stripSwallows("// 面 = `lib/**`\nconst a = 1;\nconst b = 2;\nconst c = 3;\n/** 正常文档注释 */\n").length === 1],
   ['F 能抓到"正则字面量里的 [/*] 挖出空洞"',

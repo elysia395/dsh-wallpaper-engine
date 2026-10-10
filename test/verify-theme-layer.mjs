@@ -303,6 +303,11 @@ section('④b 排版角色（F2）');
       + '；缺失=[' + missingFollow.join(' ') + ']');
   check('负对照：该判据对写死的字阶有牙',
     !String('14px').startsWith('var(--dsh-content-font-size'));
+  // 占位判据提成命名函数：阳性侧与阴性侧喂进**同一个函数**。
+  // 面板里**没有**该形态，所以变异走注入：把该形态（`placeholder: "官方…"`）
+  // 拼到真实源上，同一函数对它必须判 true（即阳性侧的取反判据必须红）。
+  const hasLegacyPlaceholder = (t) => /placeholder:\s*"官方/.test(t);
+  const injectLegacyPlaceholder = (t) => t + '\n' + 'placeholder: "官方",\n';
   // 面板**不再用占位字样**，直接显示默认值（用户口径）：角色行显示默认字阶与默认字重、
   // 颜色块显示当前默认色。
   // 调节面板的渲染器已抽到 src/panel-tabs.js（C）：这里按文件分源，不拼接 ——
@@ -311,18 +316,32 @@ const clientFontUi = readFileSync(join(root, 'src', 'client.js'), 'utf8');
 const fontTabsUi = readFileSync(join(root, 'src', 'panel-tabs.js'), 'utf8');
   // 默认值**直接显示在输入框里**（角色表：字号列未填时显示 role.defaultPx），
   // 不再用行内小字复述一遍 DSH 原字阶。
-  check('面板直接显示默认值（字号输入框未填时取 role.defaultPx）',
-    /value: size === undefined \? role\.defaultPx : size/.test(fontTabsUi));
-  check('负对照：该判据对旧写法有牙',
-    !/value: size === undefined \? role\.defaultPx : size/.test('value: size === undefined ? "" : size'));
+  // 三处「写法判据」提成命名函数 —— 函数名说的是它抓的**该种写法**（与标签同源），
+  // 阳性侧喂真实源、阴性侧喂从真实源派生的变异文本（同一函数两侧）；两边还有
+  // notEqual 证明变异真的变异过（否则负对照是空的，等于恒真）。
+  const hasWrittenDefaultSize = (t) => /value: size === undefined \? role\.defaultPx : size/.test(t);
+  const hasWrittenDefaultWeight = (t) => /role\.prefix \? Number\(role\.prefix\) : 400/.test(t);
+  const dropWrittenDefaultSize = (t) => t.replace(/value: size === undefined \? role\.defaultPx : size/, 'value: size === undefined ? "" : size');
+  const dropWrittenDefaultWeight = (t) => t.replace(/role\.prefix \? Number\(role\.prefix\) : 400/, 'role.prefix ? 700 : 400');
+  check('面板直接显示默认值（字号输入框未填时取 role.defaultPx）', hasWrittenDefaultSize(fontTabsUi));
+  {
+    const mutated = dropWrittenDefaultSize(fontTabsUi);
+    check('负对照：该判据对旧写法有牙（同一函数喂变异源）',
+      mutated !== fontTabsUi && !hasWrittenDefaultSize(mutated));
+  }
   // 字重同理：未填时显示角色表里的默认字重（`prefix` 即字重），无前缀的角色显示 400。
-  check('面板直接显示默认字重（未填时取 role.prefix，缺省 400）',
-    /role\.prefix \? Number\(role\.prefix\) : 400/.test(fontTabsUi));
-  check('负对照：字重默认值判据对合成文本有牙',
-    !/role\.prefix \? Number\(role\.prefix\) : 400/.test('role.prefix ? 700 : 400'));
-  check('面板不再有「官方」占位字样（placeholder）',
-    !/placeholder:\s*"官方/.test(fontTabsUi));
-  check('负对照：占位判据对合成文本有牙', /placeholder:\s*"官方/.test('placeholder: "官方"'));
+  check('面板直接显示默认字重（未填时取 role.prefix，缺省 400）', hasWrittenDefaultWeight(fontTabsUi));
+  {
+    const mutated = dropWrittenDefaultWeight(fontTabsUi);
+    check('负对照：字重默认值判据对合成文本有牙（同一函数喂变异源）',
+      mutated !== fontTabsUi && !hasWrittenDefaultWeight(mutated));
+  }
+  check('面板不再有「官方」占位字样（placeholder）', !hasLegacyPlaceholder(fontTabsUi));
+  {
+    const mutated = injectLegacyPlaceholder(fontTabsUi);
+    check('负对照：占位判据对合成文本有牙（同一函数喂变异源）',
+      mutated !== fontTabsUi && hasLegacyPlaceholder(mutated) === true);
+  }
   // G4 字重（角色级）：只调字重时**只写字重令牌**，且组合式改为引用它（不再用写死前缀）。
   {
     const wOnly = typo.buildTypePayload({}, all, { 'markdown-h1': 500 });
@@ -381,21 +400,40 @@ const fontTabsUi = readFileSync(join(root, 'src', 'panel-tabs.js'), 'utf8');
   {
     check('schema 里不再有全局 fontWeight 键', !('fontWeight' in schema.DEFAULTS));
     const effectsSrc = readFileSync(join(root, 'src', 'effects.js'), 'utf8');
-    check('注入的字体补丁里不再有 --we-font-weight / --we-font-stroke',
-      !/--we-font-weight|--we-font-stroke/.test(effectsSrc));
-    check('负对照：判据对旧写法有牙', /--we-font-weight/.test('font-weight:var(--we-font-weight, 400)'));
+    // 两处同形态 —— 两个判据各自提成命名常量，阳性侧喂真实源、
+    // 阴性侧喂「同一常量 + 把该形态注入真实源」得到的变异文本（同一函数两侧）。
+    const hasLegacyWeightStroke = (t) => /--we-font-weight|--we-font-stroke/.test(t);
+    const injectLegacyWeightStroke = (t) => t + '\n' + 'font-weight:var(--we-font-weight, 400);\n';
+    check('注入的字体补丁里不再有 --we-font-weight / --we-font-stroke', !hasLegacyWeightStroke(effectsSrc));
+    {
+      const mutated = injectLegacyWeightStroke(effectsSrc);
+      check('负对照：判据对旧写法有牙（同一函数喂变异源）',
+        mutated !== effectsSrc && hasLegacyWeightStroke(mutated));
+    }
     // 用户口径的最终确认：**不存在任何全局性质的字体配置**。
     check('三个全局字体键都已不存在（fontColor / fontWeight / fontFamily）',
       !('fontColor' in schema.DEFAULTS) && !('fontWeight' in schema.DEFAULTS) && !('fontFamily' in schema.DEFAULTS));
     // 判据针对**代码**：剥注释走共享的字符串感知实现（test/tools/js-text.mjs）—— 头注释里
     // 说明这些名字为什么不在时正会提到它们（散文不是代码）。
     const effectsCode = stripComments(effectsSrc);
+    const GLOBAL_FONT_LAYER = /we-font-patch|--we-font-family|--we-font-weight|--we-font-stroke|data-we-font-ignore/g;
+    const hasGlobalFontLayer = (t) => new RegExp(GLOBAL_FONT_LAYER.source).test(t);
+    const injectGlobalFontLayer = (t) => t + '\n'
+      + 'el.id = "we-font-patch";\n'
+      + 'el.style.setProperty("--we-font-family", "KaiTi");\n'
+      + 'el.setAttribute("data-we-font-ignore", "");\n';
     check('源码里不再有全局字体注入层（#we-font-patch / --we-font-family / --we-font-weight / 还原契约）',
-      !/we-font-patch|--we-font-family|--we-font-weight|--we-font-stroke|data-we-font-ignore/.test(effectsCode),
-      (effectsCode.match(/we-font-patch|--we-font-family|--we-font-weight|data-we-font-ignore/g) || []).join(' '));
-    check('负对照：全局字体判据对旧写法有牙（三条都能被抓到）',
-      /we-font-patch/.test('id="we-font-patch"') && /--we-font-family/.test('font-family:var(--we-font-family)')
-      && /data-we-font-ignore/.test(':where([data-we-font-ignore])'));
+      !hasGlobalFontLayer(effectsCode),
+      (effectsCode.match(GLOBAL_FONT_LAYER) || []).join(' '));
+    {
+      // 负对照与阳性侧共用 hasGlobalFontLayer；注入的三条禁用形态必须都被它抓到。
+      const mutated = injectGlobalFontLayer(effectsCode);
+      const caught = mutated.match(GLOBAL_FONT_LAYER) || [];
+      check('负对照：全局字体判据对旧写法有牙（三条都能被抓到）',
+        mutated !== effectsCode && hasGlobalFontLayer(mutated) === true
+        && caught.includes('we-font-patch') && caught.includes('--we-font-family') && caught.includes('data-we-font-ignore'),
+        'caught=[' + caught.join(' ') + ']');
+    }
     check('剩下的字体键全是按角色/按组件 + 总开关',
       ['themeColors', 'themeSize', 'themeWeight', 'themeFamily', 'componentFonts', 'fontCustom']
         .every((k) => k in schema.DEFAULTS)

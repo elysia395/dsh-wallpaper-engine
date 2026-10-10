@@ -456,8 +456,17 @@ section('E. /media-info 的抽帧缓存回答：只读、键与落盘一致、�
   const other = await runInfo('?fps=60');
   check('E6 别的上限没缓存 ⇒ cached:false（不许把 30 的缓存当成 60 的）',
     other && other.transcode && other.transcode.fps === 60 && other.transcode.cached === false);
-  check('E7 元信息与缓存回答在**同一次**探测里给出（夹具不是真 mp4 ⇒ info 为 null、ok 与之一致）',
-    plain && 'info' in plain && 'transcode' in plain && plain.ok === (plain.info !== null));
+  // E7：`ok` 的期望值**不取自同一响应的 `info`** —— `plain.ok === (plain.info !== null)` 只是把
+  // `lib/routes/media-derived.js:93` 的 `ok: !!info` 再抄一遍：两边**一起**翻（info 变成对象而 ok 仍是
+  // true）它就看不出来。这里给独立期望：夹具是手搓的布局盒（不含 `getMediaInfo` 要的元信息盒）⇒
+  // `info` 必须是 null、于是 `ok` 必须是 false；不带 fps ⇒ `transcode` 必须是 null。
+  // 同一个具名判据再喂一份**共同翻转**的变异响应，必须出来相反。
+  const infoAnswerOk = (r) => Boolean(r) && 'info' in r && 'transcode' in r
+    && r.info === null && r.ok === false && r.transcode === null;
+  check('E7 元信息与缓存回答在**同一次**探测里给出，且否定答案来自独立期望（夹具不是真 mp4）',
+    infoAnswerOk(plain), JSON.stringify(plain));
+  check('E7 对照：`info` 与 `ok` 一起翻转的回答必须被判不合格（旧写法 `ok === (info !== null)` 会放它过）',
+    !infoAnswerOk({ ...(plain || {}), info: { width: 1 }, ok: true }));
 }
 
 // ── 收尾 ────────────────────────────────────────────────────────────────────

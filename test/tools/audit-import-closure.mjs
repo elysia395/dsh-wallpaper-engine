@@ -113,6 +113,16 @@ for (const f of libFiles) {
   console.log(`\n数据文件读取核对: ${dataMissing === 0 ? '全部存在于磁盘' : dataMissing + ' 处读不到'}`);
 }
 
+// ── 地板（C6）：被守护的域不得退化成空 ────────────────────────────────────────
+// 若导入正则或 lib/ 递归枚举哪天失效，`checked` 会空而 `problems` 仍是 0 ⇒「没发现问题」与
+// 「什么都没检查」同形，工具照样 exit 0。地板放在段落外，域退化时**无条件**记一处问题。
+// 基线实测：lib 文件 43 个 / 被导入闭包覆盖 39 个；地板取 10，给删文件与重构留余量。
+if (libFiles.length === 0 || checked.size < 10) {
+  console.log(`  [DOMAIN-FLOOR] 覆盖面退化：lib 文件数 ${libFiles.length}（须 > 0）、`
+    + `被导入覆盖 ${checked.size}（须 >= 10）—— 域空了，"零问题"不算通过`);
+  problems++;
+}
+
 // 反向: files 里的 lib 文件是否真的存在于导入图（孤儿文件，无碍但提示）
 console.log(`\nlib 文件数: ${libFiles.length}, 被导入覆盖: ${checked.size}`);
 console.log(problems === 0 ? '\n✅ 导入闭包全部被 files 覆盖' : `\n❌ ${problems} 处问题（见上）`);
