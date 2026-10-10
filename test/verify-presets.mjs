@@ -185,13 +185,19 @@ const del = (id) => callRoute(route, fakeReq('/wallpaper-engine/glass-presets/' 
 
 {
   const digestBefore = dirDigest(BUILTIN);
-  // 清单：七套出厂（含作者自用）；响应无 hidden 形态（删除即永久，无恢复通道）
+  // 清单：仍是七套出厂（含作者自用），其中「出厂默认」被「黑客绿(Fish)」**替换**而非新增
+  // —— 总数不变，上限 8 里留给用户的那一格因此不受影响。响应无 hidden 形态（删除即永久，无恢复通道）
   let list = await getList();
   let rows = Array.isArray(list.presets) ? list.presets : [];
   const builtinRows = rows.filter((r) => r.origin === 'builtin');
-  check('清单 200：七套出厂预设、origin=builtin（含「作者自用」），响应无 hidden 字段',
+  check('清单 200：七套出厂预设、origin=builtin（含「作者自用」与「黑客绿(Fish)」），响应无 hidden 字段',
     builtinRows.length === 7 && !('hidden' in list)
-    && builtinRows.some((r) => r.id === 'factory-author' && r.name === '作者自用'),
+    && builtinRows.some((r) => r.id === 'factory-author' && r.name === '作者自用')
+    && builtinRows.some((r) => r.id === 'factory-fish' && r.name === '黑客绿(Fish)'),
+    builtinRows.map((r) => r.id).join(','));
+  // 替换而非新增：被替换掉的 id 必须**不再随包**（留着就变回八套、把用户位吃掉）
+  check('「出厂默认」已被替换掉：factory-default 不再随包',
+    !builtinRows.some((r) => r.id === 'factory-default'),
     builtinRows.map((r) => r.id).join(','));
 
   // 创建用户预设（占第 8 个位）
@@ -286,7 +292,7 @@ section('④ 客户端形态棘轮：应用走设置通道 / 无第二持久化 
     !/window\.confirm/.test(stripComments(panelSrc))
     && !/createObjectURL|new Blob|showSaveFilePicker/.test(storeSrc + panelSrc));
   check('出厂预设名字走 weT 词表（就地字面量，不是数据直出）',
-    /"factory-default": weT\("出厂默认"\)/.test(panelSrc));
+    /"factory-fish": weT\("黑客绿\(Fish\)"\)/.test(panelSrc));
   // 2026-10-04 口径再收紧：出厂预设删除 = **永久删除**（不可恢复）—— 判据从"隐藏语义"
   // 改为"两个来源各有一句删除语义文案"（文本级；行为级见下方真渲染判据）。
   check('删除按钮文案按 origin 分语义（出厂=永久删除 / 用户=删除）',
