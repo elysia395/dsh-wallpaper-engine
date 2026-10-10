@@ -307,7 +307,7 @@ dsh plugin --profile web add dsh-plugin-wallpaper-engine
 | 🐧 QQ 群 | 🎵 抖音群 |
 |---|---|
 | <img src="lib/about/qq-group.png" alt="QQ 群二维码" width="260"> | <img src="lib/about/douyin-group.png" alt="抖音群二维码" width="260"> |
-| **DSHWE \| LLM 讨论群** | **dsh 交流群**（群号 252729465001） |
+| **DSHWE \| LLM 讨论群** | **dshwe 交流 2 群**（群号 917001335502） |
 
 > 图片用的是随包资源 `lib/about/*.png`（插件运行时由自己的路由提供同一份字节）；源截图与派生口径见 [`assets/about/README.md`](assets/about/README.md)。
 
@@ -320,3 +320,7 @@ dsh plugin --profile web add dsh-plugin-wallpaper-engine
 - **[yuxilao](https://github.com/yuxilao)** —— scene-gl Linux 实时渲染管线（WebGL2 官方 shader 驱动 + 多轮性能优化）与轮换交接 / GPU 帧回填 / 官方资源路径（[#65](https://github.com/elysia395/dsh-wallpaper-engine/pull/65)、[#108](https://github.com/elysia395/dsh-wallpaper-engine/pull/108)）。
 - **[Jerry](https://github.com/ruijiaang-lab)** —— 在三平台原生支持落地之前，macOS 侧的适配与贡献路径由他维护（WaifuX 工坊目录扫描、黑胶缩略图兜底、上游移植与 macOS 贡献路径梳理，[#44](https://github.com/elysia395/dsh-wallpaper-engine/pull/44)、[#45](https://github.com/elysia395/dsh-wallpaper-engine/pull/45)、[#52](https://github.com/elysia395/dsh-wallpaper-engine/pull/52)、[#54](https://github.com/elysia395/dsh-wallpaper-engine/pull/54)）。
 - 还有 [SiriLee](https://github.com/SiriLee)（壁纸亮度 / 对比度 / 饱和度调节、吉祥物拉绳开关、WSL 下探测 Steam 根目录）、[libiwolve](https://github.com/libiwolve)（内容分级与类型过滤）、[0-007pro](https://github.com/0-007pro)（自动轮播）、[jujubaoj646-star](https://github.com/jujubaoj646-star)（字体与气泡样式自定义面板）、[xiahou001](https://github.com/xiahou001)（壁纸音轨音量控制）、[wilianyichen](https://github.com/wilianyichen)（MP4 按需缩略图与自上传内容分级）、[hecoococ](https://github.com/hecoococ)（侧栏玻璃与活动壁纸解耦）、[ShamSky88](https://github.com/ShamSky88)（玻璃模糊定位修复）、[Rekk0](https://github.com/Rekk0)（玻璃透明度令牌化、注册表定位 Steam）、[Y1X1n](https://github.com/Y1X1n)（小白向使用指南）、[wwexplorer](https://github.com/wwexplorer)（壁纸层取景：水平 / 垂直 / 缩放，数值可直接键入），以及所有通过 issue 反馈与 PR 参与改进的朋友 —— 谢谢你们！
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=elysia395/dsh-wallpaper-engine&type=Date)](https://star-history.com/#elysia395/dsh-wallpaper-engine&Date)

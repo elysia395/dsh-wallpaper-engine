@@ -18,7 +18,7 @@
 | 文件 | 内容 | 派生自 |
 |---|---|---|
 | `qq-group.png` | QQ 群「DSHWE \| LLM 讨论群」二维码（520×517） | `assets/about/qq-group-dshwe-llm-702x852.png` |
-| `douyin-group.png` | 抖音群「dsh 交流群」（群号 252729465001）二维码（520×520） | `assets/about/douyin-group-dsh-1044x1026.png` |
+| `douyin-group.png` | 抖音群「dshwe 交流 2 群」（群号 917001335502）二维码（520×519） | `assets/about/douyin-group-dshwe-2-748x748.png` |
 | `update-notice.jpg` | v1.3.0 更新公告配图「求个 star 喵！」GitHub 求星插画（720×720） | `assets/about/update-notice-star-1254x1254.png` |
 
 派生口径（只取码区 + 缩到 520px 宽 + 128 色调色板）与验证方式（逐像素比对 + macOS Vision 扫码）

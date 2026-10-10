@@ -334,7 +334,7 @@ Questions, feedback, or want new versions the moment they land? Join one of our 
 | 🐧 QQ group | 🎵 Douyin group |
 |---|---|
 | <img src="lib/about/qq-group.png" alt="QQ group QR code" width="260"> | <img src="lib/about/douyin-group.png" alt="Douyin group QR code" width="260"> |
-| **DSHWE \| LLM discussion** | **dsh community** (group ID 252729465001) |
+| **DSHWE \| LLM discussion** | **dshwe community 2** (group ID 917001335502) |
 
 > The images are the shipped assets `lib/about/*.png` (the plugin serves the very same bytes from its own route); for the source screenshots and how they were derived, see [`assets/about/README.md`](assets/about/README.md).
 
@@ -347,3 +347,7 @@ This plugin is the work of many people — thank you all:
 - **[yuxilao](https://github.com/yuxilao)** — the scene-gl Linux real-time rendering pipeline (WebGL2 official shader driver + several rounds of performance work) and rotation handoff / GPU frame backfill / official assets path ([#65](https://github.com/elysia395/dsh-wallpaper-engine/pull/65), [#108](https://github.com/elysia395/dsh-wallpaper-engine/pull/108)).
 - **[Jerry](https://github.com/ruijiaang-lab)** — before native three-platform support landed, he maintained the macOS side of things (WaifuX workshop directory scanning, vinyl thumbnail fallback, upstream porting, and the macOS contribution paths, [#44](https://github.com/elysia395/dsh-wallpaper-engine/pull/44), [#45](https://github.com/elysia395/dsh-wallpaper-engine/pull/45), [#52](https://github.com/elysia395/dsh-wallpaper-engine/pull/52), [#54](https://github.com/elysia395/dsh-wallpaper-engine/pull/54)).
 - Also [SiriLee](https://github.com/SiriLee) (brightness / contrast / saturation controls, the mascot pull-cord toggle, Steam root discovery from WSL), [libiwolve](https://github.com/libiwolve) (content rating & type filters), [0-007pro](https://github.com/0-007pro) (automatic wallpaper rotation), [jujubaoj646-star](https://github.com/jujubaoj646-star) (the typography & bubble styling panel), [xiahou001](https://github.com/xiahou001) (per-wallpaper audio volume), [wilianyichen](https://github.com/wilianyichen) (on-demand MP4 thumbnails & upload content ratings), [hecoococ](https://github.com/hecoococ) (decoupling sidebar glass from the active wallpaper), [ShamSky88](https://github.com/ShamSky88) (the glass blur positioning fix), [Rekk0](https://github.com/Rekk0) (token-driven glass transparency, registry-based Steam discovery), [Y1X1n](https://github.com/Y1X1n) (the beginner-friendly guide), [wwexplorer](https://github.com/wwexplorer) (wallpaper-layer framing: horizontal / vertical / scale, with typeable values) — and everyone who has helped through issues and PRs. Thank you!
+
+## Star History
+
+[![Star History Chart](https://api.star-history.com/svg?repos=elysia395/dsh-wallpaper-engine&type=Date)](https://star-history.com/#elysia395/dsh-wallpaper-engine&Date)
