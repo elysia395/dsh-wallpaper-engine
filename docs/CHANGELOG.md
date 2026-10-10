@@ -19,6 +19,17 @@
 
 > v1.3.0-r2 之后的增量；`NOTICE_VERSION` 哨兵同步 `1.3.1`（公告改版 ⇒ 看过 r2 公告的用户会再看到一次），；`package.json` 版本号已同步 `1.3.1`。
 
+- **新能力：第三只内置吉祥物「菲比啾比」—— 金发水手帽 Q 版抓绳立绘（吉祥物形态三选一，自定义导入栏不变）**。
+  **做法**：新立绘以 base64 内联进客户端（源图 1254×1254 RGBA，GDI+ 高质量插值缩到 **384×384 / 144KB**，与鲸御姐 384×576 同档），`ROPE_FORMS` 增 `phoebe` 项（显示盒 **64×64**，方图 1:1；画中绳从顶边垂下，与小女仆同款构图）；`ROPE_FORM_VALUES` 枚举同步 `['maid', 'whale', 'phoebe']` —— schema 校验与设置页卡片迭代读同一张表，自定义导入仍排最后。显示名「菲比啾比 / Phoebe Jiubi」进词表。`ropeForm` 已存过 `maid` / `whale` 的用户不受影响（枚举只增不改）。
+  **判据**：`test/verify-client.mjs` 形态组 —— 卡片 3 → **4** 张、自定义卡位移到最后、1.5 倍缩放下立绘计数 3、菲比啾比 64px 固定尺寸（不随滑块缩放）+ 形态切换判据（maid → whale → phoebe → maid）。
+  **验证**：`npm run build` / `verify` / `verify:docs` / smoke 全部 exit 0；验证台目检三只内置 + 自定义导入四卡齐整、菲比啾比可激活。**纯客户端 ⇒ 刷新页面即可**。
+
+- **新能力：「缓存位置」的「更改」弹出目录浏览器 —— 不再让用户手敲绝对路径**。
+  **动机**：设置页是网页，浏览器的文件选择框**从不把绝对路径交给页面**（`<input type=file>` 只给文件内容），而落盘迁移要的恰恰是绝对路径 —— 所以初版只能是"点更改 → 变出一行文本框自己敲"，对要把缓存挪去别的盘的用户（正是这条设置的目标人群）很不友好。
+  **修法（宿主 + 客户端）**：宿主加一条只读腿 `GET /cache-dir/browse?path=…`（lib/routes/cache-dir.js）：入参经 `normalizeUserDir` 规整后列该级**子目录**（`readdirSync(withFileTypes)` 只认目录、字典序、2000 条封顶带 `truncated` 标记），应答 `{ current, parent, dirs:[{name,path}], truncated }` —— 条目 `path` 原样回传问下一级，**客户端零路径拼接**（盘符大小写 / 分隔符都是宿主的口径）；不带 `path` = 根视图：逐个 stat 盘符 `A:\`–`Z:\`（没有的跳过）附 `home`。判不了的 path（指向文件 / 不存在 / 无权读）一律 400 带原因，不猜、不静默回落。客户端（src/panel-tabs.js）：点「更改」弹出浏览器面板 —— 地址栏可手输（Enter 跳转 / Esc 收起）、「此电脑 / 主目录 / 当前缓存位置」三枚快捷位、点行进入、「上一级」回退；**选中**把地址栏填进草稿、回到既有草稿行走原保存链，迁移语义一步没动。样式 `.we-dirpick` 只读既有令牌（不声明新 `--dsw-*` 变量，令牌契约白名单不动）。
+  **判据**：`test/verify-cache-dir.mjs` 新增 E 组 9 条（prefix 注册形态 / 只认 GET / 根视图盘根 + home / 条目全为真目录（配负对照）/ 子目录列表 + 字典序 + 不列文件 / current·parent 归一化 / 文件与不存在的 path ⇒ 400）。
+  **验证**：`npm run build`（lib/client.js 随轮重建）/ `verify-cache-dir` 40 条 / `verify-i18n` / `verify-api-client` / `verify-client-sync` / `verify-route-index`（ROUTE-INDEX 重算 41 → **42** 条）全部 exit 0。**宿主与客户端都改了 ⇒ 需重启 `dsh web` 并刷新页面**。
+
 - **变更：出厂预设「出厂默认」换成新预设并改名「黑客绿(Fish)」（PR [#171](https://github.com/elysia395/dsh-wallpaper-engine/pull/171) 的预设值，改为**替换**而非新增）**。
   **做法**：直接改写 `lib/glass-presets/factory-default.json` 的值与名字，而不是照 PR #171 新增第 8 套（`factory-fish`）——保持**出厂仍七套**，好让装机后 8 个预设位里还留一个给用户。取值与 PR #171 一致：整体同「作者自用」（`factory-author`），`sidebarContentColor` 由 `#0d1524`（深色内容底）改为 `#ffffff`；PR 里那 7 处与 `factory-author` 的差异都是新版本 schema 新增的键且取值恰为默认值，本文件按出厂预设的稀疏写法省略，读入时由 `sanitizeGlassPresetValues` 补齐。
   **连带**：`src/glass-panel.js` 的 `FACTORY_PRESET_CN` 把 `factory-default` 的词表名改为 `"黑客绿(Fish)"`（出厂名必须走词表字面量，i18n 判据是文本扫描、数据里的 name 扫描看不见）；`src/i18n-copy.js` 同步改键（旧键「出厂默认 / Factory default」移除，避免孤儿键）。`test/verify-presets.mjs` 的对应判据跟上。

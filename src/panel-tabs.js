@@ -1025,7 +1025,7 @@
           return React.createElement("button", {
             key: k,
             type: "button",
-            // 自定义立绘生效时这两张禁用（主页面用的是导入的那张，点了也不会变）。
+            // 自定义立绘生效时这些内置卡禁用（主页面用的是导入的那张，点了也不会变）。
             disabled: customArt,
             className: "we-picker__mascot-card" + (!customArt && sel.ropeForm === k ? " we-picker__mascot-card--active" : ""),
             "aria-pressed": !customArt && sel.ropeForm === k ? "true" : "false",
@@ -1546,7 +1546,9 @@
   }
 
   function renderAdvancedCacheSection(ctx) {
-    const { onCacheDirDraft, onCancelEditCacheDir, onStartEditCacheDir, sel } = ctx;
+    const { onCacheDirDraft, onCancelEditCacheDir, onStartEditCacheDir, sel,
+      onCacheDirBrowseInput, onCacheDirBrowseGo, onCacheDirBrowseEnter, onCacheDirBrowseUp, onPickCacheDir, onCloseCacheDirBrowse } = ctx;
+    const browse = sel.cacheDirBrowse;
     return React.createElement(React.Fragment, null,
     // ── 缓存位置：转码产物 / faststart 变体 / 静态帧 / 预览图 / 媒体桥缓存都是**可再生**的
     //    大块文件（本机实测到 GB 级），默认落在插件数据目录 —— Windows 上那个目录仍在 C 盘
@@ -1569,7 +1571,9 @@
           onClick: onStartEditCacheDir,
         }, weT("更改")),
       ),
-      sel.editingCacheDir && React.createElement("div", { className: "we-picker__row" },
+      // 目录浏览器开着时草稿行让位（地址栏就在浏览器里，两行输入框互相打架）；
+      // 选中后浏览器收起、草稿行带着填好的路径回来，保存/迁移语义不变。
+      sel.editingCacheDir && !browse && React.createElement("div", { className: "we-picker__row" },
         React.createElement("input", {
           className: "we-picker__text", type: "text",
           value: sel.cacheDirDraft,
@@ -1589,6 +1593,81 @@
           className: "we-picker__btn", type: "button",
           onClick: onCancelEditCacheDir,
         }, weT("取消")),
+      ),
+      // 目录浏览器：宿主列目录（GET /cache-dir/browse），这里只管点着进出 ——
+      // 客户端不做路径拼接，条目的 path 原样回传问下一级。选中 = 把地址栏（或最后
+      // 到达的一级）填进草稿，走既有保存链。
+      browse && React.createElement("div", { className: "we-dirpick" },
+        React.createElement("div", { className: "we-dirpick__bar" },
+          React.createElement("input", {
+            className: "we-picker__text we-dirpick__path", type: "text",
+            value: browse.display || "",
+            placeholder: weT("绝对路径，如 D:\\WallpaperEngineCache"),
+            onInput: onCacheDirBrowseInput,
+            onKeyDown: (e) => {
+              if (e.key === "Enter") onCacheDirBrowseGo();
+              if (e.key === "Escape") onCloseCacheDirBrowse();
+            },
+          }),
+          React.createElement("button", {
+            className: "we-picker__btn", type: "button",
+            disabled: !browse.parent || browse.loading,
+            title: weT("上一级"),
+            onClick: onCacheDirBrowseUp,
+          }, weT("上一级")),
+        ),
+        React.createElement("div", { className: "we-dirpick__chips" },
+          React.createElement("button", {
+            className: "we-picker__btn we-dirpick__chip", type: "button",
+            disabled: browse.loading,
+            onClick: () => onCacheDirBrowseEnter(""),
+          }, weT("此电脑")),
+          browse.home && React.createElement("button", {
+            className: "we-picker__btn we-dirpick__chip", type: "button",
+            disabled: browse.loading,
+            onClick: () => onCacheDirBrowseEnter(browse.home),
+          }, weT("主目录")),
+          sel.inventory.cacheDir && React.createElement("button", {
+            className: "we-picker__btn we-dirpick__chip", type: "button",
+            disabled: browse.loading,
+            onClick: () => onCacheDirBrowseEnter(sel.inventory.cacheDir),
+          }, weT("当前缓存位置")),
+        ),
+        React.createElement("div", { className: "we-dirpick__list" },
+          browse.loading && React.createElement("div", { className: "we-dirpick__empty" },
+            weT("正在读取目录…")),
+          !browse.loading && browse.error && React.createElement("div", { className: "we-picker__error" },
+            browse.error),
+          !browse.loading && !browse.error && !browse.dirs.length && React.createElement("div", { className: "we-dirpick__empty" },
+            weT("没有子目录")),
+          !browse.loading && browse.dirs.map((d, i) => {
+            // 条目形状防御：宿主契约是 { name, path }，但万一拿到裸字符串（服务端形态
+            // 漂移）也能渲染出名字、点进去 —— 空行比报错更难排查。
+            const label = typeof d === "string" ? d : String((d && d.name) || (d && d.path) || "");
+            const path = typeof d === "string" ? d : String((d && d.path) || "");
+            return React.createElement("button", {
+              key: path || label || i, type: "button", className: "we-dirpick__item",
+              title: path,
+              onClick: () => onCacheDirBrowseEnter(path),
+            }, label || "—");
+          }),
+        ),
+        browse.truncated && React.createElement("div", { className: "we-picker__hint" },
+          weT("目录项过多，仅显示部分")),
+        React.createElement("div", { className: "we-dirpick__foot" },
+          React.createElement("span", {
+            className: "we-picker__hint we-dirpick__sel", title: browse.display || "",
+          }, browse.display || "—"),
+          React.createElement("button", {
+            className: "we-picker__btn", type: "button",
+            disabled: browse.loading || !(String(browse.display || "").trim() || browse.path),
+            onClick: onPickCacheDir,
+          }, weT("选择此目录")),
+          React.createElement("button", {
+            className: "we-picker__btn", type: "button",
+            onClick: onCloseCacheDirBrowse,
+          }, weT("取消")),
+        ),
       ),
       React.createElement("div", { className: "we-picker__row" },
         React.createElement("span", { className: "we-picker__hint" },

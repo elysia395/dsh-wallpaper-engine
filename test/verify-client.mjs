@@ -1599,19 +1599,23 @@ setTimeout(async () => {
     };
     const activeForm = (cards) => cards.find((c) => String(c.props.className).includes('--active'));
     let mascotCards = findMascotCards(tree);
-    // 三张卡：两张内置形态 + 一张**自定义立绘**（用户口径：「导入后显示在鲸鱼姐后面、
+    // 四张卡：三只内置形态 + 一张**自定义立绘**（用户口径：「导入后显示在最后、
     // 同样的卡片大小和样式」⇒ 它排在最后、用的是同一个卡片类/同一套尺寸口径）。
-    assert.ok(mascotCards.length === 3, 'mascot cards (expect 3: maid / whale / custom):');
+    assert.ok(mascotCards.length === 4, 'mascot cards (expect 4: maid / whale / phoebe / custom):');
     assert.ok(!!activeForm(mascotCards) && activeForm(mascotCards).props.title === '小女仆', 'default form is maid:');
-    const customCard0 = mascotCards[2];
+    const customCard0 = mascotCards[3];
     assert.ok(customCard0 && String(customCard0.children?.[1]?.children?.[0] || '') === '自定义',
-      '第三张卡必须是「自定义」（排在鲸御姐后面）');
+      '最后一张卡必须是「自定义」（排在三只内置后面）');
     assert.ok(customCard0 && customCard0.props["aria-pressed"] === 'false',
       '没导入自定义立绘时它不是 active 的那张');
     const whaleCard = mascotCards.find((c) => c.props.title === '鲸御姐');
     if (whaleCard) { whaleCard.props.onClick(); tree = renderPicker(); }
     mascotCards = findMascotCards(tree);
     assert.ok(!!activeForm(mascotCards) && activeForm(mascotCards).props.title === '鲸御姐', 'form switches to whale:');
+    const phoebeCard = mascotCards.find((c) => c.props.title === '菲比啾比');
+    if (phoebeCard) { phoebeCard.props.onClick(); tree = renderPicker(); }
+    mascotCards = findMascotCards(tree);
+    assert.ok(!!activeForm(mascotCards) && activeForm(mascotCards).props.title === '菲比啾比', 'form switches to phoebe:');
     const maidCard = mascotCards.find((c) => c.props.title === '小女仆');
     if (maidCard) { maidCard.props.onClick(); tree = renderPicker(); }
     mascotCards = findMascotCards(tree);
@@ -1641,21 +1645,22 @@ setTimeout(async () => {
         if (cls.includes('we-picker__mascot-art')) artsAtScale.push(n);
         if (Array.isArray(n.children)) n.children.forEach(walkArt);
       })(tree);
-      assert.equal(artsAtScale.length, 2, '1.5 倍下形态卡片立绘仍应有 2 个（卡片不消失）');
+      assert.equal(artsAtScale.length, 3, '1.5 倍下形态卡片立绘仍应有 3 个（卡片不消失）');
       assert.equal(artsAtScale[0] && artsAtScale[0].props.style?.width, '52px', '小女仆卡片宽度固定 52px（不随滑块缩放）');
       assert.equal(artsAtScale[1] && artsAtScale[1].props.style?.height, '96px', '鲸御姐卡片高度固定 96px（不随滑块缩放）');
+      assert.equal(artsAtScale[2] && artsAtScale[2].props.style?.width, '64px', '菲比啾比卡片宽度固定 64px（不随滑块缩放）');
       // ── 自定义立绘那张卡（用户口径：吉祥物可自定义导入；已导入时下一次导入覆盖上一次）──
       //    没导入过 ⇒ 卡片画「+」占位、标题是导入的 tooltip、**不得**出现「清除」；
-      //    两张内置形态卡照旧可点（没有自定义立绘压着）。
+      //    内置形态卡照旧可点（没有自定义立绘压着）。
       {
         const cardsNow = findMascotCards(tree);
-        const custom = cardsNow[2];
+        const custom = cardsNow[3];
         assert.ok(custom && String(custom.children?.[1]?.children?.[0] || '') === '自定义',
-          '第三张卡必须是「自定义」（排在鲸御姐后面）');
+          '最后一张卡必须是「自定义」（排在三只内置后面）');
         assert.equal(custom && custom.props.title, '导入图片…', '没导入过 ⇒ 卡片的提示是「导入图片…」');
         assert.ok(!JSON.stringify(tree).includes('清除'),
           '没导入过立绘时不得出现「清除」按钮');
-        assert.ok(cardsNow.every((c) => c.props.disabled !== true), '没有自定义立绘时三张卡都可点');
+        assert.ok(cardsNow.every((c) => c.props.disabled !== true), '没有自定义立绘时四张卡都可点');
         // 卡面舞台与内置卡**同一个盒**（最高的那张 64×96）：占位是该盒，导入后图片等比缩进它。
         const stageOf = (card) => card && card.children?.[0]?.props?.style;
         assert.ok(custom && stageOf(custom).width === '64px' && stageOf(custom).height === '96px',
