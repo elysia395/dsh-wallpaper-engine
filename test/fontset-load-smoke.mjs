@@ -362,13 +362,33 @@ const waitBoot = () => new Promise((r) => setTimeout(r, 50));
   };
   const e = mount({ fetchImpl: statefulHost, store: eStore });
   await waitBoot();
-  /** 编辑器（含导入 input）在不在树上；顺带把整棵树的文案拼出来看失败态。 */
+  /**
+   * 编辑器（含导入 input）在不在树上；顺带把整棵树的文案拼出来看失败态。
+   *
+   * ⚠️ `fileInput` **不许**用 `find(第一个 accept 含 .json 的 input)` —— 那是个会漂的假设：
+   *    预设块（「玻璃 UI」节，排在「全局字体」节**之前**）也有一枚 `accept` **完全相同**
+   *    的导入 input（`src/glass-panel.js` 的 `gp-import-input`），于是"第一个"拿到的是预设
+   *    那一枚 ⇒ 喂给它的文件走进预设导入、`/fontsets/import` 永远收不到 POST，而这类失败
+   *    看起来像"导入功能坏了"而不是"台架取错了对象"。
+   *    ⇒ 先把树**按容器分组**，取含「导入字体集…」按钮的那一支，再在这一支里取 input：
+   *      定位因此绑定在"字体集编辑器自己那个导入入口"上，与页面上还有几个 .json
+   *      input、以及它们的先后顺序都无关。
+   *    （`verify-fontset.mjs` 那条"树上只有一个 .json input"的断言在**独立树**里成立，
+   *     它守的是另一个不变量，不受本处影响。）
+   */
   const editorTree = () => {
     const all = e.renderPanel().flatMap((t) => collectTree(t));
+    const isJsonInput = (n) => n.type === 'input' && String((n.props || {}).accept || '').includes('.json');
+    // 定位字体集编辑器的导入行：含「导入字体集…」按钮的那个**容器**。
+    const fontsetCtl = all.find((n) => collectTree(n).some((x) => x.type === 'button'
+      && Array.isArray(x.children) && x.children.join('') === '导入字体集…'));
+    const fileInput = fontsetCtl
+      ? collectTree(fontsetCtl).find(isJsonInput)
+      : all.find(isJsonInput);
     return {
       all,
       text: panelText(e),
-      fileInput: all.find((n) => n.type === 'input' && String((n.props || {}).accept || '').includes('.json')),
+      fileInput,
     };
   };
   check('「字体集预设」开关可驱动（面板上真的有这个 checkbox）', openFontSetEditor(e));

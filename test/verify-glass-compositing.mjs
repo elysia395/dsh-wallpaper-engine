@@ -54,6 +54,7 @@
 //   The optional argument points the parser at another bundle; the negative
 //   control uses it to prove the assertions fail on a mutated copy.
 import { readFileSync } from 'node:fs';
+import { fileURLToPath } from 'node:url';
 
 const results = [];
 function check(name, ok, detail) {
@@ -61,7 +62,7 @@ function check(name, ok, detail) {
   console.log((ok ? 'PASS' : 'FAIL') + ' | ' + name + (detail ? ' | ' + detail : ''));
 }
 
-const CLIENT = process.argv[2] || new URL('../lib/client.js', import.meta.url).pathname.replace(/^\/([A-Za-z]:)/, '$1');
+const CLIENT = process.argv[2] || fileURLToPath(new URL('../lib/client.js', import.meta.url));
 const SRC = readFileSync(CLIENT, 'utf8');
 
 // ── source → the stylesheet the plugin injects ──────────────────────────────
