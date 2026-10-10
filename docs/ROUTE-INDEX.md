@@ -47,12 +47,12 @@
 | 31 | `/remove` | lib/routes/upload.js:218 | 箭头 | disposers base CONTROL_JSON_MAX_BYTES ensureUploadDir removeUploadMeta resolveUploadFile …(+1) | 1 |
 | 32 | `/upload-dir` | lib/routes/upload.js:275 | 箭头 | disposers base CONTROL_JSON_MAX_BYTES setUploadDir normalizeUserDir armBodyIdleTimeout | 2 |
 | 33 | `/fontsets` | lib/routes/fontsets.js:245 | async 箭头 | disposers base readFontSetId | 6 |
-| 34 | `/glass-presets` | lib/routes/presets.js:259 | async 箭头 | disposers base | 2 |
+| 34 | `/glass-presets` | lib/routes/presets.js:447 | async 箭头 | disposers base | 1 |
 | 35 | `/star-count` | lib/routes/github-stars.js:107 | async 箭头 | disposers base repoSlug log | 2 |
 | 36 | `/system-fonts` | lib/routes/system-fonts.js:457 | async 箭头 | disposers base | 4 |
 | 37 | `/about-qr` | lib/routes/about-qr.js:65 | 箭头 | disposers base aboutDir serveFile | 3 |
-| 38 | `/mascot` | lib/routes/mascot.js:50 | 箭头 | disposers base serveFile mascotDir mascotPath MASCOT_EXT …(+4) | 3 |
-| 39 | `/avatar` | lib/routes/avatar.js:54 | 箭头 | disposers base serveFile avatarDir avatarPath AVATAR_SIDES …(+5) | 4 |
+| 38 | `/mascot` | lib/routes/mascot.js:50 | 箭头 | disposers base serveFile mascotDir mascotPath MASCOT_EXT …(+4) | 4 |
+| 39 | `/avatar` | lib/routes/avatar.js:54 | 箭头 | disposers base serveFile avatarDir avatarPath AVATAR_SIDES …(+5) | 5 |
 | 40 | `/settings` | lib/routes/settings.js:50 | 箭头 | disposers base ctx mediaOriginApi readSettings isBetterSidebarLoaded …(+5) | 19 |
 | 41 | `/cache-dir` | lib/routes/cache-dir.js:36 | 箭头 | disposers base CONTROL_JSON_MAX_BYTES normalizeUserDir cacheBaseDir setCacheDir …(+1) | 1 |
 

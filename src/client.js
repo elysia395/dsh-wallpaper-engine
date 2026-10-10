@@ -238,12 +238,21 @@ const selection = {
   fontSetEditing: "",
   fontSetDraftName: "",
   // Transient（玻璃预设）：清单与失败原因来自宿主（不落盘）；saving/draftName 是保存
-  // 输入行的视图态；busy 是任何在途动作（应用/保存/删除/清单）。store 见 src/preset-store.js。
+  // 对话框第一行（名字）的视图态；busy 是任何在途动作（应用/保存/导入/删除/清单）；
+  // assetChecks 是保存对话框的资产勾选态（ADR-0011 D4：字体/吉祥物默认勾、头像默认不勾，
+  // 且只有本机有那份资产时才可勾）；note 是导入成功这类一次性提示（成功与失败不同屏）。
+  // store 见 src/preset-store.js。
   glassPresets: [],
   glassPresetError: "",
   glassPresetBusy: false,
   glassPresetSaving: false,
   glassPresetDraftName: "",
+  glassPresetNote: "",
+  // 对话框用途（"save" = 存进预设栏 / "export" = 导出为文件；"" = 关着）。保存与导出
+  // 共用同一组资产勾选项，导出时这是"对哪一份导出"的 id 载体（glassPresetTargetId）。
+  glassPresetSaveTarget: "",
+  glassPresetTargetId: "",
+  glassPresetAssetChecks: { font: true, mascot: true, avatar: false, fontAvailable: false, mascotAvailable: false, avatarAvailable: false },
   url: null,
   type: null,
   previewUrl: null,
@@ -3838,43 +3847,157 @@ function fontSetCtx() {
 
 // ── 玻璃预设的接线（渲染器只读 ctx、动作经 on*；store 与失败语义见 src/preset-store.js）──
 // 与 fontSetCtx 同形：清单/错误是宿主投影，busy 是在途标记，删除走 armConfirm 两步确认。
-// 应用预设会**整快照覆盖**玻璃键 ⇒ 动作前先清掉挂着的删除确认（上下文切换必清，同字体集）。
+// 应用预设会**整机快照覆盖**（settings 段 + 勾选的资产段）⇒ 动作前先清掉挂着的删除确认
+//（上下文切换必清，同字体集）。
+/**
+ * 保存对话框的**资产可用位 + 默认勾**（ADR-0011 D4）：
+ *   · 默认勾：字体 ✅ / 吉祥物 ✅ / 头像 ❌（头像体积翻倍、与"分享一份外观配置"关系最弱）；
+ *   · available = 本机现在**有**那份资产（没有可带的段 ⇒ 勾了也带不出东西，行禁用）：
+ *     字体段的可带判据 = 活动字体集至少改过一个颜色角色（全默认的字体集没有个性）；
+ *     吉祥物 = selection.mascotImage 非空；头像 = 两张任一非空。
+ * 纯函数、零副作用：调用点（打开保存对话框时）把产物经 setTransient 存进 glassPresetAssetChecks。
+ */
+function presetAssetChecksNow() {
+  const fontValues = (() => {
+    const out = {};
+    for (const key of FONTSET_KEYS) out[key] = selection[key];
+    return sanitizeFontset(out);
+  })();
+  const fontAvailable = Boolean(fontValues.themeColors
+    && typeof fontValues.themeColors === "object"
+    && Object.keys(fontValues.themeColors).length > 0);
+  const mascotAvailable = Boolean(selection.mascotImage);
+  const avatarAvailable = Boolean(selection.avatarUserImage || selection.avatarAiImage);
+  const prev = (selection.glassPresetAssetChecks && typeof selection.glassPresetAssetChecks === "object")
+    ? selection.glassPresetAssetChecks : {};
+  return {
+    // 用户上一轮的勾选保留（重开对话框不丢他的选择）；available 位每次现算。
+    font: prev.font !== false && fontAvailable,
+    mascot: prev.mascot !== false && mascotAvailable,
+    avatar: prev.avatar === true && avatarAvailable,
+    fontAvailable,
+    mascotAvailable,
+    avatarAvailable,
+  };
+}
+
 function glassPresetCtx() {
   const done = () => { setTransient("glassPresetBusy", false); emit(); };
   const busy = (promise) => { setTransient("glassPresetBusy", true); emit(); promise.then(done, done); };
+  // 待确认的动作（应用 / 真保存 / 导入 / 删除）共用 busy；错误行由 store 内部的
+  // setPresetError 收口。
   return {
     presets: selection.glassPresets,
     loading: selection.glassPresetBusy === true,
     error: selection.glassPresetError,
+    note: selection.glassPresetNote,
     saving: selection.glassPresetSaving === true,
+    // 对话框用途："save"（存进预设栏）/ "export"（导出为文件）/ ""（关着）。
+    // 渲染器据此画名字行 + 勾选 +「保存预设」，或只画勾选 +「下载 .json」。
+    saveTarget: selection.glassPresetSaveTarget,
+    // 导出的目标预设 id（对话框里那个下拉的当前值）。与 saveTarget 同住一个瞬态字段组：
+    // 保存用 ""，导出用"选中的那一份"。
+    exportTargetId: selection.glassPresetTargetId,
     draftName: selection.glassPresetDraftName,
     armedId: armedIdOf("gpreset"),
+    assetChecks: selection.glassPresetAssetChecks,
+    // 勾选/取消只改视图态 —— 真正的名单在「保存预设」那一下才交给 store。
+    onAssetToggle: (kind, on) => {
+      const next = Object.assign({}, selection.glassPresetAssetChecks);
+      next[kind] = on === true;
+      setTransient("glassPresetAssetChecks", next);
+      emit();
+    },
     onApply: (id) => {
       disarmConfirm();
-      busy(applyGlassPreset(id));
+      busy(applyPreset(id));
     },
     onOpenSave: () => {
       setTransient("glassPresetSaving", true);
+      setTransient("glassPresetSaveTarget", "save");
+      setTransient("glassPresetTargetId", "");
       setTransient("glassPresetDraftName", "");
       setTransient("glassPresetError", "");
+      setTransient("glassPresetNote", "");
+      // 可用位在打开对话框那一刻现算（字体集/立绘/头像可能刚被改过）。
+      setTransient("glassPresetAssetChecks", presetAssetChecksNow());
       disarmConfirm();
       emit();
     },
+    // 导出（ADR-0011 D7 + 2026-10-11 用户口径）：入口**独立成一行**（网格下方与
+    // 保存 / 导入并列），不再逐格挂键 —— 所以这里不再收 id，默认选中清单里
+    // **第一份读得出来的**（broken 的没有可导出的正文，宿主对它 422）。
+    // 仍是"先弹同一组资产勾选对话框，确认后才发起下载"。
+    onOpenExport: () => {
+      const first = (Array.isArray(selection.glassPresets) ? selection.glassPresets : [])
+        .find((r) => !r.broken);
+      setTransient("glassPresetSaving", true);
+      setTransient("glassPresetSaveTarget", "export");
+      setTransient("glassPresetTargetId", first ? first.id : "");
+      setTransient("glassPresetError", "");
+      setTransient("glassPresetNote", "");
+      // 可用位在这里现算，但**勾选默认重置**成 D4 默认值：导出的对象是"那一份预设"，
+      // 不是当前 selection —— 沿用上一轮为"保存"勾过的状态反而容易带错东西。
+      setTransient("glassPresetAssetChecks", Object.assign(presetAssetChecksNow(), { font: true, mascot: true, avatar: false }));
+      disarmConfirm();
+      emit();
+    },
+    // 换"导出哪一份"：只改目标 id。资产勾选与可用位**不动** —— 可用位回答的是
+    // "本机现在有没有这份资产"，与选中的是哪一份预设无关。
+    onExportTargetChange: (id) => {
+      setTransient("glassPresetTargetId", String(id == null ? "" : id));
+      emit();
+    },
+    // 导出的确认步：普通链接导航（宿主带 Content-Disposition: attachment 应答）——
+    // 不引入 blob / showSaveFilePicker / window.confirm。勾选名单走 ?assets= 查询参数。
+    onExportCommit: () => {
+      const id = selection.glassPresetTargetId;
+      if (!isGlassPresetId(id)) return;
+      const checks = selection.glassPresetAssetChecks || {};
+      const embeds = ["font", "mascot", "avatar"].filter((k) => checks[k] === true);
+      setTransient("glassPresetSaving", false);
+      setTransient("glassPresetSaveTarget", "");
+      setTransient("glassPresetTargetId", "");
+      emit();
+      const a = document.createElement("a");
+      a.href = exportGlassPresetUrl(id, embeds);
+      a.download = id + ".json";
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+    },
     onDraftName: (v) => { setTransient("glassPresetDraftName", String(v == null ? "" : v)); emit(); },
+    // 对话框第一步的「下一步」/ 名字框里的 Enter：只做最小校验（名字非空 ——
+    // 空名字在保存时也会被 store 拦，但提前拦能让错误行贴着输入框出现）。
     onSaveCommit: () => {
-      busy(saveGlassPreset(selection.glassPresetDraftName).then((id) => {
+      if (!String(selection.glassPresetDraftName || "").trim()) {
+        setPresetError(weT("先给预设起个名字"));
+        return;
+      }
+      emit();
+    },
+    // 对话框第二步的「保存预设」：勾选名单此刻才交给 store（saveGlassPreset 内部会做
+    // 资产前置校验 —— 勾了但本机没有的组合给可判定原因）。成功后收起对话框。
+    onSaveCommit2: () => {
+      const checks = selection.glassPresetAssetChecks || {};
+      const embeds = ["font", "mascot", "avatar"].filter((k) => checks[k] === true);
+      busy(saveGlassPreset(selection.glassPresetDraftName, embeds).then((id) => {
         if (id) { setTransient("glassPresetSaving", false); setTransient("glassPresetDraftName", ""); }
         emit(); // 收起输入行的分支写完 store 必须通知（渲染纪律判据）
       }));
     },
     onCancelSave: () => {
       setTransient("glassPresetSaving", false);
+      setTransient("glassPresetSaveTarget", "");
+      setTransient("glassPresetTargetId", "");
       setTransient("glassPresetDraftName", "");
       emit();
     },
     onArmDelete: (id) => armConfirm("gpreset:" + id),
     onDisarm: () => disarmConfirm(),
     onDelete: (id) => { disarmConfirm(); busy(deleteGlassPreset(id)); },
+    // 导出对话框的确认步在上面（onExportCommit —— 普通链接，宿主附件应答）。
+    onImportFile: (file) => { disarmConfirm(); busy(importGlassPreset(file)); },
   };
 }
 
@@ -5302,6 +5425,11 @@ function apply(ctx) {
       // 「扩展」页签一号模块（自定义会话头像）的装饰层：接法同上。它是**唯一改宿主会话 DOM**
       // 的一层 —— 给消息行补头像节点（观察者 + 就地更新），关掉时逐字节恢复原样。
       const unsubAvatar = subscribe(syncAvatarLayer);
+      // 启动对时：挂载后的第一次 emit 由 applySelection 触发，但「轮播开关 / 场景实时
+      // 渲染 / 帧率档 / 播放倍速」这族键不在 emit 订阅链里（syncRotationTimer /
+      // syncSceneAudio 需显式调用）—— preset-store 的 reapplyAll() 只在应用预设时跑。
+      // 这里补一次对时，让挂载那一刻就按真实设置运转（幂等：按当前值重排定时器 / 音频）。
+      try { reapplyAll(); } catch { /* 挂载期静默：无媒体层时是空操作 */ }
       // Occlusion pause: re-apply the effective playing state whenever the
       // page hides/shows or the window loses/gains focus (see occlusionActive).
       // Fires syncLayers → play/pause on the video; decode drops to 0 while

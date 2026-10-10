@@ -19,6 +19,14 @@
 
 > v1.3.0-r2 之后的增量；`NOTICE_VERSION` 哨兵同步 `1.3.1`（公告改版 ⇒ 看过 r2 公告的用户会再看到一次），；`package.json` 版本号已同步 `1.3.1`。
 
+- **改造：预设从「玻璃子集快照」升为「整机配置快照」，并新增预设的导入 / 导出（ADR-0011）**。
+  **动机**：内置预设此前只快照玻璃一族键，导入后仍有大量设置没跟着变 —— "预设不像预设"；用户口径是"保存的预设把这个插件的所有配置存入"，并要求预设能在用户之间流转。
+  **做法**：预设正文改分四段 —— **settings 段**（全部观感与行为键，**总是携带**，缺键补默认 ⇒ 应用结果可判定）+ **三个资产段**（字体 / 吉祥物立绘 / 会话头像，**按需携带**）。键集**从 `KINDS` 派生**（`lib/settings-schema.js` 的 `PROFILE_PRESET_KEYS` / `PRESET_ASSET_KEYS` / `PRESET_EXCLUDED_KEYS`，互斥且穷尽；内容 / 运行期记忆类键进硬排除表），不再手抄第二份白名单 —— 新增设置键自动进 settings 段。正文 schema tag 换成 **`dsh-we/profile-preset@1`**。七套出厂预设全部按新 tag 与新范围重建（「黑客绿(Fish)」按作者本机现配置只读抄写）。**应用**改为整批：settings 段一次合并 + 资产经宿主 `install-assets` 落位（文件名 / 显示盒回填；字体值走字体集通道落盘，字体键不住 settings）+ 一条**整批重应用**编排 `reapplyAll()` —— 轮播开关 / 场景实时渲染 / 帧率档 / 播放倍速这族键不在 `emit()` 订阅链里，漏掉就是"写进了 selection、屏上不动"。**两段"缺席"语义相反**（别写反）：settings 段缺席补默认；资产段缺席 = 那一族键**保持现值不动**（不带 ≠ 清空）。**保存与导出都先弹资产勾选对话框**（字体默认勾 / 吉祥物默认勾 / 头像默认不勾 —— 图片体积翻倍），逐项写明不勾的后果（不勾字体 → 回落接收方当前那份；不勾吉祥物 → 回落内置 maid/whale；不勾头像 → 回落内置默认头像）；勾选只决定图片与字体要不要一并带走，数值配置总是完整保存。图片**只进不出**浏览器：保存只传勾选名单、由宿主从本机数据目录内嵌，应用只调 `install-assets` 拿文件名 —— 不新增第二条落盘通道。
+  **破坏性**：**旧预设直接作废、不做兼容**（用户口径：旧正文只含玻璃子集，按新语义解释会得到"一半是预设、一半是当前值"的混合体）。旧 tag 的预设读出时按"读不懂"处理 —— 面板点名**版本作废**并给出"重新保存一份"的出路；**升级后已存的预设需要重新保存一次**。出厂七套已随本改造重建，不受影响。墓碑标记值原样不动（删过的出厂预设不会复活）。
+  **新增**：**导出**（每行「导出」→ 同一组资产勾选 → 下载 `.json`，宿主带附件头；不引入 blob / `showSaveFilePicker`）与**导入**（三道本地预检各给可判定文案：读不出 / 不是 JSON / `$schema` 不对且点明要哪个 tag；成功只进清单、**不自动应用**）。
+  **路由**：`/glass-presets` 族新增 `create` 的 `embed` 名单、`<id>/install-assets`、`<id>/export?assets=…`、`import` 端点（索引见 [`ROUTE-INDEX.md`](./ROUTE-INDEX.md)，随包索引生成物）。
+  **验证**：`node test/verify-route-index.mjs` / `verify-i18n` / `verify-client` / `verify-package-files` / `verify-package-publish` exit 0；`node scripts/build-client.mjs` + `node test/verify-client-sync.mjs` 全绿（产物与源码一致）。
+
 - **变更：出厂预设「出厂默认」换成新预设并改名「黑客绿(Fish)」（PR [#171](https://github.com/elysia395/dsh-wallpaper-engine/pull/171) 的预设值，改为**替换**而非新增）**。
   **做法**：直接改写 `lib/glass-presets/factory-default.json` 的值与名字，而不是照 PR #171 新增第 8 套（`factory-fish`）——保持**出厂仍七套**，好让装机后 8 个预设位里还留一个给用户。取值与 PR #171 一致：整体同「作者自用」（`factory-author`），`sidebarContentColor` 由 `#0d1524`（深色内容底）改为 `#ffffff`；PR 里那 7 处与 `factory-author` 的差异都是新版本 schema 新增的键且取值恰为默认值，本文件按出厂预设的稀疏写法省略，读入时由 `sanitizeGlassPresetValues` 补齐。
   **连带**：`src/glass-panel.js` 的 `FACTORY_PRESET_CN` 把 `factory-default` 的词表名改为 `"黑客绿(Fish)"`（出厂名必须走词表字面量，i18n 判据是文本扫描、数据里的 name 扫描看不见）；`src/i18n-copy.js` 同步改键（旧键「出厂默认 / Factory default」移除，避免孤儿键）。`test/verify-presets.mjs` 的对应判据跟上。
