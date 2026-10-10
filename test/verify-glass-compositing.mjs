@@ -623,15 +623,34 @@ function main() {
   const tbNorm = (s) => String(s).replace(/--we-titlebar-alpha/g, 'ALPHA')
     .replace(/--we-left-sidebar-alpha/g, 'ALPHA').replace(/\s*!important/g, '')
     .replace(/\s+/g, ' ').trim();
-  const tbDiffs = COLOR_DECLS
-    .map((k) => [k, tbNorm(declValue(s2cLeftColRule && s2cLeftColRule.body, k)), tbNorm(declValue(tbLightRule && tbLightRule.body, k))])
-    .filter(([, a, b]) => a !== b);
+  // 判据本体：两条声明值同形（归一后逐字相等）。阳性判据与负对照**共用**它 —— 老写法
+  // 只拿 tbNorm 比两个自造字面量（拿归一器测字面量），判据本体根本没被喂过。
+  const sameDecl = (a, b) => tbNorm(a) === tbNorm(b);
+  // 真判据：取两份**规则体**，逐条经 declValue 读出声明值，返回不同形的清单（空 = 同形）。
+  const tbDiffs = (bodyA, bodyB) => COLOR_DECLS
+    .map((k) => [k, declValue(bodyA, k), declValue(bodyB, k)])
+    .filter(([, a, b]) => !sameDecl(a, b));
+  const tbLeftBody = s2cLeftColRule ? s2cLeftColRule.body : '';
+  const tbLightBody = tbLightRule ? tbLightRule.body : '';
+  const tbRealDiffs = tbDiffs(tbLeftBody, tbLightBody);
   check('TB4 顶栏与左栏**逐条同形**（决定颜色的六条声明逐字相等 ⇒ 不可能有色差）',
-    Boolean(tbLightRule) && Boolean(s2cLeftColRule) && tbDiffs.length === 0,
-    tbDiffs.length ? tbDiffs.map(([k, a, b]) => k + ': ' + a + ' ≠ ' + b).join(' | ')
+    Boolean(tbLightRule) && Boolean(s2cLeftColRule) && tbRealDiffs.length === 0,
+    tbRealDiffs.length ? tbRealDiffs.map(([k, a, b]) => k + ': ' + tbNorm(a) + ' ≠ ' + tbNorm(b)).join(' | ')
       : (COLOR_DECLS.length + ' colour declarations identical'));
-  check('TB4 负对照：给顶栏改一个字面量，同一条判据必须判红',
-    tbNorm('color-mix(in srgb, #fff 50%, transparent)') !== tbNorm('color-mix(in srgb, #eee 50%, transparent)'));
+  // 负对照：拿**真规则体**把一条声明的字面量改掉，把变异体喂回同一条判据 ⇒ 必须判红。
+  const tbMutantKey = COLOR_DECLS.find((k) => declValue(tbLightBody, k) !== null);
+  const tbMutantBody = tbMutantKey
+    ? tbLightBody.replace(new RegExp('(^|[\\s;{])' + tbMutantKey + ':\\s*[^;}]+', 'i'),
+      '$1' + tbMutantKey + ': rgb(1, 2, 3)')
+    : '';
+  const tbMutantDiffs = tbDiffs(tbLeftBody, tbMutantBody);
+  check('TB4 负对照：给顶栏真规则改一个字面量，同一条判据必须判红',
+    Boolean(tbMutantKey) && Boolean(tbLightRule) && tbMutantBody !== tbLightBody
+      && tbMutantDiffs.length > 0,
+    'mutated ' + String(tbMutantKey) + ' ⇒ diffs='
+      + (tbMutantDiffs.length
+        ? tbMutantDiffs.map(([k, a, b]) => k + ': ' + tbNorm(a) + ' ≠ ' + tbNorm(b)).join(' | ')
+        : 'none'));
   // ── TB4a: 釉光必须**恒定** sheen-a —— TB4 测不出这条（它比声明文本，三段渐变两面
   //   逐字相同却算出不同颜色）。理由与算术见 src/styles.js 的 ::before 注释。
   const tbSheen = tbLightRule ? String(declValue(tbLightRule.body, 'background-image') || '') : '';
@@ -757,9 +776,18 @@ function main() {
       && /var\(--we-accent-src/.test(String(dialogFill)));
   check('S3 我们自己的 picker 从 --we-accent-src 重新别名（自家消费面不变）',
     /var\(--we-accent-src/.test(String(pickerAlias)), 'alias=' + String(pickerAlias));
-  check('S3 负对照：自绘实色主按钮的墨也随 accent（不许写死 #fff）',
-    /var\(--we-accent-ink/.test(String(primaryBtnColor)) && !/^#fff/i.test(String(primaryBtnColor).trim()),
-    'color=' + String(primaryBtnColor));
+  // 判据：自绘实色主按钮的墨必须随 accent —— 写死 #fff 会在任意亮度的用户配色上失去对比。
+  // 阳性（真规则）与负对照（把墨改写成 #fff 的变异体）**共用**它。
+  const btnInkFollowsAccent = (raw) => /var\(--we-accent-ink/.test(String(raw))
+    && !/^#fff/i.test(String(raw).trim());
+  const primaryBtnBody = primaryBtnRule ? primaryBtnRule.body : '';
+  const primaryBtnMutated = primaryBtnBody.replace(/(^|[\s;{])color:\s*[^;}]+/i, '$1color: #fff');
+  check('S3 负对照：自绘实色主按钮的墨也随 accent（不许写死 #fff）；变异体写成 #fff 必须判红',
+    btnInkFollowsAccent(primaryBtnColor) === true
+      && Boolean(primaryBtnRule) && primaryBtnMutated !== primaryBtnBody
+      && btnInkFollowsAccent(declValue(primaryBtnMutated, 'color')) === false,
+    'color=' + String(primaryBtnColor)
+      + ' · 变异体=' + String(declValue(primaryBtnMutated, 'color')));
 
   // ── D1: Task-1 contract — saturation is decoupled from the blur slider ───
   const satTernary = SRC.match(

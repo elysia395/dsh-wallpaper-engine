@@ -63,6 +63,7 @@ const NO_MODULE_TARGET_WHY = {
   'compat-harness-live.mjs': '真 harness 安装/启动探活（不读源文件）',
   'compat-harness-pages.mjs': '无头浏览器逐页 DOM 断言（不读源文件）',
   'compat-harness-surfaces.mjs': 'UI 面清单棘轮 + sidebar 源码活判据（读的是已安装的 harness 包）',
+  'verify-retired-lines.mjs': '管的是**退役线的零残留**（`walk` lib/src/scripts/test 全树搜退役词），目标是"整棵树里不许出现这些词"，不是某个模块',
 };
 
 const map = buildMap(ROOT);

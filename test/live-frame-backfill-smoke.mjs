@@ -43,6 +43,12 @@ const check = (label, cond, detail = '') => {
   if (cond) console.log('  ✓ ' + label + (detail ? ' — ' + detail : ''));
   else { failures++; console.log('  ✗ ' + label + (detail ? ' — ' + detail : '')); }
 };
+// 场景编排里必须执行的一步：抛错不得被吞—— 吞掉就等于整段静默跳过，
+// 于是「重跑 applySelection」这条覆盖面判据根本没被测到。
+const runStep = (label, fn) => {
+  try { fn(); }
+  catch (e) { failures++; console.log('  ✗ 步骤未执行（' + label + ' 抛出）：' + e.message); }
+};
 
 /** 启动一个独立 client 实例并跑到「回填定时器已触发」为止。 */
 async function runScenario({ mode = 'varied', blobSize = 120000, gpuAlreadyPinned = false, toBlobFails = false, liveStall = false, gpuAspect = null, viewport = { w: 1920, h: 1080 }, canvasSize = { w: 1920, h: 1080 }, clearFails = false }) {
@@ -230,18 +236,25 @@ async function runScenario({ mode = 'varied', blobSize = 120000, gpuAlreadyPinne
       })(root);
       return out;
     };
+    // 同一类地板放在 `if (pickerRenders.length)` **外面**：渲染器一个都没拿到时，
+    // 下面「重跑 applySelection」整段会被跳过 —— 那种静默通过必须变成可见失败。
+    check('覆盖面：拾取器渲染器已捕获（可重跑 applySelection）', pickerRenders.length > 0, 'renders=' + pickerRenders.length);
     if (pickerRenders.length) {
       const t0 = pickerRenders[0]();
       const openBtn = collect(t0, (n) => {
         const cls = typeof n.props?.className === 'string' ? n.props.className : '';
         return cls.includes('we-picker__btn') && Array.isArray(n.children) && n.children[0] === '选择壁纸';
       })[0];
-      if (openBtn) { try { openBtn.props.onClick(); } catch { /* ignore */ } }
+      // 吞掉的异常必须可见：onClick 抛错就计入失败，不得静默跳过这一步。
+      if (openBtn) { runStep('重跑 applySelection（点「选择壁纸」）', () => openBtn.props.onClick()); }
       const card = collect(pickerRenders[0](), (n) => {
         const cls = typeof n.props?.className === 'string' ? n.props.className : '';
         return (cls === 'we-picker__card' || cls.startsWith('we-picker__card ')) && JSON.stringify(n).includes('"S"');
       })[0];
-      if (card) { try { card.props.onClick(); } catch { /* ignore */ } }
+      if (card) { runStep('重跑 applySelection（点壁纸卡片）', () => card.props.onClick()); }
+      // 地板放在 `if (openBtn)` / `if (card)` **外面**：元素没找到时整段不再静默通过。
+      check('覆盖面：重跑 applySelection 的入口存在（选择壁纸按钮）', Boolean(openBtn), 'openBtn=' + Boolean(openBtn));
+      check('覆盖面：重跑 applySelection 的目标存在（壁纸卡片）', Boolean(card), 'card=' + Boolean(card));
       await new Promise((r) => setTimeout(r, 40));
     }
     await tickPoll();

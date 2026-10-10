@@ -375,6 +375,9 @@ section('⑧ 字体落地点已抽成 src/font/apply.js 并内联');
     'function applyComponentFonts()', 'function removeComponentFonts()',
     'function snapshotHostFontDefaults()', 'function removeFontStyles()'];
   const missing = moved.filter((m) => !applySrc.includes(m));
+  // 覆盖面地板：[`missing`/`notInlined`/`stale`] 三个 filter 判据在**空清单**上全为 []（恒过）；
+  // 空清单必须显式判红：下面三条 filter 判据在空域上恒过，先钉住清单非空。
+  check('覆盖面：搬家清单非空（空清单会让下面三条 filter 判据全部空转）', moved.length === 6);
   check('落地点模块在位（六个定义齐全）', missing.length === 0, missing.join(' ') || 'ok');
   const notInlined = moved.filter((m) => !bundleSrc.includes(m));
   check('六个定义都已内联进 lib/client.js', notInlined.length === 0, notInlined.join(' ') || 'ok');
@@ -384,8 +387,6 @@ section('⑧ 字体落地点已抽成 src/font/apply.js 并内联');
   // effects.js 里不该再有任何字体 DOM 落点：`#we-font-scope` 这个 style 元素的 id 是它的指纹
   check('effects.js 里零字体落点（不再引用 #we-font-scope）',
     !effectsSrc.includes('we-font-scope'));
-  check('负对照：搬家判据对"正文里还留一份"有牙',
-    !moved.every((m) => !('function applyComponentFonts() { /* 正文副本 */ }').includes(m)));
 }
 
 console.log('');

@@ -190,8 +190,14 @@ for (const file of srcFiles) {
   for (const h of scanCjkStrings(readFileSync(file, 'utf8'))) srcHits.push({ file: rel, ...h });
 }
 const dictHits = scanCjkStrings(readFileSync(join(ROOT, DICT_MODULE), 'utf8'));
-// 宿主文案的取值面：`lib/**` 的 `.js`（排除**生成物**与 **vendored** —— 它们不是本仓文案）。
+// 宿主文案的取值面：`lib/` 下的全部 `.js`（排除**生成物**与 **vendored** —— 它们不是本仓文案）。
 // 路径一律先归一成 `/` 再判（CI 里 Windows 的分隔符会让 `includes('/vendor/')` 静默失效）。
+// 本文件里的 glob 不许写成「斜杠紧跟两个星号」：那三个字符会让**朴素剥注释**的实现
+// （`/\/\*[\s\S]*?\*\//`，正是 `test/tools/js-text.mjs` 存在的理由）从这里开一个假块注释，
+// 一路吃到下面第一条真块注释的结束标记，把中间的真实代码**静默删掉**（实测会丢 9481 个非空白
+// 字符，连文件末尾的 `process.exit(failed ? 1 : 0)` 都一起吃掉 ⇒ `audit-guard-teeth` 判据 E 会
+// 假报「本文件既无 process.exit 也无 throw」）。本仓生产路径统一走字符串感知的剥注释，
+// 这里只是不给下一个"守守卫"的工具留同样的坑。
 const libFiles = jsFiles(join(ROOT, 'lib')).filter((f) => {
   const rel = relative(ROOT, f).split(/[\\/]/).join('/');
   return rel !== 'lib/client.js' && !rel.startsWith('lib/vendor/') && !rel.startsWith('lib/webwallgl/');
@@ -208,7 +214,7 @@ const hostKeys = copyKeys(blocks.WE_I18N_HOST_EN);
 const callSites = weTCallSites(srcHits);
 
 // ══ ① 界面零裸中文 ═══════════════════════════════════════════════════════════
-console.log('① 界面零裸中文（src/**，诊断串与纯数据块除外）');
+console.log('① 界面零裸中文（src/ 下，诊断串与纯数据块除外）');
 {
   const naked = nakedCjk(srcHits);
   check('每条中文都进了 weT(...)', naked.length === 0,
@@ -261,28 +267,48 @@ console.log('② 词表双向对账（WE_I18N_EN ⇄ 代码里的 weT 字面量�
     enKeys.duplicates.length === 0 && hostKeys.duplicates.length === 0,
     enKeys.duplicates.concat(hostKeys.duplicates).slice(0, 5).join(' / ') || '无重复');
 
-  const missing = [...callSites].filter((k) => !enKeys.keys.includes(k)).sort();
+  // 正判据与下面两条对照**必须**走同一个具名函数。内联复刻一份判据（例如用自己的 `judge` 顶替，
+  // 其 orphan 分支不剥 `^[^\u0000]*\u0000` 上下文前缀）会在生产判据被砸坏时仍全绿。
+  const missingKeys = (sites, keys) => [...sites].filter((k) => !keys.includes(k)).sort();
   // 上下文键（`<ctx>\u0000<原文>`）按**原文**对账：它服务的正是同一处 `weT("原文", …)` 调用点。
-  const orphan = enKeys.keys.filter((k) => !callSites.has(k.replace(/^[^\u0000]*\u0000/, ''))).sort();
+  const orphanKeys = (sites, keys) => keys
+    .filter((k) => !new Set(sites).has(k.replace(/^[^\u0000]*\u0000/, ''))).sort();
+  const missing = missingKeys(callSites, enKeys.keys);
+  const orphan = orphanKeys(callSites, enKeys.keys);
   check('零漏译（每个 weT 原文都有词条）', missing.length === 0,
     missing.length ? missing.length + ' 条缺：' + missing.slice(0, 6).map((k) => JSON.stringify(k.slice(0, 30))).join(' ') : callSites.size + ' 条对账');
   check('零孤儿键（每条词条都被代码用到）', orphan.length === 0,
     orphan.length ? orphan.length + ' 条多余：' + orphan.slice(0, 6).map((k) => JSON.stringify(k.slice(0, 30))).join(' ') : '词表与调用点一一对应');
 
-  // 负对照：判据本体必须能对"少一条 / 多一条"分别判红。
-  const judge = (sites, keys) => ({
-    missing: [...sites].filter((k) => !keys.includes(k)).length,
-    orphan: keys.filter((k) => !new Set(sites).has(k)).length,
-  });
-  check('negative control: 漏译/孤儿分别判红',
-    judge(['中'], []).missing === 1 && judge([], ['中']).orphan === 1
-    && judge(['中'], ['中']).missing === 0 && judge(['中'], ['中']).orphan === 0);
-  check('positive control: 上下文后缀键按原文对账',
-    (() => {
-      const sites = new Set(['适配']);
-      const keys = ['适配', 'adapter\u0000适配'];
-      return keys.filter((k) => !sites.has(k.replace(/^[^\u0000]*\u0000/, ''))).length === 0;
-    })());
+  // 负对照：拿**真数据**做变异，喂回上面**同一条**判据 ——
+  //   少一条调用点 ⇒ 该词条变成孤儿（生产 orphan 判据必须开火）；
+  //   凭空多一条调用点 ⇒ 漏译 1 条；词表多一条 ⇒ 孤儿 1 条。
+  const droppedSite = [...callSites][0];
+  const mutations = {
+    lessSites: [...callSites].slice(1),
+    moreSites: [...callSites, '这个词表里没有的合成调用点'],
+    moreKeys: enKeys.keys.concat(['这个词表里没有的合成键']),
+  };
+  const missMore = missingKeys(new Set(mutations.moreSites), enKeys.keys);
+  const orphLess = orphanKeys(new Set(mutations.lessSites), enKeys.keys);
+  const orphMore = orphanKeys(callSites, mutations.moreKeys);
+  check('negative control: 同一条判据对"少一条调用点 / 多一条调用点 / 词表多一条"分别判红（变异的是真数据）',
+    callSites.size >= 2 && typeof droppedSite === 'string'
+    && orphLess.length >= 1
+    && missMore.length === 1 && missMore[0] === '这个词表里没有的合成调用点'
+    && orphMore.length === 1 && orphMore[0] === '这个词表里没有的合成键'
+    && missing.length === 0 && orphan.length === 0,
+    'sites=' + callSites.size + ' · 少一条 ⇒ 孤儿 ' + orphLess.length
+      + ' 条（' + JSON.stringify(droppedSite.slice(0, 12)) + ' 那类）· 多一条 ⇒ 漏译 ' + missMore.length
+      + ' / 词表多一条 ⇒ 孤儿 ' + orphMore.length);
+  // 正对照：上下文后缀键（`<ctx>\u0000<原文>`）按原文对账 —— 同一条 orphan 判据：对得上是 0 条，
+  // 把原文改掉（后缀前缀都不剥就会漏判）则必须是 1 条。
+  const ctxSites = new Set(['适配']);
+  check('positive control: 上下文后缀键按原文对账（与生产 orphan 判据同源）',
+    orphanKeys(ctxSites, ['适配', 'adapter\u0000适配']).length === 0
+    && orphanKeys(ctxSites, ['adapter\u0000适配别的']).length === 1,
+    '一致 ' + orphanKeys(ctxSites, ['适配', 'adapter\u0000适配']).length + ' 条孤儿 / 改写后 '
+      + orphanKeys(ctxSites, ['adapter\u0000适配别的']).length + ' 条');
 }
 
 // ══ ③ 值纪律 ═════════════════════════════════════════════════════════════════
@@ -301,10 +327,10 @@ console.log('③ 值纪律（非空 / 无中文 / 占位符对齐）');
 }
 
 // ══ ④ 宿主表对账 ═════════════════════════════════════════════════════════════
-console.log('④ 宿主表（WE_I18N_HOST_EN 的键必须来自 lib/** 的真实字面量）');
+console.log('④ 宿主表（WE_I18N_HOST_EN 的键必须来自 lib/ 下的真实字面量）');
 {
   const stray = hostKeys.keys.filter((k) => !libValues.has(k.replace(/^[^\u0000]*\u0000/, '')));
-  check('零凭空造句（每条键都能在 lib/** 找到）', stray.length === 0,
+  check('零凭空造句（每条键都能在 lib/ 下找到）', stray.length === 0,
     stray.length ? stray.slice(0, 5).map((k) => JSON.stringify(k.slice(0, 40))).join(' · ') : hostKeys.keys.length + ' 条对账');
 
   const hostEntries = parseCopyEntries(blocks.WE_I18N_HOST_EN);
@@ -312,8 +338,10 @@ console.log('④ 宿主表（WE_I18N_HOST_EN 的键必须来自 lib/** 的真实
   check('宿主表值纪律', hostViolations.length === 0,
     hostViolations.length ? hostViolations.slice(0, 5).join(' · ') : hostEntries.length + ' 条');
 
-  check('negative control: 库里没有的键会被判红',
-    ['不存在的串'].filter((k) => !libValues.has(k)).length === 1);
+  // 不许用「库里没有的键会被判红」这类对照：`['不存在的串'].filter((k) => !libValues.has(k))`
+  // 对任何不含该字面量的集合都成立（含空集），只是复述 `Array.prototype.filter` 而已；
+  // 覆盖点：上游 `stray = hostKeys.keys.filter(…)` 那条判据自身的开火路径
+  // （test/verify-i18n.mjs:332-337：`lib/` 抓不到某条宿主键时 stray 非空、当场判红，同一失效模式）。
 }
 
 // ══ ⑤ 运行期行为（真跑 i18n 层）══════════════════════════════════════════════
@@ -358,9 +386,33 @@ console.log('⑤ 运行期行为（vm 沙箱里跑 src/i18n-copy.js + src/i18n.j
   check('zh 表是"原文身份"（值 == 原文）',
     Object.keys(zhDict).length > 0 && Object.keys(zhDict).every((k) => zhDict[k] === k.replace(/^[^\u0000]*\u0000/, '')),
     Object.keys(zhDict).length + ' 条');
-  check('en 表与 WE_I18N_EN 一致（含宿主表合并）',
-    Object.keys(enDictSource).every((k) => enDict[k] === enDictSource[k]),
-    Object.keys(enDict).length + ' 条');
+  // 期望值必须取自**磁盘上的词表原文**（`parseCopyEntries(blocks.…)` 从 `src/i18n-copy.js` 解析），
+  // 不能拿被测模块经沙箱交回的 `WE_I18N_EN`：同源意味着模块整段漏合并宿主表也会绿，
+  // "含宿主表合并"那一半就从未被断言。
+  const enDisk = parseCopyEntries(blocks.WE_I18N_EN);
+  const hostDisk = parseCopyEntries(blocks.WE_I18N_HOST_EN);
+  const asDict = (entries) => Object.fromEntries(entries.map((e) => [e.key, e.value]));
+  // 合并形态照产品实现（`src/i18n.js:197` 的 `Object.assign({}, WE_I18N_EN, WE_I18N_HOST_EN)` ⇒ 宿主表覆盖同名键）。
+  const enExpected = Object.assign({}, asDict(enDisk), asDict(hostDisk));
+  const diskMismatches = (dict, expected) => Object.keys(expected).filter((k) => dict[k] !== expected[k]);
+  const enDictKeys = Object.keys(enDict);
+  check('en 表与磁盘词表原文逐条一致（WE_I18N_EN 部分；期望值取自 src/i18n-copy.js 原文）',
+    enDisk.length > 0 && enDictKeys.length === Object.keys(enExpected).length
+    && diskMismatches(enDict, asDict(enDisk)).length === 0,
+    '磁盘 EN ' + enDisk.length + ' 条 / 注册 ' + enDictKeys.length + ' 条');
+  check('en 表含宿主表合并（每条宿主键都在注册表里、值取自磁盘原文，不取自被测对象）',
+    hostDisk.length > 0 && diskMismatches(enDict, asDict(hostDisk)).length === 0,
+    '磁盘 HOST ' + hostDisk.length + ' 条 / 注册 ' + enDictKeys.length + ' 条');
+  // 负对照：喂**变异后的期望**给上面**同一对**判据 —— 模块漏合并宿主表、或某条值被改写，都必须判红。
+  const enOnly = asDict(enDisk);
+  const enFirstKey = Object.keys(enOnly)[0] || '';
+  const enMutated = Object.assign({}, enExpected, { [enFirstKey]: '__mutated__' });
+  check('negative control: 同一条判据对"漏合并宿主表 / 值被改写"分别判红',
+    hostDisk.length > 0 && Object.keys(enOnly).length > 0
+    && diskMismatches(enOnly, enExpected).length >= 1
+    && diskMismatches(enMutated, enExpected).length >= 1,
+    '漏合并 ⇒ ' + diskMismatches(enOnly, enExpected).length + ' 处不一致；改写首键 ⇒ '
+      + diskMismatches(enMutated, enExpected).length + ' 处');
 
   check('服务在场时取词仍正确（中文）', live.api.weT(sample) === sample);
   check('语言切换 ⇒ 订阅者被通知 + 修订号前进',

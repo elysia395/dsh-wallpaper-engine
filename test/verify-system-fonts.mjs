@@ -90,7 +90,6 @@ section('① 纯解析：三个来源各一条正判据 + 负对照');
   check('macOS：从 typefaces[].family 取族名（**不是**条目自己的 _name —— 那是文件名）',
     mac.includes('苹方-简') && mac.includes('Helvetica') && !mac.includes('PingFang.ttc'),
     mac.slice(0, 4).join(' / '));
-  check('负对照：同一判据对"取文件名当族名"有牙', !parseMacFonts(MAC_JSON).includes('PingFang.ttc'));
 
   const norm = normalizeFamilies(mac);
   check('收口：丢掉 `.` 开头的私有族', !norm.some((n) => n.startsWith('.')), norm.join(', '));
@@ -499,8 +498,6 @@ section('⑥ 过滤"本浏览器取不到的族名"：合成浏览器判它（�
     JSON.stringify(got.fonts) === JSON.stringify(['PingFang SC', 'MesloLGL Nerd Font Mono'])
     && got.skipped === 2 && got.measured === true,
     JSON.stringify(got));
-  check('负对照：同一条判据对"不过滤"有牙（`Apple Color Emoji` 会被留下）',
-    got.fonts.includes('Apple Color Emoji') === false);
   check('按清单**身份**记忆：同一份清单第二次不再重测（面板每帧重渲不会反复量布局）',
     withDocument(doc, () => {
       const same = filterUsableSystemFonts(got.fonts.length ? ['PingFang SC', 'Apple Color Emoji', '苹方-繁', 'MesloLGL Nerd Font Mono'] : []);

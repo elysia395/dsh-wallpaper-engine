@@ -219,6 +219,12 @@ const DISMISS_EXPR = `(() => {
   return 0;
 })()`;
 
+// 无浏览器 ⇒ 默认红（P3-13 口径）。`--allow-skip` 是**显式逃生门**，不是"通过"：它 exit 0
+// 之前必须过一道覆盖面地板，数的是 `results.length`（**本轮真的执行了几条判据**），
+// 而不是"我打印了一句正在跳过" —— 静默跳过（零断言 exit 0）与显式接受不跑必须能被分辨（C4）。
+// 地板值 = 这条路径之前的前置判据条数；位置搬动时它跟着改（见下方 `SKIP_MIN_CHECKS - 1` 自指）。
+const SKIP_MIN_CHECKS = 1;   // 浏览器可定位探针：这条路径上唯一真跑过的判据
+
 async function main() {
   for (const d of [ISO_HOME, DATA_DIR, childEnv.DSH_WE_UPLOAD_DIR, childEnv.DSH_WE_CACHE_DIR, childEnv.DSH_WE_STEAM_ROOT, CACHE]) {
     mkdirSync(d, { recursive: true });
@@ -227,7 +233,14 @@ async function main() {
   const browserPath = CANDIDATES.find((p) => existsSync(p));
   if (!check('Chromium 系浏览器可定位', Boolean(browserPath),
     browserPath || '未找到（本地可加 --allow-skip 显式接受不跑）')) {
-    if (ALLOW_SKIP) { console.log('  ⛔ 页面断言未执行（--allow-skip）'); process.exit(0); }
+    if (ALLOW_SKIP) {
+      check('覆盖面：本轮至少执行了 ' + SKIP_MIN_CHECKS + ' 条判据（跳过也要有地板）',
+        results.length >= SKIP_MIN_CHECKS,
+        '本轮已执行 ' + results.length + ' 条判据 / 地板 ' + SKIP_MIN_CHECKS
+          + '（自指：前置探针 ' + (SKIP_MIN_CHECKS - 1) + ' 条 + 覆盖面本身 1 条）');
+      console.log('  ⛔ SKIP 页面断言未执行（--allow-skip，无浏览器）—— 零判据的退出码 0 不叫通过');
+      process.exit(0);
+    }
     process.exit(1);
   }
 
@@ -345,7 +358,18 @@ async function main() {
         return { value: r.result.value };
       } catch (e) { return { error: String(e.message) }; }
     };
-    const evS = async (expression) => { const r = await ev(expression); if (r.error !== undefined && process.env.DSH_WE_COMPAT_DEBUG) console.log('  [evS error] ' + String(r.error).slice(0, 400)); return r.error === undefined ? r.value : null; };
+    // ⚠️ 求值出错必须**看得见**：错误被静默成 null 时，上面那段探针的重复声明（SyntaxError）
+    //    会让 sp 恒为 null、三条判据恒红且看不出原因。DSH_WE_COMPAT_DEBUG 只加细节，
+    //    不再是"能不能看到"的开关；同一条错误只打一次，免得住循环里刷屏。
+    const evSErrors = new Set();
+    const evS = async (expression) => {
+      const r = await ev(expression);
+      if (r.error !== undefined && !evSErrors.has(r.error)) {
+        evSErrors.add(r.error);
+        console.log('  [evS error] ' + String(r.error).slice(0, 400));
+      }
+      return r.error === undefined ? r.value : null;
+    };
     const waitEv = (expression, timeoutMs = 10000, intervalMs = 300) =>
       waitUntil(async () => {
         const v = await evS(expression);
@@ -625,7 +649,9 @@ async function main() {
           raisedBg: btn ? getComputedStyle(btn).backgroundColor : null,
         };
       };
-      const before = snap();
+      // ⚠️ 不要在这里取 before：本 IIFE 末尾的 let before = null; 会与 const before = snap();
+      //    在**同一函数作用域**里重复声明 ⇒ 整段求值是 SyntaxError，被 evS 静默吞成 null
+      //    ⇒ 下面三条判据恒红、col / colWall 两条永不执行（"没有锚点"那一侧的对照在下面的 try 里现取）。
       // 左侧栏液态玻璃（leftSidebarGlass）：那一列的锚点是座位出口 [data-slot="sidebar"]
       // 的**父元素**（CSS 模块哈希类名不可用；出口自己 display:contents 不生成盒子）。
       // 四个状态各取一次：锚点在场但开关关（默认档 = 不吃玻璃）/ 两个属性都在

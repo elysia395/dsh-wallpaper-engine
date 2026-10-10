@@ -29,15 +29,17 @@ const results = [];
   const p1OnlyInEncTune = idx.includes("av1_nvenc: ['-preset', 'p1'")
     && idx.includes("h264_nvenc: ['-preset', 'p1'");
   const encTune = idx.includes('const ENC_TUNE = {');
-  const swFallback = idx.includes("libx264: ['-preset', 'veryfast', '-crf', '20']")
-    && idx.includes("for (const enc of ['av1_nvenc', 'h264_nvenc', 'libx264'])");
+  // 判据提成命名函数，让**阳性（真源码）与阴性（诱饵）走同一条判据**：拿测试自己刚写下的
+  // 两个字面量互 `contains`（A3）对任何实现都真，零鉴别力。
+  const swFallbackIn = (text) => text.includes("libx264: ['-preset', 'veryfast', '-crf', '20']")
+    && text.includes("for (const enc of ['av1_nvenc', 'h264_nvenc', 'libx264'])");
   check('转码：NVENC 专属 preset 已从公共参数移出（旧 base 形态不存在且 p1 只在 ENC_TUNE）',
     !oldBaseForm && p1OnlyInEncTune);
   check('转码：质量参数按编码器拆分（ENC_TUNE）', encTune);
-  check('转码：libx264 软件兜底在列（无 NVENC 的 ffmpeg 也能出片）', swFallback);
+  check('转码：libx264 软件兜底在列（无 NVENC 的 ffmpeg 也能出片）', swFallbackIn(idx));
   const decoy = "const base = ['-i', abs, '-preset', 'p1'];\nfor (const enc of ['av1_nvenc', 'h264_nvenc']) {}";
-  check('negative control: 旧的 NVENC-only 写法被拒',
-    !(decoy.includes('ENC_TUNE') || decoy.includes('libx264')));
+  check('negative control: 旧的 NVENC-only 写法被**同一条判据**判出（libx264 兜底缺失）',
+    swFallbackIn(decoy) === false);
 }
 /** 派生媒体族（`/media-info` · `/transcode-progress` · `/transcoded` · `/video-preview`）
  *  已搬到 lib/routes/media-derived.js（逐条理由见该文件头）。这里钉两件事：
@@ -80,17 +82,19 @@ const results = [];
   // `/media-info` 处理器体：从它的注册字面量到下一个 disposers.push
   const at = derived.indexOf('path: `${BASE}/media-info`');
   const body = at < 0 ? '' : derived.slice(at, derived.indexOf('disposers.push', at + 1));
+  // 共享判据：阳性（真实处理器体）与阴性对照（同一处理器体的变异）都喂进它 —— 对照断的是
+  // 它自己的字面量，而是"同一判据对变异文本返回 false"。
+  const readOnlyAnswer = (body) => /transcode = \{ fps, cached: transcodeCached\(abs, fps\) === true \}/.test(body)
+    && !body.includes('transcodeToFps(') && !body.includes('await ');
   check('/media-info 只读回答（transcode 来自 transcodeCached，处理器体里没有转码调用）',
-    /transcode = \{ fps, cached: transcodeCached\(abs, fps\) === true \}/.test(body)
-      && !body.includes('transcodeToFps(') && !body.includes('await '));
+    readOnlyAnswer(body));
   check('negative control: 把这条只读回答换成"顺手转一次"会被同一条判据拒掉',
     (() => {
       const bad = derived.replace('transcode = { fps, cached: transcodeCached(abs, fps) === true }',
         'transcode = await transcodeToFps(abs, fps)');
       const at2 = bad.indexOf('path: `${BASE}/media-info`');
       const b = at2 < 0 ? '' : bad.slice(at2, bad.indexOf('disposers.push', at2 + 1));
-      return b.includes('transcodeToFps(') && b.includes('await ')
-        && /transcode = \{ fps, cached: transcodeCached\(abs, fps\) === true \}/.test(b) === false;
+      return readOnlyAnswer(b) === false;
     })());
   check('客户端带着**当前上限**问 /media-info，并把"已缓存"记成 transcodeReady（唯一 URL 构造点）',
     /\?fps=" \+ encodeURIComponent\(String\(selection\.fpsCap \|\| 0\)\)/.test(layer)
@@ -351,8 +355,14 @@ async function main() {
   check('click 30fps starts a transcode request', transcodePending.length === 1 && transcodePending[0].fps === 30);
   // 回归判据（行为层，不只是文本层）：源是**原生可解的 mp4/avc1** 且帧率 120 > 上限 30 ⇒
   // 必须真的起抽帧 —— 旧口径（原生可解即免转）在这里会停在 "native"、一个请求都不发。
+  // 本判据只认"请求里带的是 30"这一件事（落点/计数与上一条共用同一份观测）；把它对**变异
+  // 状态**（同样的比较式、操作数换成改动版字面量 60）跑一遍必须为 false —— 否则它就是恒真
+  // 的复述（这条比较式若对变异也不为假，说明它根本没在断 fps）。
+  const b30RightFps = (pendingAfterClick) => pendingAfterClick.length === 1 && pendingAfterClick[0].fps === 30;
   check('原生可解（mp4/avc1）+ 源 120fps + 上限 30 ⇒ 仍然抽帧（上限的意义是压解码占用）',
-    transcodePending.length === 1 && transcodePending[0].fps === 30);
+    b30RightFps(transcodePending));
+  check('negative control: 同一比较式吃变异状态（fps 60）必须为 false',
+    b30RightFps([{ fps: 60 }]) === false);
   const statusWorking = JSON.stringify(renderTree()).includes('抽帧准备中');
   check('UI shows 抽帧准备中 while 30fps transcode runs', statusWorking);
 

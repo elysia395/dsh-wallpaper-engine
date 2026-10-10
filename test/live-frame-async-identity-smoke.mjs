@@ -243,7 +243,24 @@ console.log('场景：① live 首帧 → 抓帧上传（挂住）② 上传期�
 
 // 等 boot（loadPersisted → loadInventory → applySelection）落定。
 for (let i = 0; i < 60 && iframeEls.length === 0; i++) await sleep(10);
-check('live 层已挂载（A 的 live iframe）', iframeEls.length >= 1, 'iframes=' + iframeEls.length);
+// A4：`iframeEls.length >= 1` 只证明"装置自己 createElement 推了一个 iframe 进去"，光靠它会
+// 在装置把任何 iframe 塞进 iframeEls 时恒绿。产品侧另有**独立可观测绑定**（src/live-layer.js
+// createLiveFrame()）：frame.className = "we-media we-iframe we-live-iframe"，且 liveRenderUrl(...)
+// 的结果落到 frame.src（正在播放）或 frame.dataset.weLiveSrc（延后挂载，liveFrameShouldDefer()）。
+// ⇒ 判据钉住"挂载的那个 iframe 确实绑定了 A 的 live selection"：class 是 live 层 + URL 指向
+// /scene-live/ 端点且带 A 的 sceneLiveSrc（夹具里是 'tok-a'）；计数地板保留。
+const liveUrlOf = (el) => String(
+  (el && el.dataset && el.dataset.weLiveSrc)
+  || (el && el.getAttribute && el.getAttribute('src'))
+  || (el && el.src) || '');
+const boundFrame = iframeEls.find((el) => String(el.className).indexOf('we-live-iframe') !== -1
+  && liveUrlOf(el).indexOf('/scene-live/') !== -1
+  && liveUrlOf(el).indexOf('tok-a') !== -1);
+check('live 层已挂载且绑定 A 的 live selection（class=we-live-iframe · /scene-live/ 带 tok-a）',
+  iframeEls.length >= 1 && !!boundFrame,
+  'iframes=' + iframeEls.length
+    + ' · class=' + (iframeEls[0] ? iframeEls[0].className : '—')
+    + ' · url=' + (iframeEls[0] ? liveUrlOf(iframeEls[0]) : '—'));
 const liveFrame = iframeEls[iframeEls.length - 1];
 liveFrame.__fire('load'); // → startLiveWatch
 

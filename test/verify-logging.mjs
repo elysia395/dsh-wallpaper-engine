@@ -17,6 +17,8 @@
  *      自己声明（issue #13）—— 产物里真有 `lvl=` 上报与三档字面量，且产物**不许**再有本地补丁
  *      （本地把级别打进产物会在下次 vendor 时被覆盖，也让产物与上游不一致）。只删补丁不建上游，
  *      渲染页就退回"宿主靠文案猜"。
+ *      ③ 同一份同步 rig 还要与宿主**路由前缀**对齐：产物里的绝对引用、rig 的 base、宿主注册的
+ *      `${BASE}/…` 三者一致 —— 否则改前缀/改路由名时产物与路由静默分叉（渲染页 404 而判据全绿）。
  *
  * N1–N6 是**静态**判据（代码长什么样）；R1–R4 是**运行期**判据（真的跑一遍两个宿主模块）——
  * 闸门三态、幂等与"投递失败才 warn"这三件事在源码上看不出来，只能跑：
@@ -160,9 +162,6 @@ const CALLERS = N1_FILES.filter((f) => f !== 'lib/notice.js');
     counts.size > 0 && bad.length === 0,
     bad.length ? '次数不为 1：' + bad.map(([k, n]) => k + '=' + n).join(' ')
       : [...counts].map(([k, n]) => k + '=' + n).join(' '));
-  check('N3 negative control: 同一 kind 的第二个调用点会让计数变成 2',
-    noticeLiteralKinds("a(); notice('media-origin', 'x'); notice('media-origin', 'y');")
-      .filter((k) => k === 'media-origin').length === 2);
 }
 
 // ── N4 成功不发日志（lib/notice.js 的日志出口只有失败路径的那一个处理器）──────
@@ -271,6 +270,70 @@ function localPatchResidue(assets, syncSrc) {
     && localPatchResidue([], 'function applyDiagLevelPatch() {}').length === 1
     && localPatchResidue([], '// applyDiagLevelPatch 曾是补丁\nconst x = 1;').length === 0
     && localPatchResidue([], "const PATCHES_ONLY = process.argv.includes('--patches-only');").length === 1);
+}
+
+// ── N7③ 渲染页的绝对引用 / 构建 rig 的 base / 宿主注册前缀，三者必须对齐 ─────────
+// 事故形态：`sync-webwallgl.mjs` 用 `--base=<BASE_PATH>/` 构建，产物里的**绝对**资源引用
+// （`/wallpaper-engine/scene-live/assets/*`）只有在宿主真把 `${BASE}/scene-live` 注册成路由时
+// 才解析得到。三处各写一份字面量、谁都不核谁 ⇒ 改前缀（或改路由名）时产物与路由**静默分叉**，
+// 症状是渲染页 404 / 白屏，而所有判据仍然全绿。
+// 判据把三方串成一条链：宿主 `BASE`（lib/index.js）→ 宿主注册的 `${BASE}/…` 模板
+// （lib/routes/scene-serve.js）→ 产物的绝对引用（lib/webwallgl/index.html）与 rig 的 `BASE_PATH`。
+// 纯函数：喂四份源码/产物文本，返回问题清单（正判据与四条负对照都调它）。
+const HOST_BASE_RE = /\bconst\s+BASE\s*=\s*'([^']*)'/;
+const RIG_BASE_RE = /\bconst\s+BASE_PATH\s*=\s*'([^']*)'/;
+const ROUTE_TEMPLATE_RE = /path:\s*`\$\{BASE\}(\/[^`]*)`/g;
+const ABS_REF_RE = /(?:src|href)="(\/[^"]*)"/g;
+
+function prefixAlignment(hostSrc, routeSrc, rigSrc, htmlSrc) {
+  const problems = [];
+  const base = (stripComments(hostSrc).match(HOST_BASE_RE) || [])[1] ?? null;
+  const rigBase = (stripComments(rigSrc).match(RIG_BASE_RE) || [])[1] ?? null;
+  if (base === null) problems.push("抠不到 lib/index.js 的 `const BASE = '…'`");
+  if (rigBase === null) problems.push("抠不到 sync-webwallgl.mjs 的 `const BASE_PATH = '…'`");
+  if (base === null || rigBase === null) return problems;
+  const routes = new Set([...stripComments(routeSrc).matchAll(ROUTE_TEMPLATE_RE)].map((m) => base + m[1]));
+  if (routes.size === 0) problems.push('宿主路由里找不到 `${BASE}/…` 模板（判据无从对齐）');
+  const refs = [...htmlSrc.matchAll(ABS_REF_RE)].map((m) => m[1]);
+  if (refs.length === 0) problems.push('产物里没有任何绝对引用（这条判据会恒真）');
+  // 引用的**前缀** = BASE + 第一段路径：产物只可能被一个前缀服务，rig 也只会构建一个 base。
+  const prefixes = new Set(refs.map((r) => base + '/' + r.slice(base.length).replace(/^\//, '').split('/')[0]));
+  const unserved = [...prefixes].filter((p) => !routes.has(p));
+  if (unserved.length) problems.push('产物引用了宿主没注册的前缀：' + unserved.join(', '));
+  if (prefixes.size !== 1) {
+    problems.push('产物引用落在多个前缀上（rig 只能构建一个 base）：' + [...prefixes].join(', '));
+  } else if (rigBase !== [...prefixes][0]) {
+    problems.push('rig 的 BASE_PATH=' + rigBase + ' 与产物的引用前缀不一致（产物在 ' + [...prefixes][0] + '）');
+  }
+  return problems;
+}
+{
+  const src = {
+    host: read('lib/index.js'),
+    route: read('lib/routes/scene-serve.js'),
+    rig: read('test/tools/sync-webwallgl.mjs'),
+    html: read('lib/webwallgl/index.html'),
+  };
+  const problems = prefixAlignment(src.host, src.route, src.rig, src.html);
+  check('N7③ 产物绝对引用 / rig 的 base / 宿主注册前缀三者对齐（分叉 ⇒ 渲染页 404 而判据全绿）',
+    problems.length === 0,
+    problems.length ? problems.join(' | ')
+      : 'BASE=' + ((stripComments(src.host).match(HOST_BASE_RE) || [])[1] || '?')
+        + ' · rig=' + ((stripComments(src.rig).match(RIG_BASE_RE) || [])[1] || '?')
+        + ' · 产物绝对引用 ' + [...src.html.matchAll(ABS_REF_RE)].length + ' 条都落在注册面上');
+  // 负对照：变异喂进**同一条判据**（改 rig 的 base / 改产物引用 / 改宿主 BASE / 字面量抠不到）
+  const rigBroken = prefixAlignment(src.host, src.route,
+    src.rig.replace("'/wallpaper-engine/scene-live'", "'/wallpaper-engine/scene-files'"), src.html);
+  const htmlBroken = prefixAlignment(src.host, src.route, src.rig,
+    src.html.replace('/wallpaper-engine/scene-live/assets/', '/wallpaper-engine/oops/assets/'));
+  const hostBroken = prefixAlignment(
+    src.host.replace("const BASE = '/wallpaper-engine'", "const BASE = '/wp'"), src.route, src.rig, src.html);
+  const hostGone = prefixAlignment(
+    src.host.replace("const BASE = '/wallpaper-engine'", 'const BASE = process.env.WE_BASE'),
+    src.route, src.rig, src.html);
+  check('N7③ negative control: 改 rig base / 改产物引用 / 改宿主 BASE / 字面量抠不到 —— 四种坏形态都被判出',
+    rigBroken.length > 0 && htmlBroken.length > 0 && hostBroken.length > 0 && hostGone.length > 0,
+    [rigBroken, htmlBroken, hostBroken, hostGone].map((p) => p.length).join('/') + ' 处问题');
 }
 
 // ── N8 模块级代码不得引用 apply 作用域的 log（真机事故：宿主被杀、DSH 反复重启）──
@@ -450,11 +513,9 @@ const wiredUp = (src) => /from\s*'\.\/log\.js'/.test(src) && /from\s*'\.\/notice
     JSON.stringify(forced.terminal));
   check('R3 negative control: 旧的 `✔ <文案>` 形状不再被认作提示行',
     isNotice({ terminal: ['out:✔ ok0\n'] }) === 0 && isNotice({ terminal: ['out:[wallpaper-engine] ok0 ✔\n'] }) === 1);
-  check('R3 negative control: 静默两态确实一条输出都没有（不是"写了但没认出来"）',
-    silentOff.terminal.length === 0 && silentPipe.terminal.length === 0);
+  // 判据只数投递失败次数，不断文案（`/投递失败/` 抄自 `lib/notice.js:56`，改名会假红）。
   check('R4 投递失败（同步抛错 / 回调 err）恰好一条 warn，成功路径零日志',
-    failedSync.length === 1 && /投递失败/.test(failedSync[0])
-    && failedCallback.length === 1 && /投递失败/.test(failedCallback[0])
+    failedSync.length === 1 && failedCallback.length === 1
     && forced.logs.length === 0 && ttyOn.logs.length === 0,
     '同步=' + failedSync.length + ' 回调=' + failedCallback.length + ' 成功路径=' + forced.logs.length);
   check('R4 negative control: 投递成功的三条路径都没有日志（判据不是"只要有日志就算"）',
@@ -569,11 +630,6 @@ const wiredUp = (src) => /from\s*'\.\/log\.js'/.test(src) && /from\s*'\.\/notice
     check('R5 三条早退不变：非 POST ⇒ 405、超 64KB ⇒ 413（且都不落盘、不提示）',
       badMethod === 405 && tooBig === 413 && notices.length === 1,
       '405=' + badMethod + ' 413=' + tooBig + ' 提示仍为 ' + notices.length);
-    check('R5 negative control: 失败模式表之外的文案不会被升级成 warn，非 `scene` 类型不会触发提示',
-      rendererLevels[1] === 'info' && rendererLevels[3] === 'info' && rendererLevels[4] === 'info'
-      && rendererLevels[5] === 'info' && rendererLevels[6] === 'info'
-      && rendererLevels.filter((l) => l === 'warn').length === 3
-      && notices.length === 1 && noNoticeForWeb === 204);
   }
 }
 

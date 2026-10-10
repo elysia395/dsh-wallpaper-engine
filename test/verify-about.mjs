@@ -50,9 +50,17 @@ const read = (rel) => readFileSync(join(ROOT, rel), 'utf8');
 // ══ ① 仓库地址三边一致 ═══════════════════════════════════════════════════════
 console.log('① 仓库地址：package.json ⇄ 客户端 ⇄ 宿主解析');
 
-/** `owner/repo` 归一化（与 lib/index.js 的 repoSlugFromPkg 同一条规则）。 */
+const hostSrc = read('lib/index.js');
+/**
+ * `owner/repo` 归一化：正则本体**从宿主实现里现抽**（`lib/index.js` 的 `repoSlugFromPkg`），
+ * 不在测试里重打一份 —— 重打的那份一旦与产品漂移，判据就退化成"测试自己和自己一致"。
+ * 宿主解析腿全仓只有这里一处行为覆盖，故只重写、不删。抽不到时用 `(?!)`（永不匹配），
+ * 阳性判据 `pkgSlug.length > 0` 当场变红，而不是静默全绿。
+ */
+const hostSlugParts = hostSrc.match(/url\.match\(\/(github[^\n]*?)\/([a-z]*)\)/) || [];
+const hostSlugRe = new RegExp(hostSlugParts[1] || '(?!)', hostSlugParts[2] || '');
 const slugOf = (url) => {
-  const m = String(url || '').match(/github\.com[/:]([^/\s]+\/[^/\s]+?)(?:\.git)?$/i);
+  const m = hostSlugRe.exec(String(url || ''));
   return m ? m[1] : '';
 };
 
@@ -67,8 +75,7 @@ check('两侧指向同一个仓库', pkgSlug !== '' && pkgSlug === clientSlug, p
 check('negative control: 只认 github.com 的地址（别的托管方不算同源）',
   slugOf('https://gitlab.com/a/b.git') === '' && slugOf('https://github.com/a/b.git') === 'a/b');
 
-// 宿主侧：**没有第二份字面量**，只从 package.json 现读。
-const hostSrc = read('lib/index.js');
+// 宿主侧：**没有第二份字面量**，只从 package.json 现读（`hostSrc` 已在 ① 开头读入）。
 check('宿主从 package.json 现读仓库地址（不抄第二份字面量）',
   /function repoSlugFromPkg\(\)/.test(hostSrc)
     && /JSON\.parse\(readFileSync\(new URL\('\.\.\/package\.json', import\.meta\.url\)/.test(hostSrc));
@@ -361,13 +368,16 @@ async function runQr(route, pathname, method, headers) {
   // 打包：lib/about/ 必须随包（checkout 里永远正常，只有发布包会缺）
   check('package.json 的 files 覆盖 lib/about/（否则发布包里没有图）',
     pkgFiles.some((f) => String(f).replace(/\/$/, '') === 'lib/about'));
+  // 白名单成员判据：路由源码的 accept 清单里逐字出现 `'<文件名>'`。下面两条判据与
+  // 它们的对照共用这一个函数 —— 对照必须喂进真判据，喂自造数组的 `includes` 等于没测。
+  const inWhitelist = (name) => aboutSrc.includes("'" + name + "'");
   check('lib/about/ 里的每张随包图（PNG/JPEG）都在路由白名单里（打包了却取不到 = 图白送）',
     readdirSync(ABOUT_DIR).filter((f) => f.endsWith('.png') || f.endsWith('.jpg'))
-      .every((f) => aboutSrc.includes("'" + f + "'")));
+      .every((f) => inWhitelist(f)));
   check('路由白名单里的每个名字都在磁盘上（白名单不许空转）',
     ['qq-group.png', 'douyin-group.png', 'update-notice.jpg'].every((f) => existsSync(join(ABOUT_DIR, f))));
-  check('negative control: 白名单判据对合成输入有牙',
-    !['qq-group.png'].includes('qq-group.png.bak') && ['qq-group.png'].includes('qq-group.png'));
+  check('negative control: 白名单判据对合成输入有牙（.bak 变体落榜、原名字上榜）',
+    !inWhitelist('qq-group.png.bak') && inWhitelist('qq-group.png'));
   // **形态判据**（分隔符那条腿只能在 Windows 上真跑出来，故这里认源码形态）：
   // 包含性检查必须走 `relative()`：`abs.startsWith(dir + '/')` 在 Windows 上必然判 null
   // （resolve 给反斜杠、前缀给正斜杠）⇒ 白名单命中的图也 404，而 macOS 上全绿 —— 正是
@@ -439,13 +449,19 @@ check('停在关于页刷新页面也能取到（effect 兜住"不走 switchTab"
 // 渲染器那一腿：**只看「关于」页签自己的函数体**（别的页签本来就有 setSetting —— 它们
 // 记的是设置，不是 star 数；按整文件判会把它们误伤成假红）。
 const aboutBody = tabsSrc.slice(tabsSrc.indexOf('function renderAboutTab(ctx) {'));
+// 三种越界形态的判据提成命名常量：阳性判据与下面的对照**共用同一批正则** —— 对照里重打
+// 一遍正则，等于只在验证"测试自己抄得对不对"。
+const ABOUT_API_CALL_RE = /api(Json|Fetch)\(/;
+const ABOUT_SET_SETTING_RE = /setSetting\(/;
+const ABOUT_EMIT_CALL_RE = /\bemit\s*\(/;
 check('「关于」渲染器只读模块级状态（不自己发请求 / 不写设置 / 不发通知）',
   aboutBody.length > 0 && aboutBody.includes('const stars = starCountLabel();')
-    && !/api(Json|Fetch)\(/.test(aboutBody) && !/setSetting\(/.test(aboutBody) && !/\bemit\s*\(/.test(aboutBody));
-check('negative control: 渲染器判据对三种越界都有牙',
-  !/api(Json|Fetch)\(/.test('const x = apiJson("/star-count");') === false
-    && /setSetting\(/.test('renderAboutTab(){ setSetting("a", 1); }')
-    && /\bemit\s*\(/.test('renderAboutTab(){ emit(); }'));
+    && !ABOUT_API_CALL_RE.test(aboutBody) && !ABOUT_SET_SETTING_RE.test(aboutBody)
+    && !ABOUT_EMIT_CALL_RE.test(aboutBody));
+check('negative control: 渲染器判据对三种越界都有牙（喂进同一批常量）',
+  ABOUT_API_CALL_RE.test('const x = apiJson("/star-count");')
+    && ABOUT_SET_SETTING_RE.test('renderAboutTab(){ setSetting("a", 1); }')
+    && ABOUT_EMIT_CALL_RE.test('renderAboutTab(){ emit(); }'));
 
 // ══ ⑤ 公告配图的 art-gate（更新后未重启的窗口期防裂图）═══════════════════════
 console.log('\n⑤ 更新公告：配图就绪门控（新面板/旧后端劈叉防裂图）');
