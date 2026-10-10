@@ -103,10 +103,20 @@ function clientMimeList(src, name) {
   const m = new RegExp('const\\s+' + name + '\\s*=\\s*\\[([^\\]]*)\\]').exec(src);
   return m ? uniq(quoted(m[1])) : null;
 }
-/** 客户端所有 `accept: "a,b,c"` 列表。 */
+/** 客户端所有 `accept: "a,b,c"` 列表（面板模块造选择器时写的那个选项）。 */
 function acceptLists(src) {
   return [...src.matchAll(/accept:\s*['"]([^'"]+)['"]/g)]
     .map((m) => uniq(m[1].split(',').map((s) => s.trim()).filter(Boolean)));
+}
+/** 客户端**选图腿自己写下的赋值点** `input.accept = "a,b,c"`（`src/client.js` 的 pickImageFile）。 */
+function acceptAssignments(src) {
+  return [...src.matchAll(/input\.accept\s*=\s*['"]([^'"]+)['"]/g)]
+    .map((m) => uniq(m[1].split(',').map((s) => s.trim()).filter(Boolean)));
+}
+/** 负对照用的变异体：把每个 `input.accept` 清单**砍掉最后一项**。 */
+function weakenedAcceptAssignments(src) {
+  return String(src).replace(/(input\.accept\s*=\s*)['"]([^'"]+)['"]/g,
+    (_, head, list) => head + '"' + list.split(',').slice(0, -1).join(',') + '"');
 }
 
 const hostSrc = read('lib/index.js');
@@ -143,23 +153,28 @@ const tabsSrc = read('src/panel-tabs.js');
     Boolean(hostFrame && hostFrame.length >= 3) && Boolean(match),
     'host=' + (hostFrame || []).join(',') + ' client=' + clientFrame.map((l) => l.join(',')).join(' | '));
 
-  // 自定义会话头像（「扩展」页签一号模块）同一条判据：客户端那一份 accept 列表在
-  // `src/client.js` 的 onAvatarPick 里（文件选择器是那儿造的），宿主那一份是 lib/index.js 的
-  // AVATAR_EXT —— 两处不一致的失效模式与自定义画面一样：选择器收得下、宿主判 415（静默失败）。
-  const hostAvatar = hostMimeKeys(hostSrc, 'AVATAR_EXT');
-  const avatarMatch = clientFrame.find((l) => hostAvatar && sameSet(l, hostAvatar));
-  check('会话头像 MIME：客户端有一个 accept 列表与宿主 AVATAR_EXT 键集一致',
-    Boolean(hostAvatar && hostAvatar.length >= 3) && Boolean(avatarMatch),
-    'host=' + (hostAvatar || []).join(',') + ' client=' + clientFrame.map((l) => l.join(',')).join(' | '));
+  // 自定义会话头像（「扩展」页签一号模块）与吉祥物立绘（「系统」页签 · 聊天吉祥物）走的是
+  // **同一条选图腿**（`src/client.js` 的 pickImageFile），也就是说客户端那一份 accept 只写在
+  // 一个地方：`input.accept = "…"`（`src/client.js:3307`）。判据必须锚在**这条腿自己写下的那一行**上
+  // ——先前三条 check 共用从 `src/panel-tabs.js` 抄来的同一份清单，选图腿漂了它也照样绿。
+  // 宿主那边是 lib/index.js 的 AVATAR_EXT / MASCOT_EXT；不一致的失效模式同自定义画面：
+  // 选择器收得下、宿主判 415（静默失败）。
+  const clientAccept = acceptAssignments(clientSrc);
+  /** 某个客户端赋值点里是否存在与宿主表一致的 accept 列表（正判据与负对照共用这一条）。 */
+  const acceptCovers = (lists, hostTable) =>
+    Boolean(hostTable && hostTable.length >= 3) && lists.some((l) => sameSet(l, hostTable));
+  check('覆盖面：选图腿确实写下了 input.accept 赋值点（抽取器退化 ⇒ 当场红，不静默恒真）',
+    clientAccept.length >= 1, '赋值点=' + clientAccept.map((l) => l.join(',')).join(' | ') || '(没抽到)');
 
-  // 自定义吉祥物立绘（「系统」页签 · 聊天吉祥物）同一条判据：客户端那一份 accept 列表
-  // 在 `src/client.js` 的 pickImageFile 里（头像与立绘共用同一条选图腿），宿主那一份是
-  // lib/index.js 的 MASCOT_EXT。
+  const hostAvatar = hostMimeKeys(hostSrc, 'AVATAR_EXT');
+  check('会话头像 MIME：客户端选图腿自己的 input.accept 与宿主 AVATAR_EXT 键集一致',
+    acceptCovers(clientAccept, hostAvatar),
+    'host=' + (hostAvatar || []).join(',') + ' client=' + clientAccept.map((l) => l.join(',')).join(' | '));
+
   const hostMascot = hostMimeKeys(hostSrc, 'MASCOT_EXT');
-  const mascotMatch = clientFrame.find((l) => hostMascot && sameSet(l, hostMascot));
-  check('吉祥物立绘 MIME：客户端有一个 accept 列表与宿主 MASCOT_EXT 键集一致',
-    Boolean(hostMascot && hostMascot.length >= 3) && Boolean(mascotMatch),
-    'host=' + (hostMascot || []).join(',') + ' client=' + clientFrame.map((l) => l.join(',')).join(' | '));
+  check('吉祥物立绘 MIME：客户端选图腿自己的 input.accept 与宿主 MASCOT_EXT 键集一致',
+    acceptCovers(clientAccept, hostMascot),
+    'host=' + (hostMascot || []).join(',') + ' client=' + clientAccept.map((l) => l.join(',')).join(' | '));
 
   // 吉祥物**显示盒上限**的单源契约：`MASCOT_BOX_MAX_W/H` 只住在 lib/settings-schema.js
   // （`mascotBox` 档用它限量级），客户端上传腿与 ropeArtOf 经构建期内联引用同一对 ——
@@ -181,8 +196,13 @@ const tabsSrc = read('src/panel-tabs.js');
     !sameSet(['image/jpeg', 'image/png', 'video/mp4', 'image/webp'], ['image/jpeg', 'image/png', 'video/mp4']));
   check('negative control: 自定义画面 accept 少一种会被判出',
     !sameSet(['image/png', 'image/jpeg'], ['image/jpeg', 'image/png', 'image/webp']));
-  check('negative control: 会话头像 accept 多一种会被判出',
-    !sameSet(['image/png', 'image/jpeg', 'image/webp', 'image/gif'], ['image/jpeg', 'image/png', 'image/webp']));
+  // 负对照：把**变异过的客户端源码**喂进同一条判据 —— 选图腿的 accept 各砍掉最后一项，
+  // 头像与立绘两条契约都必须判坏；空域同样必须判坏（否则判据可能只是"没有可比列表"恒真）。
+  const weakenedClient = weakenedAcceptAssignments(clientSrc);
+  check('negative control: 客户端选图腿少写一种 MIME（或域被抽空）会被判出',
+    !acceptCovers(acceptAssignments(weakenedClient), hostAvatar)
+    && !acceptCovers(acceptAssignments(weakenedClient), hostMascot)
+    && !acceptCovers([], hostAvatar));
 }
 
 {

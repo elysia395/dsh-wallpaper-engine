@@ -157,7 +157,7 @@ The **帧率上限 (fps cap)** control in **Playback → Effects** (selectable s
 
 ### Cache location (moving a few GB off the system drive)
 
-Extracted frames, transcodes, live frames and video thumbnails are **regenerable artefacts** and default to `~/.dsh-wallpaper-engine/cache` — your **system drive**. Over time that adds up to **several GB**. **System → Advanced → 缓存位置 (cache location)** moves it to a folder on any drive (absolute path, `~` supported): existing cache is **migrated automatically** (file by file, so it also works across drives) and the old directory is left behind as empty shells — **never deleted**.
+Extracted frames, transcodes, live frames and video thumbnails are **regenerable artefacts** and default to `~/.dsh-wallpaper-engine/cache` — your **system drive**. Over time that adds up to **several GB**. **System → Advanced → 缓存位置 (cache location)** moves it to a folder on any drive (absolute path, `~` supported): the **Change** button opens a **folder browser** (lists drives and subfolders to click through; the address bar also accepts pasted paths), and on save the existing cache is **migrated automatically** (file by file, so it also works across drives) while the old directory is left behind as empty shells — **never deleted**.
 
 The migration **only moves the plugin's own cache subdirectories**; anything it does not recognise stays where it is. So the target may be an existing folder of yours (say `D:\WallpaperEngineCache`) without the plugin touching anything else inside it. All of it is regenerable (hence the "safe to delete any time" hint in the settings page): the worst case is one extra transcode, never a lost wallpaper or setting.
 

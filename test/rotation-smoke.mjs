@@ -54,6 +54,12 @@ function makeEl(tag) {
     addEventListener(ev,fn){ (listeners[ev] ||= []).push(fn); },
     removeEventListener(ev,fn){ const l=listeners[ev]; if(l){const i=l.indexOf(fn); if(i>=0)l.splice(i,1);} },
     __fire(ev){ (listeners[ev]||[]).slice().forEach(f=>f()); if (ev==='load'&&this.onload) this.onload(); if(ev==='error'&&this.onerror)this.onerror(); },
+    // 真 DOM 语义：`play()/pause()` 会同时改 **`paused`**（产品读的是它，见 applyVideoPlayback
+    // 的 `!video.paused` 短路）—— 只记 `__paused` 会让"夺回焦点后自动恢复"这条路在测试里
+    // 永远走不到 play()（`!undefined === true` 早退），与真机行为分叉。
+    // 取真值语义：媒体未播放时 `paused === true`，play() 后 false，pause() 后 true。
+    get paused(){ return this.__paused !== false; },
+    set paused(v){ this.__paused = !!v; },
     play(){ this.__plays = (this.__plays || 0) + 1; this.__paused = false; return Promise.resolve(); },
     pause(){ this.__paused = true; },
     load(){ this.__loads = (this.__loads || 0) + 1; },
@@ -215,8 +221,10 @@ setTimeout(async () => {
   // ── BGM 闸（用户要求的核心）：渐变期间场景包 <audio> 必须静音/未在播，
   //    旧层退场后才按设置音量起播。 ──
   const bgmMid = audioEls.length > bgmBefore ? audioEls[audioEls.length-1] : null;
+  check('渐变期间确实创建了场景 BGM 元素',
+    bgmMid !== null, bgmMid ? 'audio el @' + (audioEls.length-1) : 'no audio el');
   check('渐变期间场景 BGM 未出声（音量 0 / 未播放）',
-    !bgmMid || (bgmMid.volume === 0 && bgmMid.muted === true && bgmMid.__paused !== false),
+    bgmMid !== null && bgmMid.volume === 0 && bgmMid.muted === true && bgmMid.__paused !== false,
     bgmMid ? ('volume=' + bgmMid.volume + ' muted=' + bgmMid.muted + ' paused=' + bgmMid.__paused) : 'no audio el');
   const fade2 = timers.find(t=>!t.cleared && t.ms===FADE_GRACE_MS);
   check('场景提交后渐变退役定时器已武装', !!fade2);

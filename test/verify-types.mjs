@@ -208,7 +208,7 @@ console.log('\nP1/P2  WallpaperDescriptor（壁纸条目）');
     'missing=[' + a.missingDeclared.join(', ') + '] extra=[' + a.extraDeclared.join(', ') + ']'
       + (a.missingDeclared.length ? ' ⇒ ' + whyFor(WALLPAPER_REQUIRED, a.missingDeclared) : ''));
   check('声明的每个字段都能在 inventory 构造代码里找到赋值（无幽灵字段）',
-    a.missingInCode.length === 0,
+    a.declared.length > 0 && a.missingInCode.length === 0,
     a.missingInCode.length ? '无生产者：' + a.missingInCode.join(', ') : '全部有生产者');
 }
 
@@ -216,13 +216,16 @@ console.log('\nP3  Inventory（顶层载荷）');
 {
   const a = auditSurface({ dts: hostDts, code: inventoryCode, iface: 'Inventory', required: INVENTORY_REQUIRED });
   check('钉住的必需字段全部已声明，且没有多出的字段',
-    a.parsed && a.declared.length === INVENTORY_REQUIRED.length && a.missingDeclared.length === 0 && a.extraDeclared.length === 0,
+    // 集合已逐名相等（下面 missing/extra 两项）⇒ 长度相等是冗余合取项：本条只保留
+    // 两项 missing/extra 与 `a.parsed`；"钉住的每条都真的在 .d.ts 里"由前面那条
+    // 按名字逐一钉名的判据（约 203-205 行）负责，两处分工不重复。
+    a.parsed && a.missingDeclared.length === 0 && a.extraDeclared.length === 0,
     a.parsed
       ? 'missing=[' + a.missingDeclared.join(', ') + '] extra=[' + a.extraDeclared.join(', ') + ']'
         + (a.missingDeclared.length ? ' ⇒ ' + whyFor(INVENTORY_REQUIRED, a.missingDeclared) : '')
       : 'interface 解析失败');
   check('声明的每个字段都能在 inventory 构造代码里找到赋值（无幽灵字段）',
-    a.missingInCode.length === 0,
+    a.declared.length > 0 && a.missingInCode.length === 0,
     a.missingInCode.length ? '无生产者：' + a.missingInCode.join(', ') : '全部有生产者');
 }
 

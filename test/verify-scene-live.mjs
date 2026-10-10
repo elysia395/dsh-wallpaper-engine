@@ -1765,15 +1765,27 @@ for (const [name, ok] of clientChecks) check(name, ok);
       && videoSrc.includes('if (need === null && isNativelyPlayableSource(mi, selection.url, selection.mediaExt)) {')
       && videoSrc.includes('selection.transcodeState = "skipped";')
       && videoSrc.includes('selection.transcodeState = "native";')
-      // 「原生可解 ⇒ 直接不转」这条旧口径必须彻底消失（它就是上限失效的原因）。
-      && !videoSrc.includes('if (isNativelyPlayableSource(mi, selection.url, selection.mediaExt)) {\n    if (video.dataset.weTranscoded) revertTranscodedVideo(video);\n    selection.transcodeReady = null;\n    selection.transcodeState = "native";'));
+      // 不许出现"原生可解 ⇒ 直接不转"的裸条件块（它就是帧率上限失效的原因）；由下面那条 `②`
+      // 的 `OLD_NATIVE_EXEMPT_RE` **正反两向**钉住（真源码必须不命中 + 该形态样本必须命中）。
+      // 这里不照抄逐字散文串：换个缩进/换行就匹配不上，而且从不检验判据本身有没有牙。
+      );
     check('② 正对照：判定只认原生容器/编码（mkv 之类的非原生容器不在白名单里）',
       videoSrc.includes('NATIVE_SRC_EXT') && videoSrc.includes('NATIVE_CODEC_RE')
       && /mp4\|m4v\|webm/.test(videoSrc)
       && !/NATIVE_SRC_EXT = \/[^/]*mkv/.test(videoSrc));
-    check('② 负对照：把"原生可解"重新写成免转条件（旧口径）会被上一条判出',
+    // 「原生可解 ⇒ 免转」的**缺陷形态** = 一段**没有 `need === null` 前置**的裸条件块，块内先 revert、
+    // 再把状态写成 "native"。这条判据**正反两向都用同一个正则**：照抄逐字散文串既容易被缩进/换行
+    // 骗过，也**从不检验判据自己有没有牙**。
+    //   阳性 = 真源码（该形态不得存在 ⇒ 必须不命中）；阴性 = 该形态样本（正则没坏 ⇒ 必须命中）。
+    const OLD_NATIVE_EXEMPT_SAMPLE = 'if (isNativelyPlayableSource(mi, selection.url, selection.mediaExt)) {\n'
+      + '    if (video.dataset.weTranscoded) revertTranscodedVideo(video);\n'
+      + '    selection.transcodeReady = null;\n'
+      + '    selection.transcodeState = "native";';
+    const OLD_NATIVE_EXEMPT_RE = /if \(isNativelyPlayableSource\(mi, selection\.url, selection\.mediaExt\)\) \{[\s\S]*?revertTranscodedVideo\(video\);[\s\S]*?transcodeState = "native";/;
+    check('② 负对照：把"原生可解"重新写成免转条件会被同一条判据判出（同一条正则扫真源码必须不命中）',
       videoSrc.includes('function capNeedsTranscode(')
-      && /if \(isNativelyPlayableSource\(mi, selection\.url, selection\.mediaExt\)\) \{\n    if \(video\.dataset\.weTranscoded\) revertTranscodedVideo\(video\);\n    selection\.transcodeReady = null;\n    selection\.transcodeState = "native";/.test('if (isNativelyPlayableSource(mi, selection.url, selection.mediaExt)) {\n    if (video.dataset.weTranscoded) revertTranscodedVideo(video);\n    selection.transcodeReady = null;\n    selection.transcodeState = "native";'));
+      && OLD_NATIVE_EXEMPT_RE.test(OLD_NATIVE_EXEMPT_SAMPLE)
+      && !OLD_NATIVE_EXEMPT_RE.test(videoSrc));
     // 容器**必须**能拿到真实后缀：媒体 URL 是 `/media/<base64url>`，路径里没有扩展名 ——
     // 只靠 URL 判会**恒为假**（2026-10-02 实测回归：设了帧率上限时每次切换仍跑整片重编码）。
     // 两端各钉一条：宿主把 mediaExt 发出来、客户端把它接进 selection 再传进判据。
@@ -1802,7 +1814,11 @@ for (const [name, ok] of clientChecks) check(name, ok);
   check('live-layer.js 已登记进 INLINE_MODULES 且在产物里只有一份',
     /file:\s*'src\/live-layer\.js'/.test(build)
     && (bundle.match(/function syncLayers\(\)/g) || []).length === 1);
-  check('negative control: 未登记的模块名会被判出', !/file:\s*'src\/nope\.js'/.test(build));
+  // 阴性侧把变异喂进**上一条用的同一个正则**：把登记行里的模块名换成没登记过的 `src/nope.js`，
+  // 同一条判据必须命中（而不是只在常量自比里恒真）。
+  const moduleRegistered = (text) => /file:\s*'src\/live-layer\.js'/.test(text);
+  check('negative control: 未登记的模块名会被判出',
+    moduleRegistered(build) && /file:\s*'src\/nope\.js'/.test(build.replace("'src/live-layer.js'", "'src/nope.js'")));
   // ── 点击效果与拖尾效果（「扩展」二号模块）：同样两条登记 + "产物里只有一份" ──
   check('fx-layer.js 已登记进 INLINE_MODULES 且在产物里只有一份',
     /file:\s*'src\/fx-layer\.js'/.test(build)
@@ -2620,18 +2636,16 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       // 模块级 = 顶格声明（源码里 `function` 前没有缩进）。缩进只认 `[ \t]`：
       // `\s` 会跨行吞掉换行，CRLF 检出下 `^` 落在 `\r` 后、`\s+` 吃掉 `\n`，
       // 顶格声明前面是注释行就会被误判成"缩进形态"（LF 检出测不出来）。
-      const moduleLevel = /^function renderUserPropsPanel\(/m.test(src);
-      const notInApply = !/^[ \t]+function renderUserPropsPanel\(/m.test(src);
+      const isModuleLevel = (t) => /^function renderUserPropsPanel\(/m.test(t) && !/^[ \t]+function renderUserPropsPanel\(/m.test(t);
       check('面板渲染器是**模块级**声明（放回 apply() 闭包会让侧栏一点就整页白屏）',
-        moduleLevel && notInApply);
+        isModuleLevel(src));
       check('quick-panel 当自由变量用它（不许改成只认 prop —— 那会再掉回同一个坑）',
         qpCode.includes('renderUserPropsPanel()') && !qpCode.includes('props.renderUserPropsPanel'));
       check('两个挂载点都不再传它（它已不在闭包里，传了也没用）',
         !src.includes('QuickPanel, { dock: "drawer", renderUserPropsPanel }')
           && !sidebarSrc.includes('QuickPanel, { dock: "official", renderUserPropsPanel }'));
       check('negative control: 缩进写进 apply()（闭包形态）会被同一条判据判红',
-        !(/^function renderUserPropsPanel\(/m.test('  function renderUserPropsPanel() {')
-          && !/^[ \t]+function renderUserPropsPanel\(/m.test('  function renderUserPropsPanel() {')));
+        isModuleLevel('  function renderUserPropsPanel() {') === false);
     }
     // 共用同一个开关：两个壳（设置页 / 侧栏）不许各存一份 `propsPanelOpen`。
     // ⚠️ 同上：按**剥注释**的那份判，否则解释原理的散文里那句 `` `propsPanelOpen` `` 会被当成直读。
@@ -2763,17 +2777,22 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     'onGlassColor', 'onGlassAlpha', 'onGlassFidelity', 'onChatGlassFidelity', 'onToggleThemeFollow'];
   {
     const compStart = src.indexOf('function WallpaperPicker() {');
-    const notPromoted = PROMOTED.filter((n) => {
-      const at = src.indexOf('const ' + n + ' = ');
-      return at === -1 || at > compStart;
-    });
+    // 界线判据提成命名函数：阳性侧喂真实源码（块底那个字面量就是同一份，只改了换行写法 ⇒ 不构成对照），
+    // 阴性侧喂一份**改动过的源码副本** —— 删掉 `function WallpaperPicker() {` 这个界标，`compStart` 变 -1，
+    // 同一条判据必须判红（`-1` 若被当成"都合格"，所有 `at > compStart` 反而恒真、判据静默放行）。
+    const strayProcessors = (text) => {
+      const boundary = text.indexOf('function WallpaperPicker() {');
+      if (boundary === -1) return PROMOTED.slice();
+      return PROMOTED.filter((n) => {
+        const at = text.indexOf('const ' + n + ' = ');
+        return at === -1 || at > boundary;
+      });
+    };
+    const notPromoted = strayProcessors(src);
     check('外观 / 画面处理器已提升到模块级（设置页与侧栏共用同一份实现）',
       notPromoted.length === 0, notPromoted.join(', ') || PROMOTED.length + ' 个都在组件之前');
     check('negative control: 仍住在组件里的处理器会被同一条判据判出',
-      ([...PROMOTED.slice(1), 'onScrim']).some((n) => {
-        const at = src.indexOf('const ' + n + ' = ');
-        return at > compStart;
-      }) === false && PROMOTED.every((n) => src.indexOf('const ' + n + ' = ') < compStart));
+      strayProcessors(src.replace('function WallpaperPicker() {', '')).length === PROMOTED.length);
   }
   // 另：字体 / 主题处理器与三个 ctx 构造器**同样**必须在模块级（2026-10-07 从 WallpaperPicker
   //    体内提到模块级）：它们只读模块级单例 `selection`、只调模块级函数（setFontValues /
@@ -2801,6 +2820,9 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     const stray = flagged(compStart);
     check('字体 / 主题处理器与 ctx 构造器也在模块级（组件之前声明，不再每次渲染重建）',
       stray.length === 0, stray.join(', ') || PROMOTED_FONT.length + ' 个都在组件之前');
+    // 独立地板：名单空了的话上面那条 `stray.length === 0` 是**恒真**的 —— 空域上的"全部合格"
+    // 等于零覆盖。这条把"名单被掏空"当场变红。
+    check('覆盖面：PROMOTED_FONT 非空', PROMOTED_FONT.length > 0);
     check('negative control: 把界线画到文件开头（等价于"全算组件内"）同一条判据会判出全部',
       PROMOTED_FONT.every((n) => posOf(n) > 0) && flagged(0).length === PROMOTED_FONT.length);
   }
@@ -2819,24 +2841,35 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     'onBatchHide', 'onBatchCancel', 'onSearchInput', 'onPickCard'];
   {
     const compStart = src.indexOf('function WallpaperPicker() {');
-    const posOf = (n) => {
-      const a = src.indexOf('function ' + n + '(');
-      const b = src.indexOf('const ' + n + ' = ');
+    // 位置解析必须吃**传进来的那份文本**：阴性对照会把它喂给改动过的源码副本，
+    // 若这里仍写死 `src`，`flagged(text, …)` 就会对副本永远判出"全员是孤儿"（判据恒红）。
+    const posOf = (text, n) => {
+      const a = text.indexOf('function ' + n + '(');
+      const b = text.indexOf('const ' + n + ' = ');
       if (a === -1) return b;
       return b === -1 ? a : Math.min(a, b);
     };
-    const flagged = (boundary) => PROMOTED_HANDLERS.filter((n) => {
-      const i = posOf(n);
+    const flagged = (text, boundary, names = PROMOTED_HANDLERS) => names.filter((n) => {
+      const i = posOf(text, n);
       return i === -1 || i > boundary;
     });
-    const stray = flagged(compStart);
+    const stray = flagged(src, compStart);
     check('壁纸库 / 库视图处理器与纯常量也在模块级（组件之前声明）',
       stray.length === 0, stray.join(', ') || PROMOTED_HANDLERS.length + ' 个都在组件之前');
-    // 负对照：同一条界线对"仍住在组件里"的派生值必须判出 —— 用 lastIndexOf，因为
-    // `const group = activeRotationGroup()` 也在模块级的 onGroupInterval 体内出现。
-    check('negative control: 派生值 group / candidates 仍在组件体内（同一条界线判得出）',
-      ['group', 'candidates'].every((n) => src.lastIndexOf('const ' + n + ' = ') > compStart)
-      && flagged(compStart).length !== PROMOTED_HANDLERS.length);
+    // 负对照：把**真实组件内成员**喂进同一条界线，必须判得出；再把它的声明提到组件之前，
+    // 同一条界线必须闭嘴 —— 这才证明界线不是恒真/恒假（拿 `flagged(compStart)` 与上面那条
+    // `stray.length === 0` 互证是按构造恒真，不算对照）。
+    // ⚠️ 样本只取 `candidates`：`posOf` 取**首现**，而 `group` 在文件更早处另有一份模块级
+    //    `const group = `（本文件靠 `lastIndexOf` 才看得到组件里那一份）⇒ 它在 posOf 语义下
+    //    按构造就不会被这条界线判出，不能当阴性样本；它只作为"组件体内确实有第二份声明"的证据。
+    const inComponent = ['candidates'];
+    const hoisted = (n) => 'const ' + n + ' = null;' + String.fromCharCode(10) + src;
+    check('negative control: 组件体内的派生值候选会被同一条界线判出，提到组件之前则闭嘴',
+      src.lastIndexOf('const group = ') > compStart
+      && src.lastIndexOf('const candidates = ') > compStart
+      && flagged(src, compStart, inComponent).length === inComponent.length
+      && flagged(hoisted('candidates'), compStart, inComponent).length === 0
+      && !flagged(hoisted('candidates'), compStart, inComponent).includes('candidates'));
   }
   // 另（2026-10-07 B3-a）：syncLayers 的 6 个分段助手也已提到模块级 —— 判据=只读模块级单例
   //    `selection` / 只调模块级函数（`selection` 与 `IS_EDGE` 在本模块内是自由变量）⇒
@@ -5116,11 +5149,14 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
   // 一次补丁把新用例插进了上一条的 `ctx:` 构造器里 —— **语法合法、却从没被迭代到**，于是判据一条
   // 都没加而整个套件照旧全绿（当时靠"通过数没动"才发现）。用例没进数组 / 被改名 / 被注释掉都属于
   // 这一类：**静默少跑**。地板把"少跑"变成红。（带标签期望的条数单独设下限：那是细锚的覆盖面。）
+  // 地板本身提成命名判据：阳性侧喂真实 `CASES`，阴性侧喂「空数组 / 四条都没有标签期望」的合成数组
+  // —— 两侧走的是**同一个** `floorOk`，不是各自重打一遍数字。
+  const floorOk = (cs) => cs.length >= 4 && cs.filter((c) => c.wantLabels).length >= 3;
   check('覆盖面：渲染用例数 ≥ 4 且其中带控件标签期望的 ≥ 3（用例静默没进数组即红）',
-    CASES.length >= 4 && CASES.filter((c) => c.wantLabels).length >= 3,
+    floorOk(CASES),
     'cases=' + CASES.length + ' withLabels=' + CASES.filter((c) => c.wantLabels).length);
   check('negative control: 空数组 / 缺标签期望会被同一条地板判出',
-    !([].length >= 4) && !([{ wantLabels: [] }, {}, {}, {}].filter((c) => c.wantLabels).length >= 3));
+    floorOk([]) === false && floorOk([{ wantLabels: [] }, {}, {}, {}]) === false);
 
   // ── 类名锚的**正/负对照**（目标 ④：新守卫必须带负对照）─────────────────────
   // 类名锚的判定是"子串 + 子集"，两个方向都可能恒真：恒真一 = 集合里总有它；恒真二 = 子集判空。
@@ -5434,15 +5470,18 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
   // （新用例都用最省事的那种锚，另两种慢慢没人用，而"没人用"不会自己变红）。
   {
     const all = [...CASES, ...MORE_CASES];
+    const anchorsOk = (cs) => cs.filter((c) => c.wantLabels).length >= 6
+      && cs.filter((c) => c.wantClasses).length >= 4
+      && cs.filter((c) => c.wantTexts).length >= 2;
     const nLabels = all.filter((c) => c.wantLabels).length;
     const nClasses = all.filter((c) => c.wantClasses || c.rejectClasses).length;
     const nTexts = all.filter((c) => c.wantTexts).length;
     check('覆盖面：三种锚都被真的用上（标签 ≥ 6 · 类名 ≥ 4 · 文本 ≥ 2）',
-      nLabels >= 6 && nClasses >= 4 && nTexts >= 2,
+      anchorsOk(all),
       'labels=' + nLabels + ' classes=' + nClasses + ' texts=' + nTexts + ' cases=' + all.length);
     check('negative control: 只堆一种锚会被同一条地板判出',
-      !([{ wantLabels: [] }, { wantLabels: [] }, { wantLabels: [] }, { wantLabels: [] },
-        { wantLabels: [] }, { wantLabels: [] }].filter((c) => c.wantClasses).length >= 4));
+      anchorsOk([{ wantLabels: [] }, { wantLabels: [] }, { wantLabels: [] }, { wantLabels: [] },
+        { wantLabels: [] }, { wantLabels: [] }]) === false);
   }
 
   check('负对照：外观页侧栏档确实渲染出了内容（不是空树 ⇒ 上面的"少节数"才有意义）',

@@ -10,7 +10,7 @@
 > 两条注册（渲染页按根路径上报，只挂一条会静默 404）。提及判定带尾边界，`/media` 不会被
 > `/media-info` 误算成已覆盖。
 
-共 **41** 条路由。
+共 **42** 条路由。
 
 | # | 路径 | 来源 | 形态 | 依赖（闭包状态 / `c` 字段） | 守卫提及 |
 |---|---|---|---|---|---|
@@ -19,13 +19,13 @@
 | 3 | `/transcode-progress` | lib/routes/media-derived.js:100 | 箭头 | disposers base mediaMap transcodeJobs | 2 |
 | 4 | `/transcoded` | lib/routes/media-derived.js:153 | 箭头 | disposers base mediaMap serveFile transcodeToFps registerTranscodeWaiter | 1 |
 | 5 | `/video-preview` | lib/routes/media-derived.js:212 | 箭头 | disposers base mediaMap serveFile generateVideoPreview | 2 |
-| 6 | `/media` | lib/routes/media-bytes.js:36 | 箭头 | disposers base serveFile serveLayout mediaMap log …(+1) | 20 |
+| 6 | `/media` | lib/routes/media-bytes.js:36 | 箭头 | disposers base serveFile serveLayout mediaMap log …(+1) | 21 |
 | 7 | `/preview` | lib/routes/media-bytes.js:36 | 箭头 | disposers base serveFile serveLayout mediaMap log …(+1) | 10 |
 | 8 | `/scene-frame` | lib/routes/scene-frame.js:74 | 箭头 | disposers base mediaMap trackStream customFramePath customIdFromAbs …(+3) | 12 |
 | 9 | `/scene-frame-cache` | lib/routes/scene-frame.js:152 | 箭头 | disposers base mediaMap GPU_FRAME_MAX_BYTES GPU_WRITE_INFLIGHT armBodyIdleTimeout …(+4) | 4 |
 | 10 | `/custom-frame` | lib/routes/scene-frame.js:237 | 箭头 | disposers base serveFile CUSTOM_FRAME_EXT CUSTOM_FRAME_MAX_BYTES armBodyIdleTimeout …(+3) | 3 |
-| 11 | `/scene-live` | lib/routes/scene-serve.js:53 | 箭头 | disposers base WEBWALLGL_DIR appendDiagLine traceRequests serveFile …(+1) | 7 |
-| 12 | `/scene-files` | lib/routes/scene-serve.js:91 | 箭头 | disposers base handleSceneFiles | 5 |
+| 11 | `/scene-live` | lib/routes/scene-serve.js:53 | 箭头 | disposers base WEBWALLGL_DIR appendDiagLine traceRequests serveFile …(+1) | 8 |
+| 12 | `/scene-files` | lib/routes/scene-serve.js:91 | 箭头 | disposers base handleSceneFiles | 6 |
 | 13 | `/media-origin` | lib/routes/scene-serve.js:99 | 箭头 | disposers base mediaOriginInfo | 1 |
 | 14 | `/scene-payload-progress` | lib/routes/scene-serve.js:119 | 箭头 | disposers base payloadProgress | 1 |
 | 15 | `/props` | lib/routes/props.js:42 | 箭头 | disposers base mediaMap userPropsFor | 7 |
@@ -54,7 +54,8 @@
 | 38 | `/mascot` | lib/routes/mascot.js:50 | 箭头 | disposers base serveFile mascotDir mascotPath MASCOT_EXT …(+4) | 4 |
 | 39 | `/avatar` | lib/routes/avatar.js:54 | 箭头 | disposers base serveFile avatarDir avatarPath AVATAR_SIDES …(+5) | 5 |
 | 40 | `/settings` | lib/routes/settings.js:50 | 箭头 | disposers base ctx mediaOriginApi readSettings isBetterSidebarLoaded …(+5) | 19 |
-| 41 | `/cache-dir` | lib/routes/cache-dir.js:36 | 箭头 | disposers base CONTROL_JSON_MAX_BYTES normalizeUserDir cacheBaseDir setCacheDir …(+1) | 1 |
+| 41 | `/cache-dir` | lib/routes/cache-dir.js:44 | 箭头 | disposers base CONTROL_JSON_MAX_BYTES normalizeUserDir cacheBaseDir setCacheDir …(+1) | 1 |
+| 42 | `/cache-dir/browse` | lib/routes/cache-dir.js:112 | 箭头 | disposers base normalizeUserDir | 1 |
 
 **零提及（拆分前必须先补守卫）**：（无）
 
@@ -68,7 +69,7 @@
 |---|---|---|---|---|
 | `lib/routes/about-qr.js` | `registerAboutQrRoutes(webServer, c)` | 1 | `disposers` `base` `aboutDir` `serveFile` | — |
 | `lib/routes/avatar.js` | `registerAvatarRoutes(webServer, c)` | 1 | `disposers` `base` `serveFile` `avatarDir` `avatarPath` `AVATAR_SIDES` `AVATAR_EXT` `AVATAR_MAX_BYTES` `atomicWriteFileP` `armBodyIdleTimeout` `lingerClose` | — |
-| `lib/routes/cache-dir.js` | `registerCacheDirRoutes(webServer, c)` | 1 | `disposers` `base` `CONTROL_JSON_MAX_BYTES` `normalizeUserDir` `cacheBaseDir` `setCacheDir` `armBodyIdleTimeout` | — |
+| `lib/routes/cache-dir.js` | `registerCacheDirRoutes(webServer, c)` | 2 | `disposers` `base` `CONTROL_JSON_MAX_BYTES` `normalizeUserDir` `cacheBaseDir` `setCacheDir` `armBodyIdleTimeout` | — |
 | `lib/routes/diag.js` | `registerDiagRoutes(webServer, c)` | 4 | `disposers` `appendDiagLine` `log` `notice` `base` `onHandleDiag` | — |
 | `lib/routes/fontsets.js` | `registerFontsetsRoutes(webServer, c)` | 1 | `disposers` `base` `readFontSetId` | — |
 | `lib/routes/github-stars.js` | `registerGithubStarsRoutes(webServer, c)` | 1 | `disposers` `base` `repoSlug` `cachePath` `log` `fetchJson` | — |

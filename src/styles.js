@@ -2590,6 +2590,48 @@ const CSS = `
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
     font-size: 0.8em; opacity: 0.85;
   }
+  /* ── 目录浏览器（缓存位置「更改」弹出的面板）：宿主列目录，点行进入、地址栏可手输。
+     只读既有令牌（本块不声明任何 --dsw-* 变量，令牌契约白名单不动）。 ── */
+  .we-dirpick {
+    display: flex; flex-direction: column; gap: 6px;
+    padding: 8px; border-radius: 10px;
+    border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.26));
+    background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.05));
+  }
+  .we-dirpick__bar { display: flex; gap: 6px; }
+  .we-dirpick__path { flex: 1; min-width: 0; font-size: 0.8em; }
+  .we-dirpick__chips { display: flex; gap: 6px; flex-wrap: wrap; }
+  .we-dirpick__chip { height: 24px; padding: 0 10px; font-size: 0.78em; }
+  .we-dirpick__list {
+    display: flex; flex-direction: column; gap: 2px;
+    max-height: 180px; overflow-y: auto;
+    border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.18));
+    border-radius: 8px; padding: 3px;
+  }
+  .we-dirpick__item {
+    /* **flex: none** 是这条规则里最重要的一句：列表是纵向 flex 容器且 max-height 180px，
+       目录一多（D:\ 实测 119 项）默认的 flex-shrink 会把每行压到只剩上下 padding
+       （8px 高），13px 的文字被 overflow:hidden 裁成一条细缝 —— 用户看到的正是
+       「列表看着有内容、每一行却什么都读不到」。行高必须钉死为内容高。 */
+    flex: none;
+    display: block; width: 100%; text-align: left; cursor: pointer;
+    padding: 4px 8px; border: 0; border-radius: 6px;
+    /* 墨色**直接吃宿主系统令牌**（用户口径：跟随 DSH 的系统设置）—— 与同一面板里
+       可见的 chips / 标签同族，条目永远跟面板其它文字同色，不单走一条会变黑的链。
+       字体也用 font 简写从面板继承（button 的 UA 字体不继承，chips 同款做法）。 */
+    color: var(--dsw-alias-label-primary, var(--we-ink, inherit));
+    font: inherit; font-size: 0.82em;
+    /* 行底淡染：任何令牌环境下「行」本身都找得到（文字若仍异常，行不会整体隐形）。 */
+    background: rgba(128, 128, 128, 0.08);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+  .we-dirpick__item:hover { background: var(--we-hover-bg, rgba(128, 128, 128, 0.16)); }
+  .we-dirpick__empty { font-size: 0.8em; opacity: 0.7; padding: 6px 8px; }
+  .we-dirpick__foot { display: flex; align-items: center; gap: 6px; }
+  .we-dirpick__sel {
+    flex: 1; min-width: 0;
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
   /* Segmented-control family: the playback-rate control (video wallpapers only) and the
      frame-rate-cap tier row in the 效果 tab both wrap their buttons in .we-picker__seg. */
   .we-picker__seg { display: flex; gap: 4px; flex: 1; min-width: 0; }

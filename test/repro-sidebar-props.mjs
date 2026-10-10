@@ -130,6 +130,8 @@ try {
   const tree2 = bodyRender();
   console.log('③ 展开后渲染 OK');
   console.log('   文本:', JSON.stringify(textOf(tree2)).slice(0, 300));
+  // 只有抛异常才算失败：这里的观测必须真的能失败（打印完就丢的布尔等于没有断言）。
+  if (!JSON.stringify(tree2).includes('we-picker__props')) throw new Error('props 面板未渲染');
   console.log('   有面板:', JSON.stringify(tree2).includes('we-picker__props'));
 } catch (e) {
   console.log('✗ 渲染抛异常:', e && e.constructor && e.constructor.name, e && e.message);

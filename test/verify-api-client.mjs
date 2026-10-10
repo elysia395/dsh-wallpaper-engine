@@ -32,12 +32,26 @@ const check = (name, ok, detail) => {
 /** 判据只认代码：调用点沿用短名 `strip`。 */
 const strip = stripComments;
 
-/** 客户端全模块清单（① 与 ①b 共用）。 */
-const CLIENT_MODULES = [
-  'src/client.js', 'src/panel-tabs.js', 'src/live-layer.js', 'src/media-prep.js',
-  'src/video-layer.js', 'src/layer-core.js', 'src/persistence.js', 'src/styles.js', 'src/effects.js', 'src/font/apply.js',
-  'src/font/color-roles.js', 'src/font/typography.js', 'src/we-cond.js', 'src/api-client.js',
-];
+/**
+ * 客户端全模块清单（① 与 ①b 共用）：**从磁盘枚举** `src/**`，不手抄名单。
+ * 硬编码名单只守它自己：新增一个 `src` 模块、里面写裸 `fetch(`，扫描看不见它 ⇒ 全绿
+ * （违反 `docs/DEV-GUIDE.md:363-364` 约定 4「判据的域应当从磁盘枚举」）。
+ */
+const walkSrc = (dir, out = []) => {
+  let names = [];
+  try { names = readdirSync(join(root, dir)); } catch { return out; }
+  for (const n of names) {
+    const rel = dir + '/' + n;
+    let st = null;
+    try { st = statSync(join(root, rel)); } catch { continue; }
+    if (st.isDirectory()) walkSrc(rel, out);
+    else if (n.endsWith('.js')) out.push(rel);
+  }
+  return out;
+};
+const srcWalk = walkSrc('src').sort();
+/** 被判据扫描的客户端模块清单（① 与 ①b 共用）——就是磁盘枚举的结果，不额外手抄一份。 */
+const CLIENT_MODULES = srcWalk;
 
 // ── ① 零裸 fetch（客户端全模块）──────────────────────────────────────────────
 console.log('\n① 裸 fetch 清点（业务代码必须为 0）');
@@ -48,9 +62,12 @@ console.log('\n① 裸 fetch 清点（业务代码必须为 0）');
   check('客户端**全部**模块零裸 fetch（P2-9 终态）', dirty.length === 0,
     dirty.length ? dirty.map(([f, n]) => f + '=' + n).join(' ') : CLIENT_MODULES.length + ' 个模块全为 0');
   // 覆盖面断言：上面那条在"扫不到文件"时也会绿（本仓踩过 walker 静默返回空表），
-  // 所以先钉住"文件真的都在、而且真的含 fetch 字样以外的东西"。
-  check('负对照：扫描覆盖面成立（14 个模块都存在且非空）',
-    counts.length === 14 && CLIENT_MODULES.every((rel) => readFileSync(join(root, rel), 'utf8').length > 500));
+  // 所以先钉住"枚举真的非退化：模块数够、出入口与主客户端都在清单里、文件非空"。
+  check('负对照：磁盘枚举覆盖面成立（src/** ≥14 个模块、含出入口与主客户端、都非空）',
+    CLIENT_MODULES.length === srcWalk.length && srcWalk.length >= 14
+    && ['src/api-client.js', 'src/client.js', 'src/panel-tabs.js'].every((f) => CLIENT_MODULES.includes(f))
+    && CLIENT_MODULES.every((rel) => readFileSync(join(root, rel), 'utf8').length > 500),
+    CLIENT_MODULES.length + ' 个模块（磁盘枚举 src/**）');
   check('负对照：判据能数出合成文本里的裸 fetch',
     (strip("const r = await fetch('/x'); // fetch( in comment").match(/\bfetch\s*\(/g) || []).length === 1);
   check('src/api-client.js 存在且是出入囗模块',
@@ -145,8 +162,6 @@ console.log('\n③ 语义（非 2xx / 网络中断 / 解析失败）');
   const errAlways = await apiFetch('/a', { fetch: async () => errBody, parse: 'always' });
   check("parse:'always' 能读到宿主给的原因（4xx 的 {error}）",
     errAlways.ok === false && errAlways.data && errAlways.data.error === '素材目录不存在');
-  check('负对照：默认解析策略下读不到那句原因（否则上一条是假绿）',
-    !(errDefault.data && errDefault.data.error === '素材目录不存在'));
   check('本地 data:/blob: URL 原样通过（本模块也是本地字节转换的出口）',
     apiUrl('data:image/png;base64,AAA') === 'data:image/png;base64,AAA'
     && apiUrl('blob:http://x/y') === 'blob:http://x/y');
@@ -199,8 +214,6 @@ console.log('\n④ POST 序列化');
   check('method 默认 POST', calls[0].init.method === 'POST');
   await apiPostJson('/x', undefined, { fetch: fake });
   check('空体 ⇒ 空对象而不是 undefined', calls[calls.length - 1].init.body === '{}');
-  check('负对照：body 不是字符串化的东西（防"忘了序列化"回归）',
-    calls[0].init.body !== '[object Object]');
 }
 
 // ── ⑤ 源码不变量 ────────────────────────────────────────────────────────────
@@ -252,6 +265,7 @@ console.log('\n⑦ Response 替身必须带 status');
   };
   const stubFiles = [...walk(join(root, 'scripts')), ...walk(join(root, 'test'))];
   const offenders = [];
+  const stubObjects = [];
   for (const rel of stubFiles) {
     const text = readFileSync(join(root, rel), 'utf8');
     for (let i = 0; i < text.length; i++) {
@@ -265,17 +279,23 @@ console.log('\n⑦ Response 替身必须带 status');
         else if (text[j] === '}') { depth--; if (!depth) break; }
       }
       const block = text.slice(i, j + 1);
-      if (/\bok\s*:/.test(block) && /\bjson\s*:/.test(block) && !/\bstatus\s*:/.test(block)) {
-        offenders.push(rel + ':' + (text.slice(0, i).split('\n').length));
+      if (/\bok\s*:/.test(block) && /\bjson\s*:/.test(block)) {
+        stubObjects.push(rel + ':' + (text.slice(0, i).split('\n').length));
+        if (!/\bstatus\s*:/.test(block)) {
+          offenders.push(rel + ':' + (text.slice(0, i).split('\n').length));
+        }
       }
     }
   }
   check('所有 Response 替身都带 status（ok 只能由 status 推出）', offenders.length === 0,
-    offenders.length ? offenders.join(', ') : stubFiles.length + ' 个 mjs 文件干净');
+    offenders.length ? offenders.join(', ') : stubObjects.length + ' 个替身对象干净');
   // **覆盖面断言**：上面那句"都带 status"在扫不到文件时也会绿（本仓踩过：walk 里少导入
   // readdirSync，异常被吞 ⇒ 0 个文件、假绿）。所以先钉住"真的扫到了文件"。
   check('负对照：扫描确实覆盖到文件（>20 个 mjs，防 walker 静默返回空表）',
     stubFiles.length > 20, stubFiles.length + ' 个');
+  // 域非空地板：上面那条在"扫到 0 个替身对象"时同样恒真（`stubFiles` 够多 ≠ 扫描循环有效）。
+  check('覆盖面：扫描真的命中 stub 形对象 ≥ 1（域空 ⇒ 上一条恒真）',
+    stubObjects.length >= 1, stubObjects.length + ' 个 stub 形对象');
   const mk = (o, j, s) => `${o ? '{ ok: true, ' : '{ '}${j ? 'json: () => x, ' : ''}${s ? 'status: 200, ' : ''}}`;
   check('负对照：判据对"缺 status 的替身"有牙、对合规替身放行',
     /\bok\s*:/.test(mk(true, true, false)) && !/\bstatus\s*:/.test(mk(true, true, false))

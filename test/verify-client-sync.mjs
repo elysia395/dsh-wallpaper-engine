@@ -64,6 +64,11 @@ if (!after.equals(before)) writeFileSync(ARTIFACT, before);
  */
 const lf = (buf) => Buffer.from(buf.toString('utf8').replace(/\r\n/g, '\n'), 'utf8');
 
+/** 「产物过期」判据（主判据的**唯一**实现）：两侧折成 LF 后比较，不等即过期。
+ *  正/负对照必须复用**本函数** —— 拿两个 `lf()` 结果互相比只是在证明 helper 自己会折
+ *  行尾，压根没经过判据（A4：对照的牙必须长在主判据上，而不是长在它的实现细节上）。 */
+const staleByLf = (after, before) => !lf(after).equals(lf(before));
+
 check('重建命令成功退出（markers 齐全、产物可解析）', buildCode === 0,
   buildCode === 0 ? 'exit 0' : 'exit ' + buildCode + (buildErr ? ' · ' + buildErr.split('\n')[0] : ''));
 
@@ -77,7 +82,7 @@ const firstDiffLine = (a, b) => {
 
 const a0 = lf(after);
 const b0 = lf(before);
-const agree = a0.equals(b0);
+const agree = !staleByLf(after, before);
 const eolOnly = !after.equals(before) && agree;
 check('提交物与重建结果一致（按提交形态 LF 比较）', agree,
   agree ? sha(b0) + ' · ' + b0.length + ' B' + (eolOnly ? '（盘上仅行尾风格不同：检出侧 CRLF，属正常）' : '')
@@ -88,12 +93,22 @@ check('提交物与重建结果一致（按提交形态 LF 比较）', agree,
 {
   const tampered = Buffer.from(b0);
   tampered[tampered.length - 2] = tampered[tampered.length - 2] ^ 0x01;
-  check('negative control: 内容差一个字节会被判出', !tampered.equals(b0) && firstDiffLine(tampered, b0) > 0,
-    'len=' + tampered.length);
+  check('negative control: 内容差一个字节会被判出', staleByLf(tampered, b0),
+    'len=' + tampered.length + ' · 首处差异第 ' + firstDiffLine(tampered, b0) + ' 行');
 }
 // 正对照：行尾风格不算内容差异 —— 否则本机（CRLF 检出）恒红。
-check('positive control: 只有 CRLF/LF 之差不算产物过期',
-  lf(Buffer.from('a\r\nb\r\n')).equals(lf(Buffer.from('a\nb\n'))));
+// 两侧都是**真造出来的 Buffer**（CRLF 版 / LF 版），喂进主判据同一个函数 `staleByLf`：
+// ① 只有行尾差异 ⇒ 不算过期；② 真有一个字节不同 ⇒ 必须算过期。②是这条对照的牙 ——
+// 少了它，把 `staleByLf` 改成恒 false 也照样全绿（对照就成了"判据恒绿"的复述）。
+{
+  const crlfAfter = Buffer.from('a\r\nb\r\n', 'utf8');
+  const lfBefore = Buffer.from('a\nb\n', 'utf8');
+  const changed = Buffer.from('a\nB\n', 'utf8'); // 第 2 行的 b→B：真的差一个字节
+  check('positive control: 只有 CRLF/LF 之差不算产物过期',
+    staleByLf(crlfAfter, lfBefore) === false, 'CRLF vs LF ⇒ stale=' + staleByLf(crlfAfter, lfBefore));
+  check('positive control 咬合：同一函数对"差一个字节"必须判 stale',
+    staleByLf(changed, lfBefore) === true, 'a\\nb\\n vs a\\nB\\n ⇒ stale=' + staleByLf(changed, lfBefore));
+}
 
 console.log('\n' + (failed ? 'CLIENT SYNC CHECKS FAILED — ' + failed + ' failed' : 'CLIENT SYNC CHECKS PASSED')
   + ' (' + (passed + failed) + ')');

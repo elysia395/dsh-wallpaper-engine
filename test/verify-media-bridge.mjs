@@ -296,8 +296,10 @@ if (!binPath) {
   let ready = false;
   const readyDeadline = Date.now() + bootMs + 15000;   // 引导预算 + 收尾余量
   while (!ready && Date.now() < readyDeadline) { await sleep(150); ready = backend.usingBridge(); }
+  // ⚠️ 这条**必须在 `if (ready)` 外面**：放进去就成了"进得来块 ⇒ ready 为真 ⇒ 判据恒真"，
+  //    中间件根本没起来时它不会把失败喊出来，而是**整段静默跳过** —— 恒红与静默不可达是同一个洞的两面。
+  check('中间件就绪（握手通过、子进程在跑）', ready, `引导预算 ${bootMs}ms`);
   if (ready) {
-    check('中间件就绪（握手通过、子进程在跑）', true, `引导预算 ${bootMs}ms`);
     const info = backend.bridgeInfo() || {};
     check('hello.protocol = 1（协议版本一致才用）', Number(info.protocol) === 1);
     check('hello 报告平台与后端', Boolean(info.platform) && Boolean(info.provider),
@@ -449,6 +451,12 @@ rmSync(join(TEST_DIR, 'bogus'), { recursive: true, force: true });
 rmSync(join(TEST_DIR, 'probe'), { recursive: true, force: true });
 rmSync(join(TEST_DIR, 'probe-cache'), { recursive: true, force: true });
 rmSync(bogus, { force: true });
+
+// 覆盖面地板（全局）：离线那一段（产物表 7 / 歌词 3 / 反向控制 5 / 探针判定 4 = 19 条）与有没有
+// 产物无关，恒在。整段被短路或删空时，下面的"全绿 / --allow-skip"就是**空域上的通过**，所以钉一个
+// 绝对下界（改离线判据条数时同步改这个数）。
+check('覆盖面地板：本次至少执行 19 条判据（否则汇总的"通过"是空域上的）', passed + failed >= 19,
+  '已执行 ' + (passed + failed) + ' 条');
 
 console.log(`\nmedia-bridge 自检：${passed} 通过 / ${failed} 失败`
   + `${skipped ? ` / ${skipped} 平台跳过` : ''}`

@@ -44,9 +44,9 @@
 | 令牌 | 条数 | 门控 | 行号 | 消费者注记 |
 |---|---|---|---|---|
 | `--dsw-alias-bg-base` | 2 | 壁纸(2) | 222, 343 | 页面基底 —— 壁纸可见性的关键前提（transparent） |
-| `--dsw-alias-bg-layer-1` | 11 | 玻璃(10) + 无门控(1) | 96, 248, 349, 1528, 1589, 1611, 1616, 1625, 3111, 3118, 3129 | 面板层次 1（宿主对话框/侧栏底）；better-sidebar 亦按它上色 |
-| `--dsw-alias-bg-layer-2` | 11 | 玻璃(11) | 251, 352, 821, 1531, 1592, 1612, 1617, 1626, 3112, 3119, 3130 | 面板层次 2 |
-| `--dsw-alias-bg-layer-3` | 10 | 玻璃(10) | 254, 355, 1534, 1595, 1613, 1618, 1627, 3113, 3120, 3131 | 面板层次 3 |
+| `--dsw-alias-bg-layer-1` | 11 | 玻璃(10) + 无门控(1) | 96, 248, 349, 1528, 1589, 1611, 1616, 1625, 3153, 3160, 3171 | 面板层次 1（宿主对话框/侧栏底）；better-sidebar 亦按它上色 |
+| `--dsw-alias-bg-layer-2` | 11 | 玻璃(11) | 251, 352, 821, 1531, 1592, 1612, 1617, 1626, 3154, 3161, 3172 | 面板层次 2 |
+| `--dsw-alias-bg-layer-3` | 10 | 玻璃(10) | 254, 355, 1534, 1595, 1613, 1618, 1627, 3155, 3162, 3173 | 面板层次 3 |
 | `--dsw-alias-bg-module-platform` | 2 | 玻璃(2) | 269, 365 |  |
 | `--dsw-alias-bg-multi-select` | 2 | 玻璃(2) | 272, 368 |  |
 | `--dsw-alias-bg-overlay` | 2 | 玻璃(2) | 266, 362 | 弹层/浮出层底（issue #71 全表面玻璃） |
@@ -56,7 +56,7 @@
 | `--dsw-alias-border-l3` | 1 | 玻璃(1) | 1098 |  |
 | `--dsw-alias-brand-primary` | 3 | 玻璃(3) | 1106, 1210, 1547 |  |
 | `--dsw-alias-brand-text` | 3 | 玻璃(3) | 1107, 1211, 1548 |  |
-| `--dsw-alias-button-elevated-fill` | 4 | 玻璃(4) | 257, 358, 1628, 3132 | 抬高按钮实色（侧栏「新建会话」等） |
+| `--dsw-alias-button-elevated-fill` | 4 | 玻璃(4) | 257, 358, 1628, 3174 | 抬高按钮实色（侧栏「新建会话」等） |
 | `--dsw-alias-button-floating-fill` | 3 | 玻璃(3) | 275, 371, 823 |  |
 | `--dsw-alias-button-floating-hover` | 1 | 玻璃(1) | 824 |  |
 | `--dsw-alias-button-ghost-active-fill` | 2 | 玻璃(2) | 278, 374 |  |
@@ -88,12 +88,12 @@
 | `--dsw-alias-scrollbar-hover-l1` | 2 | 玻璃(2) | 583, 594 |  |
 | `--dsw-alias-scrollbar-hover-l2` | 2 | 玻璃(2) | 584, 595 |  |
 | `--dsw-alias-state-business-primary` | 3 | 玻璃(3) | 1105, 1209, 1552 |  |
-| `--dsw-alias-turn-trigger-bg` | 3 | 玻璃(3) | 666, 676, 3143 |  |
-| `--dsw-alias-turn-trigger-bg-hover` | 3 | 玻璃(3) | 669, 679, 3144 |  |
+| `--dsw-alias-turn-trigger-bg` | 3 | 玻璃(3) | 666, 676, 3185 |  |
+| `--dsw-alias-turn-trigger-bg-hover` | 3 | 玻璃(3) | 669, 679, 3186 |  |
 | `--dsw-mask-blur` | 1 | 玻璃(1) | 572 |  |
 | `--dsw-specific-bubble` | 4 | 玻璃(2) + 无门控(2) | 543, 553, 990, 1004 |  |
 | `--dsw-specific-input-major` | 2 | 玻璃(2) | 540, 550 |  |
-| `--dsw-specific-selector` | 1 | 玻璃(1) | 3133 |  |
+| `--dsw-specific-selector` | 1 | 玻璃(1) | 3175 |  |
 | `--dsw-specific-sidebar-fill` | 4 | 壁纸(4) | 223, 344, 432, 1027 | 侧栏填充（宿主 Mica/深色主题各有一份） |
 | `--dsw-specific-sidebar-nav-item-active` | 2 | 玻璃(2) | 1538, 1598 |  |
 | `--dsw-specific-sidebar-nav-item-hover` | 2 | 玻璃(2) | 1539, 1599 |  |

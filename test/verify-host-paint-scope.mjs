@@ -80,14 +80,18 @@ const qualified = sels.filter((s) => s.includes(GATE));
   //（**实测**：那时 H0 报"模板长度 1130572 字符" = 整份 bundle）。
   const startMatch = /^\s*const CSS = `([^`]*)`;/m.exec(SRC);
   const region = startMatch ? startMatch[1] : '';
-  // 允许转义反引号（奇数个反斜杠前缀），其余一律视为截断风险。
-  const rawBackticks = [...region.matchAll(/(^|[^\\])((?:\\\\)*)`/g)].length;
-  const mutatedRegion = region + '\n  /* 反引号 ` 注入 */';
-  const caughtBacktick = [...mutatedRegion.matchAll(/(^|[^\\])((?:\\\\)*)`/g)].length > rawBackticks;
-  check('H0 注入的 CSS 模板内没有裸反引号（注释里写 markdown 反引号会截断模板，让样式表护栏读到空串）',
-    region.length > 1000 && rawBackticks === 0 && caughtBacktick,
-    `模板长度 ${region.length} 字符 · 裸反引号 ${rawBackticks}` +
-    ` · 负对照 注入一个反引号后被抓到 ${caughtBacktick ? 1 : 0}/1`);
+  // ⚠️ 这里**不许**断言"提取到的模板里没有裸反引号"：抽取正则本身就是 `[^`]*`，该断言对
+  // 任何输入恒真（数学恒等式）；"注入一个反引号后被抓到 1/1"也只是拿测试自己刚写下的串跟同一段
+  // 正则比（C3）。真正会失真的量是**抽取长度**，两个方向都要红：
+  //   ① 裸反引号**提前终止**模板字面量 ⇒ 抽取结果骤短；
+  //   ② 结束锚失配、切片一路吃到文件尾 ⇒ 结果是整份 bundle（实测那种"读到 bundle"是
+  //      1130572 字符）。
+  // 实测 CSS 本体 208118 字符（lib/client.js），上下限各留余量。
+  const CSS_FLOOR = 1000;
+  const CSS_CEIL = 400000;
+  check('H0 CSS 模板抽取完整（裸反引号 ⇒ 提前截断骤短；结束锚失配 ⇒ 吃到文件尾）',
+    region.length > CSS_FLOOR && region.length < CSS_CEIL,
+    `模板长度 ${region.length} 字符（应落在 ${CSS_FLOOR}–${CSS_CEIL} 之间）`);
 }
 
 // 负对照：把**某条真实选择器**（不是注释）里的状态属性删掉，同一判定必须报出未限定。

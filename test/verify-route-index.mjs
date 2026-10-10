@@ -53,9 +53,14 @@ check('每个路由模块的路由都出现在索引里',
 const uncoveredNow = routes.filter((r) => !r.mentions).map((r) => r.path);
 const expectedZero = uncoveredNow.length ? uncoveredNow.map((p) => '`' + p + '`').join('、') : '（无）';
 const zeroLine = text.split('\n').find((l) => l.startsWith('**零提及')) || '';
-check('索引的"零提及"行与实际计算一致', zeroLine.includes(expectedZero),
+// 判据提成命名函数，让阳性（真文档行）与阴性（构造的漂移行）走**同一条判据**：
+// 原对照是 `X.replace(a,b)` 之后在结果里再找 `a` —— 对任何输入恒真，零鉴别力。
+const zeroLineMatches = (line) => line.includes(expectedZero);
+check('索引的"零提及"行与实际计算一致', zeroLineMatches(zeroLine),
   '实际零提及 ' + uncoveredNow.length + ' 条');
-check('负对照：零提及行被改动会被判不一致', !zeroLine.replace(expectedZero, '`/__nope__`').includes(expectedZero));
+check('负对照：零提及行被改动会被同一条判据判不一致',
+  zeroLineMatches('**零提及**：`/__nope__`') === false && zeroLineMatches('') === false,
+  `零提及行 ${zeroLine ? '在' : '缺失'}`);
 
 console.log('\n② 循环注册：一个 register 字面量产出多条路由时必须逐条列出');
 {
@@ -83,9 +88,8 @@ console.log('\n③ 路由模块（lib/routes/*.js）不漏进索引');
     modules.map((m) => m.rel + '(' + m.routes.length + ')').join(' ') || '（还没有路由模块）');
   check('没有孤儿模块（文件在、apply 里却没有调用）', orphanModules.length === 0,
     orphanModules.map((m) => m.rel).join(' ') || '全部有调用点');
-  // 负对照：解析器认得出"没被调用"的模块 —— 构造一个真实存在但没被 import 的导出名
-  check('负对照：未注册的导出不会凭空出现在索引里',
-    !routes.some((r) => r.src === 'lib/routes/nope.js'));
+  // （原负对照"索引里没有 lib/routes/nope.js"断言的是一个**不可能存在的名字** ⇒ 恒真；
+  //   域非空已由上面 :82 的"modules 非空 + 索引里有来自路由模块的路由"地板守住，故删除。）
 }
 
 console.log('\n④ context 契约没有死声明');

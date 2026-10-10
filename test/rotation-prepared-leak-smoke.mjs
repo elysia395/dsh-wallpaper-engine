@@ -567,7 +567,9 @@ await runScenario('C. 卸载时收掉 staged iframe 与在途准备', {
   check('准备中的 staging iframe 已在 body 上', t.stagingDivs().length === 1 && !!staged);
 
   check('捕获到插件 cleanup（卸载路径可测）', t.cleanups.length > 0, 'cleanups=' + t.cleanups.length);
-  for (const c of t.cleanups) { try { c(); } catch { /* ignore */ } }
+  // 模拟卸载：cordis 的卸载语义是跑**全部** fiber disposer。不吞异常：disposer 抛错就成了
+  // 「没释放也没人知道」，必须让它在守卫里可见（与兄弟场景的写法一致）。
+  t.cleanups.forEach((c) => c());
 
   check('卸载后 staged iframe 被释放（导航到 about:blank）',
     String(staged.src) === 'about:blank', 'src=' + staged.src);
@@ -2011,6 +2013,18 @@ await runScenario('S1. 主题随壁纸：判决落在媒体层建好之后（不
       + ' loads=' + (snap && snap.video && snap.video.__loads) + '→' + (finalVideo && finalVideo.__loads));
   check('   负对照（同一条判据，换 src）：把期望换成那一层里没有的媒体 ⇒ 判不合格',
     !themeWriteLandsOnLayer(snap, 'l1', '/wallpaper-engine/media/nope'), 'src=' + (snap && snap.src));
+  // 同一条共享判据的牙齿：这一跳真的把媒体层换掉了。**不许**现场新建 `{ layer: {}, video: {} }`
+  // 喂给判据：字面量对真节点的同一性永远不可能为真 —— 恒红的负对照证明不了判据分得清节点身份。
+  // 这里喂**换壁纸之前**的真实快照，视频实参取它自己的 `<video>`（同一个元素 ⇒ 判据里
+  // `snap.video === video` 这半项不再抢答），于是判决只剩层身份这一项说了算。
+  const priorVideo = before.video;
+  const beforeLayerGone = !!before.layer && before.layer !== finalLayer;
+  const beforeVideoGone = !!before.video && before.video !== finalVideo;
+  check('   负对照（同一条判据，喂换壁纸之前的真实快照）：层已重建 ⇒ 判不合格 —— 判据分得清节点身份',
+    beforeLayerGone && beforeVideoGone && !!priorVideo
+      && !mediaLayerSurvives(before, finalLayer, priorVideo),
+    'layerBefore!==layerAfter: ' + beforeLayerGone + ' videoBefore!==videoAfter: ' + beforeVideoGone
+      + ' ⇐ 判据喂真快照仍判不合格');
 });
 
 // ── S2：一次**纯主题切换**（不换壁纸）不得重建媒体层 ────────────────────────────
@@ -2042,12 +2056,14 @@ await runScenario('S2. 纯主题切换不重建媒体层：节点身份同一个
     videoSrcSets(videoBefore) === 1 && videoBefore.__loads === loadsBefore
       && videoSrcSets(t.themeCalls[0] && t.themeCalls[0].video) === 1,
     'srcSets=' + videoSrcSets(videoBefore) + ' loads=' + loadsBefore + '→' + (videoBefore && videoBefore.__loads));
-  check('   负对照（同一条判据，喂换了节点的合成快照）：判不合格 —— 判据有牙，不是恒真',
-    !mediaLayerSurvives({ layer: {}, video: {} }, layerBefore, videoBefore),
-    'same=1 的合成快照被拒');
-  check('   （正判据用同一条函数）写入那一刻与切换之后是同一个节点',
-    mediaLayerSurvives(t.themeCalls[0], layerAfter, videoAfter),
-    'layer=' + (t.themeCalls[0] && !!t.themeCalls[0].layer));
+  // 同一跳里层与 <video> 都没被重建 ⇒ 同一条共享判据必须判合格。喂合成字面量
+  // （`{ layer: {}, video: {} }`）会把这条判据恒红 —— 那种字面量对真节点的同一性永远不可能为真，
+  // 所以这条只喂真快照；「判据分得清两跳」的负对照在 S1。
+  const priorSnap = t.themeCalls[0] || null;
+  check('   （共享判据的正判据）写入那一刻与切换之后是同一个层、同一个 <video>',
+    mediaLayerSurvives(priorSnap, layerAfter, videoAfter),
+    'layer=' + (priorSnap && priorSnap.layer === layerAfter)
+      + ' video=' + (priorSnap && priorSnap.video === videoAfter));
 });
 
 console.log('');

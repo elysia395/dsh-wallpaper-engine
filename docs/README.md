@@ -148,6 +148,8 @@
 | [audits/P3-11-PLAN.md](./archive/audits/P3-11-PLAN.md) | `WallpaperPicker` 拆分的过程记录（**已完成**：模型 / 模态框 / 属性面板三块都搬走）—— 开工前的事实核对、先决断言清单与收口时的牙齿证明；结论在账本的 `P3-11` 行，判据在守卫本身 |
 | [audits/LOGGING-PLAN.md](./archive/audits/LOGGING-PLAN.md) | 日志分级与提示通道的过程记录（**已完成**：G0 + P1–P5）—— 三档 `error` / `warn` / `info`（默认 `warn`）+ 一条独立的成功提示通道。**机制与不变量已留在 `lib/log.js` / `lib/notice.js` / `lib/routes/diag.js` 的文件头**，判据在 `test/verify-logging.mjs` |
 | [audits/F3-PLAN.md](./archive/audits/F3-PLAN.md) | 字体集文件化的过程记录（**已完成**：阶段 0–4）—— 随包预设 · 两层存储 · 人工切换 · 导入导出。**机制与不变量已留在 `lib/routes/fontsets.js` / `src/fontset-store.js` / `src/fontset-editor.js` / `lib/settings-schema.js` 的文件头**，判据在 `test/verify-fontset.mjs` + `test/fontset-load-smoke.mjs` |
+| [audits/TEST-ANTIPATTERN-AUDIT.md](./archive/audits/TEST-ANTIPATTERN-AUDIT.md) | **测试框架的反模式审计（逐条现状）** —— `test/` 的 72 个 `.mjs`（顶层 57 + `test/tools/` 15）与 2 份夹具按 A1–A4（面向结果编程）/ B1–B4（无意义测试）/ C1–C6（自欺欺人）三族口径逐条过了一遍：每条守什么、**牙齿**（`yes` / `no` / `partial`，即"产品真按它声称守护的方式回归时它会不会红"）如何、现址 `file:line` 在哪。**106 处发现已全部定案**（R 47 / H 33 / D 20 / 不改·声明 5 / 取消 2），未决 0 |
+| [audits/TEST-ANTIPATTERN-FIX-PLAN.md](./archive/audits/TEST-ANTIPATTERN-FIX-PLAN.md) | 同一轮审计的**遗留与风险清单**（收口后重写为"现在还有什么问题"）—— 只剩仍未解决或本机证明不了的项（F4/F5 两个手动工具、harness 与 e2e 的覆盖空洞、M16 只剩正判据、设置夹具是漂移棘轮、`%TEMP%` 里删不掉的探针）+ 需要决定的事 + 复核命令。逐条现状在审计报告里，不在这里重复 |
 
 ### 其它归档
 

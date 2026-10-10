@@ -51,7 +51,7 @@
  *
  * 保存 / 导出的**资产勾选对话框**（ADR-0011 D4，非模态）：三个勾选项各带一行
  * **不勾的后果**说明 —— 不勾字体 ⇒ 回落接收方当前那份；不勾吉祥物 ⇒ 回落内置
- * maid/whale；不勾头像 ⇒ 回落内置默认头像。数值键（开关/尺寸/圆角）恒在 settings 段，
+ * maid/whale/phoebe；不勾头像 ⇒ 回落内置默认头像。数值键（开关/尺寸/圆角）恒在 settings 段，
  * 不受勾选影响。默认值：字体 ✅ / 吉祥物 ✅ / 头像 ❌（D4：头像体积翻倍、与"分享一份
  * 外观配置"关系最弱）。勾选状态是视图态（ctx.assetChecks + onAssetToggle）。
  * **保存与导出都先过这道对话框**（ADR 修订版第③条）：保存 = 名字行 → 勾选 → 「保存预设」；
@@ -117,8 +117,8 @@ function renderGlassPresetsBlock(gp) {
       key: "pa-mascot",
       disabled: !mascotAvailable,
       hint: mascotAvailable
-        ? weT("不勾：吉祥物回落内置立绘（小女仆 / 鲸御姐）")
-        : weT("本机没有自定义立绘 —— 用的是内置小女仆 / 鲸御姐"),
+        ? weT("不勾：吉祥物回落内置立绘（小女仆 / 鲸御姐 / 菲比啾比）")
+        : weT("本机没有自定义立绘 —— 用的是内置小女仆 / 鲸御姐 / 菲比啾比"),
       tooltip: weT("把自定义吉祥物立绘的图片与显示盒一并存进预设（默认勾选）"),
     }),
     switchRow(weT("会话头像"), has("avatar"), (e) => onAssetToggle("avatar", e.target.checked), {

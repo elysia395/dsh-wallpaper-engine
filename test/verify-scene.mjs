@@ -805,14 +805,16 @@ if (token) {
   const src = readHostHalf();
   /** 判据只认代码：调用点沿用短名 `strip`。 */
   const strip = stripComments;
-  const bare = strip(src).match(/req\.destroy\(\)/g) || [];
-  check('D3 全仓 req.destroy() 只允许两处收口（lingerClose / idle 兜底）', bare.length <= 2,
-    '当前 ' + bare.length + ' 处');
+  /** 共享判据：阳性（宿主半全文）与阴性对照（合成样本）都走它。 */
+  const bareDestroyCount = (t) => (t.match(/req\.destroy\(\)/g) || []).length;
+  const bare = bareDestroyCount(strip(src));
+  check('D3 全仓 req.destroy() 只允许两处收口（lingerClose / idle 兜底）', bare <= 2,
+    '当前 ' + bare + ' 处');
   const calls = strip(src).match(/lingerClose\(/g) || [];
   check('D3 每条"收到一半就放弃"的路由都接了 lingerClose（当前 5 条：帧缓存 / 实时帧 / 自定义画面 / 上传 / 设置）',
     calls.length >= 6, '出现 ' + calls.length + ' 次（1 处定义 + 调用点）');
-  check('负对照：裸 req.destroy() 计数判据有牙',
-    (strip("try { req.destroy(); } catch { /* ignore */ }").match(/req\.destroy\(\)/g) || []).length === 1);
+  check('负对照：裸 req.destroy() 计数判据有牙（同一函数吃合成样本 ⇒ 计数 1）',
+    bareDestroyCount(strip("try { req.destroy(); } catch { /* ignore */ }")) === 1);
 }
 // ── Level E: 缓存键单一构造点（结构不变量）──────────────────────────────────
 // 帧缓存键如果每个派生点各拼一遍字面量 ⇒ 升版本
@@ -824,7 +826,9 @@ if (token) {
   //    搬进 `lib/routes/scene-media.js`。本判据守的是"每种缓存各只有一个派生点"这个
   //    **宿主级**不变量，不是"三个派生点都在主文件里"（本文件头 30–31 行的约定）。
   const hostSrc = readHostHalf();
-  const derivations = hostSrc.match(/Buffer\.from\(abs, 'utf8'\)\.toString\('base64url'\)/g) || [];
+  /** 共享判据：阳性（宿主半）与阴性对照（宿主半 + 一条合成派生）共用同一计数函数。 */
+  const base64UrlDerivations = (t) => (t.match(/Buffer\.from\(abs, 'utf8'\)\.toString\('base64url'\)/g) || []).length;
+  const derivations = base64UrlDerivations(hostSrc);
   /**
    * 取一个顶层函数的函数体：起点锚 `function <name>(`，终点锚 `function <nextName>(`。
    * ⚠️ 终点锚**必须真实存在，且缺锚要判红**（返回 null）：此处此前把终点写成
@@ -845,13 +849,13 @@ if (token) {
   check('负对照：终点锚缺失时 fnBody 返回 null（判据有牙，不会静默扫全文）',
     fnBody('function a() {}\n', 'a', 'doesNotExist') === null);
   check('P1-6 每种缓存各只有一个键派生点（当前 3 种：帧 / 场景音频 / 场景视频）',
-    derivations.length === 3,
-    '派生点 ' + derivations.length + ' 处');
+    derivations === 3,
+    '派生点 ' + derivations + ' 处');
   check('P1-6 sceneFrameSlot 复用 sceneFrameCacheKey 且不再自带版本前缀',
     slotBody !== null && slotBody.includes('sceneFrameCacheKey(abs, mtime)') && !slotBody.includes('LIVE_FRAME_KEY_VERSION'),
     'reuse=' + (slotBody !== null && slotBody.includes('sceneFrameCacheKey(abs, mtime)')) + ' versionInSlot=' + (slotBody !== null && slotBody.includes('LIVE_FRAME_KEY_VERSION')));
-  check('P1-6 negative control: 再写一份派生会被数出来',
-    (hostSrc + "\nconst x = Buffer.from(abs, 'utf8').toString('base64url');").match(/Buffer\.from\(abs, 'utf8'\)\.toString\('base64url'\)/g).length === derivations.length + 1);
+  check('P1-6 negative control: 再写一份派生会被同一计数判据数出来',
+    base64UrlDerivations(hostSrc + "\nconst x = Buffer.from(abs, 'utf8').toString('base64url');") === derivations + 1);
 
   // ── 槽位只给唯一产物（反向探针：删掉的死字段不许爬回来）─────────────────────
   // `sceneFrameSlot` 曾返回 `pngPath` / `jpgPath` / `gifPath` / `dir` 与一个 `_vN` 档位后缀，
@@ -1057,12 +1061,14 @@ console.log('Level F — sceneVideo 文件版探测（issue #136）等价 / 读�
   //     "契约丢了"（本文件头第 30–31 行的那条约定：断言"仍实现某契约"要覆盖族目录）。
   {
     const hostHalfSrc = stripComments(readHostHalf());
+    /** 共享判据：阳性（宿主半）与阴性对照（合成变异串）都喂进它。 */
+    const usesUint8Probe = (t) => /extractSceneVideo\(new Uint8Array\(/.test(t);
     check('F 后台探测泵走文件版', /probeSceneVideoFromPkgFile\(job\.abs\)/.test(hostHalfSrc));
     check('F /scene-video 走文件版提取', /await extractSceneVideoFromPkgFile\(abs\)/.test(hostHalfSrc));
     check('F 宿主零残留：readFile(整包) → extractSceneVideo 旧形态',
-      !/extractSceneVideo\(new Uint8Array\(/.test(hostHalfSrc));
-    check('F negative control: 旧形态会被同一判据判出',
-      /extractSceneVideo\(new Uint8Array\(/.test('extractSceneVideo(new Uint8Array(await readFile(abs)))'));
+      !usesUint8Probe(hostHalfSrc));
+    check('F negative control: 旧形态会被同一判据判出（合成变异串 ⇒ true）',
+      usesUint8Probe('extractSceneVideo(new Uint8Array(await readFile(abs)))') === true);
   }
   // ③b 族文件归属：场景内嵌媒资族（`/scene-video` + `/scene-audio`）已搬进
   //     `lib/routes/scene-media.js`（逐条理由见该文件头）。判据钉两件事：

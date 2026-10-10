@@ -12,6 +12,9 @@
  *      旧目录不删、回包用 `effective` 再次问解析链（env 覆盖要能看出来）。
  *   ④ 两处"写死 homedir"的旧缺口：默认上传目录、自定义画面目录（`overrides/`）
  *      —— 它们必须跟着 `pluginDataDir()` 走。
+ *   ⑤ `GET /cache-dir/browse`（设置页「更改」弹出的目录浏览器数据腿）：只列**目录**
+ *      不列文件、条目 `path` 可直接回传问下一级、current/parent 归一化、判不了的
+ *      path（文件 / 不存在）一律 400 —— 不猜、不静默回落根视图。
  *
  * 判据尽量走**公开面**（真 `apply()` + mock webServer + 真请求），因为"某个缓存目录又
  * 长回硬编码"这种事只有端到端才判得干净；剩下够不着的（六个名字是否都串在同一条链上、
@@ -22,7 +25,7 @@
  * 由本文件自己开关 ⇒ 全程不碰真实 `~/.dsh-wallpaper-engine`。
  */
 
-import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, statSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Readable, Writable } from 'node:stream';
@@ -144,11 +147,11 @@ check('A2 只认 POST：GET 出 405（当前值经 /inventory.cacheDir 下发，
     res.__state.status === 400 && /无法在该路径创建目录/.test(String(body.error)),
     body.error);
 }
-// 校验语与实现同源：A3/A5 断的两条文案就是路由模块里声明的那两条（改文案会在这里露头）。
+// 只断行为项：两条 400 文案已由 A3/A5 在**运行时响应**上断过（同上同源），这里再 includes
+// 一次源码字面量只会产生"改了文案就假红"的复述 —— 删掉，保留"不缓存缓存根副本"这条行为项。
 const cacheRouteSrc = readFileSync(join(root, 'lib', 'routes', 'cache-dir.js'), 'utf8');
-check('A6 路由模块声明了这两条 400 文案，且不缓存缓存根的副本（跨族共享可变量须每次现问）',
-  cacheRouteSrc.includes('请输入有效的绝对路径') && cacheRouteSrc.includes('无法在该路径创建目录')
-    && /effective: cacheBaseDir\(\)/.test(cacheRouteSrc)
+check('A6 路由模块不缓存缓存根的副本（跨族共享可变量须每次现问）',
+  /effective: cacheBaseDir\(\)/.test(cacheRouteSrc)
     && !/const cacheDir = cacheBaseDir\(\)/.test(cacheRouteSrc));
 
 // ── B. 解析顺序：env → config → <数据目录>/cache ─────────────────────────────
@@ -311,6 +314,60 @@ check('D8 默认上传目录 / 自定义画面目录都改成 pluginDataDir() �
   /function defaultUploadDir\(\) \{ return join\(pluginDataDir\(\), 'uploads'\); \}/.test(hostSrc)
     && /function customFrameDir\(\) \{ return ensureDirOnce\(join\(pluginDataDir\(\), 'overrides'\)\); \}/.test(hostSrc)
     && !/DEFAULT_UPLOAD_DIR/.test(hostSrc));
+
+// ── E. GET /cache-dir/browse（「更改」弹出目录浏览器的数据腿） ────────────────
+// 只读：列**目录名**（不列文件、不给内容）；条目 path 原样回传问下一级，客户端零路径拼接。
+const allRealDirs = (entries) => entries.every((d) => {
+  try { return statSync(d.path).isDirectory(); } catch { return false; }
+});
+section('E. GET /cache-dir/browse 的形状与校验');
+const BROWSE_URL = '/wallpaper-engine/cache-dir/browse';
+const browseRoute = routes.find((r) => r.kind === 'prefix' && r.path === BROWSE_URL);
+check('E1 路由已注册（prefix 形态，与带查询串的 GET 先例同口径）',
+  !!browseRoute && typeof browseRoute.handler === 'function');
+check('E2 只认 GET：POST 出 405（落盘迁移在 POST /cache-dir，这条只读）',
+  (await runHandler(browseRoute, fakeReqBody(BROWSE_URL, 'POST', {}))).__state.status === 405);
+{
+  const res = await runHandler(browseRoute, fakeReq(BROWSE_URL, 'GET'));
+  const o = json(res);
+  check('E3 根视图（不带 path）：列存在的盘（至少一个）+ 主目录 + 无 parent',
+    res.__state.status === 200 && Array.isArray(o.dirs) && o.dirs.length >= 1
+      && typeof o.home === 'string' && o.home.length > 0
+      && o.parent === null && o.current === '',
+    (o.dirs || []).length + ' 个盘根');
+  check('E4 根视图条目形状 { name, path }，且 path 都是真目录',
+    o.dirs.every((d) => d && typeof d.name === 'string' && typeof d.path === 'string')
+      && allRealDirs(o.dirs));
+}
+{
+  const base = join(ISO, 'browse');
+  mkdirSync(join(base, 'beta'), { recursive: true });
+  mkdirSync(join(base, 'alpha'), { recursive: true });
+  writeFileSync(join(base, 'plain.txt'), 'x');
+  const res = await runHandler(browseRoute,
+    fakeReq(BROWSE_URL + '?path=' + encodeURIComponent(base), 'GET'));
+  const o = json(res);
+  check('E5 列子目录：只列目录不列文件、字典序、条目 path 可直接回传',
+    res.__state.status === 200 && o.dirs.length === 2
+      && o.dirs[0].name === 'alpha' && o.dirs[1].name === 'beta'
+      && norm(o.dirs[0].path) === norm(join(base, 'alpha')),
+    JSON.stringify(o.dirs));
+  check('E6 current 归一化、parent 指向上一级',
+    norm(o.current) === norm(base) && norm(o.parent) === norm(dirname(base)));
+  const fileRes = await runHandler(browseRoute,
+    fakeReq(BROWSE_URL + '?path=' + encodeURIComponent(join(ISO, 'not-a-dir.txt')), 'GET'));
+  check('E7 path 指向文件 ⇒ 400（不能当目录浏览）',
+    fileRes.__state.status === 400 && typeof (json(fileRes) || {}).error === 'string');
+  const missRes = await runHandler(browseRoute,
+    fakeReq(BROWSE_URL + '?path=' + encodeURIComponent(join(ISO, 'no-such-dir')), 'GET'));
+  check('E8 不存在的路径 ⇒ 400（不猜、不静默回落根视图）',
+    missRes.__state.status === 400);
+}
+// E3 的负对照：E4 用的判据函数喂坏输入必须翻红 —— 否则解析器静默返回空集时
+// 正断言恒绿（本文件对允许清单/棘轮的既有口径）。
+check('E9 negative control: E4 的条目判据会红（列表混入文件时）',
+  allRealDirs([{ name: 'ok', path: join(ISO, 'browse', 'alpha') }])
+    && !allRealDirs([{ name: 'x', path: join(ISO, 'not-a-dir.txt') }]));
 // ── 收尾 ────────────────────────────────────────────────────────────────────
 if (typeof dispose === 'function') dispose();
 delete process.env.DSH_WE_DATA_DIR;

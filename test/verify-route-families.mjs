@@ -81,6 +81,11 @@ try {
 } catch (err) {
   check('路由枚举可用（buildIndex() 未抛）', false, String((err && err.message) || err));
 }
+// 覆盖面地板必须在分支**外面**：枚举静默退化成空表时（`buildIndex()` 不抛错 ——
+// 见 test/tools/host-route-index.mjs:173 `if (!existsSync(dir)) return [];`），
+// 下面整块会被跳过，届时只有这条能红；否则"没有大族，通过"会盖掉"枚举没了"。
+check('覆盖面：路由枚举非空（buildIndex() 返回了路由表，而非静默空表）', routes.length > 0,
+  `实测 ${routes.length} 条`);
 if (routes.length) {
   const families = groupFamilies(routes);
   const maxSize = families[0][1].length;

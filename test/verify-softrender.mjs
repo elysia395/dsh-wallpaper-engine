@@ -50,8 +50,11 @@
 //   P1 the exact string the LOCAL supreium-headless-gl software rasteriser
 //      reports (RENDERER "ANGLE" + VENDOR "stack-gl", no debug-renderer-info)
 //      is detected — the reason the vendor string joins the match.
-//   I1 a non-browser-ish sandbox WITHOUT `location` / URLSearchParams does not
-//      throw and still detects (typeof guards hold).
+//   I1 with no URLSearchParams the regex fallback reads and decodes the override
+//      (%6Fff → off) on a software renderer, and I2 does the same through
+//      `new URLSearchParams(search)`; I3 is the positive control (same renderer,
+//      no override → hook set), so the pair proves the guard actually runs
+//      instead of the hook being absent for every input.
 //
 // Usage: node test/verify-softrender.mjs
 import { readFileSync } from 'node:fs';
@@ -130,7 +133,6 @@ function loadClient({
   unmasked = true,
   webgl = true,
   loseContext = true,
-  provideLocation = true,
   provideURLSearchParams = true,
 } = {}) {
   const stats = { getContext: 0, kinds: [], loseContext: 0, contextCreations: 0 };
@@ -211,9 +213,10 @@ function loadClient({
     React,
     navigator: { userAgent: 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) Chrome/120 mock' },
   };
-  if (provideLocation) {
-    sandbox.location = { search, href: 'http://127.0.0.1:43120/' + search, pathname: '/' };
-  }
+  // Every scenario models a page, so `location` is always present (it used to be
+  // gated behind a `provideLocation` switch that no scenario could meaningfully
+  // turn off: the manual-override branch below is unreachable without it).
+  sandbox.location = { search, href: 'http://127.0.0.1:43120/' + search, pathname: '/' };
   if (provideURLSearchParams) sandbox.URLSearchParams = URLSearchParams;
 
   vm.createContext(sandbox);
@@ -304,7 +307,6 @@ function main() {
     // Second element is the RAW source substring (the regex source escapes "(").
     const required = [
       ['SwiftShader', 'swiftshader'],
-      ['Software', 'software'],
       ['llvmpipe', 'llvmpipe'],
       ['softpipe', 'softpipe'],
       ['Microsoft Basic Render', 'microsoft basic render'],
@@ -314,6 +316,14 @@ function main() {
     check('S1 SOFT_RENDER_RE carries every required pattern (' + required.map(([l]) => l).join(', ') + ') with /i',
       !!m && /i/.test(m[2] || '') && missing.length === 0,
       'regex=' + (m ? '/' + src + '/' + m[2] : '(not found)') + ' missing=' + (missing.map(([l]) => l).join(',') || 'none'));
+    // Coverage floor for the INDEPENDENT `software|` alternation, not the "Software"
+    // wording it shares with `angle \(software`: a bare substring test is satisfied by
+    // the ANGLE branch alone, so deleting the standalone branch used to leave S1 green.
+    // The branch is matched only where it can actually stand alone (start of the regex
+    // source, or right after an alternation bar) and must be followed by a bar/EOL.
+    check('S1 the standalone software-renderer branch is present in the extracted regex source',
+      /(^|\|)software(?=\||$)/.test(src),
+      'src=' + (src || '(not found)'));
   }
 
   // ── S2: manual override token + both renderer read paths
@@ -539,16 +549,48 @@ function main() {
       'apply threw: ' + (thrown || '(none)') + ' · hook=' + JSON.stringify(c.hook()));
   }
 
-  // ── I1: non-browser-ish environment (no location / no URLSearchParams) ────
+  // ── I1/I2/I3: the two `typeof` guards around the manual override ──────────
+  // The built detection wraps the override in two guards:
+  //   location present  → read location.search
+  //   URLSearchParams present → new URLSearchParams(search)
+  //   else                    → /[?&]we-glassfallback=([^&]*)/ fallback
+  // Every scenario below uses the SAME software renderer (Google SwiftShader),
+  // whose detection verdict is "hook set". Suppressing the hook therefore proves
+  // that the override was read AND understood, and taking `URLSearchParams` away
+  // can only change the answer through the regex fallback branch.
   {
     const c = loadClient({
-      provideLocation: false,
       provideURLSearchParams: false,
+      search: '?we-glassfallback=%6Fff',
       renderer: 'Google SwiftShader',
     });
     let thrown = null;
     try { c.apply(); } catch (e) { thrown = e && e.message; }
-    check('I1 sandbox WITHOUT location / URLSearchParams: no throw, detection still runs (typeof guards hold)',
+    check('I1 no URLSearchParams → the regex fallback reads + decodes the override (%6Fff → off) and suppresses the SwiftShader verdict, so that branch really executed',
+      !thrown && c.hook() === null,
+      'apply threw: ' + (thrown || '(none)') + ' · hook=' + JSON.stringify(c.hook()));
+  }
+  {
+    const c = loadClient({
+      provideURLSearchParams: true,
+      search: '?we-glassfallback=off',
+      renderer: 'Google SwiftShader',
+    });
+    let thrown = null;
+    try { c.apply(); } catch (e) { thrown = e && e.message; }
+    check('I2 with URLSearchParams the same override is read through new URLSearchParams(search) → hook absent',
+      !thrown && c.hook() === null,
+      'apply threw: ' + (thrown || '(none)') + ' · hook=' + JSON.stringify(c.hook()));
+  }
+  {
+    const c = loadClient({
+      provideURLSearchParams: true,
+      search: '',
+      renderer: 'Google SwiftShader',
+    });
+    let thrown = null;
+    try { c.apply(); } catch (e) { thrown = e && e.message; }
+    check('I3 (positive control for I1/I2) the same renderer with no override → hook set, so those two checks are not "no hook for any input"',
       !thrown && c.hook() === '1',
       'apply threw: ' + (thrown || '(none)') + ' · hook=' + JSON.stringify(c.hook()));
   }

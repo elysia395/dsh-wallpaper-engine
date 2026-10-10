@@ -311,11 +311,20 @@ async function main() {
   findButton(tree, 'we-picker__btn', '暂停').props.onClick(); // pause
   await tick(20);
   video._playRejects = true; // browser refuses to start it (policy / codec)
+  // 数的是这次拒绝触发的**增量**，不是本测试自己累积的 _playCalls 历史
+  // （把「前面已经成功 play 过几次」当成被拒后的重试就会放过"根本没重试"）。
+  const retriedAfterRefusal = (before, after) => after - before >= 1;
+  const callsBeforeRefusal = video._playCalls;
   findButton(renderTree(), 'we-picker__btn', '播放').props.onClick(); // resume attempt
   await tick(30);
   tree = renderTree();
   const callsAfterRefusal = video._playCalls;
-  check('B3 a refused play() is retried (not silently swallowed)', callsAfterRefusal >= 3, 'play() calls=' + callsAfterRefusal);
+  check('B3 a refused play() is retried (not silently swallowed)',
+    retriedAfterRefusal(callsBeforeRefusal, callsAfterRefusal),
+    'retries after refusal=' + (callsAfterRefusal - callsBeforeRefusal)
+      + ' (play() calls ' + callsBeforeRefusal + '→' + callsAfterRefusal + ')');
+  check('B3 负对照：同一条判据对「拒绝后一次都没重试」（增量 0）会当场红',
+    !retriedAfterRefusal(callsAfterRefusal, callsAfterRefusal));
   check('B4 the element is still paused, so the UI must NOT claim 「播放中」',
     video.paused === true && toggleLabel(tree) === '播放', 'label=' + toggleLabel(tree));
   check('B5 the refusal reason is surfaced to the user',
