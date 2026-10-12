@@ -646,6 +646,10 @@ function startLiveWatch(frame, wid) {
     firstFrame: false, stall: 0, resumed: false, heldPaused: 0, rearmed: false,
   };
   liveLog("watch-start", "wid=" + watch.wid + " 预算=" + watch.budget + "ms " + liveStateBrief());
+  // Linux 遮挡轮询：只对 scene 渲染页开（遮挡桥由宿主注入 scene-live HTML；web 壁纸
+  // 是严格沙箱第三方页，把窗口几何投给它是泄漏也是噪声）。P0 仅 X11 宿主有数据，
+  // 其余平台轮询只会拿到 backend=none ⇒ clearOcclusion，无害。
+  if (selection.type === "scene") startOcclusionPolling(frame);
   watch.timer = setInterval(() => {
     if (!frame.isConnected) { liveLog("watch-stop", "iframe 已从文档移除", "info", true); stopLiveWatch(); return; }
     // 先读统计、后下发控制：虽然 applyLiveControls 已去重（只在变化时
@@ -809,6 +813,7 @@ function stopLiveWatch() {
   try { clearInterval(liveWatch.timer); } catch { /* ignore */ }
   stopUiFpsProbe();
   stopMediaSync(liveWatch.frame);
+  stopOcclusionPolling(); // 看护停 ⇒ 轮询停（1Hz 心跳断了渲染器会自清遮挡，别留孤儿定时器）
   liveWatch = null;
   // 只重置标志；音频互斥由调用方收敛 —— 重建（fps 切换）时若在这里拉起
   // 外置 <audio>，新一帧 live 又要立刻把它停掉，中间会闪一下双声道。
