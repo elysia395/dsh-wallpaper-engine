@@ -108,6 +108,46 @@ function loadUpstream() {
     mkdirSync(dirname(a.out), { recursive: true });
     copyFileSync(a.src, a.out);
   }
+  // 3c-2c. **曝光打点重放**：本仓库对 vendored 渲染器有一处手改 —— `window.__wp={…}`
+  // 字面量后追加 `window.__weSetOcclusion` 曝流行（遮挡桥的唯一入口，见
+  // docs/wip/LINUX-OCCLUSION.md §5.1）。上游刷新会把它抹掉，这里同步后自动重放；
+  // 找不到锚点直接 exit 1（防静默失联 —— verify-scene-live-occlusion Level A 是
+  // 第二道网，但那要等下次跑 verify 才红）。
+  const rendererAsset = assets.find((a) => /assets\/renderer-.*\.js$/.test(a.out));
+  if (!rendererAsset) {
+    console.error('[sync-webwallgl] 产物里没有 assets/renderer-*.js —— 上游结构变化？');
+    process.exit(1);
+  }
+  {
+    const out = rendererAsset.out;
+    let code = readFileSync(out, 'utf8');
+    if (!code.includes('__weSetOcclusion')) {
+      const anchor = 'window.__wp={';
+      const at = code.indexOf(anchor);
+      if (at === -1) {
+        console.error('[sync-webwallgl] 找不到 `window.__wp={` 锚点 —— 上游控制器形态变化，曝光打点需人工重打');
+        process.exit(1);
+      }
+      // 从锚点起做花括号配平，找到控制器字面量的收尾 `}`，打点插在其后。
+      let depth = 0, end = -1;
+      for (let i = at + anchor.length - 1; i < code.length; i++) {
+        const ch = code[i];
+        if (ch === '{') depth++;
+        else if (ch === '}') {
+          depth--;
+          if (depth === 0) { end = i + 1; break; }
+        }
+      }
+      if (end === -1) {
+        console.error('[sync-webwallgl] `window.__wp={…}` 字面量配平失败 —— 打点需人工重打');
+        process.exit(1);
+      }
+      const exposure = ';window.__weSetOcclusion=function(t){try{window.__wp.setOcclusion(t)}catch(e){}};';
+      code = code.slice(0, end) + exposure + code.slice(end);
+      writeFileSync(out, code);
+      console.log('  ↻ 已重放遮挡曝光打点（window.__weSetOcclusion）');
+    }
+  }
   // web-shim.js 原文：宿主把它注入**网页壁纸**的 HTML 响应（见 lib/index.js 的
   // /scene-files 路由）—— 严格沙箱下渲染页与壁纸 iframe 不同源，shim 只能这样
   // 进入作者页面（渲染页内的 ?raw 版本是给 WallpaperEM 的注入路径用的）。
