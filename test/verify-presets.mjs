@@ -1818,3 +1818,6 @@ if (failed) {
   process.exit(1);
 }
 console.log(`ALL PRESET SNAPSHOT CHECKS PASSED (${passed})`);
+// 与 verify-scene-live-occlusion.mjs 同款兜底：本段加载 client bundle 后有驻留句柄
+// （实测断言全过后进程不退），显式退出把链交给下一棒。
+process.exit(0);
