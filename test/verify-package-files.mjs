@@ -208,9 +208,9 @@ async function main() {
   }
 
   // ── P4: 声明的依赖必须有消费者 (防"死声明") ──────────────────────────────────
-  // 本仓库的运行时策略是**自带副本**（`lib/webwallgl/` 这类 vendored 目录），因此
-  // package.json 里每一条 `dependencies` 都必须在 lib/ 里真的被 import ——
-  // 否则它只是给用户装了一个永远不会被 require 的包。历史上这里真有这么一条：
+  // package.json 里每一条 `dependencies` 都必须在 lib/ 里真的被 import（或经
+  // `createRequire(...).resolve()` 定位包目录 —— `webwallgl` 是浏览器端引擎，宿主不加载它，
+  // 只按文件直出）—— 否则它只是给用户装了一个永远不会被用到的包。历史上这里真有这么一条：
   // 代码只 import 一份相对路径的自带副本，裸包名在 link: 安装下根本解析不到；
   // 那份副本与它的唯一消费者已一并退役（见 `test/verify-retired-lines.mjs` ④）。
   // 注意口径：这里只断言"声明有消费者"，**不断言可达**（可达性属 P2-12 的活）。
@@ -225,7 +225,7 @@ async function main() {
     // （`foo-extra` 与 `foo` 不是同一个包）不算消费者。声明名本身是内置模块或相对路径时不算：那种声明在 Node
     // 解析下拿不到包（内置模块名命中的是内置模块，不是装进来的包）。
     const consumerRe = (dep) => new RegExp(
-      '(?:from\\s+|import\\s*\\(\\s*|require\\s*\\(\\s*)[\'"]'
+      '(?:from\\s+|import\\s*\\(\\s*|require\\s*\\(\\s*|\\.resolve\\s*\\(\\s*)[\'"]'
       + dep.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?:/[\'"]|[\'"])');
     const consumes = (dep, src) => !dep.startsWith('.') && !dep.startsWith('/')
       && !(dep.startsWith('node:') || BUILTIN_ROOTS.has(specRoot(dep)))
@@ -243,7 +243,9 @@ async function main() {
       [consumes(fake, 'import x from "' + fake + '"'), 'positive: from'],
       [consumes(fake, 'const x = require("' + fake + '")'), 'positive: require'],
       [consumes(fake, 'const m = await import("' + fake + '")'), 'positive: dynamic import'],
+      [consumes(fake, 'createRequire(import.meta.url).resolve("' + fake + '")'), 'positive: require.resolve'],
       [!consumes(fake, 'import x from "' + fake + '-extra"'), 'negative: near-miss name'],
+      [!consumes(fake, 'createRequire(import.meta.url).resolve("' + fake + '-extra")'), 'negative: near-miss resolve'],
       [!consumes(fake, 'import x from "./' + fake + '.mjs"'), 'negative: relative specifier'],
       [!consumes('./local.mjs', "import x from './local.mjs'"), 'negative: relative declaration'],
       [!consumes('node:path', 'import p from "node:path"'), 'negative: node: builtin'],
@@ -256,8 +258,8 @@ async function main() {
   }
 
   // ── P5: 构建 / 校验链保持"零裸依赖"(CI 不装依赖的前提) ───────────────────────
-  // .github/workflows/verify.yml 故意**不跑 npm ci**：build + verify + smoke 只用
-  // node: 内置模块与相对路径，因此整条流水线对 registry / peer 解析完全免疫。
+  // .github/workflows/verify.yml 只装运行期依赖（`npm ci --omit=peer`）：build + verify + smoke
+  // 脚本本身只用 node: 内置模块与相对路径，因此整条流水线对 peer 解析免疫。
   // 这是一条真不变量，不是偶然 —— 一旦有人在守卫里 import 一个裸包，CI 会红在
   // "command not found" 而不是给出可读原因，所以在这里显式钉住。
   {

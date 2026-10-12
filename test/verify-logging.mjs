@@ -53,7 +53,7 @@ const SINKS = ['lib/log.js', 'lib/notice.js'];
 /** 不在这条判据扫描面里的东西及其理由（口径写在判据旁，不靠"约定"）。 */
 const NOT_OURS = [
   [/^lib\/client\.js$/, '构建产物（源在 src/**，由 build-client 内联生成）'],
-  [/^lib\/webwallgl\//, '上游 vendored 渲染页（自带 WebWallGL 的 console logger）'],
+  [/^lib\/webwallgl\//, '浏览器端渲染页（诊断经 `/diag` 像素上报，不经宿主日志）'],
 ];
 
 function walkLib(dir, out = []) {
@@ -262,115 +262,80 @@ function noticeSuccessSilent(src) {
     && levelNamesIn("const X = { 'error': 1, 'warn': 1, 'info': 1 };").length === LEVEL_NAMES.length);
 }
 
-// ── N7 渲染页的级别由**上游产物自己**声明（宿主不再需要本地补丁）──────────────
-// `/diag` 分档的主路径是发送端自带的 `&lvl=`：上游 WebWallGL 的 `diag-level.ts` 负责声明
-// （issue #13），宿主 `lib/routes/diag.js` 只读不猜 —— 三档优先、未知 / 缺失才回落模式表
-// （那条回落由 R5 用真请求钉住）。本判据把两件事同时钉住：「产物自带级别」与「补丁已清干净」：
-// 少了上游实现，渲染页就退回"宿主靠文案猜"；而产物一旦被本地改过，`/scene-live` 的 immutable
-// 缓存会让同一 URL 继续发旧字节 —— 两种坏法都只有在这里能当场看见。
-/** 产物自带级别：`/diag` 上报模板带 `lvl=`，且三档字面量齐（宿主按这三个值认档）。 */
+// ── N7 渲染页的 `/diag` 上报自带级别 ─────────────────────────────────────────
+// `/diag` 分档的主路径是发送端自带的 `&lvl=`：引擎（npm `webwallgl` 的 diag-level）给每条诊断
+// 声明级别，渲染页 lib/webwallgl/renderer.js 原样带进上报 URL；宿主 `lib/routes/diag.js` 只读不猜
+// —— 三档优先、未知 / 缺失才回落模式表（那条回落由 R5 用真请求钉住）。渲染页丢了 `lvl=`，
+// 宿主就退回"靠文案猜"。
+/** 上报自带级别：`/diag` 上报模板带 `lvl=`，且三档字面量齐（宿主按这三个值认档）。 */
 function rendererDeclaresLevel(src) {
   return src.includes('/diag?msg=') && /&lvl=\$\{[A-Za-z_$][\w$]*\}/.test(src)
     && LEVEL_NAMES.every((l) => src.includes('"' + l + '"'));
 }
-/** 本地补丁残留：产物里的补丁标记 / 补丁后缀名，以及同步脚本里的补丁函数与开关。 */
-function localPatchResidue(assets, syncSrc) {
-  const out = [];
-  for (const f of assets) {
-    if (read(f).includes('__weLvl')) out.push(f + ' 带补丁标记');
-    if (/-welvl\d*\.js$/.test(f)) out.push(f + ' 带补丁后缀');
-  }
-  const code = stripComments(syncSrc);
-  // 这是**零残留**探针：谁把补丁函数或
-  // `--patches-only` 接回来，这里就红 —— 它不读"工具里有没有这些字符串"，而是断言它们不在。
-  for (const mark of ['applyLocalPatches', 'applyDiagLevelPatch', 'PATCH_SUFFIX', 'patches-only']) {
-    if (code.includes(mark)) out.push('sync-webwallgl.mjs 仍有 ' + mark);
-  }
-  return out;
-}
 {
-  const assets = LIB_FILES.filter((f) => /^lib\/webwallgl\/assets\/.*\.js$/.test(f));
-  const declared = assets.filter((f) => rendererDeclaresLevel(read(f)));
-  const residue = localPatchResidue(assets, read('test/tools/sync-webwallgl.mjs'));
-  check('N7 渲染页产物自带级别声明：`/diag` 上报带 `lvl=`，且 error/warn/info 三档字面量齐',
-    assets.length >= 1 && declared.length === 1,
-    '命中=' + declared.length + '/' + assets.length + '（' + (declared[0] || '无') + '）');
-  check('N7 本地补丁已清干净：产物无 `__weLvl` / `-welvl1` 后缀，同步脚本无补丁函数与 `--patches-only`',
-    residue.length === 0, residue.length ? residue.join(' | ') : '产物 ' + assets.length + ' 个 + 同步脚本干净');
+  const page = 'lib/webwallgl/renderer.js';
+  check('N7 渲染页的 `/diag` 上报带 `lvl=`，且 error/warn/info 三档字面量齐',
+    rendererDeclaresLevel(stripComments(read(page))), page);
   // 合成输入用的三档字面量 + 两种上报 URL（带 / 不带 `lvl=`）—— 同一个判据函数。
   const THREE = ' "error" "warn" "info"';
   const HAS_LVL = 'return `${t}/diag?msg=${x}&lvl=${lv}`}';
-  check('N7 negative control: 缺 `lvl=` / 缺档位字面量 / 带补丁残留 三种坏形态都会被判出',
+  check('N7 negative control: 缺 `lvl=` / 缺档位字面量 两种坏形态都会被判出',
     rendererDeclaresLevel('/diag?msg=x' + THREE) === false
     && rendererDeclaresLevel(HAS_LVL + THREE.slice(0, THREE.lastIndexOf(' "info"'))) === false
-    && rendererDeclaresLevel(HAS_LVL + THREE) === true
-    && localPatchResidue([], 'function applyDiagLevelPatch() {}').length === 1
-    && localPatchResidue([], '// applyDiagLevelPatch 曾是补丁\nconst x = 1;').length === 0
-    && localPatchResidue([], "const PATCHES_ONLY = process.argv.includes('--patches-only');").length === 1);
+    && rendererDeclaresLevel(HAS_LVL + THREE) === true);
 }
 
-// ── N7③ 渲染页的绝对引用 / 构建 rig 的 base / 宿主注册前缀，三者必须对齐 ─────────
-// 事故形态：`sync-webwallgl.mjs` 用 `--base=<BASE_PATH>/` 构建，产物里的**绝对**资源引用
-// （`/wallpaper-engine/scene-live/assets/*`）只有在宿主真把 `${BASE}/scene-live` 注册成路由时
-// 才解析得到。三处各写一份字面量、谁都不核谁 ⇒ 改前缀（或改路由名）时产物与路由**静默分叉**，
-// 症状是渲染页 404 / 白屏，而所有判据仍然全绿。
-// 判据把三方串成一条链：宿主 `BASE`（lib/index.js）→ 宿主注册的 `${BASE}/…` 模板
-// （lib/routes/scene-serve.js）→ 产物的绝对引用（lib/webwallgl/index.html）与 rig 的 `BASE_PATH`。
-// 纯函数：喂四份源码/产物文本，返回问题清单（正判据与四条负对照都调它）。
+// ── N7③ 客户端请求的渲染页 URL / 宿主注册前缀 / 渲染页的资源引用，三者必须对齐 ──────
+// 事故形态：客户端（src/live-layer.js 的 liveRenderUrl）按字面量请求 `/wallpaper-engine/scene-live/index.html`，
+// 只有宿主真把 `${BASE}/scene-live` 注册成路由时才解析得到；渲染页自己（index.html → renderer.js →
+// engine/）一律用**相对**引用，才会跟着这个前缀走。三处各写一份、谁都不核谁 ⇒ 改前缀（或改路由名）时
+// **静默分叉**，症状是渲染页 404 / 白屏，而所有判据仍然全绿。
+// 纯函数：喂四份源码文本，返回问题清单（正判据与负对照都调它）。
 const HOST_BASE_RE = /\bconst\s+BASE\s*=\s*'([^']*)'/;
-const RIG_BASE_RE = /\bconst\s+BASE_PATH\s*=\s*'([^']*)'/;
 const ROUTE_TEMPLATE_RE = /path:\s*`\$\{BASE\}(\/[^`]*)`/g;
-const ABS_REF_RE = /(?:src|href)="(\/[^"]*)"/g;
+const CLIENT_PAGE_RE = /"(\/[^"]*)\/index\.html\?type="/;
+const ABS_REF_RE = /(?:src|href)="(\/[^"]*)"|from\s+"(\/[^"]*)"/g;
 
-function prefixAlignment(hostSrc, routeSrc, rigSrc, htmlSrc) {
+function prefixAlignment(hostSrc, routeSrc, clientSrc, pageSrc) {
   const problems = [];
   const base = (stripComments(hostSrc).match(HOST_BASE_RE) || [])[1] ?? null;
-  const rigBase = (stripComments(rigSrc).match(RIG_BASE_RE) || [])[1] ?? null;
+  const clientPrefix = (stripComments(clientSrc).match(CLIENT_PAGE_RE) || [])[1] ?? null;
   if (base === null) problems.push("抠不到 lib/index.js 的 `const BASE = '…'`");
-  if (rigBase === null) problems.push("抠不到 sync-webwallgl.mjs 的 `const BASE_PATH = '…'`");
-  if (base === null || rigBase === null) return problems;
+  if (clientPrefix === null) problems.push('抠不到 src/live-layer.js 请求的渲染页 URL（`…/index.html?type=`）');
+  if (base === null || clientPrefix === null) return problems;
   const routes = new Set([...stripComments(routeSrc).matchAll(ROUTE_TEMPLATE_RE)].map((m) => base + m[1]));
   if (routes.size === 0) problems.push('宿主路由里找不到 `${BASE}/…` 模板（判据无从对齐）');
-  const refs = [...htmlSrc.matchAll(ABS_REF_RE)].map((m) => m[1]);
-  if (refs.length === 0) problems.push('产物里没有任何绝对引用（这条判据会恒真）');
-  // 引用的**前缀** = BASE + 第一段路径：产物只可能被一个前缀服务，rig 也只会构建一个 base。
-  const prefixes = new Set(refs.map((r) => base + '/' + r.slice(base.length).replace(/^\//, '').split('/')[0]));
-  const unserved = [...prefixes].filter((p) => !routes.has(p));
-  if (unserved.length) problems.push('产物引用了宿主没注册的前缀：' + unserved.join(', '));
-  if (prefixes.size !== 1) {
-    problems.push('产物引用落在多个前缀上（rig 只能构建一个 base）：' + [...prefixes].join(', '));
-  } else if (rigBase !== [...prefixes][0]) {
-    problems.push('rig 的 BASE_PATH=' + rigBase + ' 与产物的引用前缀不一致（产物在 ' + [...prefixes][0] + '）');
-  }
+  if (!routes.has(clientPrefix)) problems.push('客户端请求的渲染页前缀 ' + clientPrefix + ' 宿主没有注册');
+  const abs = [...stripComments(pageSrc).matchAll(ABS_REF_RE)].map((m) => m[1] || m[2]);
+  if (abs.length) problems.push('渲染页用了绝对引用（不随路由前缀走）：' + abs.join(', '));
   return problems;
 }
 {
   const src = {
     host: read('lib/index.js'),
     route: read('lib/routes/scene-serve.js'),
-    rig: read('test/tools/sync-webwallgl.mjs'),
-    html: read('lib/webwallgl/index.html'),
+    client: read('src/live-layer.js'),
+    page: read('lib/webwallgl/index.html') + '\n' + read('lib/webwallgl/renderer.js'),
   };
-  const problems = prefixAlignment(src.host, src.route, src.rig, src.html);
-  check('N7③ 产物绝对引用 / rig 的 base / 宿主注册前缀三者对齐（分叉 ⇒ 渲染页 404 而判据全绿）',
+  const problems = prefixAlignment(src.host, src.route, src.client, src.page);
+  check('N7③ 客户端渲染页 URL / 宿主注册前缀 / 渲染页相对引用三者对齐（分叉 ⇒ 渲染页 404 而判据全绿）',
     problems.length === 0,
     problems.length ? problems.join(' | ')
       : 'BASE=' + ((stripComments(src.host).match(HOST_BASE_RE) || [])[1] || '?')
-        + ' · rig=' + ((stripComments(src.rig).match(RIG_BASE_RE) || [])[1] || '?')
-        + ' · 产物绝对引用 ' + [...src.html.matchAll(ABS_REF_RE)].length + ' 条都落在注册面上');
-  // 负对照：变异喂进**同一条判据**（改 rig 的 base / 改产物引用 / 改宿主 BASE / 字面量抠不到）
-  const rigBroken = prefixAlignment(src.host, src.route,
-    src.rig.replace("'/wallpaper-engine/scene-live'", "'/wallpaper-engine/scene-files'"), src.html);
-  const htmlBroken = prefixAlignment(src.host, src.route, src.rig,
-    src.html.replace('/wallpaper-engine/scene-live/assets/', '/wallpaper-engine/oops/assets/'));
+        + ' · client=' + ((stripComments(src.client).match(CLIENT_PAGE_RE) || [])[1] || '?'));
+  // 负对照：变异喂进**同一条判据**（改客户端前缀 / 渲染页改用绝对引用 / 改宿主 BASE / 字面量抠不到）
+  const clientBroken = prefixAlignment(src.host, src.route,
+    src.client.replace('"/wallpaper-engine/scene-live/index.html?type="', '"/wallpaper-engine/oops/index.html?type="'), src.page);
+  const pageBroken = prefixAlignment(src.host, src.route, src.client,
+    src.page.replace('src="./renderer.js"', 'src="/wallpaper-engine/scene-live/renderer.js"'));
   const hostBroken = prefixAlignment(
-    src.host.replace("const BASE = '/wallpaper-engine'", "const BASE = '/wp'"), src.route, src.rig, src.html);
+    src.host.replace("const BASE = '/wallpaper-engine'", "const BASE = '/wp'"), src.route, src.client, src.page);
   const hostGone = prefixAlignment(
     src.host.replace("const BASE = '/wallpaper-engine'", 'const BASE = process.env.WE_BASE'),
-    src.route, src.rig, src.html);
-  check('N7③ negative control: 改 rig base / 改产物引用 / 改宿主 BASE / 字面量抠不到 —— 四种坏形态都被判出',
-    rigBroken.length > 0 && htmlBroken.length > 0 && hostBroken.length > 0 && hostGone.length > 0,
-    [rigBroken, htmlBroken, hostBroken, hostGone].map((p) => p.length).join('/') + ' 处问题');
+    src.route, src.client, src.page);
+  check('N7③ negative control: 改客户端前缀 / 渲染页绝对引用 / 改宿主 BASE / 字面量抠不到 —— 四种坏形态都被判出',
+    clientBroken.length > 0 && pageBroken.length > 0 && hostBroken.length > 0 && hostGone.length > 0,
+    [clientBroken, pageBroken, hostBroken, hostGone].map((p) => p.length).join('/') + ' 处问题');
 }
 
 // ── N8 模块级代码不得引用 apply 作用域的 log（真机事故：宿主被杀、DSH 反复重启）──

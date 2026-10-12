@@ -4,7 +4,7 @@
 > **怎么用**：改了 `src/` 或 `lib/` 的某个模块，在「模块 → 守卫」那张表里查该跑哪几条。
 > 口径：只统计守卫**代码**里真正碰到的模块（先剥注释），并区分"直接读源文件"与"隔着产物 `lib/client.js`"。
 
-模块面 84 个 · 守卫 54 个
+模块面 82 个 · 守卫 54 个
 
 ## 守卫 → 模块
 
@@ -37,7 +37,7 @@
 | `verify-i18n.mjs` | `src/client.js` `src/i18n-copy.js` `src/i18n.js` `src/nav-icon.js` `src/quick-panel.js` `src/sidebar-right.js` `src/styles.js` | ✅ |
 | `verify-inventory-index.mjs` | `lib/inventory.js` |  |
 | `verify-json-response.mjs` | `lib/json-response.js` | ✅ |
-| `verify-logging.mjs` | `lib/index.js` `lib/log.js` `lib/notice.js` `lib/routes/diag.js` `lib/routes/scene-serve.js` `lib/serve.js` `src/live-layer.js` |  |
+| `verify-logging.mjs` | `lib/index.js` `lib/log.js` `lib/notice.js` `lib/routes/diag.js` `lib/routes/scene-serve.js` `lib/serve.js` `lib/webwallgl/renderer.js` `src/live-layer.js` |  |
 | `verify-media-bridge.mjs` | `lib/media/index.js` `lib/media/provision.js` `lib/media/supervisor.js` |  |
 | `verify-module-layout.mjs` | `lib/index.js` `lib/settings-schema.js` `src/client.js` | ✅ |
 | `verify-mp4-vfs.mjs` | `lib/faststart.js` `lib/mp4-vfs.js` |  |
@@ -53,7 +53,7 @@
 | `verify-retired-lines.mjs` | — |  |
 | `verify-route-families.mjs` | — |  |
 | `verify-route-index.mjs` | `lib/index.js` `lib/routes/media-bytes.js` |  |
-| `verify-scene-live.mjs` | `lib/faststart.js` `lib/index.js` `lib/inventory.js` `lib/media-origin.js` `lib/media/index.js` `lib/media/legacy.js` `lib/media/provision.js` `lib/media/supervisor.js` `lib/mp4-vfs.js` `lib/routes/diag.js` `lib/routes/media-bytes.js` `lib/routes/now-playing.js` `lib/routes/scene-serve.js` `lib/routes/we-assets.js` `lib/serve.js` `lib/settings-schema.js` `lib/we-focus-guard.js` `lib/we-props.js` `lib/webwallgl/web-shim.js` `src/avatar-layer.js` `src/client.js` `src/effects.js` `src/ext-avatar.js` `src/ext-fx.js` `src/ext-parallax.js` `src/font/color-roles.js` `src/font/typography.js` `src/fx-layer.js` `src/glass-panel.js` `src/layer-core.js` `src/live-layer.js` `src/media-prep.js` `src/panel-tabs.js` `src/parallax-layer.js` `src/picker-modal.js` `src/quick-panel.js` `src/section-head.js` `src/sidebar-right.js` `src/styles.js` `src/system-fonts.js` `src/video-layer.js` `src/we-base.js` `src/we-cond.js` | ✅ |
+| `verify-scene-live.mjs` | `lib/faststart.js` `lib/index.js` `lib/inventory.js` `lib/media-origin.js` `lib/media/index.js` `lib/media/legacy.js` `lib/media/provision.js` `lib/media/supervisor.js` `lib/mp4-vfs.js` `lib/routes/diag.js` `lib/routes/media-bytes.js` `lib/routes/now-playing.js` `lib/routes/scene-serve.js` `lib/routes/we-assets.js` `lib/serve.js` `lib/settings-schema.js` `lib/we-focus-guard.js` `lib/we-props.js` `lib/webwallgl/renderer.js` `src/avatar-layer.js` `src/client.js` `src/effects.js` `src/ext-avatar.js` `src/ext-fx.js` `src/ext-parallax.js` `src/font/color-roles.js` `src/font/typography.js` `src/fx-layer.js` `src/glass-panel.js` `src/layer-core.js` `src/live-layer.js` `src/media-prep.js` `src/panel-tabs.js` `src/parallax-layer.js` `src/picker-modal.js` `src/quick-panel.js` `src/section-head.js` `src/sidebar-right.js` `src/styles.js` `src/system-fonts.js` `src/video-layer.js` `src/we-base.js` `src/we-cond.js` | ✅ |
 | `verify-scene.mjs` | `lib/index.js` `lib/pkg-read.js` `lib/routes/live-frame.js` `lib/routes/media-bytes.js` `lib/routes/props.js` `lib/routes/scene-frame.js` `lib/routes/scene-media.js` `lib/routes/settings.js` `lib/scene-manifest.js` | ✅ |
 | `verify-softrender.mjs` | — | ✅ |
 | `verify-system-fonts.mjs` | `lib/routes/system-fonts.js` `lib/settings-schema.js` `src/client.js` `src/font/typography.js` `src/panel-tabs.js` `src/quick-panel.js` `src/system-fonts.js` | ✅ |
@@ -109,9 +109,7 @@
 | `lib/settings-schema.js` | 12 | `verify-adapter` `verify-client` `verify-component-fonts` `verify-contracts` `verify-fontset` `verify-glass-surfaces` `verify-module-layout` `verify-presets` `verify-scene-live` `verify-system-fonts` `verify-theme-follow` `verify-theme-layer` |
 | `lib/we-focus-guard.js` | 1 | `verify-scene-live` |
 | `lib/we-props.js` | 1 | `verify-scene-live` |
-| `lib/webwallgl/assets/modulepreload-polyfill-B5Qt9EMX.js` | 0 | **（无）** |
-| `lib/webwallgl/assets/renderer-AJkjEL9i.js` | 0 | **（无）** |
-| `lib/webwallgl/web-shim.js` | 1 | `verify-scene-live` |
+| `lib/webwallgl/renderer.js` | 2 | `verify-logging` `verify-scene-live` |
 | `src/about-assets.js` | 1 | `verify-about` |
 | `src/adapter.js` | 1 | `verify-adapter` |
 | `src/api-client.js` | 2 | `verify-api-client` `verify-contracts` |

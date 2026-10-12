@@ -90,5 +90,5 @@ DSH Desktop 的插件路由前面有一道**能力头栅栏**，它会拒绝这�
 - 媒体源的建立、失败记忆与访问器：`lib/index.js`（`ensureMediaOrigin` / `mediaOriginBase` / `mediaOriginInfo`）
 - 两处挂载共用的处理函数、目录围栏与 CORS：`lib/index.js`（`handleSceneFiles`）
 - 载荷服务族路由与围栏不变量：`lib/routes/scene-serve.js`
-- 网页壁纸的沙箱与 shim 注入：`lib/webwallgl/web-shim.js`
+- 网页壁纸的沙箱与 shim 注入：`lib/index.js`（`extractWebShim`，shim 取自 `webwallgl` 包）
 - 相关的渲染路线决定：`docs/adr/0001-webwallgl-in-tree-live-renderer.md`

@@ -312,8 +312,8 @@ graph LR
    现状 `lib/fontsets/`（随包预设，只读；用户的编辑按写时复制落 `pluginDataDir()`）。
    `verify-package-files` P1 要求 `files` 覆盖 `lib/` 下**每一个**文件 —— 漏一条这里就红。
 4. **是第三方副本 / 类型声明吗？**
-   → vendored 放 `lib/vendor/`（内联副本）或 `lib/webwallgl/`（按文本注入的 shim），**不许改**，
-   同步走 `test/tools/sync-webwallgl.mjs`；
+   → vendored 放 `lib/vendor/`（内联副本），**不许改**；
+   → WebWallGL 引擎走 npm 依赖 `webwallgl`（运行期从 `node_modules` 供给），`lib/webwallgl/` 只放本仓的适配页；
    → 类型放 `lib/types/*.d.ts`，**必须与代码一致**。
 5. **是开发面的东西吗？**（不进发布包）
    → **守门与冒烟 → `test/`**（`verify-*.mjs` 结构守卫、`*-smoke.mjs` 节点级冒烟、`e2e-*.mjs` 真浏览器端到端）；

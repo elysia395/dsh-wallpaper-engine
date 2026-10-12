@@ -42,10 +42,11 @@ Wallpaper Engine 的三类壁纸里，**Scene（场景）**是最难移植的一
 
 配套的几条决定：
 
-- **D1 —— 渲染器随包 vendored，不从 CDN 取**：用户装完即可用，不引入运行期外网依赖。
-  同步走 `test/tools/sync-webwallgl.mjs`，**vendored 副本不许就地改**。
+- **D1 —— 渲染器随包安装，不从 CDN 取**：用户装完即可用，不引入运行期外网依赖。
+  （修订）引擎改为 npm 运行期依赖 `webwallgl`，宿主直接从 `node_modules/webwallgl` 供给，
+  `lib/webwallgl/` 只保留本仓适配页（`index.html` + `renderer.js`）与兜底页；升级引擎即升依赖版本。
 - **D2 —— 网页壁纸复用同一条渲染器挂载路径**：Scene 与 Web 走同一套渲染页骨架，
-  网页壁纸额外注入 WE 网页 API 的兼容 shim（`lib/webwallgl/web-shim.js`）。
+  网页壁纸额外注入 WE 网页 API 的兼容 shim（运行期从 `webwallgl` 包的 `webwallgl.mjs` 提取）。
 - **D3 —— 渲染失败不许留黑屏**：出图降级链（实时 → 内嵌 MP4 → 实时抓帧 → 自定义画面 → 空态）
   是这条决定的**必要配套**。没有它，"内嵌实时渲染"在低端机 / 无 WebGL 环境下就是一张黑屏。
 - **D4 —— 不做 Application（应用）类壁纸**：它要宿主直接运行第三方可执行程序，
@@ -66,7 +67,7 @@ Wallpaper Engine 的三类壁纸里，**Scene（场景）**是最难移植的一
   以及 CPU 帧回填这些机制的存在本身就说明"渲染器给出的画面需要被怀疑和兜底"。
 - **必须维护一条降级链**：出图来源链、失败记忆、会话内重试、载荷账本 —— 这些复杂度
   全部是"把渲染放进浏览器"换来的。
-- **vendored 上游同步成本**：渲染器与 shim 的上游演进要靠 `sync-webwallgl.mjs` 手工拉。
+- **上游跟进成本**：引擎升级走依赖版本号；但适配页 `lib/webwallgl/renderer.js` 与包 API 的契约需随版本核对。
 
 ## 重新考虑的触发线
 
@@ -75,7 +76,7 @@ Wallpaper Engine 的三类壁纸里，**Scene（场景）**是最难移植的一
 - WebWallGL 的复刻精度在**主流工坊场景**上出现无法兜底的系统性偏差
   （此时路线 1 的离线渲染可能反而更诚实）。
 - 浏览器端 WebGL / WebGPU 环境在目标平台上变得不可依赖。
-- 上游 WebWallGL 停止维护，导致 vendored 副本无法跟进而工坊场景持续演进。
+- 上游 WebWallGL 停止维护，导致依赖版本无法跟进而工坊场景持续演进。
 - 包体积成为用户侧的首要抱怨（此时应考虑把渲染器改为**按需下载**，
   与媒体中间件同一形态 —— 本仓已有该模式可复用）。
 
@@ -85,5 +86,5 @@ Wallpaper Engine 的三类壁纸里，**Scene（场景）**是最难移植的一
 - 抓帧路由与空帧门禁：`lib/routes/scene-frame.js`
 - 渲染页与壁纸文件服务、目录围栏：`lib/routes/scene-serve.js`
 - 浏览器端图层与降级：`src/live-layer.js`
-- 网页壁纸兼容 shim 的语料依据：`lib/webwallgl/web-shim.js`
+- 网页壁纸兼容 shim 的提取与注入：`lib/index.js`（`extractWebShim`）
 - 已退役的离线路线取证（**不反映现行实现**）：原 `docs/archive/static-frame/` 一支已删除，见 git 历史

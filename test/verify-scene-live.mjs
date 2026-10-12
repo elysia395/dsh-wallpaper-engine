@@ -3,12 +3,14 @@
  * verify-scene-live.mjs — WebWallGL live render pipeline self-test.
  *
  * Levels:
- *   A. Vendor artifacts: lib/webwallgl/ carries the renderer page with
- *      /wallpaper-engine/scene-live/-prefixed asset refs and an .upstream.json
- *      whose file list actually exists (sync-webwallgl.mjs output).
- *   B. /scene-live route (mock webServer): index.html + hashed assets serve
- *      with the right mime/cache headers, the directory fence rejects escapes
- *      (encoded ../), and non-GET is 405.
+ *   A. Renderer page + engine: lib/webwallgl/ carries our adapter page, which
+ *      loads the self-contained global engine build from the `webwallgl` npm
+ *      dependency (./engine/webwallgl.global.min.js, classic script), and
+ *      defines every __wp method the client calls; the engine bundle still
+ *      carries the web shim the host extracts.
+ *   B. /scene-live route (mock webServer): index.html, the page module and the
+ *      engine serve with the right mime/cache headers, the directory fences
+ *      reject escapes (encoded ../), and non-GET is 405.
  *   C. /scene-files route: a synthetic Steam library fixture (DSH_WE_STEAM_ROOT
  *      → temp dir with steamapps/common/wallpaper_engine + workshop content)
  *      drives the real inventory so a token gets minted; asserts scene pkg /
@@ -149,97 +151,71 @@ function check(name, ok, detail) {
   console.log((ok ? '  ✓ ' : '  ✗ ') + name + (detail ? ' — ' + detail : ''));
 }
 
-// ── Level A: vendor artifacts ────────────────────────────────────────────────
-console.log('Level A — vendored WebWallGL renderer page');
-const vendorDir = join(root, 'lib', 'webwallgl');
-const vendorHtmlPath = join(vendorDir, 'index.html');
-check('lib/webwallgl/index.html exists', existsSync(vendorHtmlPath));
-const vendorHtml = existsSync(vendorHtmlPath) ? readFileSync(vendorHtmlPath, 'utf8') : '';
-const assetRefs = [...vendorHtml.matchAll(/(?:src|href)="([^"]+)"/g)].map((m) => m[1]);
-check('renderer html references assets under /wallpaper-engine/scene-live/',
-  assetRefs.length > 0 && assetRefs.every((r) => r.startsWith('/wallpaper-engine/scene-live/')),
-  assetRefs.length + ' refs');
-const upstreamPath = join(vendorDir, '.upstream.json');
-check('.upstream.json present', existsSync(upstreamPath));
-if (existsSync(upstreamPath)) {
-  const up = JSON.parse(readFileSync(upstreamPath, 'utf8'));
-  const missing = (up.files || []).filter((f) => !existsSync(join(vendorDir, f)));
-  check('.upstream.json files all exist on disk', missing.length === 0,
-    missing.length ? 'missing: ' + missing.join(', ') : (up.name || '') + '@' + (up.version || '?'));
-}
+// ── Level A: renderer page + npm engine ─────────────────────────────────────
+console.log('Level A — WebWallGL renderer page (lib/webwallgl/) + npm engine (webwallgl)');
+const pageDir = join(root, 'lib', 'webwallgl');
+const pageHtmlPath = join(pageDir, 'index.html');
+check('lib/webwallgl/index.html exists', existsSync(pageHtmlPath));
+const pageHtml = existsSync(pageHtmlPath) ? readFileSync(pageHtmlPath, 'utf8') : '';
+const assetRefs = [...pageHtml.matchAll(/(?:src|href)="([^"]+)"/g)].map((m) => m[1]);
+const engineRefs = assetRefs.filter((r) => r.startsWith('./engine/'));
+check('renderer html loads the engine then its module relative to /scene-live/ (./engine/… → ./renderer.js)',
+  assetRefs.length === 2 && engineRefs.length === 1 && assetRefs[1] === './renderer.js'
+    && existsSync(join(pageDir, 'renderer.js')),
+  assetRefs.join(', ') || '无引用');
+// 引擎必须是**经典脚本**（全局版自包含）：ESM 版对 mediabunny 是裸导入，浏览器解析不了。
+check('engine is loaded as a classic script (not type="module")',
+  engineRefs.length === 1
+    && new RegExp('<script\\s+src="' + engineRefs[0].replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '"\\s*>').test(pageHtml),
+  engineRefs[0] || '无 ./engine/ 引用');
+const pageJs = existsSync(join(pageDir, 'renderer.js')) ? readFileSync(join(pageDir, 'renderer.js'), 'utf8') : '';
+const engineImport = engineRefs[0] || '';
+check('renderer page takes the engine API from window.WebWallGL',
+  /=\s*globalThis\.WebWallGL;/.test(pageJs));
+const pkgJson = JSON.parse(readFileSync(join(root, 'package.json'), 'utf8'));
+const enginePkgDir = join(root, 'node_modules', 'webwallgl');
+const enginePkg = existsSync(join(enginePkgDir, 'package.json'))
+  ? JSON.parse(readFileSync(join(enginePkgDir, 'package.json'), 'utf8')) : null;
+check('webwallgl is a runtime dependency and installed (CI: npm install before verify)',
+  Boolean(pkgJson.dependencies && pkgJson.dependencies.webwallgl) && Boolean(enginePkg),
+  'declared=' + ((pkgJson.dependencies || {}).webwallgl || '-') + ' installed=' + (enginePkg ? enginePkg.version : '-'));
+check('renderer page loads the engine from ./engine/ and that file ships in the package',
+  Boolean(engineImport) && existsSync(join(enginePkgDir, engineImport.slice('./engine/'.length))),
+  engineImport || '无 ./engine/ 引用');
+// 控制面契约：客户端按名调用渲染页的 `__wp` 方法（缺一个只表现为壁纸不响应，没有报错）——
+// 客户端源码里出现的每个 `wp.<方法>(` 都必须在渲染页上有定义。
+const clientSrc = ['live-layer.js', 'client.js']
+  .map((f) => readFileSync(join(root, 'src', f), 'utf8')).join('\n');
+const calledWp = [...new Set([...clientSrc.matchAll(/\bwp\.(\w+)\(/g)].map((m) => m[1]))].sort();
+const missingWp = calledWp.filter((name) => !new RegExp('^  ' + name + '\\(', 'm').test(pageJs));
+check('renderer page defines every __wp method the client calls',
+  calledWp.length >= 10 && missingWp.length === 0,
+  'called=[' + calledWp.join(', ') + '] missing=[' + missingWp.join(', ') + ']');
+check('renderer page exposes __wpStats.frame()', /window\.__wpStats\s*=\s*\{\s*frame:/.test(pageJs));
 // 兜底页（issue #129 证据 4）：渲染页在场景解析失败时把 iframe 指到
-// `<BASE>/default-wallpaper/index.html` —— 缺了它，「静默超时」没有可见落点
-//（该文件上游在 public/ 下、不在构建产物里，必须由 sync-webwallgl 单独拷）。
-check('fallback page vendored: default-wallpaper/index.html exists',
-  existsSync(join(vendorDir, 'default-wallpaper', 'index.html')));
-check('sync script copies the fallback page（否则下次同步删掉它）',
-  /public['"], 'default-wallpaper'/.test(readFileSync(join(root, 'test', 'tools', 'sync-webwallgl.mjs'), 'utf8').replace(/"/g, "'")));
-check('scene-serve serves default-wallpaper without immutable cache',
+// `<BASE>/default-wallpaper/index.html` —— 缺了它，「静默超时」没有可见落点。
+check('fallback page present: default-wallpaper/index.html exists',
+  existsSync(join(pageDir, 'default-wallpaper', 'index.html')));
+check('renderer page mounts the fallback page on error',
+  pageJs.includes('./default-wallpaper/index.html') && /inst\.on\("error"/.test(pageJs));
+check('scene-serve serves default-wallpaper without long cache',
   /rest === 'default-wallpaper\/index.html'/.test(readFileSync(join(root, 'lib', 'routes', 'scene-serve.js'), 'utf8')));
 
-// 网页壁纸帧率上限的实现质量与 shim 幂等性 —— 这两条都藏在
-// vendor 产物里：升级上游后若忘记重新 vendor，断言会直接指出。
-const vendoredShim = existsSync(join(vendorDir, 'web-shim.js'))
-  ? readFileSync(join(vendorDir, 'web-shim.js'), 'utf8') : '';
-/** `installRafThrottle` 的函数体（大括号配对）—— 节流实现只在这段里算数。 */
-function shimThrottleBody(src) {
-  const at = src.indexOf('function installRafThrottle');
-  if (at < 0) return null;
-  const open = src.indexOf('{', at);
-  if (open < 0) return null;
-  let depth = 0;
-  for (let i = open; i < src.length; i++) {
-    if (src[i] === '{') depth++;
-    else if (src[i] === '}' && --depth === 0) return src.slice(open, i + 1);
-  }
-  return null;
-}
-/**
- * 节流判据：**每帧都挂原生 rAF（保 vsync 相位），交付只看经过的时间**。
- * 三种坏形态都判红：
- *   · 定时器节流（`setTimeout(1000/fps)` 后再 rAF）—— 定时器落在刷新的任意相位上，
- *     30fps 上限产出 17/33/50ms 抖动，观感是「限了 30 反而更卡」；
- *   · 按**回调次数**跳帧（旧 `slot % n`）—— 长任务后浏览器一个 vsync 只补发一个回调，
- *     间隔被放大成「饿死时长 + 最多 (n-1)×vsync」，尾部呈目标间隔的整数倍；
- *   · 只在链首判相位（相位基准挂在链内）—— 作者回调普遍自递归登记下一帧，每次交付都换
- *     新链，饿死恰好落在链首时链内什么都看不到。
- * 判据作用在**剥掉注释**的代码上：这段的注释里就写着 `setTimeout(1000/fps)`。
- * 上游在 b11e839 把判据从「数回调次数」改成「比时间戳」（#8），本条随之更新。
- */
-function shimThrottleOk(body) {
-  if (typeof body !== 'string') return false;
-  const code = stripComments(body);
-  return code.includes('origRaf(step)')            // 每帧都挂原生 rAF（与 vsync 同相位）
-    && /nowMs\s*-\s*lastDeliverNow/.test(code)     // 交付按**经过的时间**判，不看回调次数
-    && /target\s*-\s*slack/.test(code)             // 目标间隔 1000/fps + 测量噪声容差
-    && !/\bsetTimeout\s*\(/.test(code);            // 定时器节流 = 抖动
-}
-const shimBody = shimThrottleBody(vendoredShim);
-check('vendored shim throttles by vsync frame-skip (not setTimeout)',
-  shimThrottleOk(shimBody),
-  '每帧挂原生 rAF + 按时间戳交付（旧的 setTimeout 节流与数回调次数两种实现都判红）');
-check('vendored shim throttle negative control: 定时器 / 数回调次数 / 链内相位 三种坏实现都被判出',
-  shimThrottleOk('{ rafMap[id] = { kind: "native", id: origRaf(step) }; setTimeout(function () { cb(now); }, 1000 / fps); }') === false
-  && shimThrottleOk('{ slot++; if (slot % n !== 0) { rafMap[id] = { kind: "native", id: origRaf(step) }; return; } cb(now); }') === false
-  && shimThrottleOk('{ var lastNow = 0; var nowMs = now; var target = 1000 / fps; var slack = 0; if (nowMs - lastNow < target - slack) return; rafMap[id] = { kind: "native", id: origRaf(step) }; }') === false
-  && shimThrottleOk('{ var nowMs = 1; var target = 2; var slack = 0; if (nowMs - lastDeliverNow < target - slack) {} rafMap[id] = { kind: "native", id: origRaf(step) }; }') === true);
-check('vendored shim installs only once (idempotent guard)',
-  /__weShimInstalled/.test(vendoredShim),
+// 网页壁纸 shim：npm 包不单独发 web-shim.js，宿主从 bundle 的 `shimSource` 模板字面量提取
+// （lib/index.js 的 extractWebShim）。bundle 形态变了提取就静默得空串 —— 先钉住形态还在。
+const engineBundle = existsSync(join(enginePkgDir, 'webwallgl.mjs'))
+  ? readFileSync(join(enginePkgDir, 'webwallgl.mjs'), 'utf8') : '';
+const shimLiteral = (/const shimSource = \x60((?:\\[\s\S]|[^\x60\\])*)\x60;/.exec(engineBundle) || [])[1] || '';
+check('engine bundle still carries the web shim as `const shimSource = \x60…\x60`',
+  shimLiteral.length > 1000, shimLiteral.length + ' chars');
+check('engine shim installs only once (idempotent guard)',
+  /__weShimInstalled/.test(shimLiteral),
   '双 shim 会让 rAF 节流叠加：15fps 上限实测变成 7.5fps');
-// 站点根夹住（官方 WE 语义：壁纸目录是站点根，`..` 解析到根即丢弃）。插件形态是
-// <BASE>/scene-files/<token>/…，与上游 dev server 的 /web/<token>/<itemId>/ 不同 ⇒
-// 靠宿主声明 __weSiteRoot；这条钉住 vendor 产物里**两条腿都在**（声明优先 + 逃逸才改写），
-// 少了声明那条，作者按官方语义写的 `../assets/x` 会 404（spine 类整页黑屏）。
-check('vendored shim 站点根夹住：认宿主声明的 __weSiteRoot，且只改逃逸的相对 URL',
-  /__weSiteRoot/.test(vendoredShim) && /function clampUrlToSiteRoot/.test(vendoredShim)
-    && /clampUrlToSiteRoot\(inner\)/.test(vendoredShim) && /\bX\.prototype\.open\b/.test(vendoredShim),
-  '声明读取 + XHR/fetch 两个网络入口的夹住');
-const vendoredBundle = assetRefs
-  .filter((r) => r.endsWith('.js'))
-  .map((r) => { try { return readFileSync(join(vendorDir, r.replace('/wallpaper-engine/scene-live/', '')), 'utf8'); } catch { return ''; } })
-  .join('\n');
-check('renderer rewrite recognises any data-we-shim value (host-injected shim)',
-  vendoredBundle.includes('data-we-shim(?:-src)?'),
+// 站点根夹住（官方 WE 语义：壁纸目录是站点根）：插件形态是 <BASE>/scene-files/<token>/…，
+// 靠宿主声明 __weSiteRoot；少了它，作者按官方语义写的 `../assets/x` 会 404（spine 类整页黑屏）。
+check('engine shim honours the host-declared __weSiteRoot', /__weSiteRoot/.test(shimLiteral));
+check('engine rewrite recognises any data-we-shim value (host-injected shim)',
+  engineBundle.includes('data-we-shim(?:-src)?'),
   '宿主注入的是 data-we-shim="host"，按值匹配会重复注入');
 
 // ── shared mock webServer + req/res shims ───────────────────────────────────
@@ -316,13 +292,16 @@ if (liveRoute) {
     'status=' + idxRes.__state.status + ' ' + h(idxRes, 'Content-Type'));
   check('index.html no-store', /no-store/.test(h(idxRes, 'Cache-Control')), h(idxRes, 'Cache-Control'));
 
-  // Serve one referenced asset (hashed name → immutable long cache).
-  const assetRef = assetRefs.find((r) => r.endsWith('.js'));
-  const assetRes = assetRef ? await runHandler(liveRoute, assetRef) : null;
-  check('hashed asset 200 + js mime + immutable',
-    assetRes && assetRes.__state.status === 200 && /javascript/.test(h(assetRes, 'Content-Type'))
-      && /immutable/.test(h(assetRes, 'Cache-Control')),
-    assetRes ? h(assetRes, 'Content-Type') + ' ' + h(assetRes, 'Cache-Control') : 'no js asset ref found');
+  // The page module and the engine: no hash in their names ⇒ revalidating cache, never immutable.
+  for (const rel of ['renderer.js', engineImport.replace(/^\.\//, '')]) {
+    const r = rel ? await runHandler(liveRoute, '/wallpaper-engine/scene-live/' + rel) : null;
+    check(rel + ' 200 + js mime + revalidate (not immutable)',
+      r && r.__state.status === 200 && /javascript/.test(h(r, 'Content-Type'))
+        && /must-revalidate/.test(h(r, 'Cache-Control')) && !/immutable/.test(h(r, 'Cache-Control')),
+      r ? h(r, 'Content-Type') + ' ' + h(r, 'Cache-Control') : 'no engine import found');
+  }
+  const engEsc = await runHandler(liveRoute, '/wallpaper-engine/scene-live/engine/%2e%2e%2fpackage.json');
+  check('engine/ encoded ../ escape fenced (403)', engEsc.__state.status === 403, 'status=' + engEsc.__state.status);
 
   // Bare prefix serves index.html (the client loads /scene-live/index.html, but
   // the directory form must not 404).
@@ -603,7 +582,7 @@ if (filesRoute && looseFixture && looseFixture.sceneLiveSrc) {
 }
 
 // ── Level C3: web wallpapers over /scene-files ──────────────────────────────
-// The strict-sandbox web path needs three host duties: inject the vendored WE
+// The strict-sandbox web path needs three host duties: inject the engine's WE
 // shim into the HTML entry, serve subresources with correct MIME types (a CSS
 // file as application/octet-stream is rejected by the browser), and allow
 // opaque-origin fetches via CORS.
@@ -646,6 +625,11 @@ let mediaEntry = '';   // C4 复用：C3 里从 inventory 拿到的那条入口 
       htmlRes.__state.status === 200 && /text\/html/.test(h(htmlRes, 'Content-Type'))
         && html.indexOf('data-we-shim="host"') !== -1,
       'status=' + htmlRes.__state.status + ' shim=' + (html.indexOf('data-we-shim') !== -1));
+    // 标签在、体是空的也会过上一条：shim 正文来自 npm 包 webwallgl 的 bundle 提取，
+    // 包缺失或 bundle 形态变化时提取静默得空串 —— 这里钉住正文真的到了页面。
+    check('injected shim carries the engine shim body (extracted from the webwallgl package)',
+      html.indexOf('__weShimInstalled') !== -1 && html.indexOf('__weSetPaused') !== -1,
+      'body=' + (html.indexOf('__weShimInstalled') !== -1));
     // 帧级夺焦围栏：与 shim 同门控（就注在这一处），但**必须早于 seed** —— 晚于作者脚本就等于没装。
     // 这里打的是真响应体：证明 `weFocusGuardInstall.toString()` 取到的源码经 esc() 后原样到达页面。
     check('HTML entry carries the frame-focus guard (before the seed)',
@@ -2035,7 +2019,7 @@ const schemaMod = await import(pathToFileURL(join(root, 'lib', 'settings-schema.
 const sanitizeHost = (raw0) => schemaMod.sanitizeFromSchema(raw0, 'host');
 const hostKeeps = (k, v) => JSON.stringify(sanitizeHost({ [k]: v })[k]) === JSON.stringify(v);
 check('host settings whitelist keeps sceneLiveFailures', hostKeeps('sceneLiveFailures', { w1: 'timeout' }));
-check('host injects the vendored shim into web HTML', /data-we-shim="host"/.test(serveSrc) && /readWebShim\(\)/.test(serveSrc));
+check('host injects the engine shim into web HTML', /data-we-shim="host"/.test(serveSrc) && /readWebShim\(\)/.test(serveSrc));
 // ── 网页壁纸的**帧级夺焦围栏**（lib/we-focus-guard.js）────────────────────────────
 // 现象：播某些网页类壁纸时，DSH 的输入框 / 下拉选择框 / 左下角账号菜单每点一次就丢焦点 ——
 // 与点击位置无关、与组件类型有关（只有"必须持有键盘焦点才正常"的控件看得出来）。
@@ -2188,7 +2172,7 @@ const guardWired = (s) => /data-we-focus-guard="host"/.test(s)
 check('host injects the focus guard into web HTML (between shim and seed)', guardWired(hostCode));
 check('负对照：拿掉注入腿 ⇒ 同一条判据变假',
   !guardWired(hostCode.replace('data-we-focus-guard="host"', 'data-we-x')));
-check('focus guard module lives outside the vendored dir (upstream sync rmSyncs it)',
+check('focus guard module lives outside the renderer page dir (it is a host module, not page code)',
   existsSync(guardPath) && !existsSync(join(root, 'lib', 'webwallgl', 'we-focus-guard.js')));
 check('host sends CORS for opaque-origin fetches', /Access-Control-Allow-Origin', '\*'/.test(serveSrc));
 // ⚠️ 下面这条读**宿主半**：`buildInventory` 已搬进 `lib/inventory.js`（§★ W-B B1）。

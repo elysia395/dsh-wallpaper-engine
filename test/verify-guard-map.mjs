@@ -43,10 +43,7 @@ const check = (name, ok, detail) => {
  * 于是它们的零覆盖被自己的例外表**掩盖**掉（实测踩过：表一写完，零覆盖就报了 0 个）。
  */
 const M = (...p) => p.join('/');
-const ZERO_COVERAGE_WHY = {
-  [M('lib', 'webwallgl', 'assets', 'modulepreload-polyfill-B5Qt9EMX.js')]: 'vendored 第三方副本（不许改；同步走 `test/tools/sync-webwallgl.mjs`）—— 只在 `lib/webwallgl/` 内被引用',
-  [M('lib', 'webwallgl', 'assets', 'renderer-AJkjEL9i.js')]: '同上（WebWallGL 渲染页的构建产物）',
-};
+const ZERO_COVERAGE_WHY = {};
 
 /**
  * 三类守卫的**口径**（别混）：
@@ -94,8 +91,9 @@ console.log('\n① 每个模块都要有守卫碰过它（例外表只许缩小�
   const probe = ['src/zzz-new-module.js'];
   check('negative control: 新模块没守卫时会被同一条判据判出',
     probe.filter((m) => !allowed.has(m)).length === 1);
+  const registered = M('lib', 'zzz-registered-module.js');
   check('positive control: 已登记的例外不算未登记',
-    [M('lib', 'webwallgl', 'assets', 'renderer-AJkjEL9i.js')].filter((m) => !allowed.has(m)).length === 0);
+    [registered].filter((m) => !new Set([...allowed, registered]).has(m)).length === 0);
 }
 
 // ═══ ② 生成物新鲜 ════════════════════════════════════════════════════════════

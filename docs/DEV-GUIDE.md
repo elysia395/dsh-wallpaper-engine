@@ -343,7 +343,6 @@ node test/tools/host-route-index.mjs --write   # 重算并写入 docs/ROUTE-INDE
 | `js-text.mjs` | JS/TS 源码的**文本级**工具（字符串 / 正则感知的剥注释） | `node test/tools/js-text.mjs selftest` |
 | `regen-golden.mjs` | **设置 golden 夹具的漂移核对与重录**：逐侧列出与当前 `lib/settings-schema.js` 的差异（host 侧的值有判据管、client 侧没有），写入必须先声明意图（`--intend`）—— 防止把缺陷输出自动录成"期望" | `node test/tools/regen-golden.mjs [--write --intend <host\|client>:<键>]` |
 | `sidebar-props-scroll-rig.mjs` | 侧栏「壁纸属性」下钻的**真浏览器滚动判定台**：属性多的壁纸能不能滚到底（官方壳的页签内容区固定高 + overflow:hidden，面板必须自带滚动） | `node test/tools/sidebar-props-scroll-rig.mjs [bundle.js] [label]` |
-| `sync-webwallgl.mjs` | 从本地 `webwallgl-github` 仓库构建 WebWallGL 渲染页（vendored 同步） | 见文件头 |
 | `token-contract.mjs` | **`--dsw-*` 令牌契约的生成与核对**（共存审计 S2）：从 `src/styles.js` 的 CSS 模板现算「改写了哪些 token、在哪个门控下」，`--write` 重算生成物 `docs/TOKEN-CONTRACT.md`（守卫 `verify-token-contract` 逐字节比对） | `node test/tools/token-contract.mjs [--write] [--stats]` |
 | `underlay-pixel-rig.mjs` | **画布兜底色**的真浏览器像素对照：壁纸的像素没送到屏上时，页面自己画的是什么颜色（掉层 → 白闪还是同色底） | `node test/tools/underlay-pixel-rig.mjs <bundle.js> [label]` |
 | `weT-shim.mjs` | 给**单独 import `src/**`** 的守卫装身份译文层（`weT(k) === k`，与 bundle 里中文态逐字一致） | `node test/tools/weT-shim.mjs` |

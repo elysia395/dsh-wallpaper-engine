@@ -117,6 +117,9 @@ while (queue.length) {
   for (const m of text.matchAll(/^\s*(?:import|export)[^'"]*?from\s*['"]([^'"]+)['"]/gm)) specs.push(m[1]);
   for (const m of text.matchAll(/^\s*import\s*['"]([^'"]+)['"]/gm)) specs.push(m[1]);
   for (const m of text.matchAll(/import\s*\(\s*['"]([^'"]+)['"]\s*\)/g)) specs.push(m[1]);
+  // `createRequire(...).resolve('pkg')`：只定位包目录、按文件直出（webwallgl 是浏览器端引擎）——
+  // 依赖照样被活代码用到，但它不是要沿着走的模块边。
+  for (const m of text.matchAll(/\.resolve\s*\(\s*['"]([^'".][^'"]*)['"]\s*\)/g)) bare.add(m[1]);
   for (const s of specs) {
     if (s.startsWith('node:')) continue;
     if (!s.startsWith('.')) { bare.add(s); continue; }
