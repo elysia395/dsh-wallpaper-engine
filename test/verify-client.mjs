@@ -3469,7 +3469,11 @@ setTimeout(async () => {
           why: '玻璃预设通道内部的清单投影（活跃清单；已删除的出厂不回来，无隐藏形态）；错误文案已收口到 setPresetError 单写点（verify-client ①e 棘轮）',
           fields: ['glassPresets'],
         },        'src/live-layer.js': {
-          why: '实时看护的会话内标志；`startLiveWatch` / `stopLiveWatch` 是它的两个入口',
+          why: '实时看护的会话内标志：组装点（syncLayers 收尾那一跳）也会直写它，故与看护域两处分别登记（登记表按「哪个文件真的写了」记账）',
+          fields: ['sceneLiveActive'],
+        },
+        'src/live-layer-watch.js': {
+          why: '实时看护的会话内标志；该字段的直写随实时管线的看护域搬进本模块（入口仍是 `startLiveWatch` / `stopLiveWatch`）',
           fields: ['sceneLiveActive'],
         },
         'src/media-prep.js': {

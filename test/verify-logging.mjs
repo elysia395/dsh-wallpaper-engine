@@ -36,6 +36,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 // 剥注释：共享的字符串感知实现（test/tools/js-text.mjs）。
 import { stripComments } from './tools/js-text.mjs';
+import { liveText } from './tools/src-scope.mjs';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 const results = [];
@@ -235,7 +236,7 @@ function noticeSuccessSilent(src) {
   //   ③ `lib/serve.js` 的 handleSceneFiles 函数体（每个壁纸子资源请求都过它）。
   const hot = [
     ['lib/routes/scene-serve.js', read('lib/routes/scene-serve.js')],
-    ['src/live-layer.js', read('src/live-layer.js')],
+    ['src/live-layer.js', liveText()],
     ['lib/serve.js:handleSceneFiles', functionBody(read('lib/serve.js'), 'function handleSceneFiles(req, res, mount)')],
   ];
   const missing = hot.filter(([, body]) => body === null).map(([n]) => n);
@@ -252,7 +253,7 @@ function noticeSuccessSilent(src) {
 // ── N6 两侧档位名同集合 ─────────────────────────────────────────────────────
 {
   const host = levelNamesIn(read('lib/log.js'));
-  const client = levelNamesIn(read('src/live-layer.js'));
+  const client = levelNamesIn(liveText());
   check('N6 宿主与客户端声明的三个档位名集合相同（两侧不共享内核，靠判据防漂）',
     host.length === LEVEL_NAMES.length && client.length === LEVEL_NAMES.length
     && LEVEL_NAMES.every((l) => host.includes(l) && client.includes(l)),
@@ -314,7 +315,7 @@ function prefixAlignment(hostSrc, routeSrc, clientSrc, pageSrc) {
   const src = {
     host: read('lib/index.js'),
     route: read('lib/routes/scene-serve.js'),
-    client: read('src/live-layer.js'),
+    client: liveText(),
     page: read('lib/webwallgl/index.html') + '\n' + read('lib/webwallgl/renderer.js'),
   };
   const problems = prefixAlignment(src.host, src.route, src.client, src.page);

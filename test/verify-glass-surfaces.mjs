@@ -46,7 +46,7 @@ import { fileURLToPath } from 'node:url';
 // 共享实现（`new Function` 装入源码文本前必须先剥掉 `export { … }`）——别在这里再抄一份正则。
 import { stripExportBlocks } from './tools/js-text.mjs';
 // 刀3：样式族取文（8 个域模板 + 组装点）——源码侧用 styleText()，产物侧用 cssBodyOf()。
-import { styleText, cssBodyOf, cssPartsOf, panelText } from './tools/src-scope.mjs';
+import { styleText, cssBodyOf, cssPartsOf, panelText, liveText } from './tools/src-scope.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const CLIENT = process.argv[2] || join(ROOT, 'lib', 'client.js');
@@ -1935,7 +1935,7 @@ console.log('\n⑬ CSS 契约（按面变量零兜底 / 门控许可证 / 双向
   const srcOf = (p) => readFileSync(join(ROOT, 'src', p), 'utf8');
   // ⚠️ 门控属性与按面变量的**写入**现在都在 `src/glass.js`（R3b 第一步搬的，见 wip §10.13）；
   //    `data-we-wallpaper` 仍由 `src/live-layer.js` 的 ACTIVE_ATTR 挂 ⇒ 两个来源都要收。
-  const gateSrc = GLASS_SRC.concat(srcOf('live-layer.js'));
+  const gateSrc = GLASS_SRC.concat(liveText());
   const jsGates = [...new Set([
     ...[...gateSrc.matchAll(/setAttribute\("(data-we-[a-z-]+)"/g)].map((m) => m[1]),
     ...[...gateSrc.matchAll(/=\s*"(data-we-[a-z-]+)"/g)].map((m) => m[1]),

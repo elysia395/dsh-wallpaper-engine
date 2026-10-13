@@ -392,10 +392,34 @@ const INLINE_MODULES = [
     markers: ['function installFocusHandback(', 'function weIsWallpaperFrame(', 'GESTURE_WINDOW_MS', 'window.__weFocusHandback'],
   },
   {
+    file: 'src/live-layer-diag.js',
+    why: '实时渲染管线·诊断与日志域：分级日志 / 状态摘要 / 诊断留痕的安装',
+    markers: ['function liveLog(', 'const LIVE_DIAG_KEY = '],
+  },
+  {
+    file: 'src/live-layer-watch.js',
+    why: '实时渲染管线·心跳与载荷域：看护 tick / 判失败 / 转移重试 / 抓帧回填',
+    markers: ['function startLiveWatch(', 'function scheduleLiveFrameBackfill('],
+  },
+  {
+    file: 'src/live-layer-pointer.js',
+    why: '实时渲染管线·指针与帧域：指针注入 / 帧字节簿记 / poster 与挂载',
+    markers: ['function livePointerFlush(', 'function liveFrameEl('],
+  },
+  {
+    file: 'src/live-layer-gate.js',
+    why: '实时渲染管线·内容闸门域：待显层的揭示闸门与失败记忆的管线身份',
+    markers: ['function armLayerContentReveal(', 'function livePipelineNow('],
+  },
+  {
+    file: 'src/live-layer-underlay.js',
+    why: '实时渲染管线·兜底色域：画布兜底色采样与可见性恢复',
+    markers: ['function writeUnderlayColor(', 'function refreshUnderlayColor('],
+  },
+  {
     file: 'src/live-layer.js',
-    why: '实时渲染管线：live 看护/判失败/抓帧回填/指针/poster 与壁纸层构建（syncLayers）与过场',
-    markers: ['const LIVE_FIRST_FRAME_MS = ', 'function liveLog(', 'function startLiveWatch(',
-      'function scheduleLiveFrameBackfill(', 'function syncLayers()', 'function toggleLiveDiag('],
+    why: '实时渲染管线的组装点（syncLayers 编排收尾 / toggleLiveDiag）；上面五个域按本清单顺序内联在本文件之前',
+    markers: ['const LIVE_FIRST_FRAME_MS = ', 'function syncLayers()', 'function toggleLiveDiag('],
   },
   {
     file: 'src/api-client.js',

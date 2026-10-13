@@ -33,7 +33,7 @@ import { execFileSync } from 'node:child_process';
 // 剥注释：共享的字符串感知实现（`verify-module-layout` 的『剥注释必须字符串感知』一节钉住"不许再用朴素正则"）。
 import { stripComments, stripExportBlocks } from './tools/js-text.mjs';
 // 刀3：样式族取文（8 个域模块 + 组装点，构建序拼接）。
-import { styleText, panelSources, panelText } from './tools/src-scope.mjs';
+import { styleText, panelSources, panelText, liveText } from './tools/src-scope.mjs';
 // 单独 import `src/**` 时补上 bundle 作用域的取词层（面板渲染器直接用 weT；见该 shim 的文件头）。
 import { installWeTShim } from './tools/weT-shim.mjs';
 installWeTShim();
@@ -186,8 +186,7 @@ check('renderer page loads the engine from ./engine/ and that file ships in the 
   engineImport || '无 ./engine/ 引用');
 // 控制面契约：客户端按名调用渲染页的 `__wp` 方法（缺一个只表现为壁纸不响应，没有报错）——
 // 客户端源码里出现的每个 `wp.<方法>(` 都必须在渲染页上有定义。
-const clientSrc = ['live-layer.js', 'client.js']
-  .map((f) => readFileSync(join(root, 'src', f), 'utf8')).join('\n');
+const clientSrc = liveText() + '\n' + readFileSync(join(root, 'src', 'client.js'), 'utf8');
 const calledWp = [...new Set([...clientSrc.matchAll(/\bwp\.(\w+)\(/g)].map((m) => m[1]))].sort();
 const missingWp = calledWp.filter((name) => !new RegExp('^  ' + name + '\\(', 'm').test(pageJs));
 check('renderer page defines every __wp method the client calls',
@@ -871,7 +870,7 @@ check('前置：qpSrc 已剥掉 `export { … }`（两处 new Function 依赖这
 const qpCode = stripComments(qpSrc);
 // 刀3：样式族已拆成 8 个域模块 + 组装点 ⇒ 取整族源码文本（构建序拼接）；判据不变。
 const stylesSrc = styleText();
-const liveSrc = readFileSync(join(root, 'src', 'live-layer.js'), 'utf8');
+const liveSrc = liveText();
 const prepSrc = readFileSync(join(root, 'src', 'media-prep.js'), 'utf8');
 // 刀4：panel-tabs 已按域拆成 5 个兄弟模块 + 组装点 ⇒ 判"页签族的渲染/接缝"一律扫**并集**。
 const tabsSrc = panelText();
@@ -1557,7 +1556,7 @@ for (const [name, ok] of clientChecks) check(name, ok);
   // 改成"poster 属性存在即放行"时出现过"十几秒纯色"，那正是这条注释要防的）。
   {
     const CH = readFileSync(new URL('../src/video-layer.js', import.meta.url), 'utf8');
-    const LIVE = readFileSync(new URL('../src/live-layer.js', import.meta.url), 'utf8');
+    const LIVE = liveText();
     check('视频通道有独立的就绪判据 videoContentReady（海报已加载 / 首帧）',
       CH.includes('function videoContentReady(video)')
       && CH.includes('__wePosterReady === true')
@@ -1693,8 +1692,8 @@ for (const [name, ok] of clientChecks) check(name, ok);
     check('围栏：视频通道不引用任何实时专属符号（' + CHANNEL_FILES.length + ' 文件 × ' + LIVE_ONLY.length + ' 符号）',
       offenderList.length === 0, offenderList.join(', ') || '干净');
     check('反空转：清单里的符号仍真实存在于实时模块（改名后围栏不许退化成查空名单）',
-      hits(srcOf('../src/live-layer.js')).length === LIVE_ONLY.length,
-      '实时模块命中 ' + hits(srcOf('../src/live-layer.js')).length + '/' + LIVE_ONLY.length);
+      hits(liveText()).length === LIVE_ONLY.length,
+      '实时模块命中 ' + hits(liveText()).length + '/' + LIVE_ONLY.length);
     check('negative control: 通道里塞进任一实时符号都会被同一函数判出',
       hits('const u = liveRenderUrl(sel); const f = () => armLayerContentReveal();').length === 2
       && hits('const u = myOwnRenderUrl(sel);').length === 0);
@@ -1709,7 +1708,7 @@ for (const [name, ok] of clientChecks) check(name, ok);
     // 搬移要**真的发生**：符号在核心里有定义，且原处不再有副本（否则只是复制一份、
     // 两条通道各留一个 —— 改一边另一边不动，那比不搬更坏）。
     const coreSrc = readFileSync(new URL('../src/layer-core.js', import.meta.url), 'utf8');
-    const liveSrc = readFileSync(new URL('../src/live-layer.js', import.meta.url), 'utf8');
+    const liveSrc = liveText();
     const movedBlocks = ['nudgeWallpaperRepaint', 'onScreenBrief', 'retireFadingLayer', 'startLayerTransition', 'layerKeyDiff', 'switchTransitionOf', 'releaseLayerMedia', 'openRotationAudioGate', 'mediaFramesOf',
       'scheduleFadingLayerRemoval', 'applyInlineStyle'];
     const defsInFile = (text, n) => (text.match(new RegExp('^(?:function\\s+' + n + '\\s*\\(|(?:const|let|var)\\s+' + n + '\\s*=)', 'gm')) || []).length;
@@ -1735,7 +1734,7 @@ for (const [name, ok] of clientChecks) check(name, ok);
     // "有画布 ⇒ 判否"，本意是"等 weDrawFrame 画上第一笔" —— 但画笔的留痕（canvas.dataset.weDrawn）
     // 从来没被读，首笔落下时回调的 recheck 又撞回同一条判据 ⇒ Edge 腿的放行条件**永远不成立**，
     // 15s 停滞上限一到旧壁纸永久留屏。两半必须同时在场且指向同一留痕。
-    const liveSrcForGate = readFileSync(new URL('../src/live-layer.js', import.meta.url), 'utf8');
+    const liveSrcForGate = liveText();
     const clientSrcForGate = readFileSync(new URL('../src/client.js', import.meta.url), 'utf8');
     const canvasGateOk = (src) => /mirror\.dataset && mirror\.dataset\.weDrawn === "1"/.test(src)
       && !/if \(node\.querySelector\("canvas\.we-media--canvas"\)\) return false;/.test(src);
@@ -1798,7 +1797,7 @@ for (const [name, ok] of clientChecks) check(name, ok);
       && /videoChannelAfterLayerBuild\(video, selection\);/.test(liveSrc)
       && !/maybeUpgradeToTranscoded\(video, selection\.url/.test(liveSrc));
     // ── ⑥ 反向探针：视频档的放行**不经过实时管线的闸门机器** ──────────────────
-    const liveSrcNow = readFileSync(new URL('../src/live-layer.js', import.meta.url), 'utf8');
+    const liveSrcNow = liveText();
     check('⑥ 视频档的放行机器归视频通道（实时管线只留一次委托）',
       videoSrc.includes('function armVideoChannelReveal(')
       && /armVideoChannelReveal\(video, recheck, giveUp\);/.test(liveSrcNow)

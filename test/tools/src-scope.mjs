@@ -98,6 +98,12 @@ export function panelText(sep = '\n;\n') {
   return scopeText('src/panel-tabs', sep);
 }
 
+/** 实时渲染管线族（src/live-layer*）：按 INLINE_MODULES 顺序，组装点在末尾。 */
+export function liveSources() { return scopeFiles('src/live-layer'); }
+
+/** 实时渲染管线族源码文本（供只看源码形态的判据使用）。 */
+export function liveText(sep = '\n;\n') { return scopeText('src/live-layer', sep); }
+
 /** 样式域模板的声明（源码与产物同形：产物里只是整体多了一层 tab 缩进）。 */
 const CSS_DECL_RE = /^[ \t]*const CSS(?:_[A-Z][A-Z0-9_]*)? = `([^`]*)`;/gm;
 
