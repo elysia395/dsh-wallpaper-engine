@@ -4618,6 +4618,45 @@ setTimeout(async () => {
   const buildFh = (source) => {
     const listeners = [];
     const focused = [];
+    // ── 虚拟时钟（issue #210）──────────────────────────────────────────────────────
+    // 本段判的全是**时序语义**：focusout 之后那一拍（模块里的 `setTimeout(handBack, 0)`）、
+    // 1000ms 手势窗口、300ms 交还间隔、120000ms 记住项过期、拆除时清在途定时器。它们只由模块
+    // 自己的 `Date.now()` / `setTimeout` / `clearTimeout` 决定。真等墙钟会让同一条判据随 CI 负载
+    // 漂移 —— Windows runner 上实测过 `A3-F2 ... {"handbacks":1,"skipped":4}`（期望 skipped===3，
+    // 同一 sha 的另一次 run 又绿，issue #210）。
+    // 这里把这三个自由名注入 `with` scope（Proxy 的 `has` 对 target 里已有的键直接放行），模块每次
+    // 读时钟 / 挂定时器都走这口队列 ⇒ 同一段序列永远同一结果。这不是"造假时钟骗过判据"：模块的行为
+    // 一条没变、断言口径也一条没缩，只是把边界钉在精确的毫秒上（999ms 一定未到点、+101ms 一定到点），
+    // 而墙钟版本连"刚好 1000ms"都只能碰运气。
+    let vnow = 1e6;             // 起点离 0 远一点：`lastHandBackAt = 0` 的初始化不能被当成"刚交还过"
+    let vseq = 0;
+    let vqueue = [];
+    class VDate extends Date {
+      constructor(...args) { super(...(args.length ? args : [vnow])); }
+      static now() { return vnow; }
+    }
+    const vSetTimeout = (fn, ms) => {
+      const id = ++vseq;
+      vqueue.push({ at: vnow + Math.max(Number(ms) || 0, 0), id, fn });
+      return id;
+    };
+    const vClearTimeout = (id) => { vqueue = vqueue.filter((t) => t.id !== id); };
+    // advance(ms)：把时钟推到 +ms，途中按"到点时刻 → 登记顺序"依次跑完所有到点的任务；任务里新挂的
+    // 定时器只要也在目标时刻内就继续跑（所以 `0ms` 的任务会在 advance(0) 里跑完）。
+    const advance = (ms) => {
+      const target = vnow + Math.max(Number(ms) || 0, 0);
+      for (let guard = 0; ; guard += 1) {
+        if (guard > 10000) throw new Error('虚拟时钟：同一段 advance 里跑了超过 10000 个任务（疑似 0ms 自旋）');
+        vqueue.sort((a, b) => (a.at - b.at) || (a.id - b.id));
+        const next = vqueue[0];
+        if (!next || next.at > target) break;
+        vqueue.shift();
+        vnow = next.at;         // 时钟只前进到该任务到点的那一刻
+        next.fn();
+      }
+      vnow = target;
+      return vnow;
+    };
     const drop = (l) => { const i = listeners.indexOf(l); if (i >= 0) listeners.splice(i, 1); };
     const win = {
       addEventListener: (t, fn) => { listeners.push({ on: 'window', t, fn }); },
@@ -4628,7 +4667,7 @@ setTimeout(async () => {
       addEventListener: (t, fn) => { listeners.push({ on: 'document', t, fn }); },
       removeEventListener: (t, fn) => { drop(listeners.find((l) => l.on === 'document' && l.t === t && l.fn === fn)); },
     };
-    const scope = new Proxy({ document: doc, window: win }, {
+    const scope = new Proxy({ document: doc, window: win, Date: VDate, setTimeout: vSetTimeout, clearTimeout: vClearTimeout }, {
       has: (t, k) => (k in t) || !(k in globalThis),
       // 未知自由名直接抛：漏抄依赖清单要响亮地红，而不是悄悄拿到一个返回 undefined 的替身。
       get: (t, k) => (k in t ? t[k] : () => { throw new Error('focus-handback 引用了未预期的自由名 ' + String(k)); }),
@@ -4641,11 +4680,9 @@ setTimeout(async () => {
     const frame = { tagName: 'IFRAME', className: 'we-media we-iframe', isConnected: true };
     // 事件派发：同类型全部监听器都跑一遍（真实 DOM 里也是这样，我们只挂一份）。
     const fire = (type, target) => { for (const l of listeners.slice()) if (l.t === type) l.fn({ type, target }); };
-    return { mod, listeners, focused, win, doc, hostInput, hostButton, frame, fire };
+    return { mod, listeners, focused, win, doc, hostInput, hostButton, frame, fire,
+      advance, now: () => vnow, pendingTimers: () => vqueue.length };
   };
-  const tick = () => new Promise((r) => { setTimeout(r, 0); });
-  // 交还频率下限是 300ms ⇒ 需要"确实过了间隔"的判据就得真等过去（睡一段比造假时钟诚实）。
-  const sleep = (ms) => new Promise((r) => { setTimeout(r, ms); });
   const A = buildFh(fhSrc);
   const disposeA = A.mod.installFocusHandback();
   assert.ok(typeof disposeA === 'function', '#148 宿主半：installFocusHandback 必须返回拆除函数（挂 ctx.effect）');
@@ -4664,7 +4701,7 @@ setTimeout(async () => {
     '#148 宿主半：focusin 必须记住用户最后在用的那个元素');
   A.doc.activeElement = A.frame;
   A.fire('focusout', A.hostInput);
-  await tick();
+  A.advance(0);
   assert.deepEqual(A.focused, ['input'],
     '#148 宿主半：焦点被搬进壁纸帧 ⇒ 必须交还给用户本来在用的元素（实测 ' + JSON.stringify(A.focused) + '）');
   assert.equal(A.win.__weFocusHandback.handbacks, 1, '#148 宿主半：交还次数必须如实记账');
@@ -4683,7 +4720,7 @@ setTimeout(async () => {
   A.doc.activeElement = A.hostButton;
   A.fire('focusin', A.hostInput);
   A.fire('focusout', A.hostInput);
-  await tick();
+  A.advance(0);
   assert.equal(A.win.__weFocusHandback.handbacks, 1,
     '负对照①：焦点落到宿主元素上时不许交还（否则用户每次点别处都被拽回来）');
 
@@ -4691,7 +4728,7 @@ setTimeout(async () => {
   resetGap();
   A.doc.activeElement = { tagName: 'IFRAME', className: 'we-iframe', isConnected: false };
   A.fire('focusout', A.hostInput);
-  await tick();
+  A.advance(0);
   assert.equal(A.win.__weFocusHandback.handbacks, 1,
     '负对照②：壁纸帧已断开时不许交还');
 
@@ -4701,40 +4738,40 @@ setTimeout(async () => {
   A.fire('focusin', A.hostButton);
   const skipBefore = A.win.__weFocusHandback.skipped;
   A.fire('focusout', A.hostInput);
-  await tick();
+  A.advance(0);
   assert.ok(A.win.__weFocusHandback.handbacks === 1 && A.win.__weFocusHandback.skipped === skipBefore,
     '负对照③：focusout 的 target 不是记住的那个元素时不交还、也不记 skipped（只认"刚从它离开"）');
 
   // ③ 保险一：记住项过期（半天前点过的输入框不许被翻出来抢焦点）。
-  //    ⚠️ 先睡过 MIN_GAP、并**清零 lastHandBackAt** 再测：否则"没交还"可能是频率下限拦的，
+  //    ⚠️ 先把虚拟时钟推过 MIN_GAP、并**清零 lastHandBackAt** 再测：否则"没交还"可能是频率下限拦的，
   //    判据就不精确了（首版正是这样"看着绿、其实测的不是这条"—— 它掩盖了阳性对照的失败）。
-  await sleep(320);
+  A.advance(320);
   resetGap();
-  A.win.__weFocusHandback.lastAt = Date.now() - 200000;   // eslint-disable-line require-atomic-updates -- 顺序 await 的判据；宿主对象无并发读写
+  A.win.__weFocusHandback.lastAt = A.now() - 200000; // 虚拟时钟：把"半天前"钉在 200s 之前
   A.doc.activeElement = A.frame;
   const skippedBefore = A.win.__weFocusHandback.skipped;
   A.fire('focusout', A.hostButton);
-  await tick();
+  A.advance(0);
   assert.ok(A.win.__weFocusHandback.handbacks === 1 && A.win.__weFocusHandback.skipped === skippedBefore + 1,
     '#148 宿主半：记住项超过 STALE_MS 就不交还（且要记一次 skipped，真机据此区分"没触发"与"没装上"）');
 
   // ③ 阳性对照：间隔够、记住项新鲜 ⇒ 交还成立（同时也是下一条负对照的前提）。
   resetGap();
-  A.win.__weFocusHandback.lastAt = Date.now();
+  A.win.__weFocusHandback.lastAt = A.now();
   A.fire('focusout', A.hostButton);
-  await tick();
+  A.advance(0);
   assert.equal(A.win.__weFocusHandback.handbacks, 2,
     '#148 宿主半：正常条件下交还成立（为下一条负对照提供前提）');
 
   // ③ 保险二：交还频率下限（壁纸高频夺焦时不至于把主线程拖成焦点乒乓）。
   A.doc.activeElement = A.frame;
   A.fire('focusout', A.hostButton);
-  await tick();
+  A.advance(0);
   assert.equal(A.win.__weFocusHandback.handbacks, 2,
     '#148 宿主半：两次交还之间必须隔 MIN_GAP_MS（紧随其后的第二次不许再交还）');
-  await sleep(320);
+  A.advance(320);
   A.fire('focusout', A.hostButton);
-  await tick();
+  A.advance(0);
   assert.equal(A.win.__weFocusHandback.handbacks, 3,
     '负对照：间隔够了（320ms > MIN_GAP_MS）就必须恢复交还 ⇒ 上一条判的不是别的东西');
 
@@ -4744,7 +4781,7 @@ setTimeout(async () => {
   assert.equal(A.win.__weFocusHandback.active, false, '#148 宿主半：拆除后状态必须标记 inactive');
   A.doc.activeElement = A.frame;
   A.fire('focusout', A.hostButton);
-  await tick();
+  A.advance(0);
   assert.equal(A.win.__weFocusHandback.handbacks, 3, '负对照：拆除后不许再交还');
   assert.ok(typeof A.mod.installFocusHandback() === 'function', '#148 宿主半：拆除后必须能重新装上');
 
@@ -4760,12 +4797,12 @@ setTimeout(async () => {
     '#148 宿主半：window 上的四类手势必须刷新"最近真实交互"时间戳');
   R.doc.activeElement = R.frame;
   R.fire('focusout', R.hostInput);
-  await tick();
+  R.advance(0);
   assert.ok(R.win.__weFocusHandback.handbacks === 0 && R.win.__weFocusHandback.skipped === 1
     && R.focused.length === 0,
     'A3-F2 前提：手势窗口内先跳过（不许立刻交还，且要记一次 skipped），实测 '
     + JSON.stringify({ handbacks: R.win.__weFocusHandback.handbacks, skipped: R.win.__weFocusHandback.skipped, focused: R.focused }));
-  await sleep(1150); // 窗口 1000ms 关闭 ⇒ 无需新的 focusout，补交自己发生
+  R.advance(1150); // 窗口 1000ms 关闭 ⇒ 无需新的 focusout，补交自己发生
   assert.deepEqual(R.focused, ['input'],
     'A3-F2：手势窗口里跳过的交还必须在窗口关闭后补一次（实测 ' + JSON.stringify(R.focused) + '）');
   assert.equal(R.win.__weFocusHandback.handbacks, 1, 'A3-F2：补交也要如实记账');
@@ -4774,7 +4811,7 @@ setTimeout(async () => {
   R.doc.activeElement = R.frame;
   R.fire('focusout', R.hostInput);
   R.fire('focusout', R.hostInput);
-  await tick();
+  R.advance(0);
   assert.ok(R.win.__weFocusHandback.handbacks === 1 && R.win.__weFocusHandback.skipped === 3,
     'A3-F2：窗口内重复 focusout 不立刻补交、每次跳过都记账，实测 '
     + JSON.stringify({ handbacks: R.win.__weFocusHandback.handbacks, skipped: R.win.__weFocusHandback.skipped }));
@@ -4786,9 +4823,38 @@ setTimeout(async () => {
   disposeR();
   assert.equal(R.win.__weFocusHandback.retrying, false,
     'A3-F2/F5：拆除必须清掉在途的补交定时器（`retrying` 仍为 true = 定时器泄漏，实测被清掉后才是 false）');
-  await sleep(1150);
+  assert.equal(R.pendingTimers(), 0,
+    'A3-F2/F5：拆除必须在队列里**真的清掉**在途补交定时器（只把 `retrying` 置 false 不够 —— 定时器还活着）');
+  R.advance(1150);
   assert.equal(R.win.__weFocusHandback.handbacks, 1,
     'A3-F2：拆除后补交不许再发生（实测补交又在拆除后发生了）');
+
+  // ④''' §11 A3-F2（issue #210）：手势窗口**未到点**时一次都不许补交。补交定时器若不等窗口就动手
+  //    （或跳过时当场补交），用户在窗口里刚点的壁纸会被抢回焦点 —— 与"照他点的来"直接矛盾。虚拟时钟
+  //    让这条判据钉在精确的边界上：999ms 一定未到点，再走 101ms 一定到点（墙钟版本只能碰运气）。
+  const W = buildFh(fhSrc);
+  W.mod.installFocusHandback();
+  W.fire('focusin', W.hostInput);
+  W.fire('pointerdown', null);
+  W.doc.activeElement = W.frame;
+  W.fire('focusout', W.hostInput);
+  W.advance(0);
+  assert.ok(W.win.__weFocusHandback.handbacks === 0 && W.win.__weFocusHandback.skipped === 1
+    && W.win.__weFocusHandback.retrying === true,
+    'A3-F2 前提：窗口内 skip 一次并挂上在途补交定时器，实测 '
+    + JSON.stringify({ handbacks: W.win.__weFocusHandback.handbacks, skipped: W.win.__weFocusHandback.skipped, retrying: W.win.__weFocusHandback.retrying }));
+  W.advance(999);
+  assert.deepEqual(W.focused, [],
+    'A3-F2：手势窗口未到点（999ms < 1000ms）时一次都不许补交，实测 ' + JSON.stringify(W.focused));
+  W.advance(101);
+  assert.deepEqual(W.focused, ['input'],
+    'A3-F2：窗口到点（999 + 101 > 1000ms）后必须补交一次，实测 ' + JSON.stringify(W.focused));
+  assert.equal(W.win.__weFocusHandback.handbacks, 1, 'A3-F2：到点补交也要如实记账');
+  W.mod.installFocusHandback()();
+  assert.equal(W.pendingTimers(), 0, 'A3-F2：拆除后虚拟队列里不许还留着补交定时器（否则它还会醒来）');
+  W.advance(1150);
+  assert.deepEqual(W.focused, ['input'],
+    'negative control：拆除后到点不许补交（交还次数不变，实测 ' + JSON.stringify(W.focused) + '）');
 
   // ④' 环境能力：本仓的 verify 挂载台用 stub `document`（只有 body / style，没有 addEventListener）
   //     ⇒ 必须安静退场（返回 null、不抛、不留半个监听器）。实测 verify-transcode-state 的挂载台
@@ -4815,7 +4881,7 @@ setTimeout(async () => {
   mutGesture.fire('focusin', mutGesture.hostInput);
   mutGesture.doc.activeElement = mutGesture.frame;
   mutGesture.fire('focusout', mutGesture.hostInput);
-  await tick();
+  mutGesture.advance(0);
   assert.deepEqual(mutGesture.focused, ['input'],
     'negative control: 摘掉"最近真实交互"判定 ⇒ 有手势也会交还 ⇒ 上面那条负对照不是空转');
   const mutTargetSrc = fhSrc.replace('if (!weIsWallpaperFrame(active) || !active.isConnected) return;',
@@ -4826,9 +4892,66 @@ setTimeout(async () => {
   mutTarget.fire('focusin', mutTarget.hostInput);
   mutTarget.doc.activeElement = mutTarget.hostButton;
   mutTarget.fire('focusout', mutTarget.hostInput);
-  await tick();
+  mutTarget.advance(0);
   assert.deepEqual(mutTarget.focused, ['input'],
     'negative control: 摘掉"焦点得在壁纸帧里"判定 ⇒ 落到宿主元素也交还 ⇒ 上面那条负对照不是空转');
+
+  // 变异负对照（issue #210：A3-F2 的时序判据必须"有牙"）：把 A3-F2 的关键序列喂给三份改写源码 ——
+  // 同一台虚拟时钟、同一串动作，观测量只要偏离原版，就说明对应的判据确实在判它（而不是靠墙钟碰巧绿）。
+  // 序列 = 窗口内 skip 一次 ⇒ 窗口未到点不许补交 ⇒ 到点必须补交 ⇒ 窗口里两次 focusout 不立刻补交
+  // 且每次都记账 ⇒ 拆除把在途定时器从队列里清掉。
+  const replayA3F2 = (src) => {
+    const M = buildFh(src);
+    M.mod.installFocusHandback();
+    M.fire('focusin', M.hostInput);
+    M.fire('pointerdown', null);            // 手势窗口内
+    M.doc.activeElement = M.frame;
+    M.fire('focusout', M.hostInput);
+    M.advance(0);                           // focusout 之后那一拍
+    M.advance(999);                         // 窗口未到点（GESTURE_WINDOW_MS = 1000）
+    const atWindowEdge = M.focused.length;
+    M.advance(101);                         // 窗口到点
+    const afterWindow = M.focused.length;
+    M.fire('pointerdown', null);            // 窗口里再来两次 focusout
+    M.doc.activeElement = M.frame;
+    M.fire('focusout', M.hostInput);
+    M.fire('focusout', M.hostInput);
+    M.advance(0);
+    const skipped = M.win.__weFocusHandback.skipped;
+    const handbacks = M.win.__weFocusHandback.handbacks;
+    const pendingBeforeDispose = M.pendingTimers();
+    M.mod.installFocusHandback()();         // 幂等返回同一个拆除函数
+    M.advance(1150);
+    return { atWindowEdge, afterWindow, skipped, handbacks, pendingBeforeDispose,
+      pendingAfterDispose: M.pendingTimers(), focusedAfterDispose: M.focused.length };
+  };
+  // 装置自检（不是产品判据）：原版源码在这条序列上的观测量 —— 三条变异都对着它比。
+  const a3f2Base = replayA3F2(fhSrc);
+  assert.deepEqual(a3f2Base,
+    { atWindowEdge: 0, afterWindow: 1, skipped: 3, handbacks: 1, pendingBeforeDispose: 1,
+      pendingAfterDispose: 0, focusedAfterDispose: 1 },
+    '装置自检：原版 A3-F2 序列的观测量（未到点 0 次补交 / 到点 1 次 / skipped=3 / 拆除后队列空），实测 '
+    + JSON.stringify(a3f2Base));
+  // 变异①：干脆不挂补交定时器 ⇒ "窗口关闭后补一次"整条判据的对象消失。
+  const mutNoRetrySrc = fhSrc.replace('if (retryTimer === null) {', 'if (false) { /* 变异①：不挂补交定时器 */');
+  assert.ok(mutNoRetrySrc !== fhSrc, 'negative control 的改写必须真的命中源码（变异①去掉补交分支）');
+  const mutNoRetry = replayA3F2(mutNoRetrySrc);
+  assert.ok(mutNoRetry.afterWindow === 0 && mutNoRetry.handbacks === 0 && mutNoRetry.pendingBeforeDispose === 0,
+    'negative control（变异①去掉补交分支）：`窗口关闭后必须补一次`要判红 —— 实测 ' + JSON.stringify(mutNoRetry));
+  // 变异②：窗口里跳过了却不记账 ⇒ `skipped` 自证面骗人（真机分不清"没触发"与"没装上"）。
+  const mutNoSkipSrc = fhSrc.replace('      state.skipped += 1;\n      // 跳过一次', '      // 跳过一次');
+  assert.ok(mutNoSkipSrc !== fhSrc, 'negative control 的改写必须真的命中源码（变异②skipped 不自增）');
+  const mutNoSkip = replayA3F2(mutNoSkipSrc);
+  assert.ok(mutNoSkip.skipped === 0,
+    'negative control（变异②skipped 不自增）：`每次跳过都记账`要判红 —— 实测 skipped=' + mutNoSkip.skipped);
+  // 变异③：补交不等窗口（挂上定时器就把手势窗口当过去）⇒ 用户在窗口里刚点的壁纸被抢回焦点。
+  const mutEarlySrc = fhSrc.replace(
+    'retryTimer = setTimeout(() => { retryTimer = null; state.retrying = false; handBack(); },\n          Math.max(state.gestureAt + GESTURE_WINDOW_MS - now, 0) + 1);',
+    'retryTimer = setTimeout(() => { retryTimer = null; state.retrying = false; state.gestureAt = 0; handBack(); }, 0);');
+  assert.ok(mutEarlySrc !== fhSrc, 'negative control 的改写必须真的命中源码（变异③提前补交）');
+  const mutEarly = replayA3F2(mutEarlySrc);
+  assert.ok(mutEarly.atWindowEdge === 1,
+    'negative control（变异③提前补交）：`窗口未到点不许补交`要判红 —— 实测 999ms 时已经补交 ' + mutEarly.atWindowEdge + ' 次');
 }
 
 // ── 滑块的取值域必须**同源于 schema**（为一个真实事故补的判据）────────────────────
