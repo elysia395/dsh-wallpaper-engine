@@ -27,6 +27,7 @@ const LIVE_PAGE_ID = (function () { try { return Math.random().toString(36).slic
 // 面板开关（本会话有效、不落盘）：给「打不开 DevTools」的环境留的入口 ——
 // DSH web 的根路径鉴权是 303 跳到干净的 `/`，URL 上的查询参数到不了客户端，
 // 所以不能靠 ?weLiveDebug=1 传参。
+// eslint-disable-next-line prefer-const -- 跨片段写入：live-layer.js:560
 let liveDiagOn = false;
 function liveDiagVerbose() {
   if (liveDiagOn) return true;

@@ -46,6 +46,8 @@
 
   // 这一层只**按顺序组装**各节（"有哪几节、什么顺序"一眼可读；
   // 判据按真渲染的节序列钉住，见 verify-scene-live 的节顺序一节）。
+  // 首行空解构是**契约**（test/verify-scene-live.mjs 的『每个页签首行都从 ctx 解构』）：
+  // 本页签只把 ctx **转交**给各节、自己不读字段 —— 所以那不是无操作声明，是"要什么写在签名处"。
   function renderWallpaperTab(ctx) {
     const { } = ctx;
     return React.createElement(React.Fragment, null,
@@ -63,6 +65,8 @@
   //    ⇒ 改这里等于同时改设置页与侧边栏 —— 这正是用户口径要的"两边同序"。
   // 用户口径（2026-10-11）：主题 → 细节 → 玻璃 UI → 侧边栏圆角 → 全局 UI 配色 → 全局字体。
   // 与上一版的差别只有一处：**「玻璃 UI」与「侧边栏圆角」对调**（前者上移到细节之后）。
+  // 首行的空解构是**契约**（test/verify-scene-live.mjs 的『每个页签首行都从 ctx 解构』）：
+  // 本页签只把 ctx 转交给各节、自己不读字段 —— 所以那不是无操作声明。
   function renderAppearanceTab(ctx) {
     const { } = ctx;
     return React.createElement(React.Fragment, null,
@@ -176,6 +180,8 @@
 
   // 这一层只**按顺序组装**各节 —— 于是"这个页签有哪几节、什么顺序"
   // 一眼可读（判据按真渲染的节序列钉住，见 verify-scene-live 的节顺序一节）。
+  // 首行的空解构是**契约**（test/verify-scene-live.mjs 的『每个页签首行都从 ctx 解构』）：
+  // 本页签只把 ctx 转交给各节、自己不读字段 —— 所以那不是无操作声明。
   function renderAdvancedTab(ctx) {
     const { } = ctx;
     return React.createElement(React.Fragment, null,

@@ -1105,6 +1105,7 @@ function syncRotationTimer() {
 // 数，全灭则 re-arm 定时器下轮重来）。手动切换/关闭轮换会取消进行中的准备。
 let rotationPrep = null; // { id, fromId, excluded, cancelled, settled, timers, staged, probeMedia, readyEl, kind }
 let pendingRotationFade = false; // commit 置位，syncLayers 消费后清零
+// eslint-disable-next-line prefer-const -- 跨片段写入：layer-core.js:52,67 · live-layer.js:398,424
 let fadingLayerNode = null;      // 正在淡出的旧壁纸层（渐变结束移除）
 // iframe 类媒体（live 渲染页 / 旧链网页壁纸）的「节点级领养」通道：同源 iframe
 // 在同文档内 reparent 会重载文档（Chromium 实测：appendChild 移动 iframe =
@@ -2171,6 +2172,7 @@ function VinylRecord(props) {
 // view closes. pickerFocusPending: one-shot flag so the view's initial focus
 // lands exactly once on open (an inline ref callback would re-fire every render).
 let pickerOpener = null;
+// eslint-disable-next-line prefer-const -- 跨片段写入：panel-tabs-effects.js:175
 let customFrameInput = null;
 let pickerFocusPending = false;
 // GPU 抓帧缓存状态（面板展示用）：wid 对应当前面板壁纸，pinned=缓存里已有
@@ -4889,7 +4891,7 @@ function apply(ctx) {
       // Fires syncLayers → play/pause on the video; decode drops to 0 while
       // minimized / covered by another app, exactly like desktop WE.
       const onOcclusionChange = () => emit();
-      let ocListeners = [];
+      const ocListeners = [];
       if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
         for (const t of ["visibilitychange", "blur", "focus"]) {
           window.addEventListener(t, onOcclusionChange);

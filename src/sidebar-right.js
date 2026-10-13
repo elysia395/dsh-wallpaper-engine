@@ -84,6 +84,7 @@ function sidebarRightClose() {
 // ── 壁纸侧栏的统一开关（吉祥物点击 / 快捷键共用；两个宿主形态都覆盖）─────────
 // 抽屉态的开关由 RopeDock 组件注册进来：drawer 的 open 状态是组件内部 state，
 // 模块层只能经这一组回调改它（注册/撤销见 client.js 的 RopeDock effect）。
+// eslint-disable-next-line prefer-const -- 跨片段写入：client.js:4404,4405,4410
 let ropeDrawerControl = null; // { toggle, open, close } | null（RopeDock 隐藏/卸载时为 null）
 /** 开：官方态展开并聚焦本 tab；抽屉态开抽屉。两边都不可用返回 false。 */
 function wallSidebarOpen() {
