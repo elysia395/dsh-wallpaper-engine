@@ -159,5 +159,4 @@
 
   export {
     renderPickerPropsPanel,
-    renderUserPropRow,
   };

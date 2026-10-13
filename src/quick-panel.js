@@ -859,11 +859,8 @@
   }
 
   export {
-    qpTypes,
     QP_TABS,
-    QP_TAB_KEY,
     QP_CTX_SETTINGS_ONLY,
     sidebarRenderCtx,
-    qpTypeLabel,
     QuickPanel,
   };

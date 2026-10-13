@@ -605,4 +605,4 @@
   //    只共享模块级纯助手 ⇒ 不需要 ctx 样板，这里按名字调用即可。
 
 
-export { renderAppearanceThemeSection, renderAppearanceDetailSection, familyOptions, renderFontGlobalFamily, renderFontColorRoles, renderFontTypeRoles, renderFontComponents, renderFontSet, renderAppearanceFontSection, renderAppearanceSidebarCornersSection, renderAppearanceUiColorSection };
+export { renderAppearanceThemeSection, renderAppearanceDetailSection, renderAppearanceFontSection, renderAppearanceSidebarCornersSection, renderAppearanceUiColorSection };

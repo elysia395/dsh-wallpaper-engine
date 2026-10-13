@@ -298,4 +298,4 @@
     );
   }
 
-export { renderEffectsSlidersSection, renderEffectsLiveSection, renderEffectsSourceSection, renderTranscodeProgress, renderEffectsPlaybackSection, renderEffectsFitSection };
+export { renderEffectsSlidersSection, renderEffectsLiveSection, renderEffectsSourceSection, renderEffectsPlaybackSection, renderEffectsFitSection };
