@@ -1604,3 +1604,6 @@ if (failed) {
   process.exit(1);
 }
 console.log(`ALL FONTSET CHECKS PASSED (${passed})`);
+// 与 verify-scene-live-occlusion.mjs 同款兜底：本文件加载的组件/字体替身会留下
+// 不退出的句柄（实测 157 项全过后进程仍驻留），显式退出把链交给下一棒。
+process.exit(0);

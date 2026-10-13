@@ -296,6 +296,16 @@ const INLINE_MODULES = [
       'const apiJson = ', 'const apiHead = '],
   },
   {
+    // Linux 壳窗遮挡轮询器（docs/wip/LINUX-OCCLUSION.md §6）：宿主 /occlusion 快照
+    // → innerWidth/own.w 缩放到画布 CSS 像素 → postMessage 给 scene-live 遮挡桥。
+    // 顶层只声明函数与 var 状态、apiJson 在调用期解引用（无 TDZ 交互），跟随
+    // api-client 之后内联。
+    file: 'src/occlusion.js',
+    why: '遮挡投递：/occlusion 轮询 + 缩放 + postMessage（1Hz，含退避与可见性暂停）',
+    markers: ['var OCCLUSION_POLL_MS = ', 'function startOcclusionPolling(', 'function stopOcclusionPolling(',
+      'function occlusionTick(', 'function deliverOcclusionSnapshot('],
+  },
+  {
     // 玻璃后端的唯一落点（wip §10.13）：从 `effects.js` 抽出的那一段 ——
     // 输入输出封闭（只要 `selection` + `body.style`），所以抽出来之后
     // ⑪/⑫/⑬ 三组守卫读的"写了什么"有了单一归属，R3b 的形状改动也只落在这里。

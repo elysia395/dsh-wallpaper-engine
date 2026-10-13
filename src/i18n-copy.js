@@ -82,6 +82,7 @@ const WE_I18N_EN = {
   "保存失败：{error}": "Save failed: {error}",
   "标签页隐藏(pauseOnHidden)": "Tab hidden (pauseOnHidden)",
   "窗口失焦(pauseOnBlur)": "Window unfocused (pauseOnBlur)",
+  "窗口被完全遮挡(pauseOnOcclusion)": "Window fully occluded (pauseOnOcclusion)",
   "电池供电(pauseOnBattery)": "On battery (pauseOnBattery)",
   "用户暂停": "Paused by user",
   "浏览器无法解码这段视频（自上传建议改用 H.264 编码的 MP4）": "The browser cannot decode this video (for your own uploads, use an H.264-encoded MP4)",

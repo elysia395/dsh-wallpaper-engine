@@ -803,12 +803,18 @@ function startLiveWatch(frame, wid) {
     if (watch.stall >= LIVE_STALL_TICKS * 2) liveFail("stall");
   }, 1000);
   liveWatch = watch;
+  // Linux 遮挡轮询：只对 scene 渲染页开（遮挡桥由宿主注入 scene-live HTML；web 壁纸
+  // 是严格沙箱第三方页，把窗口几何投给它是泄漏也是噪声）。P0 仅 X11 宿主有数据，
+  // 其余平台轮询只会拿到 backend=none ⇒ clearOcclusion，无害。
+  // ⚠️ 必须在看护定时器之后建：两者同为 1s 周期，smoke 夹具按「第一个 1000ms 定时器」认看护。
+  if (selection.type === "scene") startOcclusionPolling(frame);
 }
 function stopLiveWatch() {
   if (!liveWatch) return;
   try { clearInterval(liveWatch.timer); } catch { /* ignore */ }
   stopUiFpsProbe();
   stopMediaSync(liveWatch.frame);
+  stopOcclusionPolling(); // 看护停 ⇒ 轮询停（1Hz 心跳断了渲染器会自清遮挡，别留孤儿定时器）
   liveWatch = null;
   // 只重置标志；音频互斥由调用方收敛 —— 重建（fps 切换）时若在这里拉起
   // 外置 <audio>，新一帧 live 又要立刻把它停掉，中间会闪一下双声道。

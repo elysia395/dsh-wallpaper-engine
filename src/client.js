@@ -2481,10 +2481,17 @@ const OCCLUSION_RECHECK_MS = 3000;
 // applyLiveControls 把渲染页 pause() 掉，而暂停中的渲染页 __wpStats.frame()
 // 恒为 {fps:0, running:false}（渲染器实现：paused → running:false）。
 function livePauseReason() {
-  return selection.playing ? occlusionReason() : weT("用户暂停");
+  if (selection.playing) {
+    // 遮挡暂停（X11 矩形遮挡 ⇒ 渲染器 pause 档）也是"故意不出帧"：必须让看护
+    //（首帧预算 / stall 计数 / 载荷延迟）与 UI 归因都看见它，否则全遮挡下轮播
+    // 换页会把故意暂停误判成传输停滞并自动回退（实测事故，2026-10-12）。
+    if (occlusionRendererPaused()) return weT("窗口被完全遮挡(pauseOnOcclusion)");
+    return occlusionReason();
+  }
+  return weT("用户暂停");
 }
 function isEffectivelyPlaying() {
-  return selection.playing && !occlusionActive();
+  return selection.playing && !occlusionActive() && !occlusionRendererPaused();
 }
 
 // ── 真实播放态回写────────────────────────────────────────────────────
