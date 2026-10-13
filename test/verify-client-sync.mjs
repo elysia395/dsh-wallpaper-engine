@@ -124,7 +124,7 @@ check('构建产物与重建结果一致（按构建形态 LF 比较）', agree,
     try {
       const out = execFileSync('git', ['ls-files', '--', 'lib/client.js', 'docs/images'], { cwd: ROOT, encoding: 'utf8' });
       return out.split('\n').map((s) => s.trim()).filter(Boolean);
-    } catch (e) {
+    } catch {
       return null; // 不是 git 工作树（例如发布的 tarball 的内嵌检查）：不判这一条
     }
   })();
