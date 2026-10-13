@@ -23,6 +23,8 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
+import { panelText } from './tools/src-scope.mjs';
+
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (rel) => readFileSync(join(ROOT, rel), 'utf8');
 let failed = 0;
@@ -122,7 +124,7 @@ function weakenedAcceptAssignments(src) {
 const hostSrc = read('lib/index.js');
 const apiSrc = read('src/api-client.js');
 const clientSrc = read('src/client.js');
-const tabsSrc = read('src/panel-tabs.js');
+const tabsSrc = panelText();
 
 {
   const a = baseOf(hostSrc);

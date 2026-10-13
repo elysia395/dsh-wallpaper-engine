@@ -50,7 +50,8 @@ import { Readable, Writable } from 'node:stream';
 // 剥注释：共享的字符串感知实现（test/tools/js-text.mjs）。
 import { stripComments } from './tools/js-text.mjs';
 // 刀3：样式族取文（8 个域模块 + 组装点，构建序拼接）。
-import { styleText } from './tools/src-scope.mjs';
+// ⚠️ 本文件内另有局部 `panelText(sel)` 夹具（1108 行）⇒ 族取文别名导入，避免 TDZ/遮蔽。
+import { styleText, panelSources, panelText as panelSrcText } from './tools/src-scope.mjs';
 // 单独 import `src/**` 时补上 bundle 作用域的取词层（中文身份；见 test/tools/weT-shim.mjs）。
 import { installWeTShim } from './tools/weT-shim.mjs';
 installWeTShim();
@@ -1058,12 +1059,15 @@ section('⑧ 面板渲染回归（配色区在总开关打开时必须渲染得�
     await import(pathToFileURL(join(root, 'src', 'section-head.js')).href),
     // 面板还会调 `filterUsableSystemFonts(...)`（本机字体那道"本浏览器能否匹配"的筛，同一条理由）。
     await import(pathToFileURL(join(root, 'src', 'system-fonts.js')).href),
+    // 刀4：panel-tabs 的 5 个域模块（节渲染器）—— 与上面 glass-panel / section-head 同一条理由：
+    // 打包后同作用域，按文件 import 时必须映成全局。
+    ...(await Promise.all(panelSources().slice(0, -1).map((rel) => import(pathToFileURL(join(root, rel)).href)))),
     schema,
   ];
   for (const mod of preludeMods) for (const [k, v] of Object.entries(mod)) globalThis[k] = v;
   check('前置：夹具不是空转的（角色表非空，且配色区确实按角色遍历）',
     colorRoles.THEME_COLOR_ROLES.length >= 5
-    && /THEME_COLOR_ROLES\.map/.test(readFileSync(join(root, 'src', 'panel-tabs.js'), 'utf8')),
+    && /THEME_COLOR_ROLES\.map/.test(panelSrcText()),
     colorRoles.THEME_COLOR_ROLES.length + ' 个角色');
 
   /** 面板 ctx：只求"渲染得出"，处理器全 noop。`over.sel` 换夹具（负对照用）。 */

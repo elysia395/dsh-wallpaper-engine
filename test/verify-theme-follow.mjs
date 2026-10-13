@@ -37,6 +37,7 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { stripComments } from './tools/js-text.mjs';
 // 单独 import `src/**`（含 fresh URL 重载）时补上 bundle 作用域的取词层（中文身份）。
 import { installWeTShim } from './tools/weT-shim.mjs';
+import { panelText } from './tools/src-scope.mjs';
 installWeTShim();
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -403,7 +404,7 @@ console.log('\n⑤ 两条腿合议：真实帧与预览图不一致时取深色�
 console.log('\n⑥ 开关「主题随壁纸」：默认关 · 关时主题不变 · 开时上游行为 · 键经落盘入口');
 {
   const schema = await import(pathToFileURL(join(root, 'lib', 'settings-schema.js')).href);
-  const tabsCode = stripComments(read('src/panel-tabs.js'));
+  const tabsCode = stripComments(panelText());
   const clientCode = stripComments(read('src/client.js'));
   // i18n 之后行文案走 `weT("…")`（中文原文即键）—— 判据认"开关 + 配色行都还在、且位置如此"，
   // 不认裸字面量（认形态的判据会在下一次改包装时静默失效）。
@@ -497,7 +498,7 @@ console.log('\n⑦ 接线：服务句柄 / 切换评估 / 面板开关 / 内联�
 {
   const clientSrc = read('src/client.js');
   const prepSrc = read('src/media-prep.js');
-  const tabsSrc = read('src/panel-tabs.js');
+  const tabsSrc = panelText();
   const buildSrc = read('scripts/build-client.mjs');
   check('主题服务句柄接在既有的 theme 轮询 onReady 上（不新增轮询）',
     /onReady: \(theme\) => \{ themeFollowAttach\(theme, ctx\);/.test(clientSrc));

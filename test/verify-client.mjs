@@ -10,7 +10,7 @@ import vm from 'node:vm';
 // 剥注释：共享的字符串感知实现（test/tools/js-text.mjs）。
 import { stripComments, stripExportBlocks } from './tools/js-text.mjs';
 // 刀3：样式族取文（8 个域模块 + 组装点，构建序拼接）——别再自己 readFileSync 单文件。
-import { styleText } from './tools/src-scope.mjs';
+import { styleText, panelText, scopeText } from './tools/src-scope.mjs';
 // 分支级"改了 store 却没通知"的分析与审计工具**同源**（避免两份判据分叉）；
 // `DEF`/`defName` 也从工具导入 —— 定义形态只有一份，形态补齐时两处一起动。
 import { pathNotifications, definitionsOf, DEF, defName } from './tools/branch-notify.mjs';
@@ -1818,7 +1818,7 @@ setTimeout(async () => {
     //         （四角投影 + 透视），不复述产品里的任何字面量；
     //      ④ **中心唯一且 = 当前生效的形态**：恰好一张卡的总角度 ≡ 0（mod 360）。
     //    判据只读渲染树里的行内值（角度 / 盒宽 / 半径 / 环旋转），不去猜 CSS。
-    const tabsForRing = readFileSync(new URL('../src/panel-tabs.js', import.meta.url), 'utf8');
+    const tabsForRing = panelText();
     const numConst = (re, what) => {
       const v = Number((tabsForRing.match(re) || [])[1]);
       assert.ok(Number.isFinite(v), '（几何判据前置）源码里取不到 ' + what);
@@ -2273,7 +2273,7 @@ setTimeout(async () => {
       // test/verify-scene.mjs 的真 socket 路由用例（导入 / 覆盖 / 清除）覆盖。
       {
         const srcNow = readFileSync(new URL('../src/client.js', import.meta.url), 'utf8');
-        const tabsNow = readFileSync(new URL('../src/panel-tabs.js', import.meta.url), 'utf8');
+        const tabsNow = panelText();
         assert.ok(/function ropeArtOf\(selLike\)/.test(srcNow)
           && /apiUrl\("\/mascot\?v=" \+ encodeURIComponent\(name\)\)/.test(srcNow),
           '主页面吉祥物必须走 ropeArtOf（自定义优先）这条解析');
@@ -4063,7 +4063,7 @@ setTimeout(async () => {
 //   · 两个入口本身是唯一的"写 + 落盘"实现处（反查：入口体内必须有 selection[field] = 与
 //     persistSelection()，否则判据是空转）。
 {
-  const tabsSrc2 = readFileSync(new URL('../src/panel-tabs.js', import.meta.url), 'utf8');
+  const tabsSrc2 = panelText();   // 刀4：页签族并集（5 个域模块 + 组装点）。
   const storeSrc = readFileSync(new URL('../src/client.js', import.meta.url), 'utf8');
   // ⚠️ **先剥注释再判**（规则 ⑦）：本文件头的契约注释必须能点名 `selection.` / `editing` 才能把
   // "为什么不许写"讲清楚 —— 不剥注释的判据会逼着后来人删掉那条解释（把"为什么"从代码里抹掉）。
@@ -4117,13 +4117,14 @@ setTimeout(async () => {
     // `selection.` 字面量），于是三类越界全都漏过去了：直接 `emit()`、写模块状态
     //（`propsPanelOpen = !propsPanelOpen`）、改 ctx 别名的子对象（`editing.name = …`）。
     // 同一批"搬出去的渲染器"必须**同一条口径**，否则接缝纪律只对其中两个文件成立。
-    { file: '../src/panel-tabs.js', user: '页签',
+    { file: '../src/panel-tabs.js', family: 'src/panel-tabs', user: '页签',
       anchor: ['function renderWallpaperTab(ctx)', 'function renderAppearanceTab(ctx)',
         'function renderEffectsTab(ctx)', 'function renderAdvancedTab(ctx)',
         'function renderExtensionsTab(ctx)'] },
   ];
   for (const r of RENDERERS) {
-    const src = readFileSync(new URL(r.file, import.meta.url), 'utf8');
+    // 刀4：`family` 条目按构建序扫**族并集**（节渲染器搬出去了，单文件读法会漏掉它们）。
+    const src = r.family ? scopeText(r.family) : readFileSync(new URL(r.file, import.meta.url), 'utf8');
     const got = seamCrossings(src);
     assert.ok(r.anchor.every((a) => src.includes(a)),
       r.file + ' 必须真的含有' + r.user + '渲染器（否则下面的零次判据是空转）');
@@ -4166,7 +4167,8 @@ setTimeout(async () => {
     return hits;
   };
   for (const r of RENDERERS) {
-    const src = readFileSync(new URL(r.file, import.meta.url), 'utf8');
+    // 刀4：`family` 条目按构建序扫**族并集**（节渲染器搬出去了，单文件读法会漏掉它们）。
+    const src = r.family ? scopeText(r.family) : readFileSync(new URL(r.file, import.meta.url), 'utf8');
     const muts = aliasMutations(src);
     assert.equal(muts.length, 0,
       r.user + '渲染器不得改写 ctx 别名 / 模块状态（命中 ' + muts.join(', ') + '）');
@@ -4261,7 +4263,7 @@ setTimeout(async () => {
 // 装配函数体内不得再出现那批标记，且必须调子渲染器；负对照证明同一条判据能判出
 // "标记确实在子渲染器里"（否则是个恒真判据）。
 {
-  const src = readFileSync(new URL('../src/panel-tabs.js', import.meta.url), 'utf8');
+  const src = panelText();   // 刀4：页签族并集（helper 声明顺序判据按构建序）。
   const bodyOf = (name) => {
     const i = src.indexOf('function ' + name + '(');
     assert.ok(i >= 0, '找不到 ' + name + '（判据不得空转）');

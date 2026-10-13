@@ -46,7 +46,7 @@ import { fileURLToPath } from 'node:url';
 // 共享实现（`new Function` 装入源码文本前必须先剥掉 `export { … }`）——别在这里再抄一份正则。
 import { stripExportBlocks } from './tools/js-text.mjs';
 // 刀3：样式族取文（8 个域模板 + 组装点）——源码侧用 styleText()，产物侧用 cssBodyOf()。
-import { styleText, cssBodyOf, cssPartsOf } from './tools/src-scope.mjs';
+import { styleText, cssBodyOf, cssPartsOf, panelText } from './tools/src-scope.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const CLIENT = process.argv[2] || join(ROOT, 'lib', 'client.js');
@@ -433,7 +433,7 @@ const CLIENT_SRC = readFileSync(join(ROOT, 'src', 'client.js'), 'utf8');
 // 「独立配置」开关的**两个落点**：登记表子项由 glass-panel 自动渲染，既有面（左侧栏 / 侧栏 /
 // 内容面）的开关手写在 panel-tabs。第 ⑧ 组的"mode 可达性"判据要同时看这两处。
 const GLASS_PANEL_SRC = readFileSync(join(ROOT, 'src', 'glass-panel.js'), 'utf8');
-const PANEL_SRC = readFileSync(join(ROOT, 'src', 'panel-tabs.js'), 'utf8');
+const PANEL_SRC = panelText();
 // schema 模块（模块级：多个判据组都要读它的 DEFAULTS / GLASS_CHILDREN）。
 const SCHEMA = await import(new URL('../lib/settings-schema.js', import.meta.url).href);
 const uncommented = (s) => s.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1 ');

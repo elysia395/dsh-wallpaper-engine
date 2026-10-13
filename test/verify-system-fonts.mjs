@@ -38,6 +38,7 @@ import {
   authoritativeSources, SYSTEM_FONTS_TTL_MS, SYSTEM_FONTS_CACHE_VERSION, FONT_SCAN_TIMEOUT_MS,
 } from '../lib/routes/system-fonts.js';
 import { systemFontKeyOf, sanitizeFamilyValue } from '../lib/settings-schema.js';
+import { panelText } from './tools/src-scope.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const ISO = join(root, '.test-cache', 'system-fonts');
@@ -429,8 +430,8 @@ section('⑤ 客户端通道：登记进产物 / 浏览器安全 / 只碰自己�
     /qpTab === "appearance" && fontOpen && sel\.fontCustom/.test(qp)
     && /if \(v\) ensureSystemFonts\(false\)/.test(client));
   check('面板拿到了全局字族与重新扫描两个入口（ctx 少一个就是"点了没反应"）',
-    /onGlobalFamily, onRefreshSystemFonts/.test(read('src/panel-tabs.js')));
-  const tabs = stripComments(read('src/panel-tabs.js'));
+    /onGlobalFamily, onRefreshSystemFonts/.test(panelText()));
+  const tabs = stripComments(panelText());
   check('下拉的选项与本机字体状态行都走同一条"本浏览器能否匹配"的筛',
     /filterUsableSystemFonts\(sel\.systemFonts\)\.fonts/.test(tabs)
     && /filterUsableSystemFonts\(sel\.systemFonts\)/.test(tabs));

@@ -33,7 +33,7 @@ import { execFileSync } from 'node:child_process';
 // 剥注释：共享的字符串感知实现（`verify-module-layout` 的『剥注释必须字符串感知』一节钉住"不许再用朴素正则"）。
 import { stripComments, stripExportBlocks } from './tools/js-text.mjs';
 // 刀3：样式族取文（8 个域模块 + 组装点，构建序拼接）。
-import { styleText } from './tools/src-scope.mjs';
+import { styleText, panelSources, panelText } from './tools/src-scope.mjs';
 // 单独 import `src/**` 时补上 bundle 作用域的取词层（面板渲染器直接用 weT；见该 shim 的文件头）。
 import { installWeTShim } from './tools/weT-shim.mjs';
 installWeTShim();
@@ -873,7 +873,10 @@ const qpCode = stripComments(qpSrc);
 const stylesSrc = styleText();
 const liveSrc = readFileSync(join(root, 'src', 'live-layer.js'), 'utf8');
 const prepSrc = readFileSync(join(root, 'src', 'media-prep.js'), 'utf8');
-const tabsSrc = readFileSync(join(root, 'src', 'panel-tabs.js'), 'utf8');
+// 刀4：panel-tabs 已按域拆成 5 个兄弟模块 + 组装点 ⇒ 判"页签族的渲染/接缝"一律扫**并集**。
+const tabsSrc = panelText();
+// 组装点自身：只喂给"8 个 render*Tab 声明在 src/panel-tabs.js"那条不变量（族并集会让它变弱）。
+const tabsHubSrc = readFileSync(join(root, 'src', 'panel-tabs.js'), 'utf8');
 /** `function name() { … }` 的函数体源码（用于按内容而非脆弱的跨行正则断言）。 */
 function fnBody(source, name) {
   const i = source.indexOf('function ' + name + '(');
@@ -1863,10 +1866,10 @@ for (const [name, ok] of clientChecks) check(name, ok);
     'renderAboutTab'];
   check('页签渲染器只在 src/panel-tabs.js（client.js 不留第二份）',
     TAB_FNS.every((n) => !new RegExp('function ' + n + '\\s*\\(').test(src))
-    && TAB_FNS.every((n) => tabsSrc.includes('function ' + n + '(ctx) {')));
+    && TAB_FNS.every((n) => tabsHubSrc.includes('function ' + n + '(ctx) {')));
   // 每个渲染器的**首行**必须是 `const { … } = ctx;` —— "要什么"写在签名处，
   // 而不是靠闭包默默捕获（这正是这一刀的意义；也防止后来人图省事把捕获加回去）。
-  const tabBodies = tabsSrc.split(/^  function (render\w+Tab)\(ctx\) \{$/m).slice(1);
+  const tabBodies = tabsHubSrc.split(/^  function (render\w+Tab)\(ctx\) \{$/m).slice(1);
   const noCtxLine = [];
   for (let i = 0; i < tabBodies.length; i += 2) {
     const fn = tabBodies[i], body = tabBodies[i + 1] || '';
@@ -2332,7 +2335,7 @@ check('空闲停进程 + 下次访问自动唤醒', supSrc.includes('IDLE_STOP_M
 // 不在 Windows 上跑，但一并带上也无害。
 const winHideSites = [
   { file: 'lib/media/supervisor.js', spawn: /spawn\(binPath[\s\S]{0,80}\.\.\.a\.opts/, minFlags: 2 },
-  { file: 'lib/index.js', spawn: /spawn\(a\.file[\s\S]{0,80}\.\.\.a\.opts/, minFlags: 2 },
+  { file: 'lib/transcode.js', spawn: /spawn\(a\.file[\s\S]{0,80}\.\.\.a\.opts/, minFlags: 2 },
   { file: 'lib/media/legacy.js', spawn: /spawnSync\('ffmpeg'[\s\S]{0,220}windowsHide: true/, minFlags: 1 },
 ];
 const winHideBad = [];
@@ -3077,6 +3080,12 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
 // 一次才知道。React / store 用最小替身，**渲染器用真的**（import src/panel-tabs.js）。
 {
   const panelMod = await import(pathToFileURL(join(root, 'src', 'panel-tabs.js')).href);
+  // 刀4：节的渲染器拆到 5 个兄弟模块里了 —— 挂载台是**按文件 import** 的，而运行时是同作用域，
+  // 所以把它们逐个挂到 globalThis（与 glass-panel / section-head / 字体表同一做法）。
+  for (const rel of panelSources().slice(0, -1)) {
+    const mod = await import(pathToFileURL(join(root, rel)).href);
+    for (const [k, v] of Object.entries(mod)) globalThis[k] = v;
+  }
   const schema = await import(pathToFileURL(join(root, 'lib', 'settings-schema.js')).href);
   const noop = () => null;
   // useState 的值由队列喂（QuickPanel 的调用序：[view, qpTab]）。
@@ -3425,11 +3434,17 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
   const noop = () => null;
   // 同一个模块（前面那块已经 import 过 ⇒ 这里拿的是缓存），但 `const` 是块作用域、不能跨块用。
   const panelMod = await import(pathToFileURL(join(root, 'src', 'panel-tabs.js')).href);
+  // 刀4：节的渲染器拆到 5 个兄弟模块里了 —— 挂载台是**按文件 import** 的，而运行时是同作用域，
+  // 所以把它们逐个挂到 globalThis（与 glass-panel / section-head / 字体表同一做法）。
+  for (const rel of panelSources().slice(0, -1)) {
+    const mod = await import(pathToFileURL(join(root, rel)).href);
+    for (const [k, v] of Object.entries(mod)) globalThis[k] = v;
+  }
   const schemaMod = await import(pathToFileURL(join(root, 'lib', 'settings-schema.js')).href);
   // ⚠️ 先归一成 LF 再切片：工作树是 CRLF，而下面的边界串是 `\n  }\n`（裸 LF）——
   // 在 CRLF 上它**匹配不到**，`indexOf` 回 -1 会让切片一路吃到文件尾（把别人的解构也当成
   // 这一节的），于是判据会把整个词表都报成"漏解构"。这类"切错了还照旧报"正是判据要防的形状。
-  const tabsSrcNow = readFileSync(new URL('../src/panel-tabs.js', import.meta.url), 'utf8')
+  const tabsSrcNow = panelText()
     .replace(/\r\n/g, '\n');
   // 这些名字在产物里是**内联同一作用域**的常量 / 纯组件 / 纯函数；单独 import 时按内联规则
   // 补 globalThis 替身（`weT` 由 tools/weT-shim.mjs 装、React 等由上面那块装）。

@@ -307,12 +307,41 @@ const INLINE_MODULES = [
       'function filterUsableSystemFonts('],
   },
   {
+    // ── 刀4：panel-tabs 按域拆出的 5 个兄弟模块（必须在组装点 src/panel-tabs.js **之前**：
+    //    组装点里的 render*Tab 按名字直接调它们的 render*Section / renderMascotFormCards 等，
+    //    内联后同作用域；函数声明本身有提升，但排在调用方前面才读得出依赖方向）。
+    file: 'src/panel-tabs-wallpaper.js',
+    why: '「壁纸库」页签的四个节渲染器（原 src/panel-tabs.js 的 38–508 行原样搬移）',
+    markers: ['function renderWallpaperCurrentSection(ctx) {',
+      '    const { current, isLiveScene, onClear, onOpenPicker, onRefresh, onToggleAudio, onTogglePlay, onTogglePropsPanel, playbackLive, propsPanelOpen, renderUserPropsPanel, sel, setPickerOpener } = ctx;'],
+  },
+  {
+    file: 'src/panel-tabs-appearance.js',
+    why: '「外观」页签的节渲染器与字体一族（原 src/panel-tabs.js 的 520–1125 行原样搬移）',
+    markers: ['function renderAppearanceThemeSection(ctx) {', '    const { onToggleThemeFollow, sel } = ctx;'],
+  },
+  {
+    file: 'src/panel-tabs-mascot.js',
+    why: '「吉祥物」页签的节渲染器与其模块级常量/拖拽状态（原 src/panel-tabs.js 的 1184–1574 行原样搬移）',
+    markers: ['function renderMascotFormCards(sel, previewArt, previewW, previewH,', '  const MASCOT_BOX_PX = 64;'],
+  },
+  {
+    file: 'src/panel-tabs-effects.js',
+    why: '「播放」页签的六个节渲染器（原 src/panel-tabs.js 的 1618–1913 行原样搬移）',
+    markers: ['function renderEffectsSlidersSection(ctx) {',
+      '    const { onBackgroundBrightness, onBackgroundContrast, onBackgroundSaturate, onLayerPositionX, onLayerPositionY, onLayerReset, onLayerScale, onScrim, onWallpaperBlur, onWallpaperOpacity, sel } = ctx;'],
+  },
+  {
+    file: 'src/panel-tabs-advanced.js',
+    why: '「系统」页签的六个节渲染器（原 src/panel-tabs.js 的 1943–2211 行原样搬移）',
+    markers: ['function renderAdvancedBrowsingSection(ctx) {', '    const { onLayoutChange, sel } = ctx;'],
+  },
+  {
     file: 'src/panel-tabs.js',
-    why: '面板页签的渲染器（一个页签一个 render*Tab，其中「扩展」页签只画 extensionModules() 里登记的模块；「玻璃 UI」节已抽到 src/glass-panel.js）—— 显式 ctx 取外界',
-    markers: ['function renderWallpaperTab(ctx)', 'function renderAppearanceTab(ctx)',
-      'function renderAudioTab(ctx)', 'function renderMascotTab(ctx)',
-      'function renderEffectsTab(ctx)', 'function renderAdvancedTab(ctx)',
-      'function renderExtensionsTab(ctx)', 'function renderAboutTab(ctx)'],
+    why: '面板页签**组装点**：只留一个页签一个 render*Tab（其中「扩展」页签只画 extensionModules() 里登记的模块）；五个域的节渲染器在 panel-tabs-*.js 里 —— 显式 ctx 取外界',
+    markers: ['function renderWallpaperTab(ctx) {', '    const { } = ctx;',
+      'function renderExtensionsTab(ctx) {', 'function renderAboutTab(ctx) {',
+      'renderWallpaperTab, renderAppearanceTab, renderAudioTab, renderMascotTab, renderEffectsTab, renderAdvancedTab,'],
   },
   {
     file: 'src/picker-model.js',

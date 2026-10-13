@@ -21,6 +21,7 @@ import assert from 'node:assert/strict';
 import { stripComments } from './tools/js-text.mjs';
 // 单独 import `src/**` 时补上 bundle 作用域的取词层（中文身份；见 test/tools/weT-shim.mjs）。
 import { installWeTShim } from './tools/weT-shim.mjs';
+import { panelText } from './tools/src-scope.mjs';
 installWeTShim();
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -313,7 +314,7 @@ section('④b 排版角色（F2）');
   // 调节面板的渲染器已抽到 src/panel-tabs.js（C）：这里按文件分源，不拼接 ——
 // 拼接会让一个文件的文本满足另一个文件的结构断言。
 const clientFontUi = readFileSync(join(root, 'src', 'client.js'), 'utf8');
-const fontTabsUi = readFileSync(join(root, 'src', 'panel-tabs.js'), 'utf8');
+const fontTabsUi = panelText();
   // 默认值**直接显示在输入框里**（角色表：字号列未填时显示 role.defaultPx），
   // 不再用行内小字复述一遍 DSH 原字阶。
   // 三处「写法判据」提成命名函数 —— 函数名说的是它抓的**该种写法**（与标签同源），

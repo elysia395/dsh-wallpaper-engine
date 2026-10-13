@@ -38,7 +38,7 @@ import { Writable } from 'node:stream';
 // 就写着"不要用 startsWith(dir + '/')"，不剥注释会被自己的说明误伤成真阳性）。
 import { stripComments } from './tools/js-text.mjs';
 // 词表族的按构建顺序读法（组装点 + 各域模块；单一真源 = scripts/build-client.mjs 的 INLINE_MODULES）。
-import { scopeFiles } from './tools/src-scope.mjs';
+import { scopeFiles, panelText } from './tools/src-scope.mjs';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 let passed = 0;
@@ -411,7 +411,7 @@ async function runQr(route, pathname, method, headers) {
       '这正是 2026-10-01 CI 全红而本机全绿的原因');
   }
   // 客户端那一半：src 是路由 URL，不是 data URI
-  const clientSrc2 = read('src/panel-tabs.js');
+  const clientSrc2 = panelText();
   check('渲染器用 apiUrl 拼路由路径（不是内联图）',
     /src: apiUrl\(ABOUT_QR_QQ_PATH\)/.test(clientSrc2) && /src: apiUrl\(ABOUT_QR_DOUYIN_PATH\)/.test(clientSrc2));
   // ⚠️ 不能泛判 `data:image/png;base64,iVBOR` —— 吉祥物立绘就是这种（那两张该留）。要判的是
@@ -428,7 +428,8 @@ async function runQr(route, pathname, method, headers) {
 // ══ ④ 客户端那行字 ═══════════════════════════════════════════════════════════
 console.log('\n④ 客户端：三态文案 + 只读 + 不进设置');
 const clientSrc = read('src/client.js');
-const tabsSrc = read('src/panel-tabs.js');
+// 刀4：页签族并集（5 个域模块 + 组装点）；判据与断言一字未改。
+const tabsSrc = panelText();
 // 词表已按域拆族（`src/i18n-copy-*.js` + 组装点）：读**族并集**，判据与断言一字未改。
 const copySrc = scopeFiles('src/i18n-copy').map(read).join('\n');
 

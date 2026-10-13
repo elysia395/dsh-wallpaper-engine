@@ -15,6 +15,8 @@
  *   · scopeText(prefix, sep?)   → 各文件全文按序拼接（默认 '\n;\n'，保持语句边界）
  *   · styleSources()            → 样式族（src/styles*）路径，顺序 = 构建顺序
  *   · styleText(sep?)           → 样式族全文按序拼接
+ *   · panelSources()            → 页签族（src/panel-tabs*）路径，顺序 = 构建顺序
+ *   · panelText(sep?)           → 页签族全文按序拼接（组装点在**末尾**）
  *   · cssPartsOf(text)          → 文本里全部样式域模板体（源码/产物同形；取不到返回 []）
  *   · cssBodyOf(text)           → 同上拼成一份 CSS；**取不到即抛错**（防"空串 ⇒ 判据恒真"）
  *
@@ -74,6 +76,26 @@ export function styleSources() {
 /** 样式族源码全文按序拼接（默认分隔符同 scopeText：跨文件语句边界）。 */
 export function styleText(sep = '\n;\n') {
   return scopeText('src/styles', sep);
+}
+
+/**
+ * 页签族（`src/panel-tabs*`：5 个域模块 + 组装点 `src/panel-tabs.js`），顺序 = 构建期内联顺序
+ * （**组装点在末尾**）。
+ *
+ * 为什么需要它：`src/panel-tabs.js` 原先是"一个页签一个 render*Tab + 一堆节渲染器"的单文件；
+ * 刀4 把节渲染器按域搬进 5 个兄弟模块，组装点只留 8 个 render*Tab。守卫要判的仍然是**运行时
+ * 真实作用域的并集**（接缝越界、ctx 覆盖面、节渲染器与页签的关系都跨文件），于是取文口径从
+ * "读一个文件"换成"按构建顺序拼同族文件"——判据本身与强度不变。
+ * ⚠️ 唯一的例外是"8 个 render*Tab 声明在**组装点**里"这条不变量：那种读点要直接读
+ * `src/panel-tabs.js`（族并集会让它变弱，因为族里任意模块都算命中）。
+ */
+export function panelSources() {
+  return scopeFiles('src/panel-tabs');
+}
+
+/** 页签族源码全文按序拼接（默认分隔符同 scopeText：跨文件语句边界）。 */
+export function panelText(sep = '\n;\n') {
+  return scopeText('src/panel-tabs', sep);
 }
 
 /** 样式域模板的声明（源码与产物同形：产物里只是整体多了一层 tab 缩进）。 */
