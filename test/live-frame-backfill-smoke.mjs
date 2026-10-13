@@ -265,7 +265,7 @@ async function runScenario({ mode = 'varied', blobSize = 120000, gpuAlreadyPinne
   await new Promise((r) => { setTimeout(r, 30); });
   await tickPoll(); // 落地后再敲一次：修复生效时轮询已被清，不得再发进度请求
   const animPollAfter = intervals.filter((t) => !t.cleared && t.ms === 1500).length;
-  return { frame, watchTick, backfill, headCalls, putCalls, clearCalls, slotOrder, progCalls, blobStub,
+  return { frame, backfill, headCalls, putCalls, clearCalls, slotOrder, progCalls, blobStub,
     animPollBefore, animPollAfter, progBefore,
     selectedId: JSON.parse(localStorage._store['dsh-wallpaper-engine:selection'] || '{}').id };
 }

@@ -219,7 +219,9 @@ node test/tools/host-route-index.mjs --write   # 重算并写入 docs/ROUTE-INDE
 > 留下的四条都读**代码**：模块边界、可达性棘轮、退役线、声明孤儿 —— 那里的失败是客观的。
 
 软档**照跑、照打印 `✓/✗`**，只是退出码被 `test/warn-only.mjs` 这层包装降级：
-原码打在末尾的 `[warn-only] 软档守卫原退出码 = N` 行上，并写进 `DSH_WARN_ONLY_EXIT`。
+原码打在末尾的 `[warn-only] 软档守卫原退出码 = N` 行上，`test/run-guards.mjs` 解析的就是那一行。
+（早先这里还写着"并写进 `DSH_WARN_ONLY_EXIT`" —— **那是错的**：在自身进程里 `set` 的 env 传不给
+父进程，全仓也没有任何读取点，该赋值已删。）
 这不是"静默跳过"（跳过不得与通过同形，见 [`README.md`](./README.md) §写作纪律）—— 判据一字未改，
 想让它重新拦下改动，直接 `node test/<守卫>.mjs` 跑它。
 > 为什么是"跑子进程"而不是 `node --import …`：**实测** `npm run` 会把 `--import` 参数吞掉
@@ -344,6 +346,7 @@ node test/tools/host-route-index.mjs --write   # 重算并写入 docs/ROUTE-INDE
 | `audit-fixture-coverage.mjs` | **夹具是不是把被测行为中和掉了** | `node test/tools/audit-fixture-coverage.mjs` |
 | `audit-guard-teeth.mjs` | 守卫"牙齿"普查 A–F（对照没被评估 / log 式伪判据 / 零引用判据 / 恒真 / 无红出口 / 朴素剥注释吃代码）—— **只给候选** | `node test/tools/audit-guard-teeth.mjs` |
 | `audit-import-closure.mjs` | `lib/` 的**运行时导入闭包** vs `package.json` 的 `files`（缺文件 ⇒ registry 装上就崩） | `node test/tools/audit-import-closure.mjs` |
+| `audit-write-only-state.mjs` | `test/**` 里**只被写、从不被读**的局部变量与对象字段（eslint 作用域 + AST 引用面）—— **只印候选、不判红、不登记进链**：四类结构性假阳（外部工具参数 / 断言期望值字面量 / 身份标记桩字段 / DOM 桩完整性字段）说明这条规则现在还不是机械可判的，文件头写了升级成守卫的前置条件 | `node test/tools/audit-write-only-state.mjs [--all]` |
 | `branch-notify.mjs` | **分支级**"改了 store 却没通知" —— **只印候选供人读**：改动 `src/client.js` 的 store 处理器之后跑一遍，逐条判"这条路径该不该通知"（该通知 ⇒ 改代码；误报 ⇒ 属文件头「已知边界」那几类）。真正的判据是 `verify-client` ①h/①i（与本工具共用同一份实现） | `node test/tools/branch-notify.mjs audit` |
 | `diagnose-web-blank.mjs` | 网页壁纸「白屏」排查台（无头真浏览器） | `node test/tools/diagnose-web-blank.mjs` |
 | `guard-chain.mjs` | **守卫链与冻结 fixture 的对账判据**（`test/verify-guard-chain.mjs` 用它）：把 `test/run-guards.mjs --list-json` 折成可比形状，逐条比成员 / 顺序 / 档位 / 参数，另有地板、死路径、组合三组派生判据 —— 抽出来是为了**正判据与负对照走同一段代码**（§4.7 约定 5） | `node test/verify-guard-chain.mjs [--write-fixture]` |

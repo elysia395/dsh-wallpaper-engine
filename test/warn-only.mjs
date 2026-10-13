@@ -70,7 +70,8 @@ if (r.status === null) {
   process.exit(0);
 }
 if (r.status !== 0) {
-  process.env.DSH_WARN_ONLY_EXIT = String(r.status);
+  // 原退出码只走下面这行 stdout —— `test/run-guards.mjs` 解析的就是它。
+  // （别想用 env 传出去：在**自身进程**里 set 的 env 传不给父进程，全仓也没有任何读取点。）
   console.log('\n[warn-only] 软档守卫原退出码 = ' + r.status
     + ' —— 已降级为警告，不决定本次红绿（判据未改；要它重新拦下改动，就 `node ' + target + '` 直接跑）');
 }

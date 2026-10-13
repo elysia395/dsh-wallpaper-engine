@@ -241,7 +241,6 @@ function loadClient({
     stats,
     bodyEl,
     headEl,
-    exportsObj,
     ctx,
     disposers,
     timers,

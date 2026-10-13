@@ -261,18 +261,28 @@ async function judgeWeSetter(make) {
     const ret2 = await kit.setWeAssetsDir(null);
     const get2 = kit.getWeAssetsDir();
     const cfg2 = JSON.parse(JSON.stringify(state.cfg));
+    // 清除路径**不能只看返回值**：指到真素材目录（有 `materials/`）⇒ 可用为 true；`setWeAssetsDir(null)`
+    // 必须把可用性打回 false。这条同时钉住 setter 的返回值语义：它回显"被设进去的那个值"（清除时是 null）。
+    const realDir = freshDir('e-set-real');
+    mkdirSync(join(realDir, 'materials'), { recursive: true });
+    writeFileSync(join(realDir, 'materials', 'x.tex'), 'x');
+    const retReal = await kit.setWeAssetsDir(realDir);
+    const availReal = kit.weAssetsAvailable();
+    const retClear = await kit.setWeAssetsDir(null);
+    const availCleared = kit.weAssetsAvailable();
     const beforeMany = state.queueCalls;
     const many = await Promise.all(Array.from({ length: 20 }, (_, i) => kit.setWeAssetsDir('/we/' + i)));
     const cfgMany = JSON.parse(JSON.stringify(state.cfg));
-    return { before, ret1, get1, cfg1, ret2, get2, cfg2, many, cfgMany, queued: state.queueCalls - beforeMany };
+    return { before, ret1, get1, cfg1, ret2, get2, cfg2, realDir, retReal, availReal, retClear, availCleared, many, cfgMany, queued: state.queueCalls - beforeMany };
   });
   const ok = r.before === null && r.ret1 === '/we/one' && r.get1 === '/we/one'
     && r.cfg1.weAssetsDir === '/we/one' && r.cfg1.keep === 1
-    && r.get2 === null && !('weAssetsDir' in r.cfg2) && r.cfg2.keep === 1
+    && r.ret2 === null && r.get2 === null && !('weAssetsDir' in r.cfg2) && r.cfg2.keep === 1
+    && r.retReal === r.realDir && r.availReal === true && r.retClear === null && r.availCleared === false
     && r.queued === 20 && r.many.every((v, i) => v === '/we/' + i) && r.cfgMany.weAssetsDir === '/we/19';
   return {
     ok,
-    detail: `初值=${r.before} set⇒rets=${r.ret1}/${typeof r.ret1 === 'string' ? '' : '(不是字符串！)'} get=${r.get1} cfg=${JSON.stringify(r.cfg1)} | null⇒get=${r.get2} cfg=${JSON.stringify(r.cfg2)} | 20 路入队=${r.queued} 末值=${r.cfgMany.weAssetsDir}`,
+    detail: `初值=${r.before} set⇒rets=${r.ret1}/${typeof r.ret1 === 'string' ? '' : '(不是字符串！)'} get=${r.get1} cfg=${JSON.stringify(r.cfg1)} | null⇒ret=${JSON.stringify(r.ret2)} get=${r.get2} cfg=${JSON.stringify(r.cfg2)} | 真目录⇒ret 回显=${r.retReal === r.realDir ? 'ok' : JSON.stringify(r.retReal)} 可用=${r.availReal}；清除后可用=${r.availCleared} | 20 路入队=${r.queued} 末值=${r.cfgMany.weAssetsDir}`,
   };
 }
 
