@@ -114,6 +114,7 @@ const VERIFY_STEPS = [
   step('test/verify-picker-props.mjs'),
   step('test/verify-about.mjs'),
   step('test/verify-token-contract.mjs'),
+  step('test/verify-config-store.mjs'),
 ];
 
 /** `npm run verify:docs` —— 软档（只出声）。全部经 warn-only 降级。 */

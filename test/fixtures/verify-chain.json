@@ -381,6 +381,14 @@
           "args": [],
           "tier": "hard",
           "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-config-store.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
         }
       ]
     },
@@ -875,6 +883,14 @@
           "kind": "guard",
           "npm": null,
           "file": "test/verify-token-contract.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-config-store.mjs",
           "args": [],
           "tier": "hard",
           "probe": false

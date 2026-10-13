@@ -64,6 +64,7 @@
     "lib/scene-probe.js",
     "lib/wallpaper-scan.js",
     "lib/cache-prune.js",
+    "lib/config-store.js",
     "lib/webwallgl/",
     "lib/we-props.js",
     "lib/we-focus-guard.js",

@@ -281,8 +281,11 @@ async function main() {
     const GROUPS = [['verify', 'verify'], ['verify:docs', 'docs'], ['smoke', 'smoke'], ['verify:all', 'all']];
     // 地板 = 本轮实测步数（新增不受限，**删或改名即判红**）。`docs` 整组软档也设 1：
     // 设 0 的话"整组被删空"会和"设计如此"无法区分。
-    const CHAIN_FLOOR = { verify: 24, docs: 1, smoke: 5, 'verify:all': 29 };
-    const problems = [];
+    const CHAIN_FLOOR = { verify: 24, docs: 1, smoke: 5, all: 29 };
+    /** 地板表与 GROUPS 的对齐体检：键名必须与**组名**逐一对齐（纯函数 ⇒ 负对照可直接喂）。 */
+    const floorGaps = (groups, floors) => groups.map(([, g]) => g).filter((g) => !Number.isInteger(floors[g]));
+    const problems = floorGaps(GROUPS, CHAIN_FLOOR).map((g) => '地板表缺组 ' + g
+      + '（键名要写**组名**：`verify`/`docs`/`smoke`/`all`，不是脚本键名 `verify:docs`/`verify:all`）');
     const scripts = new Set();
     const counts = [];
     for (const [key, group] of GROUPS) {
@@ -348,6 +351,11 @@ async function main() {
       // 多挂一步（`node test/run-guards.mjs verify && node other.mjs`）也不合法
       && shapeError('node test/run-guards.mjs verify && node test/verify-about.mjs', 'verify', 'verify') !== null
       && shapeError('node test/other.mjs verify', 'verify', 'verify') !== null);
+    check('P5 negative control: a floor table that keys by script name instead of group name is detected',
+      // 真实踩过的形态：表里写 `'verify:all': 29` 而查表用组名 `all` ⇒ `undefined` ⇒ 地板永真。
+      floorGaps(GROUPS, { verify: 24, docs: 1, smoke: 5, 'verify:all': 29 }).length === 1
+      && floorGaps(GROUPS, { verify: 24, docs: 1, smoke: 5 }).length === 1
+      && floorGaps(GROUPS, CHAIN_FLOOR).length === 0);
   }
 
   // ── P8: 发布面文件不得带 UTF-8 BOM ─────────────────────────────────────────
