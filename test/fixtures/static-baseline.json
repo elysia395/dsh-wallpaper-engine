@@ -1,16 +1,9 @@
 {
   "eslint": {
-    "filesLinted": 224,
+    "filesLinted": 225,
     "byRule": {}
   },
   "tsc": {
-    "byCode": {
-      "TS2339": 20,
-      "TS2353": 4,
-      "TS2554": 21,
-      "TS2559": 1,
-      "TS2810": 2,
-      "TS8032": 7
-    }
+    "byCode": {}
   }
 }
