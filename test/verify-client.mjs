@@ -4,14 +4,18 @@
 // the four effect knobs (wallpaper blur/scrim/border/glass blur) push CSS
 // variables, the picker renders, and automatic rotation is scoped to a
 // user-defined rotation group (list) with its own interval.
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 // 剥注释：共享的字符串感知实现（test/tools/js-text.mjs）。
 import { stripComments, stripExportBlocks } from './tools/js-text.mjs';
+// 刀3：样式族取文（8 个域模块 + 组装点，构建序拼接）——别再自己 readFileSync 单文件。
+import { styleText, panelText, scopeText } from './tools/src-scope.mjs';
 // 分支级"改了 store 却没通知"的分析与审计工具**同源**（避免两份判据分叉）；
 // `DEF`/`defName` 也从工具导入 —— 定义形态只有一份，形态补齐时两处一起动。
 import { pathNotifications, definitionsOf, DEF, defName } from './tools/branch-notify.mjs';
+// 判据工具（函数体取法）与本文件外的同类实现共用一份；**朴素**是契约的一部分（见该文件头）。
+import { naiveBlockBody, naiveFuncSlice } from './tools/assert-harness.mjs';
 
 const React = {
   Fragment: 'Fragment',
@@ -25,7 +29,7 @@ const React = {
     typeof type === 'function' ? type(props || {}) : ({ type, props: props || null, children }),
 };
 
-let byId = {};
+const byId = {};
 const rotationTimers = [];
 const sceneFrameHeadCalls = [];
 const sceneFrameDeleteCalls = [];
@@ -70,7 +74,7 @@ function makeEl(tag) {
     removeAttribute(k) { delete this.attributes[k]; },
     focus() { activeEl = this; },
     blur() { if (activeEl === this) activeEl = null; },
-    querySelector(sel) { return null; },
+    querySelector() { return null; },
   };
 }
 
@@ -173,9 +177,11 @@ const fetchNow = (url, opts) => {
   if (method === 'DELETE') {
     sceneFrameDeleteCalls.push(u);
     if (cccClearUnlinkFails) {
+      // 分桶后的宿主契约：unlink 真失败（权限/占用）= 500 + unlink-failed（不再有
+      // "200 + removed:false 的假成功"——200 现在 = 清除达成，含"本桶本来就没有"）。
       return Promise.resolve({
-        ok: true, status: 200,
-        json: () => Promise.resolve({ ok: true, removed: false, error: 'unlink-failed' }),
+        ok: false, status: 500,
+        json: () => Promise.resolve({ ok: false, removed: false, error: 'unlink-failed', code: 'EACCES' }),
       });
     }
     // 真宿主语义：DELETE 删掉 <key>_gpu.png → 之后 HEAD 回到 X-WE-GPU=0。
@@ -249,13 +255,8 @@ assert.ok(!code.includes(wallpaperGatedSidebarSelector), 'legacy wallpaper-gated
 // （bg-base / sidebar-fill 置透明）—— 壁纸不在场时那两条必须**不**生效，否则页面基色
 // 会变透明（窗口底板透出来）。下面两条互为负对照：把映射锚回壁纸门 ⇒ 第一条红；
 // 把让开那两条挪进页面玻璃块 ⇒ 第二条红。
-const blockBodyOf = (needle) => {
-  const i = code.indexOf(needle);
-  if (i < 0) return null;
-  const open = code.indexOf('{', i);
-  const close = code.indexOf('}', open);
-  return open < 0 || close < 0 ? null : code.slice(open + 1, close);
-};
+// 朴素块体切片：实现在 `test/tools/assert-harness.mjs`（契约 = 两个 `indexOf`，不跳字符串/注释）。
+const blockBodyOf = (needle) => naiveBlockBody(code, needle);
 const pageGlassBlock = blockBodyOf('body[data-we-glass-page] {');
 const wallpaperBlock = blockBodyOf('body[data-we-wallpaper] {');
 assert.ok(pageGlassBlock && pageGlassBlock.includes('--dsw-alias-bg-layer-1')
@@ -334,7 +335,7 @@ document.removeEventListener = removeListenerFrom(docListeners);
 // 30s TTL 过期）才能被行为断言测出是否真的走了门禁 —— 否则按钮路径与「选壁纸」
 // 路径共用同一条 gpuFramePins 缓存命中，改回直调也照样绿。
 const RealDate = Date;
-let nowOffset = 0;
+const nowOffset = 0;
 const FakeDate = function (...a) { return a.length ? new RealDate(...a) : new RealDate(RealDate.now() + nowOffset); };
 FakeDate.now = () => RealDate.now() + nowOffset;
 FakeDate.parse = RealDate.parse; FakeDate.UTC = RealDate.UTC; FakeDate.prototype = RealDate.prototype;
@@ -433,7 +434,7 @@ setTimeout(async () => {
   // 窗口真的关上：放行应答后**同一条判据**必须给出不同的答案 —— 否则"看见了首载态"可能只是
   // 渲染函数恒返回同一棵树（上面四条一起空转）。
   releaseInventoryHold();
-  await new Promise((r) => setTimeout(r, 80));
+  await new Promise((r) => { setTimeout(r, 80); });
   const afterBoot = startupState(pickerRenders[0]());
   // 只判**那句文案**：`we-picker__hint` 落定后在别处还有 9 个（页签提示等），
   // 拿"hint 总数为 0"当判据会把它们一起算进来 ⇒ 判据与首载态就不是同一件事了。
@@ -1231,7 +1232,7 @@ setTimeout(async () => {
     //    走**真实点击路径**（tab 按钮的 onClick → switchTab → loadStarCount），不是
     //    直接调加载器 —— 这条断言要防的正是"切页签没接上"这种接线级回归。
     {
-      const fresh = () => new Promise((r) => setTimeout(r, 0));
+      const fresh = () => new Promise((r) => { setTimeout(r, 0); });
       const tabButton = (root, label) => {
         let hit = null;
         (function walk(node) {
@@ -1273,7 +1274,7 @@ setTimeout(async () => {
     //    qp-tab=appearance + 两块折叠块展开）钉高级行为（独立配置往返 / 胶囊 / 触发条 /
     //    字体开关）。两边的 handler 是同一份模块级实现，bodyEl 属性断言与哪棵树无关。
     setTab('appearance');
-    tree = renderPicker();
+    tree = renderPicker();   // eslint-disable-line require-atomic-updates -- 顺序 await 的判据；tree 无并发读写
     treeText = JSON.stringify(tree);
     assert.ok(treeText.includes('"we-tabs__tab we-tabs__tab--active"'), 'appearance tab active:');
     // ── 「全局 UI 配色」节（2026-10-11 用户口径）：配色**迁出「主题」节**、成为独立大项。
@@ -1393,14 +1394,14 @@ setTimeout(async () => {
       '设置页必须画「全局字体」节头（两档都画 —— 它也是收起的入口）');
     // ── 切侧栏渲染台（外观页 · 字体节与详细玻璃都展开）：从这里起高级行断言。 ──
     tree = renderSidePane();
-    treeText = JSON.stringify(tree);
+    JSON.stringify(tree);
     assert.ok(findCtlInput(tree, '内容面玻璃·独立配置'), '内容面独立配置不受跟随开关影响:');
     // 关掉跟随 ⇒ 侧栏「独立配置」出现（能力没丢），body 属性随之摘掉。
     followSwitch.props.onChange({ target: { checked: false } });
     assert.equal(bodyEl.attributes['data-we-sidebar-follow'], undefined,
       '关掉跟随必须摘掉 body 属性（否则侧栏的釉仍取共享那一份）');
     tree = renderSidePane();
-    treeText = JSON.stringify(tree);
+    JSON.stringify(tree);
     assert.ok(findCtlInput(tree, '侧栏玻璃·独立配置'), '关掉跟随 ⇒ 侧栏「独立配置」出现:');
     // ⚠️ 基线交付给下面 #132 的判据主体：跟随关着 ⇒ 它的开关流/量程/退役判据照原样跑。
     // ⚠️ 本批（wip §10.24）：侧栏家族与内容面的滑块挂在**各自的「独立配置」**下面 ——
@@ -1487,12 +1488,12 @@ setTimeout(async () => {
     sepTree = renderPicker();
     findGlassSwatch(sepTree, '玻璃颜色 #ffffff').props.onClick();
     tree = renderSidePane();
-    treeText = JSON.stringify(tree);
+    JSON.stringify(tree);
     assert.ok(swatchActive(findGlassSwatch(tree, '玻璃颜色 #ffffff')), 'A2-F2 复原：侧栏档回白釉');
     // 内容面同样：它的开关打开后才画透明度 / 底色两行。
     findCtlInput(tree, '内容面玻璃·独立配置').props.onChange({ target: { checked: true } });
     tree = renderSidePane();
-    treeText = JSON.stringify(tree);
+    JSON.stringify(tree);
     assert.equal(sliderMax(findSliderRow(tree, '内容面透明度')), '100', '内容面透明度上限必须是 100（规范刻度，R4）');
     // §10.27 + v1.3.0 追版：新增的「思考触发条玻璃·独立配置」—— 打开后才画它自己的两项，量程同样
     // 钉在规范刻度上（这正是"拖过 60 跳回 20"那次事故的两侧之一：**面板量程**那一侧）。
@@ -1565,7 +1566,7 @@ setTimeout(async () => {
     followSwitch.props.onChange({ target: { checked: true } });
     assert.equal(bodyEl.attributes['data-we-sidebar-follow'], 'on', '重新打开跟随 ⇒ 属性回来');
     tree = renderSidePane();
-    treeText = JSON.stringify(tree);
+    JSON.stringify(tree);
     assert.equal(findCtlInput(tree, '侧栏玻璃·独立配置'), null, '重新打开跟随 ⇒ 「独立配置」又收起');
 
     // ── 「字体」已并入「外观」：老的 localStorage 页签值必须迁移过去（不能把用户
@@ -1721,7 +1722,7 @@ setTimeout(async () => {
     // 默认形态也**从真源推**（`DEFAULTS.ropeForm`）：2026-10-13「小女仆」除名、默认改 `deepseek`
     //   之后，"默认 = 枚举第一只"这条假设不再成立（第一只现在是「Deepseek_Pro」）⇒ 写死会假红。
     //   注意锚点：注释里也会出现 `ropeForm: "maid"` 这种字样 ⇒ 只认 `DEFAULTS` 那一行（缩进两格 + 行尾逗号）。
-    const ringDefaultForm = ((ringSchemaSrc.match(/^  ropeForm: "([a-z]+)",$/m) || [])[1] || '');
+    const ringDefaultForm = ((ringSchemaSrc.match(/^ {2}ropeForm: "([a-z]+)",$/m) || [])[1] || '');
     const defaultLabel = ringLabels[ringEnum.indexOf(ringDefaultForm)] || '';
     assert.ok(!!defaultLabel,
       '（判据前置）能从真源推出发默认形态的显示名（DEFAULTS.ropeForm=' + ringDefaultForm + '）');
@@ -1794,7 +1795,7 @@ setTimeout(async () => {
       // 循环面：从第一只往左一格 ⇒ 应落到**最后一只内置**（而不是「自定义」）
       const back = itemByLabel(mascotItems, firstLabel);
       back.props.onClick(); tree = renderPicker();
-      mascotItems = findMascotItems(tree);
+      findMascotItems(tree);
       const lastBuiltin = ringLabels[ringLabels.length - 1];
       const s3 = findMascotStage(tree);
       s3.props.onKeyDown({ key: 'ArrowLeft', preventDefault: () => {} });
@@ -1816,7 +1817,7 @@ setTimeout(async () => {
     //         （四角投影 + 透视），不复述产品里的任何字面量；
     //      ④ **中心唯一且 = 当前生效的形态**：恰好一张卡的总角度 ≡ 0（mod 360）。
     //    判据只读渲染树里的行内值（角度 / 盒宽 / 半径 / 环旋转），不去猜 CSS。
-    const tabsForRing = readFileSync(new URL('../src/panel-tabs.js', import.meta.url), 'utf8');
+    const tabsForRing = panelText();
     const numConst = (re, what) => {
       const v = Number((tabsForRing.match(re) || [])[1]);
       assert.ok(Number.isFinite(v), '（几何判据前置）源码里取不到 ' + what);
@@ -1878,16 +1879,13 @@ setTimeout(async () => {
       const cx = R * Math.sin(phi), cz = R * Math.cos(phi);
       const ux = Math.cos(phi), uz = -Math.sin(phi);
       const xs = [];
-      for (const sx of [-1, 1]) {
-        for (const sy of [-1, 1]) {
-          // sy 只影响纵坐标（环是绕水平轴转的，纵坐标不参与"会不会横向重叠"），
-          // 所以这里只需把两个 x 方向算出来；保留 sy 循环是为了让"四角投影"名副其实。
-          const x = cx + sx * (W / 2) * ux;
-          const z = cz + sx * (W / 2) * uz;
-          const k = P / (P - z);
-          xs.push(x * k);
-          void sy;
-        }
+      for (const [sx] of [[-1, -1], [-1, 1], [1, -1], [1, 1]]) {
+        // sy 只影响纵坐标（环是绕水平轴转的，纵坐标不参与"会不会横向重叠"），
+        // 所以这里只需把两个 x 方向算出来；四个角仍逐个走一遍，让"四角投影"名副其实。
+        const x = cx + sx * (W / 2) * ux;
+        const z = cz + sx * (W / 2) * uz;
+        const k = P / (P - z);
+        xs.push(x * k);
       }
       return { lo: Math.min(...xs), hi: Math.max(...xs) };
     };
@@ -2130,7 +2128,7 @@ setTimeout(async () => {
         '点圆点应把那一只转到中心（期望 ' + wantFar + '）');
       // 复位到第一只
       itemByLabel(mascotItems, firstLabel).props.onClick(); tree = renderPicker();
-      mascotItems = findMascotItems(tree);
+      findMascotItems(tree);
     }
     // ── ⑥ **按钮必须可点**（用户口径：「你按钮要可点击」）─────────────────────────
     //    更早那版在"自定义立绘生效时"把内置项与两个 ‹ › 全禁用了 ⇒ 只剩「自定义」与「清除」
@@ -2147,7 +2145,8 @@ setTimeout(async () => {
       // ⚠️ 这条判据第一版我写成了 `assert.ok(!re.test('') || …)` —— 前半句恒真，
       //    于是整条**永远通过**（恒真的判据比没有判据更糟：它看起来有覆盖）。所以这里
       //    只留**单条**、可证伪的断言，并把反例写清楚。
-      const stylesForRing = readFileSync(new URL('../src/styles.js', import.meta.url), 'utf8');
+      // 刀3：样式族已拆成 8 个域模块 + 组装点 ⇒ 取整族源码文本（构建序拼接）；判据不变。
+      const stylesForRing = styleText();
       // nav 的样式规则也必须一起删干净（组件删了、样式留着就是死代码，而且下一个人看到
       // 规则还在会以为"这个控件本来有箭头"）。
       assert.ok(!/\.we-picker__mascot-nav\s*[\{:]/.test(stylesForRing),
@@ -2178,7 +2177,7 @@ setTimeout(async () => {
       assert.ok(!/MASCOT_RUBBER|MASCOT_STEP_PX/.test(tabsForRing),
         '环形布局没有端点 ⇒ 源码里不许再有端点阻尼/线性步长那套（"有界滚动"才需要）');
       // 拖动期关过渡这条必须落在 **CSS** 上（写在 JS 里没用）。
-      const stylesForDrag = readFileSync(new URL('../src/styles.js', import.meta.url), 'utf8');
+      const stylesForDrag = styleText();
       assert.ok(/\.we-picker__mascot-ring\.is-dragging\s*\{\s*transition:\s*none/.test(stylesForDrag),
         '★ 拖动期必须由 CSS 关掉**环**的过渡（.is-dragging 那一条）');
       // 3D 机制必须齐全（缺一个就不是 3D 环了：preserve-3d 缺 ⇒ 压平；backface 缺 ⇒ 后半圈透出来）
@@ -2270,7 +2269,7 @@ setTimeout(async () => {
       // test/verify-scene.mjs 的真 socket 路由用例（导入 / 覆盖 / 清除）覆盖。
       {
         const srcNow = readFileSync(new URL('../src/client.js', import.meta.url), 'utf8');
-        const tabsNow = readFileSync(new URL('../src/panel-tabs.js', import.meta.url), 'utf8');
+        const tabsNow = panelText();
         assert.ok(/function ropeArtOf\(selLike\)/.test(srcNow)
           && /apiUrl\("\/mascot\?v=" \+ encodeURIComponent\(name\)\)/.test(srcNow),
           '主页面吉祥物必须走 ropeArtOf（自定义优先）这条解析');
@@ -2951,8 +2950,8 @@ setTimeout(async () => {
     const showsInventoryError = (t) => textOf(t).includes('未检测到 Wallpaper Engine：');
     inventoryFails = true;
     findBtnByText(tree, '刷新').props.onClick();
-    await new Promise((r) => setTimeout(r, 80)); // 等 loadInventory 的 promise 落定
-    tree = renderPicker();
+    await new Promise((r) => { setTimeout(r, 80); }); // 等 loadInventory 的 promise 落定
+    tree = renderPicker();   // eslint-disable-line require-atomic-updates -- 顺序 await 的判据；tree 无并发读写
     assert.ok(showsInventoryError(tree), '库存加载失败 ⇒ 显示「未检测到 Wallpaper Engine：<原因>」');
     assert.ok(findBtnByText(tree, '重试'), '错误态必须给「重试」按钮（否则用户无路可走）');
     assert.equal(findBtnByText(tree, '刷新'), null, '错误态下整块面板被替换（不是叠在面板上）');
@@ -2962,8 +2961,8 @@ setTimeout(async () => {
     // 重试：开关放回成功 ⇒ 点「重试」⇒ 面板与网格都应回来
     inventoryFails = false;
     findBtnByText(tree, '重试').props.onClick();
-    await new Promise((r) => setTimeout(r, 80));
-    tree = renderPicker();
+    await new Promise((r) => { setTimeout(r, 80); });
+    tree = renderPicker();   // eslint-disable-line require-atomic-updates -- 顺序 await 的判据；tree 无并发读写
     assert.ok(!showsInventoryError(tree), '重试成功 ⇒ 错误态消失');
     assert.ok(findBtnByText(tree, '选择壁纸'), '恢复后回到正常面板（页签内容回来了；类型筛选在库视图里，下钻打开即有）');
 
@@ -3035,12 +3034,12 @@ setTimeout(async () => {
     assert.ok(pickerRenders.length > 0, 'picker render 回调必须已注册');
     // 等 boot 的 promise 链（loadPersisted → loadInventory →
     // revalidateSelection）全部落定：它会按持久化 id 覆盖选择。
-    await new Promise((r) => setTimeout(r, 80));
+    await new Promise((r) => { setTimeout(r, 80); });
     const renderPicker = () => {
       try { return pickerRenders[0](); } catch (e) { console.log('picker render threw:', e && e.message); return null; }
     };
     const reopenPicker = () => {
-      let tree2 = renderPicker();
+      const tree2 = renderPicker();
       const openBtn = [];
       (function walk(node) {
         if (Array.isArray(node)) { node.forEach(walk); return; }
@@ -3080,7 +3079,7 @@ setTimeout(async () => {
     // 前置：先点选一张视频壁纸把层建出来（上文「无活动壁纸」用例清掉了层），
     // 否则 scene C 是首层、无旧层可淡，手动淡出的断言失去对象。Wall 0 在虚拟
     // 首窗里（窗口第 1 个条目），直接可点。
-    let seedCard = findCard(tree3, 'Wall 0');
+    const seedCard = findCard(tree3, 'Wall 0');
     assert.ok(seedCard && typeof seedCard.props.onClick === 'function', 'video card (Wall 0) must be clickable');
     seedCard.props.onClick(); // 建首层（existing=null → 本步不淡，正常）
     tree3 = reopenPicker();
@@ -3098,13 +3097,13 @@ setTimeout(async () => {
     assert.ok(search3 && typeof search3.props.onInput === 'function', 'search box available for out-of-window cards');
     search3.props.onInput({ target: { value: 'Scene C' } });
     tree3 = reopenPicker();
-    let sceneCard = findCard(tree3, 'Scene C');
+    const sceneCard = findCard(tree3, 'Scene C');
     assert.ok(sceneCard && typeof sceneCard.props.onClick === 'function', 'scene C card must be clickable');
     findSearch(tree3).props.onInput({ target: { value: '' } });
-    tree3 = reopenPicker();
+    reopenPicker();
     const manualPreLayer = document.getElementById('dsh-wallpaper-engine-layer');
     sceneCard.props.onClick(); // 选中场景壁纸 → syncLayers → HEAD 探测
-    await new Promise((r) => setTimeout(r, 20)); // 等 HEAD 探测的 promise 回来
+    await new Promise((r) => { setTimeout(r, 20); }); // 等 HEAD 探测的 promise 回来
     // 「画面」section（含 GPU 提示行）在页签内容里，库视图只渲染网格且与页签内容
     // 互斥（页内下钻）→ 选中后退出库视图再断言（退出按钮文案恰为「返回」）。
     const modalClose = findBtn(renderPicker(), '返回');
@@ -3183,16 +3182,16 @@ setTimeout(async () => {
     }
     const clearBtn = findBtn(tree3, '清除 GPU 帧');
     assert.ok(clearBtn, 'HEAD 报 X-WE-GPU=1 时面板必须给出「清除 GPU 帧」入口');
-    // ── P2-L：宿主回 200 但 removed:false（unlink 失败）时不得当清除成功 ──
-    // 只判 r.ok 会把「假成功」当清除：面板行消失、提示已清除，而宿主照旧发 GPU
-    // 帧 —— 画面纹丝不动、档位怎么点都不变、且没有任何反馈。
+    // ── P2-L：宿主 500（unlink 失败，权限/占用）时不得当清除成功 ──
+    // 分桶后 200 就是清除达成（含"本桶本来就没有"），真失败只剩 500：面板必须
+    // 保留入口 + 给出提示，而不是静默显示成功。
     cccClearUnlinkFails = true;
     const probesBeforeFail = animProbeSrcs.length;
     clearBtn.props.onClick();
-    await new Promise((r) => setTimeout(r, 40));
+    await new Promise((r) => { setTimeout(r, 40); });
     tree3 = renderPicker();
     assert.ok(findBtn(tree3, '清除 GPU 帧'),
-      'P2-L：宿主回 200 + removed:false 时必须保留清除入口（不得当清除成功）');
+      'P2-L：宿主 500 时必须保留清除入口（不得当清除成功）');
     assert.ok(JSON.stringify(tree3).includes('清除失败'),
       'P2-L：清除失败必须给出提示，而不是静默显示成功');
     assert.equal(animProbeSrcs.slice(probesBeforeFail).length, 0,
@@ -3201,7 +3200,7 @@ setTimeout(async () => {
     const clearBtn2 = findBtn(renderPicker(), '清除 GPU 帧');
     assert.ok(clearBtn2, 'P2-L：失败后必须还能重试清除');
     clearBtn2.props.onClick();
-    await new Promise((r) => setTimeout(r, 40)); // 等 DELETE + 清除后的 HEAD 判据回来
+    await new Promise((r) => { setTimeout(r, 40); }); // 等 DELETE + 清除后的 HEAD 判据回来
     assert.ok(sceneFrameDeleteCalls.some((u) => u.includes('/scene-frame-cache/ccc')),
       '点击清除必须 DELETE /scene-frame-cache/<token>');
     tree3 = renderPicker();
@@ -3235,13 +3234,12 @@ setTimeout(async () => {
     assert.ok(code.includes('if (String(selection.id || "") !== backfillWid) return;'),
       'GPU 抓帧回填落地必须校验壁纸身份（否则切走后会给新壁纸误标「已有 GPU 帧」）');
 
-    // ⑤b 抓帧回填必须校验存帧**几何**（视口宽高比），不只是「槽位有没有帧」：
-    // 抓帧是「抓帧那一刻视口的构图」，别的窗口/旧会话留下的帧拿到当前窗口上屏
-    // 会被 CSS object-fit: cover 再裁一次 —— 实测 1440x960 的帧在 2488x1376
-    // 视口里只显示设计宽度的 84.5%（对 CPU 帧做最佳匹配拟合），人物比 live 大
-    // 约 19% 且四周被切。判据来自宿主的 X-WE-GPU-AR（读 PNG 的 IHDR）。
-    assert.ok(code.includes('GPU_FRAME_ASPECT_TOL') && code.includes('"x-we-gpu-ar"'),
-      'GPU 抓帧回填必须校验存帧视比（不符 → 清掉按当前视口重抓），行为级见 live-frame-backfill-smoke 的 G/H/I/J');
+    // ⑤b 抓帧回填必须校验存帧**面积**（单主帧升级制），不只是「槽位有没有帧」：
+    // 主帧比当前画布小 ⇒ cover 放大发糊；主帧更大 ⇒ 缩小显示无损失，保留。判据
+    // 来自宿主的 X-WE-GPU-W/H（读 PNG 的 IHDR），升级规则"只升不降"，宿主 PUT
+    // 侧另有一道面积守卫（frame-smaller 409）兜底竞态。
+    assert.ok(code.includes('GPU_FRAME_AREA_TOL') && code.includes('"x-we-gpu-w"') && code.includes('"x-we-gpu-h"'),
+      'GPU 抓帧回填必须校验主帧面积（偏小 → 升级重抓），行为级见 live-frame-backfill-smoke 的 G/H/I/J');
 
     // ⑤c 两条渐变链路的时长必须各自与常量同步（独立常量，不合并）：
     // - 轮换/手动切壁纸的过场（.we-layer--switch）= 类型基准 × 速度档；其中
@@ -3466,7 +3464,11 @@ setTimeout(async () => {
           why: '玻璃预设通道内部的清单投影（活跃清单；已删除的出厂不回来，无隐藏形态）；错误文案已收口到 setPresetError 单写点（verify-client ①e 棘轮）',
           fields: ['glassPresets'],
         },        'src/live-layer.js': {
-          why: '实时看护的会话内标志；`startLiveWatch` / `stopLiveWatch` 是它的两个入口',
+          why: '实时看护的会话内标志：组装点（syncLayers 收尾那一跳）也会直写它，故与看护域两处分别登记（登记表按「哪个文件真的写了」记账）',
+          fields: ['sceneLiveActive'],
+        },
+        'src/live-layer-watch.js': {
+          why: '实时看护的会话内标志；该字段的直写随实时管线的看护域搬进本模块（入口仍是 `startLiveWatch` / `stopLiveWatch`）',
           fields: ['sceneLiveActive'],
         },
         'src/media-prep.js': {
@@ -3858,17 +3860,8 @@ setTimeout(async () => {
       //       · 一次性迁移：让**存档形状**收敛到当前刻度。形状本身没有行为可观测，所以只能
       //         钉"那一步在场"，并在下面配负对照证明这条判据不是恒真。
       const schemaSrc = readFileSync(new URL('../lib/settings-schema.js', import.meta.url), 'utf8');
-      const bodyOf = (text, name) => {
-        const at = text.indexOf('function ' + name + '(');
-        if (at < 0) return '';
-        const open = text.indexOf('{', at);
-        let depth = 0;
-        for (let i = open; i < text.length; i += 1) {
-          if (text[i] === '{') depth += 1;
-          else if (text[i] === '}' && (depth -= 1) === 0) return text.slice(open, i + 1);
-        }
-        return '';
-      };
+      // 朴素"从头配平"切片（含外层花括号）：实现在 `test/tools/assert-harness.mjs`。
+      const bodyOf = naiveFuncSlice;
       const migrationHasV6 = (text) => /out\.glassColor\s*=\s*\{\s*light:\s*out\.glassColor\s*,\s*dark:\s*out\.glassColor\s*\}/.test(bodyOf(text, 'migrateSettings'));
       const readerHasScalar = (text) => /typeof\s+raw\s*===\s*'string'/.test(bodyOf(text, 'readGlassColors'));
       assert.ok(migrationHasV6(schemaSrc),
@@ -3962,7 +3955,7 @@ setTimeout(async () => {
     // ⑥ 行为级不变量：整条流程（选中 → HEAD 探测 → 抓帧回填 → 清除 → 后续重建）
     // 里 animProbeSrcs 必须恒为 0 —— 一帧 CPU 动画渲染都不许启动（回退走静态帧链）。
     // 点帧率档位、关场景动画这两条路径都不得改走分钟级的 CPU 重渲染。
-    tree3 = renderPicker();
+    renderPicker();
     assert.equal(animProbeSrcs.length, 0,
       'CPU 动画渲染已删除：全流程不得出现任何 /scene-anim 请求');
     console.log('CPU 动画渲染路线已删除（源码钉死 + 行为级零请求）: ok');
@@ -3977,7 +3970,7 @@ setTimeout(async () => {
       assert.ok(tick.length >= 1,
         '启动加载完 inventory 后必须安排一次 sceneVideo 时序补拉（3000ms 定时器）');
       for (const t of tick) { t.cleared = true; t.fn(); }
-      await new Promise((r) => setTimeout(r, 40));
+      await new Promise((r) => { setTimeout(r, 40); });
       assert.equal(inventoryCalls.length, before + 1,
         'sceneVideo 补拉必须真的重拉一次 inventory');
       assert.ok(!rotationTimers.some((t) => !t.cleared && t.ms === 3000),
@@ -4034,7 +4027,7 @@ setTimeout(async () => {
   // 负对照：故意植入一条**错期望**，检测器必须恰好抓到它（证明上面的比较真在比，
   // 而不是恒真）。
   const planted = CASES.concat([['植入的错期望', 'x == 1', { x: 2 }, true]]);
-  const plantedWrong = planted.filter(([label, expr, values, want]) => {
+  const plantedWrong = planted.filter(([, expr, values, want]) => {
     let got;
     try { got = weEvalCondition(expr, values); } catch { got = 'THREW'; }
     return got !== want;
@@ -4060,7 +4053,7 @@ setTimeout(async () => {
 //   · 两个入口本身是唯一的"写 + 落盘"实现处（反查：入口体内必须有 selection[field] = 与
 //     persistSelection()，否则判据是空转）。
 {
-  const tabsSrc2 = readFileSync(new URL('../src/panel-tabs.js', import.meta.url), 'utf8');
+  const tabsSrc2 = panelText();   // 刀4：页签族并集（5 个域模块 + 组装点）。
   const storeSrc = readFileSync(new URL('../src/client.js', import.meta.url), 'utf8');
   // ⚠️ **先剥注释再判**（规则 ⑦）：本文件头的契约注释必须能点名 `selection.` / `editing` 才能把
   // "为什么不许写"讲清楚 —— 不剥注释的判据会逼着后来人删掉那条解释（把"为什么"从代码里抹掉）。
@@ -4114,13 +4107,14 @@ setTimeout(async () => {
     // `selection.` 字面量），于是三类越界全都漏过去了：直接 `emit()`、写模块状态
     //（`propsPanelOpen = !propsPanelOpen`）、改 ctx 别名的子对象（`editing.name = …`）。
     // 同一批"搬出去的渲染器"必须**同一条口径**，否则接缝纪律只对其中两个文件成立。
-    { file: '../src/panel-tabs.js', user: '页签',
+    { file: '../src/panel-tabs.js', family: 'src/panel-tabs', user: '页签',
       anchor: ['function renderWallpaperTab(ctx)', 'function renderAppearanceTab(ctx)',
         'function renderEffectsTab(ctx)', 'function renderAdvancedTab(ctx)',
         'function renderExtensionsTab(ctx)'] },
   ];
   for (const r of RENDERERS) {
-    const src = readFileSync(new URL(r.file, import.meta.url), 'utf8');
+    // 刀4：`family` 条目按构建序扫**族并集**（节渲染器搬出去了，单文件读法会漏掉它们）。
+    const src = r.family ? scopeText(r.family) : readFileSync(new URL(r.file, import.meta.url), 'utf8');
     const got = seamCrossings(src);
     assert.ok(r.anchor.every((a) => src.includes(a)),
       r.file + ' 必须真的含有' + r.user + '渲染器（否则下面的零次判据是空转）');
@@ -4163,7 +4157,8 @@ setTimeout(async () => {
     return hits;
   };
   for (const r of RENDERERS) {
-    const src = readFileSync(new URL(r.file, import.meta.url), 'utf8');
+    // 刀4：`family` 条目按构建序扫**族并集**（节渲染器搬出去了，单文件读法会漏掉它们）。
+    const src = r.family ? scopeText(r.family) : readFileSync(new URL(r.file, import.meta.url), 'utf8');
     const muts = aliasMutations(src);
     assert.equal(muts.length, 0,
       r.user + '渲染器不得改写 ctx 别名 / 模块状态（命中 ' + muts.join(', ') + '）');
@@ -4258,7 +4253,7 @@ setTimeout(async () => {
 // 装配函数体内不得再出现那批标记，且必须调子渲染器；负对照证明同一条判据能判出
 // "标记确实在子渲染器里"（否则是个恒真判据）。
 {
-  const src = readFileSync(new URL('../src/panel-tabs.js', import.meta.url), 'utf8');
+  const src = panelText();   // 刀4：页签族并集（helper 声明顺序判据按构建序）。
   const bodyOf = (name) => {
     const i = src.indexOf('function ' + name + '(');
     assert.ok(i >= 0, '找不到 ' + name + '（判据不得空转）');
@@ -4467,7 +4462,7 @@ setTimeout(async () => {
     // 只接管"替身里有"或"全局也没有"的名字 —— 否则连 `Math` / `String` 也会被当成自由名
     // 拿到一个记录用的替身（第一版就是这样炸的）。
     has: (t, k) => (k in t) || !(k in globalThis),
-    get: (t, k) => (k in t ? t[k] : (...a) => { named.push(String(k)); return undefined; }),
+    get: (t, k) => (k in t ? t[k] : () => { named.push(String(k)); return undefined; }),
     set: () => true,
   });
   // `new Function` 不是模块环境 ⇒ 先剥掉 `export { … }`（构建期内联时也是这么剥的；
@@ -4579,6 +4574,23 @@ setTimeout(async () => {
   watch.cb([{ type: 'attributes' }]);
   assert.equal(liveFadeBg(), '--we-wallpaper-fade-bg=#000000',
     '#159①：切到深色后拖动档必须重算到 #000000（缓存被失效）');
+  // ── #194②：宿主切深浅色时**必须当场重算并写回**，只"失效"是不够的 ────────────────
+  // 用户口径（issue #194 第二条）：切深浅色后只有插件自己的浮层跟上（它们的取色走 CSS 的
+  // `body[data-ds-dark-theme]` 孪生、浏览器自己换），**主页面**要"点进设置随便切一个项目"
+  // 才跟着变 —— 因为主页面那层玻璃等的是这条衬底变量，而"只失效"的语义就是"等下一次
+  // applyEffects"，而那次永远由用户改设置触发。
+  // 判据（唯一真源）：把"主题翻转"喂给一个观察者，看它有没有把新值写到 body 上。
+  const backdropWrittenOnFlip = (w) => {
+    fxProps.length = 0;
+    w.cb([{ type: 'attributes' }]);
+    return fxProps.filter((p) => p.startsWith('--we-wallpaper-fade-bg=')).pop();
+  };
+  assert.equal(backdropWrittenOnFlip(watch), '--we-wallpaper-fade-bg=#000000',
+    '#194②：切深浅色 ⇒ 观察者必须**当场**重算并写回衬底（只清缓存 = 症状本身）');
+  // 负对照：同一个判据喂给"只失效、不重算"的旧观察者 ⇒ 一个字节都不许写。
+  const legacyWatch = new FakeMutationObserver(() => { /* #159① 旧行为：只清缓存 */ });
+  assert.equal(backdropWrittenOnFlip(legacyWatch), undefined,
+    'negative control: 只失效不重算的旧观察者必须被这条判据判出（它确实一个字节都没写）');
   fxMod.clearEffects();
   assert.ok(watch.disconnected, '#159①：clearEffects 必须断开主题观察者（否则卸载后它还挂在宿主 DOM 上）');
   // 装置自检（**不是**产品判据）：上一条断言的是桩的标志位，只有先证明"没调过 disconnect 的
@@ -4631,9 +4643,9 @@ setTimeout(async () => {
     const fire = (type, target) => { for (const l of listeners.slice()) if (l.t === type) l.fn({ type, target }); };
     return { mod, listeners, focused, win, doc, hostInput, hostButton, frame, fire };
   };
-  const tick = () => new Promise((r) => setTimeout(r, 0));
+  const tick = () => new Promise((r) => { setTimeout(r, 0); });
   // 交还频率下限是 300ms ⇒ 需要"确实过了间隔"的判据就得真等过去（睡一段比造假时钟诚实）。
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const sleep = (ms) => new Promise((r) => { setTimeout(r, ms); });
   const A = buildFh(fhSrc);
   const disposeA = A.mod.installFocusHandback();
   assert.ok(typeof disposeA === 'function', '#148 宿主半：installFocusHandback 必须返回拆除函数（挂 ctx.effect）');
@@ -4698,7 +4710,7 @@ setTimeout(async () => {
   //    判据就不精确了（首版正是这样"看着绿、其实测的不是这条"—— 它掩盖了阳性对照的失败）。
   await sleep(320);
   resetGap();
-  A.win.__weFocusHandback.lastAt = Date.now() - 200000;
+  A.win.__weFocusHandback.lastAt = Date.now() - 200000;   // eslint-disable-line require-atomic-updates -- 顺序 await 的判据；宿主对象无并发读写
   A.doc.activeElement = A.frame;
   const skippedBefore = A.win.__weFocusHandback.skipped;
   A.fire('focusout', A.hostButton);
@@ -4785,7 +4797,7 @@ setTimeout(async () => {
   bare.doc.addEventListener = undefined;
   let bareThrew = false;
   let bareRet = 'unset';
-  try { bareRet = bare.mod.installFocusHandback(); } catch (err) { bareThrew = true; }
+  try { bareRet = bare.mod.installFocusHandback(); } catch { bareThrew = true; }
   assert.ok(bareThrew === false && bareRet === null,
     '#148 宿主半：宿主 DOM 能力不全时必须安静退场（返回 null 且不抛），实测 ret=' + String(bareRet));
   assert.equal(bare.listeners.length, 0, '#148 宿主半：退场时不许留下半个监听器');
@@ -5015,6 +5027,120 @@ setTimeout(async () => {
   const stompBack = themeSrc.replace('if (current && current !== themeFollowWritten) return;', '/* 无脑放回 */');
   assert.ok(!/if \(current && current !== themeFollowWritten\) return;/.test(stompBack),
     'negative control: 放回变成无脑覆盖（不看现值）即判红');
+}
+
+// ── issue #194①：设置导航图标补丁换上去的必须是 **svg 本身**（不是包一层 span）──────
+// 事故：官方设置 nav 的图标是 shell 的 navIcon(id) 直接渲染的 `<svg class="…navIcon">` ——
+// 它是 navCell（`display:flex; align-items:center`）的**直接** flex 项，被块化后精确居中；
+// 而本插件的 DOM 补丁换成"一个 `<span>` + 里面一个行内 svg"：行内 svg 坐在 span 自己行盒的
+// **基线**上，继承来的 `line-height:22px` 在它底下留出降部空隙 ⇒ 图标整体比文字高约 2px，
+// 正是用户报障的截图（"图标和文字没上下居中对齐"）。第二半根因是类名：`SVGElement.className`
+// 是 **SVGAnimatedString 对象**，`span.className = iconEl.className` 会被字符串化成
+// `"[object SVGAnimatedString]"` ⇒ shell 的 `flex:none` 等尺寸/弹性约束一起丢。
+// 判据（唯一真源）：补丁交给 replaceChild 的那个元素必须**本身是 svg**、且带上宿主那一格的
+// class；两个负对照各打一半（包 span / 用 className 属性取类名），与正判据共用这一条。
+{
+  // ⚠️ 先归一成 LF（`\r\n?` → `\n`）：CI 的 Windows 检出是 CRLF（`core.autocrlf=true`），而
+  //    本组两条负对照的锚点是**跨行**字面量 —— 不归一时一个字都匹配不到、`replace` 原样返回
+  //    ⇒ 判据会在 Windows 上红成"锚点漂了"（实测：本判据第一次跑 CI 就是这么红的）。
+  //    与 verify-glass-surfaces / verify-scene-live 同一口径、同一处方。
+  const navRaw = readFileSync(new URL('../src/nav-icon.js', import.meta.url), 'utf8');
+  const navSrc = navRaw.replace(/\r\n?/g, '\n');
+  const navSwapOk = (el) => !!el && el.tagName === 'svg' && el.attrs.class === 'Dws9Sa_navIcon';
+
+  const navEl = (tag) => {
+    const attrs = {};
+    return {
+      tagName: tag, attrs, children: [], nodeType: 1,
+      // 真 DOM 的语义差：SVG 元素的 className 是 SVGAnimatedString **对象**（本 issue 第二半
+      // 根因），HTML 元素才是字符串 —— 负对照②靠这条差异把"用属性取类名"那条路判红。
+      get className() { return tag === 'svg' ? { baseVal: attrs.class || '' } : (attrs.class || ''); },
+      set className(v) { attrs.class = String(v); },
+      getAttribute: (k) => (k in attrs ? attrs[k] : null),
+      setAttribute: (k, v) => { attrs[k] = String(v); },
+      appendChild(c) { this.children.push(c); return c; },
+      // 假 DOM 不解析标记：任何 innerHTML 都产出一个 svg 子节点（判据查的是"补丁换上的是不是
+      // svg 元素"，不是"字符串解析对不对"—— 后者由 weIconSvgString 的静态形状承担）。
+      set innerHTML(v) { this._html = String(v); this.children = [navEl('svg')]; },
+      get firstElementChild() { return this.children[0] || null; },
+      get lastElementChild() { return this.children[this.children.length - 1] || null; },
+      get childElementCount() { return this.children.length; },
+    };
+  };
+
+  // 跑真源码（可换成变异版）：返回补丁交给 btn.replaceChild 的那个元素。
+  const runNavPatch = (src) => {
+    const btn = navEl('button');
+    const hostIcon = navEl('svg');            // 宿主的兜底齿轮：它本身就是那个 svg
+    hostIcon.setAttribute('class', 'Dws9Sa_navIcon');
+    btn.textContent = '壁纸引擎';
+    btn.appendChild(hostIcon);
+    btn.appendChild(navEl('span'));
+    let swapped = null;
+    btn.replaceChild = (node, old) => {
+      swapped = node;
+      btn.children = btn.children.map((c) => (c === old ? node : c));
+      return old;
+    };
+    const body = navEl('body');
+    body.querySelectorAll = (sel) => (sel === 'nav button' ? [btn] : []);
+    const scope = new Proxy({
+      document: { body, createElement: navEl, querySelector: () => null },
+      MutationObserver: class { observe() {} disconnect() {} },
+      weT: (s) => s,
+      weOnLocaleChange: () => () => {},
+    }, {
+      has: (t, k) => (k in t) || !(k in globalThis),
+      get: (t, k) => (k in t ? t[k] : () => undefined),
+      set: () => true,
+    });
+    const mod = new Function('__scope',
+      'with (__scope) { ' + stripExportBlocks(src) + '\nreturn { installWeNavIcon }; }')(scope);
+    mod.installWeNavIcon();
+    return swapped;
+  };
+
+  assert.equal(navSwapOk(runNavPatch(navSrc)), true,
+    '#194①：补丁必须换上一个**本身是 svg**、且带宿主 class 的图标');
+  // 变异器：锚点漂了就自己红（不能静默原样返回 —— 那样负对照会退化成永远为真的空转）。
+  // 内部再归一一次换行，好让 CRLF 版源码也能被同一条变异命中（见本块末尾的装置自检③）。
+  const navMutate = (from, to) => (src) => {
+    const lf = src.replace(/\r\n?/g, '\n');
+    assert.ok(lf.includes(from), '装置自检：变异锚点必须在源码里（锚点漂了就该红）— '
+      + JSON.stringify(from.split('\n')[0]));
+    return lf.replace(from, to);
+  };
+  // 负对照①：包一层 span（改动前的写法，且类名从属性上抄）⇒ 同一条判据必须判红。
+  const toLegacySpan = navMutate(
+    '        const holder = document.createElement("div");\n'
+      + '        holder.innerHTML = weIconSvgString(16);\n'
+      + '        const icon = holder.firstElementChild;\n'
+      + '        if (!icon) continue;                 // innerHTML 被拒 / 结构异常：这条按钮保齿轮\n'
+      + '        const cls = iconEl.getAttribute ? iconEl.getAttribute("class") : "";\n'
+      + '        if (cls) icon.setAttribute("class", cls);\n',
+    '        const icon = document.createElement("span");\n'
+      + '        icon.className = iconEl.className;\n'
+      + '        icon.innerHTML = weIconSvgString(16);\n');
+  const legacySpan = toLegacySpan(navSrc);
+  assert.notEqual(legacySpan, navSrc, '装置自检：负对照①的变异必须真的落在源码上（锚点漂了就该红）');
+  assert.equal(navSwapOk(runNavPatch(legacySpan)), false,
+    'negative control①：包一层 span（旧写法）即判红');
+  // 负对照②：换 svg 这件事做对了，但类名走 `iconEl.className`（SVGAnimatedString 对象）
+  // ⇒ 类名串成 "[object …]"、shell 的约束丢光 ⇒ 同一条判据必须判红。
+  const toPropClass = navMutate(
+    '        const cls = iconEl.getAttribute ? iconEl.getAttribute("class") : "";\n'
+      + '        if (cls) icon.setAttribute("class", cls);\n',
+    '        icon.className = iconEl.className;\n');
+  const propClass = toPropClass(navSrc);
+  assert.notEqual(propClass, navSrc, '装置自检：负对照②的变异必须真的落在源码上');
+  assert.equal(navSwapOk(runNavPatch(propClass)), false,
+    'negative control②：类名改走 SVGElement.className（SVGAnimatedString）即判红');
+  // 装置自检③（判据自身的平台鲁棒性）：同一组变异喂给 **CRLF 版**源码也必须落地 —— 这条钉的
+  // 是"上面那次 LF 归一不是多余的"（CI 的 windows-latest 检出就是 CRLF；不归一的话本组判据会
+  // 红成"锚点漂了"，实测过）。
+  const crlfNav = navSrc.replace(/\n/g, '\r\n');
+  assert.notEqual(toLegacySpan(crlfNav), crlfNav, '装置自检：CRLF 检出上负对照①的变异也必须落地');
+  assert.notEqual(toPropClass(crlfNav), crlfNav, '装置自检：CRLF 检出上负对照②的变异也必须落地');
 }
 
 console.log('\nALL CLIENT CHECKS DONE');

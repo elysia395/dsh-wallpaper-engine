@@ -16,11 +16,11 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import assert from 'node:assert/strict';
 // 剥注释：共享的字符串感知实现（test/tools/js-text.mjs）。
 import { stripComments } from './tools/js-text.mjs';
 // 单独 import `src/**` 时补上 bundle 作用域的取词层（中文身份；见 test/tools/weT-shim.mjs）。
 import { installWeTShim } from './tools/weT-shim.mjs';
+import { panelText } from './tools/src-scope.mjs';
 installWeTShim();
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
@@ -45,7 +45,7 @@ const section = (t) => console.log('\n' + t);
 /** 忠实模拟真服务语义的假 theme（替换 + 旧 disposer 变 no-op + 裸字符串抛错）。 */
 function fakeThemeService() {
   const log = [];
-  let layers = new Map(); // source -> {seq, tokens}
+  const layers = new Map(); // source -> {seq, tokens}
   let seq = 0;
   return {
     log,
@@ -147,36 +147,179 @@ section('② 载荷构建（白名单 + 双值 + 形状）');
 }
 
 // ── ③ 轮询（启动竞态） ──────────────────────────────────────────────────────
+// 2026-10-13 修「死控制腿」：旧桩是 `setTimeoutFn: (fn, ms) => scheduled.push(ms)` —— **推的是 ms**，
+// 推进循环取到的是数字 ⇒ 两条腿（拿到即停 / 超时放弃）从未真正执行过：那时的断言只在
+// "队列被掏空"上打转，`onReady`/`onGiveUp` 一次都没触发也能全绿。现在桩记**回调**、循环**执行**它，
+// 两条腿各自断言"触发了什么 + 触发后不许再排定时器"，并各配一条负对照（含"死腿形态回放"）。
 section('③ 轮询：拿到即停 / 超时放弃 / 不炸');
 {
-  const scheduled = [];
-  const timers = { setTimeoutFn: (fn, ms) => { scheduled.push(ms); return scheduled.length; }, clearTimeoutFn: () => {} };
-  let ready = null, giveUp = null, calls = 0;
+  /** 桩定时器：记**回调**（旧版只记 ms ⇒ 推进循环没法执行它）。返回值保持**句柄语义**
+   *  （`pollThemeService` 会把 `setTimeoutFn` 的返回值交给 `clearTimeoutFn`）。 */
+  const makeTimers = () => {
+    const queue = [];
+    return {
+      queue,
+      setTimeoutFn: (fn, ms) => { const h = { fn, ms }; queue.push(h); return h; },
+      clearTimeoutFn: (h) => { const i = queue.indexOf(h); if (i >= 0) queue.splice(i, 1); },
+    };
+  };
+  /** 手动推进时间：取出**最早排期**的那个回调并执行（= 时间走到那一刻）。返回实际执行次数。 */
+  const advance = (timers, max = 8) => {
+    let ran = 0;
+    while (timers.queue.length && ran < max) { timers.queue.shift().fn(); ran++; }
+    return ran;
+  };
   const themeObj = { overrideTokens() {} };
-  const ctx = { get: () => (++calls >= 3 ? themeObj : null) };
-  pollThemeService(ctx, { ...timers, onReady: (t) => { ready = t; }, onGiveUp: (r) => { giveUp = r; } });
-  // 手动推进：把排队的回调依次执行
-  for (let i = 0; i < 5 && scheduled.length; i++) {
-    const fn = scheduled.shift();
-    // 重新构造调度记录（真实实现里 setTimeout 返回句柄，这里简化成"再跑一轮"）
-  }
+
+  // ── 腿 1：拿到即停（前两次拿不到 ⇒ 排队等，第三次命中）────────────────────────
+  const t1 = makeTimers();
+  const seen1 = { ready: [], giveUp: [], ms: [] };
+  let calls1 = 0;
+  pollThemeService({ get: () => (++calls1 >= 3 ? themeObj : null) }, {
+    ...t1,
+    setTimeoutFn: (fn, ms) => { seen1.ms.push(ms); return t1.setTimeoutFn(fn, ms); },
+    onReady: (t) => seen1.ready.push(t), onGiveUp: (w) => seen1.giveUp.push(w),
+  });
+  const ran1 = advance(t1);
+  const left1 = t1.queue.length;
+  /** 判「拿到即停」：命中时回调收到**那个 theme 对象**、恰好一次、没走放弃，且**命中后不再排定时器**。 */
+  const judgeStop = (seen, ran, calls, left) => seen.ready.length === 1 && seen.ready[0] === themeObj
+    && seen.giveUp.length === 0 && ran === 2 && calls === 3 && left === 0;
+  check('拿到即停：两次拿不到后命中 ⇒ onReady 收到那个 theme 对象且恰好一次，命中后不再排定时器',
+    judgeStop(seen1, ran1, calls1, left1),
+    `ran=${ran1} calls=${calls1} ready=${seen1.ready.length} 同一对象=${seen1.ready[0] === themeObj} giveUp=${seen1.giveUp.length} 余队=${left1} 排期=${JSON.stringify(seen1.ms)}`);
+
+  // ── 腿 2：超时放弃（一直拿不到 ⇒ 累计到 timeoutMs 才放弃）────────────────────
+  const t2 = makeTimers();
+  const seen2 = { ready: [], giveUp: [], ms: [] };
+  let calls2 = 0;
+  pollThemeService({ get: () => { calls2++; return null; } }, {
+    ...t2,
+    timeoutMs: 750,
+    setTimeoutFn: (fn, ms) => { seen2.ms.push(ms); return t2.setTimeoutFn(fn, ms); },
+    onReady: (t) => seen2.ready.push(t), onGiveUp: (w) => seen2.giveUp.push(w),
+  });
+  const ran2 = advance(t2);
+  const left2 = t2.queue.length;
+  /** 判「超时放弃」：按 intervalMs 累计到 timeoutMs 才放弃、放弃后不再排定时器、绝不误报 ready。 */
+  const judgeGiveUp = (seen, ran, calls, left) => seen.giveUp.length === 1 && seen.giveUp[0] === 'timeout'
+    && seen.ready.length === 0 && ran === 2 && calls === 3 && left === 0;
+  check('超时放弃：一直拿不到 ⇒ 累计到 timeoutMs 触发 onGiveUp(\'timeout\')，且放弃后不再排定时器',
+    judgeGiveUp(seen2, ran2, calls2, left2),
+    `ran=${ran2} calls=${calls2} giveUp=${JSON.stringify(seen2.giveUp)} ready=${seen2.ready.length} 余队=${left2} 排期=${JSON.stringify(seen2.ms)}`);
+
+  // ── 负对照：同一判据喂"另一种腿"的观测 ⇒ 必须判红 ────────────────────────────
+  check('负对照 A：「拿到即停」判据喂超时腿的观测 ⇒ 判红',
+    judgeStop(seen2, ran2, calls2, left2) === false);
+  check('负对照 B：「超时放弃」判据喂拿到即停腿的观测 ⇒ 判红',
+    judgeGiveUp(seen1, ran1, calls1, left1) === false);
+  // 死腿形态回放：桩丢回调 + 循环只出队 ⇒ 两条判据都必须判红。这正是本段修复前的真实形态
+  //（当时 4 条断言全绿，而 onReady/onGiveUp 一次都没触发）。
+  const replayDead = (judge) => {
+    const q = [];
+    const seen = { ready: [], giveUp: [] };
+    let calls = 0;
+    pollThemeService({ get: () => (++calls >= 3 ? themeObj : null) }, {
+      setTimeoutFn: (fn, ms) => { q.push(ms); return q.length; }, clearTimeoutFn: () => {},
+      onReady: (t) => seen.ready.push(t), onGiveUp: (w) => seen.giveUp.push(w),
+    });
+    for (let i = 0; i < 5 && q.length; i++) q.shift(); // 旧循环：只出队、不执行
+    return judge(seen, 0, calls, q.length);
+  };
+  check('负对照 C（死腿形态回放）：桩丢回调 + 循环只出队 ⇒ 两条判据都判红',
+    replayDead(judgeStop) === false && replayDead(judgeGiveUp) === false);
+
+  // ── 腿 3：取消（`ctx.effect` 拆除时 `cancel()` 必须收回在途定时器且此后零回调）────
+  // 产品行为（读自实现，不猜）：`src/font/color-roles.js:139` 的返回值是
+  //   `() => { cancelled = true; if (handle !== null && clearT) clearT(handle); }`；
+  // 调用方 `src/client.js:5110` 拿它当 `cancelPoll`，并在 `ctx.effect` 的清理函数
+  // （`src/client.js:5153-5155`：`try { if (cancelPoll) cancelPoll(); }`）里调用。
+  // 取消后必须：① 把**那个在途句柄**交回 `clearTimeoutFn`（句柄身份要对，不是随便清一个）；
+  // ② 在途回调不再跑 —— 不再查服务、不再 onReady/onGiveUp、不再排新定时器（否则 effect
+  // 已拆还继续轮询 = 泄漏）；③ 因此"本来会发生的状态变更"不再发生。
+  const t4 = makeTimers();
+  const seen4 = { ready: [], giveUp: [], cleared: [] };
+  let calls4 = 0;
+  const cancel4 = pollThemeService({ get: () => { calls4++; return null; } }, {
+    queue: t4.queue,
+    setTimeoutFn: t4.setTimeoutFn,
+    clearTimeoutFn: (h) => { seen4.cleared.push(h); t4.clearTimeoutFn(h); },
+    onReady: (t) => seen4.ready.push(t), onGiveUp: (w) => seen4.giveUp.push(w),
+  });
+  const pendingHandle4 = t4.queue.length === 1 ? t4.queue[0] : null;
+  const callsBefore4 = calls4;
+  cancel4();                                  // ← effect 清理那一刻
+  const ran4 = advance(t4);                    // 时间继续走：不该再有任何回调
+  /** 判「取消腿」：清的就是那个在途句柄、取消后队列空、零执行、零查询、零回调。 */
+  const judgeCancel = (o) => o.pending === 1 && o.pendingHandle !== null
+    && o.clearedTimes === 1 && o.clearedHandle === o.pendingHandle
+    && o.queueAfter === 0 && o.ranAfter === 0 && o.callsAfter === o.callsBefore
+    && o.ready.length === 0 && o.giveUp.length === 0;
+  const obs4 = {
+    pending: pendingHandle4 ? 1 : 0, pendingHandle: pendingHandle4, clearedTimes: seen4.cleared.length,
+    clearedHandle: seen4.cleared[0], queueAfter: t4.queue.length, ranAfter: ran4,
+    callsBefore: callsBefore4, callsAfter: calls4, ready: seen4.ready, giveUp: seen4.giveUp,
+  };
+  check('取消：cancel() 把在途句柄交给 clearTimeoutFn，且取消后不再查询/回调/排期',
+    judgeCancel(obs4),
+    `在途=${obs4.pending} 清了 ${obs4.clearedTimes} 次 同一句柄=${obs4.clearedHandle === obs4.pendingHandle} 余队=${obs4.queueAfter} 取消后执行=${obs4.ranAfter} 查询 ${obs4.callsBefore}→${obs4.callsAfter} ready=${obs4.ready.length} giveUp=${obs4.giveUp.length}`);
+
+  // ── 负对照 D/E：取消腿的两种错形态回放 ⇒ 必须判红 ─────────────────────────────
+  /** 用不同的 clearTimeoutFn 形态回放整条取消腿，喂**同一条** judgeCancel。 */
+  const judgeCancelOn = (clearTimeoutFn) => {
+    const q = [];
+    const seen = { ready: [], giveUp: [], cleared: [] };
+    let calls = 0;
+    const cancel = pollThemeService({ get: () => { calls++; return null; } }, {
+      setTimeoutFn: (fn, ms) => { const h = { fn, ms }; q.push(h); return h; },
+      clearTimeoutFn,
+      onReady: (t) => seen.ready.push(t), onGiveUp: (w) => seen.giveUp.push(w),
+    });
+    const pendingHandle = q.length === 1 ? q[0] : null;
+    const callsBefore = calls;
+    cancel();
+    let ran = 0;
+    while (q.length && ran < 8) { q.shift().fn(); ran++; }
+    return judgeCancel({ pending: pendingHandle ? 1 : 0, pendingHandle, clearedTimes: seen.cleared.length,
+      clearedHandle: seen.cleared[0], queueAfter: q.length, ranAfter: ran,
+      callsBefore, callsAfter: calls, ready: seen.ready, giveUp: seen.giveUp });
+  };
+  check('负对照 D（没交回句柄）：取消时没把句柄给 clearTimeoutFn ⇒ 判红',
+    judgeCancelOn((h) => h) === false);
+  const clearedE = [];
+  check('负对照 E（交了但没真移除）：句柄对、队列没动 ⇒ 在途回调再跑一轮 ⇒ 判红',
+    judgeCancelOn((h) => { clearedE.push(h); }) === false && clearedE.length === 1);
+
+  // ── 边界：首次查询就命中 / 已就绪不得放弃 / ctx.get 抛错不炸 ─────────────────
+  const t3 = makeTimers();
+  const seen3 = { ready: [], giveUp: [] };
+  pollThemeService({ get: () => themeObj }, {
+    ...t3, onReady: (t) => seen3.ready.push(t), onGiveUp: (w) => seen3.giveUp.push(w),
+  });
   check('首次查询就命中时不排任何定时器（拿到即停）',
-    pollThemeService({ get: () => ({ overrideTokens() {} }) }, { ...timers, onReady: () => {} }) !== undefined
-    && scheduled.length === 0);
+    seen3.ready.length === 1 && seen3.ready[0] === themeObj && t3.queue.length === 0);
+  check('负对照：服务已就绪时不应触发 onGiveUp', seen3.giveUp.length === 0);
   check('ctx.get 抛错不炸（当成 null）', (() => {
-    try { pollThemeService({ get: () => { throw new Error('boom'); } }, { ...timers, timeoutMs: 1, onGiveUp: () => {} }); return true; } catch { return false; }
+    try { pollThemeService({ get: () => { throw new Error('boom'); } }, { ...makeTimers(), timeoutMs: 250, onGiveUp: () => {} }); return true; } catch { return false; }
   })());
-  check('取不到服务 ⇒ 走 onGiveUp（回落 /style 双通道）', (() => {
-    let got = null;
-    const t = { setTimeoutFn: (fn) => { fn(); return 1; }, clearTimeoutFn: () => {} };
-    pollThemeService({ get: () => null }, { ...t, timeoutMs: 0, onGiveUp: (why) => { got = why; } });
-    return got !== null;
-  })(), 'onGiveUp 触发');
-  check('负对照：服务已就绪时不应触发 onGiveUp', (() => {
-    let gave = false;
-    pollThemeService({ get: () => ({ overrideTokens() {} }) }, { ...timers, onGiveUp: () => { gave = true; } });
-    return gave === false;
-  })());
+
+  // 取消边界：没有在途定时器时（首次查询即命中 ⇒ `handle === null`）cancel() **不得**误清句柄 ——
+  // 实现里 `if (handle !== null && clearT)` 是显式的；乱交回一个 undefined 在真实宿主上可能清掉别人的定时器。
+  const t5 = makeTimers();
+  const cleared5 = [];
+  const cancel5 = pollThemeService({ get: () => themeObj }, {
+    ...t5,
+    clearTimeoutFn: (h) => { cleared5.push(h); t5.clearTimeoutFn(h); },
+    onReady: () => {},
+  });
+  const pending5 = t5.queue.length;
+  cancel5();
+  const judgeClearOnlyIfPending = (o) => o.pending === 0 && o.clearedTimes === 0;
+  check('取消边界：没有在途定时器时 cancel() 不误清句柄',
+    judgeClearOnlyIfPending({ pending: pending5, clearedTimes: cleared5.length }) && t5.queue.length === 0,
+    `在途=${pending5} 清了 ${cleared5.length} 次 余队=${t5.queue.length}`);
+  check('负对照 F：上述边界判据喂"没有在途却清了句柄" ⇒ 判红',
+    judgeClearOnlyIfPending({ pending: 0, clearedTimes: 1 }) === false);
 }
 
 // ── ④ 层：替换语义 / 旧 disposer 陷阱 / 基线时序 ─────────────────────────────
@@ -312,8 +455,7 @@ section('④b 排版角色（F2）');
   // 颜色块显示当前默认色。
   // 调节面板的渲染器已抽到 src/panel-tabs.js（C）：这里按文件分源，不拼接 ——
 // 拼接会让一个文件的文本满足另一个文件的结构断言。
-const clientFontUi = readFileSync(join(root, 'src', 'client.js'), 'utf8');
-const fontTabsUi = readFileSync(join(root, 'src', 'panel-tabs.js'), 'utf8');
+const fontTabsUi = panelText();
   // 默认值**直接显示在输入框里**（角色表：字号列未填时显示 role.defaultPx），
   // 不再用行内小字复述一遍 DSH 原字阶。
   // 三处「写法判据」提成命名函数 —— 函数名说的是它抓的**该种写法**（与标签同源），

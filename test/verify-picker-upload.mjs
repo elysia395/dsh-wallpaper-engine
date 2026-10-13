@@ -273,7 +273,7 @@ const fetch = (url, opts) => {
     return pendingUpload.promise;
   }
   if (method === 'POST' && u.includes('/wallpaper-engine/we-assets-dir')) {
-    let body = null;
+    let body;
     try { body = JSON.parse((opts && opts.body) || '{}'); } catch { body = null; }
     weAssetsCalls.push({ url: u, body });
     const ok = weAssetsSaveStatus >= 200 && weAssetsSaveStatus < 300;
@@ -307,7 +307,7 @@ const sandbox = {
 vm.createContext(sandbox);
 new vm.Script(code, { filename: 'client.js' }).runInContext(sandbox);
 
-const { id, factory } = cap.handoff;
+const { factory } = cap.handoff;
 const requireMock = (spec) => {
   if (spec === 'react') return React;
   if (spec === 'react-dom') return { createPortal: (node) => node }; // 模态框在 mock 里就地渲染
@@ -325,7 +325,7 @@ const slots = {
 const ctx = { slots, effect(fn) { fn(); return fn; } };
 exportsObj.apply(ctx);
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms) => new Promise((r) => { setTimeout(r, ms); });
 const render = () => pickerRenders[0]();
 await sleep(80); // 等 loadPersisted → loadInventory → revalidateSelection 这条启动链落定
 
@@ -354,7 +354,6 @@ console.log('0. 挂载台自检');
 }
 
 const initialTree = render();
-const initialCount = inventoryCalls.length;
 
 console.log('1. 上传：选中 File → 上传中 → 成功计数');
 {

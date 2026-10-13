@@ -436,7 +436,7 @@ function parallaxGroupKind(el) {
  *  PARALLAX_PLUGIN_SKIP / _SKIP_PREFIX / _SKIP_SCOPE 的注释）。只读宿主写的 `data-slot`。 */
 function parallaxPluginKey(el) {
   if (!el || typeof el.getAttribute !== 'function') return '';
-  let key = '';
+  let key;
   try { key = el.getAttribute(PARALLAX_PLUGIN_SLOT_ATTR) || ''; } catch (e) { return ''; }
   key = String(key);
   if (!key || PARALLAX_PLUGIN_SKIP.indexOf(key) >= 0) return '';
@@ -458,7 +458,7 @@ function parallaxPluginGroups() {
   const out = [];
   if (typeof document === 'undefined' || !document
     || typeof document.querySelectorAll !== 'function') return out;
-  let nodes = null;
+  let nodes;
   try { nodes = document.querySelectorAll(PARALLAX_PLUGIN_SELECTOR); } catch (e) { return out; }
   for (let i = 0; i < nodes.length; i += 1) {
     const slot = parallaxPluginKey(nodes[i]);
@@ -491,7 +491,7 @@ function parallaxPluginEffectiveGroups() {
   const outers = [];
   if (st.ui && typeof document !== 'undefined' && document
     && typeof document.querySelectorAll === 'function') {
-    let nodes = null;
+    let nodes;
     try { nodes = document.querySelectorAll(PARALLAX_GROUP_SELECTOR); } catch (e) { nodes = null; }
     for (let i = 0; nodes && i < nodes.length; i += 1) outers.push(nodes[i]);
   }
@@ -563,7 +563,7 @@ function parallaxGroupBox(el) {
   let node = el;
   for (let up = 0; up < PARALLAX_GROUP_BOX_MAX_UP && node; up += 1) {
     if (node === body || node === root) break;
-    let cs = null;
+    let cs;
     try { cs = getComputedStyle(node); } catch (e) { cs = null; }
     if (!cs || cs.display !== 'contents') return node;
     node = node.parentElement || null;
@@ -603,7 +603,7 @@ function parallaxSnapAxis(v, prev) {
  *  生效，得补一个。**只在重扫路径上读**（帧里绝不碰 getComputedStyle）；读不到就当作要补。 */
 function parallaxGroupNeedsRelative(el) {
   if (!el || typeof getComputedStyle !== 'function') return true;
-  let cs = null;
+  let cs;
   try { cs = getComputedStyle(el); } catch (e) { cs = null; }
   if (!cs) return true;
   return cs.position === 'static' || !cs.position;
@@ -640,7 +640,7 @@ function parallaxGroupNodes(el) {
   const now = weNow();
   const slot = parallaxGroupSizes ? parallaxGroupSizes.get(el) : null;
   if (slot && slot.big === true && now - slot.at < PARALLAX_GROUP_SCAN_COOLDOWN_MS) return null;
-  let nodes = null;
+  let nodes;
   try { nodes = el.querySelectorAll('*'); } catch (e) { return null; }
   if (!nodes) return null;
   const n = nodes.length;
@@ -675,7 +675,7 @@ function parallaxGroupBlocked(el) {
   const nodes = parallaxGroupNodes(el);
   if (!nodes || nodes.length > PARALLAX_GROUP_SCAN_MAX) return false;
   for (let i = 0; i < nodes.length; i += 1) {
-    let cs = null;
+    let cs;
     try { cs = getComputedStyle(nodes[i]); } catch (e) { cs = null; }
     if (cs && cs.position === 'fixed') return true;
   }
@@ -1186,7 +1186,7 @@ function parallaxFrame(ms) {
   const targetY = PARALLAX_DIRECTION * (cy - vh / 2) / PARALLAX_STEP_DIV;
   // 一层都不动（系数全 0）⇒ 屏上什么都不会变：一次落位、收工，一帧都不多排。
   const pctMax = parallaxMaxPercent(st);
-  let writes = 0;
+  let writes;
   if (pctMax <= 0) {
     parallaxStepX = targetX;
     parallaxStepY = targetY;

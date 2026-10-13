@@ -11,11 +11,12 @@
 ### The default form for scene / web wallpapers: WebWallGL live rendering
 
 **Scene and web wallpapers render live by default** (setting `sceneLive`, UI labels 「场景实时渲染」 /
-「网页实时渲染」, on by default) — the renderer is the **upstream WebWallGL page** (version pinned in `lib/webwallgl/.upstream.json`), vendored under
-`lib/webwallgl/` and mounted by the host with `/wallpaper-engine/scene-live/` as its base (asset
+「网页实时渲染」, on by default) — the renderer is the **engine from the npm dependency `webwallgl`** (version pinned in `package.json`) plus
+the in-repo adapter page under `lib/webwallgl/` (`index.html` + `renderer.js`); engine files are served at
+runtime straight from `node_modules/webwallgl` (under `engine/`), and the page is mounted by the host with `/wallpaper-engine/scene-live/` as its base (asset
 references resolve under that prefix); the wallpaper's own files (`scene.pkg` / web project files) are
 served through `/wallpaper-engine/scene-files/`. For web wallpapers the host injects the WE API shim
-(`lib/webwallgl/web-shim.js`) and the `project.json` property seed into the returned HTML — under the
+(extracted at runtime from the package's `webwallgl.mjs`) and the `project.json` property seed into the returned HTML — under the
 strict sandbox the renderer page cannot reach into the wallpaper iframe, so the shim must ride along
 with the document.
 
@@ -83,8 +84,8 @@ plane. The host contract is just two things: **feed the scene files to the rende
 ### Web wallpapers: implementation details & known limits
 
 **Web wallpapers** go through WebWallGL too: the host injects the **WE API shim**
-(`wallpaperRegisterAudioListener` / `wallpaperPropertyListener` / media listeners, from upstream
-`web-shim.js`, injected into the entry HTML by `/scene-files`) and hands the page to the renderer — so
+(`wallpaperRegisterAudioListener` / `wallpaperPropertyListener` / media listeners, taken from the
+`webwallgl` package, injected into the entry HTML by `/scene-files`) and hands the page to the renderer — so
 workshop web wallpapers that depend on the WE API (audio visualizers, property-driven and
 pointer-tracking pages) actually run instead of rendering blank or erroring. **Security**: the wallpaper
 iframe is forced into `sandbox="allow-scripts"` (strict sandbox) so the third-party HTML can never

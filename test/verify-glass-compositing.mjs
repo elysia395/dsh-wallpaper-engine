@@ -55,6 +55,7 @@
 //   control uses it to prove the assertions fail on a mutated copy.
 import { readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
+import { cssBodyOf } from './tools/src-scope.mjs';
 
 const results = [];
 function check(name, ok, detail) {
@@ -71,8 +72,10 @@ const FLOOR = {
   dark: Number((SRC.match(/const READABILITY_FLOOR_DARK = ([\d.]+);/) || [])[1]),
 };
 // ⚠️ 锚点锚在行首且容忍缩进（产物把内联模块整段缩进过）：散文里出现同样的声明字面量会把锚点带偏。
-const CSS_BODY_MATCH = SRC.match(/^\s*const CSS = `([^`]*)`;/m);
-const CSS_BODY = CSS_BODY_MATCH ? CSS_BODY_MATCH[1] : '';
+// 2026-10-13（刀3）：样式表由单个 CSS 模板拆成 8 个域模板 + 组装点 ⇒ 取文改走 cssBodyOf
+// （按声明顺序把族内每个域模板拼回一份 CSS 体）。与旧单模板取文**逐字节相同**（实测 276,804 B），
+// 且一个模板都取不到时会**抛错**，不再像旧写法那样静默返回空串让本文件全部判据恒真。
+const CSS_BODY = cssBodyOf(SRC);
 let CSS = '';
 let cssError = null;
 try {

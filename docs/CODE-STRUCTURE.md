@@ -103,26 +103,29 @@ graph TB
 
 ---
 
-## 2. 宿主半边：门面 + 路由族
+## 2. 宿主半边：门面、路由族与套件
 
-`lib/index.js` 是**门面**：它做注册与协议聚合，**不装新逻辑**。随着功能增长，成族的职责被抽成模块：
+`lib/index.js` 是**门面**：它做注册与协议聚合，**不装新逻辑**。宿主半边里住着三类东西：
+
+- **路由族**（`lib/routes/<族>.js`，一文件一族）—— 从门面拿一个显式 context 对象，各自注册自己的路由。
+  族的成员是**派生量**，本文不列：路由枚举的真源是 `test/tools/host-route-index.mjs` 的 `buildIndex()`
+  （它把搬进 `lib/routes/` 的族按调用点放回原位），路由级视图是生成物 `docs/ROUTE-INDEX.md`
+  （`verify-route-index` 重算并逐字节比对）。`verify-route-families` 另按账本 §7-6 的触发线盯
+  「某族长到 ≥3 条 ⇒ 拆族或改线」。
+- **宿主侧套件**（`lib/*.js` 里的非路由模块）—— 纯逻辑，不碰 `ctx.webServer`：探测与账本
+  （`media-probe` / `scene-probe` / `wallpaper-scan` / `cache-prune`）、清单与文件服务
+  （`inventory` / `serve` / `mp4-vfs` / `faststart` / `pkg-read` / `scene-manifest`）、
+  设置与配置（`settings-schema` / `config-store`）。
+- **共享管道** `lib/http-body.js` —— 请求体读取的唯一实现，路由族共用，不各写一份。
 
 ```mermaid
 graph LR
-    IDX["lib/index.js<br/>（门面：apply + 共享闭包）"]
-    IDX --> R1["lib/routes/diag.js<br/>诊断"]
-    IDX --> R2["lib/routes/now-playing.js<br/>系统音频 / 歌曲信息 / 反向控制"]
-    IDX --> R3["lib/routes/scene-frame.js<br/>抓帧与自定义画面"]
-    IDX --> R4["lib/routes/scene-serve.js<br/>渲染页 / 壁纸文件 / 媒体源诊断"]
-    IDX --> R5["lib/routes/fontsets.js<br/>字体集"]
-    IDX --> R6["lib/routes/upload.js<br/>上传"]
-    IDX --> R7["lib/routes/about-qr.js<br/>「关于」页二维码（随包 PNG 直出）"]
-    IDX --> R8["lib/routes/github-stars.js<br/>仓库 star 数（带缓存；全插件唯一出站请求）"]
-    IDX --> R10["lib/routes/system-fonts.js<br/>本机字体清单（问操作系统 + 落盘缓存）"]
-    IDX --> M1["lib/media/supervisor.js<br/>中间件生命周期"]
-    IDX --> M2["lib/media/provision.js<br/>按需下载 + 校验"]
-    IDX --> M3["lib/media/legacy.js<br/>内置回落实现"]
-    IDX --> H1["lib/http-body.js<br/>请求体管道（唯一实现；路由模块共用）"]
+    IDX["lib/index.js<br/>（门面：apply 编排 + 共享闭包）"]
+    IDX --> R["lib/routes/*.js<br/>路由族（一文件一族）"]
+    IDX --> K["lib/*.js<br/>宿主侧套件（探测 / 清单 / 服务 / 设置）"]
+    IDX --> M["lib/media/*.js<br/>媒体源：生命周期 + 按需下载"]
+    IDX --> H["lib/http-body.js<br/>请求体管道（唯一实现）"]
+    R --> H
 ```
 
 **族的形态有明文规定**（§4 第 1 条）：路由模块从 `apply(ctx)` 拿一个**显式 context 对象**
@@ -159,6 +162,45 @@ sequenceDiagram
   否则卸载 / HMR 后会留下挂着的处理器。
 - **`ctx.webServer` 仍防御性读取**：路由表建不起来时要有明确失败，而不是 undefined 崩。
 
+### 2.2 非路由套件：职责与「为什么单独成模块」
+
+抽模块的接缝判据只有一条：**同一份推导被两个互不相干的消费者读到**（或者反过来，同一件事存在
+两个可以出错的实现）。下表把宿主半边现有的套件逐个说明：
+
+| 模块 | 职责 | 接缝判据（为什么不能再摊在门面里） |
+|---|---|---|
+| `lib/media-probe.js` | MP4/MOV 容器探测：一次 moov 盒走读，回答尺寸 / 编码 / 帧率 / 时长与 moov 落点 | 同一份走读被两个消费者读：`/media-info` 的面板提示与 `runFfmpegTranscode` 的"源帧率 ≤ 上限就跳过转码"决策；`moovStart` / `moovSize` 又是 `mp4-vfs` 的 faststart 判据。抄两份就会各自漂移 |
+| `lib/scene-probe.js` | scene 的两本探测账本：独立音轨（BGM）与"主文件是否内嵌 MP4" | 两件事的消费者完全重合（`/scene-audio`、`/scene-video`、`/inventory`）。分开写会出现两份缓存键、两套陈旧判定：同一份 pkg 被探两次，两个回答还可能不一致 |
+| `lib/wallpaper-scan.js` | 「目录树 → 清单条目」的唯一推导链：扫描根推导、扫描签名、`project.json` → 条目、WE 播放列表 | 三个磁盘探测（存在 / 目录 / 文件）与 Steam 安装探测族共用同一份实现，注入后"扫描根少算一个"只剩一个出错点 —— 否则症状是签名一直"没变"、那一根里新增的壁纸永远不进库 |
+| `lib/cache-prune.js` | 启动期缓存清扫 + 容量上限（转码总量、缩略图份数、自定义画面孤儿 `.tmp`） | 四件事共享同一条纪律「只清本进程不拥有的、且够旧的孤儿产物」；它们原先分居门面两处，改一处的边界口径要回头确认另一处 |
+| `lib/config-store.js` | `config.json` 的读、原子发布（临时名 + `fsync` + `rename`）与 `settings` 段的读-改-写串行化 | **持久状态的写纪律与读改写排队**。`config.json` 被目录设置、上传元数据、字体集状态等多个业务面读-改-写共用，**每一次读改写都必须过同一条队列**（并发时后写者会基于旧快照吞掉先写者的改动）；摊在门面里就等于每个调用点各自排队，两处实现就会两处丢改动 |
+
+不变量写在各自的文件头（动它们之前先读那一段）。共同的一条：**套件不自己决定"缓存放哪"** ——
+音轨产物落点（`ensureFrameCacheDir`）、原子落盘（`atomicWriteFileP`）、转码 / ffmpeg / 缩略图三个
+目录（`transcodeCacheDir` / `ffmpegDataDir` / `videoPreviewCacheDir`）都由门面注入，因为这些路径带着
+`verify-cache-dir` 的文本锚点，留在门面才看得住。`config-store` 的调用点真源也现取：
+
+```sh
+grep -rn 'enqueueConfigWrite(' lib/
+```
+
+**门面与套件的边界**：套件只 `import` node 内建与同层纯函数；凡是要 `ctx.webServer`、要 fiber
+disposer、要门面闭包状态的，留在路由族或 `apply()` 里。
+
+### 2.3 `lib/index.js` 现在还剩什么
+
+剩下的都是"必须同作用域，或必须留锚点"的东西，不是待拆的巨石：
+
+- **注册与编排**：`apply(ctx)` 建各套件、按族注册路由、把 disposer 推进 fiber；
+- **共享可变状态与访问器**：媒体源地址、载荷账本、缓存索引 —— 必须与 `/inventory` 同作用域，
+  跨模块只能以访问器形式出去（传值就是陈旧快照）；
+- **目录解析器与配置路径**：`pluginDataDir()` / `configPath()` / `cacheBaseDir()`（及其子目录）、
+  `repoSlugFromPkg()`。它们带着 `verify-client` / `verify-cache-dir` / `verify-about` 的文本锚点，
+  所以 `lib/cache-prune.js` 只**收**这三个解析器、不搬走它们；
+- **模块加载期就建好的套件**：`wallpaper-scan` / `scene-probe` / `cache-prune` / `config-store`
+  的 kit 与 `media-probe` 的 `getMediaInfo` 在门面**模块作用域**就可用（它们的注入点必须是可提升的
+  函数声明），不在 `apply()` 里惰性建。
+
 ---
 
 ## 3. 浏览器半边：构建期内联，不是模块系统
@@ -171,8 +213,8 @@ sequenceDiagram
 graph LR
     subgraph SRC["src/**（手写真源，浏览器侧唯一真源）"]
         C["src/client.js<br/>正文"]
-        A["src/styles.js<br/>纯数据：整份样式表"]
-        B["src/panel-tabs.js · src/picker-*.js · src/ext-fx.js · src/ext-parallax.js · src/ext-avatar.js<br/>UI 面"]
+        A["src/styles-*.js + src/styles.js<br/>纯数据：样式域模板 + 组装点"]
+        B["src/panel-tabs.js（组装点）+ src/panel-tabs-*.js（域节渲染器）· src/picker-*.js · src/ext-fx.js · src/ext-parallax.js · src/ext-avatar.js<br/>UI 面"]
         D["src/live-layer.js · src/video-layer.js · src/fx-layer.js · src/parallax-layer.js · src/avatar-layer.js · src/layer-core.js · src/media-prep.js<br/>行为面"]
         E["src/font/*<br/>字体系统"]
         F["lib/settings-schema.js<br/>唯一共享内核"]
@@ -211,9 +253,9 @@ graph LR
 | 角色 | 模块 | 谁给它外界 |
 |---|---|---|
 | **状态真源 + 装配（门面）** | `src/client.js`（正文） | 自己持有：设置 store（`selection`）、持久化、`apiFetch`、`weT` 接线、React 根、`ctx` 的组装点 |
-| **接收 `ctx` 的渲染 / 行为层** | `live-layer` · `panel-tabs` · **`glass-panel`** · `ext-fx` · `ext-parallax` · `ext-avatar` · `sidebar-right` · `picker-modal` · `picker-props-panel` · `theme-follow` · `fontset-editor` · `font/apply` · `font/color-roles` | **门面在调用点组装 `ctx` 传进来** —— 这一层里**不**直接读 `selection` |
+| **接收 `ctx` 的渲染 / 行为层** | `live-layer` · 页签族：`panel-tabs.js`（**组装点**：只留 `render*Tab` 与 `extensionModules`；导出清单 = 该文件尾的 `export {…}`）+ `panel-tabs-{wallpaper,appearance,mascot,effects,advanced}.js`（按域搬出的节渲染器 `render*Section`；**构建期内联在组装点之前**，同作用域靠扁平符号协作） · **`glass-panel`** · `ext-fx` · `ext-parallax` · `ext-avatar` · `sidebar-right` · `picker-modal` · `picker-props-panel` · `theme-follow` · `fontset-editor` · `font/apply` · `font/color-roles` | **门面在调用点组装 `ctx` 传进来** —— 这一层里**不**直接读 `selection` |
 | **基座（无 `ctx`，读扁平符号）** | **`we-base`**（最小地基：`weClampTo` / `weNow` / `weBody` 的唯一实现，零依赖） · `media-prep` · `picker-model` · `video-layer` · `fx-layer` · `parallax-layer` · `avatar-layer` · **`glass`** · `effects` · `quick-panel` · `i18n` · `api-client` · `adapter` · `we-cond` · `persistence` · `fontset-store` | 直接读**同作用域**的符号；自己的符号反过来被正文读 |
-| **纯数据 / 常量表** | `styles.js`（整份样式表）· `i18n-copy.js`（词表）· `about-assets.js` · `font/typography.js` · `font/components.js` | 无外界 |
+| **纯数据 / 常量表** | 样式族 `styles-*.js`（域模板）+ `styles.js`（组装点）· i18n 词表 `i18n-copy-*.js`（域词表）+ `i18n-copy.js`（组装点，另含宿主文案表）· `about-assets.js` · `font/typography.js` · `font/components.js` | 无外界 |
 | **通道 / 工具** | `layer-core`（两条通道共用的切换核心） · `nav-icon` · `persistence` · `fontset-store` · **`preset-store`**（玻璃预设的客户端通道：清单与正文住宿主文件 `glass-presets/<id>.json`，应用走 settings 通道） | 见各自文件头 |
 
 **依赖方向单向，但两侧含义不同**：
@@ -236,10 +278,10 @@ graph LR
 |---|---|---|---|
 | **字体子系统** | `font/apply` · `font/components` · `font/color-roles` · `font/typography` | `components → apply` ×13 · `→ color-roles` ×10 | ✅ `src/font/`（门槛① 4 个成员 + 门槛② [`FONT-SYSTEM.md`](./FONT-SYSTEM.md)） |
 | **picker** | `picker-model`（纯函数、零外界） · `picker-modal` · `picker-props-panel` · `quick-panel` | `modal → model` ×30 | 平铺（见下） |
-| **渲染器层** | `panel-tabs` · `picker-modal` · `picker-props-panel` · `fontset-editor` · `ext-fx` · `ext-parallax` · `ext-avatar` | **互相零读取**（只读门面与纯函数工具） | 平铺 |
+| **渲染器层** | `panel-tabs`（族：组装点 + 五个域模块，成员与内联顺序真源 = `scripts/build-client.mjs` 的 `INLINE_MODULES`，按 `src/panel-tabs` 前缀读） · `picker-modal` · `picker-props-panel` · `fontset-editor` · `ext-fx` · `ext-parallax` · `ext-avatar` | **互相零读取**（只读门面与纯函数工具） | 平铺 |
 | **媒体管线** | `live-layer` · `video-layer` · `media-prep` · `layer-core` · `effects` | `live-layer` → 家族内 | 平铺 |
 | **点击与拖尾（「扩展」二号模块的两半）** | `fx-layer`（画布层：零 `ctx`、只读 `selection`、自带输入监听与内容驱动的 rAF） · `ext-fx`（扩展岛：收 `ctx`，动作走具名 `on*`） | 两者**互相零读取**（岛不读画布层的任何符号；画布层只在帧里现读 `selection`） | 平铺 |
-| **3D 纵深（「扩展」三号模块的两半）** | `parallax-layer`（行为层：零 `ctx`、只读 `selection`、**一个 DOM 节点都不建**，每帧把算完的**最终位移**直接写进**要动的那几层自己**的 CSS 独立属性 `translate` —— 每帧零自定义属性写入，body 上只剩一个"壁纸补边系数"；除壁纸与吉祥物外还能整块挪**界面四类**：`[data-composer-card]` / `[data-slot="conversation.view"]` / `[data-slot="sidebar"]` / `[data-chat-flow-kind="user"|"steering"]`（用户气泡，只取 DOM 顺序里最近 24 条），受子开关 `parallaxUi` 管、方向与壁纸**同向**，**每块各存自己的绝对百分比**（`parallaxUiChatDepth` / `parallaxUiComposerDepth` / `parallaxUiSidebarDepth` / `parallaxUiBubbleDepth`，KINDS `num 0..10`、步长 0.1、出厂 1.2 / 1.8 / 1.6 / 1.4（用户诉求 m04159；真源 = `lib/settings-schema.js`），设 0 = 这一块完全不缓动；老口径那枚总倍率 `parallaxUiDepth` 与"面板 ×100、存档 ÷100"整条退役 ⇒ 面板与存档**同一个单位**，百分比的口径 = "最大位移占屏幕最长对角线的 p%"、层里 `PARALLAX_STEP_DIV = 50`）；**别的插件注册的前端元素组**（用户口径 m02697-②）由**它自己的开关** `parallaxPlugin` 另管（用户诉求 m03549：**独立于 `parallaxUi`、默认关**，因为它挪的是别的插件画出来的真实界面；关着时层**连扫都不扫**、面板那一卡只有开关）：开着时才扫宿主槽出口 `[data-slot]`、位移落在它的**元素子节点**上（出口自己 `display: contents` 无盒），跳掉整帧容器（`root` / `main` / `rightbar`）、原生三组的出口本身与设置、插件管理那几块子树（前缀 `settings.` / `plugins.` / `shell.` 与子树 `settings.section` / `plugins.bundle.config`），再过一道 `parallaxPluginEffectiveGroups()`：落在**原生四组盒子**里、或落在**另一个认到的插件组**里的出口不算（重扫那一步"组里套组只留最外侧"的同一条；⚠️ 这道只在「界面元素跟随」**开着**时才算 —— 关着时那四组系数恒为 0、压根不是候选，拿它们去挡会让这个开关拖不动），距离住 `parallaxPluginDepths`（槽键 → %，`map` 档；缺键 = `PARALLAX_PLUGIN_DEFAULT` 1%、显式 0 = 这一组不动；那张表只在开关开着时才算数），名单由 `parallaxDiscoveredGroups()` 经 `ctx` 交给扩展岛（**与屏上同源**：它和 `parallaxTargetsRefresh()` 共用同一个 `parallaxPluginEffectiveGroups()` ⇒ 认到几个画几行、画出来的每一行都有落点；唯一例外 = 组里有 `position: fixed` 后代时整组不动，那一条写进每行 tooltip 与那一卡上方的说明文案里）；界面那几层在会话滚动容器**里面** ⇒ `src/styles.js` 视差段顺手给该容器封了横轴（`overflow-x: hidden`），否则横向位移会让 `overflow-y: auto` 的它长出一条横向滚动条、占掉 scrollport 把 sticky 的输入卡片顶上去）；宿主槽出口自己写死 `display: contents`、**不生成盒子** ⇒ 位移落在**锚点自己（自己就有盒子就用自己）或最近的有盒子的祖先**上（`parallaxGroupBox()`，最多往上 3 层），位移量化到整设备像素（带迟滞：零附近的尾巴不来回翻）、归零摘属性、组里有 fixed 后代就整组不动、嵌套组只留最外侧（**气泡是例外**：位移叠在会话文本区之上）；**左栏是唯一例外形态** —— 它走相对定位（`position: relative` + `left`/`top`）而不写 `translate`，因为那一列里有宿主的 `position: fixed` 收起按钮，给它任何 `transform` 都会换掉按钮的包含块（与 #131 同类的事故）） · `ext-parallax`（扩展岛：收 `ctx`，动作走具名 `on*`，面板分「背景」/「原生前端」/「插件前端」三张卡） | 岛不读行为层的其它符号，**只读它导出的三枚常量** —— `PARALLAX_PLUGIN_DEFAULT`（缺省距离的单一真源）与 `PARALLAX_GROUP_DEPTH_MIN` / `PARALLAX_GROUP_DEPTH_MAX`（插件槽那一档回显的钳制范围）；行为层只在帧里现读 `selection`（百分比、插件表都从那里来） | 平铺 |
+| **3D 纵深（「扩展」三号模块的两半）** | `parallax-layer`（行为层：零 `ctx`、只读 `selection`、**一个 DOM 节点都不建**，每帧把算完的**最终位移**直接写进**要动的那几层自己**的 CSS 独立属性 `translate` —— 每帧零自定义属性写入，body 上只剩一个"壁纸补边系数"；除壁纸与吉祥物外还能整块挪**界面四类**：`[data-composer-card]` / `[data-slot="conversation.view"]` / `[data-slot="sidebar"]` / `[data-chat-flow-kind="user"|"steering"]`（用户气泡，只取 DOM 顺序里最近 24 条），受子开关 `parallaxUi` 管、方向与壁纸**同向**，**每块各存自己的绝对百分比**（`parallaxUiChatDepth` / `parallaxUiComposerDepth` / `parallaxUiSidebarDepth` / `parallaxUiBubbleDepth`，KINDS `num 0..10`、步长 0.1、出厂 1.2 / 1.8 / 1.6 / 1.4（用户诉求 m04159；真源 = `lib/settings-schema.js`），设 0 = 这一块完全不缓动；老口径那枚总倍率 `parallaxUiDepth` 与"面板 ×100、存档 ÷100"整条退役 ⇒ 面板与存档**同一个单位**，百分比的口径 = "最大位移占屏幕最长对角线的 p%"、层里 `PARALLAX_STEP_DIV = 50`）；**别的插件注册的前端元素组**（用户口径 m02697-②）由**它自己的开关** `parallaxPlugin` 另管（用户诉求 m03549：**独立于 `parallaxUi`、默认关**，因为它挪的是别的插件画出来的真实界面；关着时层**连扫都不扫**、面板那一卡只有开关）：开着时才扫宿主槽出口 `[data-slot]`、位移落在它的**元素子节点**上（出口自己 `display: contents` 无盒），跳掉整帧容器（`root` / `main` / `rightbar`）、原生三组的出口本身与设置、插件管理那几块子树（前缀 `settings.` / `plugins.` / `shell.` 与子树 `settings.section` / `plugins.bundle.config`），再过一道 `parallaxPluginEffectiveGroups()`：落在**原生四组盒子**里、或落在**另一个认到的插件组**里的出口不算（重扫那一步"组里套组只留最外侧"的同一条；⚠️ 这道只在「界面元素跟随」**开着**时才算 —— 关着时那四组系数恒为 0、压根不是候选，拿它们去挡会让这个开关拖不动），距离住 `parallaxPluginDepths`（槽键 → %，`map` 档；缺键 = `PARALLAX_PLUGIN_DEFAULT` 1%、显式 0 = 这一组不动；那张表只在开关开着时才算数），名单由 `parallaxDiscoveredGroups()` 经 `ctx` 交给扩展岛（**与屏上同源**：它和 `parallaxTargetsRefresh()` 共用同一个 `parallaxPluginEffectiveGroups()` ⇒ 认到几个画几行、画出来的每一行都有落点；唯一例外 = 组里有 `position: fixed` 后代时整组不动，那一条写进每行 tooltip 与那一卡上方的说明文案里）；界面那几层在会话滚动容器**里面** ⇒ 样式族的视差段（`src/styles-ext.js`）顺手给该容器封了横轴（`overflow-x: hidden`），否则横向位移会让 `overflow-y: auto` 的它长出一条横向滚动条、占掉 scrollport 把 sticky 的输入卡片顶上去）；宿主槽出口自己写死 `display: contents`、**不生成盒子** ⇒ 位移落在**锚点自己（自己就有盒子就用自己）或最近的有盒子的祖先**上（`parallaxGroupBox()`，最多往上 3 层），位移量化到整设备像素（带迟滞：零附近的尾巴不来回翻）、归零摘属性、组里有 fixed 后代就整组不动、嵌套组只留最外侧（**气泡是例外**：位移叠在会话文本区之上）；**左栏是唯一例外形态** —— 它走相对定位（`position: relative` + `left`/`top`）而不写 `translate`，因为那一列里有宿主的 `position: fixed` 收起按钮，给它任何 `transform` 都会换掉按钮的包含块（与 #131 同类的事故）） · `ext-parallax`（扩展岛：收 `ctx`，动作走具名 `on*`，面板分「背景」/「原生前端」/「插件前端」三张卡） | 岛不读行为层的其它符号，**只读它导出的三枚常量** —— `PARALLAX_PLUGIN_DEFAULT`（缺省距离的单一真源）与 `PARALLAX_GROUP_DEPTH_MIN` / `PARALLAX_GROUP_DEPTH_MAX`（插件槽那一档回显的钳制范围）；行为层只在帧里现读 `selection`（百分比、插件表都从那里来） | 平铺 |
 | **设置与宿主通道** | `persistence` · `fontset-store` · `adapter` · `api-client` · `i18n` | 互读少 | 平铺 |
 
 **为什么不给上表除 `src/font/` 之外任何一族建目录**（一次性裁决，别再重新讨论）：
@@ -250,7 +292,7 @@ graph LR
 | **渲染器层** | 它是同一**架构层**，不是一伙人（成员**互相零读取**）。且与 picker **归属冲突**（`picker-modal` / `picker-props-panel` 同属两族），而规则没写优先级 ⇒ **同一优先级只开一个** |
 | **媒体管线** | `src/video-layer.js` 头注释写明它独立的**全部理由**就是"**不**在实时那条路里"（真机踩过十几秒纯色帧）；`src/layer-core.js` 的围栏专门钉"与壁纸类型无关"。收进同一目录**正好从目录上抹掉这条边界** |
 | **点击与拖尾** | 同上一条：`fx-layer` 零 `ctx`、`ext-fx` 收 `ctx`，两半跨两张角色清单。共同点同样由**文件名前缀（`fx-`）+ 设置键前缀（`fx*`）+ 扩展岛**表达；额外理由：画布层是**纯客户端**的（不读任何宿主路由），与宿主那半边毫无关系，收成目录反而会暗示"这两半要一起改" |
-| **3D 纵深** | 同前两条：`parallax-layer` 零 `ctx`、`ext-parallax` 收 `ctx`，两半跨两张角色清单。共同点由**文件名前缀（`parallax-`）+ 设置键前缀（`parallax*`）+ 扩展岛**表达；额外理由：行为层连 DOM 都不建（每帧只把**最终位移**写进要动的那几层自己的 `translate`（左栏例外，见上一族：相对定位 + `left`/`top`），一个自定义属性都不写；壁纸补边的那条静态 `scale` 住在 `src/styles.js`），与岛那半边**连"运行时对象"都没有一个**，收成目录只会暗示它们必须一起改 |
+| **3D 纵深** | 同前两条：`parallax-layer` 零 `ctx`、`ext-parallax` 收 `ctx`，两半跨两张角色清单。共同点由**文件名前缀（`parallax-`）+ 设置键前缀（`parallax*`）+ 扩展岛**表达；额外理由：行为层连 DOM 都不建（每帧只把**最终位移**写进要动的那几层自己的 `translate`（左栏例外，见上一族：相对定位 + `left`/`top`），一个自定义属性都不写；壁纸补边的那条静态 `scale` 住在样式族的视差段（`src/styles-ext.js`）），与岛那半边**连"运行时对象"都没有一个**，收成目录只会暗示它们必须一起改 |
 | **设置与宿主通道** | `src/fontset-store.js` 头注释写明"**另立一条**而不是并进 `persistence.js`"（真源/键集/失败语义都不同）；目录名会传递"这些是一回事"的**误读** |
 
 **四条通用反例**（同样适用于今后新增的族）：按**文件名前缀**机械分组（`video-layer` 与 `live-layer`
@@ -264,8 +306,8 @@ graph LR
 
 | 层 | 真源 / 入口 | 怎么生效 | 改哪里 |
 |---|---|---|---|
-| **整份样式表** | `src/styles.js` 的单个模板常量（纯数据） | 构建期内联进 bundle；运行时 `ensurePluginCss()` 把同一个 `<style>` 挂进 `document.head`，带 `data-plugin-css` 标记与**代际**标记，重挂载时按当前 bundle 内容刷新 | 改 `src/styles.js` → `npm run build` |
-| **运行时令牌**（`--we-*`） | `src/effects.js`：`applyEffects()` 往 **`document.body.style`** 写整族 CSS 变量（**玻璃那一族自 `src/glass.js` 抽出**：`applyGlass()` 写各面釉层变量与门控属性；其余写点分散在 `src/live-layer.js` 与 `src/font/apply.js`，各管自己那几项——**要数当前有几处就复算**：`git grep -c 'setProperty(' -- src`） | 样式表里的规则读 `var(--we-*)`；设置一变就重写那几个属性 | 改 `src/effects.js` / `src/glass.js`（**不是** `styles.js`） |
+| **整份样式表** | 样式族 `src/styles-*.js` 的域模板 + 组装点 `src/styles.js`（纯数据；成员与内联顺序的真源 = `scripts/build-client.mjs` 的 `INLINE_MODULES`） | 构建期内联进 bundle；运行时 `ensurePluginCss()` 把同一个 `<style>` 挂进 `document.head`，带 `data-plugin-css` 标记与**代际**标记，重挂载时按当前 bundle 内容刷新 | 改 `src/styles-*.js`（或组装点）→ `npm run build` |
+| **运行时令牌**（`--we-*`） | `src/effects.js`：`applyEffects()` 往 **`document.body.style`** 写整族 CSS 变量（**玻璃那一族自 `src/glass.js` 抽出**：`applyGlass()` 写各面釉层变量与门控属性；其余写点分散在 `src/live-layer.js` 与 `src/font/apply.js`，各管自己那几项——**要数当前有几处就复算**：`git grep -c 'setProperty(' -- src`） | 样式表里的规则读 `var(--we-*)`；设置一变就重写那几个属性 | 改 `src/effects.js` / `src/glass.js`（**不是**样式族） |
 | **字体自定义** | `src/font/apply.js`（宿主默认值快照 + 组件作用域样式表） | 单独一条通道，见 [`FONT-SYSTEM.md`](./FONT-SYSTEM.md) | 改 `src/font/` |
 
 > **判据落在哪也照这个分**：`verify-readability` 会**从产物里抽出** `src/effects.js` 的钳制函数
@@ -312,8 +354,8 @@ graph LR
    现状 `lib/fontsets/`（随包预设，只读；用户的编辑按写时复制落 `pluginDataDir()`）。
    `verify-package-files` P1 要求 `files` 覆盖 `lib/` 下**每一个**文件 —— 漏一条这里就红。
 4. **是第三方副本 / 类型声明吗？**
-   → vendored 放 `lib/vendor/`（内联副本）或 `lib/webwallgl/`（按文本注入的 shim），**不许改**，
-   同步走 `test/tools/sync-webwallgl.mjs`；
+   → vendored 放 `lib/vendor/`（内联副本），**不许改**；
+   → WebWallGL 引擎走 npm 依赖 `webwallgl`（运行期从 `node_modules` 供给），`lib/webwallgl/` 只放本仓的适配页；
    → 类型放 `lib/types/*.d.ts`，**必须与代码一致**。
 5. **是开发面的东西吗？**（不进发布包）
    → **守门与冒烟 → `test/`**（`verify-*.mjs` 结构守卫、`*-smoke.mjs` 节点级冒烟、`e2e-*.mjs` 真浏览器端到端）；
@@ -417,12 +459,13 @@ graph LR
 
 ---
 
-## 6. 守卫（与本文结构规则同名的那批；全量清单的真源是 `package.json`）
+## 6. 守卫（与本文结构规则同名的那批；全量清单的真源是 `test/run-guards.mjs`）
 
 > **本表只登记"与本文结构规则直接相关"的机器判定**，不是全量名册。**全量清单的真源是
-> `package.json` 的 `verify` / `verify:docs` / `smoke` 三个脚本**（读它们即得；抄一份进本文
-> 就是多一个无人复算的副本）—— 两档判据、逐条约定与运行矩阵见
-> [`DEV-GUIDE.md`](./DEV-GUIDE.md) §4。
+> `test/run-guards.mjs` 的 `MANIFEST`**（`verify` / `docs` / `smoke` 三组步骤表；读它即得 ——
+> `node test/run-guards.mjs verify --list`，抄一份进本文就是多一个无人复算的副本）——
+> 两档判据、逐条约定与运行矩阵见
+> [`DEV-GUIDE.md`](./DEV-GUIDE.md) §4（链条结构与改法见 §4.8）。
 >
 > 因此**不在表里 ≠ 没有机器判定**。链上还有一批同属"读**代码**"的结构性判据（路由索引生成物
 > 对照、i18n 双向对账、跨半边契约、`/about-qr` 资源在包内、死声明、可达性棘轮、退役线、
@@ -479,7 +522,7 @@ graph LR
 | **对上游的宿主要求** | `package.json` 的 **`engines.dsh`** | **插件市场与 DSH 自己的插件管理 UI** 直接从已发布的 manifest 读它（社区目录不参与），显示在插件卡片上并与运行中的宿主比对；人类读三份 README 与 [`UPGRADING.md`](./UPGRADING.md) 里的同一段散文 | 机读的那份**只有这一处**；散文是它的回声，**改一处就要改全部**。`dsh-better-sidebar` 这类**非** `@deepseek-ai/*` 的依赖**表达不了**，只存在于散文里 |
 
 > **文档一律不抄这些值**。想知道当前值：设置看 `lib/settings-schema.js`，路由看生成物，
-> 条数看 `package.json` 的 scripts —— 抄一份就是多一个无人复算的副本。
+> 守卫条数看 `test/run-guards.mjs` 的 `MANIFEST` —— 抄一份就是多一个无人复算的副本。
 >
 > **本表与 §8 用同一口径**：`localStorage` 里既有"设置的缓存"，也有**只属于这台设备**的字段
 > （见上表第 2 行）—— 后者不是任何宿主状态的回声，因此**不能**被"清缓存即可重建"这句话覆盖。

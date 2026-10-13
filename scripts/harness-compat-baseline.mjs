@@ -105,8 +105,22 @@ function pluginRevision(root, sha) {
 }
 
 /**
+ * `decide` 的入参形状。**必须显式声明**：只给默认值时 tsc 只能从默认值推出
+ * `{ root?: string; force?: boolean }`，于是 `target` / `sha` / `baseline` 既在函数里读不到
+ * （TS2339），也在每个调用点被判成"多余属性"（TS2353）。
+ * @typedef {object} DecideOptions
+ * @property {string} [root] 仓库根；缺省为仓库自身（selftest 注入临时仓库）
+ * @property {string} [target] 目标 harness 版本（逻辑上必填：`--harness`；写成可选是为了让
+ *   形参默认值 `= {}` 仍合法 —— 缺了它 `requirePair()` 会先抛错，行为不变）
+ * @property {string} [sha] 插件 commit（逻辑上必填：`--sha`，同上）
+ * @property {boolean} [force] `--force`：无条件重跑
+ * @property {object|null} [baseline] 基线对象；`undefined` ⇒ 从 `root` 读盘，`null` ⇒ 当作「无基线」
+ */
+
+/**
  * **唯一的判定函数** —— `check` 与 `selftest` 共用它，所以自检钉的就是生产逻辑本身。
  * `root` / `baseline` 可注入，便于在临时仓库里跑（不必碰真仓库）。
+ * @param {DecideOptions} [opts]
  */
 function decide({ root = ROOT, target, sha, force = false, baseline } = {}) {
   if (force) return { shouldRun: true, why: '--force 指定强制重跑' };

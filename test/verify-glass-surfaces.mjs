@@ -45,6 +45,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 // 共享实现（`new Function` 装入源码文本前必须先剥掉 `export { … }`）——别在这里再抄一份正则。
 import { stripExportBlocks } from './tools/js-text.mjs';
+// 刀3：样式族取文（8 个域模板 + 组装点）——源码侧用 styleText()，产物侧用 cssBodyOf()。
+import { styleText, cssBodyOf, cssPartsOf, panelText, liveText } from './tools/src-scope.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const CLIENT = process.argv[2] || join(ROOT, 'lib', 'client.js');
@@ -172,7 +174,7 @@ const SURFACES = [
     // ⚠️ 合并 #134（扩展思考玻璃）：新增一批只在 `[data-we-thinking-glass]` 下生效的宿主锚点
     //（思考区/文件卡/工具结果/代码块/导航按钮…）—— 全部归本面认领；锚点清单取自
     // 合并后物化 CSS 的枚举输出（认领判据会双向核对）。
-    anchors: ['[data-vcp-reasoning]', '[data-vcp-reasoning-body]', '[data-changed-files]', '[data-presented-file]', '[data-chat-flow]', '[data-chat-flow-kind="context"]', '[data-vcp-rawhtml]', '[data-code-block-banner]', '[data-context-injection-body]', '[data-diff]', '[data-dsh-navbar]', '[data-vlln-load-older]', '[data-vlln-preview]', '[data-read]', '[data-terminal]', '[data-sample="bash"]', '[data-search="matches"]', '[data-search="paths"]', '[data-slot="conversation.view"]', '[data-slot="tool.call.toolview"]', '[data-tool="glob"]', '[data-tool="grep"]', '[data-tool="read"]', '[data-tool="write"]', '[data-variant="others"]'], tier: 'global',
+    anchors: ['[data-vcp-reasoning]', '[data-vcp-reasoning-body]', '[data-changed-files]', '[data-presented-file]', '[data-chat-flow]', '[data-chat-flow-kind="context"]', '[data-vcp-rawhtml]', '[data-code-block-banner]', '[data-context-injection-body]', '[data-diff]', '[data-dsh-navbar]', '[data-vlln-load-older]', '[data-vlln-preview]', '[data-read]', '[data-terminal]', '[data-sample="bash"]', '[data-search="matches"]', '[data-search="paths"]', '[data-slot="conversation.view"]', '[data-slot="tool.call.toolview"]', '[data-tool="glob"]', '[data-tool="grep"]', '[data-tool="read"]', '[data-tool="write"]', '[data-variant="think"]', '[data-variant="others"]'], tier: 'global',
     // PR #130 的面：门是 `data-we-thinking-glass`（默认关）。⚠️ v1.3.0 追版收敛后它**不再**
     // 认领 `[data-turn-trigger]`（那一条改由上面的 conversation-thinking-trigger 认领 ——
     // 触发条吃玻璃，本面只管推理区/文件卡/工具结果等的清底与玻璃）。
@@ -218,47 +220,15 @@ const PRIVATE_VARS = {
 const MODE_MARKERS = new Set(['data-ds-dark-theme', 'data-sidebar-right-open', 'data-dsh-desktop-mode', 'data-platform']);
 
 /**
- * 参数值语义化的**豁免登记表**（第 ⑦ 组判据用）。分两类，务必分清：
+ * 历史：这里曾登记三张**参数值语义化豁免表**（`SCALE_FREE_PARAMS` / `SAME_SCALE_PARAMS` /
+ * `NORM_FREE_KEYS`），供第 ⑦ 组判据查"哪些槽位不必 `norm()`"。
  *
- * · `SCALE_FREE_PARAMS` —— 该参数的两个槽位**不需要 `norm()`**，直接传值即可。两类：
- *   · **颜色**：它的"继承"语义是"改用全局那个色"，色值本身没有量纲；
- *     它的 profile 槽位还带一个字符串哨兵（`""` = 跟随主题面板色，见 §4.3）。
- *   · **保真度**：两侧都是 **0–100 的百分比**（`glassFidelity` / `chatGlassFidelity` /
- *     `<子项>Fidelity` 同一量纲），且下游 `effects.js` 自己会做 `/100` 归一化 ⇒
- *     再套一层 `norm()` 是重复的。**注意它并不是"无量纲"** —— 只是两侧量纲本来就一致。
- *   ⚠️ 这类豁免**必须登记**。第一版判据没登记、只是因为"颜色恰好没写 norm() 而漏检"，
- *   于是凡是量纲相关的裸键都会被放过 —— 那不是判据，是巧合。
- *
- * · `NORM_FREE_KEYS` —— 该参数允许用**零参** `norm()` 作占位（表示"待接线"）。
- *   纪律与 `SURFACES[].pending` 一致：登记表示"已知且有意"，不是"忘了"。
- *   当前为空集（四项接线都已归一化）。
+ * 它们在 ⑦ 改成**语法判定**后失去输入：⑦① 现在要求"调用点的每个取值槽位都是裸键"
+ * （不许出现 `norm()` / `denorm()` / 除法），这比逐表登记更强 —— 登记表只覆盖登记过的键，
+ * 语法判定覆盖全部槽位。表留着就会变成"第二份真源"（改了不生效、删了没人知道），
+ * 所以整表删除，只保留这段来历。豁免纪律（"已知且有意"必须留痕）现由 ⑦① 的失败输出
+ * 与 `SURFACES[].pending` 承担。
  */
-const SCALE_FREE_PARAMS = new Set(['color', 'fidelity']);
-
-/**
- * `SAME_SCALE_PARAMS` —— 两侧（profile 与 global）**量程本来就是同一个** ⇒ 不需要 `norm()`。
- *
- * ⚠️ 键是 **`面.参数`**，不是裸参数名。这一点是被判据自己逼出来的：
- *    最初按参数名豁免，于是 `sidebar.blur`（本面 0–200 对全局 0–60，**确实需要**归一化）
- *    也一起被豁免了 —— 覆盖面判据立刻报"需归一化的槽位变成 0"。
- *    按面×参数登记，豁免范围才精确。
- *
- * 与 `SCALE_FREE_PARAMS` 的区别：那一类是"参数本身没有量纲"（颜色），
- * 这一类是"**有**量纲，但两侧恰好一致"。分开列是因为**理由不同**。
- *
- * ⚠️ 登记在这里 = "同一个数字在两边的含义相同" ⇒ 直接传值是忠实的。
- *    哪一天某一侧的量程变了（例如把设置窗口的模糊上限改成 200），
- *    必须把对应项从本表**挪走**并改用 `norm()` + `denorm()` —— 那正是第 ⑦ 组要防的事。
- */
-const SAME_SCALE_PARAMS = new Set([
-  'settingsWindow.blur', 'settingsWindow.transparency',
-  // 左侧栏（W3）：本面键与全局键**同为 0–60**（`leftSidebarBlur` 对 `blur`、
-  // `leftSidebarTransparency` 对 `glassAlpha`）⇒ 直接传值即忠实。
-  'leftSidebar.blur', 'leftSidebar.transparency',
-  // 浮层（W4）：同上，`floatersBlur` / `floatersTransparency` 也都是 0–60。
-  'floaters.blur', 'floaters.transparency',
-]);
-const NORM_FREE_KEYS = new Set([]);
 
 // ── 从产物取样式表 ───────────────────────────────────────────────────────────
 // 与 `verify-glass-compositing` 同一口径：先把模板**求值**（带上源码声明的常量），
@@ -269,15 +239,20 @@ const FLOOR = {
   light: Number((SRC.match(/const READABILITY_FLOOR = ([\d.]+);/) || [])[1]),
   dark: Number((SRC.match(/const READABILITY_FLOOR_DARK = ([\d.]+);/) || [])[1]),
 };
-const CSS_BODY_MATCH = SRC.match(/^\s*const CSS = `([^`]*)`;/m);
-if (!CSS_BODY_MATCH) {
-  console.error('✗ 取不到样式表（产物结构变了？）—— ' + CLIENT);
+// 刀3（2026-10-13）：样式表从单个 CSS 模板拆成 8 个域模板 + 组装点 ⇒ 取文改走 cssBodyOf
+// （按声明顺序把族内每个域模板拼回一份 CSS 体，与旧单模板取文逐字节相同：276,804 B）。
+// 取不到任何模板会**抛错**（旧写法是静默拿到 undefined）——这里把失败显式转成退出码 1。
+let CSS_BODY = '';
+try {
+  CSS_BODY = cssBodyOf(SRC);
+} catch (err) {
+  console.error('✗ 取不到样式表（产物结构变了？）—— ' + CLIENT + '：' + (err && err.message));
   process.exit(1);
 }
 let CSS = '';
 try {
   CSS = new Function('READABILITY_FLOOR', 'READABILITY_FLOOR_DARK',
-    'return `' + CSS_BODY_MATCH[1] + '`;')(FLOOR.light, FLOOR.dark);
+    'return `' + CSS_BODY + '`;')(FLOOR.light, FLOOR.dark);
 } catch (err) {
   console.error('✗ 样式表模板求值失败：' + (err && err.message));
   process.exit(1);
@@ -377,15 +352,6 @@ const ruleWith = (cssText, anchor, gateRe, bodyReqs) => rulesOf(cssText).some((r
  *  避免出现第二份"剥注释"实现）。CSS 没有行注释，所以朴素块注释正则是安全的。 */
 const stripCssComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, ' ');
 
-/** 判据：这份文本是否消费了某个私有变量前缀下的变量。纯函数，负对照喂它。 */
-function consumedPrivateVars(text, prefixes) {
-  const out = new Set();
-  for (const p of prefixes) {
-    for (const m of text.matchAll(new RegExp(p.replace(/[-]/g, '\\-') + '[\\w-]*', 'g'))) out.add(m[0]);
-  }
-  return out;
-}
-
 /**
  * 判据：样式表里出现的**全部** `--we-*` 变量名（完整 token）。
  * 接线判据按"完整 token 是否以前缀开头"比 —— 因为一个前缀可能只以更长的名字出现
@@ -419,13 +385,14 @@ const EFFECTS_SRC = readFileSync(join(ROOT, 'src', 'effects.js'), 'utf8');
 const EFFECTS = GLASS_SRC + '\n' + EFFECTS_SRC;
 // 第 ⑫ 组要读样式表：它需要从 CSS 的**内层兜底**反推"没被 JS 写出的变量实际取到哪个值"
 // （单层链 `var(--we-<面>-x, var(--we-global, lit))`）⇒ 判据与"管道形状"解耦。
-const STYLES_TEXT = readFileSync(join(ROOT, 'src', 'styles.js'), 'utf8');
+// 刀3：样式族已按域拆成 8 个模块 + 组装点 ⇒ 这里取**整族源码文本**（构建序拼接），判据文本不变。
+const STYLES_TEXT = styleText();
 // 「玻璃 UI」开关的读数/翻转处理器都住在 client.js（不在 effects.js）—— 第 ⑧ 组要看它。
 const CLIENT_SRC = readFileSync(join(ROOT, 'src', 'client.js'), 'utf8');
 // 「独立配置」开关的**两个落点**：登记表子项由 glass-panel 自动渲染，既有面（左侧栏 / 侧栏 /
 // 内容面）的开关手写在 panel-tabs。第 ⑧ 组的"mode 可达性"判据要同时看这两处。
 const GLASS_PANEL_SRC = readFileSync(join(ROOT, 'src', 'glass-panel.js'), 'utf8');
-const PANEL_SRC = readFileSync(join(ROOT, 'src', 'panel-tabs.js'), 'utf8');
+const PANEL_SRC = panelText();
 // schema 模块（模块级：多个判据组都要读它的 DEFAULTS / GLASS_CHILDREN）。
 const SCHEMA = await import(new URL('../lib/settings-schema.js', import.meta.url).href);
 const uncommented = (s) => s.replace(/\/\*[\s\S]*?\*\//g, ' ').replace(/(^|[^:])\/\/[^\n]*/g, '$1 ');
@@ -738,7 +705,6 @@ console.log('\n③ 档位声明与私有变量组一致（private 必须真接�
       missingGroupOf([{ id: 'synthetic-private', tier: 'private' }]).join() === 'synthetic-private'
         && missingGroupOf([{ id: profileIds[0], tier: 'private' }]).length === 0);
   }
-  void consumedPrivateVars;   // 保留前缀提取器（上面 ① / ② 与负对照用得到它的语义）
 }
 
 // ═══ ⑤ 保真度「同源不变量」：一对保真度内部同源、两对之间不串线 ════════════════
@@ -989,7 +955,8 @@ console.log('\n⑦ 量纲统一（一把刻度：模糊 0–60 · 透明度 0–
     const re = /glassValue\(/g;
     let m;
     while ((m = re.exec(text))) {
-      let i = m.index + m[0].length, depth = 1, arg = '', args = [], inStr = null;
+      let i = m.index + m[0].length, depth = 1, arg = '', inStr = null;
+      const args = [];
       for (; i < text.length && depth > 0; i++) {
         const ch = text[i];
         if (inStr) { if (ch === inStr) inStr = null; arg += ch; continue; }
@@ -1134,7 +1101,8 @@ console.log('\n④ 接线 ↔ 注册表 ↔ 面名 三方对账');
     const re = /glassValue\(/g;
     let m;
     while ((m = re.exec(text))) {
-      let i = m.index + m[0].length, depth = 1, arg = '', args = [], inStr = null;
+      let i = m.index + m[0].length, depth = 1, arg = '', inStr = null;
+      const args = [];
       for (; i < text.length && depth > 0; i++) {
         const ch = text[i];
         if (inStr) { if (ch === inStr) inStr = null; arg += ch; continue; }
@@ -1924,10 +1892,9 @@ console.log('\n⑬ CSS 契约（按面变量零兜底 / 门控许可证 / 双向
   //   ② **只声明自定义属性的规则豁免**（`--we-x: …` / `--dsw-…: …`）：它们自己不画任何像素，
   //      是"派生变量 / 宿主令牌"的定义点；真正画东西的是**消费**它们的那些规则，而消费者带门控
   //      （这正是 ⑨ 组在查的"门控覆盖率"）。把定义点也算成"必须有门控"是把范围放错了地方。
-  const srcOf = (p) => readFileSync(join(ROOT, 'src', p), 'utf8');
   // ⚠️ 门控属性与按面变量的**写入**现在都在 `src/glass.js`（R3b 第一步搬的，见 wip §10.13）；
   //    `data-we-wallpaper` 仍由 `src/live-layer.js` 的 ACTIVE_ATTR 挂 ⇒ 两个来源都要收。
-  const gateSrc = GLASS_SRC.concat(srcOf('live-layer.js'));
+  const gateSrc = GLASS_SRC.concat(liveText());
   const jsGates = [...new Set([
     ...[...gateSrc.matchAll(/setAttribute\("(data-we-[a-z-]+)"/g)].map((m) => m[1]),
     ...[...gateSrc.matchAll(/=\s*"(data-we-[a-z-]+)"/g)].map((m) => m[1]),
@@ -1989,18 +1956,27 @@ console.log('\n⑬ CSS 契约（按面变量零兜底 / 门控许可证 / 双向
     written.length >= 15 && deadWrites.length === 0,
     deadWrites.length ? '写了没人读：' + deadWrites.join(', ') : written.length + ' 个全部有消费者');
 
-  // ⚠️ **模板字符串的边界**：`src/styles.js` 整份 CSS 住在一个 JS 模板字符串里
-  //    （`const CSS = \`…\`;`）⇒ 注释或规则里出现**裸反引号**会提前终止它，
+  // ⚠️ **模板字符串的边界**：样式族的每份 CSS 各自住在一个 JS 模板字符串里
+  //    （`const CSS[_域] = \`…\`;`）⇒ 注释或规则里出现**裸反引号**会提前终止它，
   //    产物随即是语法错误。构建会拦住，但它报的是 `Unexpected identifier` /
   //    `Invalid left-hand side expression` 这类**指不到原因**的 JS 错误 ——
   //    实测为此浪费了两轮。这条判据把它变成一句能读懂的话（并给出行号）。
+  //    刀3：取文从"单文件"换成族内拼接 ⇒ 分隔符行数从"恰好 2"换成"恰好 2 × 族内模板数"，
+  //    判据本身（**每个反引号行都必须是模板分隔符**）一字未改，覆盖面反而更全。
   {
     const lines = STYLES_TEXT.split(/\r?\n/);
     const backtickLines = lines.map((t, i) => [i + 1, t]).filter(([, t]) => t.includes('`'));
-    const delimiters = backtickLines.filter(([, t]) => /^\s*const CSS = `\s*$/.test(t) || /^\s*`;\s*$/.test(t));
+    // 开引号行 = `const CSS[_域] = \`` 起头（**允许同一行跟着该段的第一个 CSS 注释**：
+    // 拼装契约要求"7 个非 base 段的开引号紧跟本段首行"，所以那行本来就带内容）；
+    // 收引号行 = 独占一行的 `` `; ``。其余任何带反引号的行都是裸反引号 ⇒ 判红。
+    const openers = backtickLines.filter(([, t]) => /^\s*const CSS(?:_[A-Z][A-Z0-9_]*)? = `/.test(t));
+    const closers = backtickLines.filter(([, t]) => /^\s*`;\s*$/.test(t));
+    const parts = cssPartsOf(STYLES_TEXT).length;
+    const backtickChars = lines.reduce((n, t) => n + (t.match(/`/g) || []).length, 0);
     check('样式表里不许出现裸反引号（它会提前终止 CSS 模板字符串）',
-      backtickLines.length === delimiters.length && delimiters.length === 2,
-      '含反引号的行=' + backtickLines.map(([n]) => n).join(',') + '（应当只有 const CSS = \\` 与 \\`; 这两行）');
+      parts >= 1 && backtickChars === 2 * parts && openers.length === parts && closers.length === parts
+        && backtickLines.length === parts * 2,
+      '含反引号的行=' + backtickLines.map(([n]) => n).join(',') + '（族内 ' + parts + ' 份域模板 ⇒ 应当只有 ' + (2 * parts) + ' 行分隔符）');
     // 负对照：同一谓词喂一段"注释里带反引号"的合成输入，必须判出。
     const synth = 'const CSS = `\n.a { color: red; /* 见 `x` */ }\n`;';
     const synthLines = synth.split('\n');
@@ -2095,7 +2071,7 @@ console.log('\n⑭ 三方对账：写出的变量必须有人读（R4 死码清�
 // 这条判据防的是"哪次改动又把输入框塞回思考玻璃门下"——选择器文本级负向棘轮。
 console.log('\n⑪ 思考玻璃门不碰输入框（用户口径 2026-10-04）');
 {
-  const stylesSrc = readFileSync(join(ROOT, 'src', 'styles.js'), 'utf8');
+  const stylesSrc = styleText();
   // 剥 CSS 块注释后再逐条规则解析：注释里可以提 data-we-thinking-glass / 输入框
   //（记录口径的注释必须能写这些词），判据只看**真规则**。
   const css = stylesSrc.replace(/\/\*[\s\S]*?\*\//g, '');

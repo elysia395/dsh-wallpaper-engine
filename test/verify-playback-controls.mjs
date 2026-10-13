@@ -50,7 +50,7 @@ const React = {
 };
 
 // ── DOM mock with a real-enough <video> ─────────────────────────────────────
-let byId = {};
+const byId = {};
 const timers = [];
 function makeEl(tag) {
   const handlers = {};
@@ -236,7 +236,7 @@ function findSelect(tree, ariaLabel) {
   return hit;
 }
 const renderTree = () => pickerRenders[0]();
-const tick = (ms = 20) => new Promise((r) => setTimeout(r, ms));
+const tick = (ms = 20) => new Promise((r) => { setTimeout(r, ms); });
 const treeText = () => JSON.stringify(renderTree());
 function layerVideo() {
   const layer = document.getElementById('dsh-wallpaper-engine-layer');
@@ -284,7 +284,7 @@ async function main() {
   await tick(30);
   // 页内下钻后库视图与页签内容互斥：选完经「返回」退出，播放控制才渲染（真实路径）。
   findButton(renderTree(), 'we-picker__btn', '返回').props.onClick();
-  tree = renderTree();
+  renderTree();
   let video = layerVideo();
   check('A3 applying it mounts the wallpaper layer + <video> (no blank background)', !!video);
   assert(video, 'video element mounted for the uploaded wallpaper');
@@ -379,7 +379,7 @@ async function main() {
   assert(weCard, 'WE video card present');
   weCard.props.onClick();
   await tick(30);
-  tree = closeLibrary(); // 播放控制与被拒原因住在页签内容里
+  closeLibrary(); // 播放控制与被拒原因住在页签内容里
   video = layerVideo();
   tree = renderTree();
   check('D1 a wallpaper switch while paused mounts the new video paused (not playing)',
@@ -395,7 +395,7 @@ async function main() {
   assert(ratingSelect && typeof ratingSelect.props.onChange === 'function', 'rating filter select found');
   ratingSelect.props.onChange({ target: { value: 'mature' } });
   await tick(30);
-  tree = closeLibrary(); // 被拒原因渲染在页签的当前壁纸卡里
+  closeLibrary(); // 被拒原因渲染在页签的当前壁纸卡里
   check('E1 dropping the active wallpaper via a filter is explained (no silent blank)',
     treeText().includes('被「内容分级」过滤排除了'));
   check('E2 the layer really is gone (the note replaces an unexplained blank)',
@@ -416,7 +416,7 @@ async function main() {
   //（库视图在 E3 后仍开着，直接切下拉；断言前再退回页签。）
   findSelect(renderTree(), '内容分级').props.onChange({ target: { value: 'everyone' } });
   await tick(30);
-  tree = closeLibrary();
+  closeLibrary();
   check('E5 switching the filter back re-explains the drop (never a silent blank)',
     treeText().includes('被「内容分级」过滤排除了'));
   tree = openLibrary();
@@ -425,7 +425,7 @@ async function main() {
   if (uploadAgain) {
     uploadAgain.props.onClick();
     await tick(30);
-    tree = closeLibrary();
+    closeLibrary();
     check('E7 …and it plays, with the explanation cleared',
       layerVideo() && layerVideo().paused === false && !treeText().includes('过滤排除'));
   }
@@ -438,7 +438,7 @@ async function main() {
   assert(typeSelect && typeof typeSelect.props.onChange === 'function', 'type filter select found');
   typeSelect.props.onChange({ target: { value: 'scene' } });
   await tick(30);
-  tree = closeLibrary();
+  closeLibrary();
   check('F1 switching the TYPE filter keeps the applied wallpaper mounted',
     !!document.getElementById('dsh-wallpaper-engine-layer'));
   check('F2 …still playing (the switch must not blank or pause it)',

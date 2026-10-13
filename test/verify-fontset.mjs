@@ -49,6 +49,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Readable, Writable } from 'node:stream';
 // 剥注释：共享的字符串感知实现（test/tools/js-text.mjs）。
 import { stripComments } from './tools/js-text.mjs';
+// 刀3：样式族取文（8 个域模块 + 组装点，构建序拼接）。
+// ⚠️ 本文件内另有局部 `panelText(sel)` 夹具（1108 行）⇒ 族取文别名导入，避免 TDZ/遮蔽。
+import { styleText, panelSources, panelText as panelSrcText } from './tools/src-scope.mjs';
 // 单独 import `src/**` 时补上 bundle 作用域的取词层（中文身份；见 test/tools/weT-shim.mjs）。
 import { installWeTShim } from './tools/weT-shim.mjs';
 installWeTShim();
@@ -343,7 +346,7 @@ const dirSnapshot = (dir) => {
  * 只看名字会漏掉"就地改了一份随包预设"，那正是写时复制要防的事。
  */
 const dirDigest = (dir) => {
-  let names = [];
+  let names;
   try { names = readdirSync(dir).filter((n) => n.endsWith('.json')).sort(); } catch { return null; }
   return names.map((n) => {
     const h = createHash('sha256').update(readFileSync(join(dir, n))).digest('hex').slice(0, 16);
@@ -700,7 +703,7 @@ if (fontsetsRoute) {
   //     所以"逐份有效"是发布前的硬闸（`sanitizeFontset` 会**静默丢掉**它不认识的值）。
   const badBuiltin = [];
   for (const id of builtinIds) {
-    let raw = null;
+    let raw;
     try { raw = JSON.parse(readFileSync(join(BUILTIN_DIR, id + '.json'), 'utf8')); } catch { badBuiltin.push(id + ':unreadable'); continue; }
     if (!raw || raw.$schema !== schema.FONTSET_SCHEMA_TAG) { badBuiltin.push(id + ':schema'); continue; }
     if (raw.id !== id) { badBuiltin.push(id + ':id-mismatch'); continue; }
@@ -840,7 +843,7 @@ section('⑦ 客户端通道（静态契约：字体值不再经 settings 出去
     const count = (t) => FONT_KEYS.reduce((a, k) =>
       a + ((t.match(new RegExp('selection\\.' + k + '\\s*=[^=]', 'g')) || []).length), 0);
     // 整批重置的函数体：`onFontResetAll` 起，到下一个同级 `};` 止（该函数体内没有缩进 0 的声明）。
-    const body = (text.match(/const onFontResetAll = \(\) => \{[\s\S]*?\n  \};/) || [''])[0];
+    const body = (text.match(/const onFontResetAll = \(\) => \{[\s\S]*?\n {2}\};/) || [''])[0];
     return { total: count(text), inBody: body ? count(body) : 0, paired: /persistFontSet\(\)/.test(body) };
   };
   {
@@ -1037,6 +1040,10 @@ section('⑧ 面板渲染回归（配色区在总开关打开时必须渲染得�
   // 做法：把面板会用到的那几个 prelude 模块的**全部导出**映成全局 —— 逐个列举常量会漏
   // （漏一个就是 "X is not defined" 的假红，而不是被判据抓到）。
   const colorRoles = await import(pathToFileURL(join(root, 'src', 'font', 'color-roles.js')).href);
+  // 域模块（-appearance）里的 `moduleResetButton(...)` 是 panel-tabs.js 工厂作用域的自由名字
+  // （搬出后仍靠打包期同作用域）⇒ 按文件 import 时必须先挂上真实现，否则 ⑧ 以
+  // "moduleResetButton is not defined" 的形式假红（与 sectionHead / glass-panel 同一条理由）。
+  if (typeof panelMod.moduleResetButton === "function") globalThis.moduleResetButton = panelMod.moduleResetButton;
   const preludeMods = [
     colorRoles,
     await import(pathToFileURL(join(root, 'src', 'font', 'typography.js')).href),
@@ -1054,14 +1061,19 @@ section('⑧ 面板渲染回归（配色区在总开关打开时必须渲染得�
     // `sectionHead`（搬走了），而就算找到、补成 noop 也会让**每个节头变成 `null`**：
     // 本段判的是"渲染得出"，节头全丢照样"渲染得出" ⇒ 判据静默空转。
     await import(pathToFileURL(join(root, 'src', 'section-head.js')).href),
+    // 同理（issue #192）：模块级重置按钮也是跨模块共用构件，按文件 import 时是裸标识符。
+    await import(pathToFileURL(join(root, 'src', 'module-reset.js')).href),
     // 面板还会调 `filterUsableSystemFonts(...)`（本机字体那道"本浏览器能否匹配"的筛，同一条理由）。
     await import(pathToFileURL(join(root, 'src', 'system-fonts.js')).href),
+    // 刀4：panel-tabs 的 5 个域模块（节渲染器）—— 与上面 glass-panel / section-head 同一条理由：
+    // 打包后同作用域，按文件 import 时必须映成全局。
+    ...(await Promise.all(panelSources().slice(0, -1).map((rel) => import(pathToFileURL(join(root, rel)).href)))),
     schema,
   ];
   for (const mod of preludeMods) for (const [k, v] of Object.entries(mod)) globalThis[k] = v;
   check('前置：夹具不是空转的（角色表非空，且配色区确实按角色遍历）',
     colorRoles.THEME_COLOR_ROLES.length >= 5
-    && /THEME_COLOR_ROLES\.map/.test(readFileSync(join(root, 'src', 'panel-tabs.js'), 'utf8')),
+    && /THEME_COLOR_ROLES\.map/.test(panelSrcText()),
     colorRoles.THEME_COLOR_ROLES.length + ' 个角色');
 
   /** 面板 ctx：只求"渲染得出"，处理器全 noop。`over.sel` 换夹具（负对照用）。 */
@@ -1182,7 +1194,7 @@ section('⑧ 面板渲染回归（配色区在总开关打开时必须渲染得�
   // 那是**视图**状态：重置清的是字体值，不该顺手把用户选的筛选也翻掉。
   check('「恢复默认」的函数体里不出现 themeTypeOnly（视图状态不归它管）',
     (() => {
-      const body = (/const onFontResetAll = \(\) => \{([\s\S]*?)\n  \};/.exec(clientSrc) || [])[1] || '';
+      const body = (/const onFontResetAll = \(\) => \{([\s\S]*?)\n {2}\};/.exec(clientSrc) || [])[1] || '';
       const negControl = 'selection.themeTypeOnly = false;\n' + body;
       return body.length > 0 && !/themeTypeOnly/.test(body)
         && /themeTypeOnly/.test(negControl); // 负对照：同一判据对"改前那版"会判红
@@ -1369,7 +1381,8 @@ section('⑨ 字体集编辑器（面板可驱动：意图映射 / confirm 门�
   check('「重命名」与「导出」挂的是同一枚类名（样式没有第二条来源）',
     btnClass !== '' && btnClass === linkClass && btnClass.includes('we-picker__btn'),
     btnClass + ' vs ' + linkClass);
-  const btnRule = (/\.we-picker__btn\s*\{([\s\S]*?)\}/.exec(readFileSync(join(root, 'src', 'styles.js'), 'utf8')) || [])[1] || '';
+  // 刀3：样式族已拆成 8 个域模块 + 组装点 ⇒ 取整族源码文本（构建序拼接）；判据不变。
+  const btnRule = (/\.we-picker__btn\s*\{([\s\S]*?)\}/.exec(styleText()) || [])[1] || '';
   const boxDecl = (txt) => ({
     'display:inline-flex': /display:\s*inline-flex/.test(txt),
     'box-sizing:border-box': /box-sizing:\s*border-box/.test(txt),
@@ -1436,13 +1449,14 @@ section('⑨ 字体集编辑器（面板可驱动：意图映射 / confirm 门�
       const gen = (names) => new Function('weT', 'selection', fn + '\nreturn nextFontSetName;')(
         (s) => s, { fontSets: names.map((name, i) => ({ id: 's' + i, name })) })();
       const base = '我的字体集';
+      const detLeft = gen([base, base + ' 2']);   // 确定性对照的第一次调用
       return gen([]) === base                                   // 清单里没有 ⇒ 基础名
         && gen([base]) === base + ' 2'                          // 基础名被占 ⇒ 后缀 2
         && gen([base, base + ' 2']) === base + ' 3'             // 依次往后
         && gen([base, base + ' 2', base + ' 4']) === base + ' 3'  // 取**第一个**空位（"最大+1"会给 5）
         && gen(['别的名字']) === base                             // 无关的占用不影响
         && gen([base, null, undefined, '']) === base + ' 2'      // 空/错名字不算占用（与实现里的 filter(Boolean) 一致）
-        && gen([base, base + ' 2']) === gen([base, base + ' 2']); // 同清单同结果（确定性）
+        && detLeft === gen([base, base + ' 2']);                 // 同清单同结果（确定性：两次独立调用）
     })());
   check('接线（**源码形状**判据，不是行为判据）：面板新建走 createFontSet(nextFontSetName())，不先问名字',
     (() => {
@@ -1593,7 +1607,7 @@ section('⑨ 字体集编辑器（面板可驱动：意图映射 / confirm 门�
 }
 
 // ── teardown ────────────────────────────────────────────────────────────────
-try { dispose && dispose(); } catch { /* ignore */ }
+try { if (dispose) dispose(); } catch { /* ignore */ }
 delete process.env.DSH_WE_STEAM_ROOT;
 delete process.env.DSH_WE_UPLOAD_DIR;
 rmSync(ISO, { recursive: true, force: true });
@@ -1604,3 +1618,6 @@ if (failed) {
   process.exit(1);
 }
 console.log(`ALL FONTSET CHECKS PASSED (${passed})`);
+// 与 verify-scene-live-occlusion.mjs 同款兜底：本文件加载的组件/字体替身会留下
+// 不退出的句柄（实测 157 项全过后进程仍驻留），显式退出把链交给下一棒。
+process.exit(0);

@@ -188,6 +188,5 @@ export {
   PICKER_PAGE_SIZE,
   pageSlice,
   playableWallpapers,
-  hiddenWallpapers,
   pickerModel,
 };

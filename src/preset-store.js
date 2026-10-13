@@ -87,6 +87,24 @@ function glassPresetFailureReason(res) {
   if (bare && (res.status === 404 || res.status === 405)) {
     return weT("宿主里没有玻璃预设路由：重启 DSH 后再试（改过宿主代码要重挂，刷新页面不够）");
   }
+  // ⚠️ 404 **带** JSON body 也会漏英文给用户（#188）：宿主 404 `{"error":"unknown preset"}`
+  //    时 `bare` 为 false ⇒ 原句直落 `hostFailureReason` ⇒ "unknown preset" 原样上屏。
+  //    这句英文没有中文键、也没查 weT。
+  // **因果两分**（#199 的后续）：新宿主会把这个 404 的**原因**写进 body 的 `reason`
+  //    —— `missing`（真的没有这份预设）/ `tombstone`（出厂预设已被删除）—— 这两种
+  //    情况下路由是在的，重启 DSH 一点用都没有 ⇒ 各给一条能走下去的出路；只有
+  //    **没有 reason**（旧宿主，或 #199 之前的宿主）才归"重启 DSH"：那一刻通常是
+  //    升级窗口期（新客户端 + 旧后端），卡片/弹窗的动作必然失败，出路就是重启，
+  //    不是"该重存"（那是 422 version-obsolete 的语义）。
+  if (res.status === 404 && res.data && res.data.error === "unknown preset") {
+    if (res.data.reason === "tombstone") {
+      return weT("这份出厂预设已被删除 —— 刷新清单后会从列表里消失");
+    }
+    if (res.data.reason === "missing") {
+      return weT("这份预设不存在了 —— 可能已被删掉，刷新清单后再选一份");
+    }
+    return weT("宿主里没有玻璃预设路由：重启 DSH 后再试（改过宿主代码要重挂，刷新页面不够）");
+  }
   return hostFailureReason(res);
 }
 
@@ -418,14 +436,14 @@ function exportGlassPresetUrl(id, embeds, mascotPoint) {
  */
 async function importGlassPreset(file) {
   setPresetError("");
-  let text = "";
+  let text;
   try {
     text = await gpReadFileText(file);
   } catch {
     setPresetError(weT("读不出这个文件（换一个 .json 再试）"));
     return "";
   }
-  let doc = null;
+  let doc;
   try {
     doc = JSON.parse(text);
   } catch {

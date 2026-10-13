@@ -30,7 +30,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
  * 那个目录，否则"已搬走"会被误报成"契约丢了"（假红）。反之，断言"某路由**已不在正文**"的
  * 判据仍必须只读 `lib/index.js`。
  */
-const readHostHalf = () => ['lib/index.js',
+const readHostHalf = () => ['lib/index.js', 'lib/scene-probe.js',
   ...readdirSync(resolve(root, 'lib', 'routes')).filter((f) => f.endsWith('.js')).map((f) => 'lib/routes/' + f)]
   .map((f) => readFileSync(resolve(root, f), 'utf8')).join('\n');
 // Point the cache **root** at a workspace-relative dir so the suite passes under
@@ -60,22 +60,6 @@ function platformSkip(name, why) {
 }
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
-
-/** Minimal PNG chunk writer for synthetic embedded-PNG tests. */
-function pngChunk(type, data) {
-  const out = Buffer.alloc(12 + data.length);
-  out.writeUInt32BE(data.length, 0);
-  out.write(type, 4, 'ascii');
-  data.copy(out, 8);
-  let crc = 0xffffffff;
-  const bytes = out.subarray(4, 8 + data.length);
-  for (let i = 0; i < bytes.length; i++) {
-    crc ^= bytes[i];
-    for (let k = 0; k < 8; k++) crc = (crc & 1) ? (0xedb88320 ^ (crc >>> 1)) : (crc >>> 1);
-  }
-  out.writeUInt32BE((crc ^ 0xffffffff) >>> 0, 8 + data.length);
-  return out;
-}
 
 /** Build a tiny packed scene.pkg with raw (uncompressed) entries. */
 function buildPkg(entries) {
@@ -220,7 +204,7 @@ async function runHandler(route, url) {
 }
 
 let token = null;
-let invBody = null;
+let invBody;
 {
   const res = await runHandler(invRoute, '/wallpaper-engine/inventory');
   invBody = JSON.parse(res.__state.body.toString('utf8'));
@@ -308,10 +292,11 @@ if (token) {
     return res;
   };
   const runClear = async (url, method = 'DELETE') => {
+    // 单主帧契约：清除 = 裸 DELETE（删主帧）；POST ?clear=1 是等价别名。
     const req = { url, headers: {}, method };
     const res = fakeRes();
     gpuRoute.handler(req, res);
-    await new Promise((r) => setTimeout(r, 20));
+    await new Promise((r) => { setTimeout(r, 20); });
     return res;
   };
   const runHead = async (url) => {
@@ -326,6 +311,8 @@ if (token) {
     // 残留的其它 key 文件，不算失败。版本取自上面从源码读出的 keyVersion，
     // 写死字面量会在宿主升键后静默测到旧文件（第 514 行的注释即此意）。
     const curKey = keyVersion + '_' + token + '_' + Math.round(statSync(join(fixtureItemDir, 'scene.pkg')).mtimeMs);
+    // 主帧产物名：<key>_gpu.png（单槽，面积升级制 —— 只升不降，见 PUT 守卫）。
+    const gpuMasterFile = curKey + '_gpu.png';
     const head0 = await runHead('/wallpaper-engine/scene-frame/' + token);
     check('HEAD 空槽（无抓帧、无自定义画面）→ 404 且不发 X-WE-GPU',
       head0.__state.status === 404 && head0.__state.headers['X-WE-GPU'] === undefined,
@@ -339,11 +326,11 @@ if (token) {
     check('PUT 魔数正确但无 IHDR/IEND → 415', putNoChunks.__state.status === 415, 'status=' + putNoChunks.__state.status);
     const putTooSmall = await runPut('/wallpaper-engine/scene-frame-cache/' + token, makePng(10));
     check('PUT 结构合法但过小（< 1KB 地板）→ 415', putTooSmall.__state.status === 415, 'status=' + putTooSmall.__state.status);
-    check('以上三次拒绝都没有落盘', !existsSync(join(cacheDir, curKey + '_gpu.png')), 'ok');
+    check('以上三次拒绝都没有落盘', !existsSync(join(cacheDir, gpuMasterFile)), 'ok');
     const put1 = await runPut('/wallpaper-engine/scene-frame-cache/' + token, gpuPng);
     check('PUT 合法 PNG → 200', put1.__state.status === 200, 'status=' + put1.__state.status);
-    const gpuFiles = readdirSync(cacheDir).filter((f) => f === curKey + '_gpu.png');
-    check('GPU frame stored as <key>_gpu.png (文件名即标记，可直接打开)',
+    const gpuFiles = readdirSync(cacheDir).filter((f) => f === gpuMasterFile);
+    check('GPU frame stored as <key>_gpu.png（单主帧，文件名即标记）',
       gpuFiles.length === 1, gpuFiles.join(', ') || 'missing');
     // v=4（强制自定义画面）：**豁免** GPU 抓帧 —— 用户显式 pin 的来源不被一张抓帧顶掉（§6.2/§6.7）。
     const getV4 = await runHandler(sceneRoute, '/wallpaper-engine/scene-frame/' + token + '?v=4');
@@ -366,19 +353,34 @@ if (token) {
     check('HEAD ?v=3 → X-WE-GPU=1', headV3.__state.status === 204 && headV3.__state.headers['X-WE-GPU'] === '1',
       'status=' + headV3.__state.status + ' gpu=' + headV3.__state.headers['X-WE-GPU']);
     const put2 = await runPut('/wallpaper-engine/scene-frame-cache/' + token, gpuPng);
-    check('second PUT rejected → 409 (每壁纸一份)', put2.__state.status === 409, 'status=' + put2.__state.status);
-    // 并发写入（TOCTOU 的真复现装置）：同 key 串行 → 恰好一 200 一 409。
+    check('second PUT 等面积 → 200（换内容，是「重新截」不是降级）', put2.__state.status === 200,
+      'status=' + put2.__state.status);
+    const put2b = await runPut('/wallpaper-engine/scene-frame-cache/' + token, makePng(4096, 3, [32, 32]));
+    check('明显更小的 PUT → 409 frame-smaller（小帧覆盖不掉大帧，多窗竞态的最后一道闸）',
+      put2b.__state.status === 409 && /frame-smaller/.test(String(put2b.__state.body)),
+      'status=' + put2b.__state.status);
+    const put2c = await runPut('/wallpaper-engine/scene-frame-cache/' + token, gpuPng);
+    check('守卫拒写后等面积重写仍 → 200（守卫不烧槽）', put2c.__state.status === 200,
+      'status=' + put2c.__state.status);
+    // 并发写入（面积守卫的竞态复现装置）：一大两小同槽并发 —— 不论到达顺序，
+    // 结局必须是「大帧在盘上」。小帧若先到会先 200，大帧随后升级覆盖；大帧先到
+    // 则小帧们全被 409 拒掉。**任何顺序下磁盘终态 = 最大帧**，这就是"只升不降"。
     await runClear('/wallpaper-engine/scene-frame-cache/' + token);
     const raced = await Promise.all([
-      runPut('/wallpaper-engine/scene-frame-cache/' + token, makePng(4096, 1)),
-      runPut('/wallpaper-engine/scene-frame-cache/' + token, makePng(4096, 2)),
-      runPut('/wallpaper-engine/scene-frame-cache/' + token, makePng(4096, 3)),
+      runPut('/wallpaper-engine/scene-frame-cache/' + token, makePng(4096, 1, [1440, 900])), // 大帧
+      runPut('/wallpaper-engine/scene-frame-cache/' + token, makePng(4096, 2)),              // 小帧 64×64
+      runPut('/wallpaper-engine/scene-frame-cache/' + token, makePng(4096, 3)),              // 小帧 64×64
     ]);
     const codes = raced.map((r) => r.__state.status).sort().join(',');
-    check('三个并发 PUT 只有一个成功（唯一性闸串行化）', codes === '200,409,409', 'codes=' + codes);
-    const survivor = readdirSync(cacheDir).filter((f) => f === curKey + '_gpu.png').length;
-    check('并发后磁盘上仍只有一份 GPU 帧', survivor === 1, 'count=' + survivor);
-    const noTmpLeft = readdirSync(cacheDir).filter((f) => f.startsWith(curKey + '_gpu.png.tmp')).length;
+    const bigPng = makePng(4096, 1, [1440, 900]);
+    check('一大两小并发 PUT：面积守卫把小帧挡在盘外（无论到达顺序）',
+      (codes === '200,409,409' || codes === '200,200,409')
+      && readdirSync(cacheDir).filter((f) => f === gpuMasterFile).length === 1
+      && readFileSync(join(cacheDir, gpuMasterFile)).equals(bigPng),
+      'codes=' + codes);
+    const survivor = readdirSync(cacheDir).filter((f) => f === gpuMasterFile).length;
+    check('并发后磁盘上仍只有一份主帧', survivor === 1, 'count=' + survivor);
+    const noTmpLeft = readdirSync(cacheDir).filter((f) => f.startsWith(gpuMasterFile + '.tmp')).length;
     check('并发写入未残留 .tmp 垃圾', noTmpLeft === 0, 'tmp=' + noTmpLeft);
     // 清除通道：DELETE（以及 POST ?clear=1）→ 可重新抓取。
     const clr = await runClear('/wallpaper-engine/scene-frame-cache/' + token);
@@ -395,10 +397,9 @@ if (token) {
       'status=' + headAfterClear.__state.status);
     const put3 = await runPut('/wallpaper-engine/scene-frame-cache/' + token, gpuPng);
     check('清除后可重新写入 → 200（坏帧不再是死结）', put3.__state.status === 200, 'status=' + put3.__state.status);
-    // ── 抓帧几何随 HEAD 暴露（客户端据此判断存帧是否还是当前视口的构图）────
-    // _gpu.png 是抓帧那一刻渲染页视口的构图（渲染器按画布比取景），别的窗口/
-    // 旧会话留下的帧拿到当前窗口上屏会被 CSS object-fit: cover 再裁一次 = 画面
-    // 放大且四周被切。IHDR 的宽高比就是抓帧画布的设备像素比 → 直接读文件头即可。
+    // ── 抓帧几何随 HEAD 暴露（客户端面积升级判定的数据源 + 人类可读的诊断）────
+    // _gpu.png 的 IHDR 就是抓帧画布的设备像素尺寸：客户端拿 W/H 算主帧面积
+    //（≥ 画布×0.95 保留缩放，否则升级重抓），人也能直接看出这张帧是哪个视口抓的。
     const headGeo64 = await runHead('/wallpaper-engine/scene-frame/' + token);
     check('HEAD 报出抓帧几何（X-WE-GPU-W/H/AR，来自 PNG IHDR）',
       headGeo64.__state.headers['X-WE-GPU-AR'] === '1.0000'
@@ -409,7 +410,7 @@ if (token) {
     const putWide = await runPut('/wallpaper-engine/scene-frame-cache/' + token, makePng(4096, 7, [1440, 960]));
     check('PUT 3:2 抓帧（1440x960）→ 200', putWide.__state.status === 200, 'status=' + putWide.__state.status);
     const headGeoWide = await runHead('/wallpaper-engine/scene-frame/' + token);
-    check('HEAD 报出 3:2 抓帧几何（1.5000 → 客户端判「与 16:9 视口不符」→ 重抓）',
+    check('HEAD 报出 3:2 抓帧几何（1.5000 —— 小视口抓的帧，客户端会按面积升级覆盖）',
       headGeoWide.__state.status === 204 && headGeoWide.__state.headers['X-WE-GPU-AR'] === '1.5000',
       'ar=' + headGeoWide.__state.headers['X-WE-GPU-AR']);
     const headGeoNoGpu = await (async () => {
@@ -444,7 +445,7 @@ if (token) {
       } else {
       const mode = statSync(cacheDir).mode & 0o777;
       chmodSync(cacheDir, 0o555); // 目录不可写 → unlinkSync EACCES
-      let locked = null;
+      let locked;
       try {
         locked = await runClear('/wallpaper-engine/scene-frame-cache/' + token);
       } finally {
@@ -454,7 +455,7 @@ if (token) {
         locked && locked.__state.status === 500 && /unlink-failed/.test(String(locked.__state.body)),
         'status=' + (locked && locked.__state.status) + ' body=' + String(locked && locked.__state.body).slice(0, 90));
       check('unlink 失败后 GPU 帧仍在盘上（清除确实没发生）',
-        readdirSync(cacheDir).filter((f) => f === curKey + '_gpu.png').length === 1);
+        readdirSync(cacheDir).filter((f) => f === gpuMasterFile).length === 1);
       const headLocked = await runHead('/wallpaper-engine/scene-frame/' + token);
       check('unlink 失败后 HEAD 仍报 X-WE-GPU=1（与客户端所见一致）',
         headLocked.__state.status === 204 && headLocked.__state.headers['X-WE-GPU'] === '1',
@@ -511,7 +512,7 @@ if (token) {
     if (!hit) { res.statusCode = 404; res.end('no route'); return; }
     try { hit.handler(req, res); } catch (err) { res.statusCode = 500; res.end(String(err)); }
   });
-  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  await new Promise((r) => { server.listen(0, '127.0.0.1', r); });
   const port = server.address().port;
   // 结果里带上**是哪个信号先到**（`res end` / `res close` / `req error`）与响应状态码：
   // 偶发 `status=0` 时，这一条决定了"是服务端没送到"还是"客户端侧先报错、但 413 其实收到了"
@@ -569,7 +570,7 @@ if (token) {
   });
   check('真 socket：HEAD 探测可达且报 X-WE-GPU', headOver.status === 204 || headOver.status === 404,
     'status=' + headOver.status + ' gpu=' + headOver.gpu);
-  await new Promise((r) => server.close(r));
+  await new Promise((r) => { server.close(r); });
 }
 
 // ── Level B2: 用户图片资产路由（会话头像 + 吉祥物立绘；真 socket + 隔离的数据目录）──
@@ -598,7 +599,7 @@ if (token) {
     if (!hit) { res.statusCode = 404; res.end('no route'); return; }
     try { hit.handler(req, res); } catch (err) { res.statusCode = 500; res.end(String(err)); }
   });
-  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  await new Promise((r) => { server.listen(0, '127.0.0.1', r); });
   const port = server.address().port;
   const call = (method, path, headers, body) => new Promise((resolveFn) => {
     const chunks = [];
@@ -682,7 +683,7 @@ if (token) {
       mClear.status === 200 && /"removed":true/.test(mClear.body) && mAfter.status === 404,
       'status=' + mClear.status + ' then ' + mAfter.status);
   } finally {
-    await new Promise((r) => server.close(r));
+    await new Promise((r) => { server.close(r); });
     if (PREV_DATA_DIR === undefined) delete process.env.DSH_WE_DATA_DIR; else process.env.DSH_WE_DATA_DIR = PREV_DATA_DIR;
     rmSync(dataDir, { recursive: true, force: true });
   }
@@ -928,7 +929,8 @@ if (token) {
     slotBody !== null && /function sceneFrameSlot\(\s*abs\s*\)/.test(slotBody) && !slotBody.includes("'_v'"),
     slotBody === null ? '锚点缺失' : 'arity-ok=' + /function sceneFrameSlot\(\s*abs\s*\)/.test(slotBody));
   check('P4-16 档 4 豁免抓帧时**不解析槽位**（不留那次白做的 statSync + ensureFrameCacheDir）',
-    /variant === 4 \? null : gpuFrameFileFor\(sceneFrameSlot\(abs\)\)/.test(readFileSync(join(root, 'lib', 'routes', 'scene-frame.js'), 'utf8')));
+    /const slot = variant === 4 \? null : sceneFrameSlot\(abs\);/.test(readFileSync(join(root, 'lib', 'routes', 'scene-frame.js'), 'utf8'))
+    && /const gpuFile = slot \? gpuFrameFileFor\(slot\) : null;/.test(readFileSync(join(root, 'lib', 'routes', 'scene-frame.js'), 'utf8')));
 }
 
 // ── Level F: sceneVideo 文件版探测（issue #136）──────────────────────────────
@@ -1010,9 +1012,7 @@ console.log('Level F — sceneVideo 文件版探测（issue #136）等价 / 读�
     const file = join(eqDir, name + '.pkg');
     writeFileSync(file, pkg);
     // ① 条目表（含压缩 flags）逐字段全等 —— probeCompressedEntry ≡ probeCompressedEntryAt。
-    let counted = 0;
     const readAt = async (pos, len) => {
-      counted += len;
       return pkg.subarray(pos, pos + Math.min(len, Math.max(pkg.length - pos, 0)));
     };
     const head = await parsePkgHead(readAt, pkg.length);

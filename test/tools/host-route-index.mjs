@@ -58,7 +58,7 @@ function applyScope(L, st) {
   const end = start > 0 ? braceEnd(L, st, start) : -1;
   const declRe = /^(\s*)(?:async\s+)?(?:function|const|let|var|class)\s+([A-Za-z_$][\w$]*)/;
   const names = [];
-  for (let i = start + 1; start > 0 && i <= end; i++) {
+  for (let i = start + 1; start > 0 && i <= end; i++) {   // eslint-disable-line no-unmodified-loop-condition -- 循环由 i <= end 收敛；start > 0 是不变量门
     const m = declRe.exec(L[i - 1]);
     if (m && m[1].length <= 2) names.push(m[2]);
   }
@@ -149,7 +149,7 @@ export function parseRouteModuleText(raw, rel, fnName) {
   // `c.xxx` 形式的使用也算契约的一部分 —— 但**只在函数体顶层**：嵌套回调（如
   // `req.on('data', (c) => … c.length)`) 里的 `c` 是形参、与 context 同名但无关。
   // 实测：不限定缩进时 `c.length` 被当成 context 字段 `length`。
-  for (let i = at + 1; at > 0 && i <= end; i++) {
+  for (let i = at + 1; at > 0 && i <= end; i++) {   // eslint-disable-line no-unmodified-loop-condition -- 循环由 i <= end 收敛；at > 0 是不变量门（at<=0 时 end=0，去掉会多跑一轮）
     const line = L[i - 1] || '';
     if ((/^(\s*)/.exec(line)[1]).length > indent + 2) continue;
     for (const m of line.matchAll(/\bc\.([A-Za-z_$][\w$]*)/g)) {

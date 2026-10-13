@@ -33,6 +33,8 @@ import { Writable } from 'node:stream';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 // 剥注释：共享的字符串感知实现（test/tools/js-text.mjs）。
 import { stripComments } from './tools/js-text.mjs';
+// 刀3：样式族取文（8 个域模块 + 组装点，构建序拼接）——别再自己 readFileSync 单文件。
+import { styleText, panelText } from './tools/src-scope.mjs';
 // 单独 import `src/**` 时补上 bundle 作用域的取词层（中文身份；见 test/tools/weT-shim.mjs）。
 import { installWeTShim } from './tools/weT-shim.mjs';
 installWeTShim();
@@ -332,8 +334,9 @@ clearAdapterSetting();
 // ═══ ⑤ 客户端落点（源码形态）═════════════════════════════════════════════════
 console.log('\n⑤ 客户端落点：body 钩子 / 外壳选择器门控 / 面板行 / 上报');
 const effectsSrc = read('src/effects.js');
-const stylesSrc = read('src/styles.js');
-const tabsSrc = read('src/panel-tabs.js');
+// 刀3：样式族已按域拆成 8 个模块 + 组装点 ⇒ 取**整族源码文本**（构建序拼接）；判据文本不变。
+const stylesSrc = styleText();
+const tabsSrc = panelText();
 const clientSrc = read('src/client.js');
 const persistSrc = read('src/persistence.js');
 const adapterSrc = read('src/adapter.js');

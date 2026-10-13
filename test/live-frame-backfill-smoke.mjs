@@ -25,12 +25,17 @@ function assertChildren(children) {
 //   B 有画面 + 体积达标 → HEAD + PUT 全链走通，body 就是抓到的 blob；
 //   C 体积低于分辨率地板（1080p → 41472B）→ 不 PUT（判据是分辨率地板，不是固定字节闸）；
 //   D 槽位已有 GPU 帧且几何相符 → 连抓帧都不发生（缓存唯一性）；
-//   G 槽位已有 GPU 帧但几何不符（视比 1.5 vs 视口 1.7778）→ 先抓帧过门禁，再
-//     清槽、再 PUT（DELETE 必须早于 PUT）——「别的窗口/旧会话抓的帧」自愈；
-//   H 槽位已有 GPU 帧但宿主没回几何头（旧宿主）→ 按未知处理，同样清掉重抓；
-//   I 几何不符 + 清除失败（宿主 500）→ 不 PUT、不炸、下次挂载重试；
-//   J 几何不符但画面还没出来（黑帧门禁拦下）→ 不得清槽（先清后抓会留下空槽）；
-//   K 画布比 ≠ 窗口盒比（渲染器夹了画布尺寸）→ 基准取 canvas，不得反复清写。
+//   G 槽位已有 GPU 帧但面积明显偏小（别的窗口在更小视口抓的）→ 抓帧过门禁后
+//     直接 PUT 覆盖（升级；自动路径**不删槽**，宿主面积守卫兜底小帧）——自愈；
+//   H 槽位已有 GPU 帧但宿主没回几何头（旧宿主）→ 按未知处理，同样升级重抓；
+//   I 面积偏小 + 清除通道不可用（宿主 500）→ 升级路径本就不删槽，PUT 照常；
+//   J 主帧偏小但画面还没出来（黑帧门禁拦下）→ 不抓不写（先清后抓会留下空槽）；
+//   K 画布比 ≠ 窗口盒比（渲染器夹了画布尺寸）→ 升级判定基准取 canvas 面积，
+//     不得反复清写。
+//   L 单主帧契约：HEAD/PUT 均为裸 URL（无形状参数）；自动路径零 DELETE
+//    （DELETE 仅「重新截」force 路径使用）。
+//   M PUT 撞上更大主帧（宿主面积守卫 409 frame-smaller）⇒ 视为已定局：不重试、
+//    不报错、槽位记账照常（别处有更大的帧，显示只会更好）。
 import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 
@@ -51,7 +56,7 @@ const runStep = (label, fn) => {
 };
 
 /** 启动一个独立 client 实例并跑到「回填定时器已触发」为止。 */
-async function runScenario({ mode = 'varied', blobSize = 120000, gpuAlreadyPinned = false, toBlobFails = false, liveStall = false, gpuAspect = null, viewport = { w: 1920, h: 1080 }, canvasSize = { w: 1920, h: 1080 }, clearFails = false }) {
+async function runScenario({ mode = 'varied', blobSize = 120000, gpuAlreadyPinned = false, toBlobFails = false, liveStall = false, gpuDims = null, viewport = { w: 1920, h: 1080 }, canvasSize = { w: 1920, h: 1080 }, clearFails = false, putRejectsSmaller = false }) {
   const byId = {};
   const timers = [];
   const intervals = [];
@@ -142,11 +147,13 @@ async function runScenario({ mode = 'varied', blobSize = 120000, gpuAlreadyPinne
     if (m === 'HEAD') {
       headCalls.push(u);
       if (!gpuAlreadyPinned) return Promise.resolve({ ok:false, status:404, headers:{ get:()=>null } });
-      // 真宿主语义：GPU 帧来自 PNG 的 IHDR → X-WE-GPU-AR；旧宿主没有这个头。
+      // 真宿主语义：GPU 帧几何来自 PNG 的 IHDR → X-WE-GPU-W/H（客户端算面积）；
+      // 旧宿主没有这两个头 ⇒ gpuDims 传 null 模拟。
       return Promise.resolve({ ok:true, status:204, headers:{ get:(k) => {
         const key = String(k).toLowerCase();
         if (key === 'x-we-gpu') return '1';
-        if (key === 'x-we-gpu-ar') return gpuAspect ? String(gpuAspect) : null;
+        if (key === 'x-we-gpu-w') return gpuDims ? String(gpuDims.w) : null;
+        if (key === 'x-we-gpu-h') return gpuDims ? String(gpuDims.h) : null;
         return null;
       } } });
     }
@@ -158,7 +165,13 @@ async function runScenario({ mode = 'varied', blobSize = 120000, gpuAlreadyPinne
     }
     if (m === 'PUT') {
       // 只记回填端点的 PUT —— client 自己还会 PUT /settings（持久化）。
-      if (u.includes('/scene-frame-cache/')) { putCalls.push({ url:u, body:opts.body }); slotOrder.push('PUT'); }
+      if (u.includes('/scene-frame-cache/')) {
+        putCalls.push({ url:u, body:opts.body }); slotOrder.push('PUT');
+        if (putRejectsSmaller) {
+          // 宿主面积守卫：来帧比盘上主帧小 ⇒ 409 frame-smaller（守卫拒写）。
+          return Promise.resolve({ ok:false, status:409, json:()=>Promise.resolve({ error:'frame-smaller' }) });
+        }
+      }
       return Promise.resolve({ ok:true, status:200, json:()=>Promise.resolve({ ok:true }) });
     }
     return Promise.resolve({ ok:true, status:200, json:()=>Promise.resolve(
@@ -198,7 +211,7 @@ async function runScenario({ mode = 'varied', blobSize = 120000, gpuAlreadyPinne
   // 挂载要等 loadPersisted → loadInventory 的 Promise 链跑完（纯微任务，但
   // 有若干 hop），轮询到 iframe 出现为止。
   for (let i = 0; i < 50 && iframeEls.length === 0; i++) {
-    await new Promise((r) => setTimeout(r, 10));
+    await new Promise((r) => { setTimeout(r, 10); });
   }
   if (!iframeEls.length) throw new Error('live iframe 未挂载（boot 未完成）');
 
@@ -210,11 +223,11 @@ async function runScenario({ mode = 'varied', blobSize = 120000, gpuAlreadyPinne
   // P2-M 前置：让 live 运行期失联（连续无帧 ≥ LIVE_STALL_TICKS*2）→ 降级回静态帧。
   // 目标形态里回退链**没有任何 CPU 动画渲染**（动画只走 WebWallGL 一条路线），所以这里
   // 记录的两个计数只用来断言它们恒为 0（1500ms 轮询若出现，就是 CPU 渲染路线被接了回来）。
-  let animPollBefore = 0, animPollAfter = 0, progBefore = 0;
+  let animPollBefore = 0, progBefore = 0;
   const tickPoll = async () => {
     const t = intervals.filter((x) => !x.cleared && x.ms === 1500).pop();
     if (t) t.fn();
-    await new Promise((r) => setTimeout(r, 30));
+    await new Promise((r) => { setTimeout(r, 30); });
   };
   if (liveStall) {
     frame.contentWindow.__wpStats.frame = () => ({ fps: 0, running: true });
@@ -223,7 +236,7 @@ async function runScenario({ mode = 'varied', blobSize = 120000, gpuAlreadyPinne
       const t = intervals.filter((x) => !x.cleared && x.ms === 1000).pop();
       if (t) t.fn();
     }
-    await new Promise((r) => setTimeout(r, 60));
+    await new Promise((r) => { setTimeout(r, 60); });
     // liveFail 只 syncLayers；这里再点一次该壁纸卡片走一遍 applySelection，确认
     // 重新应用选中也不会拉起任何 CPU 渲染路径（场景 F 的零请求断言）。
     const collect = (root, pred) => {
@@ -255,17 +268,17 @@ async function runScenario({ mode = 'varied', blobSize = 120000, gpuAlreadyPinne
       // 地板放在 `if (openBtn)` / `if (card)` **外面**：元素没找到时整段不再静默通过。
       check('覆盖面：重跑 applySelection 的入口存在（选择壁纸按钮）', Boolean(openBtn), 'openBtn=' + Boolean(openBtn));
       check('覆盖面：重跑 applySelection 的目标存在（壁纸卡片）', Boolean(card), 'card=' + Boolean(card));
-      await new Promise((r) => setTimeout(r, 40));
+      await new Promise((r) => { setTimeout(r, 40); });
     }
     await tickPoll();
     animPollBefore = intervals.filter((t) => !t.cleared && t.ms === 1500).length;
     progBefore = progCalls.length;
   }
   if (backfill) backfill.fn();
-  await new Promise((r) => setTimeout(r, 30));
+  await new Promise((r) => { setTimeout(r, 30); });
   await tickPoll(); // 落地后再敲一次：修复生效时轮询已被清，不得再发进度请求
-  animPollAfter = intervals.filter((t) => !t.cleared && t.ms === 1500).length;
-  return { frame, watchTick, backfill, headCalls, putCalls, clearCalls, slotOrder, progCalls, blobStub,
+  const animPollAfter = intervals.filter((t) => !t.cleared && t.ms === 1500).length;
+  return { frame, backfill, headCalls, putCalls, clearCalls, slotOrder, progCalls, blobStub,
     animPollBefore, animPollAfter, progBefore,
     selectedId: JSON.parse(localStorage._store['dsh-wallpaper-engine:selection'] || '{}').id };
 }
@@ -298,8 +311,8 @@ console.log('C. 体积低于分辨率地板（1080p → 41472B）');
 
 console.log('D. 槽位已有 GPU 帧 + 几何相符（缓存唯一性）');
 {
-  const r = await runScenario({ mode: 'varied', blobSize: 120000, gpuAlreadyPinned: true, gpuAspect: 1920 / 1080 });
-  check('几何相符 → 完全不抓帧写入', r.putCalls.length === 0 && r.headCalls.length >= 1,
+  const r = await runScenario({ mode: 'varied', blobSize: 120000, gpuAlreadyPinned: true, gpuDims: { w: 1920, h: 1080 } });
+  check('面积达标 → 完全不抓帧写入', r.putCalls.length === 0 && r.headCalls.length >= 1,
     'head=' + r.headCalls.length + ' put=' + r.putCalls.length);
   check('几何相符 → 也不清槽', r.clearCalls.length === 0, 'clear=' + r.clearCalls.length);
 }
@@ -310,36 +323,40 @@ console.log('E. toBlob 抛错（tainted / 上下文异常）不炸');
   check('异常被兜住且不 PUT', r.putCalls.length === 0, 'put=' + r.putCalls.length);
 }
 
-console.log('G. 槽位已有 GPU 帧但几何不符（别的窗口/旧会话抓的）→ 清掉按当前视口重抓');
+console.log('G. 槽位已有 GPU 帧但面积明显偏小（更小视口抓的）→ 升级覆盖');
 {
-  const r = await runScenario({ mode: 'varied', blobSize: 120000, gpuAlreadyPinned: true, gpuAspect: 1.5 });
-  check('清槽发生（DELETE /scene-frame-cache/<token>）',
-    r.clearCalls.length === 1 && r.clearCalls[0] === '/wallpaper-engine/scene-frame-cache/sss',
+  const r = await runScenario({ mode: 'varied', blobSize: 120000, gpuAlreadyPinned: true, gpuDims: { w: 480, h: 320 } });
+  check('升级不删槽（PUT 直写覆盖；DELETE 只属于 force 路径）',
+    r.clearCalls.length === 0,
     'clear=' + r.clearCalls.length + (r.clearCalls[0] ? ' ' + r.clearCalls[0] : ''));
-  check('重抓并写入（PUT 一次）', r.putCalls.length === 1, 'put=' + r.putCalls.length);
-  check('顺序：先抓帧校验、再清槽、最后 PUT',
-    r.slotOrder.join('>') === 'DELETE>PUT', r.slotOrder.join('>') || 'none');
+  check('重抓并写入（PUT 一次，裸 URL）',
+    r.putCalls.length === 1 && r.putCalls[0].url === '/wallpaper-engine/scene-frame-cache/sss',
+    r.putCalls.length ? r.putCalls[0].url : 'none');
+  check('顺序：直接 PUT（无 DELETE 前置）',
+    r.slotOrder.join('>') === 'PUT', r.slotOrder.join('>') || 'none');
 }
 
-console.log('H. 槽位已有 GPU 帧但没有几何头（旧宿主）→ 按未知自愈：清掉重抓');
+console.log('H. 槽位已有 GPU 帧但没有几何头（旧宿主）→ 按未知自愈：升级重抓');
 {
-  const r = await runScenario({ mode: 'varied', blobSize: 120000, gpuAlreadyPinned: true, gpuAspect: null });
-  check('未知几何 → 同样清槽重抓（自愈路径）',
-    r.clearCalls.length === 1 && r.putCalls.length === 1,
+  const r = await runScenario({ mode: 'varied', blobSize: 120000, gpuAlreadyPinned: true, gpuDims: null });
+  check('未知几何 → 升级重抓（宿主面积守卫兜底，不会写坏盘上更大的帧）',
+    r.clearCalls.length === 0 && r.putCalls.length === 1,
     'clear=' + r.clearCalls.length + ' put=' + r.putCalls.length);
 }
 
-console.log('I. 几何不符但清除失败（宿主 500）→ 不 PUT、不炸、可重试');
+console.log('I. 清除通道不可用（宿主 500）→ 升级路径不依赖删除，PUT 照常');
 {
-  const r = await runScenario({ mode: 'varied', blobSize: 120000, gpuAlreadyPinned: true, gpuAspect: 1.5, clearFails: true });
-  check('尝试过清除', r.clearCalls.length === 1, 'clear=' + r.clearCalls.length);
-  check('清除失败时不得 PUT（否则 409 假成功）', r.putCalls.length === 0, 'put=' + r.putCalls.length);
+  const r = await runScenario({ mode: 'varied', blobSize: 120000, gpuAlreadyPinned: true,
+    gpuDims: { w: 480, h: 320 }, clearFails: true });
+  check('自动升级不发 DELETE（删不到也不碍事）', r.clearCalls.length === 0, 'clear=' + r.clearCalls.length);
+  // 单主帧 PUT 直写覆盖：升级只依赖 PUT + 宿主面积守卫，删除通道坏不坏都无关。
+  check('升级 PUT 照常发生', r.putCalls.length === 1, 'put=' + r.putCalls.length);
 }
 
 console.log('J. 几何不符但画面还没出来（黑帧门禁）→ 不得清槽');
 {
-  const r = await runScenario({ mode: 'blank', blobSize: 120000, gpuAlreadyPinned: true, gpuAspect: 1.5 });
-  check('门禁拦下时不清槽（先清后抓会留下空槽 → 退回 CPU 帧）',
+  const r = await runScenario({ mode: 'blank', blobSize: 120000, gpuAlreadyPinned: true, gpuDims: { w: 480, h: 320 } });
+  check('门禁拦下时不抓不写（空槽比旧帧更糟，何况槽里本来就是有效主帧）',
     r.clearCalls.length === 0 && r.putCalls.length === 0,
     'clear=' + r.clearCalls.length + ' put=' + r.putCalls.length);
 }
@@ -350,10 +367,34 @@ console.log('K. 渲染器把画布比夹到别的比例（画布比 ≠ 窗口�
   // 窗口盒 2000x800（2.5）时，存帧并不旧 —— 拿盒比对照会永远判「不符」，
   // 每次挂载都清一次写一次（无休止 churn），这条断言正是防它回归。
   const r = await runScenario({ mode: 'varied', blobSize: 120000, gpuAlreadyPinned: true,
-    gpuAspect: 1920 / 1080, canvasSize: { w: 1920, h: 1080 }, viewport: { w: 2000, h: 800 } });
-  check('画布比相符（盒比不符）→ 保留，不清不写',
+    gpuDims: { w: 1920, h: 1080 }, canvasSize: { w: 1920, h: 1080 }, viewport: { w: 2000, h: 800 } });
+  check('画布面积达标（盒比不符）→ 保留，不清不写',
     r.clearCalls.length === 0 && r.putCalls.length === 0,
     'clear=' + r.clearCalls.length + ' put=' + r.putCalls.length);
+}
+
+console.log('L. 单主帧契约：裸 URL，自动路径零 DELETE');
+{
+  const r = await runScenario({ mode: 'varied', blobSize: 120000 });
+  const backfillHead = r.headCalls.find((u) => u.indexOf('scene-frame/sss') !== -1);
+  check('HEAD 为裸 URL（无 ?ar= —— 主帧无形状参数）',
+    Boolean(backfillHead) && backfillHead.indexOf('ar=') === -1,
+    backfillHead || 'none');
+  const r2 = await runScenario({ mode: 'varied', blobSize: 120000, gpuAlreadyPinned: true, gpuDims: { w: 480, h: 320 } });
+  check('升级路径零 DELETE（DELETE 仅「重新截」force 使用）',
+    r2.clearCalls.length === 0 && r2.putCalls.length === 1,
+    'clear=' + r2.clearCalls.length + ' put=' + r2.putCalls.length);
+}
+
+console.log('M. PUT 撞更大主帧（面积守卫 409）⇒ 已定局：不重试不报错，记账照常');
+{
+  const r = await runScenario({ mode: 'varied', blobSize: 120000, gpuAlreadyPinned: true,
+    gpuDims: { w: 480, h: 320 }, putRejectsSmaller: true });
+  check('升级 PUT 恰好一次（409 不触发重试）', r.putCalls.length === 1, 'put=' + r.putCalls.length);
+  check('409 路径零 DELETE（没有"先删再试"的死循环）', r.clearCalls.length === 0,
+    'clear=' + r.clearCalls.length);
+  check('409 视为已定局：槽位记账照常（下次挂载不再重复抓帧）',
+    r.slotOrder.join('>') === 'PUT', r.slotOrder.join('>') || 'none');
 }
 
 console.log('F. P2-M：GPU 静帧落地后不得有任何 CPU 渲染（该路线已删除）');

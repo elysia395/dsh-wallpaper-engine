@@ -127,7 +127,7 @@ function get(port, pathAndQuery, headers = {}) {
   });
 }
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms) => new Promise((r) => { setTimeout(r, ms); });
 async function waitUntil(fn, timeoutMs, intervalMs = 500) {
   const deadline = Date.now() + timeoutMs;
   for (;;) {
@@ -248,7 +248,7 @@ async function main() {
 
   const profilePkgPath = join(ISO_HOME, '.dsh', 'profiles', 'web', 'package.json');
   const profileText = existsSync(profilePkgPath) ? readFileSync(profilePkgPath, 'utf8') : '';
-  let registered = false;
+  let registered;
   try {
     const pkg = JSON.parse(profileText);
     const inDeps = Boolean(pkg.dependencies && PLUGIN in pkg.dependencies);
@@ -314,7 +314,7 @@ async function main() {
 
     let logStatus = await get(PORT, `${BASE}/diag-log?token=${token}`);
     if (logStatus.status !== 200) logStatus = await get(PORT, `${BASE}/diag-log`);
-    let markerInRing = false;
+    let markerInRing;
     try {
       const entries = JSON.parse(logStatus.body).entries || [];
       markerInRing = entries.some((e) => String(e.msg || '').includes(marker));

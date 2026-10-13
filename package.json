@@ -44,6 +44,7 @@
     "lib/log.js",
     "lib/notice.js",
     "lib/routes/",
+    "lib/occlusion/",
     "lib/fontsets/",
     "lib/glass-presets/",
     "lib/about/",
@@ -59,6 +60,17 @@
     "lib/serve.js",
     "lib/faststart.js",
     "lib/mp4-vfs.js",
+    "lib/media-probe.js",
+    "lib/scene-probe.js",
+    "lib/wallpaper-scan.js",
+    "lib/cache-prune.js",
+    "lib/config-store.js",
+    "lib/transcode.js",
+    "lib/steam-discovery.js",
+    "lib/host-diag.js",
+    "lib/upload-store.js",
+    "lib/video-preview.js",
+    "lib/asset-paths.js",
     "lib/webwallgl/",
     "lib/we-props.js",
     "lib/we-focus-guard.js",
@@ -85,12 +97,15 @@
   "license": "MIT",
   "scripts": {
     "build": "node scripts/build-client.mjs",
-    "verify": "node test/verify-client-sync.mjs && node test/verify-client.mjs && node test/verify-windows-caption.mjs && node test/verify-transcode-state.mjs && node test/verify-playback-controls.mjs && node test/verify-scene.mjs && node test/verify-scene-live.mjs && node test/verify-adapter.mjs && node test/verify-theme-follow.mjs && node test/verify-logging.mjs && node test/warn-only.mjs --probe-spawn test/verify-media-bridge.mjs --allow-skip && node test/verify-softrender.mjs && node test/verify-readability.mjs && node test/verify-glass-compositing.mjs && node test/verify-glass-surfaces.mjs && node test/verify-package-files.mjs && node test/verify-package-publish.mjs && node test/verify-contracts.mjs && node test/verify-body-caps.mjs && node test/verify-json-response.mjs && node test/verify-i18n.mjs && node test/verify-types.mjs && node test/verify-host-paint-scope.mjs && node test/verify-route-index.mjs && node test/verify-route-families.mjs && node test/verify-cache-dir.mjs && node test/verify-we-install-probe.mjs && node test/verify-inventory-index.mjs && node test/verify-mp4-vfs.mjs && node test/verify-theme-layer.mjs && node test/verify-api-client.mjs && node test/verify-component-fonts.mjs && node test/verify-fontset.mjs && node test/verify-presets.mjs && node test/verify-system-fonts.mjs && node test/verify-picker-upload.mjs && node test/verify-picker-model.mjs && node test/verify-picker-props.mjs && node test/verify-about.mjs && node test/verify-token-contract.mjs",
-    "verify:docs": "node test/warn-only.mjs test/verify-module-layout.mjs && node test/warn-only.mjs test/verify-reachability.mjs && node test/warn-only.mjs test/verify-retired-lines.mjs && node test/warn-only.mjs test/verify-dead-declarations.mjs && node test/warn-only.mjs test/verify-guard-map.mjs",
+    "verify": "node test/run-guards.mjs verify",
+    "verify:docs": "node test/run-guards.mjs docs",
     "verify:bridge": "node test/verify-media-bridge.mjs --provision",
     "verify:e2e": "node test/e2e-web-media-origin.mjs",
-    "smoke": "node test/rotation-smoke.mjs && node test/rotation-live-smoke.mjs && node test/rotation-prepared-leak-smoke.mjs && node test/live-frame-backfill-smoke.mjs && node test/live-frame-async-identity-smoke.mjs && node test/fontset-load-smoke.mjs",
-    "verify:all": "npm run build && npm run verify && npm run verify:docs && npm run smoke",
+    "lint": "eslint .",
+    "typecheck": "tsc --noEmit -p tsconfig.json",
+    "verify:static": "node test/verify-static.mjs",
+    "smoke": "node test/run-guards.mjs smoke",
+    "verify:all": "node test/run-guards.mjs all",
     "prepack": "node scripts/prepare.mjs"
   },
   "peerDependencies": {
@@ -111,8 +126,17 @@
       "optional": true
     }
   },
-  "dependencies": {},
+  "dependencies": {
+    "webwallgl": "^3.0.0",
+    "x11": "^4.3.1"
+  },
   "overrides": {
     "js-yaml": "4.3.2"
+  },
+  "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "@types/node": "^26.6.5",
+    "eslint": "^10.12.0",
+    "typescript": "^7.0.2"
   }
 }

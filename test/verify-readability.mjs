@@ -64,6 +64,7 @@
 //
 // Usage: node test/verify-readability.mjs
 import { readFileSync } from 'node:fs';
+import { styleSources, cssBodyOf } from './tools/src-scope.mjs';
 
 const results = [];
 function check(name, ok, detail) {
@@ -88,8 +89,9 @@ const FLOOR_JS = {
 // 2) the injected stylesheet: evaluate the CSS template literal with exactly
 // those constants (so the string checked here IS the string the plugin injects).
 // ⚠️ 锚点锚在行首且容忍缩进（产物把内联模块整段缩进过）：散文里出现同样的声明字面量会把锚点带偏。
-const CSS_BODY_MATCH = SRC.match(/^\s*const CSS = `([^`]*)`;/m);
-const CSS_BODY = CSS_BODY_MATCH ? CSS_BODY_MATCH[1] : '';
+// 2026-10-13（刀3）：样式表拆成 8 个域模板 + 组装点 ⇒ 取文改走 cssBodyOf（按声明顺序拼回一份
+// CSS 体，与旧单模板取文逐字节相同）；取不到任何模板会抛错，不再静默返回空串让判据恒真。
+const CSS_BODY = cssBodyOf(SRC);
 let CSS = '';
 let cssError = null;
 try {
@@ -321,10 +323,6 @@ function main() {
     light: lightVars ? Number(lightVars[1]) : NaN,
     dark: darkVars ? Number(darkVars[1]) : NaN,
   };
-  const BASE = {
-    light: lightVars ? hex2rgb(lightVars[2]) : null,
-    dark: darkVars ? hex2rgb(darkVars[2]) : null,
-  };
 
   // ── F2: every text-bearing surface carries the floor, both themes ─────────
   const surfaceSpecs = [
@@ -478,6 +476,82 @@ function main() {
       && declValue(chip.body, 'background-image') === 'none !important'
       && declValue(chip.body, 'border-color') === 'rgba(255, 255, 255, 0.14) !important'
       && !/(?:^|[;\s])(?:color|filter|opacity)\s*:/.test(chip.body));
+    // #197：推理正文由宿主用 compact 变体渲染（宿主模块类带 _thinkBody 后缀），那里的
+    // 行内代码是 display:inline。跨行折断时 backdrop-filter 的取值区取的是**所有行盒的
+    // 外接矩形**，于是胶囊霜釉长成一条横贯整列的矩形底板、盖住同行普通文字。修复=在推理
+    // 正文子树里**只撤模糊载体、保留胶囊填充**（宿主自身的 box-decoration-break: clone
+    // 已把背景按行盒分片）。判据两头钉：① 收口规则在位，且同时带玻璃门与 :not(pre) 围栏
+    // 排除；② 原 chip 规则的霜釉**不得被就地删掉** —— 否则"局部收口"退化成"全局摘霜"，
+    // 助手正文的胶囊也一起失去磨砂。
+    const capsuleScope = (header) => header.includes('[data-we-glass-page]')
+      && header.includes('[data-we-thinking-glass]')
+      && header.includes(':not(pre) > code');
+    const noFrost = (body) => /(?:^|[;\s])backdrop-filter: none !important/.test(body)
+      && /-webkit-backdrop-filter: none !important/.test(body)
+      && !/(?:^|[;\s])background(?:-color)?\s*:/.test(body);
+    // 特异性计数器（Selectors 规范的三级元组 #id / .class·[attr]·:pseudo / 元素名）。
+    // :is() 取最具体实参、:where() 计零、:not() 计其实参。逐条对教科书样例校准过：
+    // * → 0-0-0、li → 0-0-1、ul ol+li → 0-0-3、h1 + *[rel=up] → 0-1-1、li.red.level → 0-2-1。
+    const SPEC_ORDER = (a, b) => (a[0] - b[0]) || (a[1] - b[1]) || (a[2] - b[2]);
+    // 按**顶层**逗号拆选择器列表：`:is()` / `:not()` 实参里的逗号不是列表分隔符。
+    // 朴素 `header.split(',')` 会把 `:is(a, b)` 切成两段、留下一个没有闭括号的 `:is(`，
+    // 伪类计数被误加 —— 实测把收口规则的真实 0-4-3 算成 0-5-1，于是"特异性压过"那条
+    // 判据靠错误数字蒙混通过，只有负对照（去 [data-chat-flow] 应与原规则相等）把它咬出来。
+    const splitTop = (s) => {
+      const out = [];
+      let depth = 0;
+      let cur = '';
+      for (const ch of s) {
+        if (ch === '(') depth += 1;
+        else if (ch === ')') depth -= 1;
+        if (ch === ',' && depth === 0) { out.push(cur); cur = ''; } else cur += ch;
+      }
+      out.push(cur);
+      return out;
+    };
+    const specificity = (header) => {
+      const oneSel = (sel) => {
+        let s = sel.replace(/:is\(([^()]*(?:\([^()]*\)[^()]*)*)\)/g, (_, inner) => {
+          const parts = splitTop(inner).map((p) => p.trim()).filter(Boolean);
+          return parts.reduce((best, cur) => (SPEC_ORDER(oneSel(cur), oneSel(best)) > 0 ? cur : best), parts[0] || '');
+        });
+        s = s.replace(/:where\([^()]*\)/g, ' ').replace(/:not\(([^()]*)\)/g, ' $1 ');
+        return [
+          (s.match(/#[\w-]+/g) || []).length,
+          (s.match(/\.[\w-]+|\[[^\]]+\]|:(?!:)[\w-]+(?:\([^)]*\))?/g) || []).length,
+          (s.match(/(?:^|[\s>+~])([a-zA-Z][\w-]*)/g) || []).length,
+        ];
+      };
+      return splitTop(header).map((p) => oneSel(p.trim()))
+        .reduce((best, cur) => (SPEC_ORDER(cur, best) > 0 ? cur : best), [0, 0, 0]);
+    };
+    const thinkBodyCode = normal.filter((r) => r.header.includes('[class*="_thinkBody"]')
+      && r.header.includes(':not(pre) > code'));
+    const thinkChip = thinkBodyCode[0];
+    check('F2d3b 推理正文（compact 变体）行内代码只撤模糊载体、保留胶囊填充（#197）',
+      thinkBodyCode.length >= 1
+      && thinkBodyCode.every((r) => capsuleScope(r.header) && noFrost(r.body))
+      && !!chip && /backdrop-filter: blur\(var\(--we-inline-code-blur, 8px\)\)/.test(chip.body),
+      (thinkChip ? thinkChip.header : 'no _thinkBody capsule rule'));
+    // 收口规则必须**顺序无关地**压过原规则。两条都带 !important，若特异性相等，唯一决胜
+    // 因素就是源码顺序 —— 浏览器里把新规则挪到原规则之前，#197 会静默复活，而只看
+    // "规则在位 / 带门 / 保留 :not(pre)" 的判据抓不到（变异实测：对调后套件仍全绿）。
+    const thinkSpec = thinkChip ? specificity(thinkChip.header) : null;
+    const chipSpec = chip ? specificity(chip.header) : null;
+    check('F2d3b2 收口规则的特异性严格压过原 chip 规则（顺序无关，不靠后置取胜）',
+      !!thinkSpec && !!chipSpec && SPEC_ORDER(thinkSpec, chipSpec) > 0,
+      'closing=' + (thinkSpec ? thinkSpec.join('-') : 'n/a')
+        + ' · original=' + (chipSpec ? chipSpec.join('-') : 'n/a'));
+    check('negative control: 抽掉 [data-chat-flow] 后两条特异性相等，顺序又成为唯一决胜因素（#197）',
+      !!thinkChip && !!chipSpec
+      && SPEC_ORDER(specificity(thinkChip.header.replaceAll('[data-chat-flow]', '')), chipSpec) === 0);
+    // 语义锚点必须扛事：_thinkBody 是构建期哈希的一半，DSH-UI-INTERFACES.md 判其
+    // 稳定性为低、明确不许把用户可见功能单独挂上去（宿主改个类名就静默复发）。
+    check('F2d3b3 收口规则带着语义锚点 [data-variant="think"]，不只挂类名后缀（#197）',
+      !!thinkChip && thinkChip.header.includes('[data-variant="think"]'));
+    check('negative control: 少了思考玻璃门的收口规则等于全局摘霜（#197）',
+      thinkBodyCode.length >= 1
+      && !capsuleScope(thinkBodyCode[0].header.replaceAll('[data-we-thinking-glass]', '')));
     const tools = normal.find((r) => declValue(r.body, 'background-color') === 'var(--we-tool-glass-fill) !important');
     const toolScope = (header) => header.split(',').every((selector) =>
       selector.includes('[data-we-glass-page][data-we-thinking-glass]') && selector.includes('[data-chat-flow]')
@@ -808,26 +882,42 @@ function main() {
   // 本条把它变成**指名道姓**的判据。判据读**源码**（不是产物）: 产物构建失败时它根本不会
   // 更新, 拿产物判会测到上一次的旧文本。
   {
-    const stylesSrc = readFileSync(new URL('../src/styles.js', import.meta.url), 'utf8');
-    const open = stylesSrc.indexOf('const CSS = `');
-    // 结尾锚在行首的 `;`（与上面 C6s 取 CSS 的方式同源, 避免散文里的反引号影响）
-    const tail = stylesSrc.slice(open + 13).match(/^`;/m);
-    const bodyStart = open + 13;
-    const bodyEnd = tail ? bodyStart + tail.index : -1;
-    const body = bodyEnd > bodyStart ? stylesSrc.slice(bodyStart, bodyEnd) : '';
-    const strays = bodyEnd > bodyStart ? (body.match(/`/g) || []).length : -1;
-    // 行号定位（便于直接去改）: 第一个裸反引号所在行
-    const firstAt = body.indexOf('`');
-    const lineNo = firstAt >= 0 ? stylesSrc.slice(0, bodyStart + firstAt).split('\n').length : -1;
+    // 刀3（2026-10-13）：样式表从单个 CSS 模板拆成 8 个域模块（+ 组装点）⇒ 逐**族文件**取模板体
+    // 再数裸反引号。逐文件判（不是拼成一份再判）才能指名道姓到具体域文件；判据本身一字未改。
+    const parts = [];
+    for (const rel of styleSources()) {
+      const text = readFileSync(new URL('../' + rel, import.meta.url), 'utf8');
+      const open = text.search(/^[ \t]*const CSS(?:_[A-Z][A-Z0-9_]*)? = `/m);
+      if (open < 0) continue;
+      const bodyStart = text.indexOf('`', open) + 1;
+      // 结尾锚在行首的 `;`（与上面 C6s 取 CSS 的方式同源, 避免散文里的反引号影响）
+      const tail = text.slice(bodyStart).match(/^`;/m);
+      if (!tail) continue;
+      parts.push({ file: rel, text, bodyStart, body: text.slice(bodyStart, bodyStart + tail.index) });
+    }
+    const found = parts.length > 0;
+    const strays = found ? parts.reduce((n, p) => n + (p.body.match(/`/g) || []).length, 0) : -1;
+    const bodyBytes = parts.reduce((n, p) => n + Buffer.byteLength(p.body, 'utf8'), 0);
+    // 行号定位（便于直接去改）: 第一个裸反引号所在**文件与行**
+    let where = '';
+    for (const p of parts) {
+      const at = p.body.indexOf('`');
+      if (at >= 0) {
+        where = p.file + ':' + p.text.slice(0, p.bodyStart + at).split('\n').length;
+        break;
+      }
+    }
     check('C6t styles.js 的 CSS 模板内无裸反引号（会把模板提前终止, 报错却指向别处）',
-      bodyEnd > bodyStart && strays === 0,
-      strays < 0 ? '取不到模板体（锚点变了?）' : strays + ' 个裸反引号 · 首个在第 ' + lineNo + ' 行');
+      found && strays === 0,
+      !found ? '取不到模板体（锚点变了?）'
+        : strays + ' 个裸反引号 · 首个在 ' + where + ' · 族模板体 ' + bodyBytes + ' B');
     // 负对照: 同一判据必须能判出**合成**的裸反引号（否则它可能恒真）。
     // 用与正面**同一个谓词**（strays === 0）判, 而不是自己数一遍 —— 数一遍等于把判据抄成
     // 期望值, 那样"谓词写错"时正负对照会一起错（本仓的"期望值不许与被测对象同源"）。
-    const synth = body.slice(0, 200) + '\n/* `demo` */\n' + body.slice(200);
+    const pick = parts[0] ? parts[0].body : '';
+    const synth = pick.slice(0, 200) + '\n/* `demo` */\n' + pick.slice(200);
     check('negative control C6t-1: 合成一个裸反引号会被同一条判据判出',
-      (synth.match(/`/g) || []).length !== 0 && bodyEnd > bodyStart);
+      (synth.match(/`/g) || []).length !== 0 && found);
   }
 
   // ── F7: 侧栏全透明（issue #137）—— 放弃地板的显式开关链路（默认关）──────
@@ -897,37 +987,235 @@ function main() {
       && unpairOk(SRC));
   }
 
-  // ── F8：原生 select 弹层的选项行必须显式不透明底 + 玻璃墨色（用户报告：下拉底色与字同色）──
+  // ── F8 (#164)：原生 select 弹层的选项行必须显式「不透明底 + 对比墨」──────────────────
   // Chromium 的弹层是独立文档：画布只在 select 自身背景不透明时才取它的底色，而我们的
-  // select 是透明玻璃底 ⇒ 弹层落到默认浅色画布；选项文字继承玻璃墨色（深色主题=浅字）
-  // ⇒ 浅字浅底整列不可读。修法 = option 行显式 --we-panel-color + --we-ink（Chromium
-  // 弹层按 option 的已解析计算样式逐行画）。判据钉住：这条 option 规则必须存在、必须
-  // 同时声明两个 var、且底色必须是 --we-panel-color（不透明面板底）——防止将来有人把
-  // 底色改回透明/半透明玻璃形态而弹层再次不可读。
+  // select 是透明玻璃底 ⇒ 弹层落到默认浅色画布；选项文字却继承 select 的墨色 ⇒ 深色主题
+  // （浅字）与「用户把"正文"角色设成浅色」两档都变成浅字浅底。#164 的修法是把这一对换成
+  // 按**有效墨色**派生的 --we-popup-row-bg / --we-popup-row-ink。判据钉三件事：
+  //   ① **全局** select option 规则在位且读的就是这一对（防止退回半透明玻璃形态）；
+  //   ② 选中行单钉（UA 的 Highlight 蓝不吃这一对）；
+  //   ③ 自家 .we-picker 子树那条也在（特异性更高，宿主若有类名压 option 的规则也盖得过）。
   {
     // header 可能带着规则前的整段注释（rulesWithProp 取的是"上一个 } 到 { 之间"的原文）
     // ⇒ 先剥注释再匹配选择器，避免"注释里出现同名选择器"与"注释吃掉行首锚"两种假判。
-    const optRules = rulesWithProp('background-color')
-      .map((r) => ({ header: r.header.replace(/\/\*[^]*?\*\//g, ' ').trim(), body: r.body }))
-      .filter((r) => /(^|,)\s*(\.we-picker select|\.we-picker__select) option/.test(r.header));
-    const ok = (r) => r.body.includes('background-color: var(--we-panel-color') && r.body.includes('color: var(--we-ink');
-    check('F8 原生下拉弹层选项行：option 规则在位且为不透明面板底 + 玻璃墨色（双作用域：.we-picker select 与 .we-picker__select）',
-      optRules.length >= 1 && optRules.every(ok),
-      optRules.length + ' 条 option 规则' + (optRules.length ? ' · 作用域 ' + optRules.map((r) => r.header.replace(/\s+/g, ' ').trim().slice(0, 60)).join(' | ') : ''));
-    // 负对照 ①：底色改回透明玻璃形态（color-mix 半透明）会被同一条判据判出；
-    // 负对照 ②：丢掉墨色声明也会被判出。
-    const bad = optRules[0] ? {
-      header: optRules[0].header,
-      body: optRules[0].body.replace(/background-color:\s*var\(--we-panel-color[^;]*;/, 'background-color: color-mix(in srgb, var(--we-sidebar-color) 20%, transparent);'),
+    const norm = (r) => ({
+      header: r.header.replace(/\/\*[^]*?\*\//g, ' ').replace(/\s+/g, ' ').trim(),
+      body: r.body,
+    });
+    const optRules = rulesWithProp('background-color').map(norm);
+    const globalRules = optRules.filter((r) => r.header === 'select option');
+    const groupRules = optRules.filter((r) => r.header === 'select optgroup');
+    const checkedRules = optRules.filter((r) => r.header === 'select option:checked');
+    const pickerRules = optRules.filter((r) => /(^|,)\s*(\.we-picker select|\.we-picker__select) option$/.test(r.header));
+    const pairOk = (r) => /background-color:\s*var\(--we-popup-row-bg/.test(r.body)
+      && /color:\s*var\(--we-popup-row-ink/.test(r.body);
+    // 选中行不是行配对（语义不同）⇒ 单独一条断言。填充必读 -src、不读 --we-accent：
+    // 设置窗那个作用域块末尾把 --we-accent 掐成 initial（块内既有消费一律走 -src），而
+    // #164 的复现入口恰在窗内 —— 读 --we-accent 会恒落兜底色、与跟随用户的墨色错配。
+    const accentOk = (r) => /background-color:\s*var\(--we-accent-src,/.test(r.body)
+      && /color:\s*var\(--we-popup-row-checked-ink,/.test(r.body);
+    const f8Ok = (g, gr, c, p) => g.length >= 1 && g.every(pairOk)
+      && gr.length >= 1 && gr.every(pairOk)
+      && c.length >= 1 && c.every(accentOk) && p.length >= 1 && p.every(pairOk);
+    check('F8 原生下拉弹层选项行：全局 option / optgroup + 自家 picker 三条读 --we-popup-row-bg / -ink，选中行读 accent-src + checked-ink',
+      f8Ok(globalRules, groupRules, checkedRules, pickerRules),
+      'global=' + globalRules.length + ' · optgroup=' + groupRules.length + ' · checked=' + checkedRules.length
+      + ' · picker=' + pickerRules.length
+      + ' · 选择器 ' + optRules.filter((r) => /option/.test(r.header)).map((r) => r.header.slice(0, 48)).join(' | '));
+    const g0 = globalRules[0];
+    const badOpaque = g0 ? {
+      header: g0.header,
+      body: g0.body.replace(/background-color:\s*var\(--we-popup-row-bg[^;]*;/,
+        'background-color: color-mix(in srgb, var(--we-sidebar-color) 20%, transparent);'),
     } : null;
-    const badNoInk = optRules[0] ? {
-      header: optRules[0].header,
-      body: optRules[0].body.replace(/\s*color:\s*var\(--we-ink[^;]*;/, ''),
+    const badNoInk = g0 ? {
+      header: g0.header,
+      body: g0.body.replace(/\s*color:\s*var\(--we-popup-row-ink[^;]*;/, ''),
     } : null;
-    check('negative control F8-1: option 底色改回半透明玻璃（弹层再次浅底浅字）会被判出',
-      bad ? !ok(bad) : false);
-    check('negative control F8-2: option 丢墨色声明会被判出',
-      badNoInk ? !ok(badNoInk) : false);
+    check('negative control F8-1: 全局那条底色改回半透明玻璃（弹层再次浅底浅字）会被判出',
+      badOpaque ? !pairOk(badOpaque) : false);
+    check('negative control F8-2: 全局那条丢掉墨色声明会被判出',
+      badNoInk ? !pairOk(badNoInk) : false);
+    check('negative control F8-3: 只剩自家 picker 那条、全局那条缺失会被判出',
+      pickerRules.length >= 1 && !f8Ok([], groupRules, checkedRules, pickerRules));
+    const c0 = checkedRules[0];
+    const badChecked = c0 ? {
+      header: c0.header,
+      body: c0.body.replace(/background-color:\s*var\(--we-accent-src,[^;]*;/, 'background-color: transparent;'),
+    } : null;
+    check('negative control F8-4: 选中行底色改回 transparent（UA 蓝底下自定义墨不可控）会被判出',
+      badChecked ? !accentOk(badChecked) : false);
+    // 这条负对照钉的正是本 PR 复审时实测到的缺口：填充写 --we-accent（而不是 -src）时，
+    // 设置窗那块把 --we-accent 掐成 initial ⇒ 填充恒落兜底色、与用户 accent 脱钩。
+    const badSrc = c0 ? {
+      header: c0.header,
+      body: c0.body.replace(/var\(--we-accent-src,/, 'var(--we-accent,'),
+    } : null;
+    check('negative control F8-5: 选中行填充改读 --we-accent（设置窗内被掐成 initial ⇒ 恒落兜底、与用户配色脱钩）会被判出',
+      badSrc ? !accentOk(badSrc) : false);
+    check('negative control F8-6: 分组标签 optgroup 那条缺失会被判出',
+      !f8Ok(globalRules, [], checkedRules, pickerRules));
+  }
+
+  // ── F9 (#164)：行配对必须随产物交付、是纯函数，且网格内处处达标 ────────────────────
+  // 「只随主题翻转」救不了自定义浅墨那一档（浅色主题默认浅底 + 用户 #fff 墨 = 白字白底），
+  // 所以判据不能只看"有没有这对令牌"，必须**复算**：抽产物里的 wePopupRowPair 对一网格墨色
+  // 各跑一遍，逐对算对比度。中灰是最难的一档（白/黑两臂在相对亮度 0.1791 处只有 4.58:1）。
+  {
+    const fnStart = SRC.indexOf('function wePopupRowPair(');
+    let fnSrc = null;
+    if (fnStart >= 0) {
+      let depth = 0;
+      for (let i = fnStart; i < SRC.length; i++) {
+        const ch = SRC[i];
+        if (ch === '{') depth++;
+        else if (ch === '}') { depth--; if (depth === 0) { fnSrc = SRC.slice(fnStart, i + 1); break; } }
+      }
+    }
+    const wePopupRowPair = fnSrc ? new Function('return (' + fnSrc + ')')() : null;
+    const usable = typeof wePopupRowPair === 'function';
+    check('F9 弹层行配对函数随产物交付且可独立复算', usable);
+    if (usable) {
+      const INKS = [
+        ['宿主深墨（浅主题默认）', '#1f2328'],
+        ['宿主浅墨（深主题默认）', '#e6e8eb'],
+        ['纯白（#164 场景 B）', '#ffffff'],
+        ['纯黑', '#000000'],
+        ['中灰（两臂最窄处）', '#7f7f7f'],
+        ['彩墨 浅黄', '#f5d76e'],
+        ['彩墨 靛蓝', '#3b3f8f'],
+      ];
+      const pairs = INKS.map(([label, ink]) => {
+        const p = wePopupRowPair(ink);
+        const hex = p && /^#[0-9a-f]{6}$/.test(p.bg);
+        return { label, ink, bg: p && p.bg, ratio: hex ? contrast(hex2rgb(p.bg), hex2rgb(ink)) : 0 };
+      });
+      const worst = pairs.reduce((a, b) => (a.ratio <= b.ratio ? a : b));
+      check('F9a 七档墨色的行底都解析成不透明 #rrggbb 且与墨色对比度 ≥4.5:1', worst.ratio >= 4.5,
+        '最差 ' + worst.label + ' → ' + worst.bg + ' vs ' + worst.ink + ' = ' + worst.ratio.toFixed(2) + ':1'
+        + ' · 全档 ' + pairs.map((p) => p.ratio.toFixed(2)).join('/'));
+      const same = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
+      const dL = wePopupRowPair('#1f2328');
+      const dD = wePopupRowPair('#e6e8eb');
+      check('F9b 主题默认墨色下逐位还原现状（浅 #ffffff+宿主深墨 / 深 #1e1f26+宿主浅墨）',
+        same(dL.bg, '#ffffff') && same(dL.ink, '#1f2328') && same(dD.bg, '#1e1f26') && same(dD.ink, '#e6e8eb'),
+        'light=' + dL.bg + '/' + dL.ink + ' · dark=' + dD.bg + '/' + dD.ink);
+      check('F9c 输入缺失 / 不可解析 ⇒ 返回 null，交给样式表缺省兜底（不写脏值）',
+        wePopupRowPair('') === null && wePopupRowPair(undefined) === null && wePopupRowPair('rgba(0,0,0,.5)') === null);
+      // 负对照：短路掉"对比度约束"（一律给浅基色 = 只认墨色、不校验）必须被同一条网格判红。
+      const naiveWorst = Math.min(...INKS.map(([, ink]) => contrast(hex2rgb('#ffffff'), hex2rgb(ink))));
+      check('negative control F9-1: 不做钳制（一律给 #ffffff 行底）在纯白墨上会被同一条网格判红',
+        naiveWorst < 4.5, 'naive worst=' + naiveWorst.toFixed(2) + ':1');
+    }
+  }
+
+  // ── F10 (#164 / P1)：选中行的墨 = 纯白 / 纯黑两支里**实算对比度更大**的那支 ─────────
+  // 旧版（白 vs #0f1115 对比度取大）在九档采样面上全绿，但连续色域最差只有 ≈4.35:1
+  // （accent #de3c42、灰阶 #797979）—— 判据的**采样面**有缺口，不是实现侥幸达标。
+  // 现在换成**连续 + 自适应**网格：256 灰阶 + 6³ 粗立方 + （每一级取当前最差点）邻域
+  // 逐级细化 ±51 → ±17 → ±5 → ±1，门限 4.5。纯白/纯黑两支的等点在 L≈0.1791、比值
+  // ≈4.58 ⇒ 「取大」自带 4.58:1 的全局下界，细化网格必须落在与之相符的位置。
+  // 判据从**产物**里抽出 weCheckedRowInk 复算；负对照同时复刻两种旧实现（#0f1115 取大、
+  // 0.45 阈值），并用同一条网格证明它们判红 —— 先红后绿的那条红就是 F10-1。
+  {
+    const fnStart = SRC.indexOf('function weCheckedRowInk(');
+    let fnSrc = null;
+    if (fnStart >= 0) {
+      let depth = 0;
+      for (let i = fnStart; i < SRC.length; i++) {
+        const ch = SRC[i];
+        if (ch === '{') depth++;
+        else if (ch === '}') { depth--; if (depth === 0) { fnSrc = SRC.slice(fnStart, i + 1); break; } }
+      }
+    }
+    const weCheckedRowInk = fnSrc ? new Function('return (' + fnSrc + ')')() : null;
+    const usable10 = typeof weCheckedRowInk === 'function';
+    check('F10 选中行墨函数随产物交付且可独立复算', usable10);
+    if (usable10) {
+      const hexOf = (r, g, b) => '#' + [r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('');
+      const clamp255 = (v) => Math.max(0, Math.min(255, v));
+      const neighborhood = (hex, step) => {
+        const n = parseInt(hex.slice(1), 16);
+        const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+        const out = [];
+        for (const dr of [-step, 0, step]) for (const dg of [-step, 0, step]) for (const db of [-step, 0, step]) {
+          out.push(hexOf(clamp255(r + dr), clamp255(g + dg), clamp255(b + db)));
+        }
+        return out;
+      };
+      // ① 连续面：全 256 灰阶（等点 L≈0.1791 落在灰阶上，是最差候选所在的脊）
+      // ② 粗立方：**16 级/通道 = 4096 点**（与独立复核方用的同一张网格，结论可直接对号）
+      // ③ 自适应细化：每级取当前最差点、按该级步长的 3³ 邻域加深（去重后并进网格）
+      const seen = new Set();
+      const grid = [];
+      const push = (acc) => { if (!seen.has(acc)) { seen.add(acc); grid.push(acc); } };
+      for (let i = 0; i < 256; i++) push(hexOf(i, i, i));
+      for (let r = 0; r < 16; r++) for (let g = 0; g < 16; g++) for (let b = 0; b < 16; b++) push(hexOf(r * 17, g * 17, b * 17));
+      const ratioOf = (acc, ink) => (ink ? contrast(hex2rgb(acc), hex2rgb(ink)) : 0);
+      for (const step of [51, 17, 5, 1]) {
+        let worstAcc = grid[0], worstRatio = Infinity;
+        for (const acc of grid) {
+          const r = ratioOf(acc, weCheckedRowInk(acc));
+          if (r < worstRatio) { worstRatio = r; worstAcc = acc; }
+        }
+        for (const acc of neighborhood(worstAcc, step)) push(acc);
+      }
+      const rows = grid.map((acc) => {
+        const ink = weCheckedRowInk(acc);
+        return { acc, ink, ratio: ratioOf(acc, ink) };
+      });
+      const worst = rows.reduce((a, b) => (a.ratio <= b.ratio ? a : b));
+      check('F10a 连续/自适应网格上选中行墨都是黑/白且对比度 ≥4.5:1', worst.ratio >= 4.5,
+        '网格 ' + grid.length + ' 档 · 最差 ' + worst.acc + ' vs ' + worst.ink + ' = ' + worst.ratio.toFixed(3) + ':1'
+        + ' · 低于 4.5 的档数 ' + rows.filter((r) => r.ratio < 4.5).length);
+      check('F10a-2 两支只出纯黑 / 纯白（不得再混进有色深墨 #0f1115）',
+        rows.every((r) => r.ink === '#ffffff' || r.ink === '#000000'),
+        '不同取值 ' + [...new Set(rows.map((r) => r.ink))].join(' / '));
+      check('F10b 输入缺失 / 不可解析 ⇒ 返回 null，交给样式表缺省兜底（不写脏值）',
+        weCheckedRowInk('') === null && weCheckedRowInk(undefined) === null && weCheckedRowInk('rgba(0,0,0,.5)') === null);
+      // F10c：兜底**只在 accent 解析不出、JS 没写值**时可达 —— 那一档填充同时落回缺省
+      // #4f8cff。两条硬要求：① 兜底墨必须**等于 JS 对缺省填充的判决**（同一套择优逻辑，
+      // 不许写死一个"看起来够深"的墨 —— 曾经的 #0f1115 就是这样漏过了）；② 兜底对过红线。
+      const checkedCss = (CSS.match(/select option:checked\s*\{[^}]*\}/) || [''])[0];
+      const fbFill = /var\(--we-accent-src,\s*(#[0-9a-fA-F]{6})\)/.exec(checkedCss);
+      const fbInk = /var\(--we-popup-row-checked-ink,\s*(#[0-9a-fA-F]{6})\)/.exec(checkedCss);
+      const fbInkHex = fbInk ? fbInk[1].toLowerCase() : null;
+      const fbFillHex = fbFill ? fbFill[1].toLowerCase() : null;
+      check('F10c 缺省兜底墨 = JS 对缺省填充的判决（兜底不得落回固定 #0f1115，也不得与其不一致）',
+        !!fbInkHex && !!fbFillHex && fbInkHex === weCheckedRowInk(fbFillHex),
+        'CSS 兜底对 ' + fbFillHex + ' × ' + fbInkHex + ' · JS 判决 ' + (fbFillHex ? weCheckedRowInk(fbFillHex) : '-'));
+      const fbRatio = (fbFillHex && fbInkHex) ? contrast(hex2rgb(fbFillHex), hex2rgb(fbInkHex)) : 0;
+      check('F10c-2 样式表缺省兜底对也 ≥4.5:1', fbRatio >= 4.5, '缺省对 = ' + fbRatio.toFixed(2) + ':1');
+      // 负对照 F10-1：**先红后绿的那条红** —— 复刻 PR #203 原实现（白 vs #0f1115 取大）。
+      const ratioScalar = (a, b) => (a > b ? (a + 0.05) / (b + 0.05) : (b + 0.05) / (a + 0.05));
+      const lumOf = (hex) => lum(hex2rgb(hex));
+      const armInkOf = (acc, armHex) => {
+        const l = lumOf(acc);
+        return ratioScalar(1, l) >= ratioScalar(lum(hex2rgb(armHex)), l) ? '#ffffff' : armHex;
+      };
+      const worstOver = (list, armHex) => Math.min(...list.map((acc) => ratioScalar(lumOf(acc), lumOf(armInkOf(acc, armHex)))));
+      const oldWorst = worstOver(grid, '#0f1115');
+      check('negative control F10-1: 旧实现（白 vs #0f1115 取大，PR #203 原样）会被同一条网格判红',
+        oldWorst < 4.5, 'old worst=' + oldWorst.toFixed(4) + ':1');
+      // 负对照 F10-1b：暗臂的**临界值**也得判红。#0a0a0a 是"看着够深"的合理候选，但全局
+      // 最差 = 等点比值 = 1.05/(L*+0.05)，要 ≥4.5 必须暗臂 Lin ≤ 0.001852 ⇒ #0a0a0a
+      // (Lin≈0.00278) 只有 4.4495，仍差 0.05。这条钉住"暗臂必须真的是纯黑"。
+      const nearWorst = worstOver(grid, '#0a0a0a');
+      check('negative control F10-1b: 暗臂只放到 #0a0a0a（Lin≈0.0028，看着够深）仍会被同一条网格判红',
+        nearWorst < 4.5, '#0a0a0a worst=' + nearWorst.toFixed(4) + ':1');
+      // 负对照 F10-2：更早的 0.45 阈值口径（复审补丁前）也在这条网格上判红。
+      const inkByThreshold = (acc) => (lumOf(acc) > 0.45 ? '#0f1115' : '#ffffff');
+      const naiveWorst10 = Math.min(...grid.map((acc) => ratioScalar(lumOf(acc), lumOf(inkByThreshold(acc)))));
+      check('negative control F10-2: 沿用按钮那条 0.45 阈值（中亮度 accent 上给白字）会被同一条网格判红',
+        naiveWorst10 < 4.5, 'naive worst=' + naiveWorst10.toFixed(2) + ':1');
+      // 负对照 F10-3：网格自身有牙 —— 旧版 F10 的**九档手挑采样面**对旧实现是**漏判**的
+      //（那九档最差 4.72:1 ⇒ 全绿）。这条钉住"采样面也是判据的一部分"：谁把网格缩回
+      // 采样面，F10-1 的红就没了，而这条会立刻指出缩回去等于漏判。
+      const nineDeck = ['#4f8cff', '#3366cc', '#1a237e', '#0b1020', '#000000', '#7f7f7f', '#ffffff', '#ffcf4d', '#f5d76e'];
+      const oldWorstNine = worstOver(nineDeck, '#0f1115');
+      check('negative control F10-3: 旧的九档采样面对旧实现漏判（该面最差 ≥4.5 ⇒ 全绿）—— 采样面必须连续',
+        oldWorstNine >= 4.5, '旧实现九档最差=' + oldWorstNine.toFixed(2) + ':1');
+    }
   }
 
   const failed = results.filter((r) => !r.ok);

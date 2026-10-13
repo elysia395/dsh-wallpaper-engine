@@ -93,7 +93,7 @@
       p.text,
       p.overridden && React.createElement("span", { className: "we-picker__props-dot", title: weT("已改（点「恢复默认」还原）") }, "•"),
     );
-    let control = null;
+    let control;
     if (p.ptype === "bool") {
       control = React.createElement("input", {
         type: "checkbox", className: "we-picker__props-check",
@@ -159,5 +159,4 @@
 
   export {
     renderPickerPropsPanel,
-    renderUserPropRow,
   };

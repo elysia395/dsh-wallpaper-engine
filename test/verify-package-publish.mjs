@@ -76,12 +76,12 @@ const publishSet = (r) => files.some((entry) => coveredBy(r, entry));
 /** 遍历仓库文件；跳过永远不可能"被发布"的重目录（否则本机要白走一遍 .git 与 node_modules）。 */
 const SKIP_DIRS = new Set(['.git', 'node_modules', '.test-cache', '_refs', '.integration-notes']);
 const walk = (dir, out = []) => {
-  let names = [];
+  let names;
   try { names = readdirSync(dir); } catch { return out; }
   for (const name of names) {
     if (SKIP_DIRS.has(name)) continue;
     const abs = join(dir, name);
-    let st = null;
+    let st;
     try { st = statSync(abs); } catch { continue; }
     if (st.isDirectory()) walk(abs, out);
     else if (st.isFile()) out.push(rel(abs));
@@ -117,6 +117,9 @@ while (queue.length) {
   for (const m of text.matchAll(/^\s*(?:import|export)[^'"]*?from\s*['"]([^'"]+)['"]/gm)) specs.push(m[1]);
   for (const m of text.matchAll(/^\s*import\s*['"]([^'"]+)['"]/gm)) specs.push(m[1]);
   for (const m of text.matchAll(/import\s*\(\s*['"]([^'"]+)['"]\s*\)/g)) specs.push(m[1]);
+  // `createRequire(...).resolve('pkg')`：只定位包目录、按文件直出（webwallgl 是浏览器端引擎）——
+  // 依赖照样被活代码用到，但它不是要沿着走的模块边。
+  for (const m of text.matchAll(/\.resolve\s*\(\s*['"]([^'".][^'"]*)['"]\s*\)/g)) bare.add(m[1]);
   for (const s of specs) {
     if (s.startsWith('node:')) continue;
     if (!s.startsWith('.')) { bare.add(s); continue; }
@@ -287,7 +290,10 @@ section('⑦ 安装期不得跑任何仓库脚本（无构建钩子 + 不引用�
 {
   const INSTALL_HOOKS = ['preinstall', 'install', 'postinstall', 'prepare'];
   const DEV_ONLY = ['prepublishOnly', 'prepack', 'postpack', 'prepublish',
-    'build', 'verify', 'verify:docs', 'verify:all', 'verify:bridge', 'verify:e2e', 'smoke'];
+    'build', 'verify', 'verify:docs', 'verify:all', 'verify:bridge', 'verify:e2e', 'smoke',
+    // 静态门禁（ESLint / tsc 棘轮）：只在仓库里跑，工具与基线夹具都不随包发布。
+    // `lint`/`typecheck` 不在此列是**不需要**：它们的命令里没有未随包路径（判据只看真引用）。
+    'verify:static'];
   const unshippedRefs = (cmd) => [...String(cmd)
     .matchAll(/(?:^|\s)((?:scripts|src|test|docs|\.test-cache)\/[\w./-]+)/g)]
     .map((m) => m[1]).filter((p) => !publishSet(p));

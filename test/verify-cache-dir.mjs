@@ -160,7 +160,7 @@ check('A6 路由模块不缓存缓存根的副本（跨族共享可变量须每�
 // 最后读一次 —— 读的是"界面真正显示的那个值"，因此那一次必须等过 TTL（否则拿到的是上一态
 // 的缓存载荷，那正是本节最容易写出的恒真假通过）。
 section('B. cacheBaseDir() 的解析顺序（正负对照）');
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms) => new Promise((r) => { setTimeout(r, ms); });
 {
   const res = await postCache({ dir: CUSTOM, migrate: true });
   const body = json(res) || {};
@@ -259,6 +259,9 @@ const CACHE_SUBDIR_FILES = {
 // ── D. 「六处都派生自同一条链」+ 两处旧缺口的棘轮 ────────────────────────────
 section('D. 派生棘轮：六个子目录 / 两处 homedir 缺口（带负对照）');
 const hostSrc = readFileSync(join(root, 'lib', 'index.js'), 'utf8');
+// ⚠️ 读点变更（T2 #8）：`defaultUploadDir()` / `customFrameDir()` 已搬进 lib/asset-paths.js ⇒ D8 的
+//    两条正则改读该模块（判据文案、正则、期望值一字未改）；`hostSrc` 仍供 D7 等其余判据用。
+const assetPathsSrc = readFileSync(join(root, 'lib', 'asset-paths.js'), 'utf8');
 const faststartSrc = readFileSync(join(root, 'lib', 'faststart.js'), 'utf8');
 const mediaIndexSrc = readFileSync(join(root, 'lib', 'media', 'index.js'), 'utf8');
 const legacySrc = readFileSync(join(root, 'lib', 'media', 'legacy.js'), 'utf8');
@@ -311,8 +314,8 @@ check('D7 lib/ 全域再无「dataDir 之外还写死 homedir 的子目录」'
     && hostSrc.includes("join(homedir(), '.dsh-wallpaper-engine')"),
   '默认数据目录仍在：join(homedir(), \'.dsh-wallpaper-engine\')');
 check('D8 默认上传目录 / 自定义画面目录都改成 pluginDataDir() 派生',
-  /function defaultUploadDir\(\) \{ return join\(pluginDataDir\(\), 'uploads'\); \}/.test(hostSrc)
-    && /function customFrameDir\(\) \{ return ensureDirOnce\(join\(pluginDataDir\(\), 'overrides'\)\); \}/.test(hostSrc)
+  /function defaultUploadDir\(\) \{ return join\(pluginDataDir\(\), 'uploads'\); \}/.test(assetPathsSrc)
+    && /function customFrameDir\(\) \{ return ensureDirOnce\(join\(pluginDataDir\(\), 'overrides'\)\); \}/.test(assetPathsSrc)
     && !/DEFAULT_UPLOAD_DIR/.test(hostSrc));
 
 // ── E. GET /cache-dir/browse（「更改」弹出目录浏览器的数据腿） ────────────────

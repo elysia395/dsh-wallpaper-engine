@@ -468,14 +468,14 @@ function readFileText(file) {
  */
 async function importFontSet(file) {
   selection.fontSetError = "";
-  let text = "";
+  let text;
   try {
     text = await readFileText(file);
   } catch {
     selection.fontSetError = weT("读不出这个文件（换一个 .json 再试）");
     return "";
   }
-  let doc = null;
+  let doc;
   try {
     doc = JSON.parse(text);
   } catch {
@@ -531,7 +531,7 @@ function cancelPendingFontSet() {
 
 export {
   fontValueDefaults, readCachedFontSetValues, loadFontSet, setFontValues, persistFontSet,
-  flushFontSet, onPageHideFlushFontSet, onVisibilityResyncFontSet, cancelPendingFontSet,
+  onPageHideFlushFontSet, onVisibilityResyncFontSet, cancelPendingFontSet,
   landPresetFontSet,
   refreshFontSets, activateFontSet, createFontSet, renameFontSet, deleteFontSet,
   exportFontSetUrl, importFontSet, flushFontSetNow, fontSetDrifted,

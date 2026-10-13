@@ -121,7 +121,7 @@ function scanHookScopes(doc, hooks) {
       if (st) {
         for (const hook of want) {
           if (out[hook]) continue;
-          let v = '';
+          let v;
           try { v = st.getPropertyValue(hook); } catch { v = ''; }
           const sel = typeof rule.selectorText === 'string' ? rule.selectorText.trim() : '';
           if (v && v.trim() && HOOK_SCOPE_RE.test(sel)) out[hook] = sel;
@@ -131,7 +131,7 @@ function scanHookScopes(doc, hooks) {
     }
   };
   for (const sheet of d.styleSheets) {
-    let rules = null;
+    let rules;
     try { rules = sheet.cssRules; } catch { continue; } // 跨域样式表：读不到就跳过
     try { visit(rules); } catch { /* 不可枚举的规则表：当作扫不到 */ }
   }
@@ -179,7 +179,7 @@ function probeComponentTargets(doc, targets) {
   const hit = [];
   for (const t of list) {
     if (!byPrefix.has(t.prefix)) {
-      let found = false;
+      let found;
       try { found = d.querySelectorAll('[class*="_' + t.prefix + '_"]').length > 0; } catch { found = false; }
       byPrefix.set(t.prefix, found);
     }
@@ -309,7 +309,7 @@ function buildDslBlocks(config, available, isAvailable, hookScopes, resolveFamil
 }
 
 export {
-  COMPONENT_FONT_TARGETS, COMPONENT_FONT_PROPS, DSL_FONT_HOOKS, DSL_HOOK_NAMES, HOOK_SCOPE_RE,
+  COMPONENT_FONT_TARGETS, COMPONENT_FONT_PROPS, DSL_FONT_HOOKS, HOOK_SCOPE_RE,
   componentScopeSelector, probeComponentTargets, scanHookScopes,
   buildComponentCss, buildDslBlocks, selectorFor,
 };

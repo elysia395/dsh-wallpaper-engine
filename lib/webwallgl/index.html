@@ -3,11 +3,8 @@
   <head>
     <meta charset="UTF-8" />
     <!--
-      移动端 WebView（安卓壁纸宿主）默认按 980px 宽的桌面视口排版，再整体缩放到
-      屏宽。壁纸画布是 position:fixed;inset:0，在那个虚拟视口下会被撑成 980×N，
-      缩放后画面按桌面宽高比 letterbox 居中，竖屏上下留出大片空白。
-      锁定 viewport 到设备宽度，画布才等于真实屏幕，cover 裁切才按真实比例算。
-      桌面宿主没有 viewport 概念，这个标签对它无副作用。
+      移动端 WebView 默认按 980px 宽的桌面视口排版，再整体缩放到屏宽；锁定 viewport
+      到设备宽度，画布才等于真实屏幕。桌面宿主没有 viewport 概念，这个标签对它无副作用。
     -->
     <meta
       name="viewport"
@@ -15,8 +12,6 @@
     />
     <title>WebWallGL Renderer</title>
     <style>
-      /* 壁纸页没有文档流内容。去掉默认边距，并关掉移动端的滚动回弹、
-         长按选择与点击高亮 —— 否则触摸交互会被 WebView 自己的手势吃掉。 */
       html,
       body {
         margin: 0;
@@ -30,10 +25,28 @@
         user-select: none;
         -webkit-tap-highlight-color: transparent;
       }
+      #wp {
+        position: fixed;
+        inset: 0;
+        overflow: hidden;
+      }
+      #wp > iframe.we-fallback {
+        position: absolute;
+        inset: 0;
+        width: 100%;
+        height: 100%;
+        border: none;
+        background: transparent;
+      }
     </style>
-    <script type="module" crossorigin src="/wallpaper-engine/scene-live/assets/renderer-AJkjEL9i.js"></script>
-    <link rel="modulepreload" crossorigin href="/wallpaper-engine/scene-live/assets/modulepreload-polyfill-B5Qt9EMX.js">
+    <!--
+      引擎用自包含的全局版（已内联 mediabunny）：ESM 版对 mediabunny 是裸导入，浏览器无法直接解析。
+      经典脚本先于 module 脚本执行，renderer.js 运行时 window.WebWallGL 已就绪。
+    -->
+    <script src="./engine/webwallgl.global.min.js"></script>
+    <script type="module" src="./renderer.js"></script>
   </head>
   <body>
+    <div id="wp"></div>
   </body>
 </html>

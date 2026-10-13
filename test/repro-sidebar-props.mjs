@@ -51,8 +51,8 @@ const PROPS_DEFS = [
   { name: 'look', ptype: 'text', text: '外观', order: 0, value: null, default: null, overridden: false },
   { name: 'glow', ptype: 'bool', text: '发光', order: 1, value: false, default: false, overridden: false },
 ];
-const fetch = (url, opts) => {
-  const u = String(url); const method = String((opts && opts.method) || 'GET').toUpperCase();
+const fetch = (url) => {
+  const u = String(url);
   const json = (body, status = 200) => Promise.resolve({ status, json: () => Promise.resolve(body) });
   if (u.includes('/inventory')) return json(inventoryPayload());
   if (u.includes('/props/')) return json({ ok: true, token: PROPS_TOKEN, props: PROPS_DEFS, overrides: {}, hasProject: true });
@@ -77,7 +77,7 @@ const pump = async (rounds) => {
   for (let i = 0; i < (rounds || 8); i++) {
     const batch = timers.splice(0, timers.length);
     for (const t of batch) { try { t.fn(); } catch { /* ignore */ } }
-    await new Promise((r) => setImmediate(r));
+    await new Promise((r) => { setImmediate(r); });
   }
 };
 const sandbox = { window: { __ModuleLoader__: { load: (h) => { sandbox.__handoff = h; } },

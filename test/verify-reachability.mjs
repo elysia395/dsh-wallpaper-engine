@@ -58,11 +58,11 @@ const info = (msg) => console.log('  INFO ' + msg);
 
 // ── 扫描面 ──────────────────────────────────────────────────────────────────
 function listLibFiles(dir, out = []) {
-  let names = [];
+  let names;
   try { names = readdirSync(dir); } catch { return out; }
   for (const n of names) {
     const p = join(dir, n);
-    let st = null;
+    let st;
     try { st = statSync(p); } catch { continue; }
     if (st.isDirectory()) listLibFiles(p, out);
     else if (st.isFile() && /\.(js|mjs)$/.test(n)) out.push(posix(relative(ROOT, p)));
@@ -119,7 +119,7 @@ function resolveRelative(fromRel, spec) {
 const srcCache = new Map();
 function sourceOf(rel) {
   if (!srcCache.has(rel)) {
-    let src = '';
+    let src;
     try { src = readFileSync(join(ROOT, rel), 'utf8'); } catch { src = ''; }
     srcCache.set(rel, src);
   }
@@ -225,7 +225,7 @@ function enclosingFunction(src, at, mask) {
           if (src[k] === '{') bodyOpen = k;
         }
       } else {
-        let k = skipWs(src, m.index + m[0].length); // 配对到 `=>` 之后
+        const k = skipWs(src, m.index + m[0].length); // 配对到 `=>` 之后
         if (src[k] === '{') bodyOpen = k;
       }
       if (bodyOpen < 0) continue;

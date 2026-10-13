@@ -9,11 +9,12 @@
 ### 场景 / 网页壁纸的默认形态：WebWallGL 实时渲染
 
 **scene 与 web 壁纸默认走实时渲染**（设置项 `sceneLive`，UI 文案「场景实时渲染」/「网页实时渲染」，
-默认开）——渲染器是**上游 WebWallGL（版本钉在 `lib/webwallgl/.upstream.json`）的原版页面**，vendored 在 `lib/webwallgl/`，
+默认开）——渲染器是 **npm 依赖 `webwallgl`（版本钉在 `package.json`）的引擎** 加上本仓 `lib/webwallgl/` 的适配页
+（`index.html` + `renderer.js`），引擎文件由宿主运行期直接从 `node_modules/webwallgl` 供给（挂在 `engine/` 下），
 由宿主以 `/wallpaper-engine/scene-live/` 为 base 挂载（资源引用按该前缀解析），壁纸自身的文件
 （`scene.pkg` / 网页项目文件）经 `/wallpaper-engine/scene-files/` 供给（**路径不变，变的是 origin**：
 场景那份与网页那份都由自建媒体源提供，见下方「载荷来源」）。网页壁纸由宿主在返回的
-HTML 里注入 WE API shim（`lib/webwallgl/web-shim.js`）与 `project.json` 的属性 seed ——
+HTML 里注入 WE API shim（运行期从 `webwallgl` 包的 `webwallgl.mjs` 中提取）与 `project.json` 的属性 seed ——
 严格沙箱下渲染页够不到壁纸 iframe，shim 必须随文档一起到达。
 
 - **何时不走实时渲染**：壁纸开关被关掉，或该壁纸已被记入**失败记忆**（首帧超时；或运行期**持续无帧**——
@@ -67,7 +68,7 @@ HTML 里注入 WE API shim（`lib/webwallgl/web-shim.js`）与 `project.json` �
 ### 网页壁纸：实现细节与已知边界
 
 **网页壁纸**同样走 WebWallGL：宿主把 **WE API shim**（`wallpaperRegisterAudioListener` /
-`wallpaperPropertyListener` / 媒体监听等，来自上游 `web-shim.js`，由 `/scene-files` 注入入口 HTML）
+`wallpaperPropertyListener` / 媒体监听等，取自 `webwallgl` 包内的 shim，由 `/scene-files` 注入入口 HTML）
 交给渲染页加载 —— 依赖 WE API 的工坊网页壁纸（音频可视化、属性驱动、鼠标跟随等）因此能真正跑起来，
 不再是一片空白或报错。**安全**：壁纸 iframe 强制 `sandbox="allow-scripts"`（严格沙箱），第三方 HTML
 拿不到 DSH 的 origin（无法冒用宿主身份调宿主 API / 读宿主存储）；跨源控制与指针注入经渲染页的

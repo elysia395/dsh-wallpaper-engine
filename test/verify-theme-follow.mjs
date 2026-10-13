@@ -37,6 +37,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { stripComments } from './tools/js-text.mjs';
 // 单独 import `src/**`（含 fresh URL 重载）时补上 bundle 作用域的取词层（中文身份）。
 import { installWeTShim } from './tools/weT-shim.mjs';
+// 族取文：样式族 / 页签族 / 实时管线族都已按域拆成兄弟模块 + 组装点 ⇒ 判据扫**整族**，
+// 单读组装点会把"代码搬到域模块"错判成"接线丢了"（刀6 的 live-layer 拆分就是这么踩到的）。
+import { panelText, liveText } from './tools/src-scope.mjs';
 installWeTShim();
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -177,8 +180,10 @@ console.log('\n② 画面占比最大色（纯函数，供守卫直测）');
   check('负对照：同一判据把整图改透明后返回 null',
     m.themeFollowModeColorOf(mostlyRed, 2, 2) !== null
     && m.themeFollowModeColorOf(px([[255, 0, 0, 0], [255, 0, 0, 0], [255, 0, 0, 0], [0, 0, 255, 0]]), 2, 2) === null);
+  // 两次**独立调用**（同一行写两遍同一表达式会被 lint 当自比较）
+  const det = JSON.stringify(m.themeFollowModeColorOf(mostlyRed, 2, 2));
   check('确定性：同一张图两次得到同一个答案',
-    JSON.stringify(m.themeFollowModeColorOf(mostlyRed, 2, 2)) === JSON.stringify(m.themeFollowModeColorOf(mostlyRed, 2, 2)));
+    det === JSON.stringify(m.themeFollowModeColorOf(mostlyRed, 2, 2)));
 }
 
 // ═══ ③ 行为：判决 / 去重 / 让位 / 降级 ════════════════════════════════════════
@@ -403,7 +408,7 @@ console.log('\n⑤ 两条腿合议：真实帧与预览图不一致时取深色�
 console.log('\n⑥ 开关「主题随壁纸」：默认关 · 关时主题不变 · 开时上游行为 · 键经落盘入口');
 {
   const schema = await import(pathToFileURL(join(root, 'lib', 'settings-schema.js')).href);
-  const tabsCode = stripComments(read('src/panel-tabs.js'));
+  const tabsCode = stripComments(panelText());
   const clientCode = stripComments(read('src/client.js'));
   // i18n 之后行文案走 `weT("…")`（中文原文即键）—— 判据认"开关 + 配色行都还在、且位置如此"，
   // 不认裸字面量（认形态的判据会在下一次改包装时静默失效）。
@@ -497,18 +502,18 @@ console.log('\n⑦ 接线：服务句柄 / 切换评估 / 面板开关 / 内联�
 {
   const clientSrc = read('src/client.js');
   const prepSrc = read('src/media-prep.js');
-  const tabsSrc = read('src/panel-tabs.js');
+  const tabsSrc = panelText();
   const buildSrc = read('scripts/build-client.mjs');
   check('主题服务句柄接在既有的 theme 轮询 onReady 上（不新增轮询）',
     /onReady: \(theme\) => \{ themeFollowAttach\(theme, ctx\);/.test(clientSrc));
   check('applySelection 落 schemeColor（垫底图的底色兜底因此不再永远为空）',
     prepSrc.includes('selection.schemeColor = w.schemeColor || null;')
-    && read('src/live-layer.js').includes('sel.schemeColor ||'));
+    && liveText().includes('sel.schemeColor ||'));
   // 同一形态的接线判据：宿主发的字段（inventory 的 liveFrame）必须在 applySelection 里落地，
   // 否则 web 支的"实时帧"这一级在客户端不存在（候选表、抽帧定时器、真实帧取色那条腿全断）
   // —— 行为面由 rotation-prepared-leak-smoke 的 X1/X2 正负对照钉住。
   const liveAssign = prepSrc.includes('selection.liveFrame = w.type === "web" && w.liveFrame ? w.liveFrame : null;');
-  const liveRead = read('src/live-layer.js').includes('sel.liveFrame ||');
+  const liveRead = liveText().includes('sel.liveFrame ||');
   check('applySelection 落 liveFrame（web 支的实时帧候选因此才有入口）',
     liveAssign && liveRead, 'assign=' + liveAssign + ' read=' + liveRead);
   check('清空/被过滤两条早退分支也把实时帧清掉（不留上一张的残值）',
@@ -523,7 +528,7 @@ console.log('\n⑦ 接线：服务句柄 / 切换评估 / 面板开关 / 内联�
     buildSrc.includes("file: 'src/theme-follow.js'"));
   check('产物里确实带上了判定常量（构建期内联生效）',
     read('lib/client.js').includes('THEME_FOLLOW_LIGHT_ABOVE'));
-  const liveSrc = read('src/live-layer.js');
+  const liveSrc = liveText();
   check('两条真实抓帧路径都接上了：场景画布 + 网页 __wp.capture',
     liveSrc.includes('themeFollowOnFrameCanvas(canvas);')
     && liveSrc.includes('themeFollowOnFrameImage(dataUrl);'));

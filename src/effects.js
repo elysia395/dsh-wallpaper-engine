@@ -101,21 +101,54 @@ function resolveWallpaperFadeBg() {
   } catch { return "#000000"; }
 }
 
-// ── #159①：宿主切深浅主题 ⇒ 让淡出底色缓存失效 ─────────────────────────────────
-// 事故：`lastFadeBg` 只在 applyEffects 里重算，而宿主切主题（翻转 body 的
+// 把一个**新解析出来的**淡出底色写回 body（唯一的写点，observer 与 applyEffects 共用；
+// 拖动期由调用方自己拿缓存，见 applyEffects 的 live 分支）。
+// 只在「壁纸透明度 > 0」时真的有值 —— 关着时这个变量整份撤掉（identity opacity）。
+// 返回值 = 本次写下的值（'' = 没在用这条通道，调用方不必再看）。
+function writeWallpaperFadeBg() {
+  const using = Number(selection.wallpaperOpacity) > 0;
+  lastFadeBg = using ? resolveWallpaperFadeBg() : "";
+  if (using) document.body.style.setProperty("--we-wallpaper-fade-bg", lastFadeBg);
+  return lastFadeBg;
+}
+
+// ── #159① + #194②：宿主切深浅主题 ⇒ 失效缓存**并当场重算** ─────────────────────
+// 事故（#159①）：`lastFadeBg` 只在 applyEffects 里重算，而宿主切主题（翻转 body 的
 // `data-ds-dark-theme`）**不会**调用我们；本仓唯一的主题订阅在 src/theme-follow.js，
 // 由 `themeFollow` 开关门控、默认关 ⇒ 缓存会一直停在旧主题的底色上。它的消费者是
 // `.we-layer` 那块 z-index −2 的衬底（给 backdrop-filter 提供底色）⇒ 过期值会给
 // **每一面玻璃**上色（浅色主题配深色衬底 = 整页发灰）。
-// 这里只做**失效**、不做重算：把 lastFadeBg 清空，等下一次 applyEffects 自己算。
-// ⚠️ 刻意不在这里直接调 applyEffects —— 那会与 theme-follow 的主题订阅抢职责
-//（"跟随主题换配色"是那个开关的事，默认不接管）。
+// ⚠️ **#194② 起这里改成"失效 + 当场重算"**。只失效是 #159① 当时的取舍（"把重算留给
+//    下一次 applyEffects"），而用户实测的口径正是它的症状：切深浅色后**只有插件自己的
+//    浮层**（我们的 React 面板 / 设置窗口，取色全走 CSS 的深浅孪生 ⇒ 随class翻转即时生效）
+//    跟上，**主页面不动** —— 因为主页面那层玻璃等的是 `.we-layer` 的底色，而它要等到
+//    用户"点进设置随便切一个项目"（⇒ 一次 applyEffects）才重算。
+//    根因是**职责错位**而不是性能：这条通道的值是本插件里**唯一**由 JS 写出、且随主题变的
+//    标量（其余随主题变的东西在 styles.js 里都有 `body[data-ds-dark-theme]` 孪生，浏览器
+//    自己换），所以"等下一次 applyEffects"在语义上就是"等用户想起来动一下设置"。
+// 与 theme-follow 的分工不变（沿用 #159① 的边界）：theme-follow 决定**用哪一套主题**
+//   （写 theme 服务），这里只负责**主题已经变了之后跟上**，不回写主题、也不审批主题。
+//   ⇒ 不调用整个 applyEffects：它含与主题无关的重活（字体样式表 / 场景音频 / 强制样式
+//   计算），而本通道只需要那一个变量。
 // 幂等：observer 只挂一次；环境里没有 MutationObserver（Node 沙箱 / 极老宿主）时
-// 静默退化成"没有这条失效通道"，不抛错、不改变既有行为。
+// 静默退化成"没有这条跟随通道"，不抛错、不改变既有行为。
 function armFadeBgThemeWatch() {
   if (fadeBgThemeWatch || typeof MutationObserver !== "function") return;
   try {
-    fadeBgThemeWatch = new MutationObserver(() => { lastFadeBg = ""; });
+    fadeBgThemeWatch = new MutationObserver(() => {
+      lastFadeBg = "";   // ① 失效（#159①：防止拖动档继续拿旧值）
+      // ② 当场重算并写回（#194②）。观察者回调里抛错会冒到宿主 ⇒ 自己收干净；
+      //    重算失败也只是"这一次没跟上"，绝不动已经写在 body 上的值。
+      try {
+        if (writeWallpaperFadeBg() && document.body) {
+          // 写值本身不保证合成器立刻重画 .we-layer 那块 z-index −2 的衬底（它正是
+          // **主页面**那层玻璃的取样背景；插件自己的浮层另成一叠、自己就重画了 —— 这就是
+          // "浮层先变、主页面不动"里主页面那一半）。与 scrim 那条"写完强制回流"同一个
+          // 已知病灶与同一味药：读一次 offsetHeight，逼出同步样式/布局 ⇒ 重绘。
+          void document.body.offsetHeight;
+        }
+      } catch { /* 跟随是增强：失败保持既有值 */ }
+    });
     fadeBgThemeWatch.observe(document.body, { attributes: true, attributeFilter: ["data-ds-dark-theme"] });
   } catch {
     // 观察者建不起来（假 DOM 没有 observe / body 不在）⇒ 不留半个句柄。
@@ -145,6 +178,83 @@ function weAccentInk(hex) {
   const rgb = [0, 2, 4].map((i) => s2l(parseInt(m[1].slice(i, i + 2), 16)));
   const lum = 0.2126 * rgb[0] + 0.7152 * rgb[1] + 0.0722 * rgb[2];
   return lum > 0.45 ? "#0f1115" : "#ffffff";
+}
+
+// ── #164：选中行的墨（accent 填充 × 与填充成对比的墨）────────────────────────
+// 选中行不能吃 --we-popup-row-* 那一对（那对是"行底 vs 正文墨"，语义不同），也**不能
+// 直接吃 --we-accent-ink**：后者的 0.45 阈值是宿主按钮沿用下来的口径，在**中亮度**
+// accent 上会选到白字 —— 相对亮度 0.1783–0.45 区间白字只有 2.1–4.58:1，而同区间黑字
+// **恒优于**白字（两臂对比度的等点就是 L≈0.1791）。
+// 两支候选取**纯白 / 纯黑**并按**实算对比度取大**：两支的等点即 0.1791，也就是"更可读
+// 那支"在全体 accent 上的**最差点**（两支在该点各 4.58:1）⇒ 这条选择本身就带一个
+// ≥4.58:1 的全局下界，不需要再靠采样面兜。**深墨候选不再沿用 #0f1115**：它在同一个
+// 等点上只有 ≈4.35:1（`#de3c42` 实测 4.347:1、灰阶 `#797979` 4.353:1），旧版"白 vs
+// #0f1115 取大"因此过不了 4.5 红线 —— 视觉语言换来的是判据缺口，故改成纯黑。
+// 纯函数、无 DOM：verify-readability 从产物里抽出来复算连续网格（F10）。
+function weCheckedRowInk(hex) {
+  const m = /^#?([0-9a-fA-F]{6})$/.exec(String(hex || ""));
+  if (!m) return null;
+  const s2l = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+  const lum = (c) => 0.2126 * s2l(c[0]) + 0.7152 * s2l(c[1]) + 0.0722 * s2l(c[2]);
+  const contrast = (a, b) => (a > b ? (a + 0.05) / (b + 0.05) : (b + 0.05) / (a + 0.05));
+  const accLum = lum([0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16)));
+  return contrast(1, accLum) >= contrast(0, accLum) ? "#ffffff" : "#000000";
+}
+
+// ── #164：原生 <select> 弹层的行配对（不透明底 × 与底成对比的墨）───────────────
+// Chromium 的原生下拉弹层是**独立文档**：画布只在 select 自身背景不透明时才取它的
+// 底色，否则落回默认浅色画布；而选项文字**继承** select 的 color。本插件把宿主底色
+// 改成玻璃、又允许用户把 `--dsw-alias-label-primary`（"正文"角色）改成任意色 ⇒
+// 弹层会落成「浅字浅底」（深色主题默认浅字）或「白字白底」（浅色主题 + 用户设浅墨）。
+// 弹层里画不出玻璃（独立文档、无壁纸透出），所以只能让每行 option **自带**一对
+// 不透明底 + 对比墨。这对值必须**按有效墨色派生**：只随主题翻转救不了自定义浅墨那一档
+// —— 浅色主题下主题默认的浅底正好就是白字白底。
+//
+// 口径：行底从该墨色的**自然侧**起步 —— 墨偏暗 ⇒ 浅行底、墨偏亮 ⇒ 深行底 —— 再向
+// 纯黑 / 纯白二分钳制到与墨色 ≥4.6:1（0.1 与 weClampSurfaceColor 同源的舍入余量，
+// 因为结果要四舍五入回 hex）。起点就是主题默认面板色（浅 #ffffff / 深 #1e1f26，
+// **与 styles.js 的 --we-panel-color 两处数字必须同步改**）⇒ 用户没自定义墨色时
+// 逐位还原现状（浅主题 #ffffff 配宿主深墨、深主题 #1e1f26 配宿主浅墨，两者本就在
+// 13:1 以上，钳制步长为 0）。
+//
+// 分界取 0.1791：白 / 黑两臂的对比度在相对亮度 0.1791 处相等（各 4.58:1），所以
+// "墨亮于它走深底、暗于它走浅底"这个选择**保证至少一臂可达**。两臂都不足 4.6 的
+// 墨色存在（相对亮度落在 0.1783–0.1800 的窄带里，两臂上限都只有 4.58），此时退回
+// **对比度更高的那一臂的纯黑 / 纯白**：达不到红线但仍然是最优解，且不会因为"钳制
+// 无解"而把行底留成与墨同色。纯函数、无 DOM：verify-readability 从产物里抽出来复算网格。
+function wePopupRowPair(inkHex) {
+  const m = /^#?([0-9a-fA-F]{6})$/.exec(String(inkHex || ""));
+  if (!m) return null;
+  const s2l = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+  const lum = (c) => 0.2126 * s2l(c[0]) + 0.7152 * s2l(c[1]) + 0.0722 * s2l(c[2]);
+  const contrast = (a, b) => (a > b ? (a + 0.05) / (b + 0.05) : (b + 0.05) / (a + 0.05));
+  const toHex = (c) => "#" + c.map((v) => Math.round(v).toString(16).padStart(2, "0")).join("");
+  const ink = "#" + m[1].toLowerCase();
+  const inkLum = lum([0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16)));
+  const PIVOT = 0.1791;
+  const arms = inkLum > PIVOT
+    ? [[[0x1e, 0x1f, 0x26], [0, 0, 0]], [[0xff, 0xff, 0xff], [0xff, 0xff, 0xff]]]
+    : [[[0xff, 0xff, 0xff], [0xff, 0xff, 0xff]], [[0x1e, 0x1f, 0x26], [0, 0, 0]]];
+  let best = null;
+  for (const [base, extreme] of arms) {
+    const baseLum = lum(base);
+    if (contrast(baseLum, inkLum) >= 4.6) return { bg: toHex(base), ink };
+    if (contrast(lum(extreme), inkLum) < 4.6) {
+      if (!best || contrast(lum(extreme), inkLum) > best.c) {
+        best = { c: contrast(lum(extreme), inkLum), bg: toHex(extreme) };
+      }
+      continue;
+    }
+    let lo = 0;  // 不合格端
+    let hi = 1;  // 合格端
+    for (let i = 0; i < 12; i++) {
+      const t = (lo + hi) / 2;
+      const c = base.map((v, j) => v * (1 - t) + extreme[j] * t);
+      if (contrast(lum(c), inkLum) >= 4.6) hi = t; else lo = t;
+    }
+    return { bg: toHex(base.map((v, j) => v * (1 - hi) + extreme[j] * hi)), ink };
+  }
+  return { bg: best.bg, ink };
 }
 
 // ── 染色地板：可读性底色 = 玻璃色经亮度钳制（色相跟随用户） ──────────────────
@@ -329,11 +439,11 @@ function applyEffects(opts) {
     s.setProperty("--we-wallpaper-opacity", String((100 - selection.wallpaperOpacity) / 100));
     // 拖动期沿用缓存（见函数头的 live 说明）：resolveWallpaperFadeBg 里那次
     // getComputedStyle 是**强制同步样式计算**，每格一次会把拖动拖垮。
-    // 缓存会在宿主切深浅主题时由 armFadeBgThemeWatch 的观察者清空（#159①）；
-    // 观察者只挂一次，挂在"这个变量真的在用"的分支里。
+    // 缓存会在宿主切深浅主题时由 armFadeBgThemeWatch 的观察者**当场刷新**（#159① +
+    // #194②）；观察者只挂一次，挂在"这个变量真的在用"的分支里。
     armFadeBgThemeWatch();
-    if (!live || !lastFadeBg) lastFadeBg = resolveWallpaperFadeBg();
-    s.setProperty("--we-wallpaper-fade-bg", lastFadeBg);
+    if (live && lastFadeBg) s.setProperty("--we-wallpaper-fade-bg", lastFadeBg);
+    else writeWallpaperFadeBg();
   } else {
     s.removeProperty("--we-wallpaper-opacity");
     s.removeProperty("--we-wallpaper-fade-bg");
@@ -403,6 +513,35 @@ function applyEffects(opts) {
   const glassTintDark = glassColorOf(selection, "dark");
   s.setProperty("--we-surface-tint-light", weClampSurfaceColor(glassTintLight, "light", glassFidelity));
   s.setProperty("--we-surface-tint-dark", weClampSurfaceColor(glassTintDark, "dark", glassFidelity));
+  // - #164：原生 <select> 弹层的行配对。**只在用户自定义了「正文」墨色时写**：
+  //   没自定义时样式表的缺省就是主题默认配对（逐位还原现状），不写比写更不容易漂。
+  //   两档同时写、由样式表按主题挑 —— 与上面的 --we-surface-tint-* 同法，省掉一个
+  //   主题观察者（宿主翻 data-ds-dark-theme 不会调我们，见 armFadeBgThemeWatch 的注释）。
+  //   两边都不成立时**摘掉**而不是写空串：var(--x, fallback) 要能落回缺省。
+  //   门控跟 theme layer 同一把开关（fontCustom）—— 关掉时颜色层不接管，墨色仍是
+  //   宿主原生值，此时派生反而是多余的一层。
+  const popupInk = (selection.fontCustom && selection.themeColors && selection.themeColors.primary)
+    ? selection.themeColors.primary : null;
+  for (const theme of ["light", "dark"]) {
+    const suffix = theme === "dark" ? "-dark" : "-light";
+    const pair = wePopupRowPair(popupInk ? popupInk[theme] : "");
+    if (pair) {
+      s.setProperty("--we-popup-row-bg" + suffix, pair.bg);
+      s.setProperty("--we-popup-row-ink" + suffix, pair.ink);
+    } else {
+      s.removeProperty("--we-popup-row-bg" + suffix);
+      s.removeProperty("--we-popup-row-ink" + suffix);
+    }
+  }
+  // - #164：选中行的墨（单档，accent 不随主题分叉）。**刻意不进门控**：它修的是
+  //   "accent 填充上的字能不能读"，与用户有没有自定义正文墨色无关；而且 issue 的复现
+  //   入口（设置 → 模型 → 提供商）恰在**设置窗**内 —— 那个作用域块末尾把 --we-accent
+  //   主动掐成 initial，块内既有消费一律改读 --we-accent-src（见 styles.js 设置窗块
+  //   的注释）。所以填充侧读 runtime 写的 --we-accent-src，墨侧由这里按对比度取大下发。
+  //   不成立时摘掉，让样式表缺省落回来（缺省即默认 accent 上更可读的那一边）。
+  const checkedInk = weCheckedRowInk(selection.accent);
+  if (checkedInk) s.setProperty("--we-popup-row-checked-ink", checkedInk);
+  else s.removeProperty("--we-popup-row-checked-ink");
   // RGB 三元组形式：给 rgba() 槽位用（消息气泡 / 输入框的白釉染色）。
   s.setProperty("--we-surface-tint-rgb-light", toRgbTriple(weClampSurfaceColor(glassTintLight, "light", glassFidelity)));
   s.setProperty("--we-surface-tint-rgb-dark", toRgbTriple(weClampSurfaceColor(glassTintDark, "dark", glassFidelity)));
@@ -411,6 +550,10 @@ function applyEffects(opts) {
   //    **一行调用**。本文件继续负责全局玻璃量（--we-glass-* / --we-surface-tint-*）与其余
   //    非玻璃效果（accent / 可读性 / 光标 / 壁纸 / 字体）。
   applyGlass(selection, s);
+  // 额外补雾化的选择器（上游 #200）：玻璃面算完之后同步这条**运行期**样式通道。
+  // 静态样式表是构建期常量（styles.js），而这份规则由设置拼出来 ⇒ 单独一个 <style>
+  // 标签（见 src/glass-extra.js；空清单时它一条规则都不生成、标签也撤掉）。
+  syncExtraGlassCss(selection);
   // 思考块液态玻璃：默认关，保持宿主黑底方便阅读。打开后 CSS 清掉思考条
   // 与推理面的实心底，切到会话同一套雾化。本门控仍在 applyEffects 就地写 ——
   // 它不是玻璃量，不进 applyGlass 的取值管线。
@@ -546,6 +689,7 @@ function clearEffects() {
   s.removeProperty("--we-accent");
   s.removeProperty("--we-accent-src");
   s.removeProperty("--we-accent-ink");
+  s.removeProperty("--we-popup-row-checked-ink");
   // 全局 UI 配色（与上面那组写入成对）：卸载 / 禁用后 DOM 上不留变量。
   s.removeProperty("--we-ui-send");
   s.removeProperty("--we-ui-link");
@@ -618,6 +762,9 @@ function clearEffects() {
   removeFontStyles();
   s.removeProperty("--we-caret-color");
   removeCaretStyles();
+  // 额外补雾化通道（#200）：这一份是**运行期生成的** <style>，不在静态样式表里 ⇒
+  // 必须显式撤标签（与上面那批 body 属性 / 变量成对，理由同"清理对称性"）。
+  disposeExtraGlassCss();
   selection.sceneAudioUrl = null;
   selection.sceneHasAudio = false;
   syncSceneAudio(selection);
@@ -632,5 +779,4 @@ function clearEffects() {
 
 export {
   applyEffects, clearEffects,
-  applyCaretStyles, removeCaretStyles, resolveWallpaperFadeBg,
 };

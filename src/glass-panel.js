@@ -398,8 +398,8 @@ function panelGlassPair(sel) {
 
 function renderAppearanceGlassSection(ctx) {
   const {
-    onBlur, onGlassAlpha, onGlassChildParam, onGlassColor, onGlassDarkSeparate, onGlassFidelity,
-    onToggleChildIndependent, childIndependentOn, sel, surface,
+    onBlur, onGlassAlpha, onGlassChildParam, onGlassColor, onGlassDarkSeparate, onExtraGlassSelectors, onGlassFidelity,
+    onToggleChildIndependent, childIndependentOn, sel, surface, onResetModule,
     onCapsuleBlur, onCapsuleColor,
     onLeftSidebarGlass, onTitlebarGlass, onSidebarAlpha, onSidebarBlur, onSidebarColor,
     onSidebarContentAlpha, onSidebarContentColor, onSidebarGlass,
@@ -678,7 +678,11 @@ function renderAppearanceGlassSection(ctx) {
   return React.createElement(React.Fragment, null,
   presetSection,
   React.createElement("div", { className: "we-picker__section" },
-    sectionHead(weT("玻璃 UI"), open, onToggleGlassUiSection),
+    sectionHead(weT("玻璃 UI"), open, onToggleGlassUiSection,
+      moduleResetButtonNode("glass", onResetModule, {
+        title: weT("把这一块的参数恢复为默认值（不需要确认）"),
+        aria: weT("重置本模块"),
+      })),
     // ── 折叠门（2026-10-11 用户口径「这三个在侧边栏改成默认收敛」）：**只在侧边栏**生效 ——
     //    设置页 `collapsible` 为假、`open` 恒真 ⇒ 这一层 Fragment 里的内容照旧整个渲染。
     //    ⚠️ 包一层 Fragment 是刻意的：本节约有 80 个并列 children，逐个挂门既啰嗦又容易漏；
@@ -715,6 +719,24 @@ function renderAppearanceGlassSection(ctx) {
       SliderRow(weT("雾化"), 0, 60, 1, sel.blur, onBlur, sel.blur + "px", "glass-frost", {
         tooltip: weT("玻璃面板（对话栏卡片、左侧栏、设置窗口、插件浮层）的模糊半径 —— 越大越像磨砂玻璃；色彩饱和度不随本滑块变化。侧栏有自己的「侧栏模糊」，不受本项影响"),
       }),
+      // ── 额外补雾化的选择器（上游 #200）────────────────────────────────────────
+      // 为什么在这里、以及为什么**不是滑杆**：本插件的静态样式表只认得宿主与自己接管的
+      // 六个面；第三方插件自己的面板读的是被改写过的共享令牌、**自身没有 backdrop-filter**
+      // ⇒ 全局「雾化」对它们本来无效（实测 dsh-mobile / dsh-codearts-auth 整包 0 处命中）。
+      // 这一行给用户一条**点名**通道：写谁的选择器，就给谁补上毛玻璃载体（::before 形态，
+      // 见 src/glass-extra.js）。空 = 关（一条规则都不生成 ⇒ 与未接本功能时逐字节一致）。
+      React.createElement("div", { className: "we-picker__ctl we-picker__ctl--wrap", key: "extra-glass-selectors" },
+        ctlText(weT("额外补雾化的选择器"),
+          weT("给第三方插件自己的面板补上毛玻璃（它们自身没有模糊，全局「雾化」对它们无效）"),
+          weT("写这些面板的 CSS 选择器，逗号或换行分隔，最多 8 条、每条最多 120 字；超长的单条或超出 8 条的整条丢弃（不是截断，存活下来的前 8 条全量生效）。目标元素要自己已定位（fixed / absolute）；载体挂在它的 ::before 上，所以不会影响它内部的定位弹层。留空 = 关。")),
+        React.createElement("input", {
+          className: "we-picker__text", type: "text",
+          value: sel.extraGlassSelectors || "",
+          placeholder: weT("例如 .dsh-mobile-control__panel, .dim-jh-badgePop"),
+          spellCheck: false,
+          onInput: (e) => onExtraGlassSelectors(e.target.value),
+        }),
+      ),
       // 玻璃保真度（默认 100 = 完整可读性红线）：唯一的「颜色 vs 可读」权衡旋钮。
       // 100 = 玻璃色经亮度钳制保正文 ≥4.5:1（深色压暗 / 浅色提亮的现状）；拉低 =
       // 釉色向用户原色线性回退（单调，中间档不会更黑/更白）+ 地板层覆盖度同比例

@@ -32,7 +32,7 @@
  * 不碰 node_modules、不写插件数据目录；只在 .test-cache/ 下开一个隔离的迷你 host。
  */
 import { createServer } from 'node:http';
-import { mkdirSync, writeFileSync, rmSync, readFileSync, existsSync, statSync, createReadStream, openSync } from 'node:fs';
+import { mkdirSync, rmSync, readFileSync, existsSync, statSync, createReadStream, openSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { join, resolve, dirname, extname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -124,7 +124,7 @@ const appServer = createServer((req, res) => {
   if (!route) { res.statusCode = 404; res.end('no route'); return; }
   Promise.resolve(route.handler(req, res)).catch(() => { try { res.statusCode = 500; res.end('handler error'); } catch { /* ignore */ } });
 });
-await new Promise((r) => appServer.listen(0, '127.0.0.1', r));
+await new Promise((r) => { appServer.listen(0, '127.0.0.1', r); });
 const APP = `http://127.0.0.1:${appServer.address().port}`;
 
 // ── 库存 → 渲染页 URL（与 client 的 liveRenderUrl 同形） ──────────────────────
@@ -133,7 +133,7 @@ const target = (inv.wallpapers || []).find((w) => String(w.id) === `up-dir-${WAL
 if (!target) {
   console.error(`库存里没有 ${WALL_ID}。可用 id 样例：`,
     (inv.wallpapers || []).slice(0, 8).map((w) => w.id).join(', '));
-  try { dispose && dispose(); } catch { /* ignore */ }
+  try { if (dispose) dispose(); } catch { /* ignore */ }
   appServer.close();
   process.exit(2);
 }
@@ -198,9 +198,9 @@ const child = spawn(browser, [
 ], { stdio: ['ignore', 'ignore', errFd] });
 
 console.log(`已启动（pid ${child.pid}），等 ${WAIT_MS} ms …`);
-await new Promise((r) => setTimeout(r, WAIT_MS));
+await new Promise((r) => { setTimeout(r, WAIT_MS); });
 try { child.kill('SIGKILL'); } catch { /* ignore */ }
-await new Promise((r) => setTimeout(r, 300));
+await new Promise((r) => { setTimeout(r, 300); });
 
 // ── 读回：本次新增的诊断 + 浏览器控制台 ──────────────────────────────────────
 console.log('\n· 渲染页实况（每秒一条）');
@@ -243,6 +243,6 @@ if (shotSize) {
   console.log('  注意体积只是粗判：画面本身接近纯色的壁纸也会很小，务必**亲眼看图**。');
 }
 
-try { dispose && dispose(); } catch { /* ignore */ }
+try { if (dispose) dispose(); } catch { /* ignore */ }
 appServer.close();
 process.exit(0);

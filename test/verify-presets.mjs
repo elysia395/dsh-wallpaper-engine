@@ -38,6 +38,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Readable, Writable } from 'node:stream';
 import { stripComments } from './tools/js-text.mjs';
+import { scopeText } from './tools/src-scope.mjs';
 import { installWeTShim } from './tools/weT-shim.mjs';
 installWeTShim();
 
@@ -365,7 +366,7 @@ function fakeReq(url, method = 'GET', body = null) {
   r.headers = body === null ? {} : { 'content-type': 'application/json' };
   return r;
 }
-const waitRes = (res) => new Promise((r) => res.__state.ended ? r() : res.on('finish', r));
+const waitRes = (res) => new Promise((r) => { if (res.__state.ended) r(); else res.on('finish', r); });
 async function callRoute(route_, req) {
   const res = fakeRes();
   const done = route_.handler(req, res);
@@ -763,7 +764,9 @@ section('③d 资产段：install-assets 落盘与 applied 语义、export→imp
   //   必须与宿主 `lib/index.js` 里那份**逐字相同**。不同 ⇒ 下面所有"名字合不合法"的判据读的都是
   //   一份歪的尺子（这正是"看起来对、实际不是那回事"）。写这段守卫时它就以 ReferenceError 暴露了
   //   一次块内遮蔽，所以这条要留在跑测输出里当护栏。
-  const hostIdxSrc = readFileSync(join(root, 'lib', 'index.js'), 'utf8');
+  // ⚠️ 读点变更（T2 #8）：`MASCOT_FILE_RE` / `AVATAR_FILE_RE` 的定义已搬进 lib/asset-paths.js
+  //    ⇒ 只改"读哪个文件"，下面 hostLit 抽取式与那条逐字一致判据（含 check 文案）一字未改。
+  const hostIdxSrc = readFileSync(join(root, 'lib', 'asset-paths.js'), 'utf8');
   const hostLit = (name) => {
     const m = hostIdxSrc.match(new RegExp('const ' + name + ' = (/(?:[^/\\\\]|\\\\.)*/);'));
     return m ? m[1] : '(未找到)';
@@ -1278,6 +1281,77 @@ section('③d 资产段：install-assets 落盘与 applied 语义、export→imp
   }
 }
 
+// ── ③e #199：随包层读失败原因**不塌缩** + 404 带上下文 ═════════════════════════
+section('③e #199：随包层旧 tag ⇒ 422「版本已作废」（不是 404）、404 带 reason=missing/tombstone');
+{
+  // 为什么另起一个台架：`lib/index.js` 把随包层钉死成**仓内** `lib/glass-presets`
+  // （GLASS_PRESET_BUILTIN_DIR），守卫不能往仓内随包目录塞一份旧 tag 文件（那是改工作树）。
+  // 这里按族文件头的 ctx 契约自己接线，随包层指向隔离区里的一份**旧 tag** 文件 ——
+  // 复刻真实形态：升级窗口期磁盘上的随包文件已是另一版 tag，而宿主内存里是这份路由代码。
+  const probeMod = await import(pathToFileURL(join(root, 'lib', 'routes', 'presets.js')).href);
+  const probeBuiltin = join(ISO, 'probe-builtin');
+  const probeUser = join(ISO, 'probe-user');
+  rmSync(probeBuiltin, { recursive: true, force: true });
+  rmSync(probeUser, { recursive: true, force: true });
+  mkdirSync(probeBuiltin, { recursive: true });
+  mkdirSync(probeUser, { recursive: true });
+  writeFileSync(join(probeBuiltin, 'factory-legacy.json'),
+    JSON.stringify({ $schema: OLD_TAG, id: 'factory-legacy', name: '旧版出厂预设', values: {} }) + '\n');
+  writeFileSync(join(probeBuiltin, 'factory-live.json'),
+    JSON.stringify({ $schema: 'dsh-we/profile-preset@1', id: 'factory-live', name: '现役出厂预设', values: {} }) + '\n');
+  const probeRoutes = [];
+  probeMod.registerGlassPresetsRoutes({
+    register(r) { probeRoutes.push(r); return () => {}; },
+  }, {
+    disposers: [],
+    base: '/wallpaper-engine',
+    glassPresetsDir: () => probeUser,
+    glassPresetsBuiltinDir: probeBuiltin,
+    log: { warn: () => {} },
+    ensureDirOnce: (d) => mkdirSync(d, { recursive: true }),
+    atomicWriteFileP: async (p, buf) => { mkdirSync(dirname(p), { recursive: true }); writeFileSync(p, buf); },
+  });
+  const probe = probeRoutes.find((r) => r.path && r.path.endsWith('/glass-presets'));
+  check('台架自检：探针路由已注册（随包/用户层独立接线）', Boolean(probe), probe && probe.path);
+
+  if (probe) {
+    // ★ 主判据（#199 的核心）：随包层"**文件在**、tag 作废" ⇒ 422 + reason=version-obsolete。
+    //   #199 之前 `resolvePreset()` 把随包层的**一切**读失败塌缩成 `missing` ⇒ 这里回 404
+    //   `unknown preset`，同一条 GET 上**已经本地化**的 422「版本已作废」成了死代码（#188）。
+    const legacy = await callRoute(probe, fakeReq(P('factory-legacy'), 'GET'));
+    const legacyBody = bodyJson(legacy) || {};
+    check('★ #199：随包层旧 tag ⇒ 422 version-obsolete（塌缩回 missing 即红）',
+      legacy.__state.status === 422 && legacyBody.reason === 'version-obsolete'
+      && legacyBody.origin === 'builtin' && legacyBody.shadowsBuiltin === false,
+      'status=' + legacy.__state.status + ' reason=' + legacyBody.reason + ' origin=' + legacyBody.origin);
+    check('★ #199：该 422 上屏的是**已本地化**的「版本已作废」那条，不是英文 unreadable',
+      typeof legacyBody.error === 'string' && legacyBody.error.includes('版本已作废')
+      && !/unreadable/.test(legacyBody.error),
+      String(legacyBody.error));
+
+    const absent = await callRoute(probe, fakeReq(P('factory-absent'), 'GET'));
+    const absentBody = bodyJson(absent) || {};
+    check('随包层真不存在 ⇒ 仍是 404 missing（origin 语义不回退）',
+      absent.__state.status === 404 && absentBody.error === 'unknown preset'
+      && absentBody.reason === 'missing' && absentBody.id === 'factory-absent' && !absentBody.origin,
+      'status=' + absent.__state.status + ' reason=' + absentBody.reason + ' origin=' + absentBody.origin);
+
+    const delOk = await callRoute(probe, fakeReq(P('factory-live'), 'DELETE'));
+    check('正对照：现役 tag 的随包预设可删 ⇒ 200 写墓碑（探针台架真在跑）',
+      delOk.__state.status === 200 && (bodyJson(delOk) || {}).origin === 'builtin',
+      'status=' + delOk.__state.status);
+    const delAgain = await callRoute(probe, fakeReq(P('factory-live'), 'DELETE'));
+    const delAgainBody = bodyJson(delAgain) || {};
+    // ★ #188 建议四：三处 404 不再共用同一句**没有上下文**的文案。
+    check('★ #199：重复 DELETE 已墓碑的出厂预设 ⇒ 404 带 reason=tombstone + id',
+      delAgain.__state.status === 404 && delAgainBody.reason === 'tombstone'
+      && delAgainBody.id === 'factory-live',
+      'status=' + delAgain.__state.status + ' reason=' + delAgainBody.reason);
+  }
+  rmSync(probeBuiltin, { recursive: true, force: true });
+  rmSync(probeUser, { recursive: true, force: true });
+}
+
 // ── ④ 客户端形态棘轮（文本级）══════════════════════════════════════════════
 section('④ 客户端形态棘轮：新编排链（合并→落盘→reapplyAll→emit）/ 失败滚回 / 无第二持久化');
 {
@@ -1468,6 +1542,25 @@ section('④ 客户端形态棘轮：新编排链（合并→落盘→reapplyAll
     const introSchemaSrc = readFileSync(join(root, 'lib', 'settings-schema.js'), 'utf8');
     check('哨兵是 localStorage 口径（键定义在 client.js；settings-schema 无 preset-intro 痕迹）',
       /dsh-wallpaper-engine:preset-intro-seen/.test(introSrc) && !/preset-intro/.test(introSchemaSrc));
+    // ── #199 窗口期门控：开之前先探一次宿主**正文**路由（与公告美术闸同思路）──
+    //    探针打的是**这一份**预设的正文（清单 200 只说明路由挂着，说明不了它读得懂 ——
+    //    旧后端读新 tag 文件正是读不懂）；判定按**模块级**缓存（页面级事实，多面板只探一轮）；
+    //    非 ok（404/405/422/断网）一律不渲染：A 键在那个后端上必然失败，不值得打扰用户。
+    const probeGate = (s) => /let presetIntroProbeVerdict = "";/.test(s)
+      && /if \(presetIntroProbeVerdict\) \{ setProbe\(presetIntroProbeVerdict\); return undefined; \}/.test(s)
+      && /if \(!eligible\) return undefined;/.test(s)
+      && /gpJson\(glassPresetUrl\("factory-author"\)\)\.then\(\(r\) => \{/.test(s)
+      && /presetIntroProbeVerdict = r\.ok && !r\.error \? "ok" : "no";/.test(s)
+      && /if \(!eligible \|\| probe !== "ok"\) return null;/.test(s);
+    check('★ #199 窗口期：弹窗开之前先探 GET /glass-presets/factory-author，非 ok 一律不渲染',
+      probeGate(introSrc));
+    check('negative control: 把门放宽成"eligible 就渲染"（不看探针结论）会被判出（判据有牙）',
+      !probeGate(introSrc.replace('if (!eligible || probe !== "ok") return null;', 'if (!eligible) return null;')));
+    check('★ #199：探针结论缓存在**模块级**（页面级事实，多面板只探一轮；刷新即重探）',
+      /let presetIntroProbeVerdict = "";/.test(introSrc)
+      && /const \[probe, setProbe\] = React\.useState\(presetIntroProbeVerdict \|\| "pending"\);/.test(introSrc));
+    check('★ #199：探针归 "no" 的路径上**不写**已看哨兵（窗口期保持安静，重启后照常弹一次）',
+      !/presetIntroProbeVerdict = r\.ok && !r\.error \? "ok" : "no";[\s\S]{0,200}markSeen/.test(introSrc));
   }
 }
 
@@ -1789,6 +1882,81 @@ section('④b 行为判据：删除令牌链 + broken 行禁用与可删 + 勾�
   }
 }
 
+// ── ④c #199 失败文案：真跑分类函数 + 词表对齐 ═════════════════════════════════
+section('④c #199 失败文案：404 不再把宿主英文原句直落上屏，窗口期出路口径在词表里');
+{
+  const copyText = scopeText('src/i18n-copy');
+  const storeCode = stripComments(readFileSync(join(root, 'src', 'preset-store.js'), 'utf8'));
+  // 真跑 `src/preset-store.js` 里的 `glassPresetFailureReason()`：按花括号配平提取具名函数、喂桩执行。
+  // grep 到 `reason` 三个字符串**不算**证据 —— 把分类改回"一句到底"它照样能匹配到。
+  const at = storeCode.indexOf('function glassPresetFailureReason(');
+  let fn = '';
+  if (at >= 0) {
+    const open = storeCode.indexOf('{', at);
+    let depth = 0, end = -1;
+    for (let i = open; i >= 0 && i < storeCode.length; i++) {
+      if (storeCode[i] === '{') depth++;
+      else if (storeCode[i] === '}' && --depth === 0) { end = i + 1; break; }
+    }
+    if (end > 0) fn = storeCode.slice(at, end);
+  }
+  check('台架自检：glassPresetFailureReason 已从源码文本里提取到', fn.length > 0,
+    fn.length ? fn.length + ' 字符' : '未找到函数');
+
+  if (fn) {
+    const RESTART = '宿主里没有玻璃预设路由：重启 DSH 后再试（改过宿主代码要重挂，刷新页面不够）';
+    const dictEn = (key) => {
+      const m = copyText.match(new RegExp('"' + key.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '"\\s*:\\s*"([^"]*)"'));
+      return m ? m[1] : '';
+    };
+    const classify = new Function('weT', 'hostFailureReason', fn + '\nreturn glassPresetFailureReason;')(
+      (k) => String(k), (res) => 'HOST-EN:' + String((res && res.data && res.data.error) || ''));
+    const window404 = classify({ status: 404, data: { error: 'unknown preset' } });   // 旧宿主（无 reason）
+    const missing404 = classify({ status: 404, data: { error: 'unknown preset', reason: 'missing' } });
+    const tomb404 = classify({ status: 404, data: { error: 'unknown preset', reason: 'tombstone' } });
+    const bare404 = classify({ status: 404 });                                       // 裸状态码（老语义）
+    const bare405 = classify({ status: 405 });
+
+    check('★ #199：旧宿主（404 + unknown preset，**无** reason）⇒「重启 DSH」出路文案',
+      window404 === RESTART, String(window404).slice(0, 30));
+    check('裸状态码 404/405（无信封）仍归「重启 DSH」（客户端形态棘轮的老语义不受影响）',
+      bare404 === RESTART && bare405 === RESTART);
+    // ★ 英文漏出（#188 的原始缺陷）：`unknown preset` 这句宿主原话不许直落上屏。
+    check('★ #199：404 不再走 hostFailureReason 的英文原句直落（带不带 reason 都不许）',
+      !/^HOST-EN:/.test(missing404) && !/^HOST-EN:/.test(tomb404)
+      && !/^HOST-EN:/.test(window404),
+      'missing=' + String(missing404).slice(0, 24) + ' tomb=' + String(tomb404).slice(0, 24));
+    // 词表对齐：文案的**唯一**来源是词表键（中文原文作键），客户端不许出现未登记的散句。
+    const dictOk = (keys) => keys.every((k) => dictEn(k).trim().length > 0 && dictEn(k) !== k);
+    check('词表对齐：「重启 DSH」那条在 src/i18n-copy 里、英文非空且不是中英同形',
+      dictEn(RESTART).trim().length > 0 && dictEn(RESTART) !== RESTART,
+      dictEn(RESTART).slice(0, 44) || '词表里找不到这条键');
+    // ★ 因果三分（#199 的 P2）：路由**在**、预设真没了 ⇒ 出路不是"重启 DSH"（重启没用）。
+    //   窗口期（无 reason）/ 真不存在（missing）/ 已删除（tombstone）必须三条不同的出路，
+    //   且每条都从词表来；把三条并回一句就判红。
+    const threeWay = (v) => v.missing !== RESTART && v.tomb !== RESTART && v.missing !== v.tomb;
+    check('★ #199-P2：三条出路两两不同（窗口期 / 真不存在 / 已删除，不许并成一句）',
+      threeWay({ missing: missing404, tomb: tomb404 }),
+      'missing=' + String(missing404).slice(0, 22) + ' tomb=' + String(tomb404).slice(0, 22));
+    check('★ #199-P2：三条出路都在 src/i18n-copy 里，英文非空且不是中英同形',
+      dictOk([RESTART, missing404, tomb404]),
+      [RESTART, missing404, tomb404].map((k) => (dictOk([k]) ? 'ok' : '缺/同形')).join(','));
+    // 负对照：把 reason 两分整块拿掉（回到 #199 原文的"一句到底"）⇒ 上面两条必须判红。
+    const mergedFn = fn
+      .replace(/\n\s*if \(res\.data\.reason === "tombstone"\) \{[\s\S]*?\n\s*\}/, '')
+      .replace(/\n\s*if \(res\.data\.reason === "missing"\) \{[\s\S]*?\n\s*\}/, '');
+    const classifyMerged = new Function('weT', 'hostFailureReason', mergedFn + '\nreturn glassPresetFailureReason;')(
+      (k) => String(k), (res) => 'HOST-EN:' + String((res && res.data && res.data.error) || ''));
+    check('negative control: 把 reason 两分拿掉（三条并回一句）会被判出（判据有牙）',
+      mergedFn !== fn
+      && !threeWay({
+        missing: classifyMerged({ status: 404, data: { error: 'unknown preset', reason: 'missing' } }),
+        tomb: classifyMerged({ status: 404, data: { error: 'unknown preset', reason: 'tombstone' } }),
+      }),
+      mergedFn === fn ? '变异没生效（负对照空转）' : '变异生效且判红');
+  }
+}
+
 // ── 迁移说明（既有 40 项断言的去向；acceptance 第 9 条要求逐条交代）═══════════
 // ① 段（旧 3 项）：`GLASS_PRESET_KEYS` 已退役 ⇒ 三条判据整体换成"四段对账"（新 6 项 + 3 负对照
 //    + 1 正对照）。其中「keyOverrides 生效」与「登记表生成键自动跟随」两条**意图原样保留**，
@@ -1807,7 +1975,7 @@ section('④b 行为判据：删除令牌链 + broken 行禁用与可删 + 勾�
 // ⇒ 没有任何一条旧判据被"为了变绿"删除；每一条要么原样、要么加强、要么按新契约等价替换。
 
 // ── teardown ────────────────────────────────────────────────────────────────
-try { dispose && dispose(); } catch { /* ignore */ }
+try { if (dispose) dispose(); } catch { /* ignore */ }
 delete process.env.DSH_WE_STEAM_ROOT;
 delete process.env.DSH_WE_UPLOAD_DIR;
 rmSync(ISO, { recursive: true, force: true });
@@ -1818,3 +1986,6 @@ if (failed) {
   process.exit(1);
 }
 console.log(`ALL PRESET SNAPSHOT CHECKS PASSED (${passed})`);
+// 与 verify-scene-live-occlusion.mjs 同款兜底：本段加载 client bundle 后有驻留句柄
+// （实测断言全过后进程不退），显式退出把链交给下一棒。
+process.exit(0);

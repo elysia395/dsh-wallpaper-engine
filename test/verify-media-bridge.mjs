@@ -76,7 +76,7 @@ function blockedBy(name, why) {
   blockedNames.push(name);
   console.log('  ⛔ ' + name + ' —— 未执行' + (why ? '：' + why : ''));
 }
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms) => new Promise((r) => { setTimeout(r, ms); });
 
 // ── 环境探针（"起来了但不吭声"的二义消解）──────────────────────────────────
 // 引导失败的典型现场是「进程活着、`hello` 不回、两路输出为空」。这在自检里是**二义**的：
@@ -107,8 +107,8 @@ async function probeHandshakeViaFiles(bin, args, dir, timeoutMs = 20000) {
   const outPath = join(dir, 'probe.out');
   const errPath = join(dir, 'probe.err');
   const read = (f) => { try { return readFileSync(f, 'utf8'); } catch { return ''; } };
-  let outFd = 0;
-  let errFd = 0;
+  let outFd;
+  let errFd;
   try {
     outFd = openSync(outPath, 'w');
     errFd = openSync(errPath, 'w');
@@ -116,7 +116,7 @@ async function probeHandshakeViaFiles(bin, args, dir, timeoutMs = 20000) {
     return { spawned: false, exited: false, wrote: false, timedOut: false, hello: false, stdout: '', stderr: '', detail: '打不开探针输出文件：' + String((e && e.message) || e) };
   }
   const r = { spawned: false, exited: false, wrote: false, timedOut: false, hello: false, stdout: '', stderr: '', detail: '' };
-  let p = null;
+  let p;
   try {
     p = spawn(bin, args, { stdio: ['pipe', outFd, errFd], windowsHide: true });
   } catch (e) {

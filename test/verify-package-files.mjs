@@ -62,11 +62,11 @@ function bareImportSpecs(src) {
 // ── lib/ 文件枚举 + `files` 条目覆盖判定 ────────────────────────────────────
 /** 递归列出 dir 下的文件 (相对 ROOT 的 posix 路径, 已排序)。 */
 function walkFiles(dir, out = []) {
-  let names = [];
+  let names;
   try { names = readdirSync(dir); } catch { return out; }
   for (const name of names) {
     const abs = join(dir, name);
-    let st = null;
+    let st;
     try { st = statSync(abs); } catch { continue; }
     if (st.isDirectory()) walkFiles(abs, out);
     else if (st.isFile()) out.push(relative(ROOT, abs).split(sep).join('/'));
@@ -208,9 +208,9 @@ async function main() {
   }
 
   // ── P4: 声明的依赖必须有消费者 (防"死声明") ──────────────────────────────────
-  // 本仓库的运行时策略是**自带副本**（`lib/webwallgl/` 这类 vendored 目录），因此
-  // package.json 里每一条 `dependencies` 都必须在 lib/ 里真的被 import ——
-  // 否则它只是给用户装了一个永远不会被 require 的包。历史上这里真有这么一条：
+  // package.json 里每一条 `dependencies` 都必须在 lib/ 里真的被 import（或经
+  // `createRequire(...).resolve()` 定位包目录 —— `webwallgl` 是浏览器端引擎，宿主不加载它，
+  // 只按文件直出）—— 否则它只是给用户装了一个永远不会被用到的包。历史上这里真有这么一条：
   // 代码只 import 一份相对路径的自带副本，裸包名在 link: 安装下根本解析不到；
   // 那份副本与它的唯一消费者已一并退役（见 `test/verify-retired-lines.mjs` ④）。
   // 注意口径：这里只断言"声明有消费者"，**不断言可达**（可达性属 P2-12 的活）。
@@ -225,7 +225,7 @@ async function main() {
     // （`foo-extra` 与 `foo` 不是同一个包）不算消费者。声明名本身是内置模块或相对路径时不算：那种声明在 Node
     // 解析下拿不到包（内置模块名命中的是内置模块，不是装进来的包）。
     const consumerRe = (dep) => new RegExp(
-      '(?:from\\s+|import\\s*\\(\\s*|require\\s*\\(\\s*)[\'"]'
+      '(?:from\\s+|import\\s*\\(\\s*|require\\s*\\(\\s*|\\.resolve\\s*\\(\\s*)[\'"]'
       + dep.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?:/[\'"]|[\'"])');
     const consumes = (dep, src) => !dep.startsWith('.') && !dep.startsWith('/')
       && !(dep.startsWith('node:') || BUILTIN_ROOTS.has(specRoot(dep)))
@@ -243,7 +243,9 @@ async function main() {
       [consumes(fake, 'import x from "' + fake + '"'), 'positive: from'],
       [consumes(fake, 'const x = require("' + fake + '")'), 'positive: require'],
       [consumes(fake, 'const m = await import("' + fake + '")'), 'positive: dynamic import'],
+      [consumes(fake, 'createRequire(import.meta.url).resolve("' + fake + '")'), 'positive: require.resolve'],
       [!consumes(fake, 'import x from "' + fake + '-extra"'), 'negative: near-miss name'],
+      [!consumes(fake, 'createRequire(import.meta.url).resolve("' + fake + '-extra")'), 'negative: near-miss resolve'],
       [!consumes(fake, 'import x from "./' + fake + '.mjs"'), 'negative: relative specifier'],
       [!consumes('./local.mjs', "import x from './local.mjs'"), 'negative: relative declaration'],
       [!consumes('node:path', 'import p from "node:path"'), 'negative: node: builtin'],
@@ -256,44 +258,76 @@ async function main() {
   }
 
   // ── P5: 构建 / 校验链保持"零裸依赖"(CI 不装依赖的前提) ───────────────────────
-  // .github/workflows/verify.yml 故意**不跑 npm ci**：build + verify + smoke 只用
-  // node: 内置模块与相对路径，因此整条流水线对 registry / peer 解析完全免疫。
+  // .github/workflows/verify.yml 只装运行期依赖（`npm ci --omit=peer`）：build + verify + smoke
+  // 脚本本身只用 node: 内置模块与相对路径，因此整条流水线对 peer 解析免疫。
   // 这是一条真不变量，不是偶然 —— 一旦有人在守卫里 import 一个裸包，CI 会红在
   // "command not found" 而不是给出可读原因，所以在这里显式钉住。
+  //
+  // ⚠️ **取源已不再是 `package.json` 的脚本字符串**：`verify` / `verify:docs` / `smoke` /
+  // `verify:all` 四条现在各自只有一行 `node test/run-guards.mjs <组>`，用正则抠那行只会抠到
+  // runner 自己 —— 五十多个守卫一个也扫不到，判据会"静默缩小后照旧通过"，正是这一段一直要挡
+  // 的形态。真源在 runner 的 `--list-json`（`test/run-guards.mjs` 文件头写了为什么）。
+  // 链的**成员与顺序**另由 `test/verify-guard-chain.mjs` 对着冻结 fixture 逐字比；这里管的是
+  // 另外两面：零裸依赖，以及"链没有静默缩水"。
   {
-    // 链路外围必须钉住：四个脚本键都在，且**每个键下被引用到的脚本数**不低于实测下限 ——
-    // 键被改名 / 条目被删掉时扫描集不能"静默缩小后照旧通过"（空集里没有裸依赖，也就没有
-    // offender，主判据会恒真）。下限取自本轮实测值（build 1 / verify 24 / smoke 5 / prepack 1）：
-    // 新增脚本不受限制，删或改名即判红。
-    // ⚠️ 打包/发布那一格是 **prepack**（不是 prepare）：#141 起安装期不许有构建钩子
-    //（pnpm 的 allowBuilds 闸会拒掉 git 直装），构建只挂在 prepack 上 —— 见 verify-package-publish ⑦。
-    const CHAIN_FLOOR = { build: 1, verify: 24, smoke: 5, prepack: 1 };
-    const chainNames = Object.keys(CHAIN_FLOOR);
-    const missingKeys = chainNames.filter((n) => {
-      const cmd = (pkg.scripts || {})[n];
-      return typeof cmd !== 'string' || cmd.trim() === '';
-    });
-    const refsByKey = {};
-    for (const n of chainNames) {
-      const cmd = (pkg.scripts || {})[n] || '';
-      refsByKey[n] = [...cmd.matchAll(/node\s+([\w./-]+\.mjs)/g)].map((m) => m[1]);
+    /** 一条脚本键必须**恰好**是 `node test/run-guards.mjs <它自己的组>`。纯函数 ⇒ 可被负对照直接喂。 */
+    const shapeError = (cmd, key, group) => {
+      const m = /^node\s+(\S+)\s+(\S+)$/.exec(String(cmd || '').trim());
+      if (!m) return key + ' 不是单步 `node <file> <group>` 形态：' + JSON.stringify(cmd);
+      if (m[1] !== 'test/run-guards.mjs') return key + ' 指向 ' + m[1] + '（应为 test/run-guards.mjs）';
+      if (m[2] !== group) return key + ' 跑的组是 ' + m[2] + '（应为 ' + group + '）';
+      return null;
+    };
+    const GROUPS = [['verify', 'verify'], ['verify:docs', 'docs'], ['smoke', 'smoke'], ['verify:all', 'all']];
+    // 地板 = 本轮实测步数（新增不受限，**删或改名即判红**）。`docs` 整组软档也设 1：
+    // 设 0 的话"整组被删空"会和"设计如此"无法区分。
+    const CHAIN_FLOOR = { verify: 24, docs: 1, smoke: 5, all: 29 };
+    /** 地板表与 GROUPS 的对齐体检：键名必须与**组名**逐一对齐（纯函数 ⇒ 负对照可直接喂）。 */
+    const floorGaps = (groups, floors) => groups.map(([, g]) => g).filter((g) => !Number.isInteger(floors[g]));
+    const problems = floorGaps(GROUPS, CHAIN_FLOOR).map((g) => '地板表缺组 ' + g
+      + '（键名要写**组名**：`verify`/`docs`/`smoke`/`all`，不是脚本键名 `verify:docs`/`verify:all`）');
+    const scripts = new Set();
+    const counts = [];
+    for (const [key, group] of GROUPS) {
+      const bad = shapeError((pkg.scripts || {})[key], key, group);
+      if (bad) { problems.push(bad); continue; }
+      let listed;
+      try {
+        const out = execFileSync(process.execPath, [join(ROOT, 'test/run-guards.mjs'), group, '--list-json'], { cwd: ROOT, encoding: 'utf8' });
+        listed = JSON.parse(out);
+      } catch (err) {
+        problems.push(key + ' ⇒ runner 跑不起来：' + String((err && err.message) || err).split('\n')[0]);
+        continue;
+      }
+      // runner 自己声明它服务哪个脚本键：挂错组（如 `verify` 指向 `docs`）在这里当场对不上。
+      if (listed.chainKey !== key) problems.push(key + ' ⇒ runner 报的 chainKey=' + listed.chainKey);
+      const steps = listed.steps || [];
+      // 地板按**组名**取（不是脚本键名：`verify:docs` 的组是 `docs`）—— 键名取错会得到
+      // `undefined`，`n < undefined` 恒 false，地板静默失效、这条判据变成永真。
+      counts.push(key + '=' + steps.length + '/' + CHAIN_FLOOR[group]);
+      if (steps.length < CHAIN_FLOOR[group]) problems.push(key + ' 步数 ' + steps.length + ' < 地板 ' + CHAIN_FLOOR[group]);
+      for (const s of steps) if (s.file) scripts.add(s.file);
     }
-    const shortKeys = chainNames.filter((n) => refsByKey[n].length < CHAIN_FLOOR[n]);
-    const scripts = [...new Set(chainNames.flatMap((n) => refsByKey[n]))];
+    // `build` / `prepack` 仍是**直连**的一行（不在 runner 里）：按老口径从脚本字符串取，
+    // 并各自保一条地板 —— 只剩 runner 一条链时，它们是最容易被"顺手删掉"的两个。
+    for (const key of ['build', 'prepack']) {
+      const refs = [...String((pkg.scripts || {})[key] || '').matchAll(/node\s+([\w./-]+\.mjs)/g)].map((m) => m[1]);
+      if (refs.length < 1) problems.push(key + ' 没有可扫描的 node 入口：' + JSON.stringify((pkg.scripts || {})[key]));
+      for (const rel of refs) scripts.add(rel);
+    }
     const offenders = [];
     for (const rel of scripts) {
-      let src = '';
+      let src;
       try { src = readFileSync(join(ROOT, rel), 'utf8'); } catch { offenders.push(rel + '(缺文件)'); continue; }
       for (const spec of bareImportSpecs(src)) offenders.push(rel + ' -> ' + spec);
     }
-    check('P5 the chain perimeter is pinned: all four keys exist and each references at least its measured script count',
-      missingKeys.length === 0 && shortKeys.length === 0,
-      chainNames.map((n) => n + '=' + refsByKey[n].length + '/' + CHAIN_FLOOR[n]).join(' ')
-        + ' · unique scripts=' + scripts.length
-        + ' · missing keys=[' + missingKeys.join(', ') + '] below floor=[' + shortKeys.join(', ') + ']');
+    check('P5 the chain perimeter is pinned: each script is exactly one `node test/run-guards.mjs <its group>` and every group keeps at least its measured step count',
+      problems.length === 0,
+      problems.length ? 'problems=[' + problems.join(' · ') + ']'
+        : counts.join(' ') + ' · unique scripts=' + scripts.size);
     check('P5 build/verify/smoke/prepack chain has NO bare-package import (CI installs nothing)',
-      scripts.length > 0 && offenders.length === 0,
-      scripts.length + ' script(s) referenced; offenders=[' + offenders.join(', ') + ']');
+      scripts.size > 0 && offenders.length === 0,
+      scripts.size + ' script(s) referenced (from the runner manifests, not from the script strings); offenders=[' + offenders.join(', ') + ']');
     check('P5 negative control: the detector catches a bare import and ignores builtins/relative',
       (() => {
         // 负对照跑**主扫描用的同一个** bareImportSpecs（不是另抄一份），否则它证明不了
@@ -308,6 +342,20 @@ async function main() {
           // 注释里的引号说明符**不得**被算成依赖（本仓纪律：判据先剥注释再判）
           && bareImportSpecs("// 夹具形如 from '" + fake + "'\nconst ok = 1;").length === 0;
       })());
+    check('P5 negative control: the script-shape predicate rejects a wrong group, an extra step and the old inline chain',
+      shapeError('node test/run-guards.mjs verify', 'verify', 'verify') === null
+      && shapeError('node test/run-guards.mjs docs', 'verify', 'verify') !== null
+      && shapeError('node test/run-guards.mjs smoke', 'smoke', 'smoke') === null
+      // 旧形态（一条 `&&` 长链）不得被当成合法 —— 它正是"取源漂了"的那一形态
+      && shapeError('node test/verify-client-sync.mjs && node test/verify-client.mjs', 'verify', 'verify') !== null
+      // 多挂一步（`node test/run-guards.mjs verify && node other.mjs`）也不合法
+      && shapeError('node test/run-guards.mjs verify && node test/verify-about.mjs', 'verify', 'verify') !== null
+      && shapeError('node test/other.mjs verify', 'verify', 'verify') !== null);
+    check('P5 negative control: a floor table that keys by script name instead of group name is detected',
+      // 真实踩过的形态：表里写 `'verify:all': 29` 而查表用组名 `all` ⇒ `undefined` ⇒ 地板永真。
+      floorGaps(GROUPS, { verify: 24, docs: 1, smoke: 5, 'verify:all': 29 }).length === 1
+      && floorGaps(GROUPS, { verify: 24, docs: 1, smoke: 5 }).length === 1
+      && floorGaps(GROUPS, CHAIN_FLOOR).length === 0);
   }
 
   // ── P8: 发布面文件不得带 UTF-8 BOM ─────────────────────────────────────────

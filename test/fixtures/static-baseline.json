@@ -1,0 +1,9 @@
+{
+  "eslint": {
+    "filesLinted": 225,
+    "byRule": {}
+  },
+  "tsc": {
+    "byCode": {}
+  }
+}

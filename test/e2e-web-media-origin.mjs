@@ -26,6 +26,7 @@ import { mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from 'node
 import { spawn } from 'node:child_process';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { styleText, cssBodyOf, panelText } from './tools/src-scope.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const TEST_ROOT = join(root, '.test-cache', 'e2e-media-origin');
@@ -87,17 +88,23 @@ const matchRoute = (pathname) => routes.find((r) => (
 // 宿主页（等价于插件 client 的那半边）：嵌渲染页 + 就绪后推一次媒体快照。
 // 有它才能测「封面/歌名能不能穿过沙箱到达壁纸」—— 直接开渲染页没法调 __wp.setMedia。
 let wrapperHtml = '';
-// 插件真实 CSS（样式表模块里的模板字面量）——布局断言必须在真 CSS 上做，
+// 插件真实 CSS（样式族的域模板拼成的一份样式表）——布局断言必须在真 CSS 上做，
 // 否则「抽屉里按钮上下排列、间距 8px」这种要求测了等于没测。
-// ⚠️ 取模板用**行首锚定（容忍缩进）**：散文里出现同样的声明字面量会把锚点带偏。
-const pluginCss = (() => {
-  const srcText = readFileSync(join(root, 'src', 'styles.js'), 'utf8');
-  const m = /^\s*const CSS = `([^`]*)`;/m.exec(srcText);
-  return m ? m[1] : '';
-})();
-if (!pluginCss.includes('.we-picker__current')) {
-  console.log('  ! 未能从 src/client.js 提取插件 CSS，布局断言会跳过');
+// ⚠️ 样式拆段后（`src/styles-*.js` 域模板 + `src/styles.js` 组装点）取文必须走**族**：
+//    `styleText()` 按 `INLINE_MODULES` 顺序拼同族全文，`cssBodyOf()` 抽出全部域模板体。
+//    原先的 `match(/const CSS = `…`/) ? m[1] : ''` 在拆段后恒得空串，下游只印一句
+//    "布局断言会跳过"就放过 ⇒ 判据静默降级。**取不到一律判红**（不是 warn）。
+let pluginCss = '';
+let cssError = '';
+try {
+  pluginCss = cssBodyOf(styleText());
+} catch (err) {
+  cssError = err instanceof Error ? err.message : String(err);
 }
+check('样式族取文：能拼出插件 CSS 且含布局断言用的选择器',
+  pluginCss.includes('.we-picker__current'),
+  cssError || (pluginCss.length + ' 字符'
+    + (pluginCss.includes('.we-picker__current') ? '，含 .we-picker__current' : '，**不含** .we-picker__current')));
 const appServer = createServer((req, res) => {
   const pathname = new URL(req.url || '/', 'http://x').pathname;
   if (DEBUG) console.log(`[host] ${req.method} ${pathname}${req.url.indexOf('?') >= 0 ? '?…' : ''}`);
@@ -117,7 +124,7 @@ const appServer = createServer((req, res) => {
   if (!route) { res.statusCode = 404; res.end('no route'); return; }
   Promise.resolve(route.handler(req, res)).catch(() => { try { res.statusCode = 500; res.end('handler error'); } catch { /* ignore */ } });
 });
-await new Promise((r) => appServer.listen(0, '127.0.0.1', r));
+await new Promise((r) => { appServer.listen(0, '127.0.0.1', r); });
 const appPort = appServer.address().port;
 const APP = `http://127.0.0.1:${appPort}`;
 console.log(`迷你 host 监听 ${APP}（${routes.length} 条路由）`);
@@ -284,7 +291,7 @@ const web = (inv.wallpapers || []).find((w) => w.id === '990101') || null;
 check('inventory 列出网页壁纸且 webLiveSrc 是绝对 URL',
   Boolean(web && web.webLive === true && /^http:\/\/127\.0\.0\.1:\d+\//.test(String(web.webLiveSrc || ''))),
   web ? String(web.webLiveSrc || '').slice(0, 60) : 'not found');
-if (!web) { try { dispose && dispose(); } catch { /* ignore */ } appServer.close(); process.exit(1); }
+if (!web) { try { if (dispose) dispose(); } catch { /* ignore */ } appServer.close(); process.exit(1); }
 
 const rendererUrl = `${APP}/wallpaper-engine/scene-live/index.html?type=web&webSandbox=strict`
   + `&fit=cover&sceneFps=15&muted=true`
@@ -393,7 +400,7 @@ function productPrimaryActions(src, scope, element = 'button') {
 // 形态共用），主操作区里就一枚「选择壁纸」。镜像 DOM 只是把这枚按钮照抄了一份，所以判据必须
 // 落在产品源码上，别落在镜像的字面量上。
 const PRODUCT_DRAWER_ACTIONS_SCOPE = 'className: "we-picker__current-actions"';
-const productDrawerPanelSrc = readFileSync(join(root, 'src', 'panel-tabs.js'), 'utf8');
+const productDrawerPanelSrc = panelText();
 const productDrawerActions = (expected) => productPrimaryActions(productDrawerPanelSrc, PRODUCT_DRAWER_ACTIONS_SCOPE) === expected;
 // 对照用的另一个真来源：快捷面板的**播放控制行**也叫 actions（`we-qp__current-actions`，
 // 里面是暂停/刷新/清除三枚）。判据只在目标 scope 上生效 ⇒ 数它必须是 3 而不是 1，
@@ -529,7 +536,7 @@ for (let i = 0; i < 80; i++) {
   const r = await fetch(`${APP}/wallpaper-engine/media-status`, { cache: 'no-store' });
   mstat = await r.json();
   if (mstat && mstat.nowPlaying && mstat.nowPlaying.status === 'running') break;
-  await new Promise((res) => setTimeout(res, 250));
+  await new Promise((res) => { setTimeout(res, 250); });
 }
 check('媒体后端走中间件（backend=bridge，没有回落）',
   Boolean(mstat) && mstat.ok === true && mstat.backend === 'bridge' && !mstat.fallback,
@@ -558,7 +565,7 @@ check('now-playing 给出曲目 + 时长（秒，不是毫秒）',
 check('进度按真实时间外推（不是卡在上报值）', await (async () => {
   if (!m) return false;
   const before = m.position;
-  await new Promise((res) => setTimeout(res, 1200));
+  await new Promise((res) => { setTimeout(res, 1200); });
   const again = await (await fetch(`${APP}/wallpaper-engine/now-playing`, { cache: 'no-store' })).json();
   const after = again && again.media ? again.media.position : 0;
   return after > before;
@@ -602,18 +609,21 @@ if (!browser) {
   // （check() 在下一行才调用 ⇒ 此刻的计数里没有它）。**不要再减 1**：`preBrowserChecks - 1 >= 12`
   // 会把门槛抬成 13，与常量 12 不符。
   // 更要紧的是：地板必须**影响退出码**，否则判红也照样 exit 0，调用方拿到的仍是"通过"。
+  // 另外：跳过前**已经判红的**前置判据（比如样式族取文失败）绝不能被"退出码 0 = 显式跳过"
+  // 吞掉 —— 所以跳过路径的绿灯条件是"地板够 **且** 0 条失败"，两条都满足才允许 exit 0。
   const PRE_BROWSER_MIN_CHECKS = 12;
   const preBrowserChecks = passed + failed;
-  const preBrowserOk = preBrowserChecks >= PRE_BROWSER_MIN_CHECKS;
+  const preBrowserOk = preBrowserChecks >= PRE_BROWSER_MIN_CHECKS && failed === 0;
   check('覆盖面：自动跳过也算执行（跳过前至少 ' + PRE_BROWSER_MIN_CHECKS + ' 条前置判据）',
     preBrowserOk,
-    '本轮已执行 ' + preBrowserChecks + ' 条前置判据 / 地板 ' + PRE_BROWSER_MIN_CHECKS + '（不含本判据自己）');
+    '本轮已执行 ' + preBrowserChecks + ' 条前置判据（其中 ' + failed + ' 条判红）/ 地板 '
+    + PRE_BROWSER_MIN_CHECKS + '（不含本判据自己）');
   const skipCode = preBrowserOk ? 0 : 1;
   console.log('  ! SKIP 未找到 Chromium 系浏览器，页面断言未执行（本脚本不进 npm run verify）'
-    + ' —— 已执行 ' + preBrowserChecks + ' 条前置判据，页面部分 0 条；退出码 ' + skipCode
+    + ' —— 已执行 ' + preBrowserChecks + ' 条前置判据（' + failed + ' 条判红），页面部分 0 条；退出码 ' + skipCode
     + (skipCode === 0 ? ' 仅表示"显式跳过"，不是"页面断言通过"'
-      : '：前置判据不足，按**失败**退出（不接受"没跑完"当通过）'));
-  try { dispose && dispose(); } catch { /* ignore */ }
+      : '：前置判据不足或已有判红，按**失败**退出（不接受"没跑完"当通过）'));
+  try { if (dispose) dispose(); } catch { /* ignore */ }
   appServer.close();
   process.exit(skipCode);
 }
@@ -637,9 +647,9 @@ const child = spawn(browser, [
   NAV_URL,
 ], { stdio: 'ignore' });
 
-await new Promise((r) => setTimeout(r, 12000));
+await new Promise((r) => { setTimeout(r, 12000); });
 try { child.kill('SIGKILL'); } catch { /* ignore */ }
-await new Promise((r) => setTimeout(r, 400));
+await new Promise((r) => { setTimeout(r, 400); });
 
 // ── 第二次运行：带 <base href="./"> 的夹具（单独进程，不干扰上面的帧间隔断言）──────
 if (baseWrapperHtml) {
@@ -656,9 +666,9 @@ if (baseWrapperHtml) {
     '--window-size=1280,720',
     APP + '/e2e/base.html',
   ], { stdio: 'ignore' });
-  await new Promise((r) => setTimeout(r, 9000));
+  await new Promise((r) => { setTimeout(r, 9000); });
   try { child2.kill('SIGKILL'); } catch { /* ignore */ }
-  await new Promise((r) => setTimeout(r, 400));
+  await new Promise((r) => { setTimeout(r, 400); });
 }
 
 // ── 读回信标（按本次运行的标记过滤）────────────────────────────────────────
@@ -815,7 +825,7 @@ check('封面 data URL 到达壁纸且能加载显示',
   `thumb=${g('thumb') || 0}ch img=${g('img') || '?'}`);
 
 // ── teardown ────────────────────────────────────────────────────────────────
-try { dispose && dispose(); } catch { /* ignore */ }
+try { if (dispose) dispose(); } catch { /* ignore */ }
 try { appServer.close(); } catch { /* ignore */ }
 delete process.env.DSH_WE_STEAM_ROOT;
 delete process.env.DSH_WE_UPLOAD_DIR;

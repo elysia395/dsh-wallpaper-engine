@@ -38,6 +38,7 @@ import {
   authoritativeSources, SYSTEM_FONTS_TTL_MS, SYSTEM_FONTS_CACHE_VERSION, FONT_SCAN_TIMEOUT_MS,
 } from '../lib/routes/system-fonts.js';
 import { systemFontKeyOf, sanitizeFamilyValue } from '../lib/settings-schema.js';
+import { panelText } from './tools/src-scope.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const ISO = join(root, '.test-cache', 'system-fonts');
@@ -277,7 +278,7 @@ section('④ 路由：200 信封、缓存不重复扫描、?refresh=1 重扫、�
       set statusCode(v) { state.statusCode = v; },
     };
     await route.handler(req, res);
-    let data = null;
+    let data;
     try { data = JSON.parse(state.body); } catch { data = null; }
     return { state, data };
   };
@@ -366,7 +367,7 @@ section('④ 路由：200 信封、缓存不重复扫描、?refresh=1 重扫、�
   check('过期缓存：**先回旧值**并标 stale（不因一次扫描卡住面板）',
     stale.data.stale === true && stale.data.fonts.join() === '旧值族名',
     JSON.stringify(stale.data.fonts));
-  await new Promise((r) => setTimeout(r, 50));
+  await new Promise((r) => { setTimeout(r, 50); });
   check('过期缓存：旧值回了之后**后台**重扫一次', scans === 1, 'scans=' + scans);
 
   const notGet = await callRoute(route, 'POST', '/wallpaper-engine/system-fonts');
@@ -429,8 +430,8 @@ section('⑤ 客户端通道：登记进产物 / 浏览器安全 / 只碰自己�
     /qpTab === "appearance" && fontOpen && sel\.fontCustom/.test(qp)
     && /if \(v\) ensureSystemFonts\(false\)/.test(client));
   check('面板拿到了全局字族与重新扫描两个入口（ctx 少一个就是"点了没反应"）',
-    /onGlobalFamily, onRefreshSystemFonts/.test(read('src/panel-tabs.js')));
-  const tabs = stripComments(read('src/panel-tabs.js'));
+    /onGlobalFamily, onRefreshSystemFonts/.test(panelText()));
+  const tabs = stripComments(panelText());
   check('下拉的选项与本机字体状态行都走同一条"本浏览器能否匹配"的筛',
     /filterUsableSystemFonts\(sel\.systemFonts\)\.fonts/.test(tabs)
     && /filterUsableSystemFonts\(sel\.systemFonts\)/.test(tabs));
@@ -679,7 +680,7 @@ section('⑧ 真渲染（构建产物）：内置族键 + 本机字体同列、�
   let applyThrew = null;
   try { exportsObj.apply(ctx); } catch (e) { applyThrew = (e && (e.stack || e.message)) || String(e); }
   check('apply(ctx) 不抛（夹具给全了 slots/effect/document/fetch）', applyThrew === null, applyThrew || '');
-  await new Promise((r) => setTimeout(r, 150)); // 等 loadPersisted → loadFontSet → loadInventory → system-fonts
+  await new Promise((r) => { setTimeout(r, 150); }); // 等 loadPersisted → loadFontSet → loadInventory → system-fonts
 
   const settings = renders.find((r) => r.opts && r.opts.name === 'settings.section');
   check('设置页渲染器已注册（跑的是真注册路径）', Boolean(settings));
@@ -718,8 +719,8 @@ section('⑧ 真渲染（构建产物）：内置族键 + 本机字体同列、�
   const quickRow = rowsOf(before).find((r) => rowLabelled(r, '字体自定义'));
   const quickSwitch = quickRow ? allNodes(quickRow).find((n) => n.type === 'input') : null;
   check('面板里找得到「字体自定义」总开关（侧栏外观页 · 字体节展开）', Boolean(quickSwitch));
-  quickSwitch && quickSwitch.props.onChange({ target: { checked: true } });
-  await new Promise((r) => setTimeout(r, 80)); // 开关 ⇒ ensureSystemFonts ⇒ 宿主回话
+  if (quickSwitch) quickSwitch.props.onChange({ target: { checked: true } });
+  await new Promise((r) => { setTimeout(r, 80); }); // 开关 ⇒ ensureSystemFonts ⇒ 宿主回话
 
   const tree = renderSide();
   const nodes = allNodes(tree);
@@ -772,14 +773,14 @@ section('⑧ 真渲染（构建产物）：内置族键 + 本机字体同列、�
     // 改一下全局字体 ⇒ 真的落进字体集（PUT /fontsets/<活动 id> 的 body 带新键）。
     globalSel.props.onChange({ target: { value: 'sys:苹方-简' } });
     for (const t of timers.filter((x) => !x.cleared && !x.fired && x.ms === 200)) { t.fired = true; t.fn(); }
-    await new Promise((r) => setTimeout(r, 40));
+    await new Promise((r) => { setTimeout(r, 40); });
     const putGlobal = fontsetPuts.map((p) => p.values && p.values.globalFamily).filter(Boolean);
     check('改「默认字体」⇒ 落进字体集正文的那个键（PUT 体里带 globalFamily）',
       putGlobal.includes('sys:苹方-简'), putGlobal.join(' / ') || '（没有 PUT）');
 
     termSel.props.onChange({ target: { value: 'sys:PingFang SC' } });
     for (const t of timers.filter((x) => !x.cleared && !x.fired && x.ms === 200)) { t.fired = true; t.fn(); }
-    await new Promise((r) => setTimeout(r, 40));
+    await new Promise((r) => { setTimeout(r, 40); });
     const putTerm = fontsetPuts.map((p) => p.values && p.values.componentFonts
       && p.values.componentFonts.terminal && p.values.componentFonts.terminal.family).filter(Boolean);
     check('改「终端字体」⇒ 落进 componentFonts.terminal.family（与高级表同一项）',

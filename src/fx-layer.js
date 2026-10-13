@@ -40,6 +40,14 @@
  *   · **挂了才活、只在有内容时跑**：`fxEnabled` 关掉、或点击与拖尾两个子开关都关掉 ⇒ 立刻
  *     停 rAF、把宿主摘掉。**帧循环是内容驱动的**：没有活着的点/圈就画完这一帧收工
  *     （`fxRaf = 0`），下一次 pointer 事件再用 `fxKick()` 起一帧 —— 空闲时零帧、零 CPU。
+ *   · **绘制调用按"共享状态"合批**（issue #190）：`shadowBlur` 每次 `stroke()` / `fill()`
+ *     都要做一次离屏高斯模糊，而**同一帧里共享同一套 alpha / 颜色 / 线宽 / 模糊**的图元若
+ *     各画一次，等于白付 N-1 次模糊。两条路都合批：① **拖尾按年龄带**（同一带的点共用一次
+ *     绘制，带数 = 性能档）；② **一簇星火合成一条路径、只描一次**（12 条本来共享全部状态）。
+ *     合并的是**绘制调用**，不是形状 —— 每条火花的角度与长度差异照旧保留。
+ *   · **自适应降级、可回退**：按实测帧耗时调 `fxPerfLvl`（连续慢 N 帧降一档、连续快 M 帧升
+ *     一档，M ≫ N）。只降不升 = 一次抖动永久降级，故升档必须存在。降级只改**画法**，
+ *     不写设置、不动 DOM、不碰观感旋钮的语义（两个光晕滑块照旧有效）。
  *   · **没有 rAF 的环境连 DOM 都不建**（无头/测试沙箱）：这一层是装饰，宁可不画，也不要在
  *     没有帧时钟的地方留半截状态。
  *   · ⚠️ 帧里**不许**用"宿主还没建"当早退条件：宿主是在 `fxStart()` 里建的，而帧由
@@ -79,11 +87,46 @@ const FX_TRAIL_W_MIN = 1;
 const FX_TRAIL_W_MAX = 12;
 const FX_OPACITY_MIN = 10;
 const FX_OPACITY_MAX = 100;
+
+// ── 性能：分带 + 自适应降级（issue #190）──────────────────────────────────────
+// 报告实测的敏感度与代码结构逐条对应，主因是 `shadowBlur`（Canvas2D 每次 stroke / fill
+// 触发一次离屏高斯模糊）落在**每帧每图元**上：一帧能到上百次模糊。两处结构性浪费：
+//   ① **拖尾逐段描边**：彗尾对每个相邻点对单独 stroke + 单独设模糊 ⇒ 每帧模糊次数 ≈ 存活
+//      点数（与 `fxTrailLength` 正相关 —— 正是报告说的"拖尾时长影响很大，呈正相关"）。
+//   ② **星火逐条描边**：一簇 12 条火花，12 条共享同一套 alpha / 颜色 / 线宽 / 模糊（那些
+//      赋值都在循环**外**），却每条各 stroke 一次 ⇒ 12 次模糊（报告说的"星火比涟漪影响更大"，
+//      涟漪只有 2 个圆环）。
+// 对策：**按"年龄带"把同一带内的图元合成一条路径、只描一次**（带内 alpha / 线宽 / 模糊取带
+// 中值），星火则直接合并成一条路径。代价是同一带内的观感被量化 —— 带数就是"量化粒度"，
+// 于是它天然是降级旋钮（见下面那张表）。
+/** 性能档数（0 = 最省，越大越精细）。 */
+const FX_PERF_LEVELS = 3;
+/**
+ * 每档的拖尾带数（下标 = 档位）。带数越多观感越接近"逐段淡出"，越少越省。
+ * ⚠️ 只影响**同一带内**的量化：带内所有图元共用一次模糊，这正是省下来的东西。
+ */
+const FX_TRAIL_BANDS_BY_LEVEL = [2, 4, 8];
+/**
+ * 每档的最小帧间隔（ms，0 = 不限帧）。拖尾不需要 60fps，降到约 30fps 视觉几乎无差。
+ * 只在最省那一档限帧：平时不牺牲顺滑度。
+ */
+const FX_PERF_MIN_GAP_BY_LEVEL = [33, 0, 0];
+/** 一帧超过这么多毫秒就算"这一帧慢了"（约 42fps 以下）。 */
+const FX_PERF_SLOW_MS = 24;
+/** 连续这么多帧慢 ⇒ 降一档（迟滞：单帧抖动不降级）。 */
+const FX_PERF_DOWN_RUN = 6;
+/**
+ * 连续这么多帧快 ⇒ 升一档。**刻意远大于降档阈值**：升档要更保守，否则会在阈值上反复横跳
+ * （降档立刻生效、升档慢慢来 —— 这是"一次卡顿不该永久降级"与"别抖"之间的取舍）。
+ */
+const FX_PERF_UP_RUN = 90;
+
 /** 点在这些元素上不算"在壁纸上点"（控件 / 面板 / 弹窗自己会响应点击）。 */
 const FX_UI_SELECTOR = 'button, a, input, select, textarea, label, [role="button"], [contenteditable="true"], .we-picker, .we-modal';
 
 let fxHost = null;
 let fxCanvas = null;
+let fxCtx = null;
 let fxLastW = 0;
 let fxLastH = 0;
 let fxRaf = 0;
@@ -92,6 +135,17 @@ let fxBound = false;
 let fxAccent = '';
 let fxSeed = 0;
 let fxHue = 0;
+/** 当前性能档（0..FX_PERF_LEVELS-1，越大越精细）。默认满档 —— 只在实测变慢时才降。 */
+let fxPerfLvl = FX_PERF_LEVELS - 1;
+/** 连续"慢帧"与"快帧"计数（迟滞用）。 */
+let fxSlowRun = 0;
+let fxFastRun = 0;
+/** 上一帧的起点时刻（算帧耗时用；0 = 还没有上一帧）。 */
+let fxLastFrameAt = 0;
+/** 上一帧**真正画了**的时刻（限帧闸门用；与上一条分开 —— 被闸门挡掉的帧不算绘制）。 */
+let fxLastDrawAt = 0;
+/** 暗化层缓存（`fxPlace` 每帧都要问它；DOM 变了才重查）。 */
+let fxScrimCache = null;
 /** 活着的拖尾点：{ x, y, t, hue }（`t` 是落点时刻，存活完全由它决定）。 */
 let fxTrail = [];
 /** 活着的点击效果：{ x, y, t0, seed, hue }。 */
@@ -169,6 +223,7 @@ function fxRemoveHost() {
   if (fxHost && fxHost.parentNode) fxHost.parentNode.removeChild(fxHost);
   fxHost = null;
   fxCanvas = null;
+  fxCtx = null;
   fxLastW = 0;
   fxLastH = 0;
 }
@@ -181,11 +236,19 @@ function fxRemoveHost() {
  */
 function fxPlace() {
   if (!fxHost || !fxHost.parentNode) return;
-  let scrim = null;
-  try {
-    scrim = document.querySelector('.we-scrim');
-  } catch (e) { return; }
-  if (!scrim || !scrim.parentNode) return;
+  // 暗化层是**壁纸激活时**才挂的、且挂上后不再动 ⇒ 查一次缓存住（每帧 querySelector 白付）。
+  // 缓存失效的两条路：① 缓存的节点已经不在文档里（`isConnected` 假）；② 位序判否（下面那条，
+  // 说明有新的暗化层节点顶替了旧的）⇒ 清缓存重查一次。
+  let scrim = fxScrimCache;
+  if (scrim && !scrim.isConnected) { scrim = null; fxScrimCache = null; }
+  if (!scrim) {
+    try {
+      scrim = document.querySelector('.we-scrim');
+    } catch (e) { return; }
+    if (!scrim || !scrim.parentNode) return;
+    fxScrimCache = scrim;
+  }
+  if (!scrim.parentNode) { fxScrimCache = null; return; }
   if (fxHost.compareDocumentPosition(scrim) & 2) return; // 已经排在暗化层之后
   scrim.parentNode.insertBefore(fxHost, scrim.nextSibling);
 }
@@ -296,6 +359,13 @@ function fxStop() {
   fxTrail = [];
   fxClicks = [];
   fxAccent = '';
+  // 性能档与迟滞计数归零：下次开启从满档重新观测（否则关掉再开会带着旧结论开局）。
+  fxPerfLvl = FX_PERF_LEVELS - 1;
+  fxSlowRun = 0;
+  fxFastRun = 0;
+  fxLastFrameAt = 0;
+  fxLastDrawAt = 0;
+  fxScrimCache = null;
 }
 
 /** 效果颜色：主题色 / 彩虹（每个实例一个色相，且随时间流转）/ 自定义。 */
@@ -314,14 +384,24 @@ function fxSparkAngle(seed, i) {
   return (i / FX_SPARK_COUNT) * Math.PI * 2 + noise * 0.6;
 }
 
-/** 拖尾：`comet` 连成一条按年龄收细的光带；`dust` 按间距留下亮点。 */
+/**
+ * 拖尾：`comet` 连成一条按年龄收细的光带；`dust` 按间距留下亮点。
+ *
+ * ⚠️ **按年龄带合批**（issue #190）：同一带内的所有图元共用一次 alpha / 线宽 / 模糊，
+ * 合成**一条路径**只描一次（彗尾）/ 只在最后 fill 一次（星尘）。带内取**带中点**的年龄 ——
+ * 量化误差由带数决定，带数就是性能档（`FX_TRAIL_BANDS_BY_LEVEL`）。
+ * 逐段描边的老写法每帧模糊次数 ≈ 存活点数，这正是"拖尾时长越长越吃 GPU"的成因。
+ */
 function fxDrawTrail(g, now, st) {
   if (!st.trail || fxTrail.length < 2) return;
   const life = st.lifeMs;
+  const bands = FX_TRAIL_BANDS_BY_LEVEL[fxPerfLvl] || FX_TRAIL_BANDS_BY_LEVEL[0];
   g.lineCap = 'round';
   g.lineJoin = 'round';
   if (st.trailStyle === 'dust') {
     let acc = 0;
+    // 星尘：按带分组，每带一次 fill（把该带所有圆点攒进一条路径）。
+    const bucket = [];
     for (let i = 1; i < fxTrail.length; i += 1) {
       const p = fxTrail[i];
       const prev = fxTrail[i - 1];
@@ -330,29 +410,58 @@ function fxDrawTrail(g, now, st) {
       acc = 0;
       const f = 1 - (now - p.t) / life;
       if (f <= 0) continue;
+      const bi = Math.min(bands - 1, Math.max(0, Math.floor((1 - f) * bands)));
+      if (!bucket[bi]) bucket[bi] = { r: [], f: 0, n: 0 };
+      bucket[bi].r.push(p);
+      bucket[bi].f += f;
+      bucket[bi].n += 1;
+    }
+    for (let bi = 0; bi < bucket.length; bi += 1) {
+      const b = bucket[bi];
+      if (!b) continue;
+      const f = b.f / b.n;
       g.globalAlpha = Math.max(0, Math.min(1, f * f * 0.9));
-      g.fillStyle = fxEffectColor(st, p.hue, now);
-      g.shadowBlur = st.trailGlow * f * 0.4;
+      g.fillStyle = fxEffectColor(st, b.r[0].hue, now);
       g.shadowColor = g.fillStyle;
+      g.shadowBlur = st.trailGlow * f * 0.4;
+      const rad = Math.max(0.6, st.width * (0.45 + f * 0.75));
       g.beginPath();
-      g.arc(p.x, p.y, Math.max(0.6, st.width * (0.45 + f * 0.75)), 0, Math.PI * 2);
+      for (let k = 0; k < b.r.length; k += 1) {
+        const p = b.r[k];
+        g.moveTo(p.x + rad, p.y);
+        g.arc(p.x, p.y, rad, 0, Math.PI * 2);
+      }
       g.fill();
     }
     return;
   }
+  // 彗尾：按带分组，每带一条路径、一次 stroke。
+  const bucket = [];
   for (let i = 1; i < fxTrail.length; i += 1) {
     const a = fxTrail[i - 1];
     const b = fxTrail[i];
     const f = 1 - (now - b.t) / life;
     if (f <= 0) continue;
+    const bi = Math.min(bands - 1, Math.max(0, Math.floor((1 - f) * bands)));
+    if (!bucket[bi]) bucket[bi] = { seg: [], f: 0, n: 0, hue: b.hue };
+    bucket[bi].seg.push(a, b);
+    bucket[bi].f += f;
+    bucket[bi].n += 1;
+  }
+  for (let bi = 0; bi < bucket.length; bi += 1) {
+    const b = bucket[bi];
+    if (!b) continue;
+    const f = b.f / b.n;
     g.globalAlpha = Math.max(0, Math.min(1, f * f * 0.9));
     g.strokeStyle = fxEffectColor(st, b.hue, now);
     g.shadowColor = g.strokeStyle;
     g.shadowBlur = st.trailGlow * f * 0.35;
     g.lineWidth = Math.max(0.4, st.width * (0.25 + f * 0.75));
     g.beginPath();
-    g.moveTo(a.x, a.y);
-    g.lineTo(b.x, b.y);
+    for (let k = 0; k < b.seg.length; k += 2) {
+      g.moveTo(b.seg[k].x, b.seg[k].y);
+      g.lineTo(b.seg[k + 1].x, b.seg[k + 1].y);
+    }
     g.stroke();
   }
 }
@@ -389,18 +498,21 @@ function fxDrawClicks(g, now, st) {
       g.shadowColor = color;
       g.shadowBlur = st.clickGlow * 0.35 * fade;
       g.lineWidth = Math.max(0.6, st.width * 0.7 * (1 - p));
+      g.globalAlpha = 0.9 * fade;
+      // ⚠️ 一簇火花合成**一条路径、只描一次**（issue #190）：这 12 条共享同一套 alpha /
+      // 颜色 / 线宽 / 模糊（赋值本来就在循环外），逐条 stroke 等于白付 11 次高斯模糊。
+      // 每条的火花角度 / 长度差异全部保留 —— 合并的是**绘制调用**，不是形状。
+      g.beginPath();
       for (let i = 0; i < FX_SPARK_COUNT; i += 1) {
         const ang = fxSparkAngle(c.seed, i);
         // 每条飞多远略有差别（同一个 seed 定死）—— 等长会像一朵菊花，不等长才像火花。
         const reach = st.size * (0.45 + 0.55 * (((c.seed * 31 + i * 37) % 100) / 100)) * ease;
         const cos = Math.cos(ang);
         const sin = Math.sin(ang);
-        g.globalAlpha = 0.9 * fade;
-        g.beginPath();
         g.moveTo(c.x + cos * reach * 0.7, c.y + sin * reach * 0.7);
         g.lineTo(c.x + cos * reach, c.y + sin * reach);
-        g.stroke();
       }
+      g.stroke();
       const flash = Math.max(0, 1 - p * 3); // 中心那一下白闪只在前 1/3 寿命里
       if (flash > 0) {
         g.globalAlpha = 0.75 * flash;
@@ -411,6 +523,32 @@ function fxDrawClicks(g, now, st) {
         g.arc(c.x, c.y, Math.max(0.5, st.width * 1.6 * flash + 1), 0, Math.PI * 2);
         g.fill();
       }
+    }
+  }
+}
+
+/**
+ * 自适应降级状态机（issue #190）：按**实测帧耗时**调 `fxPerfLvl`。
+ *   · 连续 `FX_PERF_DOWN_RUN` 帧慢 ⇒ 降一档（立刻生效，别让卡顿持续）。
+ *   · 连续 `FX_PERF_UP_RUN` 帧快 ⇒ 升一档（远更保守，避免在阈值上反复横跳）。
+ * 可回退是硬要求：只降不升 = 一次抖动永久降级。降级只改**画法**，不改设置、不动 DOM。
+ * 环境没有可靠时钟（无 `weNow`）时不参与 —— 宁可不降级，也不要拿假数据乱降。
+ */
+function fxPerfUpdate(dt) {
+  if (!(dt > 0)) return;
+  if (dt > FX_PERF_SLOW_MS) {
+    fxSlowRun += 1;
+    fxFastRun = 0;
+    if (fxSlowRun >= FX_PERF_DOWN_RUN && fxPerfLvl > 0) {
+      fxPerfLvl -= 1;
+      fxSlowRun = 0;
+    }
+  } else {
+    fxFastRun += 1;
+    fxSlowRun = 0;
+    if (fxFastRun >= FX_PERF_UP_RUN && fxPerfLvl < FX_PERF_LEVELS - 1) {
+      fxPerfLvl += 1;
+      fxFastRun = 0;
     }
   }
 }
@@ -427,6 +565,19 @@ function fxFrame() {
   fxEnsureHost();
   if (!fxCanvas) return; // 宿主被外力摘走了（不是"还没建"：上一行刚 ensure 过）
   const now = weNow();
+  // 帧耗时 → 性能档（第一帧没有上一帧，跳过；间隔按**起帧时刻**算，不把 rAF 排队算进去）。
+  if (fxLastFrameAt) fxPerfUpdate(now - fxLastFrameAt);
+  fxLastFrameAt = now;
+  // 最省那一档限帧：还没到最小间隔就直接收工，**不排下一帧** —— 但拖尾点在老化，必须留一个
+  // 补帧的钩子，否则光标一停，最后那截拖尾会冻在屏上（`fxKick` 会在下一次事件再起帧，
+  // 而这里要保证"没人动光标时也会自己走完"）。故用一次 setTimeout 级别的补排：
+  // 用 rAF 自己再排一帧即可（rAF 会被浏览器按刷新率唤醒，成本可忽略）。
+  const gap = FX_PERF_MIN_GAP_BY_LEVEL[fxPerfLvl] || 0;
+  if (gap > 0 && fxLastDrawAt && now - fxLastDrawAt < gap) {
+    fxKick();
+    return;
+  }
+  fxLastDrawAt = now;
   const life = st.trail ? st.lifeMs : 0;
   fxTrail = fxTrail.filter((p) => now - p.t <= life);
   fxClicks = fxClicks.filter((c) => now - c.t0 <= FX_CLICK_LIFE_MS);
@@ -438,7 +589,9 @@ function fxFrame() {
   // （等于不生效）。
   fxNodeStyle(fxHost, 'mix-blend-mode', st.blend);
   fxNodeStyle(fxHost, 'opacity', String(st.opacity / 100));
-  const g = fxCanvas.getContext('2d');
+  // 2D 上下文只取一次并缓存（每帧 `getContext` 是一次哈希查找，白付）。
+  if (!fxCtx) fxCtx = fxCanvas.getContext('2d');
+  const g = fxCtx;
   if (!g) return;
   g.setTransform(dpr, 0, 0, dpr, 0, 0);
   g.clearRect(0, 0, width, height);

@@ -168,11 +168,11 @@ function findLibToSrcEdges(sources) {
 
 /** 递归列出 dir 下的文件（仓库根相对的 posix 路径，已排序）。 */
 function walkFiles(dir, out = []) {
-  let names = [];
+  let names;
   try { names = readdirSync(dir); } catch { return out; }
   for (const name of names) {
     const abs = join(dir, name);
-    let st = null;
+    let st;
     try { st = statSync(abs); } catch { continue; }
     if (st.isDirectory()) walkFiles(abs, out);
     else if (st.isFile()) out.push(relative(ROOT, abs).split(sep).join('/'));
@@ -457,17 +457,23 @@ console.log('\n⑤ 路由模块必须自己 import 用到的库函数（不得�
     hostImports.size + ' 个 import 名 / ' + hostRouteFiles.length + ' 个路由模块');
   check('路由模块不引用 lib/index.js 单独 import 的名字', offenders.length === 0,
     offenders.join('; ') || '全部自足');
-  // 负对照：把"缺 import"的合成源码喂给**同一个**判据；形参与 c 字段不得被误报
+  // 负对照：把"缺 import"的合成源码喂给**同一个**判据；形参与 c 字段不得被误报。
+  // ⚠️ 合成用的"陈旧名"必须**从当下真实数据现算**：硬编码某个 import 名会被无关的 import
+  //    增删扳倒（`readFile` 就曾因最后一个使用者搬去 `lib/steam-discovery.js` 而被删 ⇒
+  //    合成样本里那个名字不可能再出现 ⇒ 这条负对照静默退化成恒真）。`Boolean(staleName)`
+  //    是防它变空转的地板；取不到名字（hostImports 被削光）必须判红。
+  const staleName = [...hostImports].filter((n) => n !== 'webServer' && n !== 'base').sort()[0] || '';
   const synth = stripComments([
     'export function registerX(webServer, c) {',
     '  const { base } = c;',
-    '  const b = readFile(base);',
+    '  const b = ' + (staleName || 'noHostImportAvailable') + '(base);',
     '}',
   ].join('\n'));
   const synthStale = staleRefs(synth, importNames(''), hostImports);
   check('负对照：少了 import 的库函数会被判出，形参与 c 字段不误报',
-    synthStale.includes('readFile') && !synthStale.includes('webServer') && !synthStale.includes('base'),
-    '报出=[' + synthStale.join(',') + ']');
+    Boolean(staleName) && synthStale.includes(staleName)
+    && !synthStale.includes('webServer') && !synthStale.includes('base'),
+    '现算陈旧名=' + JSON.stringify(staleName) + ' · 报出=[' + synthStale.join(',') + ']');
 }
 
 // ═══ ④（已撤除：CODE-STRUCTURE 的内联计数 == 构建清单）══════════════════════════

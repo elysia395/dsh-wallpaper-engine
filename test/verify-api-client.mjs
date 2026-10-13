@@ -38,11 +38,11 @@ const strip = stripComments;
  * （违反 `docs/DEV-GUIDE.md:363-364` 约定 4「判据的域应当从磁盘枚举」）。
  */
 const walkSrc = (dir, out = []) => {
-  let names = [];
+  let names;
   try { names = readdirSync(join(root, dir)); } catch { return out; }
   for (const n of names) {
     const rel = dir + '/' + n;
-    let st = null;
+    let st;
     try { st = statSync(join(root, rel)); } catch { continue; }
     if (st.isDirectory()) walkSrc(rel, out);
     else if (n.endsWith('.js')) out.push(rel);
@@ -252,11 +252,11 @@ console.log('\n⑥ 出入口已登记进构建清单、并真的进了产物');
 console.log('\n⑦ Response 替身必须带 status');
 {
   const walk = (dir, out = []) => {
-    let names = [];
+    let names;
     try { names = readdirSync(dir); } catch { return out; }
     for (const n of names) {
       const abs = join(dir, n);
-      let st = null;
+      let st;
       try { st = statSync(abs); } catch { continue; }
       if (st.isDirectory()) walk(abs, out);
       else if (st.isFile() && /\.mjs$/.test(n)) out.push(relative(root, abs).split('\\').join('/'));
