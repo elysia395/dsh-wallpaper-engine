@@ -987,37 +987,177 @@ function main() {
       && unpairOk(SRC));
   }
 
-  // ── F8：原生 select 弹层的选项行必须显式不透明底 + 玻璃墨色（用户报告：下拉底色与字同色）──
+  // ── F8 (#164)：原生 select 弹层的选项行必须显式「不透明底 + 对比墨」──────────────────
   // Chromium 的弹层是独立文档：画布只在 select 自身背景不透明时才取它的底色，而我们的
-  // select 是透明玻璃底 ⇒ 弹层落到默认浅色画布；选项文字继承玻璃墨色（深色主题=浅字）
-  // ⇒ 浅字浅底整列不可读。修法 = option 行显式 --we-panel-color + --we-ink（Chromium
-  // 弹层按 option 的已解析计算样式逐行画）。判据钉住：这条 option 规则必须存在、必须
-  // 同时声明两个 var、且底色必须是 --we-panel-color（不透明面板底）——防止将来有人把
-  // 底色改回透明/半透明玻璃形态而弹层再次不可读。
+  // select 是透明玻璃底 ⇒ 弹层落到默认浅色画布；选项文字却继承 select 的墨色 ⇒ 深色主题
+  // （浅字）与「用户把"正文"角色设成浅色」两档都变成浅字浅底。#164 的修法是把这一对换成
+  // 按**有效墨色**派生的 --we-popup-row-bg / --we-popup-row-ink。判据钉三件事：
+  //   ① **全局** select option 规则在位且读的就是这一对（防止退回半透明玻璃形态）；
+  //   ② 选中行单钉（UA 的 Highlight 蓝不吃这一对）；
+  //   ③ 自家 .we-picker 子树那条也在（特异性更高，宿主若有类名压 option 的规则也盖得过）。
   {
     // header 可能带着规则前的整段注释（rulesWithProp 取的是"上一个 } 到 { 之间"的原文）
     // ⇒ 先剥注释再匹配选择器，避免"注释里出现同名选择器"与"注释吃掉行首锚"两种假判。
-    const optRules = rulesWithProp('background-color')
-      .map((r) => ({ header: r.header.replace(/\/\*[^]*?\*\//g, ' ').trim(), body: r.body }))
-      .filter((r) => /(^|,)\s*(\.we-picker select|\.we-picker__select) option/.test(r.header));
-    const ok = (r) => r.body.includes('background-color: var(--we-panel-color') && r.body.includes('color: var(--we-ink');
-    check('F8 原生下拉弹层选项行：option 规则在位且为不透明面板底 + 玻璃墨色（双作用域：.we-picker select 与 .we-picker__select）',
-      optRules.length >= 1 && optRules.every(ok),
-      optRules.length + ' 条 option 规则' + (optRules.length ? ' · 作用域 ' + optRules.map((r) => r.header.replace(/\s+/g, ' ').trim().slice(0, 60)).join(' | ') : ''));
-    // 负对照 ①：底色改回透明玻璃形态（color-mix 半透明）会被同一条判据判出；
-    // 负对照 ②：丢掉墨色声明也会被判出。
-    const bad = optRules[0] ? {
-      header: optRules[0].header,
-      body: optRules[0].body.replace(/background-color:\s*var\(--we-panel-color[^;]*;/, 'background-color: color-mix(in srgb, var(--we-sidebar-color) 20%, transparent);'),
+    const norm = (r) => ({
+      header: r.header.replace(/\/\*[^]*?\*\//g, ' ').replace(/\s+/g, ' ').trim(),
+      body: r.body,
+    });
+    const optRules = rulesWithProp('background-color').map(norm);
+    const globalRules = optRules.filter((r) => r.header === 'select option');
+    const groupRules = optRules.filter((r) => r.header === 'select optgroup');
+    const checkedRules = optRules.filter((r) => r.header === 'select option:checked');
+    const pickerRules = optRules.filter((r) => /(^|,)\s*(\.we-picker select|\.we-picker__select) option$/.test(r.header));
+    const pairOk = (r) => /background-color:\s*var\(--we-popup-row-bg/.test(r.body)
+      && /color:\s*var\(--we-popup-row-ink/.test(r.body);
+    // 选中行不是行配对（语义不同）⇒ 单独一条断言。填充必读 -src、不读 --we-accent：
+    // 设置窗那个作用域块末尾把 --we-accent 掐成 initial（块内既有消费一律走 -src），而
+    // #164 的复现入口恰在窗内 —— 读 --we-accent 会恒落兜底色、与跟随用户的墨色错配。
+    const accentOk = (r) => /background-color:\s*var\(--we-accent-src,/.test(r.body)
+      && /color:\s*var\(--we-popup-row-checked-ink,/.test(r.body);
+    const f8Ok = (g, gr, c, p) => g.length >= 1 && g.every(pairOk)
+      && gr.length >= 1 && gr.every(pairOk)
+      && c.length >= 1 && c.every(accentOk) && p.length >= 1 && p.every(pairOk);
+    check('F8 原生下拉弹层选项行：全局 option / optgroup + 自家 picker 三条读 --we-popup-row-bg / -ink，选中行读 accent-src + checked-ink',
+      f8Ok(globalRules, groupRules, checkedRules, pickerRules),
+      'global=' + globalRules.length + ' · optgroup=' + groupRules.length + ' · checked=' + checkedRules.length
+      + ' · picker=' + pickerRules.length
+      + ' · 选择器 ' + optRules.filter((r) => /option/.test(r.header)).map((r) => r.header.slice(0, 48)).join(' | '));
+    const g0 = globalRules[0];
+    const badOpaque = g0 ? {
+      header: g0.header,
+      body: g0.body.replace(/background-color:\s*var\(--we-popup-row-bg[^;]*;/,
+        'background-color: color-mix(in srgb, var(--we-sidebar-color) 20%, transparent);'),
     } : null;
-    const badNoInk = optRules[0] ? {
-      header: optRules[0].header,
-      body: optRules[0].body.replace(/\s*color:\s*var\(--we-ink[^;]*;/, ''),
+    const badNoInk = g0 ? {
+      header: g0.header,
+      body: g0.body.replace(/\s*color:\s*var\(--we-popup-row-ink[^;]*;/, ''),
     } : null;
-    check('negative control F8-1: option 底色改回半透明玻璃（弹层再次浅底浅字）会被判出',
-      bad ? !ok(bad) : false);
-    check('negative control F8-2: option 丢墨色声明会被判出',
-      badNoInk ? !ok(badNoInk) : false);
+    check('negative control F8-1: 全局那条底色改回半透明玻璃（弹层再次浅底浅字）会被判出',
+      badOpaque ? !pairOk(badOpaque) : false);
+    check('negative control F8-2: 全局那条丢掉墨色声明会被判出',
+      badNoInk ? !pairOk(badNoInk) : false);
+    check('negative control F8-3: 只剩自家 picker 那条、全局那条缺失会被判出',
+      pickerRules.length >= 1 && !f8Ok([], groupRules, checkedRules, pickerRules));
+    const c0 = checkedRules[0];
+    const badChecked = c0 ? {
+      header: c0.header,
+      body: c0.body.replace(/background-color:\s*var\(--we-accent-src,[^;]*;/, 'background-color: transparent;'),
+    } : null;
+    check('negative control F8-4: 选中行底色改回 transparent（UA 蓝底下自定义墨不可控）会被判出',
+      badChecked ? !accentOk(badChecked) : false);
+    // 这条负对照钉的正是本 PR 复审时实测到的缺口：填充写 --we-accent（而不是 -src）时，
+    // 设置窗那块把 --we-accent 掐成 initial ⇒ 填充恒落兜底色、与用户 accent 脱钩。
+    const badSrc = c0 ? {
+      header: c0.header,
+      body: c0.body.replace(/var\(--we-accent-src,/, 'var(--we-accent,'),
+    } : null;
+    check('negative control F8-5: 选中行填充改读 --we-accent（设置窗内被掐成 initial ⇒ 恒落兜底、与用户配色脱钩）会被判出',
+      badSrc ? !accentOk(badSrc) : false);
+    check('negative control F8-6: 分组标签 optgroup 那条缺失会被判出',
+      !f8Ok(globalRules, [], checkedRules, pickerRules));
+  }
+
+  // ── F9 (#164)：行配对必须随产物交付、是纯函数，且网格内处处达标 ────────────────────
+  // 「只随主题翻转」救不了自定义浅墨那一档（浅色主题默认浅底 + 用户 #fff 墨 = 白字白底），
+  // 所以判据不能只看"有没有这对令牌"，必须**复算**：抽产物里的 wePopupRowPair 对一网格墨色
+  // 各跑一遍，逐对算对比度。中灰是最难的一档（白/黑两臂在相对亮度 0.1791 处只有 4.58:1）。
+  {
+    const fnStart = SRC.indexOf('function wePopupRowPair(');
+    let fnSrc = null;
+    if (fnStart >= 0) {
+      let depth = 0;
+      for (let i = fnStart; i < SRC.length; i++) {
+        const ch = SRC[i];
+        if (ch === '{') depth++;
+        else if (ch === '}') { depth--; if (depth === 0) { fnSrc = SRC.slice(fnStart, i + 1); break; } }
+      }
+    }
+    const wePopupRowPair = fnSrc ? new Function('return (' + fnSrc + ')')() : null;
+    const usable = typeof wePopupRowPair === 'function';
+    check('F9 弹层行配对函数随产物交付且可独立复算', usable);
+    if (usable) {
+      const INKS = [
+        ['宿主深墨（浅主题默认）', '#1f2328'],
+        ['宿主浅墨（深主题默认）', '#e6e8eb'],
+        ['纯白（#164 场景 B）', '#ffffff'],
+        ['纯黑', '#000000'],
+        ['中灰（两臂最窄处）', '#7f7f7f'],
+        ['彩墨 浅黄', '#f5d76e'],
+        ['彩墨 靛蓝', '#3b3f8f'],
+      ];
+      const pairs = INKS.map(([label, ink]) => {
+        const p = wePopupRowPair(ink);
+        const hex = p && /^#[0-9a-f]{6}$/.test(p.bg);
+        return { label, ink, bg: p && p.bg, ratio: hex ? contrast(hex2rgb(p.bg), hex2rgb(ink)) : 0 };
+      });
+      const worst = pairs.reduce((a, b) => (a.ratio <= b.ratio ? a : b));
+      check('F9a 七档墨色的行底都解析成不透明 #rrggbb 且与墨色对比度 ≥4.5:1', worst.ratio >= 4.5,
+        '最差 ' + worst.label + ' → ' + worst.bg + ' vs ' + worst.ink + ' = ' + worst.ratio.toFixed(2) + ':1'
+        + ' · 全档 ' + pairs.map((p) => p.ratio.toFixed(2)).join('/'));
+      const same = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
+      const dL = wePopupRowPair('#1f2328');
+      const dD = wePopupRowPair('#e6e8eb');
+      check('F9b 主题默认墨色下逐位还原现状（浅 #ffffff+宿主深墨 / 深 #1e1f26+宿主浅墨）',
+        same(dL.bg, '#ffffff') && same(dL.ink, '#1f2328') && same(dD.bg, '#1e1f26') && same(dD.ink, '#e6e8eb'),
+        'light=' + dL.bg + '/' + dL.ink + ' · dark=' + dD.bg + '/' + dD.ink);
+      check('F9c 输入缺失 / 不可解析 ⇒ 返回 null，交给样式表缺省兜底（不写脏值）',
+        wePopupRowPair('') === null && wePopupRowPair(undefined) === null && wePopupRowPair('rgba(0,0,0,.5)') === null);
+      // 负对照：短路掉"对比度约束"（一律给浅基色 = 只认墨色、不校验）必须被同一条网格判红。
+      const naiveWorst = Math.min(...INKS.map(([, ink]) => contrast(hex2rgb('#ffffff'), hex2rgb(ink))));
+      check('negative control F9-1: 不做钳制（一律给 #ffffff 行底）在纯白墨上会被同一条网格判红',
+        naiveWorst < 4.5, 'naive worst=' + naiveWorst.toFixed(2) + ':1');
+    }
+  }
+
+  // ── F10 (#164)：选中行的墨必须按**对比度取大**选边，而不是沿用按钮的 0.45 阈值 ──────
+  // 选中行不能吃行配对（语义不同），也不该直接吃 --we-accent-ink：后者 0.45 的阈值在
+  // **中亮度** accent 上会选到白字 —— 相对亮度 0.1783–0.45 区间白字只有 2.1–4.58:1，而
+  // 同区间黑字恒优于白字（两臂等点即 0.1791）。判据从**产物**里抽出 weCheckedRowInk，
+  // 对九档 accent 逐档复算，并用"沿用 0.45 阈值"作负对照证明这条判据有牙。
+  {
+    const fnStart = SRC.indexOf('function weCheckedRowInk(');
+    let fnSrc = null;
+    if (fnStart >= 0) {
+      let depth = 0;
+      for (let i = fnStart; i < SRC.length; i++) {
+        const ch = SRC[i];
+        if (ch === '{') depth++;
+        else if (ch === '}') { depth--; if (depth === 0) { fnSrc = SRC.slice(fnStart, i + 1); break; } }
+      }
+    }
+    const weCheckedRowInk = fnSrc ? new Function('return (' + fnSrc + ')')() : null;
+    const usable10 = typeof weCheckedRowInk === 'function';
+    check('F10 选中行墨函数随产物交付且可独立复算', usable10);
+    if (usable10) {
+      const ACCENTS = [
+        ['默认蓝（settings-schema 缺省）', '#4f8cff'],
+        ['品牌蓝', '#3366cc'],
+        ['靛蓝', '#1a237e'],
+        ['近黑', '#0b1020'],
+        ['纯黑', '#000000'],
+        ['中灰（阈值区间内）', '#7f7f7f'],
+        ['纯白', '#ffffff'],
+        ['亮黄', '#FFCF4D'],
+        ['浅黄', '#f5d76e'],
+      ];
+      const rows = ACCENTS.map(([label, acc]) => {
+        const ink = weCheckedRowInk(acc);
+        return { label, acc, ink, ratio: ink ? contrast(hex2rgb(acc), hex2rgb(ink)) : 0 };
+      });
+      const worst = rows.reduce((a, b) => (a.ratio <= b.ratio ? a : b));
+      check('F10a 九档 accent 上的选中行墨都是黑/白且对比度 ≥4.5:1', worst.ratio >= 4.5,
+        '最差 ' + worst.label + ' → ' + worst.acc + ' vs ' + worst.ink + ' = ' + worst.ratio.toFixed(2) + ':1'
+        + ' · 全档 ' + rows.map((r) => r.ratio.toFixed(2)).join('/'));
+      check('F10b 输入缺失 / 不可解析 ⇒ 返回 null，交给样式表缺省兜底（不写脏值）',
+        weCheckedRowInk('') === null && weCheckedRowInk(undefined) === null && weCheckedRowInk('rgba(0,0,0,.5)') === null);
+      // 负对照：复刻 weAccentInk 的 0.45 阈值选边，同一条网格必须判红（这正是复审实测到的缺口）。
+      const s2l10 = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+      const lum10 = (rgb) => 0.2126 * s2l10(rgb[0]) + 0.7152 * s2l10(rgb[1]) + 0.0722 * s2l10(rgb[2]);
+      const inkByThreshold = (acc) => (lum10(hex2rgb(acc)) > 0.45 ? '#0f1115' : '#ffffff');
+      const naiveWorst10 = Math.min(...ACCENTS.map(([, acc]) => contrast(hex2rgb(acc), hex2rgb(inkByThreshold(acc)))));
+      check('negative control F10-1: 沿用按钮那条 0.45 阈值（中亮度 accent 上给白字）会被同一条网格判红',
+        naiveWorst10 < 4.5, 'naive worst=' + naiveWorst10.toFixed(2) + ':1');
+    }
   }
 
   const failed = results.filter((r) => !r.ok);

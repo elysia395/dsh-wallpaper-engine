@@ -128,17 +128,42 @@ const CSS_SETTINGS = `  /* ── 预设方案：两行四列的圆角表格（�
   }
   .we-picker select:hover { background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.12)); }
   .we-picker select:disabled { opacity: 0.45; cursor: default; }
-  /* ── 原生下拉的弹层选项行必须显式上不透明底 + 玻璃墨色（用户报告：下拉全是「底色与
-     字同色」）──Chromium 的弹层是一份独立文档：画布只在 select 自身背景**不透明**时才取
-     它的底色，而我们的 select 是透明玻璃底 ⇒ 弹层落到默认**浅色**画布；选项文字却继承
-     select 的玻璃墨色（深色主题=浅字）⇒ 浅字落浅底，整列不可读。修法 = 给 option 行
-     显式上 --we-panel-color（不透明面板底，随主题翻转）+ --we-ink；Chromium 弹层按
-     option 的**已解析**计算样式逐行绘制（var 在页面内已解析，弹层文档照抄结果），明暗
-     两主题都对。作用域同时钉类名（.we-picker__select —— 侧栏/抽屉的 select 不在
+  /* ── #164：原生下拉的弹层选项行必须显式上「不透明底 + 与底成对比的墨」（用户报告：
+     下拉全是「底色与字同色」）──Chromium 的弹层是一份独立文档：画布只在 select 自身
+     背景**不透明**时才取它的底色，而我们的 select 是透明玻璃底 ⇒ 弹层落到默认**浅色**
+     画布；选项文字却继承 select 的墨色 ⇒ 深色主题（浅字）落浅底、用户把"正文"角色设成
+     浅色时同样白字白底。Chromium 弹层按 option 的**已解析**计算样式逐行绘制（var 在
+     页面内已解析，弹层文档照抄结果），所以修法就是在 option 上钉死这一对。
+     ⚠️ 这一条是**全局**的（不止我们的 picker）：宿主其他原生下拉的弹层是同一个洞，
+     行色统一成「主题默认配对」——未自定义墨色时应无视觉差异。刻意用元素选择器而不挂
+     宿主 CSS-module 哈希类名（本仓红线），宿主升级后自动续效。 */
+  select option {
+    background-color: var(--we-popup-row-bg, #ffffff);
+    color: var(--we-popup-row-ink, #1f2328);
+  }
+  /* 分组下拉（optgroup）的分组标签走的是同一个机制：只钉 option 会把它漏在「select 墨色
+     × 默认画布」那一档里 ⇒ 同一个洞。这条与上面那条同对令牌、同作用域深度。 */
+  select optgroup {
+    background-color: var(--we-popup-row-bg, #ffffff);
+    color: var(--we-popup-row-ink, #1f2328);
+  }
+  /* 选中行单钉：UA 用 Highlight 蓝画 option:checked，不吃上面那对行令牌。填充读
+     --we-accent-src 而**不是** --we-accent —— 设置窗那个作用域块末尾把 --we-accent 主动
+     掐成 initial、块内既有消费一律走 -src，而 #164 的复现入口恰在窗内：读 --we-accent
+     会恒落到兜底色，既与用户配色脱钩、又与**跟随用户的**墨色错配。墨读
+     --we-popup-row-checked-ink，由 effects.js 的 weCheckedRowInk 按**对比度取大**下发
+     （刻意不沿用按钮那条 0.45 阈值：中亮度 accent 上白字只有 2.1–4.58:1，同区间黑字恒
+     更优）；兜底取默认 accent 上更可读的深墨。选中态仍是「另一种底色」，可辨识。 */
+  select option:checked {
+    background-color: var(--we-accent-src, #4f8cff);
+    color: var(--we-popup-row-checked-ink, #0f1115);
+  }
+  /* 自家 picker 子树上再钉一遍（同一对令牌）：这条特异性更高，宿主若有以类名压 option
+     的规则也盖得过去。作用域同时钉类名（.we-picker__select —— 侧栏/抽屉的 select 不在
      .we-picker 子树内，靠类名够到）与后代选择器（设置窗内一切 select，含属性面板）。 */
   .we-picker select option, .we-picker__select option {
-    background-color: var(--we-panel-color, #ffffff);
-    color: var(--we-ink, #1f2328);
+    background-color: var(--we-popup-row-bg, #ffffff);
+    color: var(--we-popup-row-ink, #1f2328);
   }
   .we-picker__hint { font-size: 0.8em; color: var(--we-ink-3, rgba(128, 128, 128, 0.75)); }
   /* 「当前壁纸实时帧」微缩预览：就是切换途中 / live 首帧前显示的那张静帧。

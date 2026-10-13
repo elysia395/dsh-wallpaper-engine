@@ -579,6 +579,16 @@ const CSS_BASE = `
     --we-follow-tint: var(--we-surface-tint-light, #ffffff);
     --we-panel-sheen-a: 0.10; --we-panel-sheen-b: 0.03; --we-panel-sheen-c: 0.05;
     --we-panel-color: var(--dsw-static-neutral-bluish-00, #ffffff);
+    /* ── #164：原生 select 弹层的行配对（不透明底 + 与底成对比的墨）────────────
+       Chromium 的弹层是一份**独立文档**：画布只在 select 自身背景**不透明**时才取
+       它的底色，否则落回默认浅色画布；而选项文字**继承** select 的墨色 —— 我们的
+       select 是透明玻璃底、墨色又可以是用户自定义的任意色，于是"浅字浅底"。这两条
+       缺省 = 主题默认配对（面板底色 + 宿主正文墨），未自定义墨色时逐位还原现状。
+       用户把"正文"角色改成浅色时，effects.js 按对比度重算这一对并覆盖
+       --we-popup-row-bg-light / -ink-light（深色档同理），两档都写、由这里按主题挑
+       —— 与 --we-surface-tint-light / -dark 同法，省掉一个主题观察者。 */
+    --we-popup-row-bg: var(--we-popup-row-bg-light, var(--we-panel-color, #ffffff));
+    --we-popup-row-ink: var(--we-popup-row-ink-light, var(--dsw-alias-label-primary, #1f2328));
   }
   body[data-ds-dark-theme] {
     --we-readability-floor-base: ${READABILITY_FLOOR_DARK};
@@ -589,6 +599,9 @@ const CSS_BASE = `
     --we-follow-tint: var(--we-surface-tint-dark, #0d1524);
     --we-panel-sheen-a: 0.07; --we-panel-sheen-b: 0.02; --we-panel-sheen-c: 0.03;
     --we-panel-color: var(--dsw-static-neutral-bluish-875, #1e1f26);
+    /* #164 深色档：见浅色块的说明。缺省墨用深色主题惯用的浅字，未自定义时逐位还原现状。 */
+    --we-popup-row-bg: var(--we-popup-row-bg-dark, var(--we-panel-color, #1e1f26));
+    --we-popup-row-ink: var(--we-popup-row-ink-dark, var(--dsw-alias-label-primary, #e6e8eb));
   }
 
 `;
