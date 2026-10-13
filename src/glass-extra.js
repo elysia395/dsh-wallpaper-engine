@@ -45,6 +45,10 @@ function weExtraGlassCss(selection) {
     + " brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);"
     + " backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8))"
     + " brightness(var(--we-glass-brightness, 1.04)) contrast(1.01); }";
+  // 拼接处的**前置不变量**：list 由 sanitizeExtraGlassSelectors 产出，只可能是"整条白名单
+  // 选择器 + ', ' 分隔"（逗号不在单条白名单里，所以 ", " 只可能是分隔符）⇒ 这里按 ", " 拆出来
+  // 的每一段都是**完整**选择器，不存在半截（总量上限与"超限整体作废"见 lib/settings-schema.js
+  // 的 EXTRA_GLASS_SELECTORS_MAX 注释：旧版 400 字上限的 slice 会在这里切出半截选择器）。
   const rules = list.split(", ").map((sel) => gate + sel + "::before {" + body);
   // ⚠️ 这条注释**只许用 ASCII**：它落在 JS 字符串字面量里（不是 styles.js 的模板），
   //    i18n 判据要求"字符串里的中文必须包 weT(...)"—— 生成出来的 CSS 注释不是 UI 文案，

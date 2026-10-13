@@ -16,6 +16,8 @@
  *   ① 生成（纯函数）：空清单 = 零规则；每条一个 `::before` 载体；声明齐（含两个前缀）；
  *      模糊读的是全局 `--we-blur`（所以跟随「雾化」滑杆）
  *   ② 消毒贯通：注入串一个字都进不去；坏条只丢自己；合法属性选择器保留
+ *   ②b 总量上限：8 条 × 120 字（974 B）全量保留且每条长度/起始符合法；任何超限输入（含
+ *      975 字符这一档）⇒ **整体拒绝 0 条**，绝不 slice 出半截选择器（+ 旧实现红对照）
  *   ③ 负对照：未消毒的同串拼进规则**会**含 `}` ⇒ ② 不是恒真
  *   ④ DOM 通道：空 ⇒ 不建标签 · 有值 ⇒ 建且内容正确 · 同值不重写 · 变空/卸载 ⇒ 移除
  *   ⑤ 接线（源码形态）：effects 两处调用 · INLINE_MODULES 登记 · 面板控件与文案 ·
@@ -126,6 +128,86 @@ const GOOD = '.dsh-mobile-control__panel, .dim-jh-badgePop';
   check('合法属性选择器保留（那是真实面板的锚点形状）', css3.includes('[data-dsh-mobile-details]::before'));
   check('生成结果里不出现任何 `}` 由选择器引入的痕迹（选择器只在 { 之前）',
     css2.split('::before {').every((part, i) => i === 0 || !/\}/.test(part.split('backdrop-filter:')[0])));
+}
+
+// ── ②b 总量上限（P1 复审：#204 原实现 slice(0,400) 会切出半截选择器）──────────────
+// 合法输入的极限是 8 条 × 单条 120 字 = 974 B（含 7 个 ", "）。旧版把总量上限写死 400 并对
+// 结果 `.slice(0, 400)` ⇒ 8 条满长输入只活下来 4 条、第 4 条被切成半截（能匹配到**别的**
+// 元素，与"整条作废、不修剪"的纪律冲突）。判定口径钉死到"不许半截"：
+//   · 满量合法输入 ⇒ 逐条逐字节保留（条数、每条长度区间、起始符合法性、总量）
+//   · 任何总量超限的输入 ⇒ **整体拒绝、0 条**（而不是截断出半截）
+// 要求 8 条 × 120 是**可达上界**：因为每条 ≤120，所以 >974 的输入必然至少 9 条（974+2+1=977），
+// 故"975 字符也不许半截"与">974 ⇒ 0 条"是同一条断言。
+{
+  const { mod } = await fresh();
+  const PER_MAX = 120;
+  const COUNT_MAX = 8;
+  const FULL = Array.from({ length: COUNT_MAX }, (_, i) => ('.p' + i + '-x'.repeat(PER_MAX)).slice(0, PER_MAX));
+  const JOINED = FULL.join(', ');
+  const TOTAL_MAX = JOINED.length;                       // 974，由 8×120 推导而来
+  const START_OK = /^[A-Za-z0-9.#_:*>()[\]=+~|\-]/;     // 与 schema 白名单首字符一致
+  const selOf = (css) => css.split('\n').filter((l) => l.includes('::before'))
+    .map((l) => l.replace(/^body\[data-we-glass-page\]:not\(\[data-we-glass-fallback\]\) /, '')
+      .replace(/::before \{.*$/, ''));
+  // 一条判据，正反两用：每段必须逐字属于输入、长度在 [1,120]、起始符合法。
+  const intact = (sels) => sels.length === COUNT_MAX && sels.every((s) =>
+    FULL.includes(s) && s.length >= 1 && s.length <= PER_MAX && START_OK.test(s));
+  const out = mod.weExtraGlassCss({ extraGlassSelectors: JOINED });
+  const got = selOf(out);
+  check('②b-1 8 条满长（各 120 字 / 合计 ' + TOTAL_MAX + ' B）全量保留，一条不丢、一句不切',
+    intact(got) && out.length >= TOTAL_MAX && schema.sanitizeExtraGlassSelectors(JOINED).length === TOTAL_MAX,
+    'n=' + got.length + ' · 规则 ' + got.length + ' · 消毒器直出 ' + schema.sanitizeExtraGlassSelectors(JOINED).length + ' B');
+  check('②b-2 消毒器直出 = 输入逐字节（不重排、不丢字、不补分隔符）',
+    schema.sanitizeExtraGlassSelectors(JOINED) === JOINED, TOTAL_MAX + ' B');
+  check('②b-2b 每条都逐字属于输入、长度 ∈[1,' + PER_MAX + '] 且以合法起始符开头（结构上排除半截）',
+    got.length === COUNT_MAX && got.every((s) => FULL.includes(s) && s.length >= 1 && s.length <= PER_MAX && START_OK.test(s)),
+    got.map((s) => s.length).join(','));
+  // 超限输入：**多余的条整条丢**（不是切半）。这一档覆盖"975 字符"——因为单条已限 120、
+  // 条数已限 8，任何 >974 的输入必然至少 9 条（974+2+1=977），只能落在这一类里。
+  const subsetIntact = (sels, inputs) => sels.length <= COUNT_MAX && sels.every((s) =>
+    inputs.includes(s) && s.length >= 1 && s.length <= PER_MAX && START_OK.test(s));
+  const OVER = FULL.concat(['.z']);
+  const OVER9 = Array.from({ length: COUNT_MAX + 1 }, (_, i) => ('.q' + i + '-y'.repeat(PER_MAX)).slice(0, PER_MAX));
+  const OVER_STR = OVER.join(', ');
+  const OVER9_STR = OVER9.join(', ');
+  const over1 = selOf(mod.weExtraGlassCss({ extraGlassSelectors: OVER_STR }));
+  const over9 = selOf(mod.weExtraGlassCss({ extraGlassSelectors: OVER9_STR }));
+  check('②b-2c 超限输入（' + OVER_STR.length + ' B = 8+1 条 · ' + OVER9_STR.length + ' B = 9 条，含 975 字符这一档）⇒ 多余的条**整条丢**，存活每条逐字属于输入、长度 ≤' + PER_MAX + '、总量 ≤' + TOTAL_MAX + '，绝不半截',
+    subsetIntact(over1, FULL) && subsetIntact(over9, OVER9)
+    && schema.sanitizeExtraGlassSelectors(OVER_STR).length <= TOTAL_MAX
+    && schema.sanitizeExtraGlassSelectors(OVER9_STR).length <= TOTAL_MAX,
+    '8+1 条 ⇒ ' + over1.length + ' 条 / ' + schema.sanitizeExtraGlassSelectors(OVER_STR).length + ' B · 9 条 ⇒ ' + over9.length + ' 条 / ' + schema.sanitizeExtraGlassSelectors(OVER9_STR).length + ' B · 上界 ' + TOTAL_MAX + ' B');
+  // 模糊 300 组（合法 / 超长 / 含非法字符 / 条数 1–11）：产物恒为「整条子集」，永不半截。
+  let fuzzBad = 0;
+  let seed = 42;
+  const rnd = () => (seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648;
+  for (let t = 0; t < 300; t++) {
+    const n = 1 + Math.floor(rnd() * 11);
+    const inputs = [];
+    const pieces = [];
+    for (let i = 0; i < n; i++) {
+      const len = 1 + Math.floor(rnd() * (PER_MAX + 3));
+      const s = ('.f' + t + '-' + i + '-' + 'z'.repeat(len)).slice(0, len);
+      inputs.push(s);
+      pieces.push(i === n - 1 && rnd() < 0.25 ? s + '!' : s);   // 掺入非法尾字符
+    }
+    const san = schema.sanitizeExtraGlassSelectors(pieces.join(', '));
+    const sels = selOf(mod.weExtraGlassCss({ extraGlassSelectors: pieces.join(', ') }));
+    if (san.length > TOTAL_MAX || sels.length > COUNT_MAX
+      || sels.some((s) => !inputs.includes(s) || s.length < 1 || s.length > PER_MAX || !START_OK.test(s))) fuzzBad++;
+  }
+  check('②b-2d 300 组随机输入（含超长 / 非法字符 / 1–11 条）的产物恒为「整条子集」：无半截、≤' + COUNT_MAX + ' 条、≤' + TOTAL_MAX + ' B',
+    fuzzBad === 0, 'violations=' + fuzzBad);
+  // 负对照：复刻旧实现（join 后 slice(0,400)），用**同一条 intact 判据**必须判红。
+  const OLD_MAX = 400;                                    // 旧实现写死的总量上限（就是 bug 本身）
+  const oldSel = JOINED.slice(0, OLD_MAX).split(', ');
+  check('negative control ②b-1: 旧实现 slice(0,' + OLD_MAX + ') 在同一条判据下判红 —— 产出半截选择器',
+    !intact(oldSel), '旧输出 ' + OLD_MAX + ' B / ' + oldSel.length + ' 条 · 末段 ' + JSON.stringify(oldSel[oldSel.length - 1]) + ' 长度 ' + oldSel[oldSel.length - 1].length);
+  // 源码形态：截断是"半截选择器"的唯一来源 ⇒ 总量上限必须由两个量纲**算出来**且不再 slice。
+  const schemaSrc = readFileSync(join(ROOT, 'lib', 'settings-schema.js'), 'utf8');
+  check('②b-3 总量上限由 8×120 推导（不是手写魔数），且结果不再走 slice 截断',
+    /const EXTRA_GLASS_SELECTORS_MAX = EXTRA_GLASS_SELECTOR_COUNT \* EXTRA_GLASS_SELECTOR_MAX\s+\+ 2 \* \(EXTRA_GLASS_SELECTOR_COUNT - 1\);/.test(schemaSrc)
+    && !/\.slice\(0,\s*EXTRA_GLASS_SELECTORS_MAX\)/.test(schemaSrc));
 }
 
 // ── ③ 负对照：没有消毒就会带进 `}` ⇒ ② 不是恒真 ───────────────────────────────
