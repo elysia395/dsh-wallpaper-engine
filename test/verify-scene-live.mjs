@@ -191,6 +191,10 @@ const missingWp = calledWp.filter((name) => !new RegExp('^  ' + name + '\\(', 'm
 check('renderer page defines every __wp method the client calls',
   calledWp.length >= 10 && missingWp.length === 0,
   'called=[' + calledWp.join(', ') + '] missing=[' + missingWp.join(', ') + ']');
+// 网页壁纸的 URL 一律带 webSandbox=strict：控制面任何方法都不得按 URL 参数被摘掉 ——
+// 摘掉 setAudioBridge 时音频可视化壁纸静默不跳（客户端 typeof 判空后直接跳过，不报错）。
+check('renderer page never strips __wp methods (strict web sandbox keeps the full host surface)',
+  !/delete\s+window\.__wp\b/.test(pageJs) && !/delete\s+window\.__wp\[/.test(pageJs));
 check('renderer page exposes __wpStats.frame()', /window\.__wpStats\s*=\s*\{\s*frame:/.test(pageJs));
 // 兜底页（issue #129 证据 4）：渲染页在场景解析失败时把 iframe 指到
 // `<BASE>/default-wallpaper/index.html` —— 缺了它，「静默超时」没有可见落点。
