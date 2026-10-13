@@ -1932,7 +1932,6 @@ console.log('\n⑬ CSS 契约（按面变量零兜底 / 门控许可证 / 双向
   //   ② **只声明自定义属性的规则豁免**（`--we-x: …` / `--dsw-…: …`）：它们自己不画任何像素，
   //      是"派生变量 / 宿主令牌"的定义点；真正画东西的是**消费**它们的那些规则，而消费者带门控
   //      （这正是 ⑨ 组在查的"门控覆盖率"）。把定义点也算成"必须有门控"是把范围放错了地方。
-  const srcOf = (p) => readFileSync(join(ROOT, 'src', p), 'utf8');
   // ⚠️ 门控属性与按面变量的**写入**现在都在 `src/glass.js`（R3b 第一步搬的，见 wip §10.13）；
   //    `data-we-wallpaper` 仍由 `src/live-layer.js` 的 ACTIVE_ATTR 挂 ⇒ 两个来源都要收。
   const gateSrc = GLASS_SRC.concat(liveText());

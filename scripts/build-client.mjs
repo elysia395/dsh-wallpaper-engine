@@ -452,6 +452,12 @@ const INLINE_MODULES = [
     markers: ['let lastScrimCss = "";', 'function applyEffects(', 'applyGlass(selection, s);',
       'function clearEffects()', 'function resolveWallpaperFadeBg()'],
   },
+  {
+    file: 'src/client-media-frame.js',
+    why: 'src/client.js 正文的媒体/帧渲染助手（画布绘制、GPU 帧钉、音频桥与封面、属性面板装配；含其模块级状态变量）—— 构建期内联在正文之前，同处一个扁平作用域',
+    markers: ['function weStopDraw()', 'const GPU_FRAME_PIN_TTL_MS = 30000;',
+      'function renderUserPropsPanel()'],
+  },
 ];
 
 /**

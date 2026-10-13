@@ -32,8 +32,8 @@ import { Readable, Writable } from 'node:stream';
 import { execFileSync } from 'node:child_process';
 // 剥注释：共享的字符串感知实现（`verify-module-layout` 的『剥注释必须字符串感知』一节钉住"不许再用朴素正则"）。
 import { stripComments, stripExportBlocks } from './tools/js-text.mjs';
-// 刀3：样式族取文（8 个域模块 + 组装点，构建序拼接）。
-import { styleText, panelSources, panelText, liveText } from './tools/src-scope.mjs';
+// 刀3：样式族取文（8 个域模块 + 组装点，构建序拼接）。刀6：客户端正文族（正文 + 助手模块）。
+import { styleText, panelSources, panelText, liveText, clientText } from './tools/src-scope.mjs';
 // 单独 import `src/**` 时补上 bundle 作用域的取词层（面板渲染器直接用 weT；见该 shim 的文件头）。
 import { installWeTShim } from './tools/weT-shim.mjs';
 installWeTShim();
@@ -186,7 +186,7 @@ check('renderer page loads the engine from ./engine/ and that file ships in the 
   engineImport || '无 ./engine/ 引用');
 // 控制面契约：客户端按名调用渲染页的 `__wp` 方法（缺一个只表现为壁纸不响应，没有报错）——
 // 客户端源码里出现的每个 `wp.<方法>(` 都必须在渲染页上有定义。
-const clientSrc = liveText() + '\n' + readFileSync(join(root, 'src', 'client.js'), 'utf8');
+const clientSrc = liveText() + '\n' + clientText();
 const calledWp = [...new Set([...clientSrc.matchAll(/\bwp\.(\w+)\(/g)].map((m) => m[1]))].sort();
 const missingWp = calledWp.filter((name) => !new RegExp('^  ' + name + '\\(', 'm').test(pageJs));
 check('renderer page defines every __wp method the client calls',
@@ -856,7 +856,7 @@ console.log('Level D — client source wiring (src/client.js + 抽出的模块)'
 // 还有"跨文件的接线"断言（如"面板调用 + 被调函数里的门禁"）—— 所以三个来源都读出来，
 // **各自用在对应的判据上**（不图省事拼成一个字符串：那样一个文件的文本就能满足另一个文件的
 // 结构断言，判据会失去牙）。
-const src = readFileSync(join(root, 'src', 'client.js'), 'utf8');
+const src = clientText();
 // 快捷播放面板源码（类型筛选等面板本地行为的断言读它）。
 // ⚠️ 这里**在定义点**统一剥掉文件末尾的 `export { … }`：本文件有两处把它喂给 `new Function`
 // （模块级自由变量形态复现台），而 `new Function` 不是模块环境 ⇒ 不剥就是语法错误。
@@ -1735,7 +1735,7 @@ for (const [name, ok] of clientChecks) check(name, ok);
     // 从来没被读，首笔落下时回调的 recheck 又撞回同一条判据 ⇒ Edge 腿的放行条件**永远不成立**，
     // 15s 停滞上限一到旧壁纸永久留屏。两半必须同时在场且指向同一留痕。
     const liveSrcForGate = liveText();
-    const clientSrcForGate = readFileSync(new URL('../src/client.js', import.meta.url), 'utf8');
+    const clientSrcForGate = clientText();
     const canvasGateOk = (src) => /mirror\.dataset && mirror\.dataset\.weDrawn === "1"/.test(src)
       && !/if \(node\.querySelector\("canvas\.we-media--canvas"\)\) return false;/.test(src);
     check('③ 镜像画布的放行读画笔留痕（weDrawn）：闸门读它、weDrawFrame 写它，两半同时在场',
