@@ -531,7 +531,7 @@ function cancelPendingFontSet() {
 
 export {
   fontValueDefaults, readCachedFontSetValues, loadFontSet, setFontValues, persistFontSet,
-  flushFontSet, onPageHideFlushFontSet, onVisibilityResyncFontSet, cancelPendingFontSet,
+  onPageHideFlushFontSet, onVisibilityResyncFontSet, cancelPendingFontSet,
   landPresetFontSet,
   refreshFontSets, activateFontSet, createFontSet, renameFontSet, deleteFontSet,
   exportFontSetUrl, importFontSet, flushFontSetNow, fontSetDrifted,

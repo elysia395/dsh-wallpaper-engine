@@ -174,7 +174,7 @@ function buildTypePayload(sizes, isAvailable, weights, families, resolveFamily, 
 }
 
 export {
-  THEME_TYPE_SOURCE, THEME_TYPE_ROLES, GLOBAL_FAMILY_TOKEN,
+  THEME_TYPE_SOURCE, THEME_TYPE_ROLES,
   THEME_SIZE_MIN, THEME_SIZE_MAX,
-  isTypeSize, typeTokenNames, buildTypePayload,
+  buildTypePayload,
 };

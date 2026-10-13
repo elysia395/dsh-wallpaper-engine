@@ -687,7 +687,7 @@ function buildMedia(sel) {
 // are only throttled by the browser while the page is hidden.
 export {
   applySelection, buildMedia, beginRotationPrepare, prepareLiveTimeouts,
-  prepTimeout, prepareWallpaper, prepareVideoProbe, prepareWebProbe,
-  prepareLiveExhausted, notePrepareLiveTimeout, clearPrepareLiveTimeout,
-  prepareSceneLiveStage, prepareSceneStaticStage,
+  prepareWallpaper,
+  clearPrepareLiveTimeout,
+  prepareSceneLiveStage,
 };

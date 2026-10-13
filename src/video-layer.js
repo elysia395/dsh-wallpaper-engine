@@ -791,7 +791,7 @@ function abortMediaInfoProbe() {
   if (mediaInfoAbort) { try { mediaInfoAbort.abort(); } catch { /* ignore */ } mediaInfoAbort = null; }
 }
 export {
-  refreshMediaInfo, maybeUpgradeToTranscoded, transcodeUpgradeFailed, abortTranscodeUpgrade,
+  refreshMediaInfo, maybeUpgradeToTranscoded, abortTranscodeUpgrade,
   invalidateMediaInfoProbe, abortMediaInfoProbe, revertTranscodedVideo,
-  clearUpgradePoll, clearUpgradeMeta,
+  clearUpgradePoll,
 };

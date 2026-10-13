@@ -309,7 +309,7 @@ function buildDslBlocks(config, available, isAvailable, hookScopes, resolveFamil
 }
 
 export {
-  COMPONENT_FONT_TARGETS, COMPONENT_FONT_PROPS, DSL_FONT_HOOKS, DSL_HOOK_NAMES, HOOK_SCOPE_RE,
+  COMPONENT_FONT_TARGETS, COMPONENT_FONT_PROPS, DSL_FONT_HOOKS, HOOK_SCOPE_RE,
   componentScopeSelector, probeComponentTargets, scanHookScopes,
   buildComponentCss, buildDslBlocks, selectorFor,
 };
