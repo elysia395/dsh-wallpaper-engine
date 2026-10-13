@@ -4140,6 +4140,53 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       'replaced=' + (mutatedText !== aiText) + ' real=' + JSON.stringify(avifBasic)
         + ' mutated=' + JSON.stringify(mutatedDim));
     rmSync(mutDir, { recursive: true, force: true });
+    // ⑧ 残留洞 A：`meta` 排在 `mdat` **之后**（`ftyp` + 3.4 MB `mdat` + `meta`，总 3.40 MiB
+    //    **低于 4 MiB 体积闸**）—— 256 KB 读头够不到 `meta` ⇒ 探针返 null ⇒ 边长闸被绕过，
+    //    体积闸也不会替它兜底（这份文件没超体积）。夹具是真的：内嵌真 `ispe` 4096×4096。
+    //    验收口径（两种收口都算过，就是不许静默放行）：量得出尺寸 ⇒ 必须被**边长闸**拦下；
+    //    量不出 ⇒ 必须**显式拒绝**。配一条变异负对照：把放宽上限改回 256 KB（= 修改前的
+    //    行为）⇒ 同一段断言必须判红。
+    const mdatFixture = catBytes(
+      isobox('ftyp', catBytes(ascii('avif'), u32be(0), ascii('mif1'), ascii('miaf'))),
+      isobox('mdat', new Uint8Array(3.4 * 1024 * 1024)),
+      isobox('meta', catBytes(
+        fullBox(new Uint8Array(0)),
+        isobox('pitm', fullBox(u16be(1))),
+        isobox('iprp', isobox('ipco', ispeBox(4096, 4096))),
+      )),
+    );
+    const fakeMdat = (cap) => ({
+      type: 'image/avif',
+      size: mdatFixture.length,
+      slice: (from, to) => {
+        const want = to === undefined ? mdatFixture.length : to;
+        const v = mdatFixture.subarray(from, cap ? Math.min(want, cap) : want);
+        return { arrayBuffer: async () => v.buffer.slice(v.byteOffset, v.byteOffset + v.byteLength) };
+      },
+    });
+    /** 这段断言本身：真实现过、变异体（256 KB 上限）不过。 */
+    const mdatHeldBy = async (mod) => {
+      const probed = await mod.probeImageSize(fakeMdat(0));
+      const gate = mod.avatarImportLimit(fakeMdat(0), probed);
+      return probed !== null
+        ? gate.ok === false && gate.overEdge === true && gate.overBytes === false : gate.ok === false;
+    };
+    const mdatMutText = aiText.replace(
+      'const AVATAR_AVIF_HEAD_BYTES = AVATAR_IMPORT_MAX_BYTES;',
+      'const AVATAR_AVIF_HEAD_BYTES = AVATAR_BITMAP_HEAD_BYTES;');
+    const mdatMutDir = join(root, '.test-cache', 'avif-mdat-mutant');
+    mkdirSync(mdatMutDir, { recursive: true });
+    const mdatMutFile = join(mdatMutDir, 'avatar-import-mutated.mjs');
+    writeFileSync(mdatMutFile, mdatMutText);
+    const mdatMutMod = await import(pathToFileURL(mdatMutFile).href);
+    const mdatDeep = await ai.probeImageSize(fakeMdat(0));
+    const mdatGate = ai.avatarImportLimit(fakeMdat(0), mdatDeep);
+    check('残留洞 A: meta 排在 3.4 MB mdat 之后（3.40 MiB < 4 MiB 体积闸）⇒ 要么量出 4096×4096 被边长闸拦下、要么显式拒绝；变异负对照: 放宽上限改回 256 KB ⇒ 该判据必须判红',
+      (await mdatHeldBy(ai)) === true && mdatMutText !== aiText
+        && (await mdatHeldBy(mdatMutMod)) === false,
+      'size=' + mdatFixture.length + ' real=' + JSON.stringify([mdatDeep, mdatGate])
+        + ' mutated=' + JSON.stringify(await mdatMutMod.probeImageSize(fakeMdat(0))));
+    rmSync(mdatMutDir, { recursive: true, force: true });
   }
   {
     // ── 头像导入的两道闸 + 「自动压缩后导入」（#185 后续，用户口径 2026-10-13）──────────
