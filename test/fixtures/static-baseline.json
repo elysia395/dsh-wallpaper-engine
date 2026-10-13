@@ -1,25 +1,7 @@
 {
   "eslint": {
-    "filesLinted": 223,
-    "byRule": {
-      "no-empty-pattern": 5,
-      "no-extra-boolean-cast": 1,
-      "no-irregular-whitespace": 5,
-      "no-promise-executor-return": 103,
-      "no-regex-spaces": 5,
-      "no-self-compare": 2,
-      "no-sequences": 4,
-      "no-template-curly-in-string": 35,
-      "no-unmodified-loop-condition": 11,
-      "no-unused-expressions": 12,
-      "no-unused-vars": 61,
-      "no-useless-assignment": 127,
-      "no-var": 23,
-      "no-void": 4,
-      "object-shorthand": 18,
-      "prefer-const": 21,
-      "require-atomic-updates": 12
-    }
+    "filesLinted": 224,
+    "byRule": {}
   },
   "tsc": {
     "byCode": {
@@ -28,7 +10,6 @@
       "TS2353": 11,
       "TS2554": 21,
       "TS2559": 1,
-      "TS2741": 1,
       "TS2810": 2,
       "TS8032": 7
     }
