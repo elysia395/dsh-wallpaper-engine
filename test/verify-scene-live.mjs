@@ -1633,7 +1633,9 @@ for (const [name, ok] of clientChecks) check(name, ok);
       && /serveLayout\(pick\.layout, pick\.abs, req, res, method === 'HEAD'\)/.test(mediaBytesFam)
       // 布局数学：moov 搬 mdat 前 + 两条 chunk 偏移表整体平移（缺一条就不是"等价搬家"）。
       && vfsLib.includes('export function analyzeMp4Layout(')
-      && vfsLib.includes('export const MP4_VFS_MAX_MOOV_BYTES')
+      // moov 上限：钉"值本身 + 强制执行点"，而不是 export 关键字（该常量本轮起不再对外导出：零消费者）。
+      && /const MP4_VFS_MAX_MOOV_BYTES = 8 \* 1024 \* 1024;/.test(vfsLib)
+      && /moov\.size > MP4_VFS_MAX_MOOV_BYTES\) return \{ kind: 'none', reason: 'moov-too-big' \};/.test(vfsLib)
       && vfsLib.includes("'stco'") && vfsLib.includes("'co64'")
       && vfsLib.includes('mdat.start')
       // 服务期合成：段表 → Range 切片（单段文件/内存段/跨段三条路都要在）。
@@ -4810,7 +4812,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     const ctxOf = (sel) => ({
       sel,
       onAvatarEnabled: () => {}, onAvatarSize: () => {}, onAvatarRadius: () => {},
-      onAvatarName: () => {}, onAvatarPick: () => {}, onAvatarClear: () => {},
+      onAvatarPick: () => {}, onAvatarClear: () => {},
     });
     const PARAMS = ['「我」的头像', '「助手」的头像', '头像大小', '圆角强度'];
     // 岛的取值面跨了三个模块：schema 的四个常量（滑块范围 / 昵称上限）+ 头像层的三枚
@@ -4977,6 +4979,9 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
           querySelector: (sel) => query(body, sel)[0] || null,
         };
         globalThis.MutationObserver = MO;
+        // 有意喂一个 SUT 不认的字段：`src/avatar-layer.js:268/275/276` 只按名读 enabled / size / radius，
+        // 而 ③ 断言节点仍只有一枚 `.we-avatar__glyph` 子节点 ⇒ 证明设置里多出来一个名字字段也不会
+        // 凭空长出名字节点（未知字段负对照，保留）。
         globalThis.selection = { avatarEnabled: true, avatarSize: 40, avatarRadius: 100, avatarUserName: '' };
         avatarLayerMod.syncAvatarLayer();
         const uNode = userRow.firstElementChild;
