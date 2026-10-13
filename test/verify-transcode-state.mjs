@@ -23,6 +23,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import { createTranscodeKit } from '../lib/transcode.js';
+import { stripComments } from './tools/js-text.mjs';
 
 const results = [];
 /** 转码编码器兜底（issue：只有 NVENC ⇒ 无 NVENC 的 ffmpeg 必然全失败）。 */
@@ -215,6 +216,45 @@ const results = [];
     joinsThroughOnEntry(withoutOnEntry) === false);
 
   rmSync(root, { recursive: true, force: true });
+}
+/** SLICE 12（kill 前必须判 pid）：`spawn` 失败（可执行文件不存在）时 ChildProcess 的
+ *  `pid === undefined`，此时 `kill()` **既不抛也不返回** —— 事件循环被同步阻塞（macOS
+ *  实测：连 watchdog 定时器都不再触发）。`try/catch` 因此完全无效（它挂住而不是抛），
+ *  唯一的正解是调用前判 pid。本段把这条判据钉在转码族的 kill 调用点上；扫整个 `lib/**`
+ *  的同类判据在 test/verify-child-kill.mjs。
+ *
+ *  判据作用在**剥注释后**的源码上（注释里提到 `proc.kill()` 不算调用点）—— 用共享的
+ *  test/tools/js-text.mjs，而不是朴素块注释正则。阳性（真源码）与阴性（变异体）走同一条
+ *  `pidUnguarded`。⚠️ 这也是本段只能钉源码形态的原因：行为判据在修复前会**挂死**而不是
+ *  报红（守卫自身卡住，CI 只能超时）。
+ */
+{
+  const tcText = readFileSync(new URL('../lib/transcode.js', import.meta.url), 'utf8');
+  /** 判据：返回没有「子进程已建立」守卫包裹的 kill 调用点（行号）。 */
+  const pidUnguarded = (text) => {
+    const lines = stripComments(text).split('\n');
+    const bad = [];
+    for (let i = 0; i < lines.length; i++) {
+      const m = lines[i].match(/([A-Za-z_$][\w$]*)\.kill\s*\(/);
+      if (!m) continue;
+      const recv = m[1];
+      const win = lines.slice(Math.max(0, i - 8), i + 1).join('\n');
+      const guarded = new RegExp('\\b' + recv + '\\s*&&\\s*' + recv + '\\.pid\\b'
+        + '|\\b' + recv + '\\.pid\\s*(?:!==?|===?)\\s*undefined').test(win);
+      if (!guarded) bad.push(i + 1);
+    }
+    return bad;
+  };
+  const realBad = pidUnguarded(tcText);
+  check('转码族每个 kill 调用点都判了「子进程已建立」（pid 落地）',
+    realBad.length === 0, '未守卫行=' + JSON.stringify(realBad));
+  const mutant = tcText
+    .split('if (proc.pid !== undefined) { try { proc.kill(); } catch { /* ignore */ } }')
+    .join('if (true) { try { proc.kill(); } catch { /* ignore */ } }')
+    .split('if (curProc && curProc.pid !== undefined) { try { curProc.kill(); } catch { /* ignore */ } }')
+    .join('if (curProc) { try { curProc.kill(); } catch { /* ignore */ } }');
+  check('negative control: 同一条判据吃「删掉 pid 守卫」的变异体必须报出调用点',
+    pidUnguarded(mutant).length > 0, '未守卫行=' + JSON.stringify(pidUnguarded(mutant)));
 }
 function check(name, ok, detail) {
   results.push({ name, ok });

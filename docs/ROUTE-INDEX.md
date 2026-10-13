@@ -19,7 +19,7 @@
 | 3 | `/transcode-progress` | lib/routes/media-derived.js:100 | 箭头 | disposers base mediaMap transcodeJobs | 2 |
 | 4 | `/transcoded` | lib/routes/media-derived.js:153 | 箭头 | disposers base mediaMap serveFile transcodeToFps registerTranscodeWaiter | 1 |
 | 5 | `/video-preview` | lib/routes/media-derived.js:212 | 箭头 | disposers base mediaMap serveFile generateVideoPreview | 2 |
-| 6 | `/media` | lib/routes/media-bytes.js:36 | 箭头 | disposers base serveFile serveLayout mediaMap log …(+1) | 21 |
+| 6 | `/media` | lib/routes/media-bytes.js:36 | 箭头 | disposers base serveFile serveLayout mediaMap log …(+1) | 22 |
 | 7 | `/preview` | lib/routes/media-bytes.js:36 | 箭头 | disposers base serveFile serveLayout mediaMap log …(+1) | 10 |
 | 8 | `/scene-frame` | lib/routes/scene-frame.js:74 | 箭头 | disposers base mediaMap trackStream customFramePath customIdFromAbs …(+3) | 12 |
 | 9 | `/scene-frame-cache` | lib/routes/scene-frame.js:152 | 箭头 | disposers base mediaMap GPU_FRAME_MAX_BYTES GPU_WRITE_INFLIGHT armBodyIdleTimeout …(+4) | 4 |
@@ -50,7 +50,7 @@
 | 34 | `/fontsets` | lib/routes/fontsets.js:245 | async 箭头 | disposers base readFontSetId | 6 |
 | 35 | `/glass-presets` | lib/routes/presets.js:491 | async 箭头 | disposers base | 1 |
 | 36 | `/star-count` | lib/routes/github-stars.js:107 | async 箭头 | disposers base repoSlug log | 2 |
-| 37 | `/system-fonts` | lib/routes/system-fonts.js:457 | async 箭头 | disposers base | 4 |
+| 37 | `/system-fonts` | lib/routes/system-fonts.js:459 | async 箭头 | disposers base | 4 |
 | 38 | `/about-qr` | lib/routes/about-qr.js:65 | 箭头 | disposers base aboutDir serveFile | 3 |
 | 39 | `/mascot` | lib/routes/mascot.js:50 | 箭头 | disposers base serveFile mascotDir mascotPath MASCOT_EXT …(+4) | 5 |
 | 40 | `/avatar` | lib/routes/avatar.js:54 | 箭头 | disposers base serveFile avatarDir avatarPath AVATAR_SIDES …(+5) | 5 |
