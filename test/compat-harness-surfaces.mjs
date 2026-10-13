@@ -144,7 +144,7 @@ if (!check('已装 harness 可定位（DSH_WE_HARNESS_ROOT 或 npm 全局）', h
 }
 
 // ── ① 清单棘轮 ────────────────────────────────────────────────────────────────
-let inventory = null;
+let inventory;
 try { inventory = JSON.parse(readFileSync(INVENTORY, 'utf8')); } catch { inventory = null; }
 const known = inventory && typeof inventory.known === 'object' && inventory.known ? inventory.known : {};
 const inventoryOk = check('提交清单可解析且非空（known 表是裁定的唯一真源）',

@@ -220,7 +220,7 @@ async function runHandler(route, url) {
 }
 
 let token = null;
-let invBody = null;
+let invBody;
 {
   const res = await runHandler(invRoute, '/wallpaper-engine/inventory');
   invBody = JSON.parse(res.__state.body.toString('utf8'));
@@ -444,7 +444,7 @@ if (token) {
       } else {
       const mode = statSync(cacheDir).mode & 0o777;
       chmodSync(cacheDir, 0o555); // 目录不可写 → unlinkSync EACCES
-      let locked = null;
+      let locked;
       try {
         locked = await runClear('/wallpaper-engine/scene-frame-cache/' + token);
       } finally {

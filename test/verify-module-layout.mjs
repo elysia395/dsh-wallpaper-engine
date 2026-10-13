@@ -168,11 +168,11 @@ function findLibToSrcEdges(sources) {
 
 /** 递归列出 dir 下的文件（仓库根相对的 posix 路径，已排序）。 */
 function walkFiles(dir, out = []) {
-  let names = [];
+  let names;
   try { names = readdirSync(dir); } catch { return out; }
   for (const name of names) {
     const abs = join(dir, name);
-    let st = null;
+    let st;
     try { st = statSync(abs); } catch { continue; }
     if (st.isDirectory()) walkFiles(abs, out);
     else if (st.isFile()) out.push(relative(ROOT, abs).split(sep).join('/'));

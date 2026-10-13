@@ -278,7 +278,7 @@ section('④ 路由：200 信封、缓存不重复扫描、?refresh=1 重扫、�
       set statusCode(v) { state.statusCode = v; },
     };
     await route.handler(req, res);
-    let data = null;
+    let data;
     try { data = JSON.parse(state.body); } catch { data = null; }
     return { state, data };
   };

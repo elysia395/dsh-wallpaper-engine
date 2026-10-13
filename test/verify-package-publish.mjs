@@ -76,12 +76,12 @@ const publishSet = (r) => files.some((entry) => coveredBy(r, entry));
 /** 遍历仓库文件；跳过永远不可能"被发布"的重目录（否则本机要白走一遍 .git 与 node_modules）。 */
 const SKIP_DIRS = new Set(['.git', 'node_modules', '.test-cache', '_refs', '.integration-notes']);
 const walk = (dir, out = []) => {
-  let names = [];
+  let names;
   try { names = readdirSync(dir); } catch { return out; }
   for (const name of names) {
     if (SKIP_DIRS.has(name)) continue;
     const abs = join(dir, name);
-    let st = null;
+    let st;
     try { st = statSync(abs); } catch { continue; }
     if (st.isDirectory()) walk(abs, out);
     else if (st.isFile()) out.push(rel(abs));

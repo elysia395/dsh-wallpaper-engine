@@ -606,7 +606,7 @@ function main() {
   // which is why that pattern is in SOFT_RENDER_RE). No PASS/FAIL: a native
   // module that is unavailable elsewhere must not fail this suite.
   {
-    let line = 'unavailable';
+    let line;
     try {
       // createGL(width, height, options) reads options.isWebGL2 unguarded, so an
       // options object is required. Ask for WebGL 1 — the same context kind

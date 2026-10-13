@@ -162,7 +162,6 @@ export function scanCjkStrings(src, options = {}) {
         }
         if (d === '$' && text[j + 1] === '{') {
           chunks.push(chunk);
-          chunk = '';
           hasInterp = true;
           // 跳过 ${…}：括号配对（认字符串/模板/注释）—— 用同一套词法递归代价太大，
           // 这里只做"配对跳过"，其中的 CJK 由外层 while 之后的常规扫描负责吗？不：

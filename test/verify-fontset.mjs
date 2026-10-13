@@ -346,7 +346,7 @@ const dirSnapshot = (dir) => {
  * 只看名字会漏掉"就地改了一份随包预设"，那正是写时复制要防的事。
  */
 const dirDigest = (dir) => {
-  let names = [];
+  let names;
   try { names = readdirSync(dir).filter((n) => n.endsWith('.json')).sort(); } catch { return null; }
   return names.map((n) => {
     const h = createHash('sha256').update(readFileSync(join(dir, n))).digest('hex').slice(0, 16);
@@ -703,7 +703,7 @@ if (fontsetsRoute) {
   //     所以"逐份有效"是发布前的硬闸（`sanitizeFontset` 会**静默丢掉**它不认识的值）。
   const badBuiltin = [];
   for (const id of builtinIds) {
-    let raw = null;
+    let raw;
     try { raw = JSON.parse(readFileSync(join(BUILTIN_DIR, id + '.json'), 'utf8')); } catch { badBuiltin.push(id + ':unreadable'); continue; }
     if (!raw || raw.$schema !== schema.FONTSET_SCHEMA_TAG) { badBuiltin.push(id + ':schema'); continue; }
     if (raw.id !== id) { badBuiltin.push(id + ':id-mismatch'); continue; }

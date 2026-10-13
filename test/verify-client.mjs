@@ -1392,14 +1392,14 @@ setTimeout(async () => {
       '设置页必须画「全局字体」节头（两档都画 —— 它也是收起的入口）');
     // ── 切侧栏渲染台（外观页 · 字体节与详细玻璃都展开）：从这里起高级行断言。 ──
     tree = renderSidePane();
-    treeText = JSON.stringify(tree);
+    JSON.stringify(tree);
     assert.ok(findCtlInput(tree, '内容面玻璃·独立配置'), '内容面独立配置不受跟随开关影响:');
     // 关掉跟随 ⇒ 侧栏「独立配置」出现（能力没丢），body 属性随之摘掉。
     followSwitch.props.onChange({ target: { checked: false } });
     assert.equal(bodyEl.attributes['data-we-sidebar-follow'], undefined,
       '关掉跟随必须摘掉 body 属性（否则侧栏的釉仍取共享那一份）');
     tree = renderSidePane();
-    treeText = JSON.stringify(tree);
+    JSON.stringify(tree);
     assert.ok(findCtlInput(tree, '侧栏玻璃·独立配置'), '关掉跟随 ⇒ 侧栏「独立配置」出现:');
     // ⚠️ 基线交付给下面 #132 的判据主体：跟随关着 ⇒ 它的开关流/量程/退役判据照原样跑。
     // ⚠️ 本批（wip §10.24）：侧栏家族与内容面的滑块挂在**各自的「独立配置」**下面 ——
@@ -1486,12 +1486,12 @@ setTimeout(async () => {
     sepTree = renderPicker();
     findGlassSwatch(sepTree, '玻璃颜色 #ffffff').props.onClick();
     tree = renderSidePane();
-    treeText = JSON.stringify(tree);
+    JSON.stringify(tree);
     assert.ok(swatchActive(findGlassSwatch(tree, '玻璃颜色 #ffffff')), 'A2-F2 复原：侧栏档回白釉');
     // 内容面同样：它的开关打开后才画透明度 / 底色两行。
     findCtlInput(tree, '内容面玻璃·独立配置').props.onChange({ target: { checked: true } });
     tree = renderSidePane();
-    treeText = JSON.stringify(tree);
+    JSON.stringify(tree);
     assert.equal(sliderMax(findSliderRow(tree, '内容面透明度')), '100', '内容面透明度上限必须是 100（规范刻度，R4）');
     // §10.27 + v1.3.0 追版：新增的「思考触发条玻璃·独立配置」—— 打开后才画它自己的两项，量程同样
     // 钉在规范刻度上（这正是"拖过 60 跳回 20"那次事故的两侧之一：**面板量程**那一侧）。
@@ -1564,7 +1564,7 @@ setTimeout(async () => {
     followSwitch.props.onChange({ target: { checked: true } });
     assert.equal(bodyEl.attributes['data-we-sidebar-follow'], 'on', '重新打开跟随 ⇒ 属性回来');
     tree = renderSidePane();
-    treeText = JSON.stringify(tree);
+    JSON.stringify(tree);
     assert.equal(findCtlInput(tree, '侧栏玻璃·独立配置'), null, '重新打开跟随 ⇒ 「独立配置」又收起');
 
     // ── 「字体」已并入「外观」：老的 localStorage 页签值必须迁移过去（不能把用户
@@ -1793,7 +1793,7 @@ setTimeout(async () => {
       // 循环面：从第一只往左一格 ⇒ 应落到**最后一只内置**（而不是「自定义」）
       const back = itemByLabel(mascotItems, firstLabel);
       back.props.onClick(); tree = renderPicker();
-      mascotItems = findMascotItems(tree);
+      findMascotItems(tree);
       const lastBuiltin = ringLabels[ringLabels.length - 1];
       const s3 = findMascotStage(tree);
       s3.props.onKeyDown({ key: 'ArrowLeft', preventDefault: () => {} });
@@ -2129,7 +2129,7 @@ setTimeout(async () => {
         '点圆点应把那一只转到中心（期望 ' + wantFar + '）');
       // 复位到第一只
       itemByLabel(mascotItems, firstLabel).props.onClick(); tree = renderPicker();
-      mascotItems = findMascotItems(tree);
+      findMascotItems(tree);
     }
     // ── ⑥ **按钮必须可点**（用户口径：「你按钮要可点击」）─────────────────────────
     //    更早那版在"自定义立绘生效时"把内置项与两个 ‹ › 全禁用了 ⇒ 只剩「自定义」与「清除」
@@ -3101,7 +3101,7 @@ setTimeout(async () => {
     let sceneCard = findCard(tree3, 'Scene C');
     assert.ok(sceneCard && typeof sceneCard.props.onClick === 'function', 'scene C card must be clickable');
     findSearch(tree3).props.onInput({ target: { value: '' } });
-    tree3 = reopenPicker();
+    reopenPicker();
     const manualPreLayer = document.getElementById('dsh-wallpaper-engine-layer');
     sceneCard.props.onClick(); // 选中场景壁纸 → syncLayers → HEAD 探测
     await new Promise((r) => setTimeout(r, 20)); // 等 HEAD 探测的 promise 回来
@@ -3957,7 +3957,7 @@ setTimeout(async () => {
     // ⑥ 行为级不变量：整条流程（选中 → HEAD 探测 → 抓帧回填 → 清除 → 后续重建）
     // 里 animProbeSrcs 必须恒为 0 —— 一帧 CPU 动画渲染都不许启动（回退走静态帧链）。
     // 点帧率档位、关场景动画这两条路径都不得改走分钟级的 CPU 重渲染。
-    tree3 = renderPicker();
+    renderPicker();
     assert.equal(animProbeSrcs.length, 0,
       'CPU 动画渲染已删除：全流程不得出现任何 /scene-anim 请求');
     console.log('CPU 动画渲染路线已删除（源码钉死 + 行为级零请求）: ok');

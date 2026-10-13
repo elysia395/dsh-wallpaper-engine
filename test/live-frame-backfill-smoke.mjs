@@ -210,7 +210,7 @@ async function runScenario({ mode = 'varied', blobSize = 120000, gpuAlreadyPinne
   // P2-M 前置：让 live 运行期失联（连续无帧 ≥ LIVE_STALL_TICKS*2）→ 降级回静态帧。
   // 目标形态里回退链**没有任何 CPU 动画渲染**（动画只走 WebWallGL 一条路线），所以这里
   // 记录的两个计数只用来断言它们恒为 0（1500ms 轮询若出现，就是 CPU 渲染路线被接了回来）。
-  let animPollBefore = 0, animPollAfter = 0, progBefore = 0;
+  let animPollBefore = 0, progBefore = 0;
   const tickPoll = async () => {
     const t = intervals.filter((x) => !x.cleared && x.ms === 1500).pop();
     if (t) t.fn();
@@ -264,7 +264,7 @@ async function runScenario({ mode = 'varied', blobSize = 120000, gpuAlreadyPinne
   if (backfill) backfill.fn();
   await new Promise((r) => setTimeout(r, 30));
   await tickPoll(); // 落地后再敲一次：修复生效时轮询已被清，不得再发进度请求
-  animPollAfter = intervals.filter((t) => !t.cleared && t.ms === 1500).length;
+  const animPollAfter = intervals.filter((t) => !t.cleared && t.ms === 1500).length;
   return { frame, watchTick, backfill, headCalls, putCalls, clearCalls, slotOrder, progCalls, blobStub,
     animPollBefore, animPollAfter, progBefore,
     selectedId: JSON.parse(localStorage._store['dsh-wallpaper-engine:selection'] || '{}').id };

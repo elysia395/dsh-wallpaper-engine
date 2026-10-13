@@ -273,7 +273,7 @@ const fetch = (url, opts) => {
     return pendingUpload.promise;
   }
   if (method === 'POST' && u.includes('/wallpaper-engine/we-assets-dir')) {
-    let body = null;
+    let body;
     try { body = JSON.parse((opts && opts.body) || '{}'); } catch { body = null; }
     weAssetsCalls.push({ url: u, body });
     const ok = weAssetsSaveStatus >= 200 && weAssetsSaveStatus < 300;

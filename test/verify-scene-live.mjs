@@ -492,7 +492,7 @@ if (filesRoute && fixture && fixture.sceneLiveSrc) {
   check('载荷进度路由已注册', Boolean(progressRoute), progressRoute ? 'kind=' + progressRoute.kind : 'missing');
   if (progressRoute) {
     const progRes = await runHandler(progressRoute, `/wallpaper-engine/scene-payload-progress?token=${encodeURIComponent(token)}`);
-    let prog = null;
+    let prog;
     try { prog = JSON.parse(progRes.__state.body.toString('utf8')); } catch { prog = null; }
     // 上面已经真的拉过整包（200 全量 + Range）⇒ 账本必须记下"传过多少字节、走完几次"。
     check('账本记下这次传输（served ≥ 整包字节、completed ≥ 1、active 归零）',
@@ -501,7 +501,7 @@ if (filesRoute && fixture && fixture.sceneLiveSrc) {
     check('账本带上整包体积（客户端据此把预算按包大小放大）',
       Boolean(prog) && prog.size >= pkgBytes.length, prog ? 'size=' + prog.size : '-');
     const unknownProg = await runHandler(progressRoute, '/wallpaper-engine/scene-payload-progress?token=bm90LWEtdG9rZW4');
-    let unknownBody = null;
+    let unknownBody;
     try { unknownBody = JSON.parse(unknownProg.__state.body.toString('utf8')); } catch { unknownBody = null; }
     check('未知 token ⇒ ok:false（"没记账" ≠ "没在动"，客户端据此回落墙钟）',
       Boolean(unknownBody) && unknownBody.ok === false, unknownBody ? JSON.stringify(unknownBody) : 'bad json');
@@ -618,7 +618,7 @@ if (filesRoute && looseFixture && looseFixture.sceneLiveSrc) {
 }
 
 console.log('Level C3 — web wallpaper files (shim injection / MIME / CORS)');
-let mediaEntry = '';   // C4 复用：C3 里从 inventory 拿到的那条入口 URL
+let mediaEntry;   // C4 复用：C3 里从 inventory 拿到的那条入口 URL
 {
   const res = await runHandler(invRoute, '/wallpaper-engine/inventory', FENCE_HEADERS);
   const body = JSON.parse(res.__state.body.toString('utf8'));
@@ -764,7 +764,7 @@ console.log('Level C5 — 壁纸属性解析 / 覆盖值 → HTML 种子');
   const propsRoute = routes.find((r) => r.path === '/wallpaper-engine/props');
   const settingsRoute = routes.find((r) => r.path === '/wallpaper-engine/settings');
   check('props 路由已注册', Boolean(propsRoute));
-  let token = '';
+  let token;
   {
     const inv = JSON.parse((await runHandler(invRoute, '/wallpaper-engine/inventory', FENCE_HEADERS)).__state.body.toString('utf8'));
     const web = (inv.wallpapers || []).find((w) => w.id === '990003') || null;
@@ -4106,8 +4106,6 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     pluginNestedOutlet.querySelectorAll = () => pluginNestedOutlet.children;
     // P3 三条行为腿的现场值（只在报错串里用）；`docGroups` 是假 DOM 里那个组数组的别名 ——
     // 腿里要往台上**新增**假组件，只能推这个同一个引用（文档假 DOM 的组选择器就返回它）。
-    // 声明必须排在 `groups` 之前：`docGroups = groups` 那行在 TDZ 里就会抛（踩过）。
-    let docGroups = null;
     let composerAttrOk = false;
     let overScanOk = false;
     let badDepthOk = false;
@@ -4116,7 +4114,8 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     const groups = [chatGroup.outlet, composerGroup.outlet, sidebarGroup.outlet, nestedGroup.outlet,
       pluginOutlet, pluginNestedOutlet].concat(bubbles.map((b) => b.outlet));
     // 假 DOM 的组选择器就返回**这个**数组 ⇒ P3 的腿要新增假组件，推它即可（同一引用）。
-    docGroups = groups;
+    // 顺序有讲究：`docGroups` 必须声明在 `groups` **之后** —— 早期版本把赋值行排在 `groups` 之前，TDZ 直接抛（踩过）。
+    const docGroups = groups;
     const listeners = {};
     let clock = 0;
     let pending = null;

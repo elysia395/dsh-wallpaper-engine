@@ -62,11 +62,11 @@ function bareImportSpecs(src) {
 // ── lib/ 文件枚举 + `files` 条目覆盖判定 ────────────────────────────────────
 /** 递归列出 dir 下的文件 (相对 ROOT 的 posix 路径, 已排序)。 */
 function walkFiles(dir, out = []) {
-  let names = [];
+  let names;
   try { names = readdirSync(dir); } catch { return out; }
   for (const name of names) {
     const abs = join(dir, name);
-    let st = null;
+    let st;
     try { st = statSync(abs); } catch { continue; }
     if (st.isDirectory()) walkFiles(abs, out);
     else if (st.isFile()) out.push(relative(ROOT, abs).split(sep).join('/'));
@@ -317,7 +317,7 @@ async function main() {
     }
     const offenders = [];
     for (const rel of scripts) {
-      let src = '';
+      let src;
       try { src = readFileSync(join(ROOT, rel), 'utf8'); } catch { offenders.push(rel + '(缺文件)'); continue; }
       for (const spec of bareImportSpecs(src)) offenders.push(rel + ' -> ' + spec);
     }
