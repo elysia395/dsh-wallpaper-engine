@@ -3004,6 +3004,16 @@ const onGlassAlpha = (pct, live) =>
 // 数学入口在 effects.js 的 weClampSurfaceColor 第三参 + --we-glass-fidelity。
 const onGlassFidelity = (pct, live) =>
   commitLiveSetting("glassFidelity", clampNum(pct, ...schemaRange("glassFidelity"), DEFAULTS.glassFidelity), live);
+// 额外补雾化的选择器（#200）：值是一串 CSS 选择器（逗号 / 换行分隔，最多 8 条）。
+// 消毒只走 settings-schema 的 sanitizeExtraGlassSelectors —— 读侧（sanitizeFromSchema）
+// 与本模块生成侧（glass-extra.js）**共用同一份**判据，所以用户敲到一半的非法串既不会进
+// 规则、也不会被"修剪"成另一个选择器。**不做防抖**：只有清单真的变了才会重写 <style>
+// （glass-extra 里那句内容比对），且一次只写一条文本节点，代价与拖滑杆同量级。
+const onExtraGlassSelectors = (text) => {
+  setSetting("extraGlassSelectors", text == null ? "" : String(text));
+  applyEffects();
+  emit();
+};
 // 对话栏玻璃保真度（默认 100）：独立于全局的第二把尺子，只作用对话栏玻璃面
 // （气泡 / 输入卡片 / 对话内 markdown 家族 —— styles.js 消费 --we-chat-readability-*）。
 const onChatGlassFidelity = (pct, live) =>
@@ -4001,7 +4011,7 @@ function WallpaperPicker() {
       // 处理器是模块级的（onAccent / onCaretColor / onToggleUiColorCustom / onUiColorElement）。
       uiColorOpen: pickerUiColorOpen, onToggleUiColorSection: togglePickerUiColorSection,
       onToggleUiColorCustom, onUiColorElement,
-      officialColorOf, onAccent, onCapsuleBlur, onCapsuleColor, onBlur, onBorder, onCaretColor, onChatGlassFidelity, onComponentFamily, onComponentFont, onFontAdvanced, onFontResetAll, onGlassAlpha, onGlassColor, onGlassDarkSeparate, onGlassFidelity, onGlobalFamily, onLeftSidebarGlass, onTitlebarGlass, onRefreshSystemFonts, onSidebarAllCorners, onSidebarAlpha, onSidebarBlur, onSidebarColor, onSidebarContentAlpha, onSidebarContentColor, onSidebarCornerRadius, onSidebarCornerSquare, onSidebarFollowGlobal, onSidebarGlass, onSidebarFullClear, onThemeColor, onThemeColorClear, onThemeDarkSeparate, onThemeFamily, onThemeSize, onThemeTypeOnly, onThemeWeight, onThinkingMode, onToggleFontCustom, onToggleThemeFollow, sel,
+      officialColorOf, onAccent, onCapsuleBlur, onCapsuleColor, onBlur, onBorder, onCaretColor, onChatGlassFidelity, onComponentFamily, onComponentFont, onExtraGlassSelectors, onFontAdvanced, onFontResetAll, onGlassAlpha, onGlassColor, onGlassDarkSeparate, onGlassFidelity, onGlobalFamily, onLeftSidebarGlass, onTitlebarGlass, onRefreshSystemFonts, onSidebarAllCorners, onSidebarAlpha, onSidebarBlur, onSidebarColor, onSidebarContentAlpha, onSidebarContentColor, onSidebarCornerRadius, onSidebarCornerSquare, onSidebarFollowGlobal, onSidebarGlass, onSidebarFullClear, onThemeColor, onThemeColorClear, onThemeDarkSeparate, onThemeFamily, onThemeSize, onThemeTypeOnly, onThemeWeight, onThinkingMode, onToggleFontCustom, onToggleThemeFollow, sel,
       // 玻璃 UI 子项开关 + 独立配置 + 独立参数（见 onToggleChildIndependent 那段注释）
       onToggleChildIndependent, onGlassChildParam, childIndependentOn,
       // 2026-10-11 二次修订：设置页也**支持隐藏**这几节（默认全展开）——

@@ -475,7 +475,7 @@
     // 渲染器保持纯读：状态在组件里、写在 handler 里，这里只装配进 ctx。
     return renderAppearanceTab(sidebarRenderCtx({
       setSetting, setTransient, sel,
-      onAccent, onBlur, onBorder, onChatGlassFidelity, onGlassAlpha, onGlassColor, onGlassFidelity, onLeftSidebarGlass, onTitlebarGlass, onSidebarGlass, onSidebarFullClear, onToggleThemeFollow,
+      onAccent, onBlur, onBorder, onChatGlassFidelity, onExtraGlassSelectors, onGlassAlpha, onGlassColor, onGlassFidelity, onLeftSidebarGlass, onTitlebarGlass, onSidebarGlass, onSidebarFullClear, onToggleThemeFollow,
       // 侧边栏圆角（外观 → 侧边栏圆角）：侧栏档也画这一节 ⇒ 处理器走真值（不是占位器）
       onSidebarAllCorners, onSidebarCornerRadius, onSidebarCornerSquare,
       onCaretColor, onSidebarFollowGlobal, onThinkingMode,

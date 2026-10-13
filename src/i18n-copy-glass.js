@@ -16,6 +16,11 @@ const WE_I18N_EN_GLASS = {
   "各面独立配置、胶囊细调等进阶旋钮（默认收起）": "Advanced knobs: per-surface independent config, capsule fine-tuning, etc. (collapsed by default)",
   "展开后出现每个面自己的「独立配置」与细调行（胶囊雾化 / 胶囊颜色、侧栏族参数等）——调完立刻能看到实时效果；收起只留本节的简化配置": "Expanding reveals each surface’s own “independent config” and fine-tuning rows (capsule frost / capsule color, sidebar-family parameters, etc.) — you see the live result right away; collapsed keeps only this section’s simplified config",
   "玻璃面板（对话栏卡片、左侧栏、设置窗口、插件浮层）的模糊半径 —— 越大越像磨砂玻璃；色彩饱和度不随本滑块变化。侧栏有自己的「侧栏模糊」，不受本项影响": "Blur radius of the glass panels (conversation cards, left sidebar, settings window, plugin popovers) — higher looks more frosted; color saturation does not change with this slider. The sidebar has its own “sidebar blur” control and is not affected by this one.",
+  // ── 额外补雾化的选择器（上游 #200；控件在 src/glass-panel.js 外观·玻璃节）──
+  "额外补雾化的选择器": "Extra frost targets",
+  "给第三方插件自己的面板补上毛玻璃（它们自身没有模糊，全局「雾化」对它们无效）": "Give third-party plugin panels their own frost — they have no blur of their own, so the global Frost slider never reaches them",
+  "写这些面板的 CSS 选择器，逗号或换行分隔，最多 8 条。目标元素要自己已定位（fixed / absolute）；载体挂在它的 ::before 上，所以不会影响它内部的定位弹层。留空 = 关。": "CSS selectors for those panels, separated by commas or newlines, up to 8. Each target must be positioned itself (fixed / absolute); the carrier is attached to its ::before, so popovers inside it keep their anchor. Empty = off.",
+  "例如 .dsh-mobile-control__panel, .dim-jh-badgePop": "e.g. .dsh-mobile-control__panel, .dim-jh-badgePop",
   "用这一项自己的釉层参数覆盖全局": "Override the global glaze parameters with this item’s own",
   "整个设置窗口（含全部原生分区）": "The whole settings window (all native sections)",
   "输入卡片 / 消息气泡 / 工具弹卡": "Composer / message bubbles / tool popcards",

@@ -546,6 +546,10 @@ function applyEffects(opts) {
   //    **一行调用**。本文件继续负责全局玻璃量（--we-glass-* / --we-surface-tint-*）与其余
   //    非玻璃效果（accent / 可读性 / 光标 / 壁纸 / 字体）。
   applyGlass(selection, s);
+  // 额外补雾化的选择器（上游 #200）：玻璃面算完之后同步这条**运行期**样式通道。
+  // 静态样式表是构建期常量（styles.js），而这份规则由设置拼出来 ⇒ 单独一个 <style>
+  // 标签（见 src/glass-extra.js；空清单时它一条规则都不生成、标签也撤掉）。
+  syncExtraGlassCss(selection);
   // 思考块液态玻璃：默认关，保持宿主黑底方便阅读。打开后 CSS 清掉思考条
   // 与推理面的实心底，切到会话同一套雾化。本门控仍在 applyEffects 就地写 ——
   // 它不是玻璃量，不进 applyGlass 的取值管线。
@@ -754,6 +758,9 @@ function clearEffects() {
   removeFontStyles();
   s.removeProperty("--we-caret-color");
   removeCaretStyles();
+  // 额外补雾化通道（#200）：这一份是**运行期生成的** <style>，不在静态样式表里 ⇒
+  // 必须显式撤标签（与上面那批 body 属性 / 变量成对，理由同"清理对称性"）。
+  disposeExtraGlassCss();
   selection.sceneAudioUrl = null;
   selection.sceneHasAudio = false;
   syncSceneAudio(selection);

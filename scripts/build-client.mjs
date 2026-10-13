@@ -452,6 +452,14 @@ const INLINE_MODULES = [
       'const glassValue = (surface, param, profileValue, globalValue) =>'],
   },
   {
+    // 排在 `glass.js` 之后、`effects.js` 之前：它只被 effects 的应用层调用（函数声明会提升，
+    // 但依赖方向应读得出来 —— 与 we-base / section-head 那两条同一条理由）。
+    file: 'src/glass-extra.js',
+    why: '「额外补雾化的选择器」（#200）：把用户点名的选择器编译成 ::before 载体规则，写进本通道自己的 <style>',
+    markers: ['const EXTRA_GLASS_TAG_ID = ', 'function weExtraGlassCss(',
+      'function syncExtraGlassCss(', 'function disposeExtraGlassCss('],
+  },
+  {
     file: 'src/effects.js',
     why: '效果应用层（设置 → DOM；契约见文件头，见 P1-7 后半）—— 玻璃那一段已抽到 src/glass.js',
     markers: ['let lastScrimCss = "";', 'function applyEffects(', 'applyGlass(selection, s);',

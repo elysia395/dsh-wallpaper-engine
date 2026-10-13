@@ -87,6 +87,7 @@ const VERIFY_STEPS = [
   step('test/verify-readability.mjs'),
   step('test/verify-glass-compositing.mjs'),
   step('test/verify-glass-surfaces.mjs'),
+  step('test/verify-extra-glass.mjs'),
   step('test/verify-package-files.mjs'),
   step('test/verify-package-publish.mjs'),
   step('test/verify-contracts.mjs'),

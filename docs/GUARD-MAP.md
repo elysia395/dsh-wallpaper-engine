@@ -5,7 +5,7 @@
 > 口径：只统计守卫**代码**里真正碰到的模块（先剥注释），并区分"直接读源文件"与"隔着产物 `lib/client.js`"。
 > 写法：字面量路径 / `join(...)` 拼接 / 唯一 basename / 产物配方 / **前缀族读法** `scopeFiles|scopeText(<前缀>)` / **经共享族助手读**（`import { panelText } from './tools/src-scope.mjs'` + 真调用；族口径封在那个库里，见 DEV-GUIDE §4.6「同时是守卫的库」）。
 
-模块面 127 个 · 守卫 71 个
+模块面 128 个 · 守卫 72 个
 
 ## 守卫 → 模块
 
@@ -35,6 +35,7 @@
 | `verify-config-store.mjs` | `lib/cache-prune.js` `lib/config-store.js` |  |
 | `verify-contracts.mjs` | `lib/asset-paths.js` `lib/index.js` `lib/media/index.js` `lib/media/legacy.js` `lib/media/supervisor.js` `lib/routes/avatar.js` `lib/routes/fontsets.js` `lib/routes/mascot.js` `lib/settings-schema.js` `src/api-client.js` `src/client.js` `src/fontset-editor.js` `src/fontset-store.js` `src/panel-tabs-advanced.js` `src/panel-tabs-appearance.js` `src/panel-tabs-effects.js` `src/panel-tabs-mascot.js` `src/panel-tabs-wallpaper.js` `src/panel-tabs.js` |  |
 | `verify-dead-declarations.mjs` | — |  |
+| `verify-extra-glass.mjs` | `lib/settings-schema.js` `src/client.js` `src/effects.js` `src/glass-extra.js` `src/glass-panel.js` `src/quick-panel.js` | ✅ |
 | `verify-fontset.mjs` | `lib/index.js` `lib/settings-schema.js` `src/client.js` `src/font/apply.js` `src/font/color-roles.js` `src/font/components.js` `src/font/typography.js` `src/fontset-editor.js` `src/fontset-store.js` `src/glass-panel.js` `src/media-prep.js` `src/panel-tabs-advanced.js` `src/panel-tabs-appearance.js` `src/panel-tabs-effects.js` `src/panel-tabs-mascot.js` `src/panel-tabs-wallpaper.js` `src/panel-tabs.js` `src/picker-modal.js` `src/picker-props-panel.js` `src/section-head.js` `src/styles-base.js` `src/styles-chrome.js` `src/styles-ext.js` `src/styles-panel.js` `src/styles-quick.js` `src/styles-settings.js` `src/styles-shell.js` `src/styles-sidebar.js` `src/styles.js` `src/system-fonts.js` `src/we-cond.js` | ✅ |
 | `verify-glass-compositing.mjs` | — | ✅ |
 | `verify-glass-surfaces.mjs` | `lib/settings-schema.js` `src/client.js` `src/effects.js` `src/glass-panel.js` `src/glass.js` `src/live-layer-diag.js` `src/live-layer-gate.js` `src/live-layer-pointer.js` `src/live-layer-underlay.js` `src/live-layer-watch.js` `src/live-layer.js` `src/panel-tabs-advanced.js` `src/panel-tabs-appearance.js` `src/panel-tabs-effects.js` `src/panel-tabs-mascot.js` `src/panel-tabs-wallpaper.js` `src/panel-tabs.js` `src/styles-base.js` `src/styles-chrome.js` `src/styles-ext.js` `src/styles-panel.js` `src/styles-quick.js` `src/styles-settings.js` `src/styles-shell.js` `src/styles-sidebar.js` `src/styles.js` | ✅ |
@@ -89,7 +90,7 @@
 |---|---:|---|
 | `lib/asset-paths.js` | 4 | `verify-asset-paths` `verify-cache-dir` `verify-contracts` `verify-presets` |
 | `lib/cache-prune.js` | 2 | `verify-cache-prune` `verify-config-store` |
-| `lib/client.js` | 40 | `fontset-load-smoke` `live-frame-async-identity-smoke` `live-frame-backfill-smoke` `rotation-live-smoke` `rotation-prepared-leak-smoke` `rotation-smoke` `verify-about` `verify-api-client` `verify-body-caps` `verify-child-kill` `verify-client-sync` `verify-client` `verify-component-fonts` `verify-fontset` `verify-glass-compositing` `verify-glass-surfaces` `verify-host-paint-scope` `verify-i18n` `verify-json-response` `verify-module-layout` `verify-occlusion-client` `verify-package-files` `verify-package-publish` `verify-picker-model` `verify-picker-props` `verify-picker-upload` `verify-playback-controls` `verify-presets` `verify-reachability` `verify-readability` `verify-scene-live` `verify-scene` `verify-settings-schema-exports` `verify-softrender` `verify-system-fonts` `verify-theme-follow` `verify-theme-layer` `verify-transcode-state` `verify-types` `verify-windows-caption` |
+| `lib/client.js` | 41 | `fontset-load-smoke` `live-frame-async-identity-smoke` `live-frame-backfill-smoke` `rotation-live-smoke` `rotation-prepared-leak-smoke` `rotation-smoke` `verify-about` `verify-api-client` `verify-body-caps` `verify-child-kill` `verify-client-sync` `verify-client` `verify-component-fonts` `verify-extra-glass` `verify-fontset` `verify-glass-compositing` `verify-glass-surfaces` `verify-host-paint-scope` `verify-i18n` `verify-json-response` `verify-module-layout` `verify-occlusion-client` `verify-package-files` `verify-package-publish` `verify-picker-model` `verify-picker-props` `verify-picker-upload` `verify-playback-controls` `verify-presets` `verify-reachability` `verify-readability` `verify-scene-live` `verify-scene` `verify-settings-schema-exports` `verify-softrender` `verify-system-fonts` `verify-theme-follow` `verify-theme-layer` `verify-transcode-state` `verify-types` `verify-windows-caption` |
 | `lib/config-store.js` | 2 | `verify-config-store` `verify-upload-store` |
 | `lib/faststart.js` | 3 | `verify-cache-dir` `verify-mp4-vfs` `verify-scene-live` |
 | `lib/host-diag.js` | 1 | `verify-host-diag` |
@@ -134,7 +135,7 @@
 | `lib/scene-manifest.js` | 2 | `verify-scene-probe` `verify-scene` |
 | `lib/scene-probe.js` | 2 | `verify-scene-probe` `verify-scene` |
 | `lib/serve.js` | 2 | `verify-logging` `verify-scene-live` |
-| `lib/settings-schema.js` | 12 | `verify-adapter` `verify-client` `verify-component-fonts` `verify-contracts` `verify-fontset` `verify-glass-surfaces` `verify-module-layout` `verify-presets` `verify-scene-live` `verify-system-fonts` `verify-theme-follow` `verify-theme-layer` |
+| `lib/settings-schema.js` | 13 | `verify-adapter` `verify-client` `verify-component-fonts` `verify-contracts` `verify-extra-glass` `verify-fontset` `verify-glass-surfaces` `verify-module-layout` `verify-presets` `verify-scene-live` `verify-system-fonts` `verify-theme-follow` `verify-theme-layer` |
 | `lib/steam-discovery.js` | 2 | `verify-steam-discovery` `verify-we-install-probe` |
 | `lib/transcode.js` | 3 | `verify-child-kill` `verify-scene-live` `verify-transcode-state` |
 | `lib/upload-store.js` | 1 | `verify-upload-store` |
@@ -151,8 +152,8 @@
 | `src/client-audio-playback.js` | 1 | `verify-scene-live` |
 | `src/client-media-frame.js` | 1 | `verify-scene-live` |
 | `src/client-rotation.js` | 1 | `verify-scene-live` |
-| `src/client.js` | 18 | `verify-about` `verify-adapter` `verify-api-client` `verify-client` `verify-component-fonts` `verify-contracts` `verify-fontset` `verify-glass-surfaces` `verify-i18n` `verify-module-layout` `verify-package-publish` `verify-presets` `verify-scene-live` `verify-system-fonts` `verify-theme-follow` `verify-theme-layer` `verify-transcode-state` `verify-types` |
-| `src/effects.js` | 6 | `verify-adapter` `verify-client` `verify-component-fonts` `verify-glass-surfaces` `verify-scene-live` `verify-theme-layer` |
+| `src/client.js` | 19 | `verify-about` `verify-adapter` `verify-api-client` `verify-client` `verify-component-fonts` `verify-contracts` `verify-extra-glass` `verify-fontset` `verify-glass-surfaces` `verify-i18n` `verify-module-layout` `verify-package-publish` `verify-presets` `verify-scene-live` `verify-system-fonts` `verify-theme-follow` `verify-theme-layer` `verify-transcode-state` `verify-types` |
+| `src/effects.js` | 7 | `verify-adapter` `verify-client` `verify-component-fonts` `verify-extra-glass` `verify-glass-surfaces` `verify-scene-live` `verify-theme-layer` |
 | `src/ext-avatar.js` | 1 | `verify-scene-live` |
 | `src/ext-fx.js` | 1 | `verify-scene-live` |
 | `src/ext-parallax.js` | 1 | `verify-scene-live` |
@@ -164,7 +165,8 @@
 | `src/fontset-editor.js` | 2 | `verify-contracts` `verify-fontset` |
 | `src/fontset-store.js` | 3 | `verify-client` `verify-contracts` `verify-fontset` |
 | `src/fx-layer.js` | 1 | `verify-scene-live` |
-| `src/glass-panel.js` | 5 | `verify-client` `verify-fontset` `verify-glass-surfaces` `verify-presets` `verify-scene-live` |
+| `src/glass-extra.js` | 1 | `verify-extra-glass` |
+| `src/glass-panel.js` | 6 | `verify-client` `verify-extra-glass` `verify-fontset` `verify-glass-surfaces` `verify-presets` `verify-scene-live` |
 | `src/glass.js` | 2 | `verify-client` `verify-glass-surfaces` |
 | `src/i18n-copy-core.js` | 2 | `verify-about` `verify-i18n` |
 | `src/i18n-copy-ext.js` | 2 | `verify-about` `verify-i18n` |
@@ -197,7 +199,7 @@
 | `src/picker-model.js` | 1 | `verify-picker-model` |
 | `src/picker-props-panel.js` | 2 | `verify-client` `verify-fontset` |
 | `src/preset-store.js` | 2 | `verify-client` `verify-presets` |
-| `src/quick-panel.js` | 6 | `e2e-web-media-origin` `verify-client` `verify-i18n` `verify-presets` `verify-scene-live` `verify-system-fonts` |
+| `src/quick-panel.js` | 7 | `e2e-web-media-origin` `verify-client` `verify-extra-glass` `verify-i18n` `verify-presets` `verify-scene-live` `verify-system-fonts` |
 | `src/section-head.js` | 2 | `verify-fontset` `verify-scene-live` |
 | `src/sidebar-right.js` | 2 | `verify-i18n` `verify-scene-live` |
 | `src/styles-base.js` | 9 | `e2e-web-media-origin` `verify-adapter` `verify-client` `verify-fontset` `verify-glass-surfaces` `verify-i18n` `verify-readability` `verify-scene-live` `verify-token-contract` |
