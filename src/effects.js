@@ -101,21 +101,54 @@ function resolveWallpaperFadeBg() {
   } catch { return "#000000"; }
 }
 
-// ── #159①：宿主切深浅主题 ⇒ 让淡出底色缓存失效 ─────────────────────────────────
-// 事故：`lastFadeBg` 只在 applyEffects 里重算，而宿主切主题（翻转 body 的
+// 把一个**新解析出来的**淡出底色写回 body（唯一的写点，observer 与 applyEffects 共用；
+// 拖动期由调用方自己拿缓存，见 applyEffects 的 live 分支）。
+// 只在「壁纸透明度 > 0」时真的有值 —— 关着时这个变量整份撤掉（identity opacity）。
+// 返回值 = 本次写下的值（'' = 没在用这条通道，调用方不必再看）。
+function writeWallpaperFadeBg() {
+  const using = Number(selection.wallpaperOpacity) > 0;
+  lastFadeBg = using ? resolveWallpaperFadeBg() : "";
+  if (using) document.body.style.setProperty("--we-wallpaper-fade-bg", lastFadeBg);
+  return lastFadeBg;
+}
+
+// ── #159① + #194②：宿主切深浅主题 ⇒ 失效缓存**并当场重算** ─────────────────────
+// 事故（#159①）：`lastFadeBg` 只在 applyEffects 里重算，而宿主切主题（翻转 body 的
 // `data-ds-dark-theme`）**不会**调用我们；本仓唯一的主题订阅在 src/theme-follow.js，
 // 由 `themeFollow` 开关门控、默认关 ⇒ 缓存会一直停在旧主题的底色上。它的消费者是
 // `.we-layer` 那块 z-index −2 的衬底（给 backdrop-filter 提供底色）⇒ 过期值会给
 // **每一面玻璃**上色（浅色主题配深色衬底 = 整页发灰）。
-// 这里只做**失效**、不做重算：把 lastFadeBg 清空，等下一次 applyEffects 自己算。
-// ⚠️ 刻意不在这里直接调 applyEffects —— 那会与 theme-follow 的主题订阅抢职责
-//（"跟随主题换配色"是那个开关的事，默认不接管）。
+// ⚠️ **#194② 起这里改成"失效 + 当场重算"**。只失效是 #159① 当时的取舍（"把重算留给
+//    下一次 applyEffects"），而用户实测的口径正是它的症状：切深浅色后**只有插件自己的
+//    浮层**（我们的 React 面板 / 设置窗口，取色全走 CSS 的深浅孪生 ⇒ 随class翻转即时生效）
+//    跟上，**主页面不动** —— 因为主页面那层玻璃等的是 `.we-layer` 的底色，而它要等到
+//    用户"点进设置随便切一个项目"（⇒ 一次 applyEffects）才重算。
+//    根因是**职责错位**而不是性能：这条通道的值是本插件里**唯一**由 JS 写出、且随主题变的
+//    标量（其余随主题变的东西在 styles.js 里都有 `body[data-ds-dark-theme]` 孪生，浏览器
+//    自己换），所以"等下一次 applyEffects"在语义上就是"等用户想起来动一下设置"。
+// 与 theme-follow 的分工不变（沿用 #159① 的边界）：theme-follow 决定**用哪一套主题**
+//   （写 theme 服务），这里只负责**主题已经变了之后跟上**，不回写主题、也不审批主题。
+//   ⇒ 不调用整个 applyEffects：它含与主题无关的重活（字体样式表 / 场景音频 / 强制样式
+//   计算），而本通道只需要那一个变量。
 // 幂等：observer 只挂一次；环境里没有 MutationObserver（Node 沙箱 / 极老宿主）时
-// 静默退化成"没有这条失效通道"，不抛错、不改变既有行为。
+// 静默退化成"没有这条跟随通道"，不抛错、不改变既有行为。
 function armFadeBgThemeWatch() {
   if (fadeBgThemeWatch || typeof MutationObserver !== "function") return;
   try {
-    fadeBgThemeWatch = new MutationObserver(() => { lastFadeBg = ""; });
+    fadeBgThemeWatch = new MutationObserver(() => {
+      lastFadeBg = "";   // ① 失效（#159①：防止拖动档继续拿旧值）
+      // ② 当场重算并写回（#194②）。观察者回调里抛错会冒到宿主 ⇒ 自己收干净；
+      //    重算失败也只是"这一次没跟上"，绝不动已经写在 body 上的值。
+      try {
+        if (writeWallpaperFadeBg() && document.body) {
+          // 写值本身不保证合成器立刻重画 .we-layer 那块 z-index −2 的衬底（它正是
+          // **主页面**那层玻璃的取样背景；插件自己的浮层另成一叠、自己就重画了 —— 这就是
+          // "浮层先变、主页面不动"里主页面那一半）。与 scrim 那条"写完强制回流"同一个
+          // 已知病灶与同一味药：读一次 offsetHeight，逼出同步样式/布局 ⇒ 重绘。
+          void document.body.offsetHeight;
+        }
+      } catch { /* 跟随是增强：失败保持既有值 */ }
+    });
     fadeBgThemeWatch.observe(document.body, { attributes: true, attributeFilter: ["data-ds-dark-theme"] });
   } catch {
     // 观察者建不起来（假 DOM 没有 observe / body 不在）⇒ 不留半个句柄。
@@ -329,11 +362,11 @@ function applyEffects(opts) {
     s.setProperty("--we-wallpaper-opacity", String((100 - selection.wallpaperOpacity) / 100));
     // 拖动期沿用缓存（见函数头的 live 说明）：resolveWallpaperFadeBg 里那次
     // getComputedStyle 是**强制同步样式计算**，每格一次会把拖动拖垮。
-    // 缓存会在宿主切深浅主题时由 armFadeBgThemeWatch 的观察者清空（#159①）；
-    // 观察者只挂一次，挂在"这个变量真的在用"的分支里。
+    // 缓存会在宿主切深浅主题时由 armFadeBgThemeWatch 的观察者**当场刷新**（#159① +
+    // #194②）；观察者只挂一次，挂在"这个变量真的在用"的分支里。
     armFadeBgThemeWatch();
-    if (!live || !lastFadeBg) lastFadeBg = resolveWallpaperFadeBg();
-    s.setProperty("--we-wallpaper-fade-bg", lastFadeBg);
+    if (live && lastFadeBg) s.setProperty("--we-wallpaper-fade-bg", lastFadeBg);
+    else writeWallpaperFadeBg();
   } else {
     s.removeProperty("--we-wallpaper-opacity");
     s.removeProperty("--we-wallpaper-fade-bg");

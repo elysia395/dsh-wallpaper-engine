@@ -263,6 +263,8 @@ s.setProperty("--we-wallpaper-fade-bg", lastFadeBg);
 ⇒ 缓存只在**插件自己的 `applyEffects` 被调用**时失效。而 `src/` 里**唯一**的主题订阅是 `src/theme-follow.js:446 ctx.on("theme/change", …)`，且被 `themeFollowEnabled()` = `selection.themeFollow === true` 门控（默认 `boolFalse`，`src/theme-follow.js:83`）；全库唯一的 `MutationObserver` 在 `src/client.js:536`，只监听 `attributeFilter:["data-dsh-skin"]`。
 ⇒ **宿主切深浅主题时，缓存不会被失效**。
 **爆炸半径**：唯一消费者是 `src/styles.js:96` 的 `.we-layer { background-color: var(--we-wallpaper-fade-bg, transparent) }` —— 那是 z-index −2 的**衬底**，用来给 `backdrop-filter` 提供底色 ⇒ 一个过期变量会**给每一面玻璃上色**。
+**⟶ 2026-10-13 后续（issue #194②）**：这一条只做"失效"的取舍被用户实测证伪 —— 症状正是它的语义（"把重算留给下一次 `applyEffects`"，而那次永远由用户改设置触发 ⇒ 切深浅色后只有插件自己的浮层跟上、主页面要"点进设置随便切一个项目"才变）。现改成**失效 + 当场重算写回**（同一个观察者回调内），见下面的 #194 段。上面 `:276-279` 那段引用按写作当时保留。
+
 **复现**：一次性脚本（用真源码的等价转录）4/4 PASS：透明+暗属性→`#000000`；透明+无属性→`#ffffff`；`rgba(0,0,0,0)`+暗→`#000000`；非透明 `#123456`→原样透传。顺带验证了 `weClampSurfaceColor`（未导出，转录）在保真度 1 时的行为：`#0d1524` → 浅 `#e8e9ea` / 深 `#0d1524`；`#ffffff` → 浅 `#ffffff` / 深 `#1c1c1c` —— 与 issue 里那张表逐格吻合。
 
 **② 玻璃色不能分深浅（能力缺口）**
@@ -307,6 +309,24 @@ jsxs("span", { ref: bubble, id: openOnClick ? id : void 0, className: css$16.bub
 （宿主另有 `ShortcutKeys` 的 `variant:"tooltip"`，走 `css$12.tooltip`，与 `_bubble` 无关，不受影响。）
 
 **副产物（文档债）**：`docs/DSH-UI-INTERFACES.md` §2.3 记录了 `_bubble` 后缀 ✅ 存在，但**没有记录它同时属于宿主 Tooltip**——这正是本 issue 的根因，台账必须补一行，否则这类误伤会重演。
+
+---
+
+### #194 图标没对齐 / 切主题主页面不跟随 —— ①② 已修（等级 A），③ 不改代码
+
+**① 设置导航图标比文字高约 2px（真缺陷，用户一眼可见）**
+官方那格的图标是 shell `navIcon(id)` 直接渲染的 `<svg className="…_navIcon" width="16" height="16">`，因此它是 navCell 的**直接 flex 项**（navCell：`display:flex; align-items:center; gap:8px; line-height:22px`）⇒ 被块化（display 不再是 inline）、由 `align-items:center` 精确居中。我们的 DOM 补丁却把第一个子元素换成"`<span>` + 里面一个行内 svg"（`src/nav-icon.js` 旧实现）：行内 svg 坐落在这个 span 的**行盒基线**上，继承来的 `line-height:22px` 在它底下留出降部空隙 ⇒ 图标整体被顶高约 2px。
+**第二半根因（同一行代码里）**：`SVGElement.className` 是 **`SVGAnimatedString` 对象**、不是字符串，`span.className = iconEl.className` 会先被字符串化成 `"[object SVGAnimatedString]"` ⇒ 抄来的类名整份丢失，连 shell 的 `flex:none` 一起丢。
+**修法**：补丁直接换上解析出来的 `<svg>`（与官方逐字同一个盒模型），类名改走 `iconEl.getAttribute("class")`。
+**判据**：`test/verify-client.mjs` 新增行为级判据（假 DOM 里跑真 `src/nav-icon.js`，断言交给 `replaceChild` 的元素**自身是 svg** 且带宿主那一格的 class）+ 两条负对照各打一半（包 span / 用 `className` 属性取类名）。变异验证：源码改回旧写法 ⇒ 判红。
+
+**② 切深浅色只有插件浮层跟上、主页面要动一下设置才变（真缺陷）**
+根因是**职责错位**，不是性能：`--we-wallpaper-fade-bg` 是本插件里**唯一**由 JS 写出、且随主题变的标量（其余随主题变的东西在 `src/styles.js` 里都带 `body[data-ds-dark-theme]` 孪生声明，浏览器自己就换了 —— 这正是"浮层先跟上"的那一半）。#159① 挂的观察者只失效缓存，重算留给下一次 `applyEffects`。
+**修法**：观察者改成**失效 + 当场重算写回**（`src/effects.js` 新增唯一写点 `writeWallpaperFadeBg()`，`applyEffects` 与观察者共用），并按 scrim 那条既有先例补一次同步布局（`void document.body.offsetHeight` —— 写值本身不保证合成器立刻重画那块 z-index −2 的衬底，而它正是**主页面**那层玻璃的取样背景）。**不调用整个 `applyEffects`**：它含与主题无关的重活（字体样式表 / 场景音频 / 强制样式计算），本通道只需要那一个变量。与 `theme-follow` 的分工不变：那个开关决定**用哪套主题**，这里只负责主题变了之后跟上。
+**判据**：`test/verify-client.mjs` 的 #159① 行为组加两条 —— 回调必须当场把新值写回 body；负对照 = 旧的"只失效"观察者一个字节都不许写。变异验证：回调改回"只失效" ⇒ 判红。
+
+**③ "深色下打字的光标 I 还是黑的"—— 用户口径：不改代码（设置里可调）**
+宿主只用一条 `caret-color: var(--dsw-alias-state-business-primary)`，且与页签**共用令牌** ⇒ 把「全局 UI 配色 / 页签」选得偏暗会连带压暗插入符。可用入口：「外观 → 输入光标 → 光标颜色」（默认"跟随 dsh 原生"，暗色档原生值 = `--dsw-static-deepseek-400` = `#7aaaff`）或把页签色调回。插件侧的 `caret-color` 覆盖只在用户**显式自选**光标颜色时才挂（`test/verify-client.mjs` 的 caret 那两条仍为准）。
 
 ---
 

@@ -4579,6 +4579,23 @@ setTimeout(async () => {
   watch.cb([{ type: 'attributes' }]);
   assert.equal(liveFadeBg(), '--we-wallpaper-fade-bg=#000000',
     '#159①：切到深色后拖动档必须重算到 #000000（缓存被失效）');
+  // ── #194②：宿主切深浅色时**必须当场重算并写回**，只"失效"是不够的 ────────────────
+  // 用户口径（issue #194 第二条）：切深浅色后只有插件自己的浮层跟上（它们的取色走 CSS 的
+  // `body[data-ds-dark-theme]` 孪生、浏览器自己换），**主页面**要"点进设置随便切一个项目"
+  // 才跟着变 —— 因为主页面那层玻璃等的是这条衬底变量，而"只失效"的语义就是"等下一次
+  // applyEffects"，而那次永远由用户改设置触发。
+  // 判据（唯一真源）：把"主题翻转"喂给一个观察者，看它有没有把新值写到 body 上。
+  const backdropWrittenOnFlip = (w) => {
+    fxProps.length = 0;
+    w.cb([{ type: 'attributes' }]);
+    return fxProps.filter((p) => p.startsWith('--we-wallpaper-fade-bg=')).pop();
+  };
+  assert.equal(backdropWrittenOnFlip(watch), '--we-wallpaper-fade-bg=#000000',
+    '#194②：切深浅色 ⇒ 观察者必须**当场**重算并写回衬底（只清缓存 = 症状本身）');
+  // 负对照：同一个判据喂给"只失效、不重算"的旧观察者 ⇒ 一个字节都不许写。
+  const legacyWatch = new FakeMutationObserver(() => { /* #159① 旧行为：只清缓存 */ });
+  assert.equal(backdropWrittenOnFlip(legacyWatch), undefined,
+    'negative control: 只失效不重算的旧观察者必须被这条判据判出（它确实一个字节都没写）');
   fxMod.clearEffects();
   assert.ok(watch.disconnected, '#159①：clearEffects 必须断开主题观察者（否则卸载后它还挂在宿主 DOM 上）');
   // 装置自检（**不是**产品判据）：上一条断言的是桩的标志位，只有先证明"没调过 disconnect 的
@@ -5015,6 +5032,98 @@ setTimeout(async () => {
   const stompBack = themeSrc.replace('if (current && current !== themeFollowWritten) return;', '/* 无脑放回 */');
   assert.ok(!/if \(current && current !== themeFollowWritten\) return;/.test(stompBack),
     'negative control: 放回变成无脑覆盖（不看现值）即判红');
+}
+
+// ── issue #194①：设置导航图标补丁换上去的必须是 **svg 本身**（不是包一层 span）──────
+// 事故：官方设置 nav 的图标是 shell 的 navIcon(id) 直接渲染的 `<svg class="…navIcon">` ——
+// 它是 navCell（`display:flex; align-items:center`）的**直接** flex 项，被块化后精确居中；
+// 而本插件的 DOM 补丁换成"一个 `<span>` + 里面一个行内 svg"：行内 svg 坐在 span 自己行盒的
+// **基线**上，继承来的 `line-height:22px` 在它底下留出降部空隙 ⇒ 图标整体比文字高约 2px，
+// 正是用户报障的截图（"图标和文字没上下居中对齐"）。第二半根因是类名：`SVGElement.className`
+// 是 **SVGAnimatedString 对象**，`span.className = iconEl.className` 会被字符串化成
+// `"[object SVGAnimatedString]"` ⇒ shell 的 `flex:none` 等尺寸/弹性约束一起丢。
+// 判据（唯一真源）：补丁交给 replaceChild 的那个元素必须**本身是 svg**、且带上宿主那一格的
+// class；两个负对照各打一半（包 span / 用 className 属性取类名），与正判据共用这一条。
+{
+  const navSrc = readFileSync(new URL('../src/nav-icon.js', import.meta.url), 'utf8');
+  const navSwapOk = (el) => !!el && el.tagName === 'svg' && el.attrs.class === 'Dws9Sa_navIcon';
+
+  const navEl = (tag) => {
+    const attrs = {};
+    return {
+      tagName: tag, attrs, children: [], nodeType: 1,
+      // 真 DOM 的语义差：SVG 元素的 className 是 SVGAnimatedString **对象**（本 issue 第二半
+      // 根因），HTML 元素才是字符串 —— 负对照②靠这条差异把"用属性取类名"那条路判红。
+      get className() { return tag === 'svg' ? { baseVal: attrs.class || '' } : (attrs.class || ''); },
+      set className(v) { attrs.class = String(v); },
+      getAttribute: (k) => (k in attrs ? attrs[k] : null),
+      setAttribute: (k, v) => { attrs[k] = String(v); },
+      appendChild(c) { this.children.push(c); return c; },
+      // 假 DOM 不解析标记：任何 innerHTML 都产出一个 svg 子节点（判据查的是"补丁换上的是不是
+      // svg 元素"，不是"字符串解析对不对"—— 后者由 weIconSvgString 的静态形状承担）。
+      set innerHTML(v) { this._html = String(v); this.children = [navEl('svg')]; },
+      get firstElementChild() { return this.children[0] || null; },
+      get lastElementChild() { return this.children[this.children.length - 1] || null; },
+      get childElementCount() { return this.children.length; },
+    };
+  };
+
+  // 跑真源码（可换成变异版）：返回补丁交给 btn.replaceChild 的那个元素。
+  const runNavPatch = (src) => {
+    const btn = navEl('button');
+    const hostIcon = navEl('svg');            // 宿主的兜底齿轮：它本身就是那个 svg
+    hostIcon.setAttribute('class', 'Dws9Sa_navIcon');
+    btn.textContent = '壁纸引擎';
+    btn.appendChild(hostIcon);
+    btn.appendChild(navEl('span'));
+    let swapped = null;
+    btn.replaceChild = (node, old) => {
+      swapped = node;
+      btn.children = btn.children.map((c) => (c === old ? node : c));
+      return old;
+    };
+    const body = navEl('body');
+    body.querySelectorAll = (sel) => (sel === 'nav button' ? [btn] : []);
+    const scope = new Proxy({
+      document: { body, createElement: navEl, querySelector: () => null },
+      MutationObserver: class { observe() {} disconnect() {} },
+      weT: (s) => s,
+      weOnLocaleChange: () => () => {},
+    }, {
+      has: (t, k) => (k in t) || !(k in globalThis),
+      get: (t, k) => (k in t ? t[k] : () => undefined),
+      set: () => true,
+    });
+    const mod = new Function('__scope',
+      'with (__scope) { ' + stripExportBlocks(src) + '\nreturn { installWeNavIcon }; }')(scope);
+    mod.installWeNavIcon();
+    return swapped;
+  };
+
+  assert.equal(navSwapOk(runNavPatch(navSrc)), true,
+    '#194①：补丁必须换上一个**本身是 svg**、且带宿主 class 的图标');
+  // 负对照①：包一层 span（改动前的写法，且类名从属性上抄）⇒ 同一条判据必须判红。
+  const legacySpan = navSrc
+    .replace('        const holder = document.createElement("div");\n'
+      + '        holder.innerHTML = weIconSvgString(16);\n'
+      + '        const icon = holder.firstElementChild;\n'
+      + '        if (!icon) continue;                 // innerHTML 被拒 / 结构异常：这条按钮保齿轮\n'
+      + '        const cls = iconEl.getAttribute ? iconEl.getAttribute("class") : "";\n'
+      + '        if (cls) icon.setAttribute("class", cls);\n',
+    '        const icon = document.createElement("span");\n'
+      + '        icon.className = iconEl.className;\n'
+      + '        icon.innerHTML = weIconSvgString(16);\n');
+  assert.notEqual(legacySpan, navSrc, '装置自检：负对照①的变异必须真的落在源码上（锚点漂了就该红）');
+  assert.equal(navSwapOk(runNavPatch(legacySpan)), false,
+    'negative control①：包一层 span（旧写法）即判红');
+  // 负对照②：换 svg 这件事做对了，但类名走 `iconEl.className`（SVGAnimatedString 对象）
+  // ⇒ 类名串成 "[object …]"、shell 的约束丢光 ⇒ 同一条判据必须判红。
+  const propClass = navSrc.replace('        const cls = iconEl.getAttribute ? iconEl.getAttribute("class") : "";\n'
+    + '        if (cls) icon.setAttribute("class", cls);\n',
+  '        icon.className = iconEl.className;\n');
+  assert.notEqual(propClass, navSrc, '装置自检：负对照②的变异必须真的落在源码上');
+  assert.equal(navSwapOk(runNavPatch(propClass)), false,
+    'negative control②：类名改走 SVGElement.className（SVGAnimatedString）即判红');
 }
 
 console.log('\nALL CLIENT CHECKS DONE');
