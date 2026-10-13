@@ -19,7 +19,7 @@ const WE_I18N_EN_GLASS = {
   // ── 额外补雾化的选择器（上游 #200；控件在 src/glass-panel.js 外观·玻璃节）──
   "额外补雾化的选择器": "Extra frost targets",
   "给第三方插件自己的面板补上毛玻璃（它们自身没有模糊，全局「雾化」对它们无效）": "Give third-party plugin panels their own frost — they have no blur of their own, so the global Frost slider never reaches them",
-  "写这些面板的 CSS 选择器，逗号或换行分隔，最多 8 条。目标元素要自己已定位（fixed / absolute）；载体挂在它的 ::before 上，所以不会影响它内部的定位弹层。留空 = 关。": "CSS selectors for those panels, separated by commas or newlines, up to 8. Each target must be positioned itself (fixed / absolute); the carrier is attached to its ::before, so popovers inside it keep their anchor. Empty = off.",
+  "写这些面板的 CSS 选择器，逗号或换行分隔，最多 8 条、每条最多 120 字；超长的单条或超出 8 条的整条丢弃（不是截断，存活下来的前 8 条全量生效）。目标元素要自己已定位（fixed / absolute）；载体挂在它的 ::before 上，所以不会影响它内部的定位弹层。留空 = 关。": "CSS selectors for those panels, separated by commas or newlines — up to 8 entries, each at most 120 characters; an over-long entry or anything beyond the 8th is dropped whole (never truncated, and everything that survives applies). Each target must be positioned itself (fixed / absolute); the carrier is attached to its ::before, so popovers inside it keep their anchor. Empty = off.",
   "例如 .dsh-mobile-control__panel, .dim-jh-badgePop": "e.g. .dsh-mobile-control__panel, .dim-jh-badgePop",
   "用这一项自己的釉层参数覆盖全局": "Override the global glaze parameters with this item’s own",
   "整个设置窗口（含全部原生分区）": "The whole settings window (all native sections)",

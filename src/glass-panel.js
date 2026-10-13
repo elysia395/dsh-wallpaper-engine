@@ -728,7 +728,7 @@ function renderAppearanceGlassSection(ctx) {
       React.createElement("div", { className: "we-picker__ctl we-picker__ctl--wrap", key: "extra-glass-selectors" },
         ctlText(weT("额外补雾化的选择器"),
           weT("给第三方插件自己的面板补上毛玻璃（它们自身没有模糊，全局「雾化」对它们无效）"),
-          weT("写这些面板的 CSS 选择器，逗号或换行分隔，最多 8 条。目标元素要自己已定位（fixed / absolute）；载体挂在它的 ::before 上，所以不会影响它内部的定位弹层。留空 = 关。")),
+          weT("写这些面板的 CSS 选择器，逗号或换行分隔，最多 8 条、每条最多 120 字；超长的单条或超出 8 条的整条丢弃（不是截断，存活下来的前 8 条全量生效）。目标元素要自己已定位（fixed / absolute）；载体挂在它的 ::before 上，所以不会影响它内部的定位弹层。留空 = 关。")),
         React.createElement("input", {
           className: "we-picker__text", type: "text",
           value: sel.extraGlassSelectors || "",
