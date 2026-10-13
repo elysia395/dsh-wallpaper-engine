@@ -35,7 +35,17 @@ jobs:
     runs-on: windows-latest
     timeout-minutes: 30
     steps:
+      # 用 **deploy key** 而不是默认 `GITHUB_TOKEN` checkout：`main` 的分支保护（ruleset
+      # `main-protection`）要求 PR + required checks，而 GitHub 个人仓库**不允许**把
+      # `GitHub Actions` 列为 bypass actor（实测 422：Actor GitHub Actions integration
+      # must be part of the ruleset source or owner organization）—— 只有 DeployKey
+      # 能当 bypass。于是这台"全绿后自动提交基线"的直推通道挂在 deploy key 上（私钥在
+      # repo secret `BASELINE_DEPLOY_KEY`，对应仓库 Deploy keys 里那把写权限密钥；
+      # ruleset 的 bypass_actors 里登记的就是它）。checkout 用它之后，后续 fetch/push
+      # 都会经 ssh-agent 走这把 key。
       - uses: actions/checkout@v4
+        with:
+          ssh-key: ${{ secrets.BASELINE_DEPLOY_KEY }}
 
       - uses: actions/setup-node@v4
         with:
