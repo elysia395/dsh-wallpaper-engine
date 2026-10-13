@@ -176,7 +176,12 @@ const INLINE_MODULES = [
   {
     file: 'lib/settings-schema.js',
     why: '设置唯一真源（宿主也 import 同一文件，见 P1-5）',
-    markers: ['const KINDS = {', 'function sanitizeFromSchema(', 'function settingsDefaults(',
+    // `function settingsDefaults(` 曾是第 3 个锚点，但它全仓零调用点、已按死代码删除
+    // （settings-schema 的零消费者导出面清理）。按"锚点只能换、不能减"的规矩，换成
+    // `function sanitizePresetValues(`：同为**顶层函数声明**，且客户端半边
+    // （`src/preset-store.js`）与宿主半边（`lib/routes/presets.js`）都在调它 ⇒
+    // 它不可能被单独删掉，作结构锚比原锚更稳。
+    markers: ['const KINDS = {', 'function sanitizeFromSchema(', 'function sanitizePresetValues(',
       'function serializeSettings(', 'const DEFAULTS = {'],
   },
   {
