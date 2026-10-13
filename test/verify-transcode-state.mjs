@@ -24,7 +24,9 @@ import vm from 'node:vm';
 const results = [];
 /** 转码编码器兜底（issue：只有 NVENC ⇒ 无 NVENC 的 ffmpeg 必然全失败）。 */
 {
-  const idx = readFileSync(new URL('../lib/index.js', import.meta.url), 'utf8');
+  // 抽帧转码实现已搬进 lib/transcode.js（第 10 刀）⇒ 文本判据合并两处；判据/期望值一字未改。
+  const idx = readFileSync(new URL('../lib/index.js', import.meta.url), 'utf8')
+    + readFileSync(new URL('../lib/transcode.js', import.meta.url), 'utf8');
   const oldBaseForm = idx.includes("'-map', '0:v:0', '-an', '-preset', 'p1',");
   const p1OnlyInEncTune = idx.includes("av1_nvenc: ['-preset', 'p1'")
     && idx.includes("h264_nvenc: ['-preset', 'p1'");
@@ -68,7 +70,10 @@ const results = [];
  *  的回答必须来自只读的 `transcodeCached`，**顺手起转码**要被拒；③ 客户端确实带着当前上限去问，
  *  并把这个回答记成 `selection.transcodeReady`。 */
 {
-  const host = readFileSync(new URL('../lib/index.js', import.meta.url), 'utf8');
+  // 三处被钉的文本里，`transcodeCacheKey`/`transcodeCachePathFor` 的实现已搬进 lib/transcode.js
+  // （第 10 刀）；`transcodeCached` 仍在门面 ⇒ 合并两处文本，判据/期望值一字未改。
+  const host = readFileSync(new URL('../lib/index.js', import.meta.url), 'utf8')
+    + readFileSync(new URL('../lib/transcode.js', import.meta.url), 'utf8');
   const derived = readFileSync(new URL('../lib/routes/media-derived.js', import.meta.url), 'utf8');
   const layer = readFileSync(new URL('../src/video-layer.js', import.meta.url), 'utf8');
   check('抽帧缓存键只有一份：落盘与"有没有缓存"共用 transcodeCacheKey(abs, mtimeMs, fps)',
