@@ -68,6 +68,7 @@
     "lib/transcode.js",
     "lib/steam-discovery.js",
     "lib/host-diag.js",
+    "lib/upload-store.js",
     "lib/webwallgl/",
     "lib/we-props.js",
     "lib/we-focus-guard.js",
