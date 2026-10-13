@@ -204,6 +204,6 @@ function filterUsableSystemFonts(names) {
 }
 
 export {
-  SYSTEM_FONTS_CACHE_KEY, readCachedSystemFonts, ensureSystemFonts, systemFontKeyList,
+  readCachedSystemFonts, ensureSystemFonts,
   filterUsableSystemFonts,
 };

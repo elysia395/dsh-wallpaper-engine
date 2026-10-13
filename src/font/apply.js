@@ -210,8 +210,7 @@ function removeFontStyles() {
 }
 
 export {
-  WE_HOST_TOKENS,
-  componentFontAvailability, componentFontDefaults,
+  componentFontDefaults,
   applyComponentFonts, removeComponentFonts, snapshotHostFontDefaults, removeFontStyles,
   applyTerminalHostVar,
 };

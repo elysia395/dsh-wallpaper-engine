@@ -278,9 +278,6 @@ function useWeLocale() {
 }
 
 export {
-  WE_I18N_NS,
-  WE_LANG_PARAM,
-  weLocaleId,
   weLocaleRevisionValue,
   weLocaleSubscribe,
   weOnLocaleChange,
