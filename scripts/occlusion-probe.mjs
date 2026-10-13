@@ -22,8 +22,18 @@ const pollMs = intervalIdx !== -1 ? Number(process.argv[intervalIdx + 1]) || 100
 const ownPidIdx = process.argv.indexOf('--own-pid');
 const ownPid = ownPidIdx !== -1 ? Number(process.argv[ownPidIdx + 1]) : undefined;
 
+/**
+ * 日志回调。hub 的 `log` 形参**只从默认值 `= () => {}` 推出类型 `() => void`**
+ * （`lib/occlusion/index.js:37`），但实现恒以 `log(msg)` 调用（同文件 `:64`）⇒ 把 msg 写成
+ * 必填参数会被 tsc 判 TS2322（"Target signature provides too few arguments"）。
+ * 这里把参数写成**可选**：声明契约（允许零参调用）与真实调用（总会传 msg）两边都成立；
+ * 行为与原来逐字一致（零参时原本也打印 `# undefined`）。lib 侧那处过窄的形参类型见报告。
+ * @param {string} [msg]
+ */
+const probeLog = (msg) => console.log(`# ${msg}`);
+
 const hub = createOcclusionHub({
-  log: (msg) => console.log(`# ${msg}`),
+  log: probeLog,
   pollMs,
   ...(ownPid ? { ownPid } : {}),
 });

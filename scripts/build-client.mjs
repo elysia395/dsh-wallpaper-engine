@@ -580,13 +580,19 @@ function readInlinedPrelude() {
       .replace(/\/\*[\s\S]*?\*\//g, ' ')
       .replace(/(^|[^:])\/\/[^\n]*/g, '$1 ');
 
-    for (const [re, what] of [
+    // 判据清单：`[正则, 人话]`。**JSDoc 注解是必须的** —— 无注解时 tsc 把元组数组宽化成
+    // `(string | RegExp)[][]`，下面的 `re.test()` 就会报 TS2339「Property 'test' does not
+    // exist on type 'string | RegExp'」。运行期恒为 RegExp（这里全是正则字面量），故这是
+    // 类型推断过宽而非缺陷。
+    /** @type {Array<[RegExp, string]>} */
+    const browserSafetyChecks = [
       [/^\s*import\s/m, 'import 语句'],
       [/\brequire\s*\(/, 'require()'],
       [/^\s*export\s+default/m, 'export default'],
       [/\bprocess\.\w/, 'process.*'],
       [/\b__dirname\b|\b__filename\b/, 'CommonJS 路径全局量'],
-    ]) {
+    ];
+    for (const [re, what] of browserSafetyChecks) {
       if (re.test(code)) {
         console.error(`[build-client] ${mod.file} 必须浏览器安全，但含${what}`);
         process.exit(1);
