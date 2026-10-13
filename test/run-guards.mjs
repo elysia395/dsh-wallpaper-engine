@@ -118,6 +118,7 @@ const VERIFY_STEPS = [
   step('test/verify-steam-discovery.mjs'),
   step('test/verify-child-kill.mjs'),
   step('test/verify-host-diag.mjs'),
+  step('test/verify-upload-store.mjs'),
 ];
 
 /** `npm run verify:docs` —— 软档（只出声）。全部经 warn-only 降级。 */
