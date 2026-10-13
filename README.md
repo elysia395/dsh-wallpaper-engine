@@ -26,7 +26,7 @@ Wallpaper Engine 实时壁纸 · 液态玻璃 · 自定义外观 · Windows / ma
 
 一个 DSH 插件，把本机 **Wallpaper Engine** 的场景、网页与视频壁纸放到对话界面后方，再配上液态玻璃、字体、吉祥物与可分享的外观预设。不向 agent 注册工具或注入提示文本，**不增加模型 token 开销**。
 
-![主界面效果展示](https://raw.githubusercontent.com/elysia395/dsh-wallpaper-engine/main/docs/images/main-interface.gif)
+![主界面效果展示](https://github.com/elysia395/dsh-wallpaper-engine/releases/download/media-v1/main-interface.gif)
 
 > 上方版本、下载量、Stars、Forks、贡献者数量与 CI 状态由 Shields.io 动态获取，受服务缓存影响，并非秒级实时；平台与 Node.js 徽章是兼容信息。没有手填测试通过数量或第三方榜单排名。
 
@@ -127,7 +127,7 @@ macOS 没有 Wallpaper Engine 官方客户端。可以上传图片 / 视频，�
 3. 通过缩略图选择壁纸，按需调整播放与外观。修改即时生效并保存到宿主端。
 4. 暂停 / 播放控制视频；清除当前壁纸不会删除原文件。
 
-![设置界面功能展示](https://raw.githubusercontent.com/elysia395/dsh-wallpaper-engine/main/docs/images/settings-ui.gif)
+![设置界面功能展示](https://github.com/elysia395/dsh-wallpaper-engine/releases/download/media-v1/settings-ui.gif)
 
 ### 六个设置页签
 
@@ -148,7 +148,7 @@ macOS 没有 Wallpaper Engine 官方客户端。可以上传图片 / 视频，�
 - **准备后切换**：下一张准备完成后再交接；失败候选自动跳过。可选择硬切、淡化、推移等过场，系统「减少动态效果」开启时使用硬切。
 - **壁纸属性**：Scene / Web 壁纸可显示作者定义的颜色、开关、滑块等属性，按壁纸保存，并可恢复默认。
 
-![壁纸库与壁纸仓库](https://raw.githubusercontent.com/elysia395/dsh-wallpaper-engine/main/docs/images/wallpaper-library.gif)
+![壁纸库与壁纸仓库](https://github.com/elysia395/dsh-wallpaper-engine/releases/download/media-v1/wallpaper-library.gif)
 
 > 演示素材保留历史界面；当前交互以安装版本为准，壁纸选择在页内库视图完成。
 
@@ -221,7 +221,7 @@ macOS 没有 Wallpaper Engine 官方客户端。可以上传图片 / 视频，�
 - `dsh-better-sidebar` 可选；插件为它的侧栏提供独立玻璃参数与字体适配。不支持 `backdrop-filter` 的浏览器回退实色。
 - 与其他皮肤同时启用时，查看 [共存说明](https://github.com/elysia395/dsh-wallpaper-engine/blob/main/docs/COEXISTENCE.md)，避免让多个插件同时接管同一表面。
 
-![侧栏玻璃与字体适配](https://raw.githubusercontent.com/elysia395/dsh-wallpaper-engine/main/docs/images/better-sidebar-font.png)
+![侧栏玻璃与字体适配](https://github.com/elysia395/dsh-wallpaper-engine/releases/download/media-v1/better-sidebar-font.png)
 
 ## 开发与贡献
 
@@ -234,7 +234,7 @@ macOS 没有 Wallpaper Engine 官方客户端。可以上传图片 / 视频，�
 - [工作原理](https://github.com/elysia395/dsh-wallpaper-engine/blob/main/docs/HOW-IT-WORKS.md)
 - [故障排查](https://github.com/elysia395/dsh-wallpaper-engine/blob/main/docs/TROUBLESHOOTING.md)
 
-> npm 包不包含 `docs/`。上面的技术资料与演示图使用源码仓库地址，避免在 npm 页面中出现无效的相对路径。
+> npm 包不包含 `docs/`。上面的技术资料使用源码仓库地址、演示图使用 Release 资产地址（`media-v1`），避免在 npm 页面中出现无效的相对路径。
 
 ## 联系方式
 

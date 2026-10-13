@@ -4,6 +4,8 @@ Thanks for helping improve `dsh-wallpaper-engine`. Please keep each pull request
 
 感谢你参与改进 `dsh-wallpaper-engine`。请让每个 Pull Request 聚焦一个明确问题，并在说明中写清适用平台和验证结果。
 
+> 问题如何分诊（标签）与认领（`/assign`）：见 [`docs/TRIAGE.md`](docs/TRIAGE.md)。
+
 ## Choose the target branch / 选择目标分支
 
 All changes target `main`. The plugin is **one natively cross-platform tree** (Windows / WSL / macOS / Linux) with no platform branch — a platform-specific change must not regress the others.
@@ -13,14 +15,14 @@ All changes target `main`. The plugin is **one natively cross-platform tree** (W
 ## Build from the canonical source / 从唯一源码构建
 
 - `src/client.js` is the canonical browser source. Edit it, then run `npm run build` to regenerate `lib/client.js`.
-- `lib/client.js` is generated and tracked for distribution. Do not edit it by hand.
+- `lib/client.js` is generated at build time and **not tracked in git** (v1.4): `npm run build` produces it locally; `prepack` produces it inside npm / Release tarballs. Do not edit it by hand.
 - Host-side changes live directly in `lib/index.js` and the other `lib/*.js` host modules.
 - Restart DSH after host-side edits: `lib/*.js` is loaded at startup and is never hot-updated in a running instance.
 - Install a local dev build with the application **fully closed** (`dsh plugin --profile desktop add link:<path>`), then start it. Installing while the app is running leaves the plugin in `startup-unconfirmed`, which the recovery state rolls back on the next start.
 - Use the Node.js version your DSH profile requires; this repository declares `engines.node` in `package.json`.
 
 - `src/client.js` 是浏览器端唯一源码。修改后运行 `npm run build` 重新生成 `lib/client.js`。
-- `lib/client.js` 是随包分发的构建产物，请勿手改。
+- `lib/client.js` 是构建期产物、**不入库**（v1.4 起）：本地跑 `npm run build` 生成；npm 包与 Release tgz 里由 `prepack` 在打包时现场构建。请勿手改。
 - 宿主端代码直接位于 `lib/index.js` 和其他 `lib/*.js` 模块中。
 - 改完宿主端代码需**重启 DSH**：`lib/*.js` 在启动时加载，运行中的实例不会热更新。
 - 安装本地 dev 构建请**先完全关闭应用**（`dsh plugin --profile desktop add link:<path>`）再启动；应用运行期间安装会停在 `startup-unconfirmed`，恢复状态会在下次启动时自动回滚。
@@ -30,8 +32,8 @@ All changes target `main`. The plugin is **one natively cross-platform tree** (W
 
 - **Anatomy**: `lib/client.js` = the `src/client.js` body **+ every module listed in `INLINE_MODULES`** (`scripts/build-client.mjs`), all inlined into a single `factory(require)` scope. `npm run build` prints that inlined list — **read the count off that list, never from prose here** (a hardcoded number in this file has already gone stale once). Most of the file's lines therefore come from `src/**`, not from `client.js` itself — it *looks* like a monolith but is a flattened repository slice.
 - **Why inlining**: the browser half has **no local-module resolver** — the loader's `require` resolves only external packages, so `import './panel-tabs.js'` cannot work at runtime. Everything split out of `src/client.js` for readability is inlined back as a prelude in the same scope. Each entry declares `markers`, and a missing marker is a **hard build failure** — that is what stops the split from silently going empty. The output must also parse (`new Script(...)`) before it is written.
-- **Its role**: `package.json` exposes it as `exports["./client"]` with `dsh.client.immediately: true`; the DSH client loader fetches it from package metadata (no host route serves it). It is **tracked in git** because the supported install paths (`pnpm add github:…`, `link:`) never run a build.
-- **Rule 1 — rebuild in the same commit**: any `src/**` change requires `npm run build` + committing the artifact together. CI asserts it (`git diff --exit-code -- lib/client.js` right after `npm run build`), and the **local chain asserts it too** via `test/verify-client-sync.mjs`: it rebuilds, compares byte-for-byte, and restores the file — so a stale artifact fails **before you push**.
+- **Its role**: `package.json` exposes it as `exports["./client"]` with `dsh.client.immediately: true`; the DSH client loader fetches it from package metadata (no host route serves it). It is **built, never tracked** (v1.4): npm / Release tarballs get it from `prepack` at packaging time, and a `link:` dev checkout gets it from `npm run build`. The supported install paths are therefore the npm package name and the Release tarball — a raw `github:` install does not build it and is **not supported**.
+- **Rule 1 — rebuild before verifying**: any `src/**` change requires `npm run build` before `verify` / packaging (there is no committed artifact left to forget). CI rebuilds and then asserts the artifact is **not tracked**; the **local chain asserts freshness** via `test/verify-client-sync.mjs`: it rebuilds, compares byte-for-byte, and restores the file — so a stale artifact fails **before you push**.
 - **Rule 2**: never hand-edit `lib/client.js`; the next build overwrites it.
 - **Rule 3 — the artifact is a contract**: several guards test the **built** file (`verify-readability`, `verify-softrender`, `verify-client`), and some extract the stylesheet from it by a line-leading anchor. That is why `src/styles.js` forbids backticks and literal copies of its own declaration in its comments — one stray backtick once made `verify-host-paint-scope` report "bare backticks: 489".
 - **Trap — comments in `src/**` ship to users**: prefer the *measurement command* over a number that drifts (two module headers once cited `src/client.js` as "9,500 lines" — both are fixed now; don't write one back).
@@ -39,8 +41,8 @@ All changes target `main`. The plugin is **one natively cross-platform tree** (W
 
 - **构成**：`lib/client.js` = `src/client.js` 正文 **+ `INLINE_MODULES` 里的每一个模块**（见 `scripts/build-client.mjs`），全部内联进**同一个** `factory(require)` 作用域。`npm run build` 会把内联清单打印出来 —— **条数只许从那份清单现读，不要写进本文件**（这里写死过一次，已经漂了）。**它的大部分行来自 `src/**` 而不是 `client.js` 自己**（占比同样按那份清单复算，勿记死数）—— 看着像巨石，实为"压平的仓库切片"。
 - **为什么必须内联**：浏览器半边**没有本地模块解析器** —— loader 的 `require` 只解析外部包，`import './panel-tabs.js'` 在运行时根本不成立。凡为可读性拆出去的代码，都在构建期作为 prelude 内联回同一作用域。每项都带 `markers`，**缺任何一个都构建硬失败** —— 这正是"拆分不会悄悄变空"的保证；产物还必须能通过 `new Script(...)` 解析才会被写出。
-- **它的身份**：`package.json` 用 `exports["./client"]` + `dsh.client.immediately: true` 暴露它，DSH 客户端加载器按**包元数据**取（宿主侧没有任何路由发它）。它**必须入库**：本仓支持的安装路径（`pnpm add github:…`、`link:`）都不跑构建。
-- **铁律一 —— 同提交重建**：改任何 `src/**` 都要 `npm run build` 并把产物**同一个提交**带上。CI 会判定（`npm run build` 之后 `git diff --exit-code -- lib/client.js`）；**本地链现在也判**：`test/verify-client-sync.mjs` 会重建、逐字节比对、并把文件**还原**（守卫不改工作树）⇒ 产物过期会在 **push 之前**就红。
+- **它的身份**：`package.json` 用 `exports["./client"]` + `dsh.client.immediately: true` 暴露它，DSH 客户端加载器按**包元数据**取（宿主侧没有任何路由发它）。它**构建、但不入库**（v1.4 起）：npm 包与 Release tgz 由 `prepack` 在打包时生成；`link:` 开发检出由 `npm run build` 生成。支持的安装路径因此是 **npm 包名 / Release tgz**；裸 `github:` 直装不构建产物，**不再支持**。
+- **铁律一 —— 先重建再验证**：改任何 `src/**` 都要在 `verify` / 打包前 `npm run build`（已无"产物忘了提交"这回事）。CI 重建后判**产物不入库**；**本地链同样判新鲜度**：`test/verify-client-sync.mjs` 会重建、逐字节比对、并把文件**还原**（守卫不改工作树）⇒ 产物过期会在 **push 之前**就红。
 - **铁律二**：绝不手改 `lib/client.js`，下一次构建会抹掉。
 - **铁律三 —— 产物即契约**：多个守卫跑的是**产物**（`verify-readability`、`verify-softrender`、`verify-client`），另有一些**按行首锚点从产物里**取样式表。这就是 `src/styles.js` 禁止在自己注释里写反引号、也禁止复述那条声明语句的原因（实测踩到过：`verify-host-paint-scope` 报"裸反引号 489"）。
 - **陷阱 —— `src/**` 的注释会随包发给用户**：涉及行数 / 体积这类会漂的量，写**复算命令**而不是写数字（曾有两处模块头注释把 `src/client.js` 说成"9,500 行"，现已修掉 —— 别再写回去）。
@@ -124,7 +126,7 @@ npm run verify:all  # = build + verify（硬档）+ verify:docs（软档）+ smo
 > **两档各含哪些守卫、分档判据是什么，只在 [`docs/DEV-GUIDE.md`](docs/DEV-GUIDE.md) §4.2 定义一处**
 > —— 这里刻意不列清单（此前抄过一份，删掉两条守卫后就过时了，正说明为什么不该抄）。
 
-`.github/workflows/verify.yml` 在每次 push / PR 上跑同一套，并额外断言两件事：`lib/client.js` 与 `src/client.js` 同步（**本地链里也有这一条**：`test/verify-client-sync.mjs`），
+`.github/workflows/verify.yml` 在每次 push / PR 上跑同一套，并额外断言两件事：产物不入库（`git ls-files -- lib/client.js docs/images` 必须为空；新鲜度由本地链首条 `test/verify-client-sync.mjs` 真跑构建逐字节判），
 以及 `git diff --check` 无尾随空白 / 冲突标记。
 
 > CI **故意不执行 `npm ci`**：build / verify / smoke 只用 `node:` 内置模块与相对路径，
@@ -184,15 +186,15 @@ UI 改动还应说明实际测试过的 DSH 界面、浏览器或 DSH Desktop �
 
 ## Release / 发布
 
-- **Publishing is the upstream repository's job** (`elysia395/dsh-wallpaper-engine`). This fork is a development line; it does not publish to npm, and it carries no version-bump gate.
-- What this fork *does* guard is the **publish surface**, via `test/verify-package-publish.mjs` inside `npm run verify`: the reachable closure of `lib/index.js` must be covered by `files`, no dev directories may leak into the package, published text must not carry another machine's home path, every `dependencies` entry must actually be loaded by reachable code, and no install-time script may reference a file that `files` does not ship.
+- **Publishing is the maintainer's job** (`elysia395/dsh-wallpaper-engine`): releases go to npm and GitHub Releases from this repository, at the maintainer's discretion (no automated publish pipeline).
+- What the guard chain protects is the **publish surface**, via `test/verify-package-publish.mjs` inside `npm run verify`: the reachable closure of `lib/index.js` must be covered by `files`, no dev directories may leak into the package, published text must not carry another machine's home path, every `dependencies` entry must actually be loaded by reachable code, and no install-time script may reference a file that `files` does not ship.
 - Check the surface locally at any time with `npm pack --dry-run`（它给出的条目数会比守卫的清单多 `package.json` + `LICENSE`）。
 - **`engines.dsh` is the machine-readable copy of the host requirement.** The plugin market (and DSH's own plugin manager) reads it straight out of the published manifest — the catalog is not involved — and displays it on the plugin card, using it to flag a mismatch with the running host. It must therefore agree with the prose in the READMEs and `docs/UPGRADING.md`; changing one means changing all three. `dsh-better-sidebar` **cannot** be expressed there (it is not a `@deepseek-ai/*` peer) and lives only in that prose.
 - **Nothing in `scripts/prepare.mjs` or `scripts/build-client.mjs` may write informational text to stdout.** `prepack` runs during `npm pack` / `npm publish`, so anything it prints lands in their stdout — and `--json` requires stdout to hold nothing but JSON (measured: `built …` was enough to make `npm pack --dry-run --json` unparseable). Progress goes to stderr.
 - **Keep the READMEs' statement about what the package ships true to the tarball.** They say the npm package does not ship `docs/`, which is a real consequence for readers (those links do not resolve on npm or in the market). Stating that it ships "only the READMEs" was false — the package carries `lib/**` and `cordis.patch.yml` — and the market shows that text on the plugin's page. Verify against the real thing (`npm pack --dry-run`, or the published tarball), not against the `files` array by eye.
 
-- **发布是上游仓库的事**（`elysia395/dsh-wallpaper-engine`）。本 fork 是开发线：**不发布到 npm**，也不带版本号闸门。
-- 本 fork 守的是**发布面**，由 `npm run verify` 里的 `test/verify-package-publish.mjs` 负责：`lib/index.js` 的可达闭包必须被 `files` 覆盖、不得泄漏开发目录、发布文本不得带别的机器的家目录路径、`dependencies` 每条都必须被可达代码加载、安装期脚本不得引用未随包发布的文件。
+- **发布由维护者执行**（`elysia395/dsh-wallpaper-engine`）：npm 与 GitHub Releases 都由本仓发布，节奏由维护者掌握（没有自动化发布流水线）。
+- 守卫链守的是**发布面**，由 `npm run verify` 里的 `test/verify-package-publish.mjs` 负责：`lib/index.js` 的可达闭包必须被 `files` 覆盖、不得泄漏开发目录、发布文本不得带别的机器的家目录路径、`dependencies` 每条都必须被可达代码加载、安装期脚本不得引用未随包发布的文件。
 - 随时可以用 `npm pack --dry-run` 核对发布面（它的条目数会比守卫清单多 `package.json` 与 `LICENSE`）。
 - **`engines.dsh` 是宿主要求的机读副本。** 插件市场（以及 DSH 自己的插件管理 UI）是**从已发布的 manifest 直接读它**的——目录那边不参与——然后显示在插件卡片上，并用它与运行中的宿主比对、标记不匹配。所以它必须与三份 README 及 `docs/UPGRADING.md` 里的散文**同口径**：改一处就要改全部。`dsh-better-sidebar` **无法**在这里表达（它不是 `@deepseek-ai/*` peer），只能留在那段散文里。
 - **`scripts/prepare.mjs` 与 `scripts/build-client.mjs` 都不许往 stdout 写信息性文字。** `prepack` 会在 `npm pack` / `npm publish` 期间跑，它打印的东西会落进这两条命令的 stdout——而 `--json` 要求 stdout 上**只有 JSON**（实测：仅仅一行 `built …` 就让 `npm pack --dry-run --json` 无法解析）。进度信息一律走 stderr。
@@ -201,7 +203,7 @@ UI 改动还应说明实际测试过的 DSH 界面、浏览器或 DSH Desktop �
 ## Pull request checklist / PR 检查清单
 
 - The PR targets `main`.
-- Source and generated client output are both included when `src/client.js` changes.
+- `src/client.js` changes were rebuilt (`npm run build`) before running verification (the artifact is not tracked).
 - Existing platform behavior is preserved or the intentional change is explained.
 - Build and verification commands pass.
 - New dev-face files go where the layout says: guards and smoke tests in `test/`, manual
@@ -214,7 +216,7 @@ UI 改动还应说明实际测试过的 DSH 界面、浏览器或 DSH Desktop �
   informational text to stdout (see **Release** for why each one matters).
 
 - PR 目标分支为 `main`。
-- 修改 `src/client.js` 时同时包含重新生成的客户端产物。
+- 修改 `src/client.js` 时已先 `npm run build` 重建（产物不入库，无需提交）。
 - 现有平台行为已保留，或正文已解释有意变更。
 - 构建与验证命令全部通过。
 - 新增的开发面文件放在**约定位置**：守门与冒烟在 `test/`，手动诊断/分析/生成工具在 `test/tools/`，

@@ -84,10 +84,10 @@ needs to execute build scripts but is not in the "allowBuilds" allowlist.
 ```
 
 **You used a `github:` install form** (e.g. `dsh plugin --profile web add github:elysia395/dsh-wallpaper-engine`).
-pnpm 11 blocks build scripts of git-hosted packages by default for supply-chain safety, and this
-plugin's git checkout needs the `prepare` script to build the client — so `github:` direct installs
-always fail. Use the **npm package name** instead (the published npm package is pre-built, no
-compile-time build needed):
+Since v1.4 the client artifact `lib/client.js` is **not committed**, and no build script runs at install
+time (pnpm 11 blocks build scripts of git-hosted packages by default for supply-chain safety) — so a
+`github:` direct install ships no client half and is not supported. Use the **npm package name**
+instead (the published tarball is built at packaging time; no compile-time build is needed):
 
 ```sh
 dsh plugin --profile web add dsh-plugin-wallpaper-engine

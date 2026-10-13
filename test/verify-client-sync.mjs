@@ -1,14 +1,17 @@
 /**
- * verify-client-sync.mjs — 提交物 `lib/client.js` 与 `src/**` 的重建结果**逐字节一致**。
+ * verify-client-sync.mjs — 构建产物 `lib/client.js` 与 `src/**` 的重建结果**逐字节一致**，
+ * 且**产物不出现在版本库里**（v1.4 起产物出库，见 CONTRIBUTING「What `lib/client.js` actually is」）。
  *
- * 不变量：`lib/client.js` 是浏览器半边**唯一能被加载的形态**（见 `CONTRIBUTING.md`
- * 「What `lib/client.js` actually is」），它入库、随包分发，而本仓支持的安装路径
- * （`pnpm add github:…` / `link:`）**都不跑构建** ⇒ 产物一旦过期，发出去的就是旧行为。
- * 而**浏览器侧的守卫跑的都是产物**（`verify-readability` / `verify-softrender` / `verify-client`），
- * 所以"改了 `src/**` 忘重建"会让它们**全绿地验证旧代码**。
+ * 不变量：`lib/client.js` 是浏览器半边**唯一能被加载的形态**，由 `npm run build` 现场生成
+ * （本地链 / CI / `prepack` 三条路径都跑同一支构建）。它**不再入库**：本仓的安装路径
+ * （npm 包 / Release tgz）都在打包时构建，开发路径（`link:`）本来就要求先 `npm run build`。
  *
- * CI 一直在判这件事（`.github/workflows/verify.yml`：`npm run build` 之后
- * `git diff --exit-code -- lib/client.js`）。本守卫把那一步搬进**本地链**，让它在 push 前就红。
+ * 判据两条，缺一不可：
+ *   ① **新鲜度**：把当前产物读进内存 → 跑一次构建 → 逐字节比对 → **把原内容写回**。
+ *      改了 `src/**` 忘重建 ⇒ 这里在 push 之前就红（浏览器侧的守卫跑的都是产物，
+ *      否则它们会**全绿地验证旧代码**）。
+ *   ② **不入库**：`git ls-files` 不得列出 `lib/client.js` / `docs/images/**`
+ *      （artifact-untracking 的机器判定；文件仍在磁盘上由构建生成）。
  *
  * 做法：把当前产物读进内存 → 跑一次构建 → 逐字节比对 → **把原内容写回**。
  * 守卫不该改工作树：无论结论如何，退出时的 `lib/client.js` 都与进来时一致。
@@ -35,7 +38,8 @@ const check = (name, ok, detail) => {
 const sha = (buf) => createHash('sha256').update(buf).digest('hex').slice(0, 12);
 
 if (!existsSync(ARTIFACT) || !existsSync(BUILD)) {
-  console.log('  ✗ 前置缺失：' + [ARTIFACT, BUILD].filter((p) => !existsSync(p)).join(' / '));
+  console.log('  ✗ 前置缺失：' + [ARTIFACT, BUILD].filter((p) => !existsSync(p)).join(' / ')
+    + '（产物由 `npm run build` 现场生成；先跑一次构建）');
   process.exit(1);
 }
 const before = readFileSync(ARTIFACT);
@@ -57,11 +61,10 @@ const after = readFileSync(ARTIFACT);
 if (!after.equals(before)) writeFileSync(ARTIFACT, before);
 
 /**
- * 判定基准是**提交形态**，不是工作树的字节。构建脚本按 LF 写产物（`output.join('\n')`
- * 且逐模块 `replace(/\r\n/g, '\n')`），而本仓的检出侧开了 `core.autocrlf=true`
- * ⇒ 同一个内容在盘上是 CRLF、入索引时被规范化回 LF。直接比字节会把「检出侧的行尾」
- * 判成「产物过期」—— 干净工作树上比字节必红（第 1 行差异），而
- * `git diff` 同时说没改。CI 不红是因为它检出的就是 LF。
+ * 判定基准是**构建形态**，不是工作树的字节。构建脚本按 LF 写产物（`output.join('\n')`
+ * 且逐模块 `replace(/\r\n/g, '\n')`），而仓库契约是全仓 LF（`.gitattributes`），
+ * 若某种检出把盘上写出了 CRLF，直接比字节会把「检出侧的行尾」判成「产物过期」——
+ * 干净工作树上比字节必红（第 1 行差异）。
  * 所以两侧都折成 LF 再判：这仍能抓住"src 改了没重建"（那是**内容**差异），
  * 只是不再把行尾风格当内容差异。
  */
@@ -87,10 +90,10 @@ const a0 = lf(after);
 const b0 = lf(before);
 const agree = !staleByLf(after, before);
 const eolOnly = !after.equals(before) && agree;
-check('提交物与重建结果一致（按提交形态 LF 比较）', agree,
+check('构建产物与重建结果一致（按构建形态 LF 比较）', agree,
   agree ? sha(b0) + ' · ' + b0.length + ' B' + (eolOnly ? '（盘上仅行尾风格不同：检出侧 CRLF，属正常）' : '')
     : '产物 ' + sha(b0) + ' ≠ 重建 ' + sha(a0) + '；首处差异在第 ' + firstDiffLine(before, after)
-      + ' 行 ⇒ 跑 `npm run build` 并把 lib/client.js 与 src/** 一起提交');
+      + ' 行 ⇒ 跑 `npm run build` 重建（产物不再入库，重建后无需提交它）');
 
 // 负对照：同一个判据对"被改过一个字节"的**内容**必须判红，否则上面那条可能是恒真式。
 {
@@ -99,7 +102,7 @@ check('提交物与重建结果一致（按提交形态 LF 比较）', agree,
   check('negative control: 内容差一个字节会被判出', staleByLf(tampered, b0),
     'len=' + tampered.length + ' · 首处差异第 ' + firstDiffLine(tampered, b0) + ' 行');
 }
-// 正对照：行尾风格不算内容差异 —— 否则本机（CRLF 检出）恒红。
+// 正对照：行尾风格不算内容差异 —— 否则换一种检出的机器上恒红。
 // 两侧都是**真造出来的 Buffer**（CRLF 版 / LF 版），喂进主判据同一个函数 `staleByLf`：
 // ① 只有行尾差异 ⇒ 不算过期；② 真有一个字节不同 ⇒ 必须算过期。②是这条对照的牙 ——
 // 少了它，把 `staleByLf` 改成恒 false 也照样全绿（对照就成了"判据恒绿"的复述）。
@@ -111,6 +114,36 @@ check('提交物与重建结果一致（按提交形态 LF 比较）', agree,
     staleByLf(crlfAfter, lfBefore) === false, 'CRLF vs LF ⇒ stale=' + staleByLf(crlfAfter, lfBefore));
   check('positive control 咬合：同一函数对"差一个字节"必须判 stale',
     staleByLf(changed, lfBefore) === true, 'a\\nb\\n vs a\\nB\\n ⇒ stale=' + staleByLf(changed, lfBefore));
+}
+
+// ── 产物不入库（v1.4 起）：`lib/client.js` 与 `docs/images/**` 不得被 git 跟踪 ────────
+// 这是"产物出库"策略的机器判定：构建产物与展示图（现由媒体 Release 分发，见 README）都不入库。
+// 判据口径：`git ls-files` 列出即红（不比对内容 —— 跟踪本就是错的那件事）。
+{
+  const tracked = (() => {
+    try {
+      const out = execFileSync('git', ['ls-files', '--', 'lib/client.js', 'docs/images'], { cwd: ROOT, encoding: 'utf8' });
+      return out.split('\n').map((s) => s.trim()).filter(Boolean);
+    } catch (e) {
+      return null; // 不是 git 工作树（例如发布的 tarball 的内嵌检查）：不判这一条
+    }
+  })();
+  if (tracked === null) {
+    console.log('  ⚠ 不在 git 工作树里，跳过「产物不入库」判据（发布 tarball 场景）');
+  } else {
+    check('产物不入库：lib/client.js 与 docs/images/** 均未被 git 跟踪', tracked.length === 0,
+      tracked.length === 0 ? 'ls-files 空' : '被跟踪 ' + tracked.length + ' 条：' + tracked.slice(0, 5).join(', ') + (tracked.length > 5 ? ' …' : ''));
+    // 负对照：给一个**确定被跟踪**的路径（仓库根自己的守卫脚本），同一判据必须能列出它。
+    // 少了这条，"ls-files 永远返回空"（比如 pathspec 写错）也会全绿。
+    const probe = (() => {
+      try {
+        const out = execFileSync('git', ['ls-files', '--', 'test/verify-client-sync.mjs'], { cwd: ROOT, encoding: 'utf8' });
+        return out.split('\n').map((s) => s.trim()).filter(Boolean);
+      } catch { return []; }
+    })();
+    check('negative control: 同一判据对已跟踪文件有牙（本守卫自身被列出）', probe.length === 1,
+      'probe=' + JSON.stringify(probe));
+  }
 }
 
 console.log('\n' + (failed ? 'CLIENT SYNC CHECKS FAILED — ' + failed + ' failed' : 'CLIENT SYNC CHECKS PASSED')

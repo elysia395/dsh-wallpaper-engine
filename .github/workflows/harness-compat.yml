@@ -72,6 +72,14 @@ jobs:
           INSTALLED="$(node -e 'const{execSync}=require("child_process");const root=execSync("npm root -g").toString().trim();process.stdout.write(require(root+"/@deepseek-ai/dsh/package.json").version)')"
           if [ "$INSTALLED" != "$TARGET" ]; then echo "installed=$INSTALLED target=$TARGET"; exit 1; fi
 
+      # 产物出库（v1.4 起）：`lib/client.js` 不再随 checkout 进来，而下面的 link 探活
+      # 直接软链本工作区 —— 先现场构建出产物，否则探活会读到一个不存在的 client。
+      # （tarball 通道不用这一步：它走 `npm pack`，prepack 自己会构建。）
+      - name: build —— 产物出库后必须先现场生成 lib/client.js
+        if: steps.target.outputs.should_run == 'true'
+        shell: bash
+        run: npm run build
+
       - name: UI 面清单棘轮 + sidebar 源码活判据（对最新 harness 真源码）
         if: steps.target.outputs.should_run == 'true'
         shell: bash

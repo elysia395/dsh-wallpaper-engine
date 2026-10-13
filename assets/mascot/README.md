@@ -121,7 +121,7 @@
      `lib/glass-presets/factory-author.json` 的 `assets.mascot.data`（键序 `file` → `box` → `data`，
      `box` = `52x57`）
 3. 转 base64 data URI 替换对应常量（`maid` 则替换预设里的 `data`），然后 `npm run build` 重建 `lib/client.js`
-   （两者必须一起提交，CI 会断言产物与源码同步）。
+   （产物不入库；CI 会重建并断言产物与源码逐字节一致）。
 4. 新增形态时同步三处：`ROPE_FORMS`（`img` + 显示名 + 基准盒 `w/h`）、
    `lib/settings-schema.js` 的 `ROPE_FORM_VALUES`（**单点真源**，`src/client.js` 只用不声明）、
    以及 `lib/client.js` 的重建。并遵守既有不变量：常量必须在 `readPersisted()` 之前声明（`const` TDZ）。
@@ -130,5 +130,5 @@
 
 ## 相关但不同的一处
 
-[`docs/images/mascot-drawer.png`](../../docs/images/mascot-drawer.png) 是 README 里**功能截图**，
-与本目录的**美术源文件**是两回事；截图受 `.gitignore` 白名单管理。
+README 里的**功能截图**（mascot-drawer）与本目录的**美术源文件**是两回事；
+截图已迁至 GitHub Release 资产（`media-v1`）外链，不再入库。

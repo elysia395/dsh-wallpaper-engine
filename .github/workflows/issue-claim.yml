@@ -1,0 +1,76 @@
+name: issue-claim
+
+# 自认领机器人：在**已受理**（`status:accepted`）的 issue 下评论 `/assign` 即被指派，
+# `/unassign` 释放（仅认领人本人或维护者可释放）。
+#
+# 为什么用 `issue_comment` 而不是 issue 表单的 assign 控件：GitHub 原生 assign 只对
+# 有 push 权限的人开放（contributors），社区贡献者点不到 —— 评论命令是唯一对所有人开放
+# 的认领入口。流程与标签口径见 docs/TRIAGE.md。
+#
+# ⚠️ 工作流只在**默认分支（main）**上的版本生效：改这个文件需要先合入 main 再试。
+on:
+  issue_comment:
+    types: [created]
+
+permissions:
+  issues: write
+
+jobs:
+  claim:
+    # 只在 issue（非 PR）下的命令评论上跑；PR 评论不处理（PR 有它自己的流转）。
+    if: ${{ !github.event.issue.pull_request }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/github-script@v7
+        with:
+          script: |
+            const body = (context.payload.comment.body || '').trim();
+            const cmd = body.split(/\s+/)[0].toLowerCase();
+            const isAssign = cmd === '/assign';
+            const isUnassign = cmd === '/unassign';
+            if (!isAssign && !isUnassign) return;
+
+            const issue = context.payload.issue;
+            const number = issue.number;
+            const commenter = context.payload.comment.user.login;
+            const labels = (issue.labels || []).map((l) => l.name);
+            const current = (issue.assignees || []).map((a) => a.login);
+
+            const { owner, repo } = context.repo;
+            const reply = (text) => github.rest.issues.createComment({ owner, repo, issue_number: number, body: text });
+
+            // 写权限判定：用于 /unassign 的放行（维护者/协作者可释放别人的认领）。
+            let hasWrite = false;
+            try {
+              const { data } = await github.rest.repos.getCollaboratorPermissionLevel({ owner, repo, username: commenter });
+              hasWrite = ['admin', 'write', 'maintain'].includes(data.permission);
+            } catch { /* 非协作者：保持 false */ }
+
+            if (isUnassign) {
+              if (current.length === 0) { await reply(`@${commenter} 这个 issue 当前没有认领人。`); return; }
+              if (!current.includes(commenter) && !hasWrite) {
+                await reply(`@${commenter} 只有当前认领人（${current.map((u) => '@' + u).join(' ')}）或维护者可以释放认领。`);
+                return;
+              }
+              const remaining = current.filter((u) => u !== commenter);
+              await github.rest.issues.removeAssignees({ owner, repo, issue_number: number, assignees: [commenter] });
+              await reply(`@${commenter} 已释放认领${remaining.length ? '（当前认领人：' + remaining.map((u) => '@' + u).join(' ') + '）' : ''}。`);
+              return;
+            }
+
+            // /assign —— 只对已受理的 issue 开放认领（见 docs/TRIAGE.md）
+            if (!labels.includes('status:accepted')) {
+              await reply(`@${commenter} 这个 issue 还没受理（缺 \`status:accepted\`），暂不能认领。维护者受理后，再评论 \`/assign\` 即可。`);
+              return;
+            }
+            if (current.includes(commenter)) { await reply(`@${commenter} 你已经是这个 issue 的认领人了。`); return; }
+            if (current.length > 0) {
+              await reply(`@${commenter} 这个 issue 已被 ${current.map((u) => '@' + u).join(' ')} 认领。想接力的话请先和他/她沟通，或等维护者改派。`);
+              return;
+            }
+            try {
+              await github.rest.issues.addAssignees({ owner, repo, issue_number: number, assignees: [commenter] });
+              await reply(`@${commenter} 已认领 ✅ —— 请按 [CONTRIBUTING.md](https://github.com/${owner}/${repo}/blob/main/CONTRIBUTING.md) 准备环境（\`npm ci\` → 改 \`src/**\` → \`npm run build\` → \`npm run verify:all\`），完成后发 PR。忙不过来随时 \`/unassign\`。`);
+            } catch (e) {
+              await reply(`@${commenter} 自动指派失败：${e.message}。请联系维护者手动指派。`);
+            }

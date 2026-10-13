@@ -595,7 +595,7 @@ macOS 没有 GNU `timeout`：一次 28 文件的对跑全 `exit 127`，脚本却
 
 ## 6. 提交前的自查清单
 
-- [ ] 改过 `src/**` 吗？→ `npm run build`，并把 `lib/client.js` **同一个提交**带上。
+- [ ] 改过 `src/**` 吗？→ `npm run build` 先重建产物（产物不入库、无需提交），再跑 verify。
 - [ ] 改过 `lib/**` 吗？→ 说明"需重启 DSH 生效"。
 - [ ] 新增了 `lib/` 下的文件吗？→ 加进 `package.json` 的 `files`。
 - [ ] 新增了 `src/**` 文件吗？→ 登记进 `INLINE_MODULES` 并给 `markers`。

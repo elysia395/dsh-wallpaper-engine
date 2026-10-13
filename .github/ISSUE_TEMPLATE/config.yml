@@ -1,0 +1,11 @@
+blank_issues_enabled: false
+contact_links:
+  - name: 安装 / 升级问题先看排障文档
+    url: https://github.com/elysia395/dsh-wallpaper-engine/blob/main/docs/TROUBLESHOOTING.md
+    about: 安装失败、升级顺序、常见症状的处置都在这里
+  - name: 问题怎么分诊与认领
+    url: https://github.com/elysia395/dsh-wallpaper-engine/blob/main/docs/TRIAGE.md
+    about: 标签含义、/assign 自动认领、从 issue 到 PR 的路径
+  - name: 交流群
+    url: https://github.com/elysia395/dsh-wallpaper-engine#联系方式
+    about: 使用问题 / 闲聊可以进群；可复现的 bug 请走 issue

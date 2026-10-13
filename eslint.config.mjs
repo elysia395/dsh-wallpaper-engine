@@ -74,7 +74,7 @@ const JUSTIFIED_OFF = {
 
 export default [
   {
-    // `lib/client.js` 是**构建产物**（`npm run build` 生成，CI 用 `git diff --exit-code` 钉同步）。
+    // `lib/client.js` 是**构建产物**（`npm run build` 生成、不入库；新鲜度由 `test/verify-client-sync.mjs` 真跑构建逐字节判）。
     // 对产物报违规没有任何可执行的含义 —— 要改就改 `src/**` 再重建。
     ignores: ['lib/client.js', 'node_modules/**', '.npm-cache/**', '.test-cache/**', 'assets/**', 'lib/types/**'],
   },

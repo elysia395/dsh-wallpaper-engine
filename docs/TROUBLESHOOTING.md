@@ -84,8 +84,9 @@ needs to execute build scripts but is not in the "allowBuilds" allowlist.
 ```
 
 **说明你用了 `github:` 形式的安装命令**（例如 `dsh plugin --profile web add github:elysia395/dsh-wallpaper-engine`）。
-pnpm 11 出于供应链安全，默认拒绝从 git 安装的包执行构建脚本，而本插件的 git checkout 需要 `prepare`
-脚本构建 client，因此 `github:` 直装必然失败。请改用 **npm 包名**安装（npm 发布包已预构建，无需安装时编译）：
+从 v1.4 起，客户端产物 `lib/client.js` **不入库**、安装期也**不跑任何构建脚本**（pnpm 11 出于供应链
+安全默认拒绝 git 依赖的构建脚本）——因此 `github:` 直装拿不到客户端半边，不受支持。请改用
+**npm 包名**安装（发布包在打包时已构建好产物，无需安装时编译）：
 
 ```sh
 dsh plugin --profile web add dsh-plugin-wallpaper-engine

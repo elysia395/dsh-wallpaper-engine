@@ -202,7 +202,7 @@ tail belongs to git history.)
 - Development / publishing: `CONTRIBUTING.md` at the repository root (including "what `lib/client.js`
   actually is"); the user-facing facade: `README.md` / `README.en.md` / `README.beginner.md` (Chinese/English
   at the root; the beginner guide is Chinese only).
-- `images/`: screenshots referenced by the README.
+- `images/`: local working screenshots only — the README showcase images moved to the `media-v1` release assets (hotlinked) and are no longer committed.
 - **Documents already dissolved into code** (conclusions into comments): `RENDERER-OFFICIAL-STRUCTURE.md`,
   `RENDER-ISSUES-ANALYSIS.md`, `REFACTOR-ROUND-2026-08-28.md`, `REFACTOR-STATIC-FRAME.md`; abandoned
   directions (`HOOK-PROGRESS` / `V6-DUMP-ANALYSIS` / `EYE-PREDICTION` / `FIX-PLAN-AMYA` /
