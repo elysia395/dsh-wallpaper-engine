@@ -534,16 +534,46 @@ node test/run-guards.mjs verify --list-json # 机器可读的有序步骤表（P
 `src/client.js` 里两份同名函数（脚本语义下**后声明静默胜出**，删掉活的那份会让死的那份无声复活）、
 守卫自身的块作用域越界引用与重复对象键、以及 `tsc` 报出的一批属性名错配。
 
-⚠️ **行内 disable 指令引用的规则名，本身也是判据面的一部分**：`src/client.js` 里一处
+⚠️ **行内 disable 指令引用的规则名，本身也是判据面的一部分**：`src/client.js` 曾有一处
 `eslint-disable-next-line react-hooks/exhaustive-deps`，而本仓不装该插件 ⇒ ESLint 报
 `Definition for rule ... was not found`（是**假错误**，但会占一格棘轮预算）。在配置里把该规则声明成
-`off` **挡不住**它 —— 报错来自那条指令本身，只能改那一行。
+`off` **挡不住**它 —— 报错来自那条指令本身，只能改那一行。**该指令已随客户端半边的改动移除**，
+这条口径留着是因为它会以同样形态复发：**写完行内 disable 要确认规则名真的存在**。
 
 **`.editorconfig` 只管三件事**（`charset` / `end_of_line` / 尾随空白与末行换行）：
 这是"编辑器别替人改文件"的约定。**格式化决策（缩进宽度、换行位置）刻意不写** —— 一次全局重排会让
 review 失去意义；真正的格式守卫是无尾随空白那两条（CI 的 `git diff --check` 与 P8 的 BOM 扫描）。
 
 ---
+
+### 4.10 清静态欠账时踩到的四个坑（都是实测，不是推测）
+
+**① flat config 的豁免面必须排在最后。** `@eslint/js` 的 `js.configs.recommended.rules`
+**包含** `no-irregular-whitespace`；`src/**` 那个配置块 spread 了它 ⇒ 任何写在**该块之前**的
+`files` 豁免都会被**重新打开**（实测：`src/styles-base.js` 里 13 个 U+3000 照红）。而且
+`npx eslint --print-config <file>` 显示的是合并后的选项，**看着像已生效** —— 唯一可信的判据是
+对着那个文件**单跑** `npx eslint <file>`。本仓把形态级豁免集中放在 `eslint.config.mjs` 末尾的
+「豁免面」段，那里的注释写明"必须排在最后"。
+
+**② 对跑守卫的脚本必须同时比 `exit code` + 末行判词，且不得把 127/空输出判成相同。**
+macOS 没有 GNU `timeout`：一次 28 文件的对跑全 `exit 127`，脚本却把"两边都 127、判词都空"判成
+`SAME`（假绿的典型形态）。退出码 127/126 的含义是"根本没跑起来"，永远不是"跑过了"。
+
+**③ 扁平作用域里的跨片段写入 ⇒ `prefer-const` 是假阳性，靠行内豁免而不是关规则。**
+`src/**` 平铺进同一个 factory 作用域，写入点常在**另一个片段文件**里（如 `src/client.js` 的
+`let fadingLayerNode` 由 `src/layer-core.js` 写），ESLint 逐文件看不见 ⇒ 硬改 `const` 是运行期
+`TypeError`。约定：`// eslint-disable-next-line prefer-const -- 跨片段写入：<文件:行>`，
+**不许**因为几条假阳性就把整块规则关掉（同规则在 `src/**` 真收掉过 20 条死 `let`）。
+
+**④ 清完一批欠账要随手压低棘轮地板**：`node test/verify-static.mjs --write-baseline`
+（它同时刷 `filesLinted` 扫描面下限）。留着旧地板等于白清 —— 棘轮只挡"涨"，不替你记"降"。
+
+**欠账清零的判据**（本轮收口采用）：每条剩余违规要么**改掉**，要么**行内/形态级豁免 + 就地理由**
+（形态级只给"形状本身就是契约"那类：`src/**` 的 `no-var`、页签首行的空解构）。整目录关规则
+**不**算清零。
+
+---
+
 
 ## 5. 改文件头注释（任何改动都要做）
 
