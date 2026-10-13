@@ -19,6 +19,9 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import assert from 'node:assert/strict';
+// 实时管线已按域拆成兄弟模块 + 组装点 ⇒ 一律取**整族**文本（判据里那些正则可能落在任一域模块，
+// 单读组装点会让"代码搬了个家"表现成判据恒假）。族口径与成员顺序的真源见该工具。
+import { liveText } from './tools/src-scope.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 let passed = 0;
@@ -45,7 +48,7 @@ const checkAsync = async (name, fn) => {
 
 const API_CLIENT_SRC = readFileSync(join(ROOT, 'src/api-client.js'), 'utf8');
 const OCCLUSION_SRC = readFileSync(join(ROOT, 'src/occlusion.js'), 'utf8');
-const LIVE_SRC = readFileSync(join(ROOT, 'src/live-layer.js'), 'utf8');
+const LIVE_SRC = liveText();
 const BUILT = readFileSync(join(ROOT, 'lib/client.js'), 'utf8');
 
 /** 沙箱工厂：假定时器（手动 fire）+ 假 document + 可编程 fetch。 */

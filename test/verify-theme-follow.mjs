@@ -37,7 +37,9 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { stripComments } from './tools/js-text.mjs';
 // 单独 import `src/**`（含 fresh URL 重载）时补上 bundle 作用域的取词层（中文身份）。
 import { installWeTShim } from './tools/weT-shim.mjs';
-import { panelText } from './tools/src-scope.mjs';
+// 族取文：样式族 / 页签族 / 实时管线族都已按域拆成兄弟模块 + 组装点 ⇒ 判据扫**整族**，
+// 单读组装点会把"代码搬到域模块"错判成"接线丢了"（刀6 的 live-layer 拆分就是这么踩到的）。
+import { panelText, liveText } from './tools/src-scope.mjs';
 installWeTShim();
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -504,12 +506,12 @@ console.log('\n⑦ 接线：服务句柄 / 切换评估 / 面板开关 / 内联�
     /onReady: \(theme\) => \{ themeFollowAttach\(theme, ctx\);/.test(clientSrc));
   check('applySelection 落 schemeColor（垫底图的底色兜底因此不再永远为空）',
     prepSrc.includes('selection.schemeColor = w.schemeColor || null;')
-    && read('src/live-layer.js').includes('sel.schemeColor ||'));
+    && liveText().includes('sel.schemeColor ||'));
   // 同一形态的接线判据：宿主发的字段（inventory 的 liveFrame）必须在 applySelection 里落地，
   // 否则 web 支的"实时帧"这一级在客户端不存在（候选表、抽帧定时器、真实帧取色那条腿全断）
   // —— 行为面由 rotation-prepared-leak-smoke 的 X1/X2 正负对照钉住。
   const liveAssign = prepSrc.includes('selection.liveFrame = w.type === "web" && w.liveFrame ? w.liveFrame : null;');
-  const liveRead = read('src/live-layer.js').includes('sel.liveFrame ||');
+  const liveRead = liveText().includes('sel.liveFrame ||');
   check('applySelection 落 liveFrame（web 支的实时帧候选因此才有入口）',
     liveAssign && liveRead, 'assign=' + liveAssign + ' read=' + liveRead);
   check('清空/被过滤两条早退分支也把实时帧清掉（不留上一张的残值）',
@@ -524,7 +526,7 @@ console.log('\n⑦ 接线：服务句柄 / 切换评估 / 面板开关 / 内联�
     buildSrc.includes("file: 'src/theme-follow.js'"));
   check('产物里确实带上了判定常量（构建期内联生效）',
     read('lib/client.js').includes('THEME_FOLLOW_LIGHT_ABOVE'));
-  const liveSrc = read('src/live-layer.js');
+  const liveSrc = liveText();
   check('两条真实抓帧路径都接上了：场景画布 + 网页 __wp.capture',
     liveSrc.includes('themeFollowOnFrameCanvas(canvas);')
     && liveSrc.includes('themeFollowOnFrameImage(dataUrl);'));

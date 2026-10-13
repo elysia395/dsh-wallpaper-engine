@@ -290,7 +290,10 @@ section('⑦ 安装期不得跑任何仓库脚本（无构建钩子 + 不引用�
 {
   const INSTALL_HOOKS = ['preinstall', 'install', 'postinstall', 'prepare'];
   const DEV_ONLY = ['prepublishOnly', 'prepack', 'postpack', 'prepublish',
-    'build', 'verify', 'verify:docs', 'verify:all', 'verify:bridge', 'verify:e2e', 'smoke'];
+    'build', 'verify', 'verify:docs', 'verify:all', 'verify:bridge', 'verify:e2e', 'smoke',
+    // 静态门禁（ESLint / tsc 棘轮）：只在仓库里跑，工具与基线夹具都不随包发布。
+    // `lint`/`typecheck` 不在此列是**不需要**：它们的命令里没有未随包路径（判据只看真引用）。
+    'verify:static'];
   const unshippedRefs = (cmd) => [...String(cmd)
     .matchAll(/(?:^|\s)((?:scripts|src|test|docs|\.test-cache)\/[\w./-]+)/g)]
     .map((m) => m[1]).filter((p) => !publishSet(p));
