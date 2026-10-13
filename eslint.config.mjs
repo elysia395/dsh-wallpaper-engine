@@ -124,6 +124,13 @@ export default [
       sourceType: 'module',
       globals: { ...NODE_GLOBALS, ...BROWSER_GLOBALS },
     },
+    rules: {
+      // 这几份是**以文本形式注入页面的经典脚本**（`lib/we-focus-guard.js` 由宿主把源码拼进
+      // HTML、`lib/webwallgl/**` 经路由原样发给页面）：按经典脚本语义写 `var` 是形态本身
+      // （函数体内提升、不引入块级 TDZ），换成 `let`/`const` 会改变提升与 TDZ 语义。
+      // 它们的行为判据在 `test/verify-*` 里，不靠这条 lint 守。
+      'no-var': 'off',
+    },
   },
 
   // ── `test/**`：守卫要**求值被抽出来的客户端代码**，`new Function` 是判据手段本身 ──
@@ -131,7 +138,13 @@ export default [
   // 违规只会逼人加 `eslint-disable`，从而失去"一处豁免一处理由"的可审计性。
   {
     files: ['test/**/*.mjs'],
-    rules: { 'no-new-func': 'off', 'no-eval': 'off', 'no-implied-eval': 'off', 'no-script-url': 'off' },
+    rules: {
+      'no-new-func': 'off', 'no-eval': 'off', 'no-implied-eval': 'off', 'no-script-url': 'off',
+      // 守卫里常拿**单引号**装一段"带 `${}` 的样本源码"（`test/tools/host-route-index.mjs`、
+      // `test/tools/i18n-scan.mjs`、`test/verify-contracts.mjs`：判据的输入就是要被测的那段文本）。
+      // 这里没有模板串插值的意图，规则的前提不成立 ⇒ 只对 `test/**` 关。
+      'no-template-curly-in-string': 'off',
+    },
   },
 
   // ── 客户端半边：扁平作用域片段（见文件头）────────────────────────────────────
@@ -151,17 +164,20 @@ export default [
       'no-unused-vars': 'off',
       // 片段内**文件内**重复声明仍是真问题（平铺后同作用域一定是 SyntaxError）。
       'no-redeclare': 'error',
-      'no-var': 'error',
+      // ⚠️ `no-var` 在 `src/**` 是**契约**不是坏味道：`scripts/build-client.mjs` 的文件头写明
+      // 「顶层只声明函数与 `var` 状态、`apiJson` 在调用期解引用（无 TDZ 交互）」—— 这些片段被
+      // 平铺进同一个 factory 作用域、跨片段互引，`var` 的状态声明正是不引入 TDZ 的手段。
+      // 换成 `let`/`const` 会把"跨片段引用"变成时序敏感的 TDZ 崩溃面。
+      'no-var': 'off',
       'prefer-const': 'error',
       'eqeqeq': ['error', 'always', { null: 'ignore' }],
       'no-console': 'off',
-      // ⚠️ 这里**故意不**声明 `react-hooks/exhaustive-deps`。`src/client.js:5335` 有一处
-      // `eslint-disable-next-line react-hooks/exhaustive-deps`，而本仓不装
-      // `eslint-plugin-react-hooks` ⇒ ESLint 把它报成
-      // `Definition for rule ... was not found`（一条**假错误**，已被棘轮冻进基线）。
-      // 实测在配置里把该规则写成 `off` **挡不住**它 —— 这条报错来自那条**行内指令本身**，
-      // 不是来自规则配置。要消掉只能改 `src/client.js` 那行注释 ⇒ 属客户端半边 owner 的刀，
-      // 已在 Lead 的任务清单里（该处注释的**意图**要保留：依赖数组是刻意收窄的）。
+      // ⚠️ 这里**故意不**声明 `react-hooks/exhaustive-deps`：本仓不装
+      // `eslint-plugin-react-hooks`，声明一个未安装插件的规则只会在配置层制造假错误。
+      // 历史：`src/client.js` 曾有一条 `eslint-disable-next-line react-hooks/exhaustive-deps`
+      // 行内指令，它被报成 `Definition for rule ... was not found`（一条**假错误**，还进过棘轮
+      // 基线）。该行内指令已随客户端半边的改动移除了 —— 实测 `src/**` 现在**零 `eslint-disable`
+      // 指令**、ESLint 对 `src/**` 也无任何非规则型消息 ⇒ 这条欠账与它的基线条目都不存在了。
     },
   },
 
@@ -173,5 +189,31 @@ export default [
   {
     files: ['src/client.js'],
     languageOptions: { ecmaVersion: 2024, sourceType: 'commonjs' },
+  },
+
+  // ── 豁免面：**必须排在最后** ─────────────────────────────────────────────────
+  // 上面 `src/**` 那块 spread 了 `js.configs.recommended.rules`，而 `@eslint/js` v10 的
+  // recommended **包含** `no-irregular-whitespace` ⇒ 任何写在它**之前**的豁免都会被重新打开
+  // （实测：`src/styles-base.js` 的 U+3000 一度照红）。所以形态级豁免集中放在数组末尾，
+  // 并保持"一处豁免一段理由"。
+  {
+    // 注释里的全角空格是**排版**：中文注释用 U+3000 对齐列是刻意的书写方式；代码里的不规则
+    // 空白仍要判红，所以只关注释面。
+    rules: { 'no-irregular-whitespace': ['error', { skipComments: true }] },
+  },
+  {
+    // `src/styles-*.js` 的模板串体是从原 `src/styles.js` **逐字节**搬出来的（拆域的唯一验收
+    // 判据就是"拼回的 CSS 与拆前逐字节相同"）；里面的 U+3000 在 CSS 注释文本里，属**被搬运的
+    // 数据**而不是书写失误 ⇒ 只对这几个数据文件关。
+    files: ['src/styles.js', 'src/styles-*.js'],
+    rules: { 'no-irregular-whitespace': 'off' },
+  },
+  {
+    // `src/panel-tabs.js` 的 5 个 `render*Tab(ctx)` 函数体**第一条语句必须**是 `const { } = ctx;`：
+    // `test/verify-scene-live.mjs:1861-1868` 用 `/^\s*\n\s*const \{[^}]*\} = ctx;/` 逐页签强制这条
+    // 形状（意图写在 `:227-230`：别让后来人以为这个页签不用取外界就能绕过接缝）。空解构是
+    // **契约的形状**，与 `src/**` 的 `no-var` 同性质 ⇒ 形态级豁免，真正的判据在守卫里。
+    files: ['src/panel-tabs.js'],
+    rules: { 'no-empty-pattern': 'off' },
   },
 ];
