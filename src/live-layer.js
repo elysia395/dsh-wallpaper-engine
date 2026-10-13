@@ -17,9 +17,9 @@
  *                     ROTATION_FADE_MS · commitRotationSwitch · switchTransitionOf · layerKeyDiff ·
  *                     switchFrames · openRotationAudioGate · releaseRotationAudioGateFor ·
  *                     rotationAudioHoldActive · scheduleSceneVideoResync
- *   live 与帧          livePauseReason · GPU_FRAME_ASPECT_TOL · gpuFrameAspectKnown ·
- *                     liveViewportAspect · probeGpuFrameState · markGpuFramePin · markGpuFrameProbed ·
- *                     clearGpuFrameSlot · refreshStaticFrameNodes · prepareSceneLiveStage ·
+ *   live 与帧          livePauseReason · GPU_FRAME_AREA_TOL · probeGpuFrameState ·
+ *                     markGpuFramePin · markGpuFrameProbed ·
+ *                     refreshStaticFrameNodes · prepareSceneLiveStage ·
  *                     prepareSceneStaticStage · prepareLiveTimeouts · clearPrepareLiveTimeout ·
  *                     disposePreparedMedia · disposeMediaEl · buildMedia
  *   主题随壁纸        themeFollowOnFrameCanvas · themeFollowOnFrameImage（src/theme-follow.js）：抓到的
@@ -972,13 +972,17 @@ function scheduleLiveTransferRetry(wid, attempts) {
 // ── live GPU 抓帧回填静态帧缓存 ─────────────────────────────────────────────
 // 渲染页的显示 canvas 在 DOM 内（data-webwallgl-gl 标记）且 WebGL2 上下文带
 // preserveDrawingBuffer:true —— 父页面同源即可随时 toBlob 抓当前帧，无需渲染
-// 页/上游配合。首帧确认后 2.5s（实时画面进稳态）HEAD 探测静态帧槽位：
-// - 已有 GPU 帧（X-WE-GPU=1）→ 不动；
-// - 空槽（404）或已有自定义画面（204 + X-WE-GPU=0）→ 抓帧 PUT 回填：GPU 帧优先
-//   于自定义画面（host 每壁纸只接受一次 GPU 帧写入，见 /scene-frame-cache）。
+// 页/上游配合。首帧确认后 2.5s（实时画面进稳态）HEAD 探测主帧（裸 URL，拿
+// X-WE-GPU-W/H 算**面积**）：
+// - 主帧面积 ≥ 画布×0.95（X-WE-GPU=1）→ 不动（cover 缩小显示，大帧无损失）；
+// - 主帧缺失（404）、只有自定义画面（204 + X-WE-GPU=0）或明显偏小 ⇒ 抓帧 PUT
+//   覆盖（升级，直写——宿主面积守卫兜底，见 /scene-frame-cache）。
 // 失败路径会清 token，于是下一次 live 首帧（通常来自重新挂载）可以重试；
-// 成功/已被别人写入则保留 token，避免同一壁纸反复抓帧。
+// 成功/被更大主帧挡下（409 frame-smaller）则保留 token，避免同一壁纸反复抓帧。
 const LIVE_FRAME_BACKFILL_DELAY_MS = 2500;
+// 主帧升级判定的面积容差（与宿主 GPU_FRAME_AREA_TOL 同值同义，两端独立部署）：
+// 主帧面积 ≥ 画布 × 95% 视为"不比画布小"，保留 + cover 缩放，不抓新帧。
+const GPU_FRAME_AREA_TOL = 0.05;
 const LIVE_FRAME_BACKFILL_MIN_BYTES = 4096;
 // 空帧门禁（内容判定）：体积不可靠 —— headless Chrome 实测全黑 PNG：
 // 960×540=12KB / 1080p=44KB / 4K=165KB，全都远超任何固定的字节阈值。改为把
@@ -1057,43 +1061,45 @@ function scheduleLiveFrameBackfill(frame, opts) {
   liveFrameBackfill.timer = window.setTimeout(() => {
     liveFrameBackfill.timer = 0;
     (async () => {
-      const head = await apiHead(src);
-      const hh = head.response;
-      const hasGpu = Boolean(head.ok && hh && hh.headers
-        && typeof hh.headers.get === "function" && hh.headers.get("x-we-gpu") === "1");
+      // 画布面积先于 HEAD：升级判定是「主帧面积 ≥ 我的画布面积」——基准取**抓帧
+      // 用的那个 canvas**（存帧的 IHDR 就是它的尺寸）。canvas 读不到 ⇒ 面积未知
+      // ⇒ 保守保留（无头/极简环境不写缓存，避免无休止重抓）。
       const win = frame.contentWindow;
       const doc = win && win.document;
       const canvas = doc && typeof doc.querySelector === "function"
         ? doc.querySelector("canvas[data-webwallgl-gl]") : null;
-      // 「当前几何」的基准取**抓帧用的那个 canvas**（存帧的 IHDR 就是它的尺寸）：
-      // 渲染器若把画布尺寸夹到某个比例（画布比 ≠ iframe 盒比），拿盒比去对照会
-      // 永远判「不符」→ 每次挂载都清写一遍。canvas 读不到时退回 iframe 盒比。
       const canvasW = canvas ? Number(canvas.width) || 0 : 0;
       const canvasH = canvas ? Number(canvas.height) || 0 : 0;
-      const arRef = canvasW > 0 && canvasH > 0 ? canvasW / canvasH : liveViewportAspect(frame);
-      // 存帧几何：宿主从 PNG 的 IHDR 读（X-WE-GPU-AR）；旧宿主没有这个头时退回
-      // 本会话抓帧时记下的比例，两者都没有 = 未知。
-      let arStored = 0;
+      const areaRef = canvasW > 0 && canvasH > 0 ? canvasW * canvasH : 0;
+      const head = await apiHead(src);
+      const hh = head.response;
+      const hasGpu = Boolean(head.ok && hh && hh.headers
+        && typeof hh.headers.get === "function" && hh.headers.get("x-we-gpu") === "1");
+      // 主帧面积：宿主从 PNG 的 IHDR 读（X-WE-GPU-W/H）。缺失 = 未知几何 ⇒ 按
+      // 「可能偏小」处理：抓一次，宿主面积守卫兜底（真比盘上小会被 409 拒掉，
+      // 主帧毫发无损）——重抓一次必然收敛到正确状态。
+      let masterArea = 0;
       if (hasGpu) {
-        const raw = Number(hh.headers.get("x-we-gpu-ar"));
-        arStored = Number.isFinite(raw) && raw > 0 ? raw : (gpuFrameAspectKnown.get(token) || 0);
+        const gw = Number(hh.headers.get("x-we-gpu-w"));
+        const gh = Number(hh.headers.get("x-we-gpu-h"));
+        masterArea = Number.isFinite(gw) && gw > 0 && Number.isFinite(gh) && gh > 0 ? gw * gh : 0;
       }
-      // 未知（旧宿主 + 本会话没抓过）→ 按「可能不符」处理：重抓一次必然正确，
-      // 留一张别处视口的帧则会让用户一直看到放大且被裁的构图。判不了当前几何
-      // （arRef=0，如无头/极简环境）时反过来保守保留，避免无休止清写。
-      // 用户手点「重新截」（force）时一律按需要重抓处理 —— 他就是要换一张。
-      const stale = force || (hasGpu && arRef > 0
-        && (arStored <= 0 || Math.abs(arStored - arRef) > GPU_FRAME_ASPECT_TOL * arRef));
-      // 已有 GPU 帧且几何相符（含并发窗口里被别人写入）：无需抓帧，保留 token 免重复。
-      if (hasGpu && !stale) {
-        // 未知几何的保留要留痕：这是「没有头也没重抓」的唯一解释。
-        if (arStored <= 0) liveLog("gpu-frame-keep-unknown", "wid=" + backfillWid + " 存帧视比未知 → 保留", "info", true);
-        return true;
-      }
-      if (stale) {
-        liveLog("gpu-frame-stale", "wid=" + backfillWid + " 存帧视比 "
-          + (arStored > 0 ? arStored.toFixed(4) : weT("未知")) + " ≠ 当前视口 " + arRef.toFixed(4)
-          + " → 清掉按当前视口重抓");
+      // **只升不降**：主帧面积 ≥ 我的画布（容差内）⇒ 保留（显示侧 cover 缩小，
+      // 大帧缩小无损失）；主帧明显更小、缺失、或几何未知 ⇒ 抓我的尺寸覆盖（升级
+      // —— 未知也敢抓，因为宿主面积守卫兜底：真比盘上小的帧会被 409 拒掉，主帧
+      // 毫发无损，重抓一次必然收敛）。频繁调整窗口大小在这里零成本：形状变小
+      // 根本不触发抓帧。force（「重新截」）一律重抓。
+      const stale = force || (hasGpu && areaRef > 0
+        && (masterArea <= 0 || masterArea < areaRef * (1 - GPU_FRAME_AREA_TOL)));
+      // 主帧面积达标（≥ 画布×0.95）：无需抓帧，保留 token 免重复。
+      if (hasGpu && !stale) return true; // 主帧面积达标：保留
+      if (!hasGpu) {
+        // 主帧缺失：首次回填（而非清写）。
+        liveLog("gpu-frame-slot-missing", "wid=" + backfillWid + " 主帧缺失 → 抓帧回填", "info", true);
+      } else if (stale && !force) {
+        liveLog("gpu-frame-stale", "wid=" + backfillWid + " 主帧 "
+          + Math.round(masterArea / 10000) + " 万px < 画布 "
+          + Math.round(areaRef / 10000) + " 万px → 升级重抓");
       }
       if (!canvas || typeof canvas.toBlob !== "function") {
         if (force) forceFail(weT("拿不到实时画面（实时渲染没在运行，或渲染页还没画布）"));
@@ -1115,31 +1121,41 @@ function scheduleLiveFrameBackfill(frame, opts) {
       //（排名 2 会盖过预览图那一档；作者配色在场时它自己会让路）。取色复用同一档
       // 64×64 采样，代价可以忽略。
       themeFollowOnFrameCanvas(canvas);
-      // 清旧帧放在抓帧+门禁**之后**：先清后抓一旦抓帧失败（画面没出来/网络断）就
-      // 只剩空槽 → 退回自定义画面/空态，比留一张旧构图的帧更糟（旧的至少是同一张壁纸）。
-      if (stale) {
-        const cleared = await clearGpuFrameSlot(token);
-        if (!cleared) {
-          // 没删掉（权限/占用/宿主报错）→ PUT 也会 409，本帧没换成；清 token 让下
-          // 次挂载重试，并留痕（否则用户只看到构图依旧是旧的，没有任何线索）。
-          liveLog("gpu-frame-stale-blocked", "wid=" + backfillWid + " 旧帧未删除 → 本轮放弃，下次挂载重试");
-          if (force) forceFail(weT("旧实时帧删不掉（被占用或宿主报错）→ 没有改动它，可稍后重试"));
-          return false;
+      // 清旧帧只属于 **force**（用户要换内容）：且放在抓帧+门禁**之后**——先清后
+      // 抓一旦抓帧失败就只剩空槽，比留旧帧更糟。自动升级路径**不清**：PUT 直写，
+      // 宿主面积守卫保证小帧覆盖不掉大帧（409 frame-smaller = 别处有更大的帧，
+      // 那就保留它），删这一步纯属多余。等面积覆盖放行 = force 在换内容。
+      let clearedOld = true;
+      let forceErrorLatched = false; // force 的"明示失败"一旦落账，成功路径不得擦掉
+      if (force) {
+        const del = await apiDelete("/scene-frame-cache/" + encodeURIComponent(token), { parse: true });
+        // 只认 HTTP 层成败：200 + removed:false（本来就没有/已被并发清掉）也算清完。
+        clearedOld = Boolean(del && del.ok);
+        if (!clearedOld) {
+          liveLog("gpu-frame-stale-keep", "wid=" + backfillWid + " 旧帧删除失败 → 仍尝试覆盖写", "info", true);
         }
-        recaptured = true;
-        recaptureSize = canvasW + "x" + canvasH;
       }
       const put = await apiFetch("/scene-frame-cache/" + encodeURIComponent(token), {
         method: "PUT",
         headers: { "Content-Type": "image/png" },
         body: blob,
       });
-      // 200 写入成功 / 409 已被写入：两种都算「已定局」，不必重试。
+      // 200 写入成功 / 409 frame-smaller（盘上有更大的主帧，我的写入被守卫拒了）：
+      // 两种都算「已定局」——409 时主帧在位且比我的大，显示侧只会更好，不必重试。
       const ok = Boolean(put && (put.ok || put.status === 409));
+      // force 且旧帧没删掉且 PUT 被守卫拒了：用户要的"换一张"没发生，必须明示失败
+      //（静默成功会让面板显示已重抓而画面纹丝不动）。
+      if (ok && force && !clearedOld && put.status === 409) {
+        forceErrorLatched = true;
+        forceFail(weT("旧实时帧删不掉（被占用或宿主报错）→ 没有换成新抓的这张，可稍后重试"));
+      }
       // 槽位内容刚被替换：留存里那份字节已不对应盘上这张帧，撤掉（下一次建层重新取、重新留）。
-      if (ok) releaseFrameBytes(token);
+      if (ok && put.ok) {
+        releaseFrameBytes(token);
+        recaptured = true;
+        recaptureSize = canvasW + "x" + canvasH;
+      }
       if (!ok && force) forceFail(weT("写入失败（宿主返回 {status}）", { status: put && put.status }));
-      if (ok && arRef > 0) gpuFrameAspectKnown.set(token, arRef);
       return ok;
     })().then((settled) => {
       // 抓帧 + 上传是异步的（多 MB PNG 要 0.1–1s），期间用户可能已经切走：
@@ -1148,7 +1164,7 @@ function scheduleLiveFrameBackfill(frame, opts) {
       // 仍落在 token 自己的槽位，下次回到这张壁纸时面板探测自然会读到。
       if (settled && force) {
         gpuFrameUi.recapturing = false;
-        gpuFrameUi.error = "";
+        if (!forceErrorLatched) gpuFrameUi.error = ""; // 明示失败在屏：不得被成功路径擦掉
         try { emit(); } catch { /* ignore */ }
       }
       if (String(selection.id || "") !== backfillWid) return;
@@ -1156,7 +1172,7 @@ function scheduleLiveFrameBackfill(frame, opts) {
         // 缓存里已有（或刚写入）GPU 帧 → 面板提示「优先于全部档位」。
         markGpuFrameProbed(backfillWid, true);
         markGpuFramePin(token, true); // 该 token 槽位刚写入 GPU 帧：探测缓存同步生效，无需再探
-        if (recaptured) {
+        if (recaptured && !forceErrorLatched) {
           liveLog("gpu-frame-recaptured", "wid=" + backfillWid + " 已按当前视口重抓（" + recaptureSize + "）");
           // 屏上若正显示这张静帧（静态帧壁纸 / live 垫底 poster）→ 就地重挂取回新图。
           refreshStaticFrameNodes(token);
@@ -1365,7 +1381,11 @@ function buildLivePoster(sel) {
   //   · 预览图是**作者随包发布的那张**，不是本插件合成的"猜图"（与 buildMedia 里 scene 静态
   //     img 的 onerror 回落同源）⇒ 不破「要么给真画面、要么诚实留空」那条裁定。
   // 顺序不能反：抓帧才是当前视口的真实构图，它一到就被顶掉；预览图只是"还没来得及出帧"的占位。
-  const candidates = (sel.type === "web" ? [sel.liveFrame, sel.previewUrl] : [sel.url, sel.previewUrl])
+  // 垫底帧按 cover 适配窗口（宿主是单主帧：大帧缩小无损失）。
+  const sceneFetchUrl = sel.type === "web" ? "" : sel.url;
+  const candidates = (sel.type === "web"
+    ? [sel.liveFrame, sel.previewUrl]
+    : [sceneFetchUrl || sel.url, sel.previewUrl])
     .filter((s) => typeof s === "string" && s);
   if (!candidates.length) return poster;
   poster.dataset.weFrameSrc = candidates[0];
@@ -1376,8 +1396,9 @@ function buildLivePoster(sel) {
   // 第 1 级（实时帧）究竟是哪个候选：web 支没有 `liveFrame` 时**这一级不存在**（宿主发了这条
   // 字段，客户端却没有它的写入点 ⇒ web 的候选表里实际只剩预览图）。那种情况下不能把
   // `candidates[0]` 当成"实时帧已存在"记进来 —— 记下的会是缩略图，语义就假了。所以下面只认
-  // 「rank 0 且确实等于实时帧 URL」的那一个。
-  const frameSrc = sel.type === "web" ? (sel.liveFrame || "") : (sel.url || "");
+  // 「rank 0 且确实等于实时帧 URL」的那一个。scene 的比较基准用**同一个带 ar 的形态**
+  //（candidates[0] 正是它），否则恒判 -1、rank 0 永远不被记账。
+  const frameSrc = sel.type === "web" ? (sel.liveFrame || "") : (sceneFetchUrl || sel.url || "");
   const frameRank = frameSrc && candidates[0] === frameSrc ? 0 : -1;
   // **图恒盖色**：`background-image` 永远画在同一元素的 `background-color` 之上，且全仓只有
   // 上面那一处写底色 ⇒ 这里不存在"谁遮谁"，只有两件事要定：**谁允许上屏**与**什么时候发请求**。

@@ -4,7 +4,7 @@
 > **怎么用**：改了 `src/` 或 `lib/` 的某个模块，在「模块 → 守卫」那张表里查该跑哪几条。
 > 口径：只统计守卫**代码**里真正碰到的模块（先剥注释），并区分"直接读源文件"与"隔着产物 `lib/client.js`"。
 
-模块面 84 个 · 守卫 54 个
+模块面 84 个 · 守卫 55 个
 
 ## 守卫 → 模块
 
@@ -53,6 +53,7 @@
 | `verify-retired-lines.mjs` | — |  |
 | `verify-route-families.mjs` | — |  |
 | `verify-route-index.mjs` | `lib/index.js` `lib/routes/media-bytes.js` |  |
+| `verify-scene-frame-master.mjs` | `lib/index.js` `lib/routes/scene-frame.js` |  |
 | `verify-scene-live.mjs` | `lib/faststart.js` `lib/index.js` `lib/inventory.js` `lib/media-origin.js` `lib/media/index.js` `lib/media/legacy.js` `lib/media/provision.js` `lib/media/supervisor.js` `lib/mp4-vfs.js` `lib/routes/diag.js` `lib/routes/media-bytes.js` `lib/routes/now-playing.js` `lib/routes/scene-serve.js` `lib/routes/we-assets.js` `lib/serve.js` `lib/settings-schema.js` `lib/we-focus-guard.js` `lib/we-props.js` `lib/webwallgl/web-shim.js` `src/avatar-layer.js` `src/client.js` `src/effects.js` `src/ext-avatar.js` `src/ext-fx.js` `src/ext-parallax.js` `src/font/color-roles.js` `src/font/typography.js` `src/fx-layer.js` `src/glass-panel.js` `src/layer-core.js` `src/live-layer.js` `src/media-prep.js` `src/panel-tabs.js` `src/parallax-layer.js` `src/picker-modal.js` `src/quick-panel.js` `src/section-head.js` `src/sidebar-right.js` `src/styles.js` `src/system-fonts.js` `src/video-layer.js` `src/we-base.js` `src/we-cond.js` | ✅ |
 | `verify-scene.mjs` | `lib/index.js` `lib/pkg-read.js` `lib/routes/live-frame.js` `lib/routes/media-bytes.js` `lib/routes/props.js` `lib/routes/scene-frame.js` `lib/routes/scene-media.js` `lib/routes/settings.js` `lib/scene-manifest.js` | ✅ |
 | `verify-softrender.mjs` | — | ✅ |
@@ -72,7 +73,7 @@
 | `lib/client.js` | 37 | `fontset-load-smoke` `live-frame-async-identity-smoke` `live-frame-backfill-smoke` `rotation-live-smoke` `rotation-prepared-leak-smoke` `rotation-smoke` `verify-about` `verify-api-client` `verify-body-caps` `verify-client-sync` `verify-client` `verify-component-fonts` `verify-fontset` `verify-glass-compositing` `verify-glass-surfaces` `verify-host-paint-scope` `verify-i18n` `verify-json-response` `verify-module-layout` `verify-package-files` `verify-package-publish` `verify-picker-model` `verify-picker-props` `verify-picker-upload` `verify-playback-controls` `verify-presets` `verify-reachability` `verify-readability` `verify-scene-live` `verify-scene` `verify-softrender` `verify-system-fonts` `verify-theme-follow` `verify-theme-layer` `verify-transcode-state` `verify-types` `verify-windows-caption` |
 | `lib/faststart.js` | 3 | `verify-cache-dir` `verify-mp4-vfs` `verify-scene-live` |
 | `lib/http-body.js` | 2 | `verify-body-caps` `verify-package-files` |
-| `lib/index.js` | 18 | `e2e-web-media-origin` `verify-about` `verify-adapter` `verify-cache-dir` `verify-client` `verify-contracts` `verify-fontset` `verify-logging` `verify-module-layout` `verify-package-files` `verify-package-publish` `verify-presets` `verify-reachability` `verify-route-index` `verify-scene-live` `verify-scene` `verify-transcode-state` `verify-we-install-probe` |
+| `lib/index.js` | 19 | `e2e-web-media-origin` `verify-about` `verify-adapter` `verify-cache-dir` `verify-client` `verify-contracts` `verify-fontset` `verify-logging` `verify-module-layout` `verify-package-files` `verify-package-publish` `verify-presets` `verify-reachability` `verify-route-index` `verify-scene-frame-master` `verify-scene-live` `verify-scene` `verify-transcode-state` `verify-we-install-probe` |
 | `lib/inventory.js` | 3 | `verify-inventory-index` `verify-scene-live` `verify-types` |
 | `lib/json-response.js` | 1 | `verify-json-response` |
 | `lib/log.js` | 1 | `verify-logging` |
@@ -97,7 +98,7 @@
 | `lib/routes/now-playing.js` | 2 | `verify-cache-dir` `verify-scene-live` |
 | `lib/routes/presets.js` | 1 | `verify-presets` |
 | `lib/routes/props.js` | 1 | `verify-scene` |
-| `lib/routes/scene-frame.js` | 1 | `verify-scene` |
+| `lib/routes/scene-frame.js` | 2 | `verify-scene-frame-master` `verify-scene` |
 | `lib/routes/scene-media.js` | 1 | `verify-scene` |
 | `lib/routes/scene-serve.js` | 2 | `verify-logging` `verify-scene-live` |
 | `lib/routes/settings.js` | 1 | `verify-scene` |
