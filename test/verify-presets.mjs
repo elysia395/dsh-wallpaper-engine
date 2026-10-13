@@ -1927,9 +1927,33 @@ section('④c #199 失败文案：404 不再把宿主英文原句直落上屏，
       && !/^HOST-EN:/.test(window404),
       'missing=' + String(missing404).slice(0, 24) + ' tomb=' + String(tomb404).slice(0, 24));
     // 词表对齐：文案的**唯一**来源是词表键（中文原文作键），客户端不许出现未登记的散句。
+    const dictOk = (keys) => keys.every((k) => dictEn(k).trim().length > 0 && dictEn(k) !== k);
     check('词表对齐：「重启 DSH」那条在 src/i18n-copy 里、英文非空且不是中英同形',
       dictEn(RESTART).trim().length > 0 && dictEn(RESTART) !== RESTART,
       dictEn(RESTART).slice(0, 44) || '词表里找不到这条键');
+    // ★ 因果三分（#199 的 P2）：路由**在**、预设真没了 ⇒ 出路不是"重启 DSH"（重启没用）。
+    //   窗口期（无 reason）/ 真不存在（missing）/ 已删除（tombstone）必须三条不同的出路，
+    //   且每条都从词表来；把三条并回一句就判红。
+    const threeWay = (v) => v.missing !== RESTART && v.tomb !== RESTART && v.missing !== v.tomb;
+    check('★ #199-P2：三条出路两两不同（窗口期 / 真不存在 / 已删除，不许并成一句）',
+      threeWay({ missing: missing404, tomb: tomb404 }),
+      'missing=' + String(missing404).slice(0, 22) + ' tomb=' + String(tomb404).slice(0, 22));
+    check('★ #199-P2：三条出路都在 src/i18n-copy 里，英文非空且不是中英同形',
+      dictOk([RESTART, missing404, tomb404]),
+      [RESTART, missing404, tomb404].map((k) => (dictOk([k]) ? 'ok' : '缺/同形')).join(','));
+    // 负对照：把 reason 两分整块拿掉（回到 #199 原文的"一句到底"）⇒ 上面两条必须判红。
+    const mergedFn = fn
+      .replace(/\n\s*if \(res\.data\.reason === "tombstone"\) \{[\s\S]*?\n\s*\}/, '')
+      .replace(/\n\s*if \(res\.data\.reason === "missing"\) \{[\s\S]*?\n\s*\}/, '');
+    const classifyMerged = new Function('weT', 'hostFailureReason', mergedFn + '\nreturn glassPresetFailureReason;')(
+      (k) => String(k), (res) => 'HOST-EN:' + String((res && res.data && res.data.error) || ''));
+    check('negative control: 把 reason 两分拿掉（三条并回一句）会被判出（判据有牙）',
+      mergedFn !== fn
+      && !threeWay({
+        missing: classifyMerged({ status: 404, data: { error: 'unknown preset', reason: 'missing' } }),
+        tomb: classifyMerged({ status: 404, data: { error: 'unknown preset', reason: 'tombstone' } }),
+      }),
+      mergedFn === fn ? '变异没生效（负对照空转）' : '变异生效且判红');
   }
 }
 

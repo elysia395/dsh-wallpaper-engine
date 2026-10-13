@@ -82,6 +82,8 @@ const WE_I18N_EN_GLASS = {
 
   // ── 玻璃预设（src/preset-store.js / src/glass-panel.js）────────────────────
   "宿主里没有玻璃预设路由：重启 DSH 后再试（改过宿主代码要重挂，刷新页面不够）": "No glass-preset routes in the host: restart DSH and try again (changed host code needs a remount — refreshing the page is not enough)",
+  "这份出厂预设已被删除 —— 刷新清单后会从列表里消失": "This built-in preset was deleted — refresh the list and it will drop out of it",
+  "这份预设不存在了 —— 可能已被删掉，刷新清单后再选一份": "This preset no longer exists — it may have been deleted; refresh the list and pick another",
   "先给预设起个名字": "Name your preset first",
   "预设方案": "Presets",
   "胶囊雾化": "Capsule frost",
