@@ -478,6 +478,82 @@ function main() {
       && declValue(chip.body, 'background-image') === 'none !important'
       && declValue(chip.body, 'border-color') === 'rgba(255, 255, 255, 0.14) !important'
       && !/(?:^|[;\s])(?:color|filter|opacity)\s*:/.test(chip.body));
+    // #197：推理正文由宿主用 compact 变体渲染（宿主模块类带 _thinkBody 后缀），那里的
+    // 行内代码是 display:inline。跨行折断时 backdrop-filter 的取值区取的是**所有行盒的
+    // 外接矩形**，于是胶囊霜釉长成一条横贯整列的矩形底板、盖住同行普通文字。修复=在推理
+    // 正文子树里**只撤模糊载体、保留胶囊填充**（宿主自身的 box-decoration-break: clone
+    // 已把背景按行盒分片）。判据两头钉：① 收口规则在位，且同时带玻璃门与 :not(pre) 围栏
+    // 排除；② 原 chip 规则的霜釉**不得被就地删掉** —— 否则"局部收口"退化成"全局摘霜"，
+    // 助手正文的胶囊也一起失去磨砂。
+    const capsuleScope = (header) => header.includes('[data-we-glass-page]')
+      && header.includes('[data-we-thinking-glass]')
+      && header.includes(':not(pre) > code');
+    const noFrost = (body) => /(?:^|[;\s])backdrop-filter: none !important/.test(body)
+      && /-webkit-backdrop-filter: none !important/.test(body)
+      && !/(?:^|[;\s])background(?:-color)?\s*:/.test(body);
+    // 特异性计数器（Selectors 规范的三级元组 #id / .class·[attr]·:pseudo / 元素名）。
+    // :is() 取最具体实参、:where() 计零、:not() 计其实参。逐条对教科书样例校准过：
+    // * → 0-0-0、li → 0-0-1、ul ol+li → 0-0-3、h1 + *[rel=up] → 0-1-1、li.red.level → 0-2-1。
+    const SPEC_ORDER = (a, b) => (a[0] - b[0]) || (a[1] - b[1]) || (a[2] - b[2]);
+    // 按**顶层**逗号拆选择器列表：`:is()` / `:not()` 实参里的逗号不是列表分隔符。
+    // 朴素 `header.split(',')` 会把 `:is(a, b)` 切成两段、留下一个没有闭括号的 `:is(`，
+    // 伪类计数被误加 —— 实测把收口规则的真实 0-4-3 算成 0-5-1，于是"特异性压过"那条
+    // 判据靠错误数字蒙混通过，只有负对照（去 [data-chat-flow] 应与原规则相等）把它咬出来。
+    const splitTop = (s) => {
+      const out = [];
+      let depth = 0;
+      let cur = '';
+      for (const ch of s) {
+        if (ch === '(') depth += 1;
+        else if (ch === ')') depth -= 1;
+        if (ch === ',' && depth === 0) { out.push(cur); cur = ''; } else cur += ch;
+      }
+      out.push(cur);
+      return out;
+    };
+    const specificity = (header) => {
+      const oneSel = (sel) => {
+        let s = sel.replace(/:is\(([^()]*(?:\([^()]*\)[^()]*)*)\)/g, (_, inner) => {
+          const parts = splitTop(inner).map((p) => p.trim()).filter(Boolean);
+          return parts.reduce((best, cur) => (SPEC_ORDER(oneSel(cur), oneSel(best)) > 0 ? cur : best), parts[0] || '');
+        });
+        s = s.replace(/:where\([^()]*\)/g, ' ').replace(/:not\(([^()]*)\)/g, ' $1 ');
+        return [
+          (s.match(/#[\w-]+/g) || []).length,
+          (s.match(/\.[\w-]+|\[[^\]]+\]|:(?!:)[\w-]+(?:\([^)]*\))?/g) || []).length,
+          (s.match(/(?:^|[\s>+~])([a-zA-Z][\w-]*)/g) || []).length,
+        ];
+      };
+      return splitTop(header).map((p) => oneSel(p.trim()))
+        .reduce((best, cur) => (SPEC_ORDER(cur, best) > 0 ? cur : best), [0, 0, 0]);
+    };
+    const thinkBodyCode = normal.filter((r) => r.header.includes('[class*="_thinkBody"]')
+      && r.header.includes(':not(pre) > code'));
+    const thinkChip = thinkBodyCode[0];
+    check('F2d3b 推理正文（compact 变体）行内代码只撤模糊载体、保留胶囊填充（#197）',
+      thinkBodyCode.length >= 1
+      && thinkBodyCode.every((r) => capsuleScope(r.header) && noFrost(r.body))
+      && !!chip && /backdrop-filter: blur\(var\(--we-inline-code-blur, 8px\)\)/.test(chip.body),
+      (thinkChip ? thinkChip.header : 'no _thinkBody capsule rule'));
+    // 收口规则必须**顺序无关地**压过原规则。两条都带 !important，若特异性相等，唯一决胜
+    // 因素就是源码顺序 —— 浏览器里把新规则挪到原规则之前，#197 会静默复活，而只看
+    // "规则在位 / 带门 / 保留 :not(pre)" 的判据抓不到（变异实测：对调后套件仍全绿）。
+    const thinkSpec = thinkChip ? specificity(thinkChip.header) : null;
+    const chipSpec = chip ? specificity(chip.header) : null;
+    check('F2d3b2 收口规则的特异性严格压过原 chip 规则（顺序无关，不靠后置取胜）',
+      !!thinkSpec && !!chipSpec && SPEC_ORDER(thinkSpec, chipSpec) > 0,
+      'closing=' + (thinkSpec ? thinkSpec.join('-') : 'n/a')
+        + ' · original=' + (chipSpec ? chipSpec.join('-') : 'n/a'));
+    check('negative control: 抽掉 [data-chat-flow] 后两条特异性相等，顺序又成为唯一决胜因素（#197）',
+      !!thinkChip && !!chipSpec
+      && SPEC_ORDER(specificity(thinkChip.header.replaceAll('[data-chat-flow]', '')), chipSpec) === 0);
+    // 语义锚点必须扛事：_thinkBody 是构建期哈希的一半，DSH-UI-INTERFACES.md 判其
+    // 稳定性为低、明确不许把用户可见功能单独挂上去（宿主改个类名就静默复发）。
+    check('F2d3b3 收口规则带着语义锚点 [data-variant="think"]，不只挂类名后缀（#197）',
+      !!thinkChip && thinkChip.header.includes('[data-variant="think"]'));
+    check('negative control: 少了思考玻璃门的收口规则等于全局摘霜（#197）',
+      thinkBodyCode.length >= 1
+      && !capsuleScope(thinkBodyCode[0].header.replaceAll('[data-we-thinking-glass]', '')));
     const tools = normal.find((r) => declValue(r.body, 'background-color') === 'var(--we-tool-glass-fill) !important');
     const toolScope = (header) => header.split(',').every((selector) =>
       selector.includes('[data-we-glass-page][data-we-thinking-glass]') && selector.includes('[data-chat-flow]')

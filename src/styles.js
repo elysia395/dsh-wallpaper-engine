@@ -900,6 +900,27 @@ const CSS = `
     backdrop-filter: blur(var(--we-inline-code-blur, 8px)) saturate(var(--we-saturate, 1.3)) brightness(var(--we-glass-brightness, 1.04));
     border-color: rgba(255, 255, 255, 0.14) !important;
   }
+  /* #197: the host renders the reasoning body with Markdown's compact variant,
+     where the inline-code chip is display:inline. A backdrop-filter carrier that
+     breaks across line boxes paints the union of every line box, so the capsule
+     frost grows into one full-column bar over the plain text sharing those lines.
+     Drop only the blur here — the host's box-decoration-break: clone keeps the
+     fill sliced per line box, and fences stay excluded by :not(pre).
+     Two anchors carry this: the semantic data-variant="think" the host writes on
+     the reasoning root, and the _thinkBody class suffix. The suffix is a build
+     hash half — DSH-UI-INTERFACES.md rates it low-stability and forbids hanging
+     user-visible behaviour on it alone — so the semantic attribute is the load
+     bearing one and the suffix is the fallback. The old data-vcp-* names stay
+     for older host lines.
+     [data-chat-flow] is carried too: it puts this rule at 0-4-3 against the
+     0-3-3 original, so the order of the two blocks stops being load bearing
+     (both are !important and equally specific without it). Coverage does not
+     shrink: the only host element with data-variant="think" is the reasoning row
+     inside the chat flow column. */
+  body[data-we-glass-page][data-we-thinking-glass] [data-chat-flow] :is([data-variant="think"], [class*="_thinkBody"], [data-vcp-reasoning-body], [data-vcp-reasoning]) :not(pre) > code {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
   /* The two chat navigation buttons reuse capsule mist and frost.
      Local fill tokens preserve native hover/disabled states and hit areas. */
   body[data-we-glass-page][data-we-thinking-glass] [data-dsh-navbar] > button[data-vlln-load-older],

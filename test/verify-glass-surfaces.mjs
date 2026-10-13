@@ -172,7 +172,7 @@ const SURFACES = [
     // ⚠️ 合并 #134（扩展思考玻璃）：新增一批只在 `[data-we-thinking-glass]` 下生效的宿主锚点
     //（思考区/文件卡/工具结果/代码块/导航按钮…）—— 全部归本面认领；锚点清单取自
     // 合并后物化 CSS 的枚举输出（认领判据会双向核对）。
-    anchors: ['[data-vcp-reasoning]', '[data-vcp-reasoning-body]', '[data-changed-files]', '[data-presented-file]', '[data-chat-flow]', '[data-chat-flow-kind="context"]', '[data-vcp-rawhtml]', '[data-code-block-banner]', '[data-context-injection-body]', '[data-diff]', '[data-dsh-navbar]', '[data-vlln-load-older]', '[data-vlln-preview]', '[data-read]', '[data-terminal]', '[data-sample="bash"]', '[data-search="matches"]', '[data-search="paths"]', '[data-slot="conversation.view"]', '[data-slot="tool.call.toolview"]', '[data-tool="glob"]', '[data-tool="grep"]', '[data-tool="read"]', '[data-tool="write"]', '[data-variant="others"]'], tier: 'global',
+    anchors: ['[data-vcp-reasoning]', '[data-vcp-reasoning-body]', '[data-changed-files]', '[data-presented-file]', '[data-chat-flow]', '[data-chat-flow-kind="context"]', '[data-vcp-rawhtml]', '[data-code-block-banner]', '[data-context-injection-body]', '[data-diff]', '[data-dsh-navbar]', '[data-vlln-load-older]', '[data-vlln-preview]', '[data-read]', '[data-terminal]', '[data-sample="bash"]', '[data-search="matches"]', '[data-search="paths"]', '[data-slot="conversation.view"]', '[data-slot="tool.call.toolview"]', '[data-tool="glob"]', '[data-tool="grep"]', '[data-tool="read"]', '[data-tool="write"]', '[data-variant="think"]', '[data-variant="others"]'], tier: 'global',
     // PR #130 的面：门是 `data-we-thinking-glass`（默认关）。⚠️ v1.3.0 追版收敛后它**不再**
     // 认领 `[data-turn-trigger]`（那一条改由上面的 conversation-thinking-trigger 认领 ——
     // 触发条吃玻璃，本面只管推理区/文件卡/工具结果等的清底与玻璃）。
