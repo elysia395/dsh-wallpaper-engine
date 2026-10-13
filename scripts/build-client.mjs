@@ -61,8 +61,46 @@ const INLINE_MODULES = [
     markers: ['function weClampTo(', 'function weNow(', 'function weBody('],
   },
   {
+    // 词表域模块（7 个）必须排在组装点 `src/i18n-copy.js` **之前**：构建期内联进同一工厂作用域，
+    // 组装点顶层读它们是 TDZ 的正面用法。域划分 = 文案归属的界面域（表体一行未改、顺序未动）；
+    // 顺序即键插入序，守卫 test/verify-i18n.mjs 按 INLINE_MODULES 顺序逐条比对。
+    file: 'src/i18n-copy-core.js',
+    why: '英文词表域：客户端外壳（adapter / client / 更新公告）',
+    markers: ['const WE_I18N_EN_CORE = {', '"自动检测": "Auto-detect",'],
+  },
+  {
+    file: 'src/i18n-copy-font.js',
+    why: '英文词表域：字体与配色（font/* · fontset-editor · fontset-store）',
+    markers: ['const WE_I18N_EN_FONT = {', '"正文": "Primary text",'],
+  },
+  {
+    file: 'src/i18n-copy-live.js',
+    why: '英文词表域：实时层与素材预处理（live-layer · media-prep）',
+    markers: ['const WE_I18N_EN_LIVE = {', '"首帧超时（{secs} 秒内无画面）": "First-frame timeout'],
+  },
+  {
+    file: 'src/i18n-copy-panel.js',
+    why: '英文词表域：设置面板页签（panel-tabs）',
+    markers: ['const WE_I18N_EN_PANEL = {', '"当前壁纸": "Current wallpaper",'],
+  },
+  {
+    file: 'src/i18n-copy-picker.js',
+    why: '英文词表域：壁纸选择器与快捷面板（picker-* · quick-panel · sidebar-right · theme-follow）',
+    markers: ['const WE_I18N_EN_PICKER = {', '"返回": "Back",'],
+  },
+  {
+    file: 'src/i18n-copy-ext.js',
+    why: '英文词表域：扩展页签 · 关于页签 · 更新公告（ext-* · panel-tabs）',
+    markers: ['const WE_I18N_EN_EXT = {', '"扩展模块": "Extension modules",'],
+  },
+  {
+    file: 'src/i18n-copy-glass.js',
+    why: '英文词表域：玻璃预设与外观细项（思考块 · 系统字体 · 预设 · 侧栏圆角）',
+    markers: ['const WE_I18N_EN_GLASS = {', '"思考块液态玻璃": "Thinking-block liquid glass",'],
+  },
+  {
     file: 'src/i18n-copy.js',
-    why: '英文词表（中文原文即键）：客户端表 + 宿主显示表（两张表的键集各由 verify-i18n 双向对账）',
+    why: '英文词表的**组装点** + 宿主显示表（域模块在前，这里只展开组装；两张表的键集各由 verify-i18n 双向对账）',
     markers: ['const WE_I18N_EN = {', 'const WE_I18N_HOST_EN = {'],
   },
   {
@@ -343,9 +381,25 @@ function readNormalized(abs) {
   return text;
 }
 
+/**
+ * 顶层声明的机器提取口径 —— `readInlinedPrelude()` 的撞名判据与 `assertNoShadowedScopeDecls()`
+ * 的全作用域重复判据**共用这一份**（两份口径写着写着必然漂移，而这两条判据判的正是同一件事）。
+ * ⚠️ 判据是"缩进 == 本文件声明的最小缩进"，不是"行首"也不是任意缩进：
+ *   · 要求行首（原实现 `^(?:const|let|var|function)`)会**静默漏掉**把顶层声明写了一层缩进的模块
+ *     （本仓真实形态：`src/picker-modal.js` / `src/picker-props-panel.js` / `src/quick-panel.js`）
+ *     ⇒ 撞名不被判出，平铺后就是运行期 SyntaxError；
+ *   · 只写 `^\s*` 又会把**嵌套**声明（函数内 const/let）全收进来 ⇒ 遍地假撞名。
+ */
+const DECL_RE = /^([ \t]*)(?:async\s+)?(?:const|let|var|function|class)\s+([A-Za-z_$][\w$]*)/gm;
+
 const src = readNormalized(resolve(root, 'src', 'client.js'));
-const body = stripHeader(src).replace(/\n+$/, '');
+// `codeStart` = 正文在原文件里的起始行偏移：判据报错必须指**原文件**的行号，而不是正文内的相对行。
+const { body: bodyText, codeStart } = stripHeader(src);
+const body = injectRopeArt(bodyText.replace(/\n+$/, ''));
 const prelude = readInlinedPrelude();
+// 这条必须在拼 `output` **之前**跑：它判的失败后果（后声明静默胜出）在语法解析层完全看不见，
+// 因此不能指望下面那道 `new Script(output)` 兜住（见该函数注释）。
+assertNoShadowedScopeDecls();
 
 const outline = [
   'window.__ModuleLoader__.load({',
@@ -393,8 +447,9 @@ function indent(text) {
  *   · 断言每个模块**浏览器安全**（无 import/require/Node 全局）；
  *   · 断言形状符合预期（markers 全在）；
  *   · 剥掉 `export {...}` 块与声明前的 `export ` 关键字（内联后同作用域，不需要导出）；
- *   · 断言 src/client.js **没有**重复声明任何一个被注入的名字
- *     （重复 = 运行时 SyntaxError；名字从模块里**机器提取**，不维护手工清单）。
+ *   · 断言 src/client.js **没有**重复声明任何一个被注入的名字（名字机器提取，不维护手工清单）。
+ *     ⚠️ 这一条只管「注入 ↔ 正文」这一个方向；**同一作用域内**更广的重复声明（含正文内部、
+ *     含内联模块彼此之间）由 `assertNoShadowedScopeDecls()` 判 —— 两者是互补判据，不是重复判据。
  */
 function readInlinedPrelude() {
   const parts = [];
@@ -427,13 +482,7 @@ function readInlinedPrelude() {
       }
     }
 
-    // 机器提取被注入的名字：**顶层**声明名 + export 列表。
-    // ⚠️ 判据是"缩进 == 本文件声明的最小缩进"，不是"行首"也不是任意缩进：
-    //   · 要求行首（原实现 `^(?:const|let|var|function)`)会**静默漏掉**把顶层声明写了一层缩进的模块
-    //     （本仓真实形态：`src/picker-modal.js` / `src/picker-props-panel.js` / `src/quick-panel.js`）
-    //     ⇒ 撞名不被判出，平铺后就是运行期 SyntaxError；
-    //   · 只写 `^\s*` 又会把**嵌套**声明（函数内 const/let）全收进来 ⇒ 遍地假撞名。
-    const DECL_RE = /^([ \t]*)(?:async\s+)?(?:const|let|var|function|class)\s+([A-Za-z_$][\w$]*)/gm;
+    // 机器提取被注入的名字：**顶层**声明名 + export 列表。缩进口径见文件上方的 `DECL_RE`。
     const decls = [...text.matchAll(DECL_RE)];
     const minIndent = decls.length ? Math.min(...decls.map((m) => m[1].length)) : 0;
     for (const m of decls) if (m[1].length === minIndent) injected.set(m[2], mod.file);
@@ -464,6 +513,127 @@ function readInlinedPrelude() {
   return parts.join('\n');
 }
 
+/**
+ * 立绘（rope art）载荷的**构建期注入**。
+ *
+ * ## 为什么字节不写在 src/client.js 里
+ * 10 张立绘原本是 10 条单行 base64 常量内联在 `src/client.js`（2,369,676 字符 data URI /
+ * 1,777,009 字节 PNG）—— 全仓最大的一处内聚污染：正文被 2.3MB 字面量切成两半，diff 任何一次
+ * 编辑都要拖着这几百万字符走，而**运行时根本不解析这些字节**（它们是纯 data URI，原样交给
+ * `<img src>`，见 `ROPE_FORMS` / `ropeArtOf`）。
+ * 现在字节住 `assets/rope/<name>.png`（源资产归档在 `assets/mascot/`），源码只留
+ * `const ROPE_IMG_<NAME> = "data:image/png;base64,__ROPE_ART_<NAME>__";`，由这里拼回产物。
+ *
+ * ## 等价性
+ * 注入是**逐字符替换**：占位符回填后必须与拆分前的 `lib/client.js` **逐字节相同**
+ * （sha256 不变 —— 这一刀的等价性证据就是"产物字节零差异"，比任何单测都硬）。
+ * 替换不改行数 ⇒ 正文行号映射（`codeStart`）不受影响。
+ *
+ * ## 断言（任一不成立都 exit 1，绝不让占位符漏进产物）
+ * 1. 声明名与占位符名一致（`ROPE_IMG_WHALE` ↔ `__ROPE_ART_WHALE__` —— 对不上就是笔误）；
+ * 2. 每个占位符在正文里**恰好命中一次**（写重/写漏都当场红）；
+ * 3. `const ROPE_IMG_` 声明数 == 实际注入数（有人把某行改成内联 base64 或改了名 → 红）；
+ * 4. 载荷必须是 PNG（magic 校验；换成别的格式会让 data URI 的 mime 说谎）；
+ * 5. 替换后正文里**不再残留** `__ROPE_ART_`（占位符进产物 = 图挂掉，宁可构建失败）。
+ */
+function injectRopeArt(text) {
+  // 声明写在函数体内：本脚本的调用点在文件上半部，模块级 `const` 会在调用时踩 TDZ
+  // （实测 `ReferenceError: Cannot access 'ROPE_DECL_RE' before initialization`）。
+  const dir = resolve(root, 'assets', 'rope');
+  const declRe = /^const (ROPE_IMG_([A-Z0-9_]+)) = "data:image\/png;base64,__ROPE_ART_([A-Z0-9_]+)__";$/gm;
+  const hits = [...text.matchAll(declRe)];
+  const declared = (text.match(/^const ROPE_IMG_/gm) || []).length;
+  if (!hits.length) {
+    console.error('[build-client] src/client.js 里一个立绘占位符都没有：载荷应写成'
+      + ' `const ROPE_IMG_<NAME> = "data:image/png;base64,__ROPE_ART_<NAME>__";`'
+      + '（字节在 assets/rope/<name>.png，见该目录 README）');
+    process.exit(1);
+  }
+  let out = text;
+  for (const m of hits) {
+    const [, decl, declName, phName] = m;
+    if (declName !== phName) {
+      console.error(`[build-client] src/client.js 的 ${decl} 与占位符 __ROPE_ART_${phName}__ 名字不一致`
+        + '（文件名 = 占位符名的小写形式，改名必须同时动源码与 assets/rope/）');
+      process.exit(1);
+    }
+    const ph = `__ROPE_ART_${phName}__`;
+    const anchor = `const ${decl} = "data:image/png;base64,${ph}";`;
+    if (text.split(anchor).length !== 2) {
+      console.error(`[build-client] 占位符 ${ph} 在正文里不是恰好命中一次 —— `
+        + '写重或写漏都会让注入结果不可预测');
+      process.exit(1);
+    }
+    const asset = resolve(dir, `${phName.toLowerCase()}.png`);
+    let bytes;
+    try {
+      bytes = readFileSync(asset);
+    } catch {
+      console.error(`[build-client] 找不到立绘载荷 ${asset} —— 占位符 ${ph} 没有对应文件`);
+      process.exit(1);
+    }
+    if (bytes.subarray(0, 8).toString('hex') !== '89504e470d0a1a0a') {
+      console.error(`[build-client] ${asset} 不是 PNG（magic 不符）—— data URI 声明的是 image/png，`
+        + '载荷就必须真是 PNG');
+      process.exit(1);
+    }
+    out = out.replace(anchor, `const ${decl} = "data:image/png;base64,${bytes.toString('base64')}";`);
+  }
+  if (declared !== hits.length) {
+    console.error(`[build-client] src/client.js 里 const ROPE_IMG_ 声明有 ${declared} 条，`
+      + `符合占位符形态的只有 ${hits.length} 条 —— 有一条既没内联字节也没占位符`
+      + '（构建期注入是唯一真源，不要手写 base64）');
+    process.exit(1);
+  }
+  if (/__ROPE_ART_[A-Z0-9_]+__/.test(out)) {
+    console.error('[build-client] 注入后仍残留 __ROPE_ART_ 占位符 —— 漏了文件或名字对不上');
+    process.exit(1);
+  }
+  return out;
+}
+
+/**
+ * 平铺进同一个 factory 作用域的全部代码里，**不得有两个同名顶层声明**。
+ *
+ * ## 为什么必须单独一条判据（现有两道都盖不住它）
+ *   · `new Script(output)` 只报**语法**错误。而 `var` / `function` 的重复声明在**脚本**语义下
+ *     是合法的 —— 后声明**静默胜出**，解析器一声不吭（同一份代码当成 **模块** 解析时才是
+ *     SyntaxError，这个语义分裂本身就是判据缺口）。
+ *   · `readInlinedPrelude()` 的撞名判据是 `injected ∩ bodyDecls`，而 `injected` 是 **Map**：
+ *     内联模块**彼此之间**的重名会被 `Map.set` 静默覆盖，同样判不出来。
+ *
+ * **实测（本仓真实缺陷，这条判据就是为它写的）**：`src/client.js` 里 `onStartEditCacheDir`
+ * 被声明两次 —— 前者只 `setTransient` + `emit`，后者多调一次 `openCacheDirBrowse`。脚本语义下
+ * 后者胜出 ⇒ 前者是永不执行的死代码；而**删掉后者**（重构挪代码、或拆分这个 6206 行文件）
+ * 就会让前者**静默复活** ⇒ 「更改」按钮不再弹目录浏览器，**而当时的守卫链全绿**。
+ * 这类"行为改了却零判据"正是本仓最该挡的东西。
+ *
+ * 口径与撞名判据同源（`DECL_RE` + 该文件的最小缩进口径），因此不会因缩进写法漏判。
+ */
+function assertNoShadowedScopeDecls() {
+  const seen = new Map(); // name -> 'file:line'
+  const dups = [];
+  const scan = (file, text, lineOffset) => {
+    const decls = [...text.matchAll(DECL_RE)];
+    if (!decls.length) return;
+    const minIndent = Math.min(...decls.map((m) => m[1].length));
+    for (const m of decls) {
+      if (m[1].length !== minIndent) continue;
+      const at = `${file}:${text.slice(0, m.index).split('\n').length + lineOffset}`;
+      const prev = seen.get(m[2]);
+      if (prev) dups.push(`${m[2]} —— ${prev} 与 ${at}（后者胜出，前者永不执行）`);
+      else seen.set(m[2], at);
+    }
+  };
+  scan('src/client.js', body, codeStart);
+  for (const mod of INLINE_MODULES) scan(mod.file, readNormalized(resolve(root, mod.file)), 0);
+  if (dups.length) {
+    console.error('[build-client] 平铺后同一作用域里有同名顶层声明（后声明静默胜出 ⇒ 前者是死代码；'
+      + '反过来删掉后者会让前者无声复活，行为改变而语法层无感）：\n  ' + dups.join('\n  '));
+    process.exit(1);
+  }
+}
+
 // Header comments in the source are preserved inside the factory, which is
 // harmless, but strip the leading "this is not the artifact / edit src" banner
 // so the emitted bundle reads as a compiled artifact.
@@ -476,5 +646,7 @@ function stripHeader(srcText) {
     if (!inBlock && /^\s*\/\*\*/.test(line)) inBlock = true;
     else if (inBlock && /\*\/\s*$/.test(line)) { codeStart = i + 1; break; }
   }
-  return lines.slice(codeStart).join('\n');
+  // 返回 `codeStart`（正文在原文件里的起始行偏移）而不只是正文：所有报错判据都要能指回
+  // **原文件**的行号 —— 报"正文第 3 行"对读日志的人毫无用处。
+  return { body: lines.slice(codeStart).join('\n'), codeStart };
 }

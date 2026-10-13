@@ -37,6 +37,8 @@ import { Writable } from 'node:stream';
 // 剥注释：共享的字符串感知实现（形态判据必须只看**代码** —— 下面那条 fence 判据的注释里
 // 就写着"不要用 startsWith(dir + '/')"，不剥注释会被自己的说明误伤成真阳性）。
 import { stripComments } from './tools/js-text.mjs';
+// 词表族的按构建顺序读法（组装点 + 各域模块；单一真源 = scripts/build-client.mjs 的 INLINE_MODULES）。
+import { scopeFiles } from './tools/src-scope.mjs';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 let passed = 0;
@@ -427,7 +429,8 @@ async function runQr(route, pathname, method, headers) {
 console.log('\n④ 客户端：三态文案 + 只读 + 不进设置');
 const clientSrc = read('src/client.js');
 const tabsSrc = read('src/panel-tabs.js');
-const copySrc = read('src/i18n-copy.js');
+// 词表已按域拆族（`src/i18n-copy-*.js` + 组装点）：读**族并集**，判据与断言一字未改。
+const copySrc = scopeFiles('src/i18n-copy').map(read).join('\n');
 
 check('客户端只读宿主这条路由（apiJson 唯一入口）',
   clientSrc.includes('apiJson("/star-count")') && !/fetch\(\s*["'`]\/star-count/.test(clientSrc));

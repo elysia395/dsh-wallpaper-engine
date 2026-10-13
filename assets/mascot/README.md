@@ -2,9 +2,13 @@
 
 本目录归档**「聊天吉祥物」/ 拉绳功能**的原始美术素材。它们是**源资产**，不是运行时载荷：
 
-- 运行时用的是 [`src/client.js`](../../src/client.js) 里**内联的 base64 派生版本**（单文件客户端
-  自包含，见 `ROPE_IMG` / `ROPE_IMG_WHALE` / `ROPE_IMG_PHOEBE` 与 8 只
-  「模型娘」的常量及其注释）。
+- 运行时用的是 10 张立绘的 base64 派生版本：**载荷字节住
+  [`../rope/`](../rope/README.md)**（`assets/rope/<名>.png`），由
+  [`scripts/build-client.mjs`](../../scripts/build-client.mjs) 在构建期注入 `lib/client.js`。
+  `src/client.js` 里只剩声明与 `__ROPE_ART_<NAME>__` 占位符（见 `ROPE_IMG_<NAME>` 常量及其注释）。
+  ⚠️ 2026-10-13 之前这些字节是**内联在 `src/client.js`** 的 10 条巨型常量；本 README 下文凡提到
+  「转 base64 内联 / 替换对应常量」的步骤，载荷落点一律改读 [`../rope/README.md`](../rope/README.md)：
+  写 `<名>.png` 到 `assets/rope/`，源码只留占位符，`npm run build` 负责拼回。
 - 因此本目录**不进 npm 包**（不在 `package.json` 的 `files` 白名单内），只随仓库源码分发。
 - 原本散落在**仓库根目录**（三个 `ChatGPT Image …png` + 一个 hash 名 `.svg`），P0-2 归入此处并
   改成可读名。`git mv` 完成，历史可追。
