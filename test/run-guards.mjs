@@ -121,6 +121,7 @@ const VERIFY_STEPS = [
   step('test/verify-upload-store.mjs'),
   step('test/verify-video-preview.mjs'),
   step('test/verify-asset-paths.mjs'),
+  step('test/verify-settings-schema-exports.mjs'),
 ];
 
 /** `npm run verify:docs` —— 软档（只出声）。全部经 warn-only 降级。 */

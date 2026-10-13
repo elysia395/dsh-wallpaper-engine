@@ -5,7 +5,7 @@
 > 口径：只统计守卫**代码**里真正碰到的模块（先剥注释），并区分"直接读源文件"与"隔着产物 `lib/client.js`"。
 > 写法：字面量路径 / `join(...)` 拼接 / 唯一 basename / 产物配方 / **前缀族读法** `scopeFiles|scopeText(<前缀>)` / **经共享族助手读**（`import { panelText } from './tools/src-scope.mjs'` + 真调用；族口径封在那个库里，见 DEV-GUIDE §4.6「同时是守卫的库」）。
 
-模块面 127 个 · 守卫 70 个
+模块面 127 个 · 守卫 71 个
 
 ## 守卫 → 模块
 
@@ -67,6 +67,7 @@
 | `verify-scene-live.mjs` | `lib/faststart.js` `lib/index.js` `lib/inventory.js` `lib/media-origin.js` `lib/media/index.js` `lib/media/legacy.js` `lib/media/provision.js` `lib/media/supervisor.js` `lib/mp4-vfs.js` `lib/routes/diag.js` `lib/routes/media-bytes.js` `lib/routes/now-playing.js` `lib/routes/scene-serve.js` `lib/routes/we-assets.js` `lib/serve.js` `lib/settings-schema.js` `lib/transcode.js` `lib/wallpaper-scan.js` `lib/we-focus-guard.js` `lib/we-props.js` `lib/webwallgl/renderer.js` `src/avatar-layer.js` `src/client-audio-playback.js` `src/client-media-frame.js` `src/client-rotation.js` `src/client.js` `src/effects.js` `src/ext-avatar.js` `src/ext-fx.js` `src/ext-parallax.js` `src/font/color-roles.js` `src/font/typography.js` `src/fx-layer.js` `src/glass-panel.js` `src/layer-core.js` `src/live-layer-diag.js` `src/live-layer-gate.js` `src/live-layer-pointer.js` `src/live-layer-underlay.js` `src/live-layer-watch.js` `src/live-layer.js` `src/media-prep.js` `src/panel-tabs-advanced.js` `src/panel-tabs-appearance.js` `src/panel-tabs-effects.js` `src/panel-tabs-mascot.js` `src/panel-tabs-wallpaper.js` `src/panel-tabs.js` `src/parallax-layer.js` `src/picker-modal.js` `src/quick-panel.js` `src/section-head.js` `src/sidebar-right.js` `src/styles-base.js` `src/styles-chrome.js` `src/styles-ext.js` `src/styles-panel.js` `src/styles-quick.js` `src/styles-settings.js` `src/styles-shell.js` `src/styles-sidebar.js` `src/styles.js` `src/system-fonts.js` `src/video-layer.js` `src/we-base.js` `src/we-cond.js` | ✅ |
 | `verify-scene-probe.mjs` | `lib/pkg-read.js` `lib/scene-manifest.js` `lib/scene-probe.js` |  |
 | `verify-scene.mjs` | `lib/index.js` `lib/pkg-read.js` `lib/routes/live-frame.js` `lib/routes/media-bytes.js` `lib/routes/props.js` `lib/routes/scene-frame.js` `lib/routes/scene-media.js` `lib/routes/settings.js` `lib/scene-manifest.js` `lib/scene-probe.js` | ✅ |
+| `verify-settings-schema-exports.mjs` | `lib/index.js` | ✅ |
 | `verify-softrender.mjs` | — | ✅ |
 | `verify-static.mjs` | — |  |
 | `verify-steam-discovery.mjs` | `lib/index.js` `lib/steam-discovery.js` |  |
@@ -88,12 +89,12 @@
 |---|---:|---|
 | `lib/asset-paths.js` | 4 | `verify-asset-paths` `verify-cache-dir` `verify-contracts` `verify-presets` |
 | `lib/cache-prune.js` | 2 | `verify-cache-prune` `verify-config-store` |
-| `lib/client.js` | 39 | `fontset-load-smoke` `live-frame-async-identity-smoke` `live-frame-backfill-smoke` `rotation-live-smoke` `rotation-prepared-leak-smoke` `rotation-smoke` `verify-about` `verify-api-client` `verify-body-caps` `verify-child-kill` `verify-client-sync` `verify-client` `verify-component-fonts` `verify-fontset` `verify-glass-compositing` `verify-glass-surfaces` `verify-host-paint-scope` `verify-i18n` `verify-json-response` `verify-module-layout` `verify-occlusion-client` `verify-package-files` `verify-package-publish` `verify-picker-model` `verify-picker-props` `verify-picker-upload` `verify-playback-controls` `verify-presets` `verify-reachability` `verify-readability` `verify-scene-live` `verify-scene` `verify-softrender` `verify-system-fonts` `verify-theme-follow` `verify-theme-layer` `verify-transcode-state` `verify-types` `verify-windows-caption` |
+| `lib/client.js` | 40 | `fontset-load-smoke` `live-frame-async-identity-smoke` `live-frame-backfill-smoke` `rotation-live-smoke` `rotation-prepared-leak-smoke` `rotation-smoke` `verify-about` `verify-api-client` `verify-body-caps` `verify-child-kill` `verify-client-sync` `verify-client` `verify-component-fonts` `verify-fontset` `verify-glass-compositing` `verify-glass-surfaces` `verify-host-paint-scope` `verify-i18n` `verify-json-response` `verify-module-layout` `verify-occlusion-client` `verify-package-files` `verify-package-publish` `verify-picker-model` `verify-picker-props` `verify-picker-upload` `verify-playback-controls` `verify-presets` `verify-reachability` `verify-readability` `verify-scene-live` `verify-scene` `verify-settings-schema-exports` `verify-softrender` `verify-system-fonts` `verify-theme-follow` `verify-theme-layer` `verify-transcode-state` `verify-types` `verify-windows-caption` |
 | `lib/config-store.js` | 2 | `verify-config-store` `verify-upload-store` |
 | `lib/faststart.js` | 3 | `verify-cache-dir` `verify-mp4-vfs` `verify-scene-live` |
 | `lib/host-diag.js` | 1 | `verify-host-diag` |
 | `lib/http-body.js` | 2 | `verify-body-caps` `verify-package-files` |
-| `lib/index.js` | 20 | `e2e-web-media-origin` `verify-about` `verify-adapter` `verify-cache-dir` `verify-client` `verify-contracts` `verify-fontset` `verify-logging` `verify-module-layout` `verify-occlusion-hub` `verify-package-files` `verify-package-publish` `verify-presets` `verify-reachability` `verify-route-index` `verify-scene-live` `verify-scene` `verify-steam-discovery` `verify-transcode-state` `verify-we-install-probe` |
+| `lib/index.js` | 21 | `e2e-web-media-origin` `verify-about` `verify-adapter` `verify-cache-dir` `verify-client` `verify-contracts` `verify-fontset` `verify-logging` `verify-module-layout` `verify-occlusion-hub` `verify-package-files` `verify-package-publish` `verify-presets` `verify-reachability` `verify-route-index` `verify-scene-live` `verify-scene` `verify-settings-schema-exports` `verify-steam-discovery` `verify-transcode-state` `verify-we-install-probe` |
 | `lib/inventory.js` | 3 | `verify-inventory-index` `verify-scene-live` `verify-types` |
 | `lib/json-response.js` | 2 | `verify-json-response` `verify-occlusion-hub` |
 | `lib/log.js` | 1 | `verify-logging` |
