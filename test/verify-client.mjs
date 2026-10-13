@@ -177,9 +177,11 @@ const fetchNow = (url, opts) => {
   if (method === 'DELETE') {
     sceneFrameDeleteCalls.push(u);
     if (cccClearUnlinkFails) {
+      // 分桶后的宿主契约：unlink 真失败（权限/占用）= 500 + unlink-failed（不再有
+      // "200 + removed:false 的假成功"——200 现在 = 清除达成，含"本桶本来就没有"）。
       return Promise.resolve({
-        ok: true, status: 200,
-        json: () => Promise.resolve({ ok: true, removed: false, error: 'unlink-failed' }),
+        ok: false, status: 500,
+        json: () => Promise.resolve({ ok: false, removed: false, error: 'unlink-failed', code: 'EACCES' }),
       });
     }
     // 真宿主语义：DELETE 删掉 <key>_gpu.png → 之后 HEAD 回到 X-WE-GPU=0。
@@ -3180,16 +3182,16 @@ setTimeout(async () => {
     }
     const clearBtn = findBtn(tree3, '清除 GPU 帧');
     assert.ok(clearBtn, 'HEAD 报 X-WE-GPU=1 时面板必须给出「清除 GPU 帧」入口');
-    // ── P2-L：宿主回 200 但 removed:false（unlink 失败）时不得当清除成功 ──
-    // 只判 r.ok 会把「假成功」当清除：面板行消失、提示已清除，而宿主照旧发 GPU
-    // 帧 —— 画面纹丝不动、档位怎么点都不变、且没有任何反馈。
+    // ── P2-L：宿主 500（unlink 失败，权限/占用）时不得当清除成功 ──
+    // 分桶后 200 就是清除达成（含"本桶本来就没有"），真失败只剩 500：面板必须
+    // 保留入口 + 给出提示，而不是静默显示成功。
     cccClearUnlinkFails = true;
     const probesBeforeFail = animProbeSrcs.length;
     clearBtn.props.onClick();
     await new Promise((r) => { setTimeout(r, 40); });
     tree3 = renderPicker();
     assert.ok(findBtn(tree3, '清除 GPU 帧'),
-      'P2-L：宿主回 200 + removed:false 时必须保留清除入口（不得当清除成功）');
+      'P2-L：宿主 500 时必须保留清除入口（不得当清除成功）');
     assert.ok(JSON.stringify(tree3).includes('清除失败'),
       'P2-L：清除失败必须给出提示，而不是静默显示成功');
     assert.equal(animProbeSrcs.slice(probesBeforeFail).length, 0,
@@ -3232,13 +3234,12 @@ setTimeout(async () => {
     assert.ok(code.includes('if (String(selection.id || "") !== backfillWid) return;'),
       'GPU 抓帧回填落地必须校验壁纸身份（否则切走后会给新壁纸误标「已有 GPU 帧」）');
 
-    // ⑤b 抓帧回填必须校验存帧**几何**（视口宽高比），不只是「槽位有没有帧」：
-    // 抓帧是「抓帧那一刻视口的构图」，别的窗口/旧会话留下的帧拿到当前窗口上屏
-    // 会被 CSS object-fit: cover 再裁一次 —— 实测 1440x960 的帧在 2488x1376
-    // 视口里只显示设计宽度的 84.5%（对 CPU 帧做最佳匹配拟合），人物比 live 大
-    // 约 19% 且四周被切。判据来自宿主的 X-WE-GPU-AR（读 PNG 的 IHDR）。
-    assert.ok(code.includes('GPU_FRAME_ASPECT_TOL') && code.includes('"x-we-gpu-ar"'),
-      'GPU 抓帧回填必须校验存帧视比（不符 → 清掉按当前视口重抓），行为级见 live-frame-backfill-smoke 的 G/H/I/J');
+    // ⑤b 抓帧回填必须校验存帧**面积**（单主帧升级制），不只是「槽位有没有帧」：
+    // 主帧比当前画布小 ⇒ cover 放大发糊；主帧更大 ⇒ 缩小显示无损失，保留。判据
+    // 来自宿主的 X-WE-GPU-W/H（读 PNG 的 IHDR），升级规则"只升不降"，宿主 PUT
+    // 侧另有一道面积守卫（frame-smaller 409）兜底竞态。
+    assert.ok(code.includes('GPU_FRAME_AREA_TOL') && code.includes('"x-we-gpu-w"') && code.includes('"x-we-gpu-h"'),
+      'GPU 抓帧回填必须校验主帧面积（偏小 → 升级重抓），行为级见 live-frame-backfill-smoke 的 G/H/I/J');
 
     // ⑤c 两条渐变链路的时长必须各自与常量同步（独立常量，不合并）：
     // - 轮换/手动切壁纸的过场（.we-layer--switch）= 类型基准 × 速度档；其中

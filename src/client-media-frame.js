@@ -155,7 +155,7 @@ function markGpuFramePin(token, pinned) {
 // 看护心跳、判失败、帧可用性、抓帧回填、指针转发、poster/挂载/抓首帧，以及 syncLayers
 // 与层过渡）。构建期内联回本作用域，调用点无需改动。
 // **故意留在本文件的**（别的域，别处找）：媒体集成（下方「媒体后端」段）、GPU 帧槽助手
-// （clearGpuFrameSlot / refreshStaticFrameNodes / liveViewportAspect 等）、用户属性、diag 上报。
+// （refreshStaticFrameNodes 等）、用户属性、diag 上报。
 // 契约：出向依赖清单 / 入口 / 不变量 —— 见该文件头（清单只在那里维护，此处不复述数量）。
 
 // ── 媒体后端（宿主侧的系统音频频谱 / Now Playing → 渲染页）─────────────────────
@@ -440,56 +440,16 @@ function startMediaSync(frame) {
   }, 50);
 }
 
-// ── 存帧几何校验（视口宽高比）────────────────────────────────────────────────
-// _gpu.png 是**抓帧那一刻渲染页视口的构图**，不是「这张壁纸该有的画面」：渲染器
-// 按画布比取景（WebWallGL fit：与设计比 2% 内 → 整张设计上屏；否则按画布比
-// cover 裁切），而静态帧上屏时还要再经 CSS object-fit: cover。两个比例一叠加，
-// 「在 3:2 窗口抓的帧」拿到 16:9 窗口上屏就是被再裁一次 —— 构图明显放大：
-// 实测 1440x960 的抓帧在 2488x1376 视口里只显示设计宽度的 84.5%（按设计比做
-// 最佳匹配拟合得到），人物比 live 大约 19% 且四周被切。判据不能只问
-// 「槽位有没有 GPU 帧」，还要问「这张帧配不配当前视口」：不配的帧会永久上屏
-// （宿主的唯一性闸让 PUT 只写一次，没人再动它）。
-// 判据：存帧视比与当前视口比的相对差 > 2%（与渲染页自己的 fit 容差同口径 ——
-// 2% 以内两个比例的取景/裁切差异不可见）。不符 → 清掉按当前视口重抓。
-// 两个窗口同时开引擎且窗口比不同时，双方会各按自己的比反复重抓（槽位只有一份，
-// 谁后挂载谁说了算）：构图正确性优先于这点 I/O，代价是每轮各抓一次 —— 正确做法
-// 仍是只留一个页面（同「两个客户端互相覆盖设置」的既有约束）。
-const GPU_FRAME_ASPECT_TOL = 0.02;
-// 本会话自己抓过的帧：宿主回了几何头时以头为准，没回（旧宿主）时至少知道自己
-// 刚写的是什么比例，免得「自己刚写的帧被自己判成旧帧」反复清写。
-const gpuFrameAspectKnown = new Map(); // token -> 视口比
-// 当前渲染页视口比 = iframe 的 client 盒（canvas 就按它定尺寸）。比
-// window.innerWidth 更准：父页面出现经典滚动条时 innerWidth 会比 .we-layer
-// 宽出一条滚动条（~1% 量级），够把 2% 容差吃掉。取不到返回 0（= 判不了）。
-function liveViewportAspect(frame) {
-  try {
-    const w = Number(frame && frame.clientWidth) || 0;
-    const h = Number(frame && frame.clientHeight) || 0;
-    if (w > 0 && h > 0) return w / h;
-  } catch { /* ignore */ }
-  try {
-    const w = Number(typeof window !== "undefined" ? window.innerWidth : 0) || 0;
-    const h = Number(typeof window !== "undefined" ? window.innerHeight : 0) || 0;
-    if (w > 0 && h > 0) return w / h;
-  } catch { /* ignore */ }
-  return 0;
-}
-// 清除槽位（同面板「清除 GPU 帧」的语义：宿主 200 + removed:false 也算没删掉，
-// 见其在 P2-L 的处理 —— 假成功会让画面纹丝不动而没有任何反馈）。
-/**
- * 宿主回 200 也可能没删掉（unlink 失败时 `removed:false`）：只判 HTTP 状态
- * 会把「假成功」当清除 —— 面板行消失、提示已清除，而画面没变、也没有任何错误提示。
- * 旧宿主无该字段 ⇒ 按 HTTP 状态判（`removed !== false` 即为真）。
- *
- * 「清除」有两处调用点（内部逻辑只要布尔值、面板还要区分失败原因），语义必须一致 ⇒ 收在这里。
- */
-function removedFromResponse(res) {
-  return !(res && res.data && res.data.removed === false);
-}
-function clearGpuFrameSlot(token) {
-  return apiDelete("/scene-frame-cache/" + encodeURIComponent(token), { parse: true })
-    .then((res) => Boolean(res.ok && removedFromResponse(res)));
-}
+// ── GPU 抓帧主帧（单主帧 + 面积升级制）──────────────────────────────────────
+// _gpu.png 是**抓帧那一刻渲染页画布的画面**，每壁纸一份（单主帧）。升级判定
+// 不看视口比，看**面积**：主帧面积 ≥ 我的画布（容差 5%，GPU_FRAME_AREA_TOL）⇒
+// 保留，显示侧 CSS object-fit: cover 缩小 —— 大帧缩小无损失；主帧缺失、明显
+// 更小或几何未知 ⇒ 抓**我的画布尺寸** PUT 覆盖（升级）。宿主 PUT 侧另有面积
+// 守卫（frame-smaller 409）兜底竞态：小帧永远覆盖不掉大帧。历史上"存帧视比
+// ≠ 我的视口就清掉重抓"的规则让两个视比不同的窗口在每轮轮播到访时互踢对方
+// 的帧（实测 60s 一对永不收敛）；而推演过的按形状精确缓存又躲不开 resize 场景
+// 的无界写盘（每个新形状落一份）—— 面积升级制把两者一起解决：写入次数 = 主帧面积单调升级次数（个位数封顶），
+// resize 零写入。
 // 重抓落地后，当前层若正显示这张静帧（静态帧 img / live 垫底 poster），就地重挂
 // 一次：scene-frame 响应带 no-store，换个 query 即重新取图（同「切换出图来源」的既有
 // 做法）。否则用户要等下一次切换才看到修正后的构图。

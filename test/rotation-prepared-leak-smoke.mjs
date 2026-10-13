@@ -490,7 +490,7 @@ await runScenario('A. live 首帧超时回退：探针不得留在领养槽位�
   // 下面第二轮要量的是「一次**已经完成**的切换之后，轮换回视频壁纸」这条路径，而切层内容
   // 闸门（见 src/live-layer.js）会让"新层还没画面"的切换停在旧层上 —— 不推这一下，第二轮
   // 的旧层就不是这里假设的那一层（切层闸门自己的判据在 C 组）。
-  const frameProbe = t.imageEls.filter((i) => t.mediaSrc(i) === '/wallpaper-engine/scene-frame/s1').pop() || null;
+  const frameProbe = t.imageEls.filter((i) => String(t.mediaSrc(i) || '').split('?')[0] === '/wallpaper-engine/scene-frame/s1').pop() || null;
   if (frameProbe && typeof frameProbe.onload === 'function') frameProbe.onload();
 
   // 第二轮：轮换回视频壁纸 → 正常领养路径不得被误释放。
@@ -924,6 +924,17 @@ await runScenario('L2. 同管线：记忆是自己挣来的 ⇒ 不作废（负�
 // 那条路径不经过 buildMedia，因此**没有**垫底图 —— 用它测这张图会测到空气。
 // stats fps=0：live 永远不出首帧 ⇒ iframe 停在 `--we-live-fade:0`（透明），屏上就是垫底图本身，
 // 正是用户报的"第一次激活黑屏"那一刻。
+const posterProbeForFrame = (t, src) => t.imageEls.filter((i) => String(t.mediaSrc(i) || '').split('?')[0] === src).pop() || null;
+const posterShowsFrame = (t, poster, src) => {
+  if (!src) return posterBgSrc(t, poster) === '';
+  const m = /url\(["']?([^"')]+)["']?\)/.exec(posterBgSrc(t, poster));
+  return Boolean(m) && m[1].split('?')[0] === src;
+};
+// 留存表键 = 完整帧 URL ⇒ 判据归一到路径再断言（历史键曾带 ?ar=，归一保持兼容）。
+const frameBytesPaths = (t) => {
+  const b = t.frameBytes();
+  return b ? new Map([...b.entries()].map(([k, v]) => [String(k).split('?')[0], v])) : null;
+};
 await runScenario('P. 首帧前垫底图：抓帧 → 作者预览图 → 主题色（首次激活不留黑屏）', {
   wallpapers: [scene('s1', 'tok-s1')],
   stats: { 'tok-s1': { fps: 0, running: true } },
@@ -934,11 +945,11 @@ await runScenario('P. 首帧前垫底图：抓帧 → 作者预览图 → 主题
   check('场景 live 层带垫底图（不是空层）', !!poster);
   const frameSrc = '/wallpaper-engine/scene-frame/s1';
   const previewSrc = '/wallpaper-engine/preview/s1';
-  const probeFrame = t.imageEls.filter((i) => t.mediaSrc(i) === frameSrc).pop() || null;
+  const probeFrame = posterProbeForFrame(t, frameSrc);
   check('① 垫底图先试**实时抓帧**（当前视口的真实构图优先于预览图）',
     !!probeFrame, 'probe=' + (probeFrame ? t.mediaSrc(probeFrame) : 'none'));
   check('   来源已记录（诊断能看出退到哪一级）',
-    !!poster && poster.dataset.weFrameSrc === frameSrc,
+    !!poster && String(poster.dataset.weFrameSrc || '').split('?')[0] === frameSrc,
     'weFrameSrc=' + (poster ? poster.dataset.weFrameSrc : 'no poster'));
   // 首次激活：抓帧不存在（这一轮 live 才回填）⇒ 必须退到作者预览图
   if (probeFrame && typeof probeFrame.onerror === 'function') probeFrame.onerror();
@@ -962,7 +973,7 @@ await runScenario('P2. 无预览图：垫底图只留主题色兜底，不猜图
   const layer = t.layerEl();
   const poster = layer && layer.querySelector('div.we-live-poster');
   const frameSrc = '/wallpaper-engine/scene-frame/s2';
-  const probeFrame = t.imageEls.filter((i) => t.mediaSrc(i) === frameSrc).pop() || null;
+  const probeFrame = posterProbeForFrame(t, frameSrc);
   check('垫底图仍先试实时抓帧', !!probeFrame, 'probe=' + (probeFrame ? t.mediaSrc(probeFrame) : 'none'));
   const imagesBefore = t.imageEls.length;
   if (probeFrame && typeof probeFrame.onerror === 'function') probeFrame.onerror();
@@ -1018,6 +1029,9 @@ const posterBgSrc = (t, poster) => {
 const posterShowsSrc = (t, poster, src) => posterBgSrc(t, poster) === (src ? 'url(' + src + ')' : '');
 const posterColor = (poster) => (poster && poster.style ? String(poster.style.backgroundColor || '') : '');
 const posterProbeFor = (t, src) => t.imageEls.filter((i) => t.mediaSrc(i) === src).pop() || null;
+// 分桶后海报第 1 级（实时抓帧）的 URL 带 `?ar=<本窗口视口比>`（查询串随窗口变）⇒
+// 抓帧探针的查找与"屏上是真帧"的比对一律按**路径部分**匹配；作者预览图没有查询串，
+// 仍走精确匹配的 posterProbeFor / posterShowsSrc。
 const fireProbe = (probe, ev) => {
   if (probe && typeof probe[ev] === 'function') { probe[ev](); return true; }
   return false;
@@ -1049,7 +1063,7 @@ await runScenario('P3. 无缓存实时帧：第 1 级仍在飞行中 ⇒ 缩略�
   const poster = posterOf(t);
   const frameSrc = '/wallpaper-engine/scene-frame/s1';
   const previewSrc = '/wallpaper-engine/preview/s1';
-  const probeFrame = posterProbeFor(t, frameSrc);
+  const probeFrame = posterProbeForFrame(t, frameSrc);
   const probePreview = posterProbeFor(t, previewSrc);
   check('① 抓帧未定（既未成功也未失败）时，两张探针**都已发出**（并行请求，不互相门控）',
     !!probePreview && !!probeFrame,
@@ -1077,7 +1091,7 @@ await runScenario('P4. 无缓存实时帧：第 1 级成功 ⇒ 真帧上屏，�
   const poster = posterOf(t);
   const frameSrc = '/wallpaper-engine/scene-frame/s1';
   const previewSrc = '/wallpaper-engine/preview/s1';
-  const probeFrame = posterProbeFor(t, frameSrc);
+  const probeFrame = posterProbeForFrame(t, frameSrc);
   const probePreview = posterProbeFor(t, previewSrc);
   check('① 两张探针同场竞速（"谁允许上屏"的前提：两张都可能到）',
     !!probeFrame && !!probePreview, 'frame=' + !!probeFrame + ' preview=' + !!probePreview);
@@ -1087,12 +1101,12 @@ await runScenario('P4. 无缓存实时帧：第 1 级成功 ⇒ 真帧上屏，�
     'bg=' + posterBg(poster));
   fireProbe(probeFrame, 'onload');              // 高权威后到
   check('③ 真帧到达 ⇒ 上屏的就是真帧',
-    posterShowsSrc(t, poster, frameSrc), 'bg=' + posterBg(poster));
+    posterShowsFrame(t, poster, frameSrc), 'bg=' + posterBg(poster));
   // 负方向：真帧已定稿后，低权威的**迟到回调**不得把它压回去。抓帧先到、预览图后到时，
   // 低权威那次 onload 走的正是这条路径；这里把它再放一次（同一段代码路径）。
   fireProbe(probePreview, 'onload');
   check('④ 负对照（同一条判据）：真帧定稿后低权威不得压回去（屏上仍是真帧）',
-    posterShowsSrc(t, poster, frameSrc) && !posterShowsSrc(t, poster, previewSrc),
+    posterShowsFrame(t, poster, frameSrc) && !posterShowsSrc(t, poster, previewSrc),
     'bg=' + posterBg(poster));
 });
 
@@ -1107,7 +1121,7 @@ await runScenario('P5. 无缓存实时帧：第 1 级判失败 ⇒ 已就绪的�
   const poster = posterOf(t);
   const frameSrc = '/wallpaper-engine/scene-frame/s1';
   const previewSrc = '/wallpaper-engine/preview/s1';
-  const probeFrame = posterProbeFor(t, frameSrc);
+  const probeFrame = posterProbeForFrame(t, frameSrc);
   const probePreview = posterProbeFor(t, previewSrc);
   const colorBefore = posterColor(poster);
   fireProbe(probePreview, 'onload');            // 缩略图先就绪（按闸门还不能上屏）
@@ -1139,20 +1153,20 @@ await runScenario('P6. 缓存实时帧存在：建层那一刻就是实时帧（
 }, (t) => {
   const frameSrc = '/wallpaper-engine/scene-frame/s1';
   const previewSrc = '/wallpaper-engine/preview/s1';
-  const frameProbes = () => t.imageEls.filter((i) => t.mediaSrc(i) === frameSrc);
+  const frameProbes = () => t.imageEls.filter((i) => String(t.mediaSrc(i) || '').split('?')[0] === frameSrc);
   const previewProbes = () => t.imageEls.filter((i) => t.mediaSrc(i) === previewSrc);
 
   // 第一次建层：本会话还没加载过第 1 级（本文件自己的留存表也是空的）
   const cold = posterOf(t);
   check('① 冷（本会话还没见过第 1 级）⇒ 建层那一刻屏上没有任何图 —— 判据有牙，不是恒真',
-    !!cold && posterShowsSrc(t, cold, '') && !posterShowsSrc(t, cold, frameSrc),
+    !!cold && posterShowsSrc(t, cold, '') && !posterShowsFrame(t, cold, frameSrc),
     'bg=' + posterBg(cold));
   check('   负对照（同一条判据，换 src）：屏上也不是缩略图那张（这一刻谁都还没上屏）',
     !posterShowsSrc(t, cold, previewSrc), 'bg=' + posterBg(cold));
   // 第 1 级加载成功 ⇒ 它的**字节**留在本进程里（下一次建层据此同步上帧）
   fireProbe(frameProbes().pop(), 'onload');
   check('② 第 1 级就绪 ⇒ 屏上是实时帧（字节由此进留存）',
-    posterShowsSrc(t, cold, frameSrc), 'bg=' + posterBg(cold));
+    posterShowsFrame(t, cold, frameSrc), 'bg=' + posterBg(cold));
 
   // 换出去（v），再换回来（s1）⇒ 同一个 key 的第二次建层
   t.fireLatest(10000);
@@ -1171,7 +1185,7 @@ await runScenario('P6. 缓存实时帧存在：建层那一刻就是实时帧（
   markVideoDecoded(probeBack);   // 提交 → buildMedia → buildLivePoster（热）
   const warm = posterOf(t);
   check('④ 缓存命中 ⇒ 第二次建层那一刻屏上**已经是实时帧**（不是缩略图、也不是纯色）',
-    !!warm && warm !== cold && posterShowsSrc(t, warm, frameSrc),
+    !!warm && warm !== cold && posterShowsFrame(t, warm, frameSrc),
     'bg=' + posterBg(warm) + ' layer=' + (t.layerEl() ? String(t.layerEl().dataset.weKey).slice(0, 40) : 'none'));
   check('   负对照（同一条判据，换 src）：缩略图从未成为屏上那张',
     !posterShowsSrc(t, warm, previewSrc), 'bg=' + posterBg(warm));
@@ -1202,8 +1216,8 @@ await runScenario('P7. 拿不到 object URL：命中仍同步上帧（插入已�
   // 只数**网络探针**：`new Image()` 建的那种（没有 `data-we-frame-src`）。命中时插进屏里的那个
   // 已解码元素带这个标记 —— 它是留住的字节，不是一次新请求，两者必须分开数。
   const frameMark = (i) => String((i && i.attributes && i.attributes['data-we-frame-src']) || '');
-  const frameProbes = () => t.imageEls.filter((i) => t.mediaSrc(i) === frameSrc && !frameMark(i));
-  const clonedFrames = () => t.imageEls.filter((i) => frameMark(i) === frameSrc);
+  const frameProbes = () => t.imageEls.filter((i) => String(t.mediaSrc(i) || '').split('?')[0] === frameSrc && !frameMark(i));
+  const clonedFrames = () => t.imageEls.filter((i) => String(frameMark(i) || '').split('?')[0] === frameSrc);
   const previewProbes = () => t.imageEls.filter((i) => t.mediaSrc(i) === previewSrc);
 
   // 先建立"这张帧可用"这个事实（冷建层 → 第 1 级成功 ⇒ 字节进留存）
@@ -1225,7 +1239,7 @@ await runScenario('P7. 拿不到 object URL：命中仍同步上帧（插入已�
   markVideoDecoded(probeBack);   // 提交 → 命中分支（第 2 次建层）
   const warm = posterOf(t);
   check('② 命中：第 2 次建层那一刻屏上已是实时帧（插入的是已解码元素，不是纯色也不是缩略图）',
-    !!warm && posterShowsSrc(t, warm, frameSrc), 'bg=' + posterBgSrc(t, warm));
+    !!warm && posterShowsFrame(t, warm, frameSrc), 'bg=' + posterBgSrc(t, warm));
   check('③ 命中不为它再发请求：网络探针没新增（屏上那张来自留住的元素，不是重新取值）',
     frameProbes().length === frameProbesBefore,
     'frame probes ' + frameProbesBefore + '→' + frameProbes().length
@@ -1253,22 +1267,22 @@ await runScenario('P8. 留存帧字节替换：旧 object URL 被撤销（只删
   selection: selSeed(['s1'], 's1'),
 }, (t) => {
   const frameSrc = '/wallpaper-engine/scene-frame/s1';
-  const probe = posterProbeFor(t, frameSrc);
+  const probe = posterProbeForFrame(t, frameSrc);
   check('① 前置：第 1 级探针在场（本轮帧字节的来源）', !!probe, 'src=' + frameSrc);
   // 帧就绪 ⇒ 字节进留存
   fireProbe(probe, 'onload');
-  const bytes = t.frameBytes();
+  const bytes = frameBytesPaths(t);
   check('② 帧就绪后留存表里就是这一条（诊断面可读出留下的是哪几张）',
     !!bytes && bytes.size === 1 && bytes.has(frameSrc), 'size=' + (bytes ? bytes.size : 'n/a'));
   const urlsAfterFirst = t.blobSources.size;
   // 同一个 URL 再成功一次（真机形态：下一次建层又把它取回来了一次）⇒ 换一份字节
-  fireProbe(posterProbeFor(t, frameSrc), 'onload');
+  fireProbe(posterProbeForFrame(t, frameSrc), 'onload');
   check('③ 同一 URL 再来一次不会越留越多：留存表仍只有这一条（每键一份）',
     t.frameBytes() && t.frameBytes().size === 1, 'size=' + (t.frameBytes() ? t.frameBytes().size : 'n/a'));
   check('④ 旧的 object URL 被 URL.revokeObjectURL 撤掉（不撤 = 那份字节收到页面关闭）',
     t.revokedObjectUrls.length === 1 && t.blobSources.size === urlsAfterFirst,
     'revoked=' + t.revokedObjectUrls.length + ' registered=' + t.blobSources.size);
-  check('⑤ 屏上始终是这张帧（换字节不撤图）', posterShowsSrc(t, posterOf(t), frameSrc),
+  check('⑤ 屏上始终是这张帧（换字节不撤图）', posterShowsFrame(t, posterOf(t), frameSrc),
     'bg=' + posterBgSrc(t, posterOf(t)));
 });
 
@@ -1361,9 +1375,8 @@ await runScenario('P9. 留存表 LRU：命中搬到表尾 ⇒ 超上限淘汰的
     rotationGroups: [{ id: 'g1', name: 'L', interval: 5, order: 'random', wallpaperIds: lruIds }],
   }),
 }, (t) => {
-  const bytes = () => t.frameBytes();
+  const bytes = () => frameBytesPaths(t);
   const keys = () => (bytes() ? [...bytes().keys()] : []);
-  const urlFor = (src) => { for (const [u, s] of t.blobSources) if (s === src) return u; return ''; };
   const nextRound = () => {
     t.fireLatest(10000);            // 轮换 → 准备下一张（live 探测）
     t.fireLatest(300);              // 首拍 fps=0 → 未达标，轮询续跑
@@ -1375,14 +1388,14 @@ await runScenario('P9. 留存表 LRU：命中搬到表尾 ⇒ 超上限淘汰的
   // 取值序：每轮在"除当前张以外的 8 张"里选中下一张（下标 × 8 取整）。
   t.setRandomSeq([0.05, 0.2, 0.3, 0.4, 0.5, 0.7, 0.8, 0.1, 0.95]);
   // 启动即选中 s1：它的第 1 级探针 onload ⇒ 字节进留存（表由此有第一条）
-  fireProbe(posterProbeFor(t, frameKey(1)), 'onload');
+  fireProbe(posterProbeForFrame(t, frameKey(1)), 'onload');
   check('① 前置：启动那一层已把 s1 的帧字节留住（留存表里唯一的一条）',
     !!bytes() && bytes().size === 1 && bytes().has(frameKey(1)),
     'size=' + (bytes() ? bytes().size : 'n/a'));
   // s2..s8：每轮换到一个**表里还没有字节**的 key ⇒ 冷建层 ⇒ 探针 onload 后进表
   for (let i = 2; i <= 8; i++) {
     nextRound();
-    const probe = posterProbeFor(t, frameKey(i));
+    const probe = posterProbeForFrame(t, frameKey(i));
     check('   前置：第 ' + (i - 1) + ' 轮落在 s' + i + '（表里还没有它的字节 ⇒ 这一跳是冷建层）',
       !!probe && !keys().includes(frameKey(i)), 'probe=' + !!probe + ' size=' + keys().length);
     fireProbe(probe, 'onload');
@@ -1390,16 +1403,16 @@ await runScenario('P9. 留存表 LRU：命中搬到表尾 ⇒ 超上限淘汰的
   check('② 前置：8 张不同帧刚好把表填到上限（还没触发淘汰）',
     keys().length === FRAME_BYTES_MAX, 'size=' + keys().length + '/' + FRAME_BYTES_MAX);
   // 第 9 轮回到 s1：字节还在表里 ⇒ 命中（同步上屏、一个探针都不发）= "最近被用到"那次访问
-  const f1ProbesBefore = t.imageEls.filter((i) => t.mediaSrc(i) === frameKey(1)).length;
+  const f1ProbesBefore = t.imageEls.filter((i) => String(t.mediaSrc(i) || '').split('?')[0] === frameKey(1)).length;
   nextRound();
-  const f1ProbesAfter = t.imageEls.filter((i) => t.mediaSrc(i) === frameKey(1)).length;
+  const f1ProbesAfter = t.imageEls.filter((i) => String(t.mediaSrc(i) || '').split('?')[0] === frameKey(1)).length;
   check('③ 前置：回到 s1 的那一跳是**命中**（屏上是帧的字节，且没有为它新建探针）',
-    posterShowsSrc(t, posterOf(t), frameKey(1)) && f1ProbesAfter === f1ProbesBefore,
+    posterShowsFrame(t, posterOf(t), frameKey(1)) && f1ProbesAfter === f1ProbesBefore,
     'bg=' + posterBgSrc(t, posterOf(t)) + ' probes=' + f1ProbesBefore + '→' + f1ProbesAfter);
-  const f2Url = urlFor(frameKey(2));
+  const f2Url = (() => { for (const [u, src] of t.blobSources) if (String(src).split('?')[0] === frameKey(2)) return u; return ''; })();
   // 第 10 轮：s9 是**新条目**（表里没有）⇒ 进表后超上限，必须淘汰一条
   nextRound();
-  fireProbe(posterProbeFor(t, frameKey(9)), 'onload');
+  fireProbe(posterProbeForFrame(t, frameKey(9)), 'onload');
   check('④ 上限生效：同会话轮换 9 张不同帧之后，表被截到上限（不是无界增长）',
     keys().length === FRAME_BYTES_MAX, 'size=' + keys().length + '/' + FRAME_BYTES_MAX);
   check('⑤ 淘汰的是**最久没被用到**的那一条（s2：最后一次用它是在 7 轮之前）',
@@ -1496,7 +1509,7 @@ await runScenario('T1. 切层内容闸门：垫底图还没有图 ⇒ 旧层留�
     pendingFrame.shown === oldLayer, frameLabel(pendingFrame));
 
   // 画面到了（真机里是抓帧或作者预览图的探针回来）
-  const frameProbe = t.imageEls.filter((i) => t.mediaSrc(i) === frameSrc).pop() || null;
+  const frameProbe = t.imageEls.filter((i) => String(t.mediaSrc(i) || '').split('?')[0] === frameSrc).pop() || null;
   check('   前置：这一跳确实发了抓帧探针（垫底图的第 1 级，冷会话里没有字节在手）', !!frameProbe);
   if (frameProbe && typeof frameProbe.onload === 'function') frameProbe.onload();
   const shownFrame = observeFrame(t, '画面到位后');
@@ -1602,7 +1615,7 @@ await runScenario('T4. 终点语义：抓帧与预览图都不存在 ⇒ 闸门�
   check('① 抓帧还没有结论之前守在旧层上',
     pendingFrame.shown === oldLayer && !!newLayer
       && String(newLayer.className).includes(LAYER_PENDING_CLS), frameLabel(pendingFrame));
-  const probeFrame = t.imageEls.filter((i) => t.mediaSrc(i) === frameSrc).pop() || null;
+  const probeFrame = t.imageEls.filter((i) => String(t.mediaSrc(i) || '').split('?')[0] === frameSrc).pop() || null;
   check('   前置：这一档只有抓帧一级（作者没有发布预览图 ⇒ 不猜图，见 P2）',
     !!probeFrame && !t.imageEls.some((i) => t.mediaSrc(i) === '/wallpaper-engine/preview/s2'),
     'frame=' + !!probeFrame + ' preview=' + t.imageEls.length);
@@ -1647,7 +1660,7 @@ await runScenario('T5. 硬切（默认过场）：旧层留到新层有画面，
     frameLabel(pendingFrame) + ' layers=' + layersNow().length);
   check('② 这一刻新层还没有画面（闸门挡的就是它）', layerShowsPicture(newLayer) === false,
     'picture=' + layerShowsPicture(newLayer));
-  const frameProbe = t.imageEls.filter((i) => t.mediaSrc(i) === frameSrc).pop() || null;
+  const frameProbe = t.imageEls.filter((i) => String(t.mediaSrc(i) || '').split('?')[0] === frameSrc).pop() || null;
   if (frameProbe && typeof frameProbe.onload === 'function') frameProbe.onload();
   const shownFrame = observeFrame(t, '画面到位后');
   check('③ 画面到位 ⇒ 旧层一次性退场（硬切语义：body 里只剩新层），新层已经有画面',

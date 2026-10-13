@@ -663,7 +663,6 @@ function frameUrlWithVariant(frameUrl, v) {
   const base = String(frameUrl).split("?")[0];
   return v > 0 ? base + "?v=" + v : base;
 }
-
 // ── React hook for the picker UI ────────────────────────────────────────────
 function useStore() {
   const [, setTick] = React.useState(0);
@@ -3022,6 +3021,8 @@ function probeGpuFrameState(frameUrl, force) {
   gpuFrameUi.wid = wid;
   gpuFrameUi.probedAt = at;
   const wasPinned = gpuFrameUi.pinned;
+  // 探测 = 读主帧在不在 + 几何（W/H 头），面板的「已抓帧/未抓帧」读数、清除与
+  // 重抓动作作用在同一份主帧上，读行动作一致。
   apiHead("/scene-frame/" + encodeURIComponent(token))
     .then((res) => {
       if (gpuFrameUi.wid !== wid || gpuFrameUi.probedAt !== at) return; // 期间切了壁纸
@@ -4011,22 +4012,22 @@ function WallpaperPicker() {
     gpuFrameUi.wid = wid;
     gpuFrameUi.busy = true;
     emit();
+    // 清除 = 删主帧（单主帧语义）。这是共享资源：清掉后其他窗口在下一次回填点
+    // 各自按自己的画布尺寸重抓——与旧单槽时代一致，用户显式点「清除」即此意。
     apiDelete("/scene-frame-cache/" + encodeURIComponent(token), { parse: true })
       .then((r) => {
-        // 宿主回 200 也可能没删掉（`removed:false`）⇒ 语义统一走 removedFromResponse。
-        const declaredRemoved = removedFromResponse(r);
-        if (!r.ok || !declaredRemoved) {
+        // 真·失败只有一种：宿主 500（unlink 被权限/占用挡住）。`removed:false`
+        //（200）= 主帧本来就没有 —— 目标态已达成，按成功走：探测读数本来就说
+        // 没有帧，两面一致。
+        if (!r.ok) {
           gpuFrameUi.busy = false;
-          gpuFrameUi.error = !r.ok
-            ? weT("清除失败：宿主返回 {status}", { status: r.status })
-            : weT("清除失败：缓存文件未删除（权限或占用）");
+          gpuFrameUi.error = weT("清除失败：宿主返回 {status}", { status: r.status });
           emit();
           return;
         }
         gpuFrameUi.error = "";
         markGpuFrameProbed(wid, false);
         forgetGpuFramePin(token);
-        gpuFrameAspectKnown.delete(token); // 槽位已空：几何记忆一并作废
         // 请求期间用户可能已经切走：槽位状态属于发起时那张壁纸，URL 重写/渲染恢复
         // 只对「还是它」的情况做（同 A4 的身份校验；否则会把当前壁纸的 URL 改写成
         // 「当前帧 URL + 旧壁纸的档位」→ 画面与面板读数不一致）。

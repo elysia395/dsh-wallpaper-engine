@@ -55,6 +55,14 @@
         {
           "kind": "guard",
           "npm": null,
+          "file": "test/verify-scene-frame-master.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
           "file": "test/verify-scene-live.mjs",
           "args": [],
           "tier": "hard",
@@ -617,6 +625,14 @@
           "kind": "guard",
           "npm": null,
           "file": "test/verify-scene.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-scene-frame-master.mjs",
           "args": [],
           "tier": "hard",
           "probe": false

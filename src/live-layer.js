@@ -17,9 +17,9 @@
  *                     ROTATION_FADE_MS · commitRotationSwitch · switchTransitionOf · layerKeyDiff ·
  *                     switchFrames · openRotationAudioGate · releaseRotationAudioGateFor ·
  *                     rotationAudioHoldActive · scheduleSceneVideoResync
- *   live 与帧          livePauseReason · GPU_FRAME_ASPECT_TOL · gpuFrameAspectKnown ·
- *                     liveViewportAspect · probeGpuFrameState · markGpuFramePin · markGpuFrameProbed ·
- *                     clearGpuFrameSlot · refreshStaticFrameNodes · prepareSceneLiveStage ·
+ *   live 与帧          livePauseReason · GPU_FRAME_AREA_TOL · probeGpuFrameState ·
+ *                     markGpuFramePin · markGpuFrameProbed ·
+ *                     refreshStaticFrameNodes · prepareSceneLiveStage ·
  *                     prepareSceneStaticStage · prepareLiveTimeouts · clearPrepareLiveTimeout ·
  *                     disposePreparedMedia · disposeMediaEl · buildMedia
  *   主题随壁纸        themeFollowOnFrameCanvas · themeFollowOnFrameImage（src/theme-follow.js）：抓到的

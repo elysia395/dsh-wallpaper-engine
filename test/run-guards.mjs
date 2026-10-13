@@ -73,6 +73,7 @@ const VERIFY_STEPS = [
   step('test/verify-transcode-state.mjs'),
   step('test/verify-playback-controls.mjs'),
   step('test/verify-scene.mjs'),
+  step('test/verify-scene-frame-master.mjs'),
   step('test/verify-scene-live.mjs'),
   step('test/verify-scene-live-occlusion.mjs'),
   step('test/verify-scene-probe.mjs'),

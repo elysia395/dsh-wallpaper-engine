@@ -89,7 +89,6 @@ const WE_I18N_EN_CORE = {
   "未选择壁纸": "No wallpaper selected",
   "我的字体集": "My font set",
   "清除失败：宿主返回 {status}": "Clear failed: host returned {status}",
-  "清除失败：缓存文件未删除（权限或占用）": "Clear failed: cache file was not deleted (permissions or file in use)",
   "清除失败：请求未完成": "Clear failed: request did not complete",
   "拿不到实时画面（实时渲染没在运行）→ 想抓实时帧请先开「场景实时渲染」": "No live frame available (live rendering is not running) → to capture a live frame, turn on \"Scene live rendering\" first",
   "扫描 Wallpaper Engine…": "Scanning for Wallpaper Engine…",

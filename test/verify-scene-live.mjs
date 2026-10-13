@@ -1246,7 +1246,7 @@ const clientChecks = [
     // 跨文件接线：面板（client.js）发起 force 重抓；"先抓帧 + 内容门禁 → 成功后才清旧帧"
     // 的安全顺序在被调的 scheduleLiveFrameBackfill 里（live-layer.js）。
     /scheduleLiveFrameBackfill\(live, \{ force: true \}\)/.test(src)
-    && /const stale = force \|\| \(hasGpu && arRef > 0/.test(liveSrc)],
+    && /const stale = force \|\| \(hasGpu && areaRef > 0/.test(liveSrc)],
   // 微缩预览必须指向层里正在用的那个 URL（同档位）+ 缓存破坏参数。
   ['frame preview points at the live layer URL',
     /function framePreviewSrc\(selLike\)[\s\S]{0,500}?frameUrlWithVariant\(selLike && selLike\.sceneFrameUrl, v\)[\s\S]{0,200}?we-prev=/.test(src)],
