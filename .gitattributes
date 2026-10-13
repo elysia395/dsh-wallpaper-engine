@@ -1,0 +1,25 @@
+# 全仓文本文件在**所有平台**的检出都是 LF。
+#
+# 为什么不能靠默认值：Git for Windows 的 `core.autocrlf=true` 会把文本文件检出成
+# CRLF，而 `test/` 里的守卫大量用「按行锚定的字面替换」做变异体/负对照
+# （例如 `test/verify-transcode-state.mjs` 的 `ONENTRY_CALL_RE`、`test/verify-*`
+# 里的 `replace(/…\n/, '')`）。CRLF 检出时锚点不命中 ⇒ 负对照判红 ⇒ 整条
+# `verify` 链在 Windows 上短路。本仓 CI 明确跑 windows-latest + ubuntu-latest
+# 一份代码，所以 EOL 必须是仓库契约，而不是各平台 checkout 的默认值。
+* text=auto eol=lf
+
+# 二进制资产：永不参与 EOL 归一（`text=auto` 靠 NUL 字节判定，这里再显式钉住）。
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.webp binary
+*.ico  binary
+*.icns binary
+*.woff binary
+*.woff2 binary
+*.ttf  binary
+*.otf  binary
+*.mp3  binary
+*.mp4  binary
+*.zip  binary

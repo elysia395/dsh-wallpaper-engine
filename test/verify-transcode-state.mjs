@@ -207,7 +207,10 @@ const results = [];
     const end = tcText.indexOf('return entry.promise;', at);
     if (at < 0 || end < 0) return tcText;
     const cleaned = tcText.slice(at, end)
-      .replace(/if \(typeof onEntry === 'function'\) onEntry\(entry\);\n/, '');
+      // `\r?\n`：这条判据吃的是**源码文本**，而文本的换行取决于 checkout 的 EOL。
+      // 仓库已用 `.gitattributes` 把检出钉成 LF，这里再容一次 CR，避免这条负对照
+      // 变成「只有 LF 检出才跑得通」的平台依赖。
+      .replace(/if \(typeof onEntry === 'function'\) onEntry\(entry\);\r?\n/, '');
     return tcText.slice(0, at) + cleaned + tcText.slice(end);
   })();
   check('在途命中分支在返回同一个 promise 前先回调 onEntry（源码形态）',

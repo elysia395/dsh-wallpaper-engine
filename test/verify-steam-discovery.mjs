@@ -287,8 +287,13 @@ await pair(
   'D3 vdf 里的 `\\\\` 要反转义成单个 `\\`（Windows 路径在 WSL/本机都靠这一层）',
   async (make) => {
     const probe = tmpRoot('vdf-esc');
-    const inFile = String.raw`D:\\SteamLibrary`;
-    const want = String.raw`D:\SteamLibrary`;
+    // 夹具刻意**不带盘符**：`wslPath()` 只翻译 `X:\…` 形，带盘符时 `D:\\x`（未反转义）
+    // 与 `D:\x`（已反转义）在 linux 上都会被翻译成同一个 `/mnt/d/x`，负对照在那里就没有
+    // 牙（ubuntu-latest 实测：正判据 owning=[["/mnt/d/SteamLibrary"]] 判红、变异体也判不红）。
+    // 换成 UNC 形后 `wslPath()` 在任何平台都是恒等，反转义是唯一变量：未反转义得到
+    // `\\srv\\share\\SteamLibrary` ≠ want。
+    const inFile = String.raw`\\srv\\share\\SteamLibrary`;
+    const want = String.raw`\srv\share\SteamLibrary`;
     writeVdf(probe, [{ path: inFile, appid: APPID }]);
     setEnv(probe);
     const owning = await make(realExists).owningLibrariesP();
