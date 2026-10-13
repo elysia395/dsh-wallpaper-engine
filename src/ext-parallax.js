@@ -135,6 +135,8 @@ function renderParallaxIsland(ctx) {
  *  `title` / `desc` 与另外两个模块同一条理由写成 getter（渲染时才取译文，见 panel-tabs 的契约）。 */
 const PARALLAX_EXTENSION_MODULE = {
   id: 'parallax',
+  // 模块级重置的分组名（issue #192）：键集住在 lib/settings-schema.js 的 RESET_GROUPS。
+  resetGroup: 'parallax',
   get title() { return weT("3D 效果"); },
   get desc() { return weT("光标移动时，壁纸与吉祥物沿屏幕中心的对称方向轻轻偏移，界面整块则与壁纸同向轻挪（视差纵深）"); },
   render: renderParallaxIsland,

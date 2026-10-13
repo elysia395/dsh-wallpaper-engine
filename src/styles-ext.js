@@ -236,6 +236,39 @@ const CSS_EXT = `  /* ── 软件渲染回退（upstream #95，运行时探测
   }
   .we-ext__module-head { display: flex; align-items: center; gap: 8px; }
   .we-ext__module-title { font-size: 0.85em; font-weight: 600; color: var(--we-ink, inherit); }
+  /* 模块级重置按钮（issue #192）↺：外观各节的节头与扩展模块头**共用同一枚**。
+     margin-left: auto 把它推到行尾（两者都是 flex 行）。
+     ⚠️ 与折叠三角同排时**必须让位**（见下面那条相邻选择器）：三角也靠 margin-left: auto
+     推右，两个 auto 在同一 flex 行里会**均分**剩余空间 —— ↺ 于是停在行中间，而"主题"
+     （那个节头没有 caret）的 ↺ 贴在最右端，同一批模块两种位置（用户 2026-10-13 报的正是
+     这个）。现在的次序是 标签 → 三角 → ↺，三角吃掉剩余空间、↺ 紧跟其后贴在最右一列。
+     ⚠️ 本段注释不许出现反引号：整套样式文本是模板字符串，一个反引号就拼断 JS。 */
+  .we-mod-reset {
+    margin-left: auto; flex: 0 0 auto;
+    width: 24px; height: 24px; padding: 0; line-height: 1;
+    display: inline-flex; align-items: center; justify-content: center;
+    font-size: 1em; cursor: pointer;
+    border-radius: 999px; corner-shape: round;
+    border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.28));
+    background: transparent; color: var(--dsw-alias-label-secondary, inherit);
+  }
+  /* 有折叠三角同排 ⇒ 由三角独占那个 auto（它已是 margin-left: auto），↺ 只留一段间距。
+     两者因此成组贴在行尾：…… [▾] [↺]。 */
+  .we-picker__section-caret + .we-mod-reset { margin-left: 8px; }
+  .we-mod-reset:hover { color: var(--dsw-alias-label-primary, inherit); }
+  /* 破坏性动作的用色（「全部重置」）：与别的按钮同形，只在描边与文字上给警示色
+     （不填底色 —— 填了在浅色主题下会压过旁边的说明文字）。 */
+  .we-picker__btn--danger {
+    border-color: color-mix(in srgb, #e5534b 55%, transparent);
+    color: #e5534b;
+  }
+  /* 重置节的标题（页签级「重置本页」/ 全局「重置」）—— 与设置分组卡同字形，但用**独立类名**：
+     它是**操作区**不是分组卡（语义更准），同时那些按"分组卡位置"取窗口的判据不会被它干扰
+     （3D 效果那一页正好有三张分组卡 + 本节排在末尾，用同名类名会挤掉「背景」）。 */
+  .we-picker__section-reset-label {
+    font-size: 0.85em; font-weight: 600; color: var(--we-ink, inherit);
+  }
+
 
   /* ── 「扩展」页签一号模块：自定义会话头像（装饰层见 src/avatar-layer.js）──
      这一层是**宿主会话 DOM 的补丁**：给三类消息行（data-chat-flow-kind = user / steering /
@@ -276,6 +309,11 @@ const CSS_EXT = `  /* ── 软件渲染回退（upstream #95，运行时探测
   .we-avatar__img { display: block; width: 100%; height: 100%; object-fit: cover; }
   .we-avatar__glyph { display: flex; align-items: center; justify-content: center; }
   .we-avatar__glyph svg { width: 62%; height: 62%; }
+  /* 连续同侧消息的后续行（issue #191 问题 2）：头像**只显示在第一条**。
+     ⚠️ 只做 visibility: hidden —— 节点与它的框都还在，缩进对齐与 flex 几何逐字节不变。
+     绝不写 display: none / 摘节点：那会让宿主 display:contents 锚点下的内容退回
+     flex: 0 1 auto，收起的思考行固有宽为 0 ⇒ 整条消息连入口一起消失（issue #154）。 */
+  .we-avatar--cont { visibility: hidden; }
   /* 面板里的预览：固定框（不随滑块长高），里头那张脸按当前大小 / 圆角现画。
      预览用的是自己的一对类名（不是 .we-avatar）—— 那些节点由装饰层建在会话里，
      面板这一份是 React 画的，两边共用的是"零件表与 URL"而不是 DOM 结构。 */
@@ -295,6 +333,42 @@ const CSS_EXT = `  /* ── 软件渲染回退（upstream #95，运行时探测
   .we-avatar-preview__glyph { display: flex; align-items: center; justify-content: center; }
   .we-avatar-preview__glyph svg { width: 62%; height: 62%; }
   .we-avatar-error { font-size: 0.82em; opacity: 0.9; color: #e5534b; }
+  /* 上传裁切弹窗（issue #191 问题 1）：居中模态 + 方形取景框。
+     取景框 overflow: hidden 是"框外不显示"的唯一手段；框内那张图由 client.js 现算的
+     几何定位（left/top 负偏移），**不用 transform** —— transform 会建合成层，
+     而这里每拖一下都改值（见 styles.js 里"不常驻合成层"那条纪律）。 */
+  .we-crop {
+    position: fixed; inset: 0; z-index: 40;
+    display: flex; align-items: center; justify-content: center;
+    background: rgba(0, 0, 0, 0.45);
+  }
+  .we-crop__card {
+    display: flex; flex-direction: column; align-items: center; gap: 10px;
+    padding: 16px; border-radius: 14px; corner-shape: round;
+    background: var(--dsw-alias-bg-layer-1, #101418);
+    border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.28));
+    max-width: min(92vw, 360px);
+  }
+  .we-crop__title { font-size: 0.95em; font-weight: 600; color: var(--we-ink, inherit); }
+  .we-crop__view {
+    position: relative; overflow: hidden; flex: 0 0 auto;
+    border-radius: 8px; corner-shape: round;
+    background: rgba(128, 128, 128, 0.16);
+    cursor: grab; touch-action: none;
+  }
+  .we-crop__img { position: absolute; display: block; pointer-events: none; user-select: none; }
+  /* 框线：纯装饰（拖拽由整格接管），压在图上但吃不到指针。 */
+  .we-crop__frame {
+    position: absolute; inset: 0; pointer-events: none;
+    border: 2px solid rgba(255, 255, 255, 0.85);
+    border-radius: 8px; corner-shape: round;
+    box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.35);
+  }
+  .we-crop__actions { display: flex; gap: 8px; align-self: stretch; justify-content: flex-end; }
+  .we-picker__btn--primary {
+    border-color: color-mix(in srgb, var(--we-accent, #4f8cff) 60%, transparent);
+    color: var(--we-accent, #4f8cff);
+  }
   /* 自定义立绘那一格（「系统」页签 · 聊天吉祥物）：与形态卡片同一个画框口径 ——
      固定尺寸的透明底小舞台，图各自按自己的宽高比 contain 进去。未导入时画一句
      「未导入」占位（虚线框），导入后画的是**用户那张图**（与主页面那只同一份盒）。 */

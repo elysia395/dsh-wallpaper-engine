@@ -1040,6 +1040,10 @@ section('⑧ 面板渲染回归（配色区在总开关打开时必须渲染得�
   // 做法：把面板会用到的那几个 prelude 模块的**全部导出**映成全局 —— 逐个列举常量会漏
   // （漏一个就是 "X is not defined" 的假红，而不是被判据抓到）。
   const colorRoles = await import(pathToFileURL(join(root, 'src', 'font', 'color-roles.js')).href);
+  // 域模块（-appearance）里的 `moduleResetButton(...)` 是 panel-tabs.js 工厂作用域的自由名字
+  // （搬出后仍靠打包期同作用域）⇒ 按文件 import 时必须先挂上真实现，否则 ⑧ 以
+  // "moduleResetButton is not defined" 的形式假红（与 sectionHead / glass-panel 同一条理由）。
+  if (typeof panelMod.moduleResetButton === "function") globalThis.moduleResetButton = panelMod.moduleResetButton;
   const preludeMods = [
     colorRoles,
     await import(pathToFileURL(join(root, 'src', 'font', 'typography.js')).href),
@@ -1057,6 +1061,8 @@ section('⑧ 面板渲染回归（配色区在总开关打开时必须渲染得�
     // `sectionHead`（搬走了），而就算找到、补成 noop 也会让**每个节头变成 `null`**：
     // 本段判的是"渲染得出"，节头全丢照样"渲染得出" ⇒ 判据静默空转。
     await import(pathToFileURL(join(root, 'src', 'section-head.js')).href),
+    // 同理（issue #192）：模块级重置按钮也是跨模块共用构件，按文件 import 时是裸标识符。
+    await import(pathToFileURL(join(root, 'src', 'module-reset.js')).href),
     // 面板还会调 `filterUsableSystemFonts(...)`（本机字体那道"本浏览器能否匹配"的筛，同一条理由）。
     await import(pathToFileURL(join(root, 'src', 'system-fonts.js')).href),
     // 刀4：panel-tabs 的 5 个域模块（节渲染器）—— 与上面 glass-panel / section-head 同一条理由：

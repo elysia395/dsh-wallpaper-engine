@@ -49,6 +49,11 @@ const AVATAR_ROW_SELECTOR = '[data-chat-flow-kind="user"], [data-chat-flow-kind=
 const AVATAR_ROW_ATTR = 'data-we-avatar-row';
 const AVATAR_NODE_CLASS = 'we-avatar';
 const AVATAR_NODE_ATTR = 'data-we-avatar-node';
+/**
+ * 「连续同侧消息的后续行」标记（issue #191 问题 2）：加在**头像节点**上。
+ * CSS 里只做 `visibility: hidden` —— 节点与它的框都还在，缩进对齐与 flex 几何逐字节不变。
+ */
+const AVATAR_CONT_CLASS = 'we-avatar--cont';
 /** 开关属性与两个观感变量（styles.js 的「自定义会话头像」段读它们）。 */
 const AVATAR_ATTR = 'data-we-avatar';
 const AVATAR_VAR_SIZE = '--we-avatar-size';
@@ -86,6 +91,8 @@ const AVATAR_GLYPH_VIEW_BOX = '0 0 16 16';
 /** 消息行的观察者与开关（模块级单例：这一层只有一份）。 */
 let avatarObserver = null;
 let avatarActive = false;
+/** 分组重算的 rAF 句柄（0 = 没有挂起的一次；见 avatarScheduleGrouping）。 */
+let avatarGroupRaf = 0;
 
 /* `weBody()` / `weClampTo()` 的唯一实现见 src/we-base.js（内联后同作用域）。 */
 
@@ -203,9 +210,53 @@ function avatarDecorateRow(row) {
 /** 扫一遍全文档，把还没补过的消息行补上（观察者只管新插入的，这一条管"已经在了的"）。 */
 function avatarSweep() {
   if (typeof document.querySelectorAll !== 'function') return;
-  let rows;
+  let rows = [];
   try { rows = document.querySelectorAll(AVATAR_ROW_SELECTOR); } catch { return; }
   for (const row of rows) avatarDecorateRow(row);
+  // 扫完立刻重算分组：`sweep` 本来就是一次全文档扫，分组复用同一次遍历的开销类别。
+  avatarApplyGrouping();
+}
+
+/**
+ * 分组：**连续的同侧消息只在第一条前面显示头像**（issue #191 问题 2）—— 主流聊天软件的
+ * 形态（微信 / Discord / Telegram 同款），免得"连着十条助手回复贴着十张一样的脸"。
+ *
+ * ⚠️ 做法是给后续同侧的**头像节点加一个 `--cont` 修饰类**（CSS 里 `visibility: hidden`），
+ * **绝不摘掉节点**：节点在、框还占着 ⇒ 缩进对齐与 flex 几何**逐字节不变**。
+ * 那正是 issue #154 那个坑的规避方式 —— 摘掉头像节点会让宿主那层 `display: contents`
+ * 锚点下的内容退回 `flex: 0 1 auto`，收起的思考行固有宽为 0 ⇒ 整条消息连入口一起消失
+ *（见 src/styles.js 头像段的血泪注释与 test/verify-scene-live.mjs 的假 DOM 判据）。
+ *
+ * 顺序判定：按**文档序**走一遍消息行，记住上一条的 side；同侧且不是第一条 ⇒ 标记为续行。
+ * 不同类型之间（助手 → 用户）自然断开。只认三种消息行（`AVATAR_FLOW_SIDES`）。
+ */
+function avatarApplyGrouping() {
+  if (!avatarActive || typeof document.querySelectorAll !== 'function') return;
+  let rows = [];
+  try { rows = document.querySelectorAll(AVATAR_ROW_SELECTOR); } catch { return; }
+  let prev = '';
+  for (const row of rows) {
+    const side = AVATAR_FLOW_SIDES[row.getAttribute('data-chat-flow-kind')];
+    if (!side) continue;
+    const node = row.firstElementChild;
+    if (node && node.classList && node.classList.contains(AVATAR_NODE_CLASS)) {
+      try { node.classList.toggle(AVATAR_CONT_CLASS, side === prev); } catch { /* ignore */ }
+    }
+    prev = side;
+  }
+}
+
+/**
+ * 分组重算的**限频**入口：流式输出时消息行会连续插入，每插一行就全文档扫一次是
+ * O(帧 × 行数)。合并到一帧一次（没有 rAF 的环境退化为同步 —— 验证沙箱走这条）。
+ */
+function avatarScheduleGrouping() {
+  if (avatarGroupRaf) return;
+  if (typeof requestAnimationFrame !== 'function') { avatarApplyGrouping(); return; }
+  avatarGroupRaf = requestAnimationFrame(() => {
+    avatarGroupRaf = 0;
+    avatarApplyGrouping();
+  });
 }
 
 /**
@@ -217,20 +268,26 @@ function avatarSweep() {
  */
 function avatarOnMutations(records) {
   if (!avatarActive) return;
+  let decorated = false;
   for (const r of records) {
     const added = r.addedNodes;
     if (!added || !added.length) continue;
     for (const n of added) {
       if (!n || n.nodeType !== 1) continue;
       try {
-        if (n.matches && n.matches(AVATAR_ROW_SELECTOR)) { avatarDecorateRow(n); continue; }
+        if (n.matches && n.matches(AVATAR_ROW_SELECTOR)) {
+          if (avatarDecorateRow(n)) decorated = true;
+          continue;
+        }
         if (n.closest && n.closest('[' + AVATAR_ROW_ATTR + ']')) continue; // 已在装饰过的行里
       } catch { continue; }
       let inner;
       try { inner = n.querySelectorAll ? n.querySelectorAll(AVATAR_ROW_SELECTOR) : []; } catch { inner = []; }
-      for (const row of inner) avatarDecorateRow(row);
+      for (const row of inner) { if (avatarDecorateRow(row)) decorated = true; }
     }
   }
+  // 补了新行 ⇒ 分组可能变了（新行算不算"续行"取决于它前面那条）⇒ 合并到一帧重算一次。
+  if (decorated) avatarScheduleGrouping();
 }
 
 function avatarStop() {
@@ -238,6 +295,11 @@ function avatarStop() {
   if (avatarObserver) {
     try { avatarObserver.disconnect(); } catch { /* ignore */ }
     avatarObserver = null;
+  }
+  // 挂起的分组重算要取消：它不属于 fiber，留着会在卸载后再扫一次 DOM。
+  if (avatarGroupRaf) {
+    try { if (typeof cancelAnimationFrame === 'function') cancelAnimationFrame(avatarGroupRaf); } catch { /* ignore */ }
+    avatarGroupRaf = 0;
   }
   if (typeof document === 'undefined' || !document) return;
   const body = weBody();

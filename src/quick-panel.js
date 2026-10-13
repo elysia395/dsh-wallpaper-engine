@@ -475,6 +475,9 @@
     // 渲染器保持纯读：状态在组件里、写在 handler 里，这里只装配进 ctx。
     return renderAppearanceTab(sidebarRenderCtx({
       setSetting, setTransient, sel,
+      // 模块级重置（issue #192）：本档也画外观那六个节头 ⇒ ↺ 也要能用
+      //（同一个模块级处理器，与设置页那份同源）。
+      onResetModule,
       onAccent, onBlur, onBorder, onChatGlassFidelity, onExtraGlassSelectors, onGlassAlpha, onGlassColor, onGlassFidelity, onLeftSidebarGlass, onTitlebarGlass, onSidebarGlass, onSidebarFullClear, onToggleThemeFollow,
       // 侧边栏圆角（外观 → 侧边栏圆角）：侧栏档也画这一节 ⇒ 处理器走真值（不是占位器）
       onSidebarAllCorners, onSidebarCornerRadius, onSidebarCornerSquare,
@@ -858,6 +861,8 @@
     );
   }
 
+  // `qpTypes` / `QP_TAB_KEY` / `qpTypeLabel` 是文件内自用（PR #202 的底座落后于本地线
+  // 的导出面清理，顺手把它们留在了导出里）⇒ 按本仓口径收回，声明本体不动。
   export {
     QP_TABS,
     QP_CTX_SETTINGS_ONLY,

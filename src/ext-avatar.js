@@ -116,6 +116,114 @@ function avatarPreviewRound(sel) {
 }
 
 /**
+ * 上传裁切弹窗（issue #191 问题 1）：居中模态 + 方形取景框。
+ *
+ * 交互：**拖拽平移** + **滚轮 / 滑块缩放**；框里那张图按 `zoom = 1 短边铺满` 起算
+ * （再小就会露白），平移的边界是"图不能露出空白"。
+ * 几何全在 client.js 的 `avatarCropGeometry`（唯一实现）—— 这一侧只读它算出的绘制值，
+ * 不自己再算一遍（两处算法必然漂）。
+ */
+function renderAvatarCropModal(ctx) {
+  const { sel, onAvatarCropZoom, onAvatarCropDrag, onAvatarCropConfirm, onAvatarCropCancel } = ctx;
+  if (!sel.avatarCropSide) return null;
+  // 几何由 ctx 传进来（client.js 现算）：渲染器不引 avatarCropGeometry 这个裸标识符 ——
+  // 它是"只读 ctx"契约的一部分（见文件头不变量）。
+  const geo = ctx.avatarCropGeo || { dw: 0, dh: 0, dx: 0, dy: 0 };
+  const view = ctx.avatarCropView || 260;
+  return React.createElement("div", { className: "we-crop" },
+    React.createElement("div", { className: "we-crop__card" },
+      React.createElement("div", { className: "we-crop__title" }, weT("裁切头像")),
+      React.createElement("span", { className: "we-picker__hint" },
+        weT("拖动调整位置、滚轮或滑块缩放；框内这一块会作为头像（方形）。")),
+      React.createElement("div", {
+        className: "we-crop__view",
+        style: { width: view + "px", height: view + "px" },
+        onPointerDown: (e) => {
+          const startX = e.clientX;
+          const startY = e.clientY;
+          const move = (ev) => onAvatarCropDrag(ev.clientX - startX, ev.clientY - startY);
+          const up = () => {
+            try { window.removeEventListener("pointermove", move); window.removeEventListener("pointerup", up); } catch { /* ignore */ }
+          };
+          try {
+            window.addEventListener("pointermove", move);
+            window.addEventListener("pointerup", up);
+          } catch { /* ignore */ }
+          if (e.preventDefault) e.preventDefault();
+        },
+        onWheel: (e) => {
+          const dir = (e.deltaY || 0) > 0 ? -0.1 : 0.1;
+          onAvatarCropZoom((Number(sel.avatarCropZoom) || 1) + dir, true);
+          if (e.preventDefault) e.preventDefault();
+        },
+      },
+        React.createElement("img", {
+          className: "we-crop__img",
+          src: sel.avatarCropUrl,
+          alt: "",
+          draggable: false,
+          style: {
+            width: geo.dw + "px",
+            height: geo.dh + "px",
+            left: (view - geo.dw) / 2 + geo.dx + "px",
+            top: (view - geo.dh) / 2 + geo.dy + "px",
+          },
+        }),
+        React.createElement("span", { className: "we-crop__frame", "aria-hidden": "true" }),
+      ),
+      SliderRow(weT("缩放"), 100, 400, 5, Math.round((Number(sel.avatarCropZoom) || 1) * 100),
+        (v, live) => onAvatarCropZoom(v / 100, live), "%", "avatar-crop-zoom"),
+      React.createElement("div", { className: "we-crop__actions" },
+        React.createElement("button", {
+          className: "we-picker__btn", type: "button", onClick: onAvatarCropCancel,
+        }, weT("取消")),
+        React.createElement("button", {
+          className: "we-picker__btn we-picker__btn--primary", type: "button",
+          disabled: sel.avatarBusy === sel.avatarCropSide,
+          onClick: onAvatarCropConfirm,
+        }, sel.avatarBusy === sel.avatarCropSide ? weT("导入中…") : weT("确认并导入")),
+      ),
+    ),
+  );
+}
+
+/**
+ * 超限提示行（#185 后续，2026-10-13）：原图过了两道闸就被拦在这里 ——
+ * 一句话说清**哪一条超了、实测多少**，再给一枚「自动压缩后导入」作为出路。
+ *
+ * 为什么不是直接拒绝：用户口径是"提示无法导入**或**选择启用自动压缩"。只有拒绝没有出路，
+ * 用户就得自己去找工具压图；只有压缩不问一声，用户又不知道原图被处理过 —— 两者都要给。
+ *
+ * 文案分三支：只超体积 / 只超边长 / 两者都超。压缩后仍可能装不下的情况（超大图压到 1024
+ * 仍 > 4 MiB）在提示里预先说明，免得压完发现白压。
+ */
+function avatarOverflowRow(sel, acts) {
+  const info = sel.avatarOverflow;
+  if (!info) return null;
+  // ⚠️ 三个占位符**必须在这里就插值**：`weT` 只在收到第二个实参时才替换，
+  // 漏了它屏上就会原样显示 "{w}×{h}"（判据只对账占位符集合，看不出这个）。
+  const dims = { w: info.width, h: info.height, mb: humanMb(info.bytes) };
+  const why = info.overBytes && info.overEdge
+    ? weT("原图 {w}×{h}、{mb}，同时超过 1024×1024 与 4 MB 上限", dims)
+    : info.overEdge
+      ? weT("原图 {w}×{h}，超过 1024×1024 上限", dims)
+      : weT("原图 {mb}，超过 4 MB 上限", dims);
+  const busy = sel.avatarCompressing === true;
+  return React.createElement("div", { className: "we-picker__ctl we-picker__ctl--wrap we-avatar-overflow", key: "avatar-overflow" },
+    React.createElement("span", { className: "we-picker__hint we-avatar-error" },
+      weT("这张图无法直接导入：{why}。", { why: why })),
+    React.createElement("span", { className: "we-picker__hint" },
+      weT("可以点下面的按钮自动压缩后再导入：等比缩到 1024×1024 以内、优先 PNG 无损编码（只有 PNG 装不下才转视觉无损 WebP），压缩完仍然让你先裁切、可取消。")),
+    React.createElement("button", {
+      className: "we-picker__btn we-picker__btn--primary",
+      type: "button",
+      disabled: busy,
+      onClick: () => acts.onAutoCompress(),
+    }, busy ? weT("压缩中…") : weT("自动压缩后导入")),
+  );
+}
+
+/**
  * 扩展岛：总开关 → 两方各自的头像行 → 大小 → 圆角强度。
  * @param {{sel:object}} ctx 见文件头契约
  */
@@ -126,7 +234,7 @@ function renderAvatarIsland(ctx) {
     switchRow(weT("启用自定义会话头像"), on, onAvatarEnabled,
       { key: "avatar-on", hint: weT("给会话双方配上头像，消息像好友聊天一样左右分列") }),
     React.createElement("span", { className: "we-picker__hint", key: "avatar-what" },
-      weT("开启后：你的消息靠右侧、带你的头像；助手的消息靠左侧、带助手的头像。图片只保存在本机（导入时会缩到 512px 以内），没导入就用内置的默认头像。关掉这个开关，会话立刻恢复原样。")),
+      weT("开启后：你的消息靠右侧、带你的头像；助手的消息靠左侧、带助手的头像。图片只保存在本机（导入时会缩到 1024px 以内）；JPG / PNG / WebP 直接导入，SVG / GIF / BMP / AVIF 会在导入时转成位图。超过 1024×1024 或 4 MB 的图会被拦下，可选择自动压缩后导入。没导入就用内置的默认头像。关掉这个开关，会话立刻恢复原样。")),
     on && AVATAR_SIDE_ROWS.map((side) => avatarSideRow(side, sel, {
       onPick: onAvatarPick,
       onClear: onAvatarClear,
@@ -134,8 +242,11 @@ function renderAvatarIsland(ctx) {
     on && SliderRow(weT("头像大小"), AVATAR_SIZE_MIN, AVATAR_SIZE_MAX, 1, sel.avatarSize, onAvatarSize, "px", "avatar-size"),
     on && SliderRow(weT("圆角强度"), AVATAR_RADIUS_MIN, AVATAR_RADIUS_MAX, 1, sel.avatarRadius, onAvatarRadius, "%", "avatar-radius",
       { tooltip: weT("100% = 正圆（默认），50% = 大圆角方块，0% = 直角方形") }),
+    on && avatarOverflowRow(sel, { onAutoCompress: ctx.onAvatarAutoCompress }),
     on && sel.avatarError
       && React.createElement("div", { className: "we-picker__hint we-avatar-error", key: "avatar-err" }, sel.avatarError),
+    // 裁切弹窗（issue #191 问题 1）：只在"已选好图、还没确认"时画。
+    renderAvatarCropModal(ctx),
   );
 }
 
@@ -143,9 +254,14 @@ function renderAvatarIsland(ctx) {
  *  `title` / `desc` 与别的模块同一条理由写成 getter（见 src/panel-tabs.js 的注册表契约）。 */
 const AVATAR_EXTENSION_MODULE = {
   id: 'avatar',
+  // 模块级重置的分组名（issue #192）：键集住在 lib/settings-schema.js 的 RESET_GROUPS，
+  // 这一侧只报"我是哪一组" —— 键表不在渲染器里手抄第二份。
+  resetGroup: 'avatar',
   get title() { return weT("自定义会话头像"); },
   get desc() { return weT("给会话双方各配一张头像，消息像好友聊天一样左右分列（默认关）"); },
   render: renderAvatarIsland,
 };
 
+// `renderAvatarCropModal` 只在文件内被 `renderAvatarIsland` 调用（PR #202 顺带把它导了
+// 出来，本地线没有任何跨文件消费者）⇒ 按本仓导出面口径不导出。
 export { AVATAR_EXTENSION_MODULE, renderAvatarIsland };
