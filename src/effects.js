@@ -147,6 +147,62 @@ function weAccentInk(hex) {
   return lum > 0.45 ? "#0f1115" : "#ffffff";
 }
 
+// ── #164：原生 <select> 弹层的行配对（不透明底 × 与底成对比的墨）───────────────
+// Chromium 的原生下拉弹层是**独立文档**：画布只在 select 自身背景不透明时才取它的
+// 底色，否则落回默认浅色画布；而选项文字**继承** select 的 color。本插件把宿主底色
+// 改成玻璃、又允许用户把 `--dsw-alias-label-primary`（"正文"角色）改成任意色 ⇒
+// 弹层会落成「浅字浅底」（深色主题默认浅字）或「白字白底」（浅色主题 + 用户设浅墨）。
+// 弹层里画不出玻璃（独立文档、无壁纸透出），所以只能让每行 option **自带**一对
+// 不透明底 + 对比墨。这对值必须**按有效墨色派生**：只随主题翻转救不了自定义浅墨那一档
+// —— 浅色主题下主题默认的浅底正好就是白字白底。
+//
+// 口径：行底从该墨色的**自然侧**起步 —— 墨偏暗 ⇒ 浅行底、墨偏亮 ⇒ 深行底 —— 再向
+// 纯黑 / 纯白二分钳制到与墨色 ≥4.6:1（0.1 与 weClampSurfaceColor 同源的舍入余量，
+// 因为结果要四舍五入回 hex）。起点就是主题默认面板色（浅 #ffffff / 深 #1e1f26，
+// **与 styles.js 的 --we-panel-color 两处数字必须同步改**）⇒ 用户没自定义墨色时
+// 逐位还原现状（浅主题 #ffffff 配宿主深墨、深主题 #1e1f26 配宿主浅墨，两者本就在
+// 13:1 以上，钳制步长为 0）。
+//
+// 分界取 0.1791：白 / 黑两臂的对比度在相对亮度 0.1791 处相等（各 4.58:1），所以
+// "墨亮于它走深底、暗于它走浅底"这个选择**保证至少一臂可达**。两臂都不足 4.6 的
+// 墨色存在（相对亮度落在 0.1783–0.1800 的窄带里，两臂上限都只有 4.58），此时退回
+// **对比度更高的那一臂的纯黑 / 纯白**：达不到红线但仍然是最优解，且不会因为"钳制
+// 无解"而把行底留成与墨同色。纯函数、无 DOM：verify-readability 从产物里抽出来复算网格。
+function wePopupRowPair(inkHex) {
+  const m = /^#?([0-9a-fA-F]{6})$/.exec(String(inkHex || ""));
+  if (!m) return null;
+  const s2l = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+  const lum = (c) => 0.2126 * s2l(c[0]) + 0.7152 * s2l(c[1]) + 0.0722 * s2l(c[2]);
+  const contrast = (a, b) => (a > b ? (a + 0.05) / (b + 0.05) : (b + 0.05) / (a + 0.05));
+  const toHex = (c) => "#" + c.map((v) => Math.round(v).toString(16).padStart(2, "0")).join("");
+  const ink = "#" + m[1].toLowerCase();
+  const inkLum = lum([0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16)));
+  const PIVOT = 0.1791;
+  const arms = inkLum > PIVOT
+    ? [[[0x1e, 0x1f, 0x26], [0, 0, 0]], [[0xff, 0xff, 0xff], [0xff, 0xff, 0xff]]]
+    : [[[0xff, 0xff, 0xff], [0xff, 0xff, 0xff]], [[0x1e, 0x1f, 0x26], [0, 0, 0]]];
+  let best = null;
+  for (const [base, extreme] of arms) {
+    const baseLum = lum(base);
+    if (contrast(baseLum, inkLum) >= 4.6) return { bg: toHex(base), ink };
+    if (contrast(lum(extreme), inkLum) < 4.6) {
+      if (!best || contrast(lum(extreme), inkLum) > best.c) {
+        best = { c: contrast(lum(extreme), inkLum), bg: toHex(extreme) };
+      }
+      continue;
+    }
+    let lo = 0;  // 不合格端
+    let hi = 1;  // 合格端
+    for (let i = 0; i < 12; i++) {
+      const t = (lo + hi) / 2;
+      const c = base.map((v, j) => v * (1 - t) + extreme[j] * t);
+      if (contrast(lum(c), inkLum) >= 4.6) hi = t; else lo = t;
+    }
+    return { bg: toHex(base.map((v, j) => v * (1 - hi) + extreme[j] * hi)), ink };
+  }
+  return { bg: best.bg, ink };
+}
+
 // ── 染色地板：可读性底色 = 玻璃色经亮度钳制（色相跟随用户） ──────────────────
 // 地板色是**玻璃色经亮度钳制后的版本** —— 深色主题过亮就压暗、浅色主题过暗就提亮，
 // 色相交给用户；对比度判据与 #82 同一条网格（正文 vs 表面合成到最坏背衬 ≥4.5:1）。
@@ -403,6 +459,26 @@ function applyEffects(opts) {
   const glassTintDark = glassColorOf(selection, "dark");
   s.setProperty("--we-surface-tint-light", weClampSurfaceColor(glassTintLight, "light", glassFidelity));
   s.setProperty("--we-surface-tint-dark", weClampSurfaceColor(glassTintDark, "dark", glassFidelity));
+  // - #164：原生 <select> 弹层的行配对。**只在用户自定义了「正文」墨色时写**：
+  //   没自定义时样式表的缺省就是主题默认配对（逐位还原现状），不写比写更不容易漂。
+  //   两档同时写、由样式表按主题挑 —— 与上面的 --we-surface-tint-* 同法，省掉一个
+  //   主题观察者（宿主翻 data-ds-dark-theme 不会调我们，见 armFadeBgThemeWatch 的注释）。
+  //   两边都不成立时**摘掉**而不是写空串：var(--x, fallback) 要能落回缺省。
+  //   门控跟 theme layer 同一把开关（fontCustom）—— 关掉时颜色层不接管，墨色仍是
+  //   宿主原生值，此时派生反而是多余的一层。
+  const popupInk = (selection.fontCustom && selection.themeColors && selection.themeColors.primary)
+    ? selection.themeColors.primary : null;
+  for (const theme of ["light", "dark"]) {
+    const suffix = theme === "dark" ? "-dark" : "-light";
+    const pair = wePopupRowPair(popupInk ? popupInk[theme] : "");
+    if (pair) {
+      s.setProperty("--we-popup-row-bg" + suffix, pair.bg);
+      s.setProperty("--we-popup-row-ink" + suffix, pair.ink);
+    } else {
+      s.removeProperty("--we-popup-row-bg" + suffix);
+      s.removeProperty("--we-popup-row-ink" + suffix);
+    }
+  }
   // RGB 三元组形式：给 rgba() 槽位用（消息气泡 / 输入框的白釉染色）。
   s.setProperty("--we-surface-tint-rgb-light", toRgbTriple(weClampSurfaceColor(glassTintLight, "light", glassFidelity)));
   s.setProperty("--we-surface-tint-rgb-dark", toRgbTriple(weClampSurfaceColor(glassTintDark, "dark", glassFidelity)));

@@ -578,6 +578,16 @@ const CSS = `
     --we-follow-tint: var(--we-surface-tint-light, #ffffff);
     --we-panel-sheen-a: 0.10; --we-panel-sheen-b: 0.03; --we-panel-sheen-c: 0.05;
     --we-panel-color: var(--dsw-static-neutral-bluish-00, #ffffff);
+    /* ── #164：原生 select 弹层的行配对（不透明底 + 与底成对比的墨）────────────
+       Chromium 的弹层是一份**独立文档**：画布只在 select 自身背景**不透明**时才取
+       它的底色，否则落回默认浅色画布；而选项文字**继承** select 的墨色 —— 我们的
+       select 是透明玻璃底、墨色又可以是用户自定义的任意色，于是"浅字浅底"。这两条
+       缺省 = 主题默认配对（面板底色 + 宿主正文墨），未自定义墨色时逐位还原现状。
+       用户把"正文"角色改成浅色时，effects.js 按对比度重算这一对并覆盖
+       --we-popup-row-bg-light / -ink-light（深色档同理），两档都写、由这里按主题挑
+       —— 与 --we-surface-tint-light / -dark 同法，省掉一个主题观察者。 */
+    --we-popup-row-bg: var(--we-popup-row-bg-light, var(--we-panel-color, #ffffff));
+    --we-popup-row-ink: var(--we-popup-row-ink-light, var(--dsw-alias-label-primary, #1f2328));
   }
   body[data-ds-dark-theme] {
     --we-readability-floor-base: ${READABILITY_FLOOR_DARK};
@@ -588,6 +598,9 @@ const CSS = `
     --we-follow-tint: var(--we-surface-tint-dark, #0d1524);
     --we-panel-sheen-a: 0.07; --we-panel-sheen-b: 0.02; --we-panel-sheen-c: 0.03;
     --we-panel-color: var(--dsw-static-neutral-bluish-875, #1e1f26);
+    /* #164 深色档：见浅色块的说明。缺省墨用深色主题惯用的浅字，未自定义时逐位还原现状。 */
+    --we-popup-row-bg: var(--we-popup-row-bg-dark, var(--we-panel-color, #1e1f26));
+    --we-popup-row-ink: var(--we-popup-row-ink-dark, var(--dsw-alias-label-primary, #e6e8eb));
   }
 
   /* ── iOS liquid glass ──────────────────────────────────────────────────────
@@ -2024,17 +2037,32 @@ const CSS = `
   }
   .we-picker select:hover { background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.12)); }
   .we-picker select:disabled { opacity: 0.45; cursor: default; }
-  /* ── 原生下拉的弹层选项行必须显式上不透明底 + 玻璃墨色（用户报告：下拉全是「底色与
-     字同色」）──Chromium 的弹层是一份独立文档：画布只在 select 自身背景**不透明**时才取
-     它的底色，而我们的 select 是透明玻璃底 ⇒ 弹层落到默认**浅色**画布；选项文字却继承
-     select 的玻璃墨色（深色主题=浅字）⇒ 浅字落浅底，整列不可读。修法 = 给 option 行
-     显式上 --we-panel-color（不透明面板底，随主题翻转）+ --we-ink；Chromium 弹层按
-     option 的**已解析**计算样式逐行绘制（var 在页面内已解析，弹层文档照抄结果），明暗
-     两主题都对。作用域同时钉类名（.we-picker__select —— 侧栏/抽屉的 select 不在
+  /* ── #164：原生下拉的弹层选项行必须显式上「不透明底 + 与底成对比的墨」（用户报告：
+     下拉全是「底色与字同色」）──Chromium 的弹层是一份独立文档：画布只在 select 自身
+     背景**不透明**时才取它的底色，而我们的 select 是透明玻璃底 ⇒ 弹层落到默认**浅色**
+     画布；选项文字却继承 select 的墨色 ⇒ 深色主题（浅字）落浅底、用户把"正文"角色设成
+     浅色时同样白字白底。Chromium 弹层按 option 的**已解析**计算样式逐行绘制（var 在
+     页面内已解析，弹层文档照抄结果），所以修法就是在 option 上钉死这一对。
+     ⚠️ 这一条是**全局**的（不止我们的 picker）：宿主其他原生下拉的弹层是同一个洞，
+     行色统一成「主题默认配对」——未自定义墨色时应无视觉差异。刻意用元素选择器而不挂
+     宿主 CSS-module 哈希类名（本仓红线），宿主升级后自动续效。 */
+  select option {
+    background-color: var(--we-popup-row-bg, #ffffff);
+    color: var(--we-popup-row-ink, #1f2328);
+  }
+  /* 选中行单钉：UA 用 Highlight 蓝画 option:checked，不吃上面那一对；蓝底配用户自定义
+     的墨色可能不达标。改用 accent 填充 + accent 反色墨（weAccentInk 已按亮度选边），
+     选中态仍表现为**另一种底色**（可辨识），且与全局主按钮同一套色语言。 */
+  select option:checked {
+    background-color: var(--we-accent, #4f8cff);
+    color: var(--we-accent-ink, #ffffff);
+  }
+  /* 自家 picker 子树上再钉一遍（同一对令牌）：这条特异性更高，宿主若有以类名压 option
+     的规则也盖得过去。作用域同时钉类名（.we-picker__select —— 侧栏/抽屉的 select 不在
      .we-picker 子树内，靠类名够到）与后代选择器（设置窗内一切 select，含属性面板）。 */
   .we-picker select option, .we-picker__select option {
-    background-color: var(--we-panel-color, #ffffff);
-    color: var(--we-ink, #1f2328);
+    background-color: var(--we-popup-row-bg, #ffffff);
+    color: var(--we-popup-row-ink, #1f2328);
   }
   .we-picker__hint { font-size: 0.8em; color: var(--we-ink-3, rgba(128, 128, 128, 0.75)); }
   /* 「当前壁纸实时帧」微缩预览：就是切换途中 / live 首帧前显示的那张静帧。

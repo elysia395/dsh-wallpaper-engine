@@ -897,37 +897,111 @@ function main() {
       && unpairOk(SRC));
   }
 
-  // ── F8：原生 select 弹层的选项行必须显式不透明底 + 玻璃墨色（用户报告：下拉底色与字同色）──
+  // ── F8 (#164)：原生 select 弹层的选项行必须显式「不透明底 + 对比墨」──────────────────
   // Chromium 的弹层是独立文档：画布只在 select 自身背景不透明时才取它的底色，而我们的
-  // select 是透明玻璃底 ⇒ 弹层落到默认浅色画布；选项文字继承玻璃墨色（深色主题=浅字）
-  // ⇒ 浅字浅底整列不可读。修法 = option 行显式 --we-panel-color + --we-ink（Chromium
-  // 弹层按 option 的已解析计算样式逐行画）。判据钉住：这条 option 规则必须存在、必须
-  // 同时声明两个 var、且底色必须是 --we-panel-color（不透明面板底）——防止将来有人把
-  // 底色改回透明/半透明玻璃形态而弹层再次不可读。
+  // select 是透明玻璃底 ⇒ 弹层落到默认浅色画布；选项文字却继承 select 的墨色 ⇒ 深色主题
+  // （浅字）与「用户把"正文"角色设成浅色」两档都变成浅字浅底。#164 的修法是把这一对换成
+  // 按**有效墨色**派生的 --we-popup-row-bg / --we-popup-row-ink。判据钉三件事：
+  //   ① **全局** select option 规则在位且读的就是这一对（防止退回半透明玻璃形态）；
+  //   ② 选中行单钉（UA 的 Highlight 蓝不吃这一对）；
+  //   ③ 自家 .we-picker 子树那条也在（特异性更高，宿主若有类名压 option 的规则也盖得过）。
   {
     // header 可能带着规则前的整段注释（rulesWithProp 取的是"上一个 } 到 { 之间"的原文）
     // ⇒ 先剥注释再匹配选择器，避免"注释里出现同名选择器"与"注释吃掉行首锚"两种假判。
-    const optRules = rulesWithProp('background-color')
-      .map((r) => ({ header: r.header.replace(/\/\*[^]*?\*\//g, ' ').trim(), body: r.body }))
-      .filter((r) => /(^|,)\s*(\.we-picker select|\.we-picker__select) option/.test(r.header));
-    const ok = (r) => r.body.includes('background-color: var(--we-panel-color') && r.body.includes('color: var(--we-ink');
-    check('F8 原生下拉弹层选项行：option 规则在位且为不透明面板底 + 玻璃墨色（双作用域：.we-picker select 与 .we-picker__select）',
-      optRules.length >= 1 && optRules.every(ok),
-      optRules.length + ' 条 option 规则' + (optRules.length ? ' · 作用域 ' + optRules.map((r) => r.header.replace(/\s+/g, ' ').trim().slice(0, 60)).join(' | ') : ''));
-    // 负对照 ①：底色改回透明玻璃形态（color-mix 半透明）会被同一条判据判出；
-    // 负对照 ②：丢掉墨色声明也会被判出。
-    const bad = optRules[0] ? {
-      header: optRules[0].header,
-      body: optRules[0].body.replace(/background-color:\s*var\(--we-panel-color[^;]*;/, 'background-color: color-mix(in srgb, var(--we-sidebar-color) 20%, transparent);'),
+    const norm = (r) => ({
+      header: r.header.replace(/\/\*[^]*?\*\//g, ' ').replace(/\s+/g, ' ').trim(),
+      body: r.body,
+    });
+    const optRules = rulesWithProp('background-color').map(norm);
+    const globalRules = optRules.filter((r) => r.header === 'select option');
+    const checkedRules = optRules.filter((r) => r.header === 'select option:checked');
+    const pickerRules = optRules.filter((r) => /(^|,)\s*(\.we-picker select|\.we-picker__select) option$/.test(r.header));
+    const pairOk = (r) => /background-color:\s*var\(--we-popup-row-bg/.test(r.body)
+      && /color:\s*var\(--we-popup-row-ink/.test(r.body);
+    // 选中行走的是 accent 那一套（见 styles.js 里那条的说明），不是行配对 ⇒ 单独一条断言。
+    const accentOk = (r) => /background-color:\s*var\(--we-accent,/.test(r.body)
+      && /color:\s*var\(--we-accent-ink,/.test(r.body);
+    const f8Ok = (g, c, p) => g.length >= 1 && g.every(pairOk)
+      && c.length >= 1 && c.every(accentOk) && p.length >= 1 && p.every(pairOk);
+    check('F8 原生下拉弹层选项行：全局 + 自家 picker 两条读 --we-popup-row-bg / -ink，选中行单钉 accent',
+      f8Ok(globalRules, checkedRules, pickerRules),
+      'global=' + globalRules.length + ' · checked=' + checkedRules.length + ' · picker=' + pickerRules.length
+      + ' · 选择器 ' + optRules.filter((r) => /option/.test(r.header)).map((r) => r.header.slice(0, 48)).join(' | '));
+    const g0 = globalRules[0];
+    const badOpaque = g0 ? {
+      header: g0.header,
+      body: g0.body.replace(/background-color:\s*var\(--we-popup-row-bg[^;]*;/,
+        'background-color: color-mix(in srgb, var(--we-sidebar-color) 20%, transparent);'),
     } : null;
-    const badNoInk = optRules[0] ? {
-      header: optRules[0].header,
-      body: optRules[0].body.replace(/\s*color:\s*var\(--we-ink[^;]*;/, ''),
+    const badNoInk = g0 ? {
+      header: g0.header,
+      body: g0.body.replace(/\s*color:\s*var\(--we-popup-row-ink[^;]*;/, ''),
     } : null;
-    check('negative control F8-1: option 底色改回半透明玻璃（弹层再次浅底浅字）会被判出',
-      bad ? !ok(bad) : false);
-    check('negative control F8-2: option 丢墨色声明会被判出',
-      badNoInk ? !ok(badNoInk) : false);
+    check('negative control F8-1: 全局那条底色改回半透明玻璃（弹层再次浅底浅字）会被判出',
+      badOpaque ? !pairOk(badOpaque) : false);
+    check('negative control F8-2: 全局那条丢掉墨色声明会被判出',
+      badNoInk ? !pairOk(badNoInk) : false);
+    check('negative control F8-3: 只剩自家 picker 那条、全局那条缺失会被判出',
+      pickerRules.length >= 1 && !f8Ok([], checkedRules, pickerRules));
+    const c0 = checkedRules[0];
+    const badChecked = c0 ? {
+      header: c0.header,
+      body: c0.body.replace(/background-color:\s*var\(--we-accent,[^;]*;/, 'background-color: transparent;'),
+    } : null;
+    check('negative control F8-4: 选中行底色改回 transparent（UA 蓝底下自定义墨不可控）会被判出',
+      badChecked ? !accentOk(badChecked) : false);
+  }
+
+  // ── F9 (#164)：行配对必须随产物交付、是纯函数，且网格内处处达标 ────────────────────
+  // 「只随主题翻转」救不了自定义浅墨那一档（浅色主题默认浅底 + 用户 #fff 墨 = 白字白底），
+  // 所以判据不能只看"有没有这对令牌"，必须**复算**：抽产物里的 wePopupRowPair 对一网格墨色
+  // 各跑一遍，逐对算对比度。中灰是最难的一档（白/黑两臂在相对亮度 0.1791 处只有 4.58:1）。
+  {
+    const fnStart = SRC.indexOf('function wePopupRowPair(');
+    let fnSrc = null;
+    if (fnStart >= 0) {
+      let depth = 0;
+      for (let i = fnStart; i < SRC.length; i++) {
+        const ch = SRC[i];
+        if (ch === '{') depth++;
+        else if (ch === '}') { depth--; if (depth === 0) { fnSrc = SRC.slice(fnStart, i + 1); break; } }
+      }
+    }
+    const wePopupRowPair = fnSrc ? new Function('return (' + fnSrc + ')')() : null;
+    const usable = typeof wePopupRowPair === 'function';
+    check('F9 弹层行配对函数随产物交付且可独立复算', usable);
+    if (usable) {
+      const INKS = [
+        ['宿主深墨（浅主题默认）', '#1f2328'],
+        ['宿主浅墨（深主题默认）', '#e6e8eb'],
+        ['纯白（#164 场景 B）', '#ffffff'],
+        ['纯黑', '#000000'],
+        ['中灰（两臂最窄处）', '#7f7f7f'],
+        ['彩墨 浅黄', '#f5d76e'],
+        ['彩墨 靛蓝', '#3b3f8f'],
+      ];
+      const pairs = INKS.map(([label, ink]) => {
+        const p = wePopupRowPair(ink);
+        const hex = p && /^#[0-9a-f]{6}$/.test(p.bg);
+        return { label, ink, bg: p && p.bg, ratio: hex ? contrast(hex2rgb(p.bg), hex2rgb(ink)) : 0 };
+      });
+      const worst = pairs.reduce((a, b) => (a.ratio <= b.ratio ? a : b));
+      check('F9a 七档墨色的行底都解析成不透明 #rrggbb 且与墨色对比度 ≥4.5:1', worst.ratio >= 4.5,
+        '最差 ' + worst.label + ' → ' + worst.bg + ' vs ' + worst.ink + ' = ' + worst.ratio.toFixed(2) + ':1'
+        + ' · 全档 ' + pairs.map((p) => p.ratio.toFixed(2)).join('/'));
+      const same = (a, b) => String(a).toLowerCase() === String(b).toLowerCase();
+      const dL = wePopupRowPair('#1f2328');
+      const dD = wePopupRowPair('#e6e8eb');
+      check('F9b 主题默认墨色下逐位还原现状（浅 #ffffff+宿主深墨 / 深 #1e1f26+宿主浅墨）',
+        same(dL.bg, '#ffffff') && same(dL.ink, '#1f2328') && same(dD.bg, '#1e1f26') && same(dD.ink, '#e6e8eb'),
+        'light=' + dL.bg + '/' + dL.ink + ' · dark=' + dD.bg + '/' + dD.ink);
+      check('F9c 输入缺失 / 不可解析 ⇒ 返回 null，交给样式表缺省兜底（不写脏值）',
+        wePopupRowPair('') === null && wePopupRowPair(undefined) === null && wePopupRowPair('rgba(0,0,0,.5)') === null);
+      // 负对照：短路掉"对比度约束"（一律给浅基色 = 只认墨色、不校验）必须被同一条网格判红。
+      const naiveWorst = Math.min(...INKS.map(([, ink]) => contrast(hex2rgb('#ffffff'), hex2rgb(ink))));
+      check('negative control F9-1: 不做钳制（一律给 #ffffff 行底）在纯白墨上会被同一条网格判红',
+        naiveWorst < 4.5, 'naive worst=' + naiveWorst.toFixed(2) + ':1');
+    }
   }
 
   const failed = results.filter((r) => !r.ok);
