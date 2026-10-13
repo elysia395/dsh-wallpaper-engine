@@ -18,8 +18,11 @@
 //      request and the state/UI stay truthful.
 //
 // Usage: node test/verify-transcode-state.mjs
-import { readFileSync } from 'node:fs';
+import { readFileSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
+import { createTranscodeKit } from '../lib/transcode.js';
 
 const results = [];
 /** 转码编码器兜底（issue：只有 NVENC ⇒ 无 NVENC 的 ffmpeg 必然全失败）。 */
@@ -109,6 +112,109 @@ const results = [];
   check('negative control: 客户端各处自己拼 transcoded URL 的形态已被唯一构造点取代',
     !layer.includes('"/wallpaper-engine/transcoded/" + encodeURIComponent(token) + "?fps=" + cap')
       && !layer.includes('"/media-info/" + encodeURIComponent(token), '));
+}
+
+/** SLICE 11（转码等待者账本）：**在途命中时加入者也必须进账本**。
+ *
+ *  回归面：`transcodeToFps` 命中在途条目时曾直接 `return entry.promise` ⇒ 第二个客户端的
+ *  `onEntry` 从不回调 ⇒ 路由在它里面写的 `registerTranscodeWaiter(e, res)` 不执行 ⇒ 该 res
+ *  从不进账本 ⇒ 第一个客户端断开就把 `waiters` 打到 0、`cancel()` 杀掉 ffmpeg 并删掉半成品，
+ *  仍在等的第二个客户端收到 502。账本本身（`registerTranscodeWaiter`：「**所有**等待者断开
+ *  才 cancel」）就是为多等待者写的，所以"发起者断开即整体取消"不是既定口径。
+ *
+ *  本段**不需要真 ffmpeg**（CI 上没有，也不该依赖）：账本条目是调用期同步建好的（任务体在
+ *  第一个 `await` 处分片），所以同一次 tick 里的第二次调用必定走"加入"分支 —— 观测与判定
+ *  都是确定性的、不依赖计时器。供给链被指向一个不存在的路径 ⇒ 任务体随后以 ENOENT 失败
+ *  （不触发真实下载），那条路径与本段判据无关。
+ *
+ *  ⚠️ 本段**故意不取消**真实 kit 的在途任务：`spawnFfmpeg` 在"子进程 spawn 失败（`proc.pid`
+ *  为 undefined）"之后调用 `proc.kill()` 会**同步挂死整个进程**（macOS 实测；`kill()` 不返回、
+ *  事件循环被阻塞、连 watchdog 都不再触发）—— 用这种方式制造"取消"会把守卫变成挂死而不是报红。
+ *  所以：加入者登记只用**同步观测**（不需要取消），账本语义用**手造条目**跑（不需要真任务）。
+ */
+{
+  const root = fileURLToPath(new URL('../.test-cache/transcode-waiter-ledger/', import.meta.url));
+  mkdirSync(root, { recursive: true });
+  const src = join(root, 'fake.mp4');
+  writeFileSync(src, 'not-really-an-mp4');
+  process.env.DSH_WE_FFMPEG = join(root, 'no-such-ffmpeg');
+  const kit = createTranscodeKit({
+    configPath: () => join(root, 'config.json'),
+    transcodeCacheDir: () => join(root, 'transcodes'),
+    ensureDirOnce: (d) => { mkdirSync(d, { recursive: true }); return d; },
+    atomicTmpPath: (f) => f + '.tmp' + process.pid + '1',
+  });
+  /** 路由侧最小的 res 替身：账本只用到 `once('close', …)`。 */
+  function fakeRes() {
+    const handlers = {};
+    return {
+      statusCode: 200,
+      once: (type, fn) => { handlers[type] = fn; },
+      close: () => { if (handlers.close) handlers.close(); },
+    };
+  }
+  const cb1 = [];
+  const cb2 = [];
+  const p1 = kit.transcodeToFps(src, 60, (e) => cb1.push(e));
+  const p2 = kit.transcodeToFps(src, 60, (e) => cb2.push(e)); // 同 tick ⇒ 命中在途分支
+  p1.then(() => {}, () => {}); // 随后的 ENOENT 拒绝不属于本段判据，别变成 unhandled rejection
+  const joinObservation = {
+    samePromise: p1 === p2,
+    creator: cb1.length,
+    joiner: cb2.length,
+    sameEntry: cb1.length === 1 && cb2.length === 1 && cb1[0] === cb2[0],
+  };
+  // 共享判据：阳性（真实观测）与阴性对照（同一判据吃"加入者未登记"的观测）都走它。
+  const joinerRegisters = (o) => o.samePromise === true && o.creator === 1 && o.joiner === 1
+    && o.sameEntry === true;
+  check('在途命中：加入者也进账本（否则退化成"发起者断开即整体取消"）',
+    joinerRegisters(joinObservation), JSON.stringify(joinObservation));
+  check('negative control: 同一判据吃"加入者未登记"的观测必须为 false',
+    joinerRegisters({ ...joinObservation, joiner: 0, sameEntry: false }) === false);
+
+  // 账本语义（手造条目）：先关一个不取消，全关才 cancel。与上一条互补 —— 上一条证明"加入者
+  // 登记了"，这一条证明"账本确实按**全部**等待者计数"，两条合起来才是完整语义。
+  let cancelled = 0;
+  const fakeEntry = { waiters: 0, cancel: () => { cancelled++; } };
+  const resA = fakeRes();
+  const resB = fakeRes();
+  kit.registerTranscodeWaiter(fakeEntry, resA);
+  kit.registerTranscodeWaiter(fakeEntry, resB);
+  resA.close();
+  const afterOne = { waiters: fakeEntry.waiters, cancelled };
+  resB.close();
+  const afterAll = { waiters: fakeEntry.waiters, cancelled };
+  const ledger = (o) => o.afterOne.waiters === 1 && o.afterOne.cancelled === 0
+    && o.afterAll.waiters === 0 && o.afterAll.cancelled === 1;
+  check('等待者账本：先关一个不取消，全关才 cancel', ledger({ afterOne, afterAll }),
+    `one=${afterOne.waiters}/${afterOne.cancelled} all=${afterAll.waiters}/${afterAll.cancelled}`);
+  check('negative control: 同一判据吃"发起者一关就 cancel"的观测必须为 false',
+    ledger({ afterOne: { waiters: 0, cancelled: 1 }, afterAll: { waiters: 0, cancelled: 1 } }) === false);
+
+  // 源码形态：在途命中分支**在返回同一个 promise 之前**先回调 onEntry。负对照按字面要求做
+  // "把那一行删掉"——阳性与变异跑的是同一条判据函数。
+  const tcText = readFileSync(new URL('../lib/transcode.js', import.meta.url), 'utf8');
+  const joinsThroughOnEntry = (text) => {
+    const at = text.indexOf('TRANSCODE_INFLIGHT.get(cachePath)');
+    if (at < 0) return false;
+    const end = text.indexOf('return entry.promise;', at);
+    if (end < 0) return false;
+    return /onEntry\(entry\)/.test(text.slice(at, end));
+  };
+  const withoutOnEntry = (() => {
+    const at = tcText.indexOf('TRANSCODE_INFLIGHT.get(cachePath)');
+    const end = tcText.indexOf('return entry.promise;', at);
+    if (at < 0 || end < 0) return tcText;
+    const cleaned = tcText.slice(at, end)
+      .replace(/if \(typeof onEntry === 'function'\) onEntry\(entry\);\n/, '');
+    return tcText.slice(0, at) + cleaned + tcText.slice(end);
+  })();
+  check('在途命中分支在返回同一个 promise 前先回调 onEntry（源码形态）',
+    joinsThroughOnEntry(tcText));
+  check('negative control: 把那一行 onEntry(entry) 删掉后同一条判据必须为 false',
+    joinsThroughOnEntry(withoutOnEntry) === false);
+
+  rmSync(root, { recursive: true, force: true });
 }
 function check(name, ok, detail) {
   results.push({ name, ok });
