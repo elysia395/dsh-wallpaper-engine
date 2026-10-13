@@ -464,6 +464,12 @@ const INLINE_MODULES = [
     markers: ['function barsPolygon(dir, p) {', 'const LIVE_FIRST_FADE_MS = 1800;',
       'function installRotationResumeListeners() {'],
   },
+  {
+    file: 'src/client-audio-playback.js',
+    why: 'src/client.js 正文的音频/播放桥助手（期望音量与元素音量写入、轮换音频闸、层内媒体元素枚举、live iframe 音量与场景包 BGM 起停、播放状态应用；含其顶层状态）—— 构建期内联在正文之前，同处一个扁平作用域',
+    markers: ['function weApplyAudio(video) {', 'let rotationAudioGate = null;',
+      'const LAYER_KEY_FIELDS = ["type", "url", "edge", "sceneVideo", "audio", "live"];'],
+  },
 ];
 
 /**
