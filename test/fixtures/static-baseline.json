@@ -1,24 +1,23 @@
 {
   "eslint": {
-    "filesLinted": 172,
+    "filesLinted": 223,
     "byRule": {
       "no-empty-pattern": 5,
       "no-extra-boolean-cast": 1,
       "no-irregular-whitespace": 5,
-      "no-promise-executor-return": 106,
+      "no-promise-executor-return": 103,
       "no-regex-spaces": 5,
       "no-self-compare": 2,
       "no-sequences": 4,
       "no-template-curly-in-string": 35,
       "no-unmodified-loop-condition": 11,
       "no-unused-expressions": 12,
-      "no-unused-vars": 74,
-      "no-useless-assignment": 141,
+      "no-unused-vars": 61,
+      "no-useless-assignment": 127,
       "no-var": 23,
       "no-void": 4,
       "object-shorthand": 18,
       "prefer-const": 21,
-      "react-hooks/exhaustive-deps": 1,
       "require-atomic-updates": 12
     }
   },
