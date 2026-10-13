@@ -82,6 +82,21 @@
   }
 
 
+  // 模块级 ↺ 的**薄包装**（issue #192）：真实现住在 `src/module-reset.js`（panel-tabs 与
+  // glass-panel 共用，抽出来才能让挂载台 import 真实现）。这里只把"取词 + 处理器"两样外界
+  // 喂给它 —— 中文因此留在本文件的 `weT(...)` 里（i18n 扫描器认这个形态；写进被调模块会
+  // 被判成"裸中文"），各节调用点则保持 `moduleResetButton("模块名", onResetModule)` 这么短。
+  // ⚠️ 必须是**本文件的模块级（工厂作用域）声明**，不能留在 `renderAppearanceTab` 体内：
+  //    五个域模块（src/panel-tabs-*.js）按域搬出后仍按这个名字引用它 —— 打包后同一工厂
+  //    作用域没问题，但按文件 import 的守卫台架（verify-fontset / verify-scene-live 的
+  //    侧栏档）只有把真实现挂到全局才找得到。
+  function moduleResetButton(moduleName, onResetModule) {
+    return moduleResetButtonNode(moduleName, onResetModule, {
+      title: weT("把这一块的参数恢复为默认值（不需要确认）"),
+      aria: weT("重置本模块"),
+    });
+  }
+
   function renderAudioTab(ctx) {
     const { onToggleAudio, onVideoVolume, sel } = ctx;
     // 声音：壁纸音轨（视频 / 场景内嵌 MP4 / 场景包内音频共用一套设置）。
@@ -234,7 +249,7 @@
   // ⚠️ 判据口径：`const { … } = ctx;` 必须是函数体的**第一条语句**（前面连注释行都不许有），
   // 所以说明文字只能写在函数外面 —— 见 test/verify-scene-live.mjs 的『每个页签首行都从 ctx 解构』。
   function renderExtensionsTab(ctx) {
-    const { } = ctx;
+    const { onResetModule } = ctx;
     const modules = extensionModules();
     return React.createElement(React.Fragment, null,
       React.createElement("div", { className: "we-picker__section" },
@@ -254,6 +269,7 @@
               },
                 React.createElement("div", { className: "we-ext__module-head" },
                   React.createElement("span", { className: "we-ext__module-title" }, mod.title),
+                  moduleResetButton(mod.resetGroup, onResetModule),
                 ),
                 mod.desc ? React.createElement("span", { className: "we-picker__hint" }, mod.desc) : null,
                 mod.render ? mod.render(ctx) : null,
@@ -387,7 +403,76 @@
   }
 
 
+  // ── 页签级重置（issue #192 用户口径：「每个选项卡后面加重置，重置指定选项卡」）──────────
+  // 压在**每个页签内容的最末尾**，由 client.js 的渲染点在 renderActiveTab() 之后统一挂 ——
+  // 六处渲染器各挂一遍必然漏一个，挂一处才是结构性的。
+  // 走两步确认：整页设置量不小（外观页就有 60 个键）且不可撤销 ⇒ 与模块级 ↺ 分档
+  //（那是单模块、用户口径明确"无需确认"）。令牌按页签区分，因为 `armedConfirm` 是单值。
+  function renderTabReset(ctx, tabId) {
+    const { armedConfirm, onArmConfirm, onDisarmConfirm, onResetTab } = ctx;
+    // 「关于」页签没有任何设置（纯静态文案）⇒ 不给它画一个点了没反应的按钮。
+    if (tabId === "about") return null;
+    const token = "tab:" + tabId;
+    // ⚠️ 刻意**不用** `we-picker__section-label`：那是"设置分组卡"的类名，而本节的判据口径
+    //（既有守卫按"末三张分组卡"取窗口）会被这一节顶掉 —— 3D 效果那一页就有三张分组卡，
+    // 重置节排在它后面会挤走「背景」。它是**操作区**不是分组卡，用独立类名在语义上也更准。
+    const cls = "we-picker__section-reset-label";
+    return React.createElement("div", { className: "we-picker__section" },
+      React.createElement("div", { className: "we-picker__section-head" },
+        React.createElement("span", { className: cls }, weT("重置本页")),
+      ),
+      React.createElement("span", { className: "we-picker__hint" },
+        weT("把这一页的设置恢复为默认值；其他页签与导入的图片不受影响。")),
+      React.createElement("div", { className: "we-picker__row" },
+        React.createElement("button", {
+          className: "we-picker__btn",
+          type: "button",
+          disabled: armedConfirm === token,
+          onClick: () => onArmConfirm(token),
+        }, weT("重置本页")),
+      ),
+      renderConfirmRow(armedConfirm, token,
+        weT("确定要把这一页的设置恢复为默认吗？此操作不可撤销。"),
+        () => onResetTab(tabId), onDisarmConfirm),
+    );
+  }
+
+  // ── 全局重置节（issue #192，压在「系统」页签末尾）──────────────────────────────
+  // 三档里的最高一档：**模块 < 页签 < 全局**。全局必须二次确认（不可撤销）。
+  // 二次确认复用 client.js 既有的 `armConfirm` / `renderConfirmRow` 两步构件 ——
+  // `selection.armedConfirm` 是单值 ⇒ 结构上同一时刻只有一个动作待确认。
+  // ⚠️ 只重置**设置值**：导入的头像图 / 吉祥物立绘 / 字体集住各自的目录，删不删是另一件事
+  //（文案必须把这一点说清，否则用户会以为"重置"连图一起删了）。
+  function renderResetSection(ctx) {
+    const { armedConfirm, onArmConfirm, onDisarmConfirm, onResetAll } = ctx;
+    const token = "resetAll";
+    return React.createElement("div", { className: "we-picker__section" },
+      React.createElement("div", { className: "we-picker__section-head" },
+        // 同 renderTabReset：操作区不用「设置分组卡」那个类名（它会被"末三张分组卡"那类
+        // 位置口径的判据看见，挤掉真正的分组卡）。
+        React.createElement("span", { className: "we-picker__section-reset-label" }, weT("重置")),
+      ),
+      React.createElement("span", { className: "we-picker__hint" },
+        weT("把全部设置恢复为出厂默认值；导入的头像与吉祥物图片、字体集不受影响。此操作不可撤销。")),
+      React.createElement("div", { className: "we-picker__row" },
+        React.createElement("button", {
+          className: "we-picker__btn we-picker__btn--danger",
+          type: "button",
+          disabled: armedConfirm === token,
+          onClick: () => onArmConfirm(token),
+        }, weT("全部重置")),
+      ),
+      renderConfirmRow(armedConfirm, token,
+        weT("确定要将所有设置恢复为默认吗？此操作不可撤销。"),
+        onResetAll, onDisarmConfirm),
+    );
+  }
+
 export {
   renderWallpaperTab, renderAppearanceTab, renderAudioTab, renderMascotTab, renderEffectsTab, renderAdvancedTab,
-  renderExtensionsTab, renderAboutTab,
+  renderExtensionsTab, renderAboutTab, renderResetSection, renderTabReset,
+  // 模块级 ↺ 的薄包装：域模块（-appearance / -effects / -mascot）的节头按工厂作用域自由名字引用它
+  // （打包后同作用域）。导出它只为让**按文件 import 的守卫台架**能挂上真实现，
+  // 不是新公共 API；bundle 侧无消费者（内联后同作用域）。
+  moduleResetButton,
 };

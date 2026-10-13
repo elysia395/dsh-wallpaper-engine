@@ -142,6 +142,8 @@ function renderFxIsland(ctx) {
  *  `title` / `desc` 与上面的档位表同一条理由写成 getter（见那份注释）。 */
 const FX_EXTENSION_MODULE = {
   id: 'fx',
+  // 模块级重置的分组名（issue #192）：键集住在 lib/settings-schema.js 的 RESET_GROUPS。
+  resetGroup: 'fx',
   get title() { return weT("点击效果与拖尾效果"); },
   get desc() { return weT("在壁纸之上叠加随光标响应的点击与拖尾效果：整层在界面之后，不会挡到任何控件"); },
   render: renderFxIsland,

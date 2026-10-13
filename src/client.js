@@ -352,6 +352,25 @@ const selection = {
   // 设置白名单没有它们（serialize 时被 schema 过滤掉）。
   avatarBusy: "",
   avatarError: "",
+  avatarCompressing: false,
+  // 自定义吉祥物立绘的导入态（transient）：在途标志与最后一条错误（同上面两枚口径）。
+  mascotBusy: false,
+  mascotError: "",
+  // 待确认的**形态切换目标**（transient）：自定义立绘生效时点内置项 / 按 ‹ › 都会先把目标
+  // 记在这里并置 armedConfirm，由面板画一行两步确认 —— 切到内置形态必须先清除那张自定义
+  // 立绘，而清除**不可恢复**，所以是唯一需要确认的路径。空串 = 没有待确认的切换。
+  mascotPendingForm: "",
+  // Upload-directory editor (transient): open state + draft path.
+  editingUploadDir: false,
+  uploadDirDraft: "",
+  // 缓存位置编辑器（transient）：开态 + 草稿路径 + 上次错误。**生效值由 inventory.cacheDir
+  // 携带**（host 是唯一真相）—— 它给的是解析链的答案，设了 `DSH_WE_CACHE_DIR` 时这个答案
+  // 和用户填的值不同，界面据此提示"当前由环境变量覆盖"。
+  editingCacheDir: false,
+  cacheDirDraft: "",
+  cacheDirBusy: false,
+  cacheDirError: "",
+  cacheDirNote: "",
   // 自定义吉祥物立绘的导入态（transient）：在途标志与最后一条错误（同上面两枚口径）。
   mascotBusy: false,
   mascotError: "",
@@ -688,6 +707,18 @@ function setTransient(field, value) {
 // 拖动期的中间值**照样会落盘**（setSetting → debounce 200ms），所以中途关窗也不丢最后一次值。
 function commitLiveSetting(field, value, live) {
   setSetting(field, value);
+  if (live) applyEffects({ live: true });
+  else emit();
+}
+/**
+ * 同一套两档口径，但写给**瞬态**字段（`setTransient`，不落盘）。
+ *
+ * 为什么需要它：瞬态也有"拖动中每格都来"的场景（上传裁切的拖拽与缩放），而那些值同样
+ * 只需要"看得见的那部分"跟手、**不需要**整棵面板重渲染。与 `commitLiveSetting` 同形成对 ——
+ * 面板处理器写 store 必须能通知到（本仓既有判据），走这个入口就自动满足。
+ */
+function commitLiveTransient(field, value, live) {
+  setTransient(field, value);
   if (live) applyEffects({ live: true });
   else emit();
 }
@@ -2530,13 +2561,19 @@ function onParallaxSmooth(v, live) { commitLiveSetting("parallaxSmooth", v, live
 // 为什么**不缓存 input 元素**（custom-frame 那种模块级 ref 是为了"面板重渲染后还点得到"）：
 // 这里每次导入都是一次性的 —— 造一个、点开、用完即弃，语义经闭包带进来。
 /** 客户端缩放上限（px）：显示尺寸最多 72px（头像）/ 96px（立绘），把原图按它缩一遍 ——
- *  直接把 8MB 的原图发上去只会让宿主目录变大、每次加载多传几倍字节。 */
+ *  直接把 8MB 的原图发上去只会让宿主目录变大、每次加载多传几倍字节。
+ *  ⚠️ 头像是**例外**：裁切链要按原图分辨率取样，72px 的显示尺寸放大 4 倍也才 288 —
+ *  它用 src/avatar-import.js 的 AVATAR_IMPORT_MAX_EDGE（1024）。 */
 const IMAGE_IMPORT_MAX_EDGE = 512;
-function pickImageFile(onFile) {
+// 头像导入的两道闸（边长 1024 / 体积 4 MiB）、零解码尺寸探针与两层 MIME 清单全部住在
+// `src/avatar-import.js` —— **纯函数**，因此 `test/verify-scene-live.mjs` 能 import 真实现、
+// 用真字节喂它（"源码里有没有这行字"测不出位域读错一位：1024 读成 0 ⇒ 闸恒放行）。
+/** 选图腿的 accept：默认直传层；调用方要收更多格式就显式传（头像传两层之和）。 */
+function pickImageFile(onFile, accept) {
   if (typeof document === "undefined" || typeof document.createElement !== "function") return;
   const input = document.createElement("input");
   input.type = "file";
-  input.accept = "image/png,image/jpeg,image/webp";
+  input.accept = accept || IMAGE_DIRECT_ACCEPT;
   input.style.display = "none";
   try { document.body.appendChild(input); } catch { /* ignore */ }
   const done = () => { try { input.remove(); } catch { /* ignore */ } };
@@ -2575,6 +2612,20 @@ async function decodeImageFile(file) {
  *  返回 `{ blob, width, height }` —— 宽高是**缩放后**的像素数（立绘要用它算显示盒）。 */
 async function downscaleImageFile(file, maxEdge) {
   const src = await decodeImageFile(file);
+  return await downscaleDecoded(src, maxEdge, file);
+}
+/**
+ * 同一件事的 **blob 入口**：裁切链手里已经是一个画好的 canvas/blob，没有 `File`
+ * （`downscaleImageFile` 吃的是 `File`）。两者共用下面同一段实现，不复制第二份缩放逻辑。
+ */
+async function downscaleImageBlob(blob, maxEdge) {
+  const src = await decodeImageFile(blob);
+  return await downscaleDecoded(src, maxEdge, blob);
+}
+/** 缩放 + 重编码的**唯一实现**（两个入口共用；`fallback` 是编码全失败时原样交出去的那份）。
+ *  `losslessFirst` = 先试 PNG（**像素级无损**）再退 WebP —— 只有头像的「自动压缩后导入」
+ *  走这一档（用户口径："保证原图信息不丢失"）；其余导入档仍按"WebP 优先、体积优先"编。 */
+async function downscaleDecoded(src, maxEdge, fallback, losslessFirst) {
   const w = Number(src.width) || 0;
   const h = Number(src.height) || 0;
   if (!w || !h) throw new Error("bad image");
@@ -2591,10 +2642,18 @@ async function downscaleImageFile(file, maxEdge) {
   const toBlob = (type, quality) => new Promise((resolve) => {
     try { canvas.toBlob((b) => resolve(b), type, quality); } catch { resolve(null); }
   });
+  // 无损优先（头像压缩档）：PNG 装得下就用 PNG，装不下才退视觉无损的 WebP。
+  if (losslessFirst) {
+    const png = await toBlob("image/png");
+    if (png && png.type === "image/png") return { blob: png, width: tw, height: th };
+    const lossy = await toBlob("image/webp", 0.92);
+    return { blob: (lossy && lossy.type === "image/webp") ? lossy : ((await toBlob("image/png")) || fallback), width: tw, height: th };
+  }
   const webp = await toBlob("image/webp", 0.92);
-  const blob = (webp && webp.type === "image/webp") ? webp : (await toBlob("image/png")) || file;
+  const blob = (webp && webp.type === "image/webp") ? webp : (await toBlob("image/png")) || fallback;
   return { blob, width: tw, height: th };
 }
+
 /**
  * 用户资产路由的失败文案。
  *
@@ -2635,27 +2694,231 @@ async function postImageAsset(path, blob, what) {
 function onAvatarEnabled(e) { setSetting("avatarEnabled", e.target.checked); emit(); }
 function onAvatarSize(v, live) { commitLiveSetting("avatarSize", v, live); if (live) syncAvatarLayer(); }
 function onAvatarRadius(v, live) { commitLiveSetting("avatarRadius", v, live); if (live) syncAvatarLayer(); }
-function onAvatarPick(side) { pickImageFile((file) => uploadAvatarFile(side, file)); }
-async function uploadAvatarFile(side, file) {
-  if (!file || !/^image\/(png|jpeg|webp)$/.test(String(file.type || ""))) {
-    setTransient("avatarError", weT("仅支持 JPG / PNG / WebP 图片"));
+// 上传裁切（issue #191 问题 1）：用户口径是"上传非正方形、或主体不在中央时效果很差"。
+// 做法是**导入时先裁再传**（而不是存裁切参数第二次渲染）：
+//   · 盘上那张就是裁完的方形图 ⇒ 预览、会话里、以及"以后任何读到它的地方"天然一致，
+//     不存在"存了参数但某处忘了应用"的漏网点；
+//   · **零新设置键**（不动 KINDS / 夹具 / 预设段），也就没有"预设带不带裁切参数"的语义问题。
+// 代价：裁切是一次性的、事后不可再调（要重调就重新导入 —— 与"替换图片"同一条路）。
+const AVATAR_CROP_VIEW = 260; // 弹窗取景框边长（px，与 CSS 里那格同值）
+/** 待裁的原图（**内存**里，不是设置）：唯一消费者是当前这次弹窗。 */
+let avatarCropPending = null;
+/** 超限**被拦下**的原图（内存里）：用户在提示行点「自动压缩后导入」时走它。 */
+let avatarOverflowPending = null;
+/** 导入前的裁切弹窗：先让用户框选构图，确认后才真正上传。 */
+function onAvatarPick(side) {
+  // 收的格式 = 直传层 ∪ 仅光栅化层（AVATAR_PICK_ACCEPT 与两层清单同住 src/avatar-import.js）。
+  pickImageFile((file) => onAvatarFileChosen(side, file), AVATAR_PICK_ACCEPT);
+}
+/**
+ * 选好图之后的**第一站**：先过两道闸，再进裁切弹窗（`#185` 后续，用户口径 2026-10-13）。
+ *
+ * 顺序就是这道闸的全部价值 —— `avatarImportLimit` 只读文件头，**一次都不解码**；
+ * 超限则当场拦下并记住这张图（`avatarOverflowPending`），让面板画一行提示 + 一枚
+ * 「自动压缩后导入」。用户点它才真的解码 → 缩到 1024 → 无损重编（见 `onAvatarAutoCompress`）。
+ */
+async function onAvatarFileChosen(side, file) {
+  if (!file) return;
+  const type = String(file.type || "").toLowerCase();
+  // 白名单两层都收；认不出的 MIME（或浏览器不给 type）仍放行给解码腿去判 ——
+  // 这里只挡"明确不在清单里"的，别把扩展名不规范的图也一起拒了。
+  const known = (IMAGE_DIRECT_ACCEPT + "," + IMAGE_RASTER_ACCEPT).split(",");
+  if (type && !known.includes(type)) {
+    setTransient("avatarOverflow", null);
+    setTransient("avatarError", weT("仅支持 JPG / PNG / WebP / SVG / GIF / BMP / AVIF 图片"));
     emit();
     return;
   }
+  const size = await probeImageSize(file);
+  const verdict = avatarImportLimit(file, size);
+  if (verdict.ok) {
+    avatarOverflowPending = null;
+    setTransient("avatarOverflow", null);
+    await openAvatarCrop(side, file);
+    return;
+  }
+  // 拦下：把"哪一条超了、实测多少"说清楚（笼统的"图太大"等于什么都没说）。
+  avatarOverflowPending = { side: side, file: file };
   setTransient("avatarError", "");
+  setTransient("avatarOverflow", {
+    side: side,
+    bytes: verdict.bytes,
+    width: verdict.width,
+    height: verdict.height,
+    overBytes: verdict.overBytes,
+    overEdge: verdict.overEdge,
+    // 压缩后仍可能装不下的提示用得上（超大图压到 1024 也可能 > 4 MiB —— 见 ext-avatar 文案）。
+    compressible: true,
+  });
+  emit();
+}
+/**
+ * 「自动压缩后导入」：解码 → 缩到 1024 → **无损优先**重编（PNG，装不下才退 WebP）→ 进裁切弹窗。
+ *
+ * 为什么压在 1024 而不是更小：用户要的是"信息不丢失"，1024 是显示尺寸（72px）的 14 倍，
+ * 肉眼与矢量几乎没有差别；PNG 优先则保证**像素级无损**（只有 PNG 真装不下时才退视觉无损的
+ * WebP，并在面板上如实说明）。
+ */
+async function onAvatarAutoCompress() {
+  const pending = avatarOverflowPending;
+  if (!pending) return;
+  setTransient("avatarCompressing", true);
+  setTransient("avatarError", "");
+  emit();
+  try {
+    const src = await decodeImageFile(pending.file);
+    const shrunk = await downscaleDecoded(src, AVATAR_IMPORT_MAX_EDGE, pending.file, true);
+    // 压缩结果包成 File 再进裁切弹窗：裁切腿吃的是 File（它要 type 与 size）。
+    const name = "avatar-compressed." + (shrunk.blob.type === "image/png" ? "png" : "webp");
+    const compressed = (typeof File === "function")
+      ? new File([shrunk.blob], name, { type: shrunk.blob.type })
+      : shrunk.blob;
+    setTransient("avatarCompressing", false);
+    avatarOverflowPending = null;
+    setTransient("avatarOverflow", null);
+    await openAvatarCrop(pending.side, compressed);
+  } catch (err) {
+    setTransient("avatarCompressing", false);
+    setTransient("avatarError", weT("压缩失败：{error}", { error: err && err.message ? err.message : String(err) }));
+    emit();
+  }
+}
+/** 打开裁切弹窗（读原图尺寸 → 填瞬态 → 交给面板画）。 */
+async function openAvatarCrop(side, file) {
+  if (!file || !/^image\//.test(String(file.type || ""))) {
+    setTransient("avatarError", weT("仅支持 JPG / PNG / WebP / SVG / GIF / BMP / AVIF 图片"));
+    emit();
+    return;
+  }
+  let url = "";
+  try {
+    const src = await decodeImageFile(file);
+    const w = Number(src.width) || 0;
+    const h = Number(src.height) || 0;
+    if (src.close) { try { src.close(); } catch { /* ignore */ } }
+    if (!w || !h) throw new Error(weT("读不出图片尺寸"));
+    url = URL.createObjectURL(file);
+  } catch (err) {
+    setTransient("avatarError", weT("导入失败：{error}", { error: err && err.message ? err.message : String(err) }));
+    emit();
+    return;
+  }
+  // 待裁的原图**存在内存里**（不是设置）：它的唯一消费者是这次弹窗。
+  avatarCropPending = { side: side, file: file };
+  setTransient("avatarError", "");  setTransient("avatarCropSide", side);
+  setTransient("avatarCropUrl", url);
+  setTransient("avatarCropW", w);
+  setTransient("avatarCropH", h);
+  setTransient("avatarCropZoom", 1);
+  setTransient("avatarCropX", 0);
+  setTransient("avatarCropY", 0);
+  emit();
+}
+/** 关掉裁切弹窗（撤掉预览 URL，**不上传**）。 */
+function closeAvatarCrop() {
+  const url = selection.avatarCropUrl;
+  if (url) { try { URL.revokeObjectURL(url); } catch { /* ignore */ } }
+  avatarCropPending = null;
+  setTransient("avatarCropSide", "");
+  setTransient("avatarCropUrl", "");
+  setTransient("avatarCropW", 0);
+  setTransient("avatarCropH", 0);
+  setTransient("avatarCropZoom", 1);
+  setTransient("avatarCropX", 0);
+  setTransient("avatarCropY", 0);
+  emit();
+}
+/**
+ * 取景框里那张图的实际绘制几何（换算成"显示 px"）。
+ *
+ * 口径：方形取景框边长 `AVATAR_CROP_VIEW`；`zoom = 1` 时图**短边刚好铺满**取景框
+ * （cover 语义 —— 再小就会在框里露白），放大只增不减。`x` / `y` 是 -1..1 的归一化平移，
+ * 边界取"图不能露出空白"的最大可移动量。
+ */
+function avatarCropGeometry() {
+  const w = Number(selection.avatarCropW) || 0;
+  const h = Number(selection.avatarCropH) || 0;
+  const zoom = Math.max(1, Number(selection.avatarCropZoom) || 1);
+  if (!w || !h) return { dw: 0, dh: 0, dx: 0, dy: 0, base: 1 };
+  const base = AVATAR_CROP_VIEW / Math.min(w, h); // 短边铺满
+  const dw = w * base * zoom;
+  const dh = h * base * zoom;
+  const slackX = Math.max(0, (dw - AVATAR_CROP_VIEW) / 2);
+  const slackY = Math.max(0, (dh - AVATAR_CROP_VIEW) / 2);
+  const nx = Math.max(-1, Math.min(1, Number(selection.avatarCropX) || 0));
+  const ny = Math.max(-1, Math.min(1, Number(selection.avatarCropY) || 0));
+  return {
+    dw: dw, dh: dh, base: base,
+    dx: -slackX * nx, // 向右拖（nx>0）⇒ 图左移
+    dy: -slackY * ny,
+  };
+}
+/** 拖动取景：把指针位移换成归一化平移（1 = 可用位移的满量）。 */
+function onAvatarCropDrag(dxPx, dyPx) {
+  const geo = avatarCropGeometry();
+  const slackX = Math.max(0, (geo.dw - AVATAR_CROP_VIEW) / 2);
+  const slackY = Math.max(0, (geo.dh - AVATAR_CROP_VIEW) / 2);
+  const nx = slackX > 0 ? (Number(selection.avatarCropX) || 0) - dxPx / slackX : 0;
+  const ny = slackY > 0 ? (Number(selection.avatarCropY) || 0) - dyPx / slackY : 0;
+  // 拖动是"看得见的那部分" ⇒ 走 live 档（面板不重渲染；预览图由控件按新值自己挪）。
+  commitLiveTransient("avatarCropX", Math.max(-1, Math.min(1, nx)), true);
+  commitLiveTransient("avatarCropY", Math.max(-1, Math.min(1, ny)), true);
+}
+/** 缩放取景（滚轮 / 滑块）。 */
+function onAvatarCropZoom(z, live) {
+  const v = Math.max(1, Math.min(4, Number(z) || 1));
+  commitLiveTransient("avatarCropZoom", v, live);
+}
+/** 把取景框里那一块**按原图分辨率**裁出来（再用既有 downscale 链缩到 512）。 */
+async function cropAvatarToBlob() {
+  const pending = avatarCropPending;
+  if (!pending) throw new Error(weT("没有待裁的图片"));
+  const src = await decodeImageFile(pending.file);
+  const w = Number(src.width) || 0;
+  const h = Number(src.height) || 0;
+  const geo = avatarCropGeometry();
+  // 显示几何 → 原图像素：取景框边长对应原图 (AVATAR_CROP_VIEW / (base*zoom)) 个像素。
+  const perSrc = 1 / (geo.base * Math.max(1, Number(selection.avatarCropZoom) || 1));
+  const side = AVATAR_CROP_VIEW * perSrc;
+  // 取景框左上角在图坐标里的位置：图中心 + dx/dy，再退半个框。
+  const cx = w / 2 - geo.dx * perSrc;
+  const cy = h / 2 - geo.dy * perSrc;
+  const sx = Math.max(0, Math.min(w - side, cx - side / 2));
+  const sy = Math.max(0, Math.min(h - side, cy - side / 2));
+  const out = document.createElement("canvas");
+  out.width = Math.max(1, Math.round(side));
+  out.height = Math.max(1, Math.round(side));
+  const g = out.getContext("2d");
+  if (!g) throw new Error(weT("没有可用的画布"));
+  g.drawImage(src, sx, sy, side, side, 0, 0, out.width, out.height);
+  if (src.close) { try { src.close(); } catch { /* ignore */ } }
+  const toBlob = (type, quality) => new Promise((resolve) => {
+    try { out.toBlob((b) => resolve(b), type, quality); } catch { resolve(null); }
+  });
+  const webp = await toBlob("image/webp", 0.92);
+  return (webp && webp.type === "image/webp") ? webp : (await toBlob("image/png"));
+}
+/** 确认裁切 → 上传裁好的图（走既有 postImageAsset 那条腿）。 */
+async function onAvatarCropConfirm() {
+  const pending = avatarCropPending;
+  if (!pending) { closeAvatarCrop(); return; }
+  const side = pending.side;
   setTransient("avatarBusy", side);
   emit();
   try {
-    const img = await downscaleImageFile(file, IMAGE_IMPORT_MAX_EDGE);
+    const cut = await cropAvatarToBlob();
+    if (!cut) throw new Error(weT("裁切失败"));
+    const img = await downscaleImageBlob(cut, AVATAR_IMPORT_MAX_EDGE);
     const posted = await postImageAsset("/avatar/" + side, img.blob, weT("头像"));
     if (!posted.ok) throw new Error(posted.error);
     // 记账：文件名进设置（它同时是"设置过没有"与 `<img>` 的缓存键）。
     setSetting(side === "ai" ? "avatarAiImage" : "avatarUserImage", posted.name);
-  } catch (err) {
-    setTransient("avatarError", weT("导入失败：{error}", { error: err && err.message ? err.message : String(err) }));
-  } finally {
     setTransient("avatarBusy", "");
-    emit();
+    closeAvatarCrop(); // 它自己会 emit
+  } catch (err) {
+    setTransient("avatarBusy", "");
+    setTransient("avatarError", weT("导入失败：{error}", { error: err && err.message ? err.message : String(err) }));
+    closeAvatarCrop();
   }
 }
 function onAvatarClear(side) {
@@ -2946,6 +3209,61 @@ const onLayerReset = (key) => {
   const field = key === "x" ? "layerPositionX" : key === "y" ? "layerPositionY" : "layerScale";
   setSetting(field, DEFAULTS[field]);
   emit();
+};
+
+// ── 模块级 / 页签级 / 全局重置（issue #192）────────────────────────────────────
+// 键集一律取自 lib/settings-schema.js 的 `RESET_MODULES`（模块级）/ `RESET_TABS`（页签级）/
+// `PROFILE_PRESET_KEYS`（全局）—— 都在那一侧定义，这一侧不手抄键表。
+// ⚠️ 必须是**整批赋值 + 一次 persistSelection + 一次 emit**：逐键走 `setSetting` 会发 N 次
+// debounce、N 次整棵面板重渲染（本仓"写必成对"纪律，同 src/fontset-store.js 的注释）。
+/**
+ * 把给定的键整批写回默认值，返回真正改动的键数。
+ * 只碰"确实有默认值"的键：缺默认值的键原样留着，免得把 `undefined` 写进 store ——
+ * 那会被宿主 sanitize 折成默认值，看着像"重置生效了"，实际是绕了一圈的静默改写。
+ */
+function resetKeysToDefault(keys) {
+  let touched = 0;
+  for (let i = 0; i < keys.length; i += 1) {
+    const k = keys[i];
+    if (!Object.prototype.hasOwnProperty.call(DEFAULTS, k)) continue;
+    if (selection[k] === DEFAULTS[k]) continue;
+    selection[k] = DEFAULTS[k];
+    touched += 1;
+  }
+  if (touched) persistSelection();
+  return touched;
+}
+/**
+ * 模块级重置（**无需确认**：单模块代价低 —— 用户口径见 issue #192）。
+ * 覆盖**两处**的模块：扩展页签的三个（avatar / fx / parallax）与外观页签的六个
+ * （theme / detail / glass / corners / uiColor / font）—— 同一个入口，键集由模块名查表。
+ */
+const onResetModule = (groupName) => {
+  const keys = (typeof RESET_MODULES === "object" && RESET_MODULES && RESET_MODULES[groupName]) || [];
+  if (!keys.length) return;
+  resetKeysToDefault(keys);
+  emit();
+};
+/**
+ * 页签级重置（issue #192 用户口径：「每个选项卡后面加重置，重置指定选项卡」）。
+ * 键集取自 `RESET_TABS`（schema 里手写并由守卫对账的完整划分）。
+ * 走两步确认 ⇒ 这个函数只负责"确认之后真的做"，确认由面板用 armConfirm 上膛。
+ */
+const onResetTab = (tabId) => {
+  const keys = (typeof RESET_TABS === "object" && RESET_TABS && RESET_TABS[tabId]) || [];
+  resetKeysToDefault(keys);
+  disarmConfirm(); // 确认行自己收掉（它内部会 emit）
+};
+/**
+ * 全局重置（**必须二次确认**）：确认由面板走既有 `armConfirm` 两步确认构件完成
+ * （`selection.armedConfirm` 是单值 ⇒ 结构上同一时刻只有一个动作待确认，见那段注释），
+ * 这里只负责"确认之后真的做"。
+ * 范围 = `PROFILE_PRESET_KEYS`（全部会持久化的设置键）；**不含导入的资产文件**
+ * （头像图 / 吉祥物立绘 / 字体集住各自的目录，删不删是另一件事 —— 重置设置不该顺手删用户的图）。
+ */
+const onResetAll = () => {
+  resetKeysToDefault(PROFILE_PRESET_KEYS);
+  disarmConfirm(); // 确认行自己收掉（它内部会 emit）
 };
 // 配色 (accent color) + 玻璃透明度 (glass transparency) + 玻璃颜色 (glass base
 // tint): applied instantly through applyEffects() (--we-accent /
@@ -3986,6 +4304,13 @@ function WallpaperPicker() {
     // 必须同源，否则会出现点了没反应的滑杆。它与「界面元素跟随」互不依赖（不是 `ui &&`）。
     parallaxPluginSlots: sel.parallaxPlugin === true ? parallaxDiscoveredGroups().sort() : [],
     onAvatarEnabled, onAvatarSize, onAvatarRadius, onAvatarPick, onAvatarClear,
+    // 上传裁切（issue #191 问题 1）：几何在这里现算（唯一实现），渲染器只读结果。
+    onAvatarCropZoom, onAvatarCropDrag, onAvatarCropConfirm, onAvatarCropCancel: closeAvatarCrop,
+    avatarCropGeo: avatarCropGeometry(), avatarCropView: AVATAR_CROP_VIEW,
+    // 超限拦截（#185 后续）：面板画提示行 + 「自动压缩后导入」按钮，处理器在 client 这一侧。
+    onAvatarAutoCompress,
+    // 模块级重置（issue #192）：各模块头的 ↺ 把该模块的键整批写回默认值。
+    onResetModule,
   });
   const renderActiveTab = () => {
     if (activeTab === "about") return renderAboutTab({});
@@ -4011,6 +4336,9 @@ function WallpaperPicker() {
       detailOpen: pickerDetailOpen, onToggleDetailSection: togglePickerDetailSection,
       glassUiOpen: pickerGlassUiOpen, onToggleGlassUiSection: togglePickerGlassUiSection,
       cornersOpen: pickerCornersOpen, onToggleCornersSection: togglePickerCornersSection,
+      // 模块级重置（issue #192）：外观页签下每个模块（主题 / 细节 / 玻璃 UI / 侧边栏圆角 /
+      // 全局 UI 配色 / 全局字体）节头右端各一枚 ↺。
+      onResetModule,
       presetsOpen: pickerPresetsOpen, onTogglePresetsSection: togglePickerPresetsSection,
     });
     if (activeTab === "playback") return React.createElement(React.Fragment, null,
@@ -4087,7 +4415,21 @@ function WallpaperPicker() {
         onClear, onRatingFilterChange, onTypeFilterChange,
         onShowNormalView, onShowHiddenView,
         onToggleBatchMode, onArmBatchHide, onBatchHide, onBatchCancel, onSearchInput, onPickCard,
-      }) : renderActiveTab()),
+      }) : React.createElement(React.Fragment, null,
+        // 页签内容 → **每个页签末尾一个重置**（issue #192 用户口径：重置指定选项卡）→
+        // 全局重置（只在「系统」页签末尾，即设置页里最接近"最底部"的位置）。
+        renderActiveTab(),
+        renderTabReset({
+          armedConfirm: sel.armedConfirm, onArmConfirm: armConfirm,
+          onDisarmConfirm: disarmConfirm, onResetTab,
+        }, activeTab),
+        activeTab === "system"
+          ? renderResetSection({
+              armedConfirm: sel.armedConfirm, onArmConfirm: armConfirm,
+              onDisarmConfirm: disarmConfirm, onResetAll,
+            })
+          : null,
+      )),
   );
 }
 

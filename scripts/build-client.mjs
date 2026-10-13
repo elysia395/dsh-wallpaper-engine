@@ -250,8 +250,17 @@ const INLINE_MODULES = [
     //    才读得出依赖方向 —— 与 `we-base.js` 排最前是同一条理由。
     file: 'src/section-head.js',
     why: '节头构件（可折叠）：panel-tabs 与 glass-panel 共用的那一份，抽出来是为了让挂载台能 import 真实现',
-    markers: ['function sectionHead(label, open, onToggle) {',
+    markers: ['function sectionHead(label, open, onToggle, action) {',
       'className: "we-picker__section-head we-picker__section-head--toggle"'],
+  },
+  {
+    // 模块级重置按钮（issue #192 的 ↺）：与 section-head 同一条理由抽出来 ——
+    // panel-tabs（外观各节 + 扩展模块头）与 glass-panel（玻璃 UI）共用同一枚构件，
+    // 抽成独立文件才能让挂载台 import 到真实现。
+    file: 'src/module-reset.js',
+    why: '模块级重置按钮（↺）：panel-tabs 与 glass-panel 共用；模块名查 RESET_MODULES 取键集',
+    markers: ['function moduleResetButtonNode(moduleName, onResetModule, labels) {',
+      'className: "we-mod-reset"'],
   },
   {
     // 「玻璃 UI」节的渲染器（wip §10.13）：与其余页签只共享**模块级纯助手**，
@@ -290,6 +299,18 @@ const INLINE_MODULES = [
     markers: ['const PARALLAX_EXTENSION_MODULE = {', 'function renderParallaxIsland(ctx)'],
   },
   {
+    // 头像导入的两道闸 + 零解码尺寸探针（#185 后续）。**纯函数**，因此是本仓少数几个
+    // 能被守卫**直接执行**的模块之一（用真字节喂真函数 —— 位域读错一位那种错，
+    // "源码里有没有这行字"测不出来）。排在 avatar-layer / ext-avatar / client 正文之前：
+    // 那几处的调用点直接按名引用这些常量与函数。
+    file: 'src/avatar-import.js',
+    why: '头像导入的两道闸（边长 1024 / 体积 4 MiB）、零解码的文件头尺寸探针（PNG/JPEG/GIF/BMP/WebP/SVG）与两层 MIME 清单（直传 / 仅光栅化）',
+    markers: ['const AVATAR_IMPORT_MAX_EDGE = ', 'const AVATAR_IMPORT_MAX_BYTES = ',
+      'const IMAGE_DIRECT_ACCEPT = ', 'const IMAGE_RASTER_ACCEPT = ',
+      'function parseBitmapHeaderSize(', 'function parseSvgSize(',
+      'async function probeImageSize(', 'function avatarImportLimit('],
+  },
+  {
     // 「扩展」页签**一号模块**（自定义会话头像）：与前面两份不同 —— 它的"本体"既不是画布层
     // 也不是纯变量层，而是**会话界面上的 DOM 补丁**（给宿主的消息行补头像节点 + 一个
     // 观察者），所以行为层是 src/avatar-layer.js。排在 panel-tabs 之前（它要在渲染时取
@@ -323,7 +344,7 @@ const INLINE_MODULES = [
   {
     file: 'src/panel-tabs-appearance.js',
     why: '「外观」页签的节渲染器与字体一族（原 src/panel-tabs.js 的 520–1125 行原样搬移）',
-    markers: ['function renderAppearanceThemeSection(ctx) {', '    const { onToggleThemeFollow, sel } = ctx;'],
+    markers: ['function renderAppearanceThemeSection(ctx) {', '    const { onResetModule, onToggleThemeFollow, sel } = ctx;'],
   },
   {
     file: 'src/panel-tabs-mascot.js',

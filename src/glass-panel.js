@@ -399,7 +399,7 @@ function panelGlassPair(sel) {
 function renderAppearanceGlassSection(ctx) {
   const {
     onBlur, onGlassAlpha, onGlassChildParam, onGlassColor, onGlassDarkSeparate, onGlassFidelity,
-    onToggleChildIndependent, childIndependentOn, sel, surface,
+    onToggleChildIndependent, childIndependentOn, sel, surface, onResetModule,
     onCapsuleBlur, onCapsuleColor,
     onLeftSidebarGlass, onTitlebarGlass, onSidebarAlpha, onSidebarBlur, onSidebarColor,
     onSidebarContentAlpha, onSidebarContentColor, onSidebarGlass,
@@ -678,7 +678,11 @@ function renderAppearanceGlassSection(ctx) {
   return React.createElement(React.Fragment, null,
   presetSection,
   React.createElement("div", { className: "we-picker__section" },
-    sectionHead(weT("玻璃 UI"), open, onToggleGlassUiSection),
+    sectionHead(weT("玻璃 UI"), open, onToggleGlassUiSection,
+      moduleResetButtonNode("glass", onResetModule, {
+        title: weT("把这一块的参数恢复为默认值（不需要确认）"),
+        aria: weT("重置本模块"),
+      })),
     // ── 折叠门（2026-10-11 用户口径「这三个在侧边栏改成默认收敛」）：**只在侧边栏**生效 ——
     //    设置页 `collapsible` 为假、`open` 恒真 ⇒ 这一层 Fragment 里的内容照旧整个渲染。
     //    ⚠️ 包一层 Fragment 是刻意的：本节约有 80 个并列 children，逐个挂门既啰嗦又容易漏；

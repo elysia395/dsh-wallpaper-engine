@@ -25,8 +25,18 @@
  * @param {*} label 已翻译的节标签
  * @param {boolean} open 展开态（真值才画内容）
  * @param {() => void} [onToggle] 点击 / 键盘触发时调用
+ * @param {*} [action] 可选的尾部动作节点（issue #192 的模块级 ↺）。渲染在 **caret 之后**、
+ *   也就是整个节头的**最右端** —— 用户口径（2026-10-13 二次修订）："全部放在后边，做成像主题
+ *   那样子"。最初它排在标签之后、caret 之前，视觉上落在行中间（见下）。
+ *   **调用方负责 `stopPropagation`** —— 本构件是折叠开关，不拦的话点动作会连带把这一节收起来
+ *   （重置完看不到结果）。不传就与原来逐字节同形（既有判据不受影响）。
+ *
+ * ⚠️ 次序为什么会漂（别改回去）：`.we-picker__section-caret` 与 `.we-mod-reset` **都**靠
+ * `margin-left: auto` 往右推，同一 flex 行里两个 auto 会把剩余空间**均分** ⇒ ↺ 停在行中间、
+ * 而"主题"（那个节头没有 caret，只有一个 auto）的 ↺ 却贴在最右端 —— 同一批模块两种位置。
+ * 现在 ↺ 排在 caret 之后、且由 CSS 让出 auto（见 styles.js 的相邻选择器），两者都靠右成组。
  */
-function sectionHead(label, open, onToggle) {
+function sectionHead(label, open, onToggle, action) {
   return React.createElement("div", {
     className: "we-picker__section-head we-picker__section-head--toggle",
     role: "button",
@@ -45,6 +55,9 @@ function sectionHead(label, open, onToggle) {
       className: "we-picker__section-caret" + (open ? " is-open" : ""),
       "aria-hidden": "true",
     }, "▾"),
+    // ↺ 排在 caret **之后** ⇒ 落在整个节头的最右端（原来"小绿点"那一列），
+    // 与"主题"节头（没有 caret、↺ 独占最右）视觉对齐。
+    action || null,
   );
 }
 

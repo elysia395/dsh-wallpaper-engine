@@ -5,7 +5,7 @@
  * 内联顺序见 scripts/build-client.mjs：本模块排在组装点之前（打包后同一工厂作用域）。
  */
   function renderAppearanceThemeSection(ctx) {
-    const { onToggleThemeFollow, sel } = ctx;
+    const { onResetModule, onToggleThemeFollow, sel } = ctx;
     return React.createElement(React.Fragment, null,
     // ── 主题：本节点只剩「主题随壁纸」—— 玻璃配置在「玻璃 UI」节，
     //    **「配色」（accent）已迁进「全局 UI 配色」节**（2026-10-11 用户口径：配色要成为
@@ -13,6 +13,7 @@
     React.createElement("div", { className: "we-picker__section" },
       React.createElement("div", { className: "we-picker__section-head" },
         React.createElement("span", { className: "we-picker__section-label" }, weT("主题")),
+        moduleResetButton("theme", onResetModule),
       ),
       // 主题随壁纸：总开关（**默认关** = 不按壁纸自动改深浅主题；**试验性功能**，行内已标注）。
       // 开着时才取色判决，并把**最近一次结论**摊开（"为什么判成浅色"要能当场答）；
@@ -30,7 +31,7 @@
   }
 
   function renderAppearanceDetailSection(ctx) {
-    const { onBorder, sel, detailOpen, onToggleDetailSection } = ctx;
+    const { onBorder, onResetModule, sel, detailOpen, onToggleDetailSection } = ctx;
     // 简化 / 高级分档见 ADR-0008 **D4**（实现口径在 `src/glass-panel.js`，按 `ctx.surface` 判定）：
     // 全局四件套、预设方案与各面总开关属简化配置（侧栏档也画）；本节的「独立配置」层及其子项
     // 属高级配置 ⇒ 只在设置页画。它与 quick-panel 的 setting-only 占位器互为负对照。
@@ -40,7 +41,7 @@
     return React.createElement(React.Fragment, null,
     // ── 细节：只剩**非釉层**的「边框」（边框 / 分割线对比度）—— 不属于玻璃配方 ──
     React.createElement("div", { className: "we-picker__section" },
-      sectionHead(weT("细节"), open, onToggleDetailSection),
+      sectionHead(weT("细节"), open, onToggleDetailSection, moduleResetButton("detail", onResetModule)),
       open && SliderRow(weT("边框"), 0, 90, 5, Math.round(sel.border * 100), onBorder, Math.round(sel.border * 100) + "%", "border-emphasis", {
         tooltip: weT("提高边框 / 分割线的对比度（浅色与深色主题通用）"),
       }),
@@ -369,7 +370,7 @@
   }
 
   function renderAppearanceFontSection(ctx) {
-    const { officialColorOf, onComponentFamily, onComponentFont, onFontAdvanced, onFontResetAll, onGlobalFamily, onRefreshSystemFonts, onThemeColor, onThemeColorClear, onThemeDarkSeparate, onThemeFamily, onThemeSize, onThemeTypeOnly, onThemeWeight, onToggleFontCustom, fontOpen, onToggleFontSection, fontSet, sel } = ctx;
+    const { officialColorOf, onComponentFamily, onComponentFont, onFontAdvanced, onFontResetAll, onGlobalFamily, onRefreshSystemFonts, onResetModule, onThemeColor, onThemeColorClear, onThemeDarkSeparate, onThemeFamily, onThemeSize, onThemeTypeOnly, onThemeWeight, onToggleFontCustom, fontOpen, onToggleFontSection, fontSet, sel } = ctx;
     // 「排版角色」表要按「只看改过的」筛，而**筛完是空**时要单独给一行提示 ⇒ 先算出来再渲染表。
     // ⚠️ 必须在 `React.createElement(...)` **之前**算（写成参数位置上的赋值表达式 ——
     //    赋值表达式的值是那个**数组本身**，于是它被当成一个子节点 ⇒ React #31「对象不能作为子节点」；
@@ -391,25 +392,9 @@
     //    找不到该节、报"字体自定义被干掉了" ⇒ 用户口径"两边都有"。两档都**默认收起**
     //    （节头点击展开），开合状态各记各的键。──
     React.createElement("div", { className: "we-picker__section" },
-      React.createElement("div", {
-        className: "we-picker__section-head we-picker__section-head--toggle",
-        role: "button",
-        tabIndex: 0,
-        "aria-expanded": open ? "true" : "false",
-        onClick: () => onToggleFontSection && onToggleFontSection(),
-        onKeyDown: (e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            if (onToggleFontSection) onToggleFontSection();
-          }
-        },
-      },
-        React.createElement("span", { className: "we-picker__section-label" }, weT("全局字体")),
-        React.createElement("span", {
-          className: "we-picker__section-caret" + (open ? " is-open" : ""),
-          "aria-hidden": "true",
-        }, "▾"),
-      ),
+      // 节头一律走共用构件（`sectionHead`）：折叠三角与模块级 ↺ 的**次序只有一份实现**
+      // ——手写副本正是次序会漂的地方（一处改了另一处不改 ⇒ 只有部分模块对齐）。
+      sectionHead(weT("全局字体"), open, onToggleFontSection, moduleResetButton("font", onResetModule)),
       open && switchRow(weT("字体自定义"), sel.fontCustom, (e) => onToggleFontCustom(e.target.checked), {
         tooltip: weT("关闭后恢复 dsh 默认字体外观；开启后可调颜色角色、排版角色（字号/字重/字族）与组件字体"),
       }),
@@ -487,12 +472,12 @@
   }
 
   function renderAppearanceSidebarCornersSection(ctx) {
-    const { onSidebarAllCorners, onSidebarCornerRadius, onSidebarCornerSquare, sel, cornersOpen, onToggleCornersSection } = ctx;
+    const { onResetModule, onSidebarAllCorners, onSidebarCornerRadius, onSidebarCornerSquare, sel, cornersOpen, onToggleCornersSection } = ctx;
     // ⚠️ 折叠门同「细节」节（2026-10-11 二次修订）：两档都支持隐藏，差别只在默认值。
     const open = cornersOpen === true;
     return React.createElement(React.Fragment, null,
       React.createElement("div", { className: "we-picker__section" },
-        sectionHead(weT("侧边栏圆角"), open, onToggleCornersSection),
+        sectionHead(weT("侧边栏圆角"), open, onToggleCornersSection, moduleResetButton("corners", onResetModule)),
         open && sidebarCornerGroup("left", weT("左侧栏"), sel, onSidebarCornerRadius, onSidebarCornerSquare, onSidebarAllCorners),
         open && sidebarCornerGroup("right", weT("右侧栏"), sel, onSidebarCornerRadius, onSidebarCornerSquare, onSidebarAllCorners),
       ),
@@ -509,7 +494,7 @@
   //    ⚠️ 折叠门与字体节同形（`uiColorOpen`，默认收起，两档各记各的 localStorage 键）。
   //    令牌与宿主消费者的实证见 `src/styles.js` 的同名段与 `lib/settings-schema.js` 的 DEFAULTS 注释。
   function renderAppearanceUiColorSection(ctx) {
-    const { onAccent, onCaretColor, onToggleUiColorCustom, onUiColorElement, sel, uiColorOpen, onToggleUiColorSection } = ctx;
+    const { onAccent, onCaretColor, onResetModule, onToggleUiColorCustom, onUiColorElement, sel, uiColorOpen, onToggleUiColorSection } = ctx;
     const open = uiColorOpen === true;
     const custom = sel.uiColorCustom === true;
     // 五个元素行：id 与 settings 键一一对应；文案与 tooltip 写明它**具体是哪一处** ——
@@ -532,25 +517,9 @@
     }, weT("跟随"));
     return React.createElement(React.Fragment, null,
     React.createElement("div", { className: "we-picker__section" },
-      React.createElement("div", {
-        className: "we-picker__section-head we-picker__section-head--toggle",
-        role: "button",
-        tabIndex: 0,
-        "aria-expanded": open ? "true" : "false",
-        onClick: () => onToggleUiColorSection && onToggleUiColorSection(),
-        onKeyDown: (e) => {
-          if (e.key === "Enter" || e.key === " ") {
-            e.preventDefault();
-            if (onToggleUiColorSection) onToggleUiColorSection();
-          }
-        },
-      },
-        React.createElement("span", { className: "we-picker__section-label" }, weT("全局 UI 配色")),
-        React.createElement("span", {
-          className: "we-picker__section-caret" + (open ? " is-open" : ""),
-          "aria-hidden": "true",
-        }, "▾"),
-      ),
+      // 节头一律走共用构件（`sectionHead`）：折叠三角与模块级 ↺ 的**次序只有一份实现**
+      // ——手写副本正是次序会漂的地方（一处改了另一处不改 ⇒ 只有部分模块对齐）。
+      sectionHead(weT("全局 UI 配色"), open, onToggleUiColorSection, moduleResetButton("uiColor", onResetModule)),
       open && React.createElement(React.Fragment, null,
         // ① 全局配色：直接调全部。开自定义后**禁用**（不是隐藏）—— 让它可见但明示"此刻不由它说了算"。
         React.createElement("div", { key: "global-accent", className: custom ? "we-picker__ctl we-picker__ctl--disabled" : "" },

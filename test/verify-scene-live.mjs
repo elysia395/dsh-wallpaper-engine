@@ -3099,6 +3099,9 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
   globalThis.SliderRow = noop; globalThis.switchRow = noop;
   globalThis.ctlText = noop; globalThis.swatchRow = noop; globalThis.renderFontSetEditor = noop;
   globalThis.ACCENT_PRESETS = []; globalThis.GLASS_COLOR_PRESETS = []; globalThis.CARET_COLOR_PRESETS = [];
+  // 模块级重置的处理器（issue #192）：quick-panel 的装配点会按名引用它 ⇒ 这里必须预置
+  //（与 onAccent 那批模块级处理器同一条口径：本守卫只验"渲染得出"，动作不真的跑）。
+  globalThis.onResetModule = noop;
   // 子 UI 玻璃登记表 + 键名生成器：panel-tabs 的「玻璃 UI」节按它逐项渲染。
   // ⚠️ 给**真值**（schema 的同一份），不手抄 —— 手抄一份就多一个会漂的副本，
   //    而且夹具渲染的项数一旦与真实面板不同就是假绿。
@@ -3114,6 +3117,14 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
   // 挂个替身等于"判据测替身"（比红更糟）。
   globalThis.sectionHead =
     (await import(pathToFileURL(join(root, 'src', 'section-head.js')).href)).sectionHead;
+  // 模块级重置按钮（issue #192）：同样是 panel-tabs 与 glass-panel 共用的构件，同样给**真实现**
+  // —— 判据要验"每处节头都挂上了 ↺"，挂替身就等于判据测替身。
+  globalThis.moduleResetButtonNode =
+    (await import(pathToFileURL(join(root, 'src', 'module-reset.js')).href)).moduleResetButtonNode;
+  // ⚠️ 域模块（-appearance / -effects / -mascot）的节头调的是**薄包装** `moduleResetButton(...)`：
+  //    它是 panel-tabs.js 的工厂作用域自由名字（打包后同作用域）；按文件 import 时是裸标识符
+  //    ⇒ 这里同样挂**真实现**（不是替身：判据要验"每处节头都挂上了 ↺"）。
+  globalThis.moduleResetButton = panelMod.moduleResetButton;
   // `renderMascotTab` 会调 `ropeArtOf(sel)`（主页面那只吉祥物当前用哪张立绘）—— 它住在
   // `src/client.js` 顶层，按文件 import 的替身里没有 ⇒ 挂一个形状正确的替身（本文件对它的
   // 判据在 verify-client 那边打真产物；这里只需要"有个合法的立绘盒"让环画得出来）。
@@ -3602,6 +3613,457 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       && fxSrc.includes('target.closest(FX_UI_SELECTOR)')
       && fxSrc.includes('{ passive: true }'),
       'fx-layer = 内容驱动 rAF + 层级 + 输入过滤 + 宿主混合；死锁形态 = 帧头 ensure 之前不许有别的早退');
+  }
+  {
+    // ── #190 光效层性能契约 ────────────────────────────────────────────────────
+    // 报告实测的敏感度与代码结构逐条对应：主因是 Canvas2D 的 shadowBlur（每次 stroke/fill
+    // 触发一次离屏高斯模糊）落在**每帧每图元**上 —— 「点击光晕 / 拖尾光晕影响很大」、
+    // 「拖尾时长正相关」（每帧模糊次数 ≈ 存活点数）、「星火 > 涟漪」（12 次 vs 2 次）。
+    // 这条判据用**假 canvas 数贵操作**：只数 stroke / fill / 非零 shadowBlur 赋值，
+    // 在最小 DOM 替身下真跑一遍画布层，断言"一帧的贵操作数"落在一个**只许下降**的上界内。
+    // 纯源码断言（例如"文件里不许出现 shadowBlur"）挡不住"换成别的贵写法"，故以计数为准。
+    const fxPerfSrc = readFileSync(join(root, 'src', 'fx-layer.js'), 'utf8').replace(/\r\n/g, '\n');
+    const restorePerfBase = stubWeBase();
+    const PERF_KEYS = ['document', 'window', 'requestAnimationFrame', 'cancelAnimationFrame', 'selection', 'weNow'];
+    const prevPerf = {};
+    for (const k of PERF_KEYS) prevPerf[k] = globalThis[k];
+    let perfNote = '';
+    let ops = null;
+    try {
+      // 假 2D 上下文：只数贵操作。**模糊按"绘制时 shadowBlur > 0"计**（那才是真的
+      // 高斯模糊次数）—— 只数赋值会漏掉"一次赋值、多次描边"（星火那 12 条正是这个形态）。
+      const mkCtx = () => {
+        const c = { ops: { stroke: 0, fill: 0, blur: 0 } };
+        const noop = () => {};
+        for (const m of ['setTransform', 'clearRect', 'beginPath', 'moveTo', 'lineTo', 'arc',
+          'save', 'restore', 'closePath', 'rect', 'fillRect', 'translate', 'scale']) c[m] = noop;
+        c.clearRect = noop;
+        c.stroke = () => { c.ops.stroke += 1; if (c.shadowBlur > 0) c.ops.blur += 1; };
+        c.fill = () => { c.ops.fill += 1; if (c.shadowBlur > 0) c.ops.blur += 1; };
+        for (const p of ['globalAlpha', 'globalCompositeOperation', 'strokeStyle', 'fillStyle',
+          'shadowColor', 'lineWidth', 'lineCap', 'lineJoin', 'font']) c[p] = '';
+        c.shadowBlur = 0;
+        return c;
+      };
+      const ctx = mkCtx();
+      const mkStyle = () => ({
+        _m: {},
+        setProperty(k, v) { this._m[k] = v; },
+        getPropertyValue(k) { return this._m[k] || ''; },
+        removeProperty() {},
+      });
+      const fakeCanvas = {
+        width: 0, height: 0, style: mkStyle(), className: '',
+        setAttribute() {}, appendChild() {}, getContext() { return ctx; },
+      };
+      const fakeHost = {
+        id: '', className: '', style: mkStyle(), isConnected: true, parentNode: null,
+        setAttribute() {}, appendChild() {},
+        compareDocumentPosition() { return 0; },
+      };
+      const listeners = {};
+      globalThis.document = {
+        body: { appendChild() {} },
+        createElement(tag) { return tag === 'canvas' ? fakeCanvas : fakeHost; },
+        addEventListener(type, fn) { (listeners[type] = listeners[type] || []).push(fn); },
+        removeEventListener(type, fn) {
+          const a = listeners[type] || [];
+          const i = a.indexOf(fn);
+          if (i >= 0) a.splice(i, 1);
+        },
+        querySelector() { return null; },
+      };
+      let clock = 1000;
+      globalThis.weNow = () => clock;
+      globalThis.window = {
+        innerWidth: 1920, innerHeight: 1080, devicePixelRatio: 1,
+        performance: { now: () => clock },
+      };
+      let rafCb = null;
+      globalThis.requestAnimationFrame = (fn) => { rafCb = fn; return 1; };
+      globalThis.cancelAnimationFrame = () => { rafCb = null; };
+      // 满档设置：光晕与时长都拉满（= 报告里最吃 GPU 的那组），两种点击样式与拖尾样式各测一次。
+      globalThis.selection = {
+        fxEnabled: true, fxClick: true, fxTrail: true,
+        fxClickStyle: 'both', fxTrailStyle: 'comet',
+        fxClickSize: 140, fxClickGlow: 100, fxTrailLength: 2000, fxTrailWidth: 3,
+        fxTrailGlow: 100, fxOpacity: 85, fxBlend: 'screen',
+        fxColorMode: 'accent', fxColor: '#4f8cff',
+      };
+      const runFrame = () => {
+        const cb = rafCb;
+        rafCb = null;
+        if (cb) cb();
+      };
+      fxLayerMod.syncFxLayer();
+      // 灌一条足够长的拖尾（模拟光标划过）+ 一次点击，然后量**一帧**的贵操作数。
+      for (let i = 0; i < 400; i += 1) {
+        for (const fn of (listeners.pointermove || [])) {
+          fn({ clientX: 60 + i * 4, clientY: 120 + (i % 60) * 6 });
+        }
+      }
+      for (const fn of (listeners.pointerdown || [])) fn({ clientX: 900, clientY: 500, target: null });
+      clock += 100; // 跨过降帧闸门
+      ctx.ops.stroke = 0; ctx.ops.fill = 0; ctx.ops.blur = 0;
+      runFrame();
+      ops = { stroke: ctx.ops.stroke, fill: ctx.ops.fill, blur: ctx.ops.blur };
+      perfNote = 'stroke=' + ops.stroke + ' fill=' + ops.fill + ' blur=' + ops.blur;
+    } catch (e) {
+      perfNote = 'threw: ' + String((e && e.message) || e);
+    } finally {
+      try { fxLayerMod.disposeFxLayer(); } catch { /* 已卸载 */ }
+      for (const k of PERF_KEYS) {
+        if (prevPerf[k] === undefined) delete globalThis[k]; else globalThis[k] = prevPerf[k];
+      }
+      restorePerfBase();
+    }
+    // 上界是**棘轮**（只许下降）：实测形态下 96 点的彗尾 + both 点击，分带后每帧只剩个位数
+    // 的带级描边；这里留出余量到 40，但把"逐段一次模糊"（≈99）挡在外面。
+    const OPS_CAP = 40;
+    const BLUR_CAP = 24;
+    check('#190 光效层：一帧的贵操作数在棘轮内（分带 + 星火合并 + 光晕不再逐图元）',
+      Boolean(ops) && ops.stroke + ops.fill <= OPS_CAP && ops.blur <= BLUR_CAP,
+      '需 stroke+fill ≤ ' + OPS_CAP + ' 且 blur ≤ ' + BLUR_CAP + ' —— ' + perfNote);
+    // 源码口径：降级状态机与分带表的形态（行为计数够不着"有没有可回退的降级"这件事）。
+    check('#190 光效层：自适应降级状态机 + 拖尾分带表在位（可回退 / 有迟滞）',
+      fxPerfSrc.includes('FX_PERF_SLOW_MS')
+      && fxPerfSrc.includes('FX_PERF_DOWN_RUN')
+      && fxPerfSrc.includes('FX_PERF_UP_RUN')
+      && fxPerfSrc.includes('FX_TRAIL_BANDS_BY_LEVEL')
+      && fxPerfSrc.includes('function fxPerfUpdate(')
+      // 升档必须存在（只降不升 = 一次卡顿永久降级）。
+      && /fxPerfLvl\s*-=\s*1/.test(fxPerfSrc)
+      // 12 条火花合并成一条 path、只描边一次。
+      && /g\.beginPath\(\);\s*\n\s*for \(let i = 0; i < FX_SPARK_COUNT/.test(fxPerfSrc),
+      'fxPerfSrc: ' + fxPerfSrc.length + ' 字节');
+  }
+  {
+    // ── #192 模块级 / 页签级 / 全局重置 ────────────────────────────────────────
+    // 键集是**派生或手写+对账**的（RESET_MODULES / RESET_TABS ← KINDS）⇒ 判据盯四件事：
+    // 四档口径都要有、各组非空、两两不相交、且每个键都有默认值可回写。
+    const groups = schemaMod.RESET_MODULES || {};
+    const names = Object.keys(groups);
+    const allKeys = [];
+    for (const n of names) { for (const k of groups[n]) allKeys.push(k); }
+    const uniq = new Set(allKeys);
+    // 真正要守的是"每个键都有默认值可回写" —— 缺默认值的键会让重置**静默什么都不做**
+    //（`resetKeysToDefault` 会跳过它），那正是"假控件"。刻意**不**用
+    // `PROFILE_PRESET_KEYS` 当判据：头像文件名属预设的**资产段**、`parallaxPluginDepths`
+    // 属排除段，但两者都该跟着模块一起重置（重置不该留着"上次导入的头像"）。
+    const missingDefault = allKeys.filter((k) => !Object.prototype.hasOwnProperty.call(schemaMod.DEFAULTS, k));
+    check('#192 模块分组：扩展 3 + 外观 6 共九组、非空、两两不相交、每键都有默认值可回写',
+      names.length === 9
+      && names.every((n) => groups[n].length > 0)
+      && uniq.size === allKeys.length
+      && missingDefault.length === 0,
+      'names=' + names.join(',') + ' keys=' + allKeys.length + ' missingDefault=' + missingDefault.join(','));
+    // 面板侧源码口径：全局重置**必须**经过既有两步确认构件（直接上屏 = 违背 #192 的
+    // "不可撤销所以要确认"），模块头要有 ↺ 且真的接到 onResetModule。
+    const ptSrc = readFileSync(join(root, 'src', 'panel-tabs.js'), 'utf8').replace(/\r\n/g, '\n');
+    check('#192 全局重置走两步确认 + 模块头有 ↺ 且接到分组',
+      ptSrc.includes('function renderResetSection(')
+      && ptSrc.includes('renderConfirmRow(armedConfirm, token,')
+      && ptSrc.includes('we-mod-reset') === false // 类名住在共用构件里
+      && ptSrc.includes('moduleResetButton(mod.resetGroup, onResetModule)'),
+      'panel-tabs 源码口径');
+    // 模块级 ↺ 必须**覆盖外观页签下的每个模块**（用户口径："外观下的模块也要能单独重置"）：
+    // 六个外观节各有一处调用，且共用构件必须阻止冒泡（否则点 ↺ 会连带收起该节）。
+    const mrSrc = readFileSync(join(root, 'src', 'module-reset.js'), 'utf8').replace(/\r\n/g, '\n');
+    const gpSrc = readFileSync(join(root, 'src', 'glass-panel.js'), 'utf8').replace(/\r\n/g, '\n');
+    // ⚠️ 刀4 之后节的渲染器搬到了 src/panel-tabs-*.js 域模块 ⇒ 扫**页签族全文**（组装点在末尾），
+    //    而不是组装点单文件（否则六处调用全在域模块里 ⇒ 假红 missing=theme,detail,…）。
+    const appearanceModules = ['theme', 'detail', 'corners', 'uiColor', 'font'];
+    const panelAllSrc = panelText();
+    const missingModules = appearanceModules.filter((m) => !panelAllSrc.includes('moduleResetButton("' + m + '"'));
+    check('#192 外观六模块各挂 ↺ + 玻璃 UI 也挂 + 共用构件阻止冒泡',
+      missingModules.length === 0
+      && gpSrc.includes('moduleResetButtonNode("glass", onResetModule')
+      && mrSrc.includes('function moduleResetButtonNode(moduleName, onResetModule, labels) {')
+      && mrSrc.includes('stopPropagation')
+      && mrSrc.includes('"we-mod-reset"'),
+      'missing=' + missingModules.join(',') + ' glass=' + gpSrc.includes('moduleResetButtonNode("glass"')
+      + ' stop=' + mrSrc.includes('stopPropagation'));
+    // 页签级划分（用户口径「每个选项卡后面加重置，重置指定选项卡」）：
+    // 必须是一份**完整划分** —— 每个可重置键恰好属于一个页签，或落在显式排除表里。
+    // 这是"手写表"的唯一兜底：新增设置键若两边都没登记，这里当场判红（而不是静默不重置）。
+    const tabs = schemaMod.RESET_TABS || {};
+    const excluded = schemaMod.RESET_TABS_EXCLUDED || [];
+    const resettable = Object.keys(schemaMod.KINDS)
+      .filter((k) => !schemaMod.DEFAULTS_ONLY.includes(k) && !schemaMod.CLIENT_ONLY.includes(k));
+    const tabKeys = [];
+    for (const n of Object.keys(tabs)) { for (const k of tabs[n]) tabKeys.push(k); }
+    const tabSeen = new Set(tabKeys);
+    const tabDup = tabKeys.filter((k, i) => tabKeys.indexOf(k) !== i);
+    const uncovered = resettable.filter((k) => !tabSeen.has(k) && !excluded.includes(k));
+    const overlapWithExcluded = excluded.filter((k) => tabSeen.has(k));
+    const strayExcluded = excluded.filter((k) => !resettable.includes(k));
+    check('#192 页签划分：五页签非空 + 完整覆盖可重置键 + 与排除表互斥（新增键漏登记即判红）',
+      Object.keys(tabs).length === 5
+      && Object.keys(tabs).every((n) => tabs[n].length > 0)
+      && tabDup.length === 0
+      && uncovered.length === 0
+      && overlapWithExcluded.length === 0
+      && strayExcluded.length === 0,
+      'tabs=' + Object.keys(tabs).join(',') + ' covered=' + tabSeen.size + '/' + resettable.length
+      + ' dup=' + tabDup.join(',') + ' uncovered=' + uncovered.join(',')
+      + ' overlap=' + overlapWithExcluded.join(',') + ' stray=' + strayExcluded.join(','));
+    // 面板侧：页签重置**挂在渲染点一处**（六处渲染器各挂一遍必然漏一个）。
+    const clSrc3 = readFileSync(join(root, 'src', 'client.js'), 'utf8').replace(/\r\n/g, '\n');
+    check('#192 页签重置：单一挂载点 + 关于页签不给假按钮 + 处理器在 client.js',
+      ptSrc.includes('function renderTabReset(ctx, tabId)')
+      && ptSrc.includes('if (tabId === "about") return null;')
+      && ptSrc.includes('renderConfirmRow(armedConfirm, token,')
+      // ⚠️ 重置节的标题**不许**用 `we-picker__section-label`：那是"设置分组卡"的类名，
+      // 而那些按"末三张分组卡"取窗口的判据（3D 效果页正好三张）会被它挤掉。
+      && ptSrc.includes('we-picker__section-reset-label')
+      && !/weT\("重置本页"\)\).*section-label/.test(ptSrc)
+      && clSrc3.includes('renderTabReset({')
+      && clSrc3.includes('const onResetTab = (tabId) =>'),
+      'panel-tabs + client 源码口径');
+  }
+  {
+    // ── #191 问题 2：连续同侧消息只在首条显示头像 ──────────────────────────────
+    const avSrc = readFileSync(join(root, 'src', 'avatar-layer.js'), 'utf8').replace(/\r\n/g, '\n');
+    // ⚠️ 刀4 之后 `src/styles.js` 只是 31 行组装点 ⇒ 样式判据必须读**样式族全文**（styleText()）。
+    const stSrc = styleText();
+    check('#191 头像分组：只在首条显示 + 续行用 visibility 隐藏（不摘节点 ⇒ 不踩回 #154）',
+      avSrc.includes("const AVATAR_CONT_CLASS = 'we-avatar--cont';")
+      && avSrc.includes('function avatarApplyGrouping()')
+      && avSrc.includes('classList.toggle(AVATAR_CONT_CLASS, side === prev)')
+      && avSrc.includes('function avatarScheduleGrouping()')
+      && avSrc.includes('if (decorated) avatarScheduleGrouping();')
+      // #154 的保护线：续行**只许**用 visibility 隐藏。出现 display 就是踩回那个坑 ——
+      // 摘掉/收起头像那一路曾让收起的思考行宽度塌成 0、连入口一起消失。
+      && /\.we-avatar--cont\s*\{\s*visibility:\s*hidden;\s*\}/.test(stSrc)
+      && !/\.we-avatar--cont\s*\{[^}]*display\s*:/.test(stSrc),
+      'avatar-layer + styles 源码口径');
+  }
+  {
+    // ── #191 问题 1：上传裁切 ──────────────────────────────────────────────────
+    // 做法是"**导入时先裁再传**"（盘上那张就是裁完的方形图）⇒ 零新设置键、预览与会话天然一致。
+    // 判据盯三件事：① 裁切几何只有一份实现（渲染器不自己再算一遍）；② 上传腿走既有的
+    // postImageAsset（不新开第二条落盘通道）；③ 弹窗有取消路径（取消 = 不上传、撤 URL）。
+    const clSrc2 = readFileSync(join(root, 'src', 'client.js'), 'utf8').replace(/\r\n/g, '\n');
+    const eaSrc = readFileSync(join(root, 'src', 'ext-avatar.js'), 'utf8').replace(/\r\n/g, '\n');
+    check('#191 上传裁切：唯一几何实现 + 走既有上传腿 + 有取消路径',
+      clSrc2.includes('function avatarCropGeometry()')
+      && clSrc2.includes('function cropAvatarToBlob()')
+      && clSrc2.includes('function onAvatarCropConfirm()')
+      && clSrc2.includes('postImageAsset("/avatar/" + side, img.blob, weT("头像"))')
+      // 取消必须真的撤掉预览 URL（否则每次取消漏一个 blob）
+      && clSrc2.includes('function closeAvatarCrop()')
+      && clSrc2.includes('URL.revokeObjectURL(url)')
+      // 渲染器只读 ctx 传进来的几何（不引 avatarCropGeometry 这个裸标识符）
+      && eaSrc.includes('function renderAvatarCropModal(ctx)')
+      && eaSrc.includes('ctx.avatarCropGeo')
+      && !eaSrc.includes('avatarCropGeometry('),
+      'client + ext-avatar 源码口径');
+  }
+  {
+    // ── 文件头尺寸解析器：**喂真字节**跑真实现（#185 后续）──────────────────────────
+    // 上面那组判据只钉"函数在不在、顺序对不对"（源码口径）。但 `parseBitmapHeaderSize`
+    // 是这轮**唯一含位运算的新代码** —— 位域读错一位就会把 1024 读成 0（闸随之恒放行）。
+    // 所以这里 import **真实现**、用合成的最小文件头喂它，断言的是**返回值**而不是源码形状。
+    // 之所以能这么测：`src/avatar-import.js` 是纯函数（零 DOM、零异步、零外界），
+    // 而它独立成文件的理由与 section-head / module-reset 完全相同（按文件 import 的替身
+    // 必须取到真实现）。
+    const ai = await import(pathToFileURL(join(root, 'src', 'avatar-import.js')).href);
+    /** 造一个 PNG 头（89 50 4E 47 0D 0A 1A 0A + 长度 + IHDR + 宽 + 高）。 */
+    const pngHead = (w, h) => {
+      const b = new Uint8Array(32);
+      b.set([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a], 0);
+      b.set([0, 0, 0, 13], 8);
+      b.set([0x49, 0x48, 0x44, 0x52], 12);
+      b[16] = (w >>> 24) & 255; b[17] = (w >>> 16) & 255; b[18] = (w >>> 8) & 255; b[19] = w & 255;
+      b[20] = (h >>> 24) & 255; b[21] = (h >>> 16) & 255; b[22] = (h >>> 8) & 255; b[23] = h & 255;
+      return b.buffer;
+    };
+    const png = ai.parseBitmapHeaderSize(pngHead(1024, 768));
+    check('尺寸解析：PNG 头部读出真实宽高（1024×768）+ 认得出 kind',
+      png && png.width === 1024 && png.height === 768 && png.kind === 'png',
+      JSON.stringify(png));
+    // GIF：GIF89a + 小端 u16 宽高。
+    const gifGot = (() => {
+      const b = new Uint8Array(16);
+      b.set([0x47, 0x49, 0x46, 0x38, 0x39, 0x61], 0);
+      b[6] = 300 & 255; b[7] = (300 >> 8) & 255;
+      b[8] = 200 & 255; b[9] = (200 >> 8) & 255;
+      return ai.parseBitmapHeaderSize(b.buffer);
+    })();
+    check('尺寸解析：GIF 头部读出小端宽高（300×200）',
+      gifGot && gifGot.width === 300 && gifGot.height === 200 && gifGot.kind === 'gif',
+      JSON.stringify(gifGot));
+    // BMP：BM + DIB，宽高是**有符号**小端 i32（负高度 = 自顶向下）。
+    const bmpGot = (() => {
+      const b = new Uint8Array(32);
+      b[0] = 0x42; b[1] = 0x4d;
+      const w = 640; const h = -480;
+      b[18] = w & 255; b[19] = (w >> 8) & 255; b[20] = (w >> 16) & 255; b[21] = (w >> 24) & 255;
+      const u = h >>> 0;
+      b[22] = u & 255; b[23] = (u >> 8) & 255; b[24] = (u >> 16) & 255; b[25] = (u >> 24) & 255;
+      return ai.parseBitmapHeaderSize(b.buffer);
+    })();
+    check('尺寸解析：BMP 负高度（自顶向下位图）取绝对值（640×480）',
+      bmpGot && bmpGot.width === 640 && bmpGot.height === 480 && bmpGot.kind === 'bmp',
+      JSON.stringify(bmpGot));
+    // JPEG：SOI + APP0（要跨过它）+ SOF0。SOF 段内布局（从段标记起算）：
+    //   +2..+3 = 段长、+4 = 精度、+5..+6 = 高、+7..+8 = 宽（都是大端 u16）。
+    const jpegGot = (() => {
+      const b = new Uint8Array(40);
+      b[0] = 0xff; b[1] = 0xd8;
+      b[2] = 0xff; b[3] = 0xe0; b[4] = 0x00; b[5] = 0x10; // APP0，长度 16 ⇒ 下一段在 20
+      b[20] = 0xff; b[21] = 0xc0; b[22] = 0x00; b[23] = 0x11; // SOF0
+      b[24] = 8;                                              // 精度
+      b[25] = (512 >> 8) & 255; b[26] = 512 & 255;            // 高
+      b[27] = (768 >> 8) & 255; b[28] = 768 & 255;            // 宽
+      return ai.parseBitmapHeaderSize(b.buffer);
+    })();
+    check('尺寸解析：JPEG 跨过 APP 段找到 SOF0 并读对宽高（768×512）',
+      jpegGot && jpegGot.width === 768 && jpegGot.height === 512 && jpegGot.kind === 'jpeg',
+      JSON.stringify(jpegGot));
+    // WebP：VP8X 的宽高是 **24 位小端 + 1**（位域少加一就会读出 0 ⇒ 闸恒放行）。
+    const webpGot = (() => {
+      const b = new Uint8Array(32);
+      b.set([0x52, 0x49, 0x46, 0x46], 0);
+      b.set([0x57, 0x45, 0x42, 0x50], 8);
+      b.set([0x56, 0x50, 0x38, 0x58], 12); // "VP8X"
+      const w = 4096 - 1; const h = 2048 - 1;
+      b[24] = w & 255; b[25] = (w >> 8) & 255; b[26] = (w >> 16) & 255;
+      b[27] = h & 255; b[28] = (h >> 8) & 255; b[29] = (h >> 16) & 255;
+      return ai.parseBitmapHeaderSize(b.buffer);
+    })();
+    check('尺寸解析：WebP VP8X 的 24 位宽高（+1 语义）读对（4096×2048）',
+      webpGot && webpGot.width === 4096 && webpGot.height === 2048 && webpGot.kind === 'webp',
+      JSON.stringify(webpGot));
+    // 认不出 = null（而不是抛错）：调用方据此退回解码腿，绝不因此误拒用户的图。
+    check('尺寸解析：认不出的字节流给 null（调用方退回解码腿，不误拒）',
+      ai.parseBitmapHeaderSize(new Uint8Array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15, 16, 17]).buffer) === null
+      && ai.parseBitmapHeaderSize(null) === null);
+    // SVG：属性优先，其次是 viewBox（都没有给 null，交给解码腿裁决）。
+    const svgAttr = ai.parseSvgSize('<svg xmlns="http://www.w3.org/2000/svg" width="2048" height="1536"></svg>');
+    const svgView = ai.parseSvgSize('<svg viewBox="0 0 640 480"></svg>');
+    const svgNone = ai.parseSvgSize('<svg xmlns="http://www.w3.org/2000/svg"></svg>');
+    check('尺寸解析：SVG 读 width/height，缺失时退回 viewBox，都没有给 null',
+      svgAttr && svgAttr.width === 2048 && svgAttr.height === 1536
+      && svgView && svgView.width === 640 && svgView.height === 480
+      && svgNone === null,
+      JSON.stringify([svgAttr, svgView, svgNone]));
+    // 两道闸的**行为**（不只是常量在不在）：边界两侧各喂一次。
+    const over = ai.avatarImportLimit({ size: 5 * 1024 * 1024 }, { width: 800, height: 800 });
+    const overEdge = ai.avatarImportLimit({ size: 1024 }, { width: 4096, height: 100 });
+    const okEdge = ai.avatarImportLimit({ size: 1024 }, { width: 1024, height: 1024 });
+    const okBoth = ai.avatarImportLimit({ size: 4 * 1024 * 1024 }, { width: 1024, height: 1024 });
+    const unknown = ai.avatarImportLimit({ size: 1024 }, null);
+    check('两道闸的行为：超体积/超边长各自判拒，恰好等于上限放行，尺寸未知时只按体积判',
+      over.ok === false && over.overBytes === true && over.overEdge === false
+      && overEdge.ok === false && overEdge.overEdge === true && overEdge.overBytes === false
+      && okEdge.ok === true && okBoth.ok === true && unknown.ok === true,
+      JSON.stringify([over.ok, overEdge.ok, okEdge.ok, okBoth.ok, unknown.ok]));
+    // 负对照：把 PNG 的字节序故意当成"小端"（即读错位）⇒ 同一个断言必须判坏。
+    const wrongEndian = (() => {
+      const b = new Uint8Array(pngHead(1024, 768));
+      return { width: (b[19] << 24 | b[18] << 16 | b[17] << 8 | b[16]) >>> 0 }; // 小端解读
+    })();
+    check('negative control: 字节序/位域读错会被同一条断言判出（判据不是恒真）',
+      png.width === 1024 && wrongEndian.width !== 1024,
+      '正确=' + png.width + ' 错读=' + wrongEndian.width);
+  }
+  {
+    // ── 头像导入的两道闸 + 「自动压缩后导入」（#185 后续，用户口径 2026-10-13）──────────
+    // 这道闸之前**根本不存在**：选什么图都直接 decodeImageFile，再缩到 512px 上传。
+    // 危险在"解码炸弹"—— 一个 20000×20000 的 PNG 只有几百 KB，解码却要 1.6 GB 像素内存；
+    // 而"这图多大"**不用解码就能从文件头读出来**。判据因此盯五件事：
+    //   ① 两道闸的常量在位（边长 1024 / 体积 4 MiB）；
+    //   ② 尺寸解析走**文件头**，解析函数自己不许解码；
+    //   ③ 判定发生在**解码之前**（先拒再解 —— 这条顺序就是闸的全部价值）；
+    //   ④ 自动压缩**无损优先**（PNG 排在 WebP 前面）；
+    //   ⑤ 结构上不泄原始文件：上传的那份 blob 来自**裁切画布**（于是 SVG 这类"客户端收得下、
+    //      宿主不认"的格式只可能以像素形态落盘，同源存储型 XSS 无从谈起）。
+    const gsrc = readFileSync(join(root, 'src', 'client.js'), 'utf8').replace(/\r\n/g, '\n');
+    const eSrc = readFileSync(join(root, 'src', 'ext-avatar.js'), 'utf8').replace(/\r\n/g, '\n');
+    // 闸的常量与探针住在 src/avatar-import.js（纯函数，上面那组判据用真字节喂它）；
+    // 这里钉的是**接线**：client 正文有没有真的用它们、以及用的顺序对不对。
+    const aiSrc = readFileSync(join(root, 'src', 'avatar-import.js'), 'utf8').replace(/\r\n/g, '\n');
+    const limitsInPlace = aiSrc.includes('const AVATAR_IMPORT_MAX_EDGE = 1024;')
+      && aiSrc.includes('const AVATAR_IMPORT_MAX_BYTES = 4 * 1024 * 1024;');
+    const headFn = aiSrc.includes('function parseBitmapHeaderSize(buffer)');
+    const svgFn = aiSrc.includes('function parseSvgSize(text)');
+    const probeFn = aiSrc.includes('async function probeImageSize(file)');
+    const headerOnly = headFn && svgFn && probeFn
+      // ⚠️ 必须在**剥掉注释**后的代码上判：本模块的注释里正好写着 `decodeImageFile`
+      //（解释"为什么必须在解码之前"），不剥就会被自己那句话判红（实测踩过）。
+      && !/decodeImageFile|createImageBitmap/.test(stripComments(aiSrc));
+    /** 判定是否排在解码之前（正/负对照共用**这一个**函数）。 */
+    const gateBeforeDecode = (src2) => {
+      const body = fnBody(src2, 'onAvatarFileChosen');
+      const gateAt = body.indexOf('avatarImportLimit(');
+      const cropAt = body.indexOf('openAvatarCrop(');
+      return gateAt >= 0 && cropAt >= 0 && gateAt < cropAt
+        && !/decodeImageFile|createImageBitmap/.test(body);
+    };
+    const encFn = fnBody(gsrc, 'downscaleDecoded');
+    /** 自动压缩是否无损优先（PNG 先于 WebP 出现）。 */
+    const losslessFirst = (src2) => {
+      const body = fnBody(src2, 'downscaleDecoded');
+      return /losslessFirst/.test(body)
+        && body.indexOf('image/png') >= 0 && body.indexOf('image/png') < body.indexOf('image/webp');
+    };
+    const confirmFn = fnBody(gsrc, 'onAvatarCropConfirm');
+    const canvasOnly = confirmFn.includes('cropAvatarToBlob()')
+      && confirmFn.includes('postImageAsset("/avatar/" + side, img.blob');
+    check('头像导入闸：两道闸常量在位、尺寸走文件头（不解码）、判定排在解码之前',
+      limitsInPlace && headerOnly && gateBeforeDecode(gsrc),
+      'limits=' + limitsInPlace + ' headerOnly=' + headerOnly
+      + ' gateBeforeDecode=' + gateBeforeDecode(gsrc));
+    check('头像自动压缩：无损优先（PNG 先于 WebP）+ 上传的是裁切画布（原始文件永不直传）',
+      losslessFirst(gsrc) && canvasOnly,
+      'losslessFirst=' + losslessFirst(gsrc) + ' canvasOnly=' + canvasOnly);
+    // 面板侧：超限时给的是**出路**（一枚「自动压缩后导入」），不是只有一句拒绝。
+    check('头像超限的面板出口：提示行 + 「自动压缩后导入」按钮都接在真处理器上',
+      eSrc.includes('sel.avatarOverflow') && eSrc.includes('onAvatarAutoCompress')
+      && eSrc.includes('weT("自动压缩后导入")') && eSrc.includes('weT("压缩中…")'),
+      'ext-avatar 源码口径');
+    // 负对照：把判定挪到解码之后（先 openAvatarCrop 再判）⇒ 同一条判据判红。
+    const reversed = gsrc.replace(
+      /([ \t]*)const verdict = avatarImportLimit\(/,
+      '$1const __verdictMoved = avatarImportLimit(')
+      .replace('function onAvatarFileChosen(', 'function onAvatarFileChosenMutant(');
+    check('negative control: 判定挪到解码之后就判红（同一条判据不是恒真）',
+      gateBeforeDecode(gsrc) === true && gateBeforeDecode(reversed) === false);
+  }
+  {
+    // ── 模块级 ↺ 的视觉对齐（#192 的回归，用户口径 2026-10-13）────────────────────────
+    // 根因：`.we-picker__section-caret` 与 `.we-mod-reset` **都写了 margin-left: auto**，
+    // 同一 flex 行里两个 auto 会把剩余空间**均分** ⇒ ↺ 停在行中间；而「主题」节头没有
+    // 折叠三角、只剩一个 auto ⇒ 它贴在最右端。用户要的是**所有模块都长成主题那样**。
+    // 于是两件事：① 节头里 ↺ 排到折叠三角**之后**（坐进原来"小绿点"那一列）；
+    //            ② 有三角同排时 ↺ 不再抢剩余空间（让位给三角的 auto）。
+    const headSrc = readFileSync(join(root, 'src', 'section-head.js'), 'utf8').replace(/\r\n/g, '\n');
+    // ⚠️ 同上：CSS 住在 src/styles-*.js 域模块里，`src/styles.js` 只是组装点 ⇒ 读样式族全文。
+    const styleSrc = styleText();
+    /** 节头尾部次序：标签 → 折叠三角 → ↺（正/负对照共用**这一个**函数）。 */
+    const tailOrderOk = (src2) => {
+      const iLabel = src2.indexOf('we-picker__section-label');
+      const iCaret = src2.indexOf('"we-picker__section-caret');
+      const iAction = src2.indexOf('action || null');
+      return iLabel >= 0 && iCaret >= 0 && iAction >= 0 && iLabel < iCaret && iCaret < iAction;
+    };
+    /** 有三角同排时 ↺ 让出剩余空间（不再抢 auto）。 */
+    const resetYieldsOk = (src2) => /\.we-picker__section-caret\s*\+\s*\.we-mod-reset\s*\{[^}]*margin-left:\s*8px/.test(src2);
+    // 折叠节头**只有一个实现**：panel-tabs 里那两处手写的 --toggle 节头已并回共用构件
+    //（手写副本正是顺序会漂的地方 —— 一处改了另一处不改，就是"只有部分模块对齐"）。
+    const handRolled = (readFileSync(join(root, 'src', 'panel-tabs.js'), 'utf8')
+      .match(/we-picker__section-head--toggle/g) || []).length;
+    check('#192 回归：节头里 ↺ 排在折叠三角之后（标签 → 三角 → ↺）+ 有三角时 ↺ 让出剩余空间',
+      tailOrderOk(headSrc) && resetYieldsOk(styleSrc),
+      'order=' + tailOrderOk(headSrc) + ' yields=' + resetYieldsOk(styleSrc));
+    check('#192 回归：折叠节头只剩共用构件一个实现（panel-tabs 不再手写 --toggle 节头）',
+      handRolled === 0, '手写处数=' + handRolled);
+    // 负对照：把次序换回旧样子（↺ 排在三角之前）⇒ 同一条判据判红。
+    const oldOrder = headSrc.replace('    action || null,\n', '')
+      + '\n// 旧样子：action 排在 caret 之前\n';
+    check('negative control: ↺ 排回折叠三角之前会被同一条判据判出',
+      tailOrderOk(headSrc) === true && tailOrderOk(oldOrder) === false);
   }
   {
     // 二号模块的岛：注册表项形状 + 「关着只画总开关、开着才画 12 个参数」这条可见行为。
@@ -4769,6 +5231,89 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       && typeof avatarLayerMod.syncAvatarLayer === 'function'
       && typeof avatarLayerMod.disposeAvatarLayer === 'function'
       && !threw && !pure, threw || pure);
+    {
+      // ── 超限提示行：**跑真渲染器**看它到底画出什么文本（#185 后续）──────────────────
+      // 为什么值得单独一条：三个占位符（{w}/{h}/{mb}）由 `weT` 的**第二个实参**替换 ——
+      // 漏传时屏上会原样显示 "{w}×{h}"，而 i18n 守卫只对账"占位符集合一致"、看不出这个。
+      // 渲染器是纯函数（读 sel、返回 React 元素树），所以这里能直接调它、遍历树取文本。
+      const PREV_REACT = globalThis.React;
+      const restoreWeBase2 = stubWeBase();
+      const stubs2 = {
+        apiUrl: (p) => '/wallpaper-engine' + String(p || ''),
+        avatarImageUrl: () => '', renderAvatarGlyph: () => null,
+        switchRow: () => null, SliderRow: () => null, ctlText: () => null,
+        // ⚠️ `humanMb` 给**真实现**（不是替身）：它就是超限文案里那句 "{mb}" 的格式化器，
+        // 替身会让"这个函数在产物里根本不存在"这种缺陷溜过去（ext-avatar 只在超限时调它，
+        // 别的用例喂的是没有超限的 sel ⇒ 那条路覆盖不到）。
+        humanMb: (await import(pathToFileURL(join(root, 'src', 'avatar-import.js')).href)).humanMb,
+      };
+      const prevFns = {};
+      for (const k of Object.keys(stubs2)) { prevFns[k] = globalThis[k]; globalThis[k] = stubs2[k]; }
+      for (const k of ['AVATAR_SIZE_MIN', 'AVATAR_SIZE_MAX', 'AVATAR_RADIUS_MIN', 'AVATAR_RADIUS_MAX']) {
+        prevFns[k] = globalThis[k]; globalThis[k] = schemaMod[k];
+      }
+      try {
+        // 极简 React 替身：只要 createElement 把 props/children 原样装成可遍历的树即可。
+        globalThis.React = {
+          createElement: (type, props, ...children) => ({ type, props: props || {}, children }),
+          Fragment: 'Fragment',
+        };
+        // 遍历替身树收集全部文本节点。⚠️ **迭代式、不用递归**：本文件跑在一条已经很深的
+        // 调用链上（顶层 await → 一堆 check 闭包），递归版实测**偶发**把 V8 的栈顶爆掉
+        // （`v8::String::Utf8Value::~Utf8Value` 那种崩法，退出码还随机会不同）——
+        // 只递归进 children、不碰 props，深度由渲染树决定但仍是外部输入。
+        const textsOf = (root) => {
+          const acc = [];
+          const stack = [root];
+          while (stack.length) {
+            const n = stack.pop();
+            if (typeof n === 'string') { acc.push(n); continue; }
+            if (Array.isArray(n)) { for (const x of n) stack.push(x); continue; }
+            if (!n || typeof n !== 'object') continue;
+            if (Array.isArray(n.children)) for (const x of n.children) stack.push(x);
+          }
+          return acc;
+        };
+        const islandCtx = (sel) => ({
+          sel: sel,
+          onAvatarEnabled: () => {}, onAvatarSize: () => {}, onAvatarRadius: () => {},
+          onAvatarPick: () => {}, onAvatarClear: () => {}, onAvatarAutoCompress: () => {},
+        });
+        const exceeded = Object.assign({}, schemaMod.DEFAULTS, {
+          avatarEnabled: true,
+          avatarOverflow: {
+            side: 'user', bytes: 12.5 * 1024 * 1024, width: 4096, height: 3072,
+            overBytes: true, overEdge: true,
+          },
+        });
+        const flat = textsOf(extAvatarMod.renderAvatarIsland(islandCtx(exceeded))).join(' ');
+        const nodes = textsOf(extAvatarMod.renderAvatarIsland(islandCtx(exceeded)));
+        // ⚠️ 必须用**整节点相等**而不是子串：那句总说明里本来就写着"可选择自动压缩后导入"
+        //（解释这个功能是怎么工作的），子串匹配会把说明当成按钮 ⇒ 负对照永远失败。
+        const hasAutoCompress = nodes.some((t) => t === '自动压缩后导入');
+        // 三个占位符都不许以原样出现在文本里（漏传实参的典型形态）。
+        const noRawPlaceholder = !/\{w\}|\{h\}|\{mb\}/.test(flat);
+        // 实测值必须真的插进去了（4096 / 3072 / 12.5 MB）。
+        const interpolated = flat.includes('4096') && flat.includes('3072') && flat.includes('12.5 MB');
+        // 负对照：同一个渲染器喂"没有超限"的 sel ⇒ 这一行整个不画（判据不是恒真）。
+        const plainSel = Object.assign({}, schemaMod.DEFAULTS, { avatarEnabled: true, avatarOverflow: null });
+        const noneNodes = textsOf(extAvatarMod.renderAvatarIsland(islandCtx(plainSel)));
+        const noneFlat = noneNodes.join(' ');
+        check('#185 超限提示行：占位符真的插了值（不出现裸 {w}/{h}/{mb}）+ 「自动压缩后导入」按钮在场',
+          hasAutoCompress && noRawPlaceholder && interpolated,
+          'btn=' + hasAutoCompress + ' noRaw=' + noRawPlaceholder + ' interpolated=' + interpolated
+          + ' | ' + flat.slice(0, 120));
+        check('negative control: 没有超限信息时这一行整个不画（同一条判据不是恒真）',
+          noneNodes.length > 0 && !noneNodes.some((t) => t === '自动压缩后导入'),
+          'noneLen=' + noneFlat.length);
+      } finally {
+        if (PREV_REACT === undefined) delete globalThis.React; else globalThis.React = PREV_REACT;
+        for (const k of Object.keys(prevFns)) {
+          if (prevFns[k] === undefined) delete globalThis[k]; else globalThis[k] = prevFns[k];
+        }
+        restoreWeBase2();
+      }
+    }
     // 源码口径：这一层的要点全是"看不见的形态"或"只准碰哪几类行"。逐条钉住，改坏了当场红。
     const avSrc = readFileSync(join(root, 'src', 'avatar-layer.js'), 'utf8');
     // 收窄导出面（task-17 第 56 条）：`avatarGlyphSvgString` 零跨模块按名引用 ⇒ 只删导出面。

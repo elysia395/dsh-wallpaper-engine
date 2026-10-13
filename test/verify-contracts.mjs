@@ -110,10 +110,17 @@ function acceptLists(src) {
   return [...src.matchAll(/accept:\s*['"]([^'"]+)['"]/g)]
     .map((m) => uniq(m[1].split(',').map((s) => s.trim()).filter(Boolean)));
 }
-/** 客户端**选图腿自己写下的赋值点** `input.accept = "a,b,c"`（`src/client.js` 的 pickImageFile）。 */
+/** 客户端**选图腿自己写下的赋值点** `input.accept = …`（`src/client.js` 的 pickImageFile）。
+ *  ⚠️ 右侧**不一定是字面量**（issue #185 之后是 `accept || IMAGE_DIRECT_ACCEPT`）⇒ 这里抽的是
+ *  "整条赋值语句"，由调用方按形态判定（字面量 or 常量名兜底）。 */
 function acceptAssignments(src) {
-  return [...src.matchAll(/input\.accept\s*=\s*['"]([^'"]+)['"]/g)]
-    .map((m) => uniq(m[1].split(',').map((s) => s.trim()).filter(Boolean)));
+  return [...src.matchAll(/input\.accept\s*=\s*([^;\n]+)/g)].map((m) => m[1].trim());
+}
+/** 一条赋值语句右侧里的字面量 MIME 清单（不是字面量则空数组）。 */
+function acceptAssignmentLiterals(assignments) {
+  return assignments
+    .filter((rhs) => /^['"]/.test(rhs))
+    .map((rhs) => uniq(rhs.replace(/^['"]|['"]$/g, '').split(',').map((s) => s.trim()).filter(Boolean)));
 }
 /** 负对照用的变异体：把每个 `input.accept` 清单**砍掉最后一项**。 */
 function weakenedAcceptAssignments(src) {
@@ -159,27 +166,30 @@ const tabsSrc = panelText();
     'host=' + (hostFrame || []).join(',') + ' client=' + clientFrame.map((l) => l.join(',')).join(' | '));
 
   // 自定义会话头像（「扩展」页签一号模块）与吉祥物立绘（「系统」页签 · 聊天吉祥物）走的是
-  // **同一条选图腿**（`src/client.js` 的 pickImageFile），也就是说客户端那一份 accept 只写在
-  // 一个地方：`input.accept = "…"`（`src/client.js:3307`）。判据必须锚在**这条腿自己写下的那一行**上
-  // ——先前三条 check 共用从 `src/panel-tabs.js` 抄来的同一份清单，选图腿漂了它也照样绿。
-  // 宿主那边是 lib/index.js 的 AVATAR_EXT / MASCOT_EXT；不一致的失效模式同自定义画面：
-  // 选择器收得下、宿主判 415（静默失败）。
+  // **同一条选图腿**（`src/client.js` 的 pickImageFile）。宿主那边是 lib/index.js 的
+  // AVATAR_EXT / MASCOT_EXT；不一致的失效模式同自定义画面：选择器收得下、宿主判 415（静默失败）。
+  //
+  // ⚠️ issue #185（头像支持 SVG 等格式）之后，accept **不再是"等于宿主表"**，而是分成两层：
+  //   · **直传格式**（`IMAGE_DIRECT_ACCEPT`）—— 客户端原样上传、宿主认、**原样落盘**。
+  //     这一层的键集必须与宿主表**逐个相等**（老契约，一个字都没松）。
+  //   · **仅光栅化格式**（`IMAGE_RASTER_ACCEPT`）—— 选择器收得下，但**绝不会原样落盘**：
+  //     它经 canvas 解码成像素、再由同一个编码器重编成直传格式。宿主**不认识也不该认识**
+  //     它们（`/avatar/<side>` 与页面同源，原样存一份 SVG 就是同源存储型 XSS）。
+  // 判据因此守三件事：① 直传层 == 宿主表（两侧都比）；② 仅光栅化层与宿主表**不相交**
+  //（加了 SVG 却没光栅化、直接落盘 ⇒ 这里当场红）；③ 选图腿真的把两层都挂上了（不是造了个
+  // 常量没人用）。
   const clientAccept = acceptAssignments(clientSrc);
-  /** 某个客户端赋值点里是否存在与宿主表一致的 accept 列表（正判据与负对照共用这一条）。 */
+  const clientAcceptLiterals = acceptAssignmentLiterals(clientAccept);
+  /** 某个 accept 清单里是否存在与宿主表一致的列表（正判据与负对照共用这一条）。 */
   const acceptCovers = (lists, hostTable) =>
     Boolean(hostTable && hostTable.length >= 3) && lists.some((l) => sameSet(l, hostTable));
   check('覆盖面：选图腿确实写下了 input.accept 赋值点（抽取器退化 ⇒ 当场红，不静默恒真）',
-    clientAccept.length >= 1, '赋值点=' + clientAccept.map((l) => l.join(',')).join(' | ') || '(没抽到)');
+    clientAccept.length >= 1, '赋值点=' + (clientAccept.join(' | ') || '(没抽到)'));
 
-  const hostAvatar = hostMimeKeys(hostAssetsSrc, 'AVATAR_EXT');
-  check('会话头像 MIME：客户端选图腿自己的 input.accept 与宿主 AVATAR_EXT 键集一致',
-    acceptCovers(clientAccept, hostAvatar),
-    'host=' + (hostAvatar || []).join(',') + ' client=' + clientAccept.map((l) => l.join(',')).join(' | '));
-
-  const hostMascot = hostMimeKeys(hostAssetsSrc, 'MASCOT_EXT');
-  check('吉祥物立绘 MIME：客户端选图腿自己的 input.accept 与宿主 MASCOT_EXT 键集一致',
-    acceptCovers(clientAccept, hostMascot),
-    'host=' + (hostMascot || []).join(',') + ' client=' + clientAccept.map((l) => l.join(',')).join(' | '));
+  const hostAvatar = hostMimeKeys(hostSrc, 'AVATAR_EXT');
+  const hostMascot = hostMimeKeys(hostSrc, 'MASCOT_EXT');
+  // ⚠️ 两层的**真源**住在 `src/avatar-import.js`（纯函数模块，与选图腿同一条链）。
+  // 判据必须读真源、不能读产物或抄一份：抄的那份漂了判据照样绿。
 
   // 吉祥物**显示盒上限**的单源契约：`MASCOT_BOX_MAX_W/H` 只住在 lib/settings-schema.js
   // （`mascotBox` 档用它限量级），客户端上传腿与 ropeArtOf 经构建期内联引用同一对 ——
