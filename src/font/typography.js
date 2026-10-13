@@ -11,7 +11,7 @@
  * ② **shorthand 是字面量、不由细粒度令牌组合**（定义在
  *    @deepseek-ai/dsh-client-ui-theme/lib/client.js 的 design-platform CSS 串），三种形态：
  *    A. 带 delta 的基准 / B. 用 DSH 正文字号 / C. 纯字面量（不随 DSH 字号缩放）。
- *    ⇒ 本模块**照抄 DSH 的角色表达式**（角色表 size/lh 字段，不"统一化"）：未设字号的角色继续
+ *    ⇒ 本模块**照抄 DSH 的角色表达式**（角色表 size 字段，不"统一化"）：未设字号的角色继续
  *      引用 DSH 令牌（C 类不缩放、B 类跟随 DSH 字号），设了绝对值的角色用该 px。
  *
  * ③ **DSH 的「通用 → 字号」经 `--dsh-content-font-delta` 进来**（CSS 侧自带 14px 兜底
@@ -66,22 +66,24 @@ const BODY_SIZE_2 = 'var(--dsh-content-font-size-secondary,13px)';
 /**
  * 角色表：`id` = DSH 的令牌角色名（令牌名由它派生），表达式**照抄 DSH 原文**。
  * prefix 是 shorthand 里字号之前的那一段（字重/斜体），同样照抄。
+ * **行高不在此表**：一律沿用 DSH 令牌 `--dsw-font-<角色>-line-height`（组装 shorthand 时读，见
+ * `buildTypePayload`）⇒ 表里不再保存 lh 值（此前有 12 个纯数据 `lh` 字段，零消费者，已删）。
  */
 const THEME_TYPE_ROLES = [
   // —— 对话区 markdown（MarkdownText.module.css 消费）——
-  { id: 'markdown-h1', get label() { return weT('标题 1'); }, prefix: '700', size: `calc(21px + ${DELTA})`, lh: `calc(30px + ${DELTA})`, defaultPx: 21 },
-  { id: 'markdown-h2', get label() { return weT('标题 2'); }, prefix: '700', size: `calc(19px + ${DELTA})`, lh: `calc(28px + ${DELTA})`, defaultPx: 19 },
-  { id: 'markdown-h3', get label() { return weT('标题 3'); }, prefix: '700', size: `calc(18px + ${DELTA})`, lh: `calc(26px + ${DELTA})`, defaultPx: 18 },
-  { id: 'markdown-h4', get label() { return weT('标题 4'); }, prefix: '600', size: BODY_SIZE, lh: `calc(24px + ${DELTA})`, defaultPx: 14 },
-  { id: 'markdown-base', get label() { return weT('对话正文'); }, prefix: '', size: BODY_SIZE, lh: `calc(24px + ${DELTA})`, defaultPx: 14 },
-  { id: 'markdown-small', get label() { return weT('小字说明'); }, prefix: '', size: '12px', lh: '20px', defaultPx: 12 },
-  { id: 'markdown-code', get label() { return weT('行内代码'); }, prefix: '', size: '12px', lh: '19px', defaultPx: 12 },
-  { id: 'markdown-code-block', get label() { return weT('代码块'); }, prefix: '', size: '11px', lh: '19px', defaultPx: 11 },
-  { id: 'markdown-table', get label() { return weT('表格'); }, prefix: '', size: BODY_SIZE_2, lh: `calc(22px + ${DELTA_2})`, defaultPx: 13 },
-  { id: 'markdown-table-head', get label() { return weT('表头'); }, prefix: '500', size: BODY_SIZE_2, lh: `calc(22px + ${DELTA_2})`, defaultPx: 13 },
+  { id: 'markdown-h1', get label() { return weT('标题 1'); }, prefix: '700', size: `calc(21px + ${DELTA})`, defaultPx: 21 },
+  { id: 'markdown-h2', get label() { return weT('标题 2'); }, prefix: '700', size: `calc(19px + ${DELTA})`, defaultPx: 19 },
+  { id: 'markdown-h3', get label() { return weT('标题 3'); }, prefix: '700', size: `calc(18px + ${DELTA})`, defaultPx: 18 },
+  { id: 'markdown-h4', get label() { return weT('标题 4'); }, prefix: '600', size: BODY_SIZE, defaultPx: 14 },
+  { id: 'markdown-base', get label() { return weT('对话正文'); }, prefix: '', size: BODY_SIZE, defaultPx: 14 },
+  { id: 'markdown-small', get label() { return weT('小字说明'); }, prefix: '', size: '12px', defaultPx: 12 },
+  { id: 'markdown-code', get label() { return weT('行内代码'); }, prefix: '', size: '12px', defaultPx: 12 },
+  { id: 'markdown-code-block', get label() { return weT('代码块'); }, prefix: '', size: '11px', defaultPx: 11 },
+  { id: 'markdown-table', get label() { return weT('表格'); }, prefix: '', size: BODY_SIZE_2, defaultPx: 13 },
+  { id: 'markdown-table-head', get label() { return weT('表头'); }, prefix: '500', size: BODY_SIZE_2, defaultPx: 13 },
   // —— 界面通用阶梯（SearchBlock / WebBlock / TerminalBlock 消费 xs-13）——
-  { id: 'xs-13', get label() { return weT('界面小字'); }, prefix: '', size: '13px', lh: '20px', defaultPx: 13 },
-  { id: 'xxs-12', get label() { return weT('界面极小字'); }, prefix: '', size: '12px', lh: '18px', defaultPx: 12 },
+  { id: 'xs-13', get label() { return weT('界面小字'); }, prefix: '', size: '13px', defaultPx: 13 },
+  { id: 'xxs-12', get label() { return weT('界面极小字'); }, prefix: '', size: '12px', defaultPx: 12 },
 ];
 
 const typeTokenNames = (role) => ({

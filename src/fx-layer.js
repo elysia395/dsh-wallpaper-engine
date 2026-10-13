@@ -84,8 +84,6 @@ const FX_UI_SELECTOR = 'button, a, input, select, textarea, label, [role="button
 
 let fxHost = null;
 let fxCanvas = null;
-let fxLastW = 0;
-let fxLastH = 0;
 let fxRaf = 0;
 let fxOn = false;
 let fxBound = false;
@@ -159,8 +157,6 @@ function fxEnsureHost() {
   fxCanvas.className = 'we-fx__canvas';
   fxHost.appendChild(fxCanvas);
   document.body.appendChild(fxHost);
-  fxLastW = 0;
-  fxLastH = 0;
   fxPlace();
 }
 
@@ -169,8 +165,6 @@ function fxRemoveHost() {
   if (fxHost && fxHost.parentNode) fxHost.parentNode.removeChild(fxHost);
   fxHost = null;
   fxCanvas = null;
-  fxLastW = 0;
-  fxLastH = 0;
 }
 
 /**
@@ -452,8 +446,6 @@ function fxFrame() {
     g.globalAlpha = 1;
     g.shadowBlur = 0;
   }
-  fxLastW = width;
-  fxLastH = height;
   fxPlace();
   if (active) fxKick(); // 还有活着的点/圈 ⇒ 继续这一轮；画空了就自然收工（空闲零帧）
 }
