@@ -58,7 +58,7 @@
 | `verify-picker-props.mjs` | — | ✅ |
 | `verify-picker-upload.mjs` | — | ✅ |
 | `verify-playback-controls.mjs` | — | ✅ |
-| `verify-presets.mjs` | `lib/asset-paths.js` `lib/index.js` `lib/routes/presets.js` `lib/settings-schema.js` `src/client.js` `src/glass-panel.js` `src/preset-store.js` `src/quick-panel.js` | ✅ |
+| `verify-presets.mjs` | `lib/asset-paths.js` `lib/index.js` `lib/routes/presets.js` `lib/settings-schema.js` `src/client.js` `src/glass-panel.js` `src/i18n-copy-core.js` `src/i18n-copy-ext.js` `src/i18n-copy-font.js` `src/i18n-copy-glass.js` `src/i18n-copy-live.js` `src/i18n-copy-panel.js` `src/i18n-copy-picker.js` `src/i18n-copy.js` `src/preset-store.js` `src/quick-panel.js` | ✅ |
 | `verify-reachability.mjs` | `lib/index.js` | ✅ |
 | `verify-readability.mjs` | `src/styles-base.js` `src/styles-chrome.js` `src/styles-ext.js` `src/styles-panel.js` `src/styles-quick.js` `src/styles-settings.js` `src/styles-shell.js` `src/styles-sidebar.js` `src/styles.js` | ✅ |
 | `verify-retired-lines.mjs` | — |  |
@@ -170,14 +170,14 @@
 | `src/glass-extra.js` | 1 | `verify-extra-glass` |
 | `src/glass-panel.js` | 6 | `verify-client` `verify-extra-glass` `verify-fontset` `verify-glass-surfaces` `verify-presets` `verify-scene-live` |
 | `src/glass.js` | 2 | `verify-client` `verify-glass-surfaces` |
-| `src/i18n-copy-core.js` | 2 | `verify-about` `verify-i18n` |
-| `src/i18n-copy-ext.js` | 2 | `verify-about` `verify-i18n` |
-| `src/i18n-copy-font.js` | 2 | `verify-about` `verify-i18n` |
-| `src/i18n-copy-glass.js` | 2 | `verify-about` `verify-i18n` |
-| `src/i18n-copy-live.js` | 2 | `verify-about` `verify-i18n` |
-| `src/i18n-copy-panel.js` | 2 | `verify-about` `verify-i18n` |
-| `src/i18n-copy-picker.js` | 2 | `verify-about` `verify-i18n` |
-| `src/i18n-copy.js` | 2 | `verify-about` `verify-i18n` |
+| `src/i18n-copy-core.js` | 3 | `verify-about` `verify-i18n` `verify-presets` |
+| `src/i18n-copy-ext.js` | 3 | `verify-about` `verify-i18n` `verify-presets` |
+| `src/i18n-copy-font.js` | 3 | `verify-about` `verify-i18n` `verify-presets` |
+| `src/i18n-copy-glass.js` | 3 | `verify-about` `verify-i18n` `verify-presets` |
+| `src/i18n-copy-live.js` | 3 | `verify-about` `verify-i18n` `verify-presets` |
+| `src/i18n-copy-panel.js` | 3 | `verify-about` `verify-i18n` `verify-presets` |
+| `src/i18n-copy-picker.js` | 3 | `verify-about` `verify-i18n` `verify-presets` |
+| `src/i18n-copy.js` | 3 | `verify-about` `verify-i18n` `verify-presets` |
 | `src/i18n.js` | 1 | `verify-i18n` |
 | `src/layer-core.js` | 1 | `verify-scene-live` |
 | `src/live-layer-diag.js` | 5 | `verify-glass-surfaces` `verify-logging` `verify-occlusion-client` `verify-scene-live` `verify-theme-follow` |
