@@ -71,7 +71,7 @@ function makeSpawn({ behavior = 'ok', delayMs = 0, log = null } = {}) {
     const rec = { ff, args, ss: args[args.indexOf('-ss') + 1], vf: args[args.indexOf('-vf') + 1], out: args[args.length - 1] };
     calls.push(rec);
     if (log) log.push(rec);
-    // 失败即不落帧：抛出的那次不写输出（"抛了却留下残片"是另一条候选缺陷，见 E 段注释与报告）。
+    // 失败即不落帧：抛出的那次不写输出。"抛了却留下 0 字节残片"由 D2 的专用替身覆盖。
     if (behavior === 'throw-always') throw new Error('ffmpeg boom');
     if (behavior === 'throw-first' && calls.length === 1) throw new Error('ffmpeg boom');
     if (delayMs) await sleep(delayMs);
@@ -143,8 +143,11 @@ const M_WIDTH = [[`              '-vf', \`scale='min(\${VIDEO_PREVIEW_WIDTH},iw)
 // 只摘掉查表（保留 `let entry;` —— 否则变异体自己会 ReferenceError，红得没有意义）。
 const M_INFLIGHT = [[`    let entry = VIDEO_PREVIEW_INFLIGHT.get(out);\n    if (entry) return entry;\n`, `    let entry;\n`]];
 // 吞掉"两次都没产出"的那次抛出 ⇒ 随后 renameSync(tmp,out) 以 ENOENT 失败，错误语义被换掉。
-const M_LASTERR = [[`        if (!existsSync(tmp)) throw lastErr || new Error('no preview frame produced');`,
-  `        if (!existsSync(tmp)) { /* 吞掉最后一次失败 */ }`]];
+const M_LASTERR = [[`        if (!produced) throw lastErr || new Error('no preview frame produced');`,
+  `        if (!produced) { /* 吞掉最后一次失败 */ }`]];
+// 回退到修前语义：只按"文件在不在"裁决 ⇒ 抛出的那次留下的 0 字节残片会被 renameSync 当帧发布。
+const M_LEFTOVER = [[`        if (!produced) throw lastErr || new Error('no preview frame produced');`,
+  `        if (!existsSync(tmp)) throw lastErr || new Error('no preview frame produced');`]];
 const M_FINALLY = [[`        releaseVideoPreviewSlot();`, `        /* 忘了放闸 */`]];
 const M_KEY_MTIME = [[`      .update(abs + '|' + size + '|' + mtime + '|v1|' + VIDEO_PREVIEW_WIDTH)`,
   `      .update(abs + '|' + size + '|v1|' + VIDEO_PREVIEW_WIDTH)`]];
@@ -228,6 +231,28 @@ async function judgeSeekFallback(make) {
   return { ok, detail: `ss 顺序=${JSON.stringify(order)} 产出=${Boolean(out) && existsSync(out)} 逃逸异常=${err ? err.message : '无'} tmp 残留=${JSON.stringify(tmpLeftovers(dir))}` };
 }
 
+// ── D2. 失败留下的残片不得被当帧发布（真缺陷回归：lead 裁决"spawn 抛 ⇒ 该次尝试无产出"） ──
+async function judgeLeftoverTmp(make) {
+  const dir = freshDir('d-leftover');
+  const calls = [];
+  // ffmpeg 的 image2 复用器"打开输出即建档"：编码中途失败很可能留下 0 字节/半张图。
+  const spawn = async (ff, args) => {
+    calls.push(args[args.indexOf('-ss') + 1]);
+    writeFileSync(args[args.length - 1], '');
+    throw new Error('ffmpeg boom');
+  };
+  const kit = kitFor(dir, { ...make, spawn });
+  const src = freshFile('d-leftover-src');
+  const out = kit.videoPreviewCachePath(src);
+  let err = null; let ret = null;
+  try { ret = await kit.generateVideoPreview(src); } catch (e) { err = e; }
+  return {
+    ok: Boolean(err) && err.message === 'ffmpeg boom' && calls.length === 2 && ret === null
+      && !existsSync(out) && tmpLeftovers(dir).length === 0,
+    detail: `err=${err && err.message} 返回值=${ret ? '有（错！）' : '无'} 正式产物存在=${existsSync(out)} tmp 残留=${JSON.stringify(tmpLeftovers(dir))}`,
+  };
+}
+
 // ───────────────────────── E. 全失败：reject + 清 tmp + 放闸 ─────────────────────────
 async function judgeAllFail(make) {
   const dir = freshDir('e-fail');
@@ -236,6 +261,25 @@ async function judgeAllFail(make) {
   let err = null;
   try { await kit.generateVideoPreview(freshFile('e-src')); } catch (e) { err = e; }
   return { ok: Boolean(err) && err.message === 'ffmpeg boom' && calls.length === 2 && tmpLeftovers(dir).length === 0, detail: `err=${err && err.message} spawn=${calls.length} tmp 残留=${JSON.stringify(tmpLeftovers(dir))}` };
+}
+
+// E1b. 老兜底不许被换掉：spawn 正常返回但两次都没留文件 ⇒ 仍 reject 'no preview frame produced'。
+// （这格是回归：produced 旗标修法不得顺手丢掉"返回了却没出帧"的语义。
+//   没有变异体 —— 回放旧语义的变异体在这格上行为相同，牙齿由 D2 那条负对照承担。）
+async function judgeSpawnOkButNoFile(make) {
+  const dir = freshDir('e-nofile');
+  const calls = [];
+  const spawn = async (ff, args) => { calls.push(args[args.indexOf('-ss') + 1]); };
+  const kit = kitFor(dir, { ...make, spawn });
+  const src = freshFile('e-nofile-src');
+  const out = kit.videoPreviewCachePath(src);
+  let err = null; let ret = null;
+  try { ret = await kit.generateVideoPreview(src); } catch (e) { err = e; }
+  return {
+    ok: Boolean(err) && err.message === 'no preview frame produced' && calls.length === 2
+      && ret === null && !existsSync(out) && tmpLeftovers(dir).length === 0,
+    detail: `err=${err && err.message} 返回值=${ret ? '有（错！）' : '无'} 正式产物存在=${existsSync(out)} spawn=${calls.length} tmp 残留=${JSON.stringify(tmpLeftovers(dir))}`,
+  };
 }
 
 async function judgeSlotReleasedAfterFailure(make) {
@@ -312,9 +356,13 @@ await pair('C 同 tick 两次调用解析到同一路径且 spawn 恰 1 次', ju
 
 section('D. 首帧失败回退：-ss 1 → 0');
 await pair('D 首次 spawn 失败 ⇒ 第二次用 -ss 0，最终产出存在且无 .tmp 残留', judgeSeekFallback, 'no-fallback', M_FALLBACK);
+await pair('D2 spawn 抛且留下 0 字节残片 ⇒ 必须 reject、正式产物不得生成、tmp 无残留', judgeLeftoverTmp, 'publish-leftover-tmp', M_LEFTOVER);
 
 section('E. 全失败：reject、清 .tmp、放闸（finally）');
 await pair('E1 两次都失败 ⇒ reject 最后一条 spawn 错误、spawn 2 次、无 .tmp 残留', judgeAllFail, 'swallow-last-error', M_LASTERR);
+const noFile = await judgeSpawnOkButNoFile({});
+check('E1b spawn 正常返回但两次都没留文件 ⇒ 老兜底仍 reject `no preview frame produced`（真修没换掉这条语义）',
+  noFile.ok === true, '正向读数：' + noFile.detail);
 await pair('E2 失败后闸被放回：闸=1 时同键再次调用能成功', judgeSlotReleasedAfterFailure, 'finally-no-release', M_FINALLY);
 
 section('F. 缓存键含 size + mtime + width；缺源退化不抛（不变量 3）');
