@@ -26,6 +26,7 @@ import { mkdirSync, writeFileSync, rmSync, readFileSync, existsSync } from 'node
 import { spawn } from 'node:child_process';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { styleText, cssBodyOf, panelText } from './tools/src-scope.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const TEST_ROOT = join(root, '.test-cache', 'e2e-media-origin');
@@ -87,17 +88,23 @@ const matchRoute = (pathname) => routes.find((r) => (
 // 宿主页（等价于插件 client 的那半边）：嵌渲染页 + 就绪后推一次媒体快照。
 // 有它才能测「封面/歌名能不能穿过沙箱到达壁纸」—— 直接开渲染页没法调 __wp.setMedia。
 let wrapperHtml = '';
-// 插件真实 CSS（样式表模块里的模板字面量）——布局断言必须在真 CSS 上做，
+// 插件真实 CSS（样式族的域模板拼成的一份样式表）——布局断言必须在真 CSS 上做，
 // 否则「抽屉里按钮上下排列、间距 8px」这种要求测了等于没测。
-// ⚠️ 取模板用**行首锚定（容忍缩进）**：散文里出现同样的声明字面量会把锚点带偏。
-const pluginCss = (() => {
-  const srcText = readFileSync(join(root, 'src', 'styles.js'), 'utf8');
-  const m = /^\s*const CSS = `([^`]*)`;/m.exec(srcText);
-  return m ? m[1] : '';
-})();
-if (!pluginCss.includes('.we-picker__current')) {
-  console.log('  ! 未能从 src/client.js 提取插件 CSS，布局断言会跳过');
+// ⚠️ 样式拆段后（`src/styles-*.js` 域模板 + `src/styles.js` 组装点）取文必须走**族**：
+//    `styleText()` 按 `INLINE_MODULES` 顺序拼同族全文，`cssBodyOf()` 抽出全部域模板体。
+//    原先的 `match(/const CSS = `…`/) ? m[1] : ''` 在拆段后恒得空串，下游只印一句
+//    "布局断言会跳过"就放过 ⇒ 判据静默降级。**取不到一律判红**（不是 warn）。
+let pluginCss = '';
+let cssError = '';
+try {
+  pluginCss = cssBodyOf(styleText());
+} catch (err) {
+  cssError = err instanceof Error ? err.message : String(err);
 }
+check('样式族取文：能拼出插件 CSS 且含布局断言用的选择器',
+  pluginCss.includes('.we-picker__current'),
+  cssError || (pluginCss.length + ' 字符'
+    + (pluginCss.includes('.we-picker__current') ? '，含 .we-picker__current' : '，**不含** .we-picker__current')));
 const appServer = createServer((req, res) => {
   const pathname = new URL(req.url || '/', 'http://x').pathname;
   if (DEBUG) console.log(`[host] ${req.method} ${pathname}${req.url.indexOf('?') >= 0 ? '?…' : ''}`);
@@ -393,7 +400,7 @@ function productPrimaryActions(src, scope, element = 'button') {
 // 形态共用），主操作区里就一枚「选择壁纸」。镜像 DOM 只是把这枚按钮照抄了一份，所以判据必须
 // 落在产品源码上，别落在镜像的字面量上。
 const PRODUCT_DRAWER_ACTIONS_SCOPE = 'className: "we-picker__current-actions"';
-const productDrawerPanelSrc = readFileSync(join(root, 'src', 'panel-tabs.js'), 'utf8');
+const productDrawerPanelSrc = panelText();
 const productDrawerActions = (expected) => productPrimaryActions(productDrawerPanelSrc, PRODUCT_DRAWER_ACTIONS_SCOPE) === expected;
 // 对照用的另一个真来源：快捷面板的**播放控制行**也叫 actions（`we-qp__current-actions`，
 // 里面是暂停/刷新/清除三枚）。判据只在目标 scope 上生效 ⇒ 数它必须是 3 而不是 1，
@@ -602,17 +609,20 @@ if (!browser) {
   // （check() 在下一行才调用 ⇒ 此刻的计数里没有它）。**不要再减 1**：`preBrowserChecks - 1 >= 12`
   // 会把门槛抬成 13，与常量 12 不符。
   // 更要紧的是：地板必须**影响退出码**，否则判红也照样 exit 0，调用方拿到的仍是"通过"。
+  // 另外：跳过前**已经判红的**前置判据（比如样式族取文失败）绝不能被"退出码 0 = 显式跳过"
+  // 吞掉 —— 所以跳过路径的绿灯条件是"地板够 **且** 0 条失败"，两条都满足才允许 exit 0。
   const PRE_BROWSER_MIN_CHECKS = 12;
   const preBrowserChecks = passed + failed;
-  const preBrowserOk = preBrowserChecks >= PRE_BROWSER_MIN_CHECKS;
+  const preBrowserOk = preBrowserChecks >= PRE_BROWSER_MIN_CHECKS && failed === 0;
   check('覆盖面：自动跳过也算执行（跳过前至少 ' + PRE_BROWSER_MIN_CHECKS + ' 条前置判据）',
     preBrowserOk,
-    '本轮已执行 ' + preBrowserChecks + ' 条前置判据 / 地板 ' + PRE_BROWSER_MIN_CHECKS + '（不含本判据自己）');
+    '本轮已执行 ' + preBrowserChecks + ' 条前置判据（其中 ' + failed + ' 条判红）/ 地板 '
+    + PRE_BROWSER_MIN_CHECKS + '（不含本判据自己）');
   const skipCode = preBrowserOk ? 0 : 1;
   console.log('  ! SKIP 未找到 Chromium 系浏览器，页面断言未执行（本脚本不进 npm run verify）'
-    + ' —— 已执行 ' + preBrowserChecks + ' 条前置判据，页面部分 0 条；退出码 ' + skipCode
+    + ' —— 已执行 ' + preBrowserChecks + ' 条前置判据（' + failed + ' 条判红），页面部分 0 条；退出码 ' + skipCode
     + (skipCode === 0 ? ' 仅表示"显式跳过"，不是"页面断言通过"'
-      : '：前置判据不足，按**失败**退出（不接受"没跑完"当通过）'));
+      : '：前置判据不足或已有判红，按**失败**退出（不接受"没跑完"当通过）'));
   try { dispose && dispose(); } catch { /* ignore */ }
   appServer.close();
   process.exit(skipCode);

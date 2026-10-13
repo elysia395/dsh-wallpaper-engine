@@ -152,6 +152,16 @@ function check(name, ok, detail) {
   else failed++;
   console.log((ok ? '  ✓ ' : '  ✗ ') + name + (detail ? ' — ' + detail : ''));
 }
+// 未执行的判据**必须**显式记名（DEV-GUIDE §4.7 约定 10：跳过不得与通过同形）。
+// 平台造不出链接时那两条围栏判据整条不存在 —— 只打印一句"平台跳过"就放过，
+// 汇总行仍是 `ALL … PASSED (N)`，调用方分不清"N 条判据都在"和"N 条里少两条"。
+// 所以：逐条点名 + 计数进汇总行。**这不是通过**，也不替代判据本身（CI 的
+// windows-latest 腿用 junction、POSIX 腿用 dir 链接，两处都有真覆盖）。
+const skipNotes = [];
+function skip(name, why) {
+  skipNotes.push(name);
+  console.log('  ○ SKIP ' + name + ' —— ' + why + '（不是通过）');
+}
 
 // ── Level A: renderer page + npm engine ─────────────────────────────────────
 console.log('Level A — WebWallGL renderer page (lib/webwallgl/) + npm engine (webwallgl)');
@@ -535,7 +545,8 @@ if (filesRoute && fixture && fixture.sceneLiveSrc) {
       linkRes.__state.status === 403 && linkBody.indexOf('top-secret') === -1,
       'status=' + linkRes.__state.status);
   } else {
-    console.log('  ~ 平台跳过：本机不允许创建文件符号链接（该层在此平台零覆盖）');
+    skip('指向界外的**文件链接** ⇒ 403（且没有读出 secret.txt）',
+      '本机不允许创建文件符号链接（该层在此平台零覆盖）');
   }
   // (b) **中间目录**是链接：字面路径全在界内（没有 `..`），只有 realpath 能判出越界 ——
   // 这一条才是第二层的真牙齿：删掉 realpath 比对，它必然变红。
@@ -554,7 +565,12 @@ if (filesRoute && fixture && fixture.sceneLiveSrc) {
     check('负对照：同目录的普通文件不受新围栏影响（200）',
       plainRes.__state.status === 200, 'status=' + plainRes.__state.status);
   } else {
-    console.log('  ~ 平台跳过：本机不允许创建目录链接 / junction（realpath 那层在此平台零覆盖）');
+    // 两条判据（403 本体 + 「同目录普通文件仍 200」的防空转负对照）在这里**都**没执行 ⇒
+    // 逐条记名，否则"未执行"的条数会比真实缺口少。
+    skip('中间目录是**指向界外的链接** ⇒ 403（字面路径全在界内，只有 realpath 判得出）',
+      '本机不允许创建目录链接 / junction（realpath 那层在此平台零覆盖）');
+    skip('负对照：同目录的普通文件不受新围栏影响（200）',
+      '同上：目录链接建不出来 ⇒ 这条对照与它要护的主判据一起不存在');
   }
 
   const nosubRes = await runHandler(filesRoute, `/wallpaper-engine/scene-files/${token}/`);
@@ -6131,8 +6147,11 @@ rmSync(TEST_UPLOAD_DIR, { recursive: true, force: true });
 rmSync(weAssetsFixture, { recursive: true, force: true });
 
 console.log('');
+if (skipNotes.length) {
+  console.log(`⚠️  ${skipNotes.length} 条未执行（不是通过，见上面的 ○ 行）：${skipNotes.join('；')}`);
+}
 if (failed > 0) {
-  console.log(`SCENE-LIVE CHECKS FAILED — ${failed} failed, ${passed} passed`);
+  console.log(`SCENE-LIVE CHECKS FAILED — ${failed} failed, ${passed} passed${skipNotes.length ? `, ${skipNotes.length} skipped` : ''}`);
   process.exit(1);
 }
-console.log(`ALL SCENE-LIVE CHECKS PASSED (${passed})`);
+console.log(`ALL SCENE-LIVE CHECKS PASSED (${passed})${skipNotes.length ? ` —— ⚠️ ${skipNotes.length} 条未执行（不是通过，见上面的 ○ 行）` : ''}`);
