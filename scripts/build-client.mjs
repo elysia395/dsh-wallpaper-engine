@@ -458,6 +458,12 @@ const INLINE_MODULES = [
     markers: ['function weStopDraw()', 'const GPU_FRAME_PIN_TTL_MS = 30000;',
       'function renderUserPropsPanel()'],
   },
+  {
+    file: 'src/client-rotation.js',
+    why: 'src/client.js 正文的轮换/媒体生命周期助手（过场几何、探测元素领养与释放、隐藏期轮换推迟；含其顶层状态）—— 构建期内联在正文之前，同处一个扁平作用域',
+    markers: ['function barsPolygon(dir, p) {', 'const LIVE_FIRST_FADE_MS = 1800;',
+      'function installRotationResumeListeners() {'],
+  },
 ];
 
 /**
