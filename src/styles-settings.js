@@ -151,12 +151,18 @@ const CSS_SETTINGS = `  /* ── 预设方案：两行四列的圆角表格（�
      --we-accent-src 而**不是** --we-accent —— 设置窗那个作用域块末尾把 --we-accent 主动
      掐成 initial、块内既有消费一律走 -src，而 #164 的复现入口恰在窗内：读 --we-accent
      会恒落到兜底色，既与用户配色脱钩、又与**跟随用户的**墨色错配。墨读
-     --we-popup-row-checked-ink，由 effects.js 的 weCheckedRowInk 按**对比度取大**下发
-     （刻意不沿用按钮那条 0.45 阈值：中亮度 accent 上白字只有 2.1–4.58:1，同区间黑字恒
-     更优）；兜底取默认 accent 上更可读的深墨。选中态仍是「另一种底色」，可辨识。 */
+     --we-popup-row-checked-ink，由 effects.js 的 weCheckedRowInk 按**实算对比度取大**
+     在纯黑 / 纯白之间下发（刻意不沿用按钮那条 0.45 阈值：中亮度 accent 上白字只有
+     2.1–4.58:1，同区间黑字恒更优；两支取大的全局下界 = 等点 L≈0.1791 处的 4.58:1）。
+     这里的兜底 #000000 **必须等于 JS 对缺省填充的判决**：兜底只在 accent 解析不出来、
+     JS 没写值时才可达，而那一档填充同时落回缺省 #4f8cff —— 对 #4f8cff（L≈0.29 > 等点
+     0.1791）择优给出的正是纯黑。曾经这里写死 #0f1115 而填充侧是 #4f8cff：那个组合虽然
+     恰好 5.87:1，但它是**手抄的巧合**，不是同一套择优逻辑（暗臂一漂就再也对不上）。
+     F10c 把"兜底墨 === weCheckedRowInk(兜底填充)"钉成判据，防止再手抄。选中态仍是
+     「另一种底色」，可辨识。 */
   select option:checked {
     background-color: var(--we-accent-src, #4f8cff);
-    color: var(--we-popup-row-checked-ink, #0f1115);
+    color: var(--we-popup-row-checked-ink, #000000);
   }
   /* 自家 picker 子树上再钉一遍（同一对令牌）：这条特异性更高，宿主若有以类名压 option
      的规则也盖得过去。作用域同时钉类名（.we-picker__select —— 侧栏/抽屉的 select 不在

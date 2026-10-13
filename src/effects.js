@@ -184,9 +184,13 @@ function weAccentInk(hex) {
 // 选中行不能吃 --we-popup-row-* 那一对（那对是"行底 vs 正文墨"，语义不同），也**不能
 // 直接吃 --we-accent-ink**：后者的 0.45 阈值是宿主按钮沿用下来的口径，在**中亮度**
 // accent 上会选到白字 —— 相对亮度 0.1783–0.45 区间白字只有 2.1–4.58:1，而同区间黑字
-// **恒优于**白字（两臂对比度的等点就是 0.1791）。所以这里按**对比度取大**选边，任意
-// accent 都拿到它上面更可读的那一边。深墨候选沿用 --we-accent-ink 的 #0f1115，视觉语言
-// 不变。纯函数、无 DOM：verify-readability 从产物里抽出来复算选中行网格（F10）。
+// **恒优于**白字（两臂对比度的等点就是 L≈0.1791）。
+// 两支候选取**纯白 / 纯黑**并按**实算对比度取大**：两支的等点即 0.1791，也就是"更可读
+// 那支"在全体 accent 上的**最差点**（两支在该点各 4.58:1）⇒ 这条选择本身就带一个
+// ≥4.58:1 的全局下界，不需要再靠采样面兜。**深墨候选不再沿用 #0f1115**：它在同一个
+// 等点上只有 ≈4.35:1（`#de3c42` 实测 4.347:1、灰阶 `#797979` 4.353:1），旧版"白 vs
+// #0f1115 取大"因此过不了 4.5 红线 —— 视觉语言换来的是判据缺口，故改成纯黑。
+// 纯函数、无 DOM：verify-readability 从产物里抽出来复算连续网格（F10）。
 function weCheckedRowInk(hex) {
   const m = /^#?([0-9a-fA-F]{6})$/.exec(String(hex || ""));
   if (!m) return null;
@@ -194,7 +198,7 @@ function weCheckedRowInk(hex) {
   const lum = (c) => 0.2126 * s2l(c[0]) + 0.7152 * s2l(c[1]) + 0.0722 * s2l(c[2]);
   const contrast = (a, b) => (a > b ? (a + 0.05) / (b + 0.05) : (b + 0.05) / (a + 0.05));
   const accLum = lum([0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16)));
-  return contrast(1, accLum) >= contrast(lum([0x0f, 0x11, 0x15]), accLum) ? "#ffffff" : "#0f1115";
+  return contrast(1, accLum) >= contrast(0, accLum) ? "#ffffff" : "#000000";
 }
 
 // ── #164：原生 <select> 弹层的行配对（不透明底 × 与底成对比的墨）───────────────

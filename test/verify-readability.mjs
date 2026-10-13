@@ -1109,11 +1109,14 @@ function main() {
     }
   }
 
-  // ── F10 (#164)：选中行的墨必须按**对比度取大**选边，而不是沿用按钮的 0.45 阈值 ──────
-  // 选中行不能吃行配对（语义不同），也不该直接吃 --we-accent-ink：后者 0.45 的阈值在
-  // **中亮度** accent 上会选到白字 —— 相对亮度 0.1783–0.45 区间白字只有 2.1–4.58:1，而
-  // 同区间黑字恒优于白字（两臂等点即 0.1791）。判据从**产物**里抽出 weCheckedRowInk，
-  // 对九档 accent 逐档复算，并用"沿用 0.45 阈值"作负对照证明这条判据有牙。
+  // ── F10 (#164 / P1)：选中行的墨 = 纯白 / 纯黑两支里**实算对比度更大**的那支 ─────────
+  // 旧版（白 vs #0f1115 对比度取大）在九档采样面上全绿，但连续色域最差只有 ≈4.35:1
+  // （accent #de3c42、灰阶 #797979）—— 判据的**采样面**有缺口，不是实现侥幸达标。
+  // 现在换成**连续 + 自适应**网格：256 灰阶 + 6³ 粗立方 + （每一级取当前最差点）邻域
+  // 逐级细化 ±51 → ±17 → ±5 → ±1，门限 4.5。纯白/纯黑两支的等点在 L≈0.1791、比值
+  // ≈4.58 ⇒ 「取大」自带 4.58:1 的全局下界，细化网格必须落在与之相符的位置。
+  // 判据从**产物**里抽出 weCheckedRowInk 复算；负对照同时复刻两种旧实现（#0f1115 取大、
+  // 0.45 阈值），并用同一条网格证明它们判红 —— 先红后绿的那条红就是 F10-1。
   {
     const fnStart = SRC.indexOf('function weCheckedRowInk(');
     let fnSrc = null;
@@ -1129,34 +1132,89 @@ function main() {
     const usable10 = typeof weCheckedRowInk === 'function';
     check('F10 选中行墨函数随产物交付且可独立复算', usable10);
     if (usable10) {
-      const ACCENTS = [
-        ['默认蓝（settings-schema 缺省）', '#4f8cff'],
-        ['品牌蓝', '#3366cc'],
-        ['靛蓝', '#1a237e'],
-        ['近黑', '#0b1020'],
-        ['纯黑', '#000000'],
-        ['中灰（阈值区间内）', '#7f7f7f'],
-        ['纯白', '#ffffff'],
-        ['亮黄', '#FFCF4D'],
-        ['浅黄', '#f5d76e'],
-      ];
-      const rows = ACCENTS.map(([label, acc]) => {
+      const hexOf = (r, g, b) => '#' + [r, g, b].map((v) => v.toString(16).padStart(2, '0')).join('');
+      const clamp255 = (v) => Math.max(0, Math.min(255, v));
+      const neighborhood = (hex, step) => {
+        const n = parseInt(hex.slice(1), 16);
+        const r = (n >> 16) & 255, g = (n >> 8) & 255, b = n & 255;
+        const out = [];
+        for (const dr of [-step, 0, step]) for (const dg of [-step, 0, step]) for (const db of [-step, 0, step]) {
+          out.push(hexOf(clamp255(r + dr), clamp255(g + dg), clamp255(b + db)));
+        }
+        return out;
+      };
+      // ① 连续面：全 256 灰阶（等点 L≈0.1791 落在灰阶上，是最差候选所在的脊）
+      // ② 粗立方：**16 级/通道 = 4096 点**（与独立复核方用的同一张网格，结论可直接对号）
+      // ③ 自适应细化：每级取当前最差点、按该级步长的 3³ 邻域加深（去重后并进网格）
+      const seen = new Set();
+      const grid = [];
+      const push = (acc) => { if (!seen.has(acc)) { seen.add(acc); grid.push(acc); } };
+      for (let i = 0; i < 256; i++) push(hexOf(i, i, i));
+      for (let r = 0; r < 16; r++) for (let g = 0; g < 16; g++) for (let b = 0; b < 16; b++) push(hexOf(r * 17, g * 17, b * 17));
+      const ratioOf = (acc, ink) => (ink ? contrast(hex2rgb(acc), hex2rgb(ink)) : 0);
+      for (const step of [51, 17, 5, 1]) {
+        let worstAcc = grid[0], worstRatio = Infinity;
+        for (const acc of grid) {
+          const r = ratioOf(acc, weCheckedRowInk(acc));
+          if (r < worstRatio) { worstRatio = r; worstAcc = acc; }
+        }
+        for (const acc of neighborhood(worstAcc, step)) push(acc);
+      }
+      const rows = grid.map((acc) => {
         const ink = weCheckedRowInk(acc);
-        return { label, acc, ink, ratio: ink ? contrast(hex2rgb(acc), hex2rgb(ink)) : 0 };
+        return { acc, ink, ratio: ratioOf(acc, ink) };
       });
       const worst = rows.reduce((a, b) => (a.ratio <= b.ratio ? a : b));
-      check('F10a 九档 accent 上的选中行墨都是黑/白且对比度 ≥4.5:1', worst.ratio >= 4.5,
-        '最差 ' + worst.label + ' → ' + worst.acc + ' vs ' + worst.ink + ' = ' + worst.ratio.toFixed(2) + ':1'
-        + ' · 全档 ' + rows.map((r) => r.ratio.toFixed(2)).join('/'));
+      check('F10a 连续/自适应网格上选中行墨都是黑/白且对比度 ≥4.5:1', worst.ratio >= 4.5,
+        '网格 ' + grid.length + ' 档 · 最差 ' + worst.acc + ' vs ' + worst.ink + ' = ' + worst.ratio.toFixed(3) + ':1'
+        + ' · 低于 4.5 的档数 ' + rows.filter((r) => r.ratio < 4.5).length);
+      check('F10a-2 两支只出纯黑 / 纯白（不得再混进有色深墨 #0f1115）',
+        rows.every((r) => r.ink === '#ffffff' || r.ink === '#000000'),
+        '不同取值 ' + [...new Set(rows.map((r) => r.ink))].join(' / '));
       check('F10b 输入缺失 / 不可解析 ⇒ 返回 null，交给样式表缺省兜底（不写脏值）',
         weCheckedRowInk('') === null && weCheckedRowInk(undefined) === null && weCheckedRowInk('rgba(0,0,0,.5)') === null);
-      // 负对照：复刻 weAccentInk 的 0.45 阈值选边，同一条网格必须判红（这正是复审实测到的缺口）。
-      const s2l10 = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
-      const lum10 = (rgb) => 0.2126 * s2l10(rgb[0]) + 0.7152 * s2l10(rgb[1]) + 0.0722 * s2l10(rgb[2]);
-      const inkByThreshold = (acc) => (lum10(hex2rgb(acc)) > 0.45 ? '#0f1115' : '#ffffff');
-      const naiveWorst10 = Math.min(...ACCENTS.map(([, acc]) => contrast(hex2rgb(acc), hex2rgb(inkByThreshold(acc)))));
-      check('negative control F10-1: 沿用按钮那条 0.45 阈值（中亮度 accent 上给白字）会被同一条网格判红',
+      // F10c：兜底**只在 accent 解析不出、JS 没写值**时可达 —— 那一档填充同时落回缺省
+      // #4f8cff。两条硬要求：① 兜底墨必须**等于 JS 对缺省填充的判决**（同一套择优逻辑，
+      // 不许写死一个"看起来够深"的墨 —— 曾经的 #0f1115 就是这样漏过了）；② 兜底对过红线。
+      const checkedCss = (CSS.match(/select option:checked\s*\{[^}]*\}/) || [''])[0];
+      const fbFill = /var\(--we-accent-src,\s*(#[0-9a-fA-F]{6})\)/.exec(checkedCss);
+      const fbInk = /var\(--we-popup-row-checked-ink,\s*(#[0-9a-fA-F]{6})\)/.exec(checkedCss);
+      const fbInkHex = fbInk ? fbInk[1].toLowerCase() : null;
+      const fbFillHex = fbFill ? fbFill[1].toLowerCase() : null;
+      check('F10c 缺省兜底墨 = JS 对缺省填充的判决（兜底不得落回固定 #0f1115，也不得与其不一致）',
+        !!fbInkHex && !!fbFillHex && fbInkHex === weCheckedRowInk(fbFillHex),
+        'CSS 兜底对 ' + fbFillHex + ' × ' + fbInkHex + ' · JS 判决 ' + (fbFillHex ? weCheckedRowInk(fbFillHex) : '-'));
+      const fbRatio = (fbFillHex && fbInkHex) ? contrast(hex2rgb(fbFillHex), hex2rgb(fbInkHex)) : 0;
+      check('F10c-2 样式表缺省兜底对也 ≥4.5:1', fbRatio >= 4.5, '缺省对 = ' + fbRatio.toFixed(2) + ':1');
+      // 负对照 F10-1：**先红后绿的那条红** —— 复刻 PR #203 原实现（白 vs #0f1115 取大）。
+      const ratioScalar = (a, b) => (a > b ? (a + 0.05) / (b + 0.05) : (b + 0.05) / (a + 0.05));
+      const lumOf = (hex) => lum(hex2rgb(hex));
+      const armInkOf = (acc, armHex) => {
+        const l = lumOf(acc);
+        return ratioScalar(1, l) >= ratioScalar(lum(hex2rgb(armHex)), l) ? '#ffffff' : armHex;
+      };
+      const worstOver = (list, armHex) => Math.min(...list.map((acc) => ratioScalar(lumOf(acc), lumOf(armInkOf(acc, armHex)))));
+      const oldWorst = worstOver(grid, '#0f1115');
+      check('negative control F10-1: 旧实现（白 vs #0f1115 取大，PR #203 原样）会被同一条网格判红',
+        oldWorst < 4.5, 'old worst=' + oldWorst.toFixed(4) + ':1');
+      // 负对照 F10-1b：暗臂的**临界值**也得判红。#0a0a0a 是"看着够深"的合理候选，但全局
+      // 最差 = 等点比值 = 1.05/(L*+0.05)，要 ≥4.5 必须暗臂 Lin ≤ 0.001852 ⇒ #0a0a0a
+      // (Lin≈0.00278) 只有 4.4495，仍差 0.05。这条钉住"暗臂必须真的是纯黑"。
+      const nearWorst = worstOver(grid, '#0a0a0a');
+      check('negative control F10-1b: 暗臂只放到 #0a0a0a（Lin≈0.0028，看着够深）仍会被同一条网格判红',
+        nearWorst < 4.5, '#0a0a0a worst=' + nearWorst.toFixed(4) + ':1');
+      // 负对照 F10-2：更早的 0.45 阈值口径（复审补丁前）也在这条网格上判红。
+      const inkByThreshold = (acc) => (lumOf(acc) > 0.45 ? '#0f1115' : '#ffffff');
+      const naiveWorst10 = Math.min(...grid.map((acc) => ratioScalar(lumOf(acc), lumOf(inkByThreshold(acc)))));
+      check('negative control F10-2: 沿用按钮那条 0.45 阈值（中亮度 accent 上给白字）会被同一条网格判红',
         naiveWorst10 < 4.5, 'naive worst=' + naiveWorst10.toFixed(2) + ':1');
+      // 负对照 F10-3：网格自身有牙 —— 旧版 F10 的**九档手挑采样面**对旧实现是**漏判**的
+      //（那九档最差 4.72:1 ⇒ 全绿）。这条钉住"采样面也是判据的一部分"：谁把网格缩回
+      // 采样面，F10-1 的红就没了，而这条会立刻指出缩回去等于漏判。
+      const nineDeck = ['#4f8cff', '#3366cc', '#1a237e', '#0b1020', '#000000', '#7f7f7f', '#ffffff', '#ffcf4d', '#f5d76e'];
+      const oldWorstNine = worstOver(nineDeck, '#0f1115');
+      check('negative control F10-3: 旧的九档采样面对旧实现漏判（该面最差 ≥4.5 ⇒ 全绿）—— 采样面必须连续',
+        oldWorstNine >= 4.5, '旧实现九档最差=' + oldWorstNine.toFixed(2) + ':1');
     }
   }
 
