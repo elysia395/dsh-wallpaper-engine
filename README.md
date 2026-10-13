@@ -1,350 +1,295 @@
-# dsh-plugin-wallpaper-engine
+<div align="center">
 
-![license: MIT](https://img.shields.io/badge/license-MIT-blue.svg) ![node: >=18](https://img.shields.io/badge/node-%3E%3D18-5fa04e.svg)
+<img src="icon.png" alt="DSH Wallpaper Engine 项目图标" width="96" height="96">
 
-[English](README.en.md) | [中文](README.md) | [小白向指南](README.beginner.md)
+# DSH Wallpaper Engine
 
-> 🆕 **没用过命令行？先看这里：[小白向使用指南（新手快速上手）→](README.beginner.md)** —— 给完全没接触过命令行的用户准备的简化说明。
+**把喜欢的壁纸，带进每一次对话。**
 
-一个 DSH bundle，把你电脑上的 **Wallpaper Engine** 壁纸变成 **DSH 网页界面（`dsh web`）的背景**。
+Wallpaper Engine 实时壁纸 · 液态玻璃 · 自定义外观 · Windows / macOS / Linux
 
-![主界面效果展示](docs/images/main-interface.gif)
+[![GitHub Release](https://img.shields.io/github/v/release/elysia395/dsh-wallpaper-engine?style=for-the-badge&logo=github&label=Release&color=27866b)](https://github.com/elysia395/dsh-wallpaper-engine/releases/latest)
+[![npm Version](https://img.shields.io/npm/v/dsh-plugin-wallpaper-engine?style=for-the-badge&logo=npm&label=npm&color=cb3837)](https://www.npmjs.com/package/dsh-plugin-wallpaper-engine)
+[![npm Downloads](https://img.shields.io/npm/dm/dsh-plugin-wallpaper-engine?style=for-the-badge&logo=npm&label=Downloads%2Fmonth&color=27866b)](https://www.npmjs.com/package/dsh-plugin-wallpaper-engine)
+[![GitHub Stars](https://img.shields.io/github/stars/elysia395/dsh-wallpaper-engine?style=for-the-badge&logo=github&label=Stars&color=d4a72c)](https://github.com/elysia395/dsh-wallpaper-engine/stargazers)
+[![GitHub Forks](https://img.shields.io/github/forks/elysia395/dsh-wallpaper-engine?style=for-the-badge&logo=github&label=Forks&color=4385be)](https://github.com/elysia395/dsh-wallpaper-engine/forks)
 
-> 壁纸 + 磨砂遮罩 + iOS 液态玻璃，渲染在 DSH 界面后方。
+[![CI](https://img.shields.io/github/actions/workflow/status/elysia395/dsh-wallpaper-engine/verify.yml?branch=main&style=flat-square&logo=githubactions&label=CI)](https://github.com/elysia395/dsh-wallpaper-engine/actions/workflows/verify.yml)
+[![Contributors](https://img.shields.io/github/contributors/elysia395/dsh-wallpaper-engine?style=flat-square&logo=github&label=Contributors)](https://github.com/elysia395/dsh-wallpaper-engine/graphs/contributors)
+[![License](https://img.shields.io/github/license/elysia395/dsh-wallpaper-engine?style=flat-square&label=License&color=4385be)](https://github.com/elysia395/dsh-wallpaper-engine/blob/main/LICENSE)
+![Node.js](https://img.shields.io/badge/Node.js-%3E%3D18-5fa04e?style=flat-square&logo=nodedotjs&logoColor=white)
+![Platforms](https://img.shields.io/badge/Platforms-Windows%20%7C%20macOS%20%7C%20Linux-4385be?style=flat-square)
 
-## 目录
+[中文](README.md) · [English](README.en.md) · [新手指南](README.beginner.md) · [安装](#安装) · [更新记录](https://github.com/elysia395/dsh-wallpaper-engine/blob/main/docs/CHANGELOG.md) · [反馈问题](https://github.com/elysia395/dsh-wallpaper-engine/issues) · [支持与赞赏](#支持与赞赏)
 
-- [能做什么](#能做什么) · [更新前置条件](#更新前置条件) · [支持哪些壁纸类型](#支持哪些壁纸类型) · [工作原理](#工作原理)
-- [安装](#安装) · [使用](#使用) · [配置](#配置) · [与 dsh-better-sidebar 的兼容适配](#与-dsh-better-sidebar-的兼容适配) · [已知限制](#已知限制) · [开发 / 重建](#开发--重建) · [联系方式](#联系方式) · [致谢](#致谢)
-- 版本号、issue 号与性能数字见 [`docs/CHANGELOG.md`](docs/CHANGELOG.md)；升级前置条件见 [`docs/UPGRADING.md`](docs/UPGRADING.md)。
-- 📦 npm 包**不带 `docs/`**（随包的是运行期文件：`lib/**`、`cordis.patch.yml` 与三份 README）⇒ 上面这些 `docs/…` 链接在 npm / 插件市场里点不开，请到**源码仓库** <https://github.com/elysia395/dsh-wallpaper-engine> 的同名路径阅读。
+</div>
 
-## 能做什么
+一个 DSH 插件，把本机 **Wallpaper Engine** 的场景、网页与视频壁纸放到对话界面后方，再配上液态玻璃、字体、吉祥物与可分享的外观预设。不向 agent 注册工具或注入提示文本，**不增加模型 token 开销**。
 
-它会自动发现你本机的 Wallpaper Engine 安装，列出你的壁纸，并把*可移植*的类型渲染到 DSH 对话界面**后方**的固定图层，配以 iOS 风格的**液态玻璃**界面改造。
-> 版本号、issue 号与性能数字一律记在 [`docs/CHANGELOG.md`](docs/CHANGELOG.md)。
+![主界面效果展示](https://raw.githubusercontent.com/elysia395/dsh-wallpaper-engine/main/docs/images/main-interface.gif)
 
-**壁纸渲染（核心）**
+> 上方版本、下载量、Stars、Forks、贡献者数量与 CI 状态由 Shields.io 动态获取，受服务缓存影响，并非秒级实时；平台与 Node.js 徽章是兼容信息。没有手填测试通过数量或第三方榜单排名。
 
-- **三类壁纸，三条渲染路径**：**Video** 直接播放；**Web / HTML** 走内置 WebWallGL 的网页挂载（宿主注入 WE API + 严格沙箱隔离）；**Scene（场景）** 由内置 **WebWallGL** 实时 WebGL 引擎渲染 —— 粒子系统、puppet 骨骼模型、SceneScript 脚本、鼠标视差与点击交互、包内音频与音频反应。
-- **实时优先、逐级降级**：场景 / 网页壁纸由内置渲染器**实时**渲染；渲染页有**心跳看护**，真的出不了帧就按一条**降级链**逐级回退，**首帧之前不留黑屏**，最后一级允许**诚实留空**。
-  > 降级链的**顺序、看护判据、失败记忆分层与垫底画面来源**只在
-  > [`docs/HOW-IT-WORKS.md`](docs/HOW-IT-WORKS.md) 定义一处 —— 本文只承诺"不会黑屏、不会被一张坏帧永久卡住"，
-  > 不重复它的步骤（重复一份就会在下一次改动时漏改一处）。
-- **高帧率源可降载**：**帧率上限**把 4K120 这类源一次性转成上限帧率（4K 保留 + AV1），**显著降低 GPU 占用**；**遮挡暂停**三档在最小化 / 失焦 / 电池供电时直接停解码。
-- **能搬的都搬**：本地 JPG / PNG / MP4 可直接上传当壁纸；自定义轮播列表按各自的间隔与顺序自动换壁纸（就绪后才切，不黑屏）。
-
-**界面改造（核心）**
-
-- **跟随 DSH 的界面语言**：插件界面接进宿主的语言设置（设置 → 通用 → 语言）—— **语言目录与 dsh web 完全一致**（内置 `中文` / `English`，装了语言包也一并跟随）；切换即时生效，不需要重载页面，设置页、选择器、右栏 / 抽屉、吉祥物、字体集与更新说明全部跟着换。
-- **整个设置窗口液态玻璃（恒开）**：DSH 原生设置窗口整体（对话框 + 左导航 + 全部原生分区）都走玻璃配方 —— 原先那个"设置窗口液态玻璃"总开关**已退役**（实测那个"关"回不到原生纯色），配色 / 玻璃底色 / 透明度 / 雾化仍可调；逐面细调见「设置窗口玻璃·独立配置」。
-- **文字面保底**：承载文字的面固定压一层主题底色，最坏情况正文对比度 **4.63:1** —— 滑条调到极端也不会把字压得看不清。
-- **字体与光标可细调**：字体按**颜色角色 / 排版角色 / 组件**三层细化（字号、字重、字族各自可设）；界面配色一处调全部，也可给发送键 / 链接 / 文件图标 / 页签 / 深度求索状态**各自指定颜色**；输入光标独立取色。整套外观可存成**字体集**（随包自带预设，可新建 / 重命名 / 删除 / 恢复原样，也能**导出导入** `.json` 分享）。
-- **预设 = 整机配置快照**：「外观」页的**配置预设**一键套用**整套配置** —— 不再只是玻璃：全部观感与行为设置总是携带，字体 / 吉祥物立绘 / 会话头像**按需勾选**一并带上；预设可**导出 / 导入** `.json` 在用户之间流转（导入不立刻应用）。旧版只存玻璃子集的预设已**作废**，升级后重新保存一份即可。
-- **壁纸与界面融合可细调**：壁纸模糊、亮度 / 对比度 / 饱和度、壁纸透明度、暗化、边框、雾化，全部即时生效。
-
-**特色功能**
-
-- **吉祥物**：聊天顶部一条可拖拽的**拉绳**，向下拉出**壁纸仓库**抽屉（两套立绘、可缩放），快捷调节随身可用。
-- **侧边栏液态玻璃**：为 `dsh-better-sidebar` 的侧边栏专门适配（毛玻璃、高光与层级统一），另有一组独立的侧栏玻璃控制。
-
-## 更新前置条件
-
-> ⚠️ 本插件要求 **DSH 内核 ≥ 0.1.5**（0.1.5-rc.1 起——官方桌面端线与 DSH Desktop ≥ 2.0.7 线都满足；实测下限）。`dsh-better-sidebar` **不再有版本限制**（装了的话建议顺手更新到最新）。版本矩阵与升级注意事项见 [`docs/UPGRADING.md`](docs/UPGRADING.md)。
-
-## 支持哪些壁纸类型？
-
-Wallpaper Engine 本体把壁纸分四种类型；本插件支持其中的三类：
-
-| 类型 | 由谁渲染 | 能否搬到 DSH |
-|---|---|---|
-| **Scene（场景）** | Wallpaper Engine 自带的 3D 引擎 | ✅ 实时渲染 — 内置 WebWallGL WebGL 引擎（粒子 / 脚本 / 视差 / 包内音频）；失败按出图来源链降级 |
-| **Web（网页）** | Wallpaper Engine 内置的 HTML/JS 运行时 | ✅ 实时渲染 — 内置 WebWallGL 的网页挂载 + **注入 WE API**（音频监听/属性/媒体），严格沙箱隔离；失败自动回退兼容 iframe |
-| **Video（视频）** | Wallpaper Engine 内置播放器 | ✅ 直接播放 — 走上传视频同一套硬化管线（转码、解码帧率上限、遮挡暂停、倍速/翻转） |
-| **Application（应用）** | Wallpaper Engine 启动第三方可执行程序 | ❌ **不支持** —— 它要宿主直接运行外部程序，本插件不提供该能力 |
-
-> **四类壁纸各自的渲染路径、优雅降级、出图来源链与空帧门禁、以及排查用的诊断行**，
-> 见 [`docs/HOW-IT-WORKS.md`](docs/HOW-IT-WORKS.md)。
-
-## 工作原理
-
-一句话：**宿主**（`lib/index.js` + `lib/routes/*.js`）负责找到 Wallpaper Engine 与你的壁纸库、
-把媒体按需喂给浏览器；**客户端**（`lib/client.js`）负责把选中的壁纸挂到应用三列**后方**的固定图层，
-并在「设置」里注册一个一级页签「Wallpaper Engine」。
-
-> 出图来源链（实时渲染 → 内嵌 MP4 → 实时抓帧 → 自定义画面 → 空态）、宿主/客户端分工、
-> 全部 HTTP 路由表、以及"为什么没有 CPU 兜底出图"的设计理由，都在
-> [`docs/HOW-IT-WORKS.md`](docs/HOW-IT-WORKS.md)。**实现细节以代码注释为准**（本仓「代码即真相」）。
-
-## 安装
-
-### 普通用户（安装已发布版本，推荐）
-
-如果你只是想用这个插件，直接装 npm 上已发布的包即可：
+## 快速开始
 
 ```sh
 dsh plugin --profile web add dsh-plugin-wallpaper-engine
 ```
 
-装完重启 `dsh web`，打开 **设置 → Wallpaper Engine** 就能用。
+重启 `dsh web`，打开 **设置 → Wallpaper Engine → 壁纸库**，选择一张壁纸即可。
 
-> **macOS / Linux 用户**：本插件在 Windows / macOS / Linux 上**原生可用** —— 三平台装的是**同一个包、同一条命令**（媒体链路也各自原生：GSMTC / MediaRemote / MPRIS）。
->
-> macOS 没有 Wallpaper Engine 客户端，因此扫不到 Steam 壁纸库：把「自定义壁纸」的**存储位置**指到一个装着 WE 工程目录的文件夹（`project.json` + `scene.pkg` / `index.html` / `*.mp4`），里面的场景 / 网页 / 视频壁纸会照常收录、场景同样实时渲染；也可以直接上传图片 / 视频。
+**前置条件**：DSH 内核 `>=0.1.5-rc.1`；Node.js `>=18`。桌面端用户优先通过应用内插件市场安装，命令行安装时使用对应的 `desktop` profile。`dsh-better-sidebar` 是可选配套插件，不是必装依赖。
 
-### 开发者（运行你本地的一份代码）
+没用过命令行？从 [新手指南](README.beginner.md) 开始。
 
-用 `link:` 装本地一份代码、构建与验证、热挂载与编码铁律（含 **`lib/client.js` 到底是什么**）见
-[`CONTRIBUTING.md`](CONTRIBUTING.md)。**宿主端改动要重启 DSH 才生效**（CLI 装的走 `--profile web`，桌面端走 `--profile desktop` 且**必须先完全关闭应用**）。
+## 目录
 
-### 安装失败排查
+<table>
+  <tr>
+    <td width="72%" valign="middle">
+      <ul>
+        <li><a href="#能做什么">能做什么</a> · <a href="#支持哪些壁纸类型">支持哪些壁纸类型</a> · <a href="#安装">安装</a> · <a href="#使用">使用</a></li>
+        <li><a href="#配置与数据">配置与数据</a> · <a href="#兼容与限制">兼容与限制</a> · <a href="#开发与贡献">开发与贡献</a></li>
+        <li><a href="#联系方式">联系方式</a> · <a href="#致谢">致谢</a> · <a href="#支持与赞赏">支持与赞赏</a> · <a href="#star-history">Star History</a></li>
+      </ul>
+    </td>
+    <td width="28%" align="center" valign="middle">
+      <a href="https://github.com/elysia395/dsh-wallpaper-engine/blob/main/assets/about/sponsor-fish.png">
+        <img src="https://raw.githubusercontent.com/elysia395/dsh-wallpaper-engine/main/assets/about/sponsor-fish.png" alt="生鱼的微信赞赏码；点击查看原图" width="200">
+      </a>
+      <br><strong>生鱼的赞赏码</strong>
+      <br><sub>用于插件维护与更新 · 自愿赞赏</sub>
+    </td>
+  </tr>
+</table>
 
-装不上（`ERR_PNPM_UNEXPECTED_VIRTUAL_STORE` 等）的逐步处置，见
-[`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md)。
+## 能做什么
+
+| 方向 | 能力 |
+|---|---|
+| 实时壁纸 | 内置 **WebWallGL** 渲染 Scene / Web 壁纸，支持粒子、puppet 骨骼、SceneScript、鼠标交互与音频反应；视频直接播放 |
+| 液态玻璃 | 设置窗口、对话区与侧边栏玻璃效果，支持配色、透明度、雾化、边框与独立侧栏参数 |
+| 外观预设 | 整套配置快照，字体、吉祥物与头像资产可按需携带；支持 JSON 导出、导入与分享 |
+| 字体与配色 | 按颜色角色、排版角色和组件细调字体；支持系统字体、终端字体、字体集与独立光标颜色 |
+| 吉祥物 | **10 只内置立绘 + 自定义导入**，通过 3D 圆环选择；拉绳展开壁纸仓库抽屉 |
+| 壁纸库 | 内容分级与类型筛选、批量隐藏与恢复、自定义图片 / 视频上传、WE 项目目录收录、自动轮播 |
+| 播放与降载 | 帧率上限、转码缓存、倍速、水平翻转、切换过场、遮挡暂停与可迁移的缓存目录 |
+| 音乐联动 | 系统输出回环频谱、Now Playing 歌曲信息与封面；在线歌词按需启用 |
+| 扩展效果 | 可选的会话头像、点击 / 拖尾特效、壁纸与界面视差；不需要的效果可关闭 |
+| 宿主适配 | Windows / macOS / Linux 共用同一个 npm 包；界面跟随 DSH 的语言设置 |
+
+场景渲染失败时会逐级降级，首帧准备期间使用可用的预览图。不同壁纸使用的资源与脚本不同，**不能保证每张工坊壁纸都与 Wallpaper Engine 本体完全一致**。渲染与降级规则见 [工作原理](https://github.com/elysia395/dsh-wallpaper-engine/blob/main/docs/HOW-IT-WORKS.md)。
+
+## 支持哪些壁纸类型
+
+| 类型 | 在 DSH 中的路径 | 支持情况 |
+|---|---|---|
+| **Scene（场景）** | 内置 WebWallGL 实时 WebGL 渲染；失败按降级链回退 | 支持，不需要 WE 在后台运行 |
+| **Web（网页）** | 网页挂载、WE API 注入与沙箱隔离 | 支持；效果取决于网页及浏览器能力 |
+| **Video（视频）** | 浏览器播放，配合转码、帧率上限与暂停控制 | 支持 |
+| **Application（应用）** | 需要启动第三方可执行程序 | **不支持**，不进入壁纸库与轮播候选 |
+| **自定义图片 / 视频** | 上传本地 JPG / PNG / MP4 | 支持，文件保存在本机 |
+
+## 安装
+
+### 普通用户
+
+浏览器版安装或更新：
+
+```sh
+dsh plugin --profile web add dsh-plugin-wallpaper-engine
+```
+
+桌面版通过应用内插件市场安装；使用 CLI 时：
+
+```sh
+dsh plugin --profile desktop add dsh-plugin-wallpaper-engine
+```
+
+安装或更新后，**重启对应宿主**。桌面版需要完全退出应用后重新打开，而不只是刷新页面。
+
+版本要求以 npm 包声明和 [升级指南](https://github.com/elysia395/dsh-wallpaper-engine/blob/main/docs/UPGRADING.md) 为准。历史桌面端版本号与 DSH 内核版本号不是同一个概念，不要混用。
+
+### macOS / Linux
+
+三平台使用同一个包。系统媒体链路分别使用 Windows 的 GSMTC、macOS 的 MediaRemote、Linux 的 MPRIS。
+
+macOS 没有 Wallpaper Engine 官方客户端。可以上传图片 / 视频，或把「自定义壁纸 → 存储位置」指向包含 WE 项目的目录。含 `project.json` 与场景包、网页入口或视频的项目会按对应类型收录；这些项目目录只读，不参与上传文件的删除操作。
+
+### 安装失败
+
+`ERR_PNPM_UNEXPECTED_VIRTUAL_STORE` 等安装错误的处理见 [故障排查](https://github.com/elysia395/dsh-wallpaper-engine/blob/main/docs/TROUBLESHOOTING.md)。
 
 ## 使用
 
-1. 打开 `dsh web`，进入 DSH 界面。
-2. 打开 **设置**，左侧导航里找到 **Wallpaper Engine**（一级设置页，侧边栏独立入口）；聊天顶部的**拉绳吉祥物**也能拉出「壁纸仓库」抽屉，两处共用同一套页签与调节项。
-3. 点 **选择壁纸** 在页内展开**库视图**（**不是弹窗**、也没有遮罩），在缩略图网格里点选一张（**Application（应用）**类壁纸不支持，不显示在网格中）；从库视图退出即回到设置页。
-4. 用 **暂停/播放** 控制视频壁纸，用 **关闭** 清除壁纸。全部选择与调节都会即时生效并持久保存（见 [配置](#配置)）。
+1. 打开 **设置 → Wallpaper Engine**，或向下拉聊天顶部的吉祥物拉绳，展开「壁纸仓库」抽屉。
+2. 在「壁纸库」中点 **选择壁纸**，进入页内库视图。它不是额外的模态弹窗。
+3. 通过缩略图选择壁纸，按需调整播放与外观。修改即时生效并保存到宿主端。
+4. 暂停 / 播放控制视频；清除当前壁纸不会删除原文件。
 
-![设置界面功能展示](docs/images/settings-ui.gif)
+![设置界面功能展示](https://raw.githubusercontent.com/elysia395/dsh-wallpaper-engine/main/docs/images/settings-ui.gif)
 
-> 设置界面：液态玻璃卡片，六个页签（壁纸库 / 外观 / 播放 / 系统 / 扩展 / 关于）。
+### 六个设置页签
 
-![壁纸选择弹窗与壁纸仓库](docs/images/wallpaper-library.gif)
-
-> 选择弹窗：浏览全部壁纸缩略图，支持批量隐藏与已隐藏恢复。
-
-### 设置的页签
-
-设置页分**六个页签** —— **壁纸库**（选择 / 轮播 / 自定义上传）· **外观**（配色 / 玻璃 / 光标 / **配置预设** —— 整机配置快照，可导出导入；**全局字体与玻璃细调节两处都有**（侧栏默认收起、设置页默认展开））· **播放**（效果 + 声音）· **系统**（吉祥物 —— 可**导入自己的立绘**替下内置形态（再导入即覆盖上一次；两个形态卡片在自定义生效时禁用，清除后恢复可选）+ 高级）· **扩展**（后续功能的**模块容器**：目前挂着**自定义会话头像**（**第一项**，总开关**默认关**）—— 开启后宿主的会话界面被"排成好友聊天"：你的消息靠右、带头像，助手的靠左、带它自己的；头像可以**导入自己的图片**（只存在本机：宿主数据目录的 `avatars/`，导入前先缩到 512px 以内），没导入就画内置的默认头像（我方 = 人像、助手 = 四角星），形状默认正圆、**大小**（24–72px）与**圆角强度**（0–100%，100% = 正圆、0% = 直角方形）各一个滑块；关掉开关，会话立刻恢复原样（注入的节点与标记全部摘掉），它对壁纸、玻璃、字体那些设置一概不碰）与**点击效果与拖尾效果**（总开关默认关、按需开启）—— 它是跟着指针走的霓虹光效：**点击**按「涟漪」（从落点扩散的两圈圆环）/「星火」（一簇亮点向四周飞散）/「两者」在落点炸开，**拖尾**按「彗尾」（一条逐段收细、尾部渐隐的光带）/「星尘」（按步距留在原地的亮点）记下指针划过的一路，轨迹按「拖尾时长」自行淡完（指针停住也照淡）；整层用 `lighter` 叠加，颜色可跟主题色 / 彩虹（每个实例一个色相、还随时间流转）/ 自定义，不透明度与**混合模式**（滤色 = 只把画面加亮，最像霓虹；也可手选正常 / 叠加 / 正片叠底 / 变亮）都写在**宿主元素**上；点在自己的界面控件上不炸光效，监听是 passive 的、绝不拦指针；这一层**刻意不读壁纸像素**（所以它没有「自动」档），层级恒在壁纸之上、暗化层之上；点击 / 拖尾各有一个子开关，任一开着即生效，总开关默认关；三号 **3D 效果**是随光标移动的**视差纵深**：光标偏离屏幕中心时，壁纸与吉祥物沿**关于中心对称的方向**轻轻偏移，偏移量按**最长对角线的百分比**计（光标贴在屏幕角上时 ⇒ 该层挪它那个百分点的对角线）—— 壁纸默认 1%、吉祥物跟着壁纸一起（可单独关掉）、缓动平滑可调（0 = 立刻跟手，越大越柔和）；壁纸会同时按同样多放大，免得边上露出底色；**界面元素跟随**（子开关，默认关）打开后，输入卡片 / 会话文本区 / 侧栏作为**整块**跟着挪 —— 文字与底下的玻璃一起动（离眼睛越近走得越多：界面与壁纸**同向**，读起来像镜头横移；四个区域的距离**各自独立**（没有总倍率：会话文本区 / 输入卡片 / 侧栏 / 用户气泡各一个滑块，0 = 那一块完全不缓动）），位移**量化到整设备像素**（带迟滞：缓动尾巴在零附近不再来回翻，这正是「经过屏幕中线时发抖」的来路）、停下就把属性摘掉（`translate` 整条摘掉；属性在就成立包含块），组里有固定定位后代就整组不动；**只有左上角那一列例外** —— 宿主的「收起侧边栏」按钮是它里面的固定定位后代，所以那一列走**相对定位**（`left` / `top`）而从不写 `translate`；**点击与拖尾那一层刻意不参与** —— 这一层一个 DOM 节点都不建，每帧只把**算完的最终位移**直接写进要动的那几层自己的 CSS 独立属性 `translate`（不走继承型自定义属性：写在 body 上等于每帧让整棵文档树重算样式；body 上只剩一个"壁纸补边系数"，只在设置变了时写一次），位移与配比不再由样式表算；帧里零测量、跟随显示器真实刷新率；这一层还按"动的那几帧才提合成层、到位立刻摘掉"省开销（到位按屏上还剩多少位移判、系数全 0 时一帧都不排、页面不可见不排帧）；后续功能只往注册表里加一项）· **关于**（项目简介 / 仓库与实时 Star 数 / 交流群二维码 / 贡献者致谢），每页只保留与它相关的控件，不再是一列三十项的长滚动。页签指示胶囊随选中项平滑滑动，长说明一律收进控件悬停提示（tooltip），行内只保留一句话简述。「关于」不读面板状态、不写设置：文案 + 两张二维码（随包 PNG，走插件自己的路由，离线也显示得出来），外部输入只有那行 **star 数**与这两张图 —— 切进本页时由宿主代取 GitHub API（带缓存，拉不到就显示上一次的值）。**一键 Star 不做**：GitHub 点星必须有你的凭据，插件不存 token —— 按钮打开仓库页，旁边另有可复制的地址。
-
-### 选择与过滤
-
-- **隐藏 / 恢复**：卡片右上角的「隐藏」只把壁纸从列表移除，**不删除源文件**；弹窗的「已隐藏」标签可单张**恢复**或**全部恢复**，「批量」进入多选模式。隐藏当前壁纸不会打断播放，自动轮播也会跳过它。
-- **内容分级**：按壁纸的 `contentrating` 字段（WE 壁纸读 `project.json`，自上传内容读 `uploads/.meta.json`）分 **全部 / Everyone（默认）/ PG13 / Mature / 未分级**；自上传内容未标注时按 **Everyone** 处理。这个字段由插件直接扫盘读取，**不跟随 WE 客户端里的成人内容开关**。
-- **类型**：按可内嵌类型筛选 —— **全部 / 视频 / 网页 / 图片（自上传）/ 场景**。
-- 每个选项都带当前可播放数量；被过滤掉的壁纸会从网格、轮播编辑器与轮播候选中**整体剔除**，也不会被自动选中或轮换。
-
-### 卡片样式与播放控制
-
-- **紧凑布局**（「系统」→「高级」里的开关）：开启即 **CD 架效果** —— 卡片纵向层叠、悬停放大置顶、一页到底不翻页；关闭为常规网格（默认）。
-- **黑胶唱片**：选择界面旁旋转的黑胶把当前壁纸封面当唱片标签，播放时旋转、暂停即停；经典与紧凑两种卡片样式下都显示。
-- **倍速**：视频壁纸可选播放倍速档位，基于浏览器原生 `playbackRate`，即时生效、不重载不黑屏。
-- **水平翻转**：视频、网页与上传的图片 / 视频都生效（CSS `scaleX(-1)`，零主线程开销）。
-- **切换过场**：换壁纸（手动点选与自动轮播共用）可选的转场动画 —— **硬切（默认）** / 交叉淡化 / 推移 / 擦除 / 光圈 / 缩放 / 条带，每种自带基准时长，再乘「快 / 标准 / 慢」三档，方向型过场另有方向可选；系统开启「减少动态效果」时一律按硬切处理。
-
-### 适配目标（宿主形态）
-
-「系统」→「高级」里的**适配**段自动识别插件跑在 **原生浏览器 / 非官方桌面端 / 官方桌面端** 哪一种里，并显示「检测到：… · 有 / 无能力头栅栏」；检测不准时可手选覆盖 —— **手选优先于检测**。判定与操作系统无关：宿主按**请求头与 UA** 观测（能力头 `x-dsh-desktop-renderer` ⇒ 非官方桌面端，UA 含 `Electron/` ⇒ 桌面壳，两者皆无 ⇒ 原生浏览器），观测结果用只增不减的闩锁记住。它同时决定四件事：**网页壁纸载荷**走独立媒体源还是应用源（原生浏览器没有栅栏，就不再多开一个 loopback 监听）、**桌面壳材质规则**是否生效（一律经 `[data-we-adapter^="desktop-"]` 门控，浏览器形态不吃壳层材质）、**「窗口失焦时暂停」是否提供**（见下），以及**面板各行的显隐与警示**（手选与检测冲突时直接说明后果，例如手选浏览器却观测到栅栏 ⇒ 网页壁纸会 403）。
-
-### 省电与降载
-
-「系统」→「高级」里的**遮挡暂停**三档（最小化 / 切页、窗口失焦、使用电池；各档默认值见控件本身）：命中时机时视频壁纸**直接停解码**（不靠浏览器节流，解码引擎归零），场景实时渲染同时暂停渲染循环；回到界面 / 接通电源自动继续（手动暂停过的不会被自动恢复）。其中**「窗口失焦时暂停」只在适配目标为「原生浏览器」时提供** —— 桌面壳失焦时壁纸多半仍整块可见，按失焦暂停会定格**可见**画面；该档的值不会被删掉，切回浏览器目标即恢复生效。
-
-「播放」→「效果」里的**帧率上限**（可选档位见控件本身）针对高帧率源：宿主用 ffmpeg **一次性**把源转成上限帧率（时间线保持**正常速度**、与倍速完全解耦），输出 **4K 保留 + AV1**，缓存后同一张壁纸只付一次成本。播放时**先播原片、转好自动切换**，设置页有**实时进度条**；源帧率已在上限内会自动跳过，转码失败自动回退原片。
-
-> ffmpeg 三档供给：**显式指定**（`DSH_WE_FFMPEG` 或插件目录下的 `ffmpeg/`）→ **自动下载**（npmmirror + GitHub 双源竞速，校验后缓存）→ **系统 PATH**。编码器优先 **NVENC**（`av1_nvenc` → `h264_nvenc`），无 NVIDIA 显卡时回落 **libx264 软件编码**（慢，但能出片）；只有**连 ffmpeg 都拿不到**时该功能才自动关闭，壁纸保持原片，不影响其它任何功能。
-
-### 缓存位置（把几个 GB 挪出系统盘）
-
-抽帧 / 转码 / 实时抓帧 / 视频缩略图这些**可再生产物**默认落在 `~/.dsh-wallpaper-engine/cache`，也就是**系统盘** —— 用得久了能堆到**几个 GB**。**「系统」→「高级」→「缓存位置」**可以把它改到任意盘符的目录（绝对路径，支持 `~`）：点「更改」会弹出**目录浏览器**（列盘符与子目录，点着进出，地址栏也支持直接粘贴路径），改完**已有缓存自动迁移**过去（逐文件搬，跨盘也搬得动），旧目录**只留空壳、不删**。
-
-迁移**只搬插件自己的那几个缓存子目录**，不认识的文件原地不动 —— 目标可以是你已有的任意目录（例如 `D:\WallpaperEngineCache`），插件不会去动里面的别的东西。缓存全是可再生的（所以设置页的提示是"随时可删"），最坏情况只是重跑一次转码，不会丢你的壁纸或设置。
-
-优先级：`DSH_WE_CACHE_DIR` 环境变量 → 设置里的「缓存位置」→ 默认 `~/.dsh-wallpaper-engine/cache`。环境变量在场时它优先，设置页显示的是**实际生效**的那条路径（两者不一致就是它被覆盖了）。
-
-> 设置存在 `config.json` 的根字段 `cacheDir`。**自定义壁纸**的存储位置（默认 `~/.dsh-wallpaper-engine/uploads`）在「壁纸库」页签改，同一条迁移逻辑（见上）；要把**整个数据目录**（含设置与头像 / 字体 / 吉祥物这些）挪走，用环境变量 `DSH_WE_DATA_DIR` —— 见「配置」的环境变量表。
-
-### 画面调节
-
-画面相关的十一个滑动条分居两处：「播放」→「效果」（壁纸激活后）九个 —— **壁纸模糊** · **亮度 / 对比度 / 饱和度**（壁纸媒体滤镜）· **水平 / 垂直 / 缩放**（壁纸**层取景**：位移与缩放，与 WE 壁纸属性面板那三条同名滑条**同量程**，右侧数值可直接键入、双击标签回默认）· **壁纸透明度**（整层淡出、融向页面底色，与**暗化**互补）· **暗化**（加深壁纸与文字之间的遮罩）；「外观」页签两个 —— **边框**（「细节」段，边框 / 分割线对比度）与**雾化**（「玻璃 UI」节，玻璃面板模糊半径）。全部即时生效、持久保存，**无需刷新页面**；每个控件的取值范围与默认值直接看控件本身。
-
-> **浅色 / 深色由壁纸自己决定** —— 换壁纸后插件会自动切到与壁纸相配的那一侧（取色顺序：作者的 `schemecolor` → 画面占比最大色（作者预览图与真实渲染帧**各判一次，不一致时取深色**）→ 取不到就保持不动；判定按颜色深浅，**只有明显偏亮**才用浅色。作者填的**恰好纯黑**算"没填"，会改用画面主色）。你也可以随时在 DSH 里手动改主题 —— 改过之后**本张壁纸不再自动**，换下一张恢复。偏亮或花纹复杂的壁纸看不清字时调高 **暗化 / 边框**（必要时加一点 **壁纸模糊**），嫌壁纸抢眼则调高 **壁纸透明度**。滑条再怎么调也不会把正文压到看不清 —— 承载文字的面都有**可读性下限**（见上）。
-
-### 实时渲染与壁纸属性
-
-场景 / 网页壁纸默认走内置 **WebWallGL** 实时渲染（`lib/webwallgl/`，MIT，源自 [webwallgl](https://github.com/oneincase/webwallgl)）：粒子系统、puppet 骨骼模型、SceneScript 脚本、鼠标视差 / 点击交互、包内音频与音频反应完整还原。渲染页跑在**同源隔离 iframe** 里并有**心跳看护**，失败按壁纸记住并自动降级（设置里重开开关即重试）。网页壁纸另有**注入的 WE API**（音频监听 / 属性 / 媒体），并强制 `sandbox="allow-scripts"` —— 第三方 HTML 拿不到 DSH 的 origin。
-
-当前壁纸是**场景**或**网页**时，「当前壁纸」卡片上会出现绿色的 **壁纸属性** 按钮：列出作者在 WE 编辑器里定义的可调属性（颜色 / 开关 / 滑块 / 下拉 / 文本 / 文件），改一下**立刻生效**并**按壁纸记住**，「恢复默认」一键清掉这张壁纸的全部改动；面板显示的是**真正生效**的值（从渲染页读回）。
-
-### 自定义壁纸与自动轮播
-
-- **自定义壁纸**：上传本地 **JPG / PNG / MP4** 当壁纸（浏览器与宿主端双重校验）。**存储位置**默认 `~/.dsh-wallpaper-engine/uploads`，可改到任意盘符（绝对路径，支持 `~`）并自动迁移已有文件；**适配模式**有覆盖 / 填充 / 居中 / 拉伸四种。上传的 MP4 按需抽帧生成缩略图；重复上传同一文件按内容识别、直接复用已有的那张。
-- **WE 项目目录**：存储位置里含 `project.json` 的壁纸项目目录（含 `scene.pkg` / `index.html` / `*.mp4`）会被自动收录成对应类型，场景壁纸同样走实时渲染；这些目录**只读**，不参与上传管理，也不会被删除。
-- **自动轮播**：轮转基于**自定义轮播列表** —— 用 **新建** 建任意多个列表，从库存勾选壁纸加入，每个列表单独设**切换间隔**（按分钟，范围与默认见控件本身）与**播放顺序**（顺序 / 随机），再勾选 **自动轮转** 只在该列表内循环。每个列表至少需要 2 张可播放壁纸；首次使用时插件会把第一个可播放的 WE 播放列表导入成一个列表，编辑时也可用 **从 WE 播放列表导入**。
-- **就绪后切换**：到点先在后台把下一张准备到**完全就绪**（实时渲染首帧 / 视频可播放 / 图片解码完成）才落实切换 —— 旧壁纸在准备期间原样保持，就绪瞬间新旧两层交叉淡化，上屏即是活画面、不黑屏闪烁；准备失败的候选自动跳过、链式尝试下一张。
-
-### 液态玻璃外观（整个设置窗口 + 配色 + 透明度）
-
-「外观」页签控制**整个 DSH 原生设置窗口**的观感（参照 dsh-web-ui-all 皮肤中心的设计）：
-
-| 控件 | 作用 | 默认 |
-|---|---|---|
-| **设置窗口玻璃（恒开）** | 设置窗口整体（对话框 + 左导航 + 全部原生分区）走玻璃配方；原先的总开关已退役 | 开 |
-| **设置窗口玻璃·独立配置** | 用这一面自己的玻璃颜色 / 透明度 / 雾化**覆盖**全局（关 = 跟随全局）。**只在设置页**出现（侧栏档只画简化配置） | 关（跟随全局） |
-| **配色** | 主题色：窗口内的按钮、开关、链接、导航选中、滑块与玻璃高光统一跟随（6 预设 + 自定义取色） | 经典蓝 `#4f8cff` |
-| **玻璃颜色** | 设置窗口玻璃的**底色色调**（6 预设 + 自定义取色） | 浅色白 / 深色深夜蓝 |
-| **玻璃透明度** | 玻璃面板（设置窗口、输入栏、气泡、侧边栏）的透明度，越高越透 | 见控件本身 |
-| **左侧栏液态玻璃** | 让宿主原生**左侧栏**（会话列表 / 工作区那一列）也跟随「配色 / 玻璃颜色 / 玻璃透明度 / 雾化 / 边框」—— 默认关时那一列直接透出**原样**壁纸（无霜、无底色） | 关 |
-| **雾化** | 玻璃模糊半径 —— 对话栏卡片、**左侧栏液态玻璃**、设置窗口、插件浮层**共用同一套调节参数**（侧栏除外：它有独立的「侧栏模糊」） | 见控件本身 |
-| **文字面可读性下限** | 承载文字的面在玻璃色之下固定压一层主题底色（正文保持 ≥4.5:1），**默认开启且不提供开关** | 开 |
-| **主题随壁纸** | **开关，默认关**。开启后换壁纸时按壁纸自动切全局深 / 浅（作者配色 → 画面占比最大色（预览图与真实帧不一致时取深色）→ 取不到则不动；作者填的恰好纯黑按"没填"处理；只有明显偏亮才切浅色。面板「外观 → 主题」那一行会显示最近一次判决的来源与亮度）；在 DSH 设置里手动改过主题则本张不再自动、换下一张恢复 | 关 |
-
-所有控件即时生效并持久保存；不支持 `backdrop-filter` 的浏览器自动回退到高不透明实色，保证文字可读。
-
-> **默认值与取值范围以控件本身为准**。设置的唯一真源是 [`lib/settings-schema.js`](lib/settings-schema.js)（`DEFAULTS` 默认值 / `KINDS` 校验范围 / 枚举表），宿主与客户端都从它派生，面板直接读它渲染 —— 因此本文与其它文档**一律不抄写这些数值**：抄一份就等于多一个会腐化的副本。
-
-### 配置预设（整机配置快照）
-
-「外观」页签顶部的**配置预设**不再是"玻璃子集"，而是**这个插件整套配置的快照**：一键套用，观感与行为设置（含轮播、播放、特效、视差、头像形状等全部设置）**总是完整生效**；**字体 / 吉祥物立绘 / 会话头像**三类**实体资产**在保存 / 导出时**按需勾选**携带（不勾的项落到接收方自己当前那份 —— 勾选只决定图片与字体要不要一并带走，数值配置总是完整保存）。预设可**导出成 `.json` 文件**、再在别处**导入**（导入只进列表、不立刻应用 —— 去列表里点它才生效），供用户之间流转。出厂自带若干套预设；**升级前保存的旧版预设只含玻璃子集、已作废** —— 面板会点名版本作废，重新保存一份即可。
-
-### 吉祥物（聊天顶部拉绳）
-
-「系统」→「吉祥物」控制聊天的**拉绳吉祥物** —— 一条可拖拽的拉绳沿顶部吸附，向下拉即拉出**壁纸仓库**抽屉（当前壁纸黑胶、轮播与自定义壁纸管理随手可及）。**形态**以卡片呈现，卡片直接渲染当前形态的立绘并按「吉祥物大小」实时缩放，选形态与看大小在同一处完成：
-
-| 控件 | 作用 | 默认 |
-|---|---|---|
-| **显示吉祥物** | 是否显示拉绳吉祥物与其壁纸仓库抽屉 | 开 |
-| **吉祥物形态** | **3D 圆环转盘**选立绘：10 只立绘**等角度排在一个圆环上**、整环旋转（转到后脑勺的那几张自动隐藏），**中心 = 当前生效的那一只**；可**拖动**环、按 ← / →、点下面的圆点，或**直接点任意一只**把它转到中心。共 **10 只内置 + 自定义**：**Deepseek_Pro**（原名「鲸御姐」，鲸尾女仆竖版 2:3 全身体；与同一行里那只模型娘 **DeepSeek** 是**两张不同的图**，别按名字猜）/ **菲比啾比**（竖版），以及八只**模型娘** **Claude · DeepSeek · Gemini · GPT · GLM · Grok · Kimi · Qwen**（各自按源图比例定盒高）；最后一项可导入**自定义立绘**（自定义生效时点其他立绘会先问你确认） | **DeepSeek** |
-| **吉祥物大小** | 缩放吉祥物（拉绳盒尺寸随比例变化，拖拽 / 吸附几何自动适配） | 见控件本身 |
-
-![吉祥物快捷调节页面](docs/images/mascot-drawer.png)
-
-> 点击顶部拉绳吉祥物即可拉出「壁纸仓库」抽屉。立绘在打包时都已内联为 base64（透明背景），单文件客户端资源依然自包含；**大小**只改变拉绳自身的盒尺寸，不影响下方的抽屉。
->
-> 出厂列表里原有的一只「小女仆」（近方形 chibi）已于 2026-10-13 **除名** —— 那只立绘改由「作者自用」预设携带（当彩蛋），出厂默认形态是 **DeepSeek**。
-
-### 全局 UI 配色 · 字体 · 光标
-
-三个分区，**设置页与侧栏「外观」页两处都能调**。外观页共六节、**两处同序**
-（主题 / 细节 / 玻璃 UI / 侧边栏圆角 / 全局 UI 配色 / 全局字体），每节都能点节头**收起**；
-差别只在**默认开合**：**侧栏**把**后面三个**（侧边栏圆角 / 全局 UI 配色 / 全局字体）默认隐藏
-（侧栏窄，铺开要滚好几屏），**设置页五个门全部默认展开**（那里空间大、一眼看全），
-两处都**记住你手动收放的选择**（设置页是模态对话框，调外观时会挡住主页面、看不到实时效果，
-所以细调在侧栏那份更顺手）：
-
-- **全局 UI 配色**（外观页，位于「全局字体」**之上**）—— 一个总色 + 五个可单独指定的位置：
-  - **全局配色**：一处调全部 —— 界面强调色、按钮、选中态与下面那几处一起变；
-  - **UI 配色自定义**（**默认关**）：开启后「全局配色」整行**禁用**，改由下面五项分别决定；每项留「跟随」即回到全局配色。五项分别对应界面里那几处**原本不跟着配色变**的颜色：
-
-    | 项 | 管哪里 |
-    |---|---|
-    | 发送键 | 输入框右侧那个圆形箭头按钮（⚠️ 它的箭头是**宿主写死的白色**，建议选中间调） |
-    | 链接文字 | 会话与面板里的链接、强调文字 |
-    | 文件图标 | 交付物卡片上 `</>` 那个文件图标（与链接同源，这里单独覆盖） |
-    | 页签 / 焦点环 | 会话的「对话 / 轨迹」页签与下划线；焦点环与状态点同源，一并跟色 |
-    | 深度求索状态 | 「深度求索中，用时 …」那行文字与它的微光 |
-
-  - **光标颜色** —— 壁纸透过液态玻璃输入框衬在光标后面、两者颜色相近时光标会「隐形」（[#83](https://github.com/elysia395/dsh-wallpaper-engine/issues/83)）：**自动**（默认，恢复 dsh 原生）/ 6 种预设 / 自定义取色，经 `caret-color` 作用于所有文本输入位。它**不受**上面那个总开关影响，始终可调。
-  - ⚠️ **五项都只在本插件运行时生效**（锚点是页面玻璃标记）：本插件停用时界面回到 DSH 原生配色。
-- **全局字体**（外观页 · 折叠块） —— **总开关默认关闭**（即 dsh 原生外观）。开启后**按角色 / 按组件**细化，另有**一个默认字体**（**没有全局字重** —— 一个全局值会把 DSH 的粗细层次压成一档）：
-  - **默认字体（全局）**：整套界面的默认字族，**含本机已安装字体**（宿主枚举系统字体清单，可下拉选择、可「重新扫描」）。它是**默认**不是强制 —— 任何角色 / 组件单独设过字族都以那里为准，而且**不会改动任何角色的字号**；
-  - **终端字体**：一处管两处终端 —— ① 对话里的**终端块**（官方 `--dsl-terminal-font` 钩子）② 侧栏 / SSH 的**终端面板**（`dsh-ssh` 的 xterm，走它给皮肤留的 `--dsh-ssh-terminal-font` 钩子）。⚠️ 它与「高级字体设置 → 终端」是同一项的两处入口；若在 `dsh-ssh` 自己的设置里填过 `terminalFontFamily`，那个值优先级更高。**Nerd Font 图标（Powerline 那种）只有 Nerd Font 能画** —— 选了它才不出「口」；
-  - **文字颜色角色**：按 DSH 的**颜色角色**分别上色（未设置 = 用 DSH 默认色）；
-  - **排版角色**：一行一个角色，列出**字号 / 字重 / 字体**三项 —— 字号是**绝对值 px**（输入框直接显示 DSH 官方字号，留空 = 不改），字重 100–900，字族可选内置族键或**本机字体**（「跟随」= 不覆盖），另有「只看改过的」过滤器；
-  - **高级字体设置**（子开关）：**按组件**细化 **代码块 / 终端 / markdown / 表格** 四项 —— 只对**启动自探测命中**的组件生效（DSH 改名即整条降级，不误伤）。
-  - **字体集预设**：把整套字体外观存成一份**字体集** —— 随包自带预设，可**新建（以当前外观）/ 重命名 / 删除**；改任何一项都只落到**当前这一套**，随时可以「恢复原样」回到它本来的样子；也能**导出 / 导入** `.json`（导出走系统「另存为」）。它是「字体自定义」的附属：关掉总开关即整块收起。
-  报错 / 危险 / 警告语义元素强制保留系统红字；「恢复默认」一键清掉全部字体自定义项（**不**影响「只看改过的」这类视图开关）。
-
-### 系统音频反应与歌曲信息（Now Playing）
-
-「播放」→「声音」三项（前两项默认开启，第三项默认关闭）：
-
-- **系统音频反应** —— 把**系统正在播放的声音**（任何 App，不只是浏览器标签）做成频谱喂给壁纸的音频反应效果。采集的是**系统输出回环**、不是麦克风，macOS / Windows / Linux 三平台都内置（Windows 走 WASAPI 回环，**不再需要「立体声混音」或虚拟声卡**）；拿不到音频时壁纸自动回落内置的模拟频谱。
-- **媒体信息** —— 把系统 **Now Playing**（歌名 / 歌手 / 专辑 / 播放态 / 进度 / 时长 / **封面**）交给壁纸：依赖 WE 官方 `wallpaperRegisterMediaPropertiesListener` / `…ThumbnailListener` / `…PlaybackListener`（以及 `…TimelineListener`），识别这些 API 的工坊网页壁纸会自动显示歌曲信息与封面。
-- **在线歌词** —— 优先取本地的（音频同目录的 `.lrc` 与已缓存歌词）；开启后本地没有才向 [lrclib.net](https://lrclib.net) 查一次 —— 那次请求会把歌名 / 歌手 / 专辑发出去，所以**默认关闭**。
-
-**反向控制（随「媒体信息」生效）**：场景壁纸里 Now Playing 组件自带的 **▶ / ⏸ / ⏮ / ⏭** 按钮，点击会控制**系统真实播放器**（播放 / 暂停 / 上下曲）—— 只对带该组件按钮的壁纸生效（全库同组件共三张）；控制面与数据面同源：中间件不可用时按钮落到渲染器自己的模拟源，内置实现（纯读取）不提供控制。
-
-> 这些数据由宿主侧自带的 Rust 中间件 [media-bridge](https://github.com/oneincase/media-bridge) 子进程提供（随插件按需下载、校验 sha256 后执行，缓存在 `~/.dsh-wallpaper-engine/bin/`）：macOS 用 MediaRemote、Windows 用系统媒体会话（GSMTC）、Linux 用 MPRIS over D-Bus。因此**不再需要** `brew install media-control`、`playerctl` 或 VB-Cable，macOS 也不再需要 Xcode Command Line Tools；中间件取不到或起不来时自动回落到内置实现，原因写在 `GET /wallpaper-engine/media-status` 的 `fallback` 字段里。
-
-## 配置
-
-本插件不会向模型暴露任何工具或提示文本，对 agent **零 token 开销**，也不写入任何 DSH 自身的设置。本地落盘只有三类：宿主端配置文件 `~/.dsh-wallpaper-engine/config.json`（选择、隐藏、轮播、配色、字体等全部设置，以及你选的上传目录与缓存位置）、**自定义壁纸文件**本身，以及 `~/.dsh-wallpaper-engine/` 下的**缓存与按需下载的运行时**（抽帧转码 / 实时抓帧 / 视频缩略图缓存、ffmpeg 与媒体中间件的二进制）。其中占盘的**缓存根**与**上传目录**都能在设置里改到别的盘（见上「缓存位置」），整个数据目录也能用 `DSH_WE_DATA_DIR` 一次挪走。
-
-**环境变量**：
-
-| 变量 | 作用 |
+| 页签 | 主要内容 |
 |---|---|
-| `DSH_WE_FFMPEG` | 指定 ffmpeg 可执行文件（解析链最高优先） |
-| `DSH_WE_FFMPEG_URL` | 替换自动下载源（自建镜像 / 代理加速） |
-| `DSH_WE_CACHE_DIR` | 覆盖**缓存根目录**（抽帧转码 / 实时抓帧 / 视频缩略图缓存；优先于设置里的「缓存位置」，见上） |
-| `DSH_WE_STEAM_ROOT` | 显式指定 Steam 根目录（逗号/分号分隔，Windows 或 `/mnt` 路径）。**排在注册表与自动探测之前**，想固定到某一处时用它；列出的根里没有安装会自动往后找 |
-| `DSH_WE_MEDIA_BRIDGE` | 指定媒体中间件的可执行文件（开发/自备产物；解析链最高优先） |
-| `DSH_WE_MEDIA_BRIDGE_URL` | 替换中间件下载源（自建镜像 / 代理加速；支持 `{tag}` / `{asset}` 占位符） |
-| `DSH_WE_MEDIA_BRIDGE_TAG` / `DSH_WE_MEDIA_BRIDGE_SHA256` | 换用其它版本的中间件（自定义版本必须同时给出 sha256，否则拒绝执行） |
-| `DSH_WE_MEDIA_LEGACY` | `=1` 强制使用内置实现（对比排查用） |
-| `DSH_WE_MEDIA_NO_AUDIO` | `=1` 只取歌曲信息、**永不碰系统音频采集**（不申请授权） |
-| `DSH_WE_MEDIA_PROVIDER` | `=mock` 用中间件自带的假播放器联调（不需要真播放器） |
-| `DSH_WE_MEDIA_IDLE_MS` | 空闲多少毫秒后停掉中间件子进程（`0` = 不停；缺省值见实现） |
-| `DSH_WE_MEDIA_DEBUG` | `=1` 把中间件的 stderr 与启动参数打到宿主日志 |
-| `DSH_WE_DATA_DIR` | 覆盖插件数据目录（默认 `~/.dsh-wallpaper-engine`；自检脚本用它隔离，避免写到你真实的 `config.json`） |
-| `DSH_WE_UPLOAD_DIR` | 覆盖自定义壁纸的存储位置（优先于设置里的「更改」与默认目录） |
-| `DSH_WE_ASSETS_DIR` | 覆盖「官方资源路径」（WE 的 `assets` 树；优先于设置里那一项） |
-| `DSH_WE_TRANSCODE_TIMEOUT_MS` | 覆盖单次转码的墙钟预算（毫秒；缺省值见实现） |
+| **壁纸库** | 壁纸选择、筛选、自定义上传与轮播列表 |
+| **外观** | 主题预设、配色、玻璃、侧边栏圆角、全局 UI 配色与字体 |
+| **播放** | 画面滤镜、取景、倍速、过场、音频与媒体联动 |
+| **系统** | 吉祥物、宿主适配、遮挡暂停、缓存与高级选项 |
+| **扩展** | 会话头像、点击与拖尾、3D 视差等可选效果 |
+| **关于** | 项目入口、Star 数、交流群与贡献者信息 |
 
-**设置存在哪**：从 v0.4.0 起全部设置存在宿主端文件 `~/.dsh-wallpaper-engine/config.json`（与浏览器端口无关，
-重启 / 换端口 / 清浏览器数据都不会丢；老版本的 localStorage 配置会自动迁移）。文件位置、多设备共享与读写行为见
-[`docs/UPGRADING.md`](docs/UPGRADING.md) 的「设置持久化」。
+### 壁纸库与自动轮播
 
-## 与 dsh-better-sidebar 的兼容适配
+- **筛选**：按内容分级与类型过滤；筛选同时作用于库视图与轮播候选。
+- **隐藏 / 恢复**：只改变列表，不删除源文件。支持批量隐藏与恢复；隐藏当前壁纸不会中断播放。
+- **自动轮播**：创建列表，选择壁纸并设置间隔与顺序 / 随机播放。至少需要两张可播放壁纸。
+- **准备后切换**：下一张准备完成后再交接；失败候选自动跳过。可选择硬切、淡化、推移等过场，系统「减少动态效果」开启时使用硬切。
+- **壁纸属性**：Scene / Web 壁纸可显示作者定义的颜色、开关、滑块等属性，按壁纸保存，并可恢复默认。
 
-本插件的液态玻璃效果对 dsh-better-sidebar 的侧边栏面板做了专门适配（毛玻璃、高光与层级统一），让侧边栏与对话区共享同一套「壁纸 + 遮罩」背景，三列视觉一致、不再割裂。
+![壁纸库与壁纸仓库](https://raw.githubusercontent.com/elysia395/dsh-wallpaper-engine/main/docs/images/wallpaper-library.gif)
 
-「外观」页签还提供一组独立于会话玻璃和当前壁纸的**侧栏玻璃**细粒度控制：即使没有启用 Wallpaper Engine 壁纸，也可以在普通 DSH 背景或其他背景来源上调整侧栏。它只作用于 dsh-better-sidebar 的侧边栏子树；不支持 `backdrop-filter` 的浏览器会自动回退到高不透明实色。
+> 演示素材保留历史界面；当前交互以安装版本为准，壁纸选择在页内库视图完成。
 
-| 控件 | 作用 | 默认 |
+### 液态玻璃、字体与预设
+
+- 设置窗口玻璃当前恒开；可调整颜色、透明度和雾化，没有恢复原生纯色的总开关。
+- 设置页与侧栏均可调整外观，各节支持折叠；侧栏的圆角、全局 UI 配色与全局字体默认收起。
+- **主题随壁纸默认关闭**。开启后才按作者配色与画面取色切换深浅主题；本张壁纸下手动改过主题后，自动切换会让位。
+- 字体支持按角色 / 组件细调、系统字体枚举与字体集管理。终端里的 Nerd Font 图标需要对应字体。
+- 「主题预设」保存的是整套配置，不只是玻璃参数。导入只加入列表，不立即应用；分享时可选择携带字体、吉祥物和头像。
+- **套用预设前注意覆盖范围**：预设可能更换或清除自定义资产。保存、导出与套用前，阅读对应确认提示。
+
+默认值、枚举与取值范围以 [设置 schema](https://github.com/elysia395/dsh-wallpaper-engine/blob/main/lib/settings-schema.js) 和当前控件为准，避免在文档中维护一套容易过时的数值。
+
+### 吉祥物与扩展
+
+3D 转盘提供 **Deepseek_Pro、菲比啾比** 与 **Claude、DeepSeek、Gemini、GPT、GLM、Grok、Kimi、Qwen**，默认形态是 **DeepSeek**。支持拖动、方向键与圆点导航，也可导入自己的立绘；自定义生效后仍可选择内置项，但切回前会要求确认清除自定义立绘。
+
+「小女仆」不在内置转盘中，由「作者自用」预设携带。会话头像、点击 / 拖尾与 3D 视差在「扩展」中按需启用。
+
+### 播放、省电与音乐联动
+
+- 画面可调模糊、亮度、对比度、饱和度、透明度、暗化与取景。视频支持倍速与翻转。
+- 帧率上限由 ffmpeg 转码生成缓存：先播放原片，完成后切换；优先使用可用的硬件编码器，失败回退原片或软件编码。
+- 遮挡暂停覆盖视频解码和场景实时渲染；窗口失焦暂停只在原生浏览器适配目标下提供，纯网页 iframe 不受同样的暂停控制。
+- 系统音频反应采集的是**输出回环，不是麦克风**。媒体中间件按需下载并校验，不可用时回退内置实现。
+- Now Playing 提供歌名、歌手、专辑、封面与播放进度；支持这些 WE API 的壁纸可显示它们。
+- **在线歌词默认关闭**。开启后，本地歌词不可用时才向 [LRCLIB](https://lrclib.net) 查询，请求会发送歌名、歌手和专辑。
+
+## 配置与数据
+
+全部设置保存在宿主端 `~/.dsh-wallpaper-engine/config.json`，不依赖浏览器端口。重启、换端口或清浏览器数据不影响这份配置；旧 localStorage 配置可自动迁移。
+
+| 数据 | 默认位置 | 调整入口 |
 |---|---|---|
-| **侧栏液态玻璃** | 总开关：把侧边栏面板换成液态毛玻璃 | 开 |
-| **侧栏模糊** | 侧边栏毛玻璃的模糊半径 | 见控件本身 |
-| **侧栏透明度** | 侧边栏玻璃的浓淡（**越大越透**） | 见控件本身 |
-| **侧栏玻璃颜色** | 侧边栏玻璃的**底色色调** | 见控件本身 |
-| **侧栏全透明** | 放弃可读性下限换全透：壁纸激活时撤掉侧栏的可读性底、色染与釉光（模糊仍由旋钮管） | 关 |
-| **侧栏玻璃跟随全局** | 开：侧栏跟随「玻璃颜色 / 玻璃透明度 / 雾化」；关：用侧栏自己那套值（「侧栏玻璃·独立配置」，**只在设置页**出现） | 开 |
+| 设置与插件数据 | `~/.dsh-wallpaper-engine/` | 环境变量 `DSH_WE_DATA_DIR` |
+| 可再生成缓存 | `~/.dsh-wallpaper-engine/cache/` | 系统 → 高级 → 缓存位置；或 `DSH_WE_CACHE_DIR` |
+| 上传的壁纸 | `~/.dsh-wallpaper-engine/uploads/` | 壁纸库 → 自定义壁纸 → 存储位置；或 `DSH_WE_UPLOAD_DIR` |
+| 按需下载的运行时 | 数据目录下的 `bin/` 等子目录 | 由插件管理 |
 
-> 侧栏玻璃与设置窗口玻璃是两套独立参数：会话玻璃的「玻璃」滑杆只管输入栏/气泡，侧栏玻璃滑杆管侧边栏。关闭「侧栏液态玻璃」会连同编辑器/终端内容面一起恢复原生样式（插件直接画的毛玻璃 / 模糊整组退场）；**页面令牌级的玻璃配方不在此开关的管辖内** —— 按宿主规范读 `--dsw-alias-*` 上色的面（含第三方插件）仍会拿到玻璃配方，这一层要等玻璃总开关（现状、自查与共存四态见 [`docs/COEXISTENCE.md`](docs/COEXISTENCE.md)）。侧边栏默认较透（与背景观感一致、避免面板发白）；编辑器/终端等内容面另有独立的近不透明底色 + 透明度控制，保证窄面板里文字可读。
+修改缓存 / 上传位置时会迁移对应的插件文件，不移动目标目录中不认识的文件。环境变量优先于面板中的路径设置。
 
-![dsh-better-sidebar 兼容适配与字体自定义](docs/images/better-sidebar-font.png)
+常用环境变量：
 
-> 侧边栏液态玻璃适配与「外观」页签的字体自定义（行楷）同时生效的实际观感。
+| 变量 | 用途 |
+|---|---|
+| `DSH_WE_DATA_DIR` | 覆盖整个数据目录 |
+| `DSH_WE_CACHE_DIR` / `DSH_WE_UPLOAD_DIR` | 覆盖缓存 / 上传目录 |
+| `DSH_WE_STEAM_ROOT` | 指定 Steam 根目录，支持多个候选 |
+| `DSH_WE_ASSETS_DIR` | 覆盖 WE 官方资源路径 |
+| `DSH_WE_FFMPEG` / `DSH_WE_FFMPEG_URL` | 指定 ffmpeg 文件 / 下载源 |
+| `DSH_WE_TRANSCODE_TIMEOUT_MS` | 单次转码的超时预算 |
+| `DSH_WE_MEDIA_BRIDGE` / `DSH_WE_MEDIA_BRIDGE_URL` | 指定媒体中间件文件 / 下载源 |
+| `DSH_WE_MEDIA_BRIDGE_TAG` / `DSH_WE_MEDIA_BRIDGE_SHA256` | 指定中间件版本与校验值；自定义版本必须给出 SHA-256 |
+| `DSH_WE_MEDIA_LEGACY` | `=1`，强制使用内置媒体实现 |
+| `DSH_WE_MEDIA_NO_AUDIO` | `=1`，只读取媒体信息，不采集系统音频 |
+| `DSH_WE_MEDIA_PROVIDER` | `=mock`，使用模拟播放器联调 |
+| `DSH_WE_MEDIA_IDLE_MS` / `DSH_WE_MEDIA_DEBUG` | 中间件空闲回收时间 / 调试日志 |
 
-## 已知限制
+插件不向模型注册工具，不上传你的壁纸；但下载运行时、查询仓库 Stars 和主动开启在线歌词会访问外部服务。它不是「完全离线」插件。
 
-- **Application（应用）**类壁纸不支持 —— 它要宿主直接运行第三方可执行程序，本插件不提供该能力，因此不显示在缩略图选择器和轮播候选中。**Scene（场景）**壁纸由内置 WebWallGL 引擎实时渲染，不需要 Wallpaper Engine 在后台运行。
-- 浏览器需能自动播放静音 `<video>`（DSH 跑在 loopback，现代浏览器允许静音自动播放）。
-- 媒体从你本机的 Wallpaper Engine 安装路径提供；host 只提供它已枚举过的文件，不会暴露任意文件系统。自定义上传的文件同样只存在于本机，不上传任何服务器。
-- **抽帧转码依赖 ffmpeg**：编码器优先 NVENC（`av1_nvenc` → `h264_nvenc`），无 NVIDIA 显卡时回落 **libx264 软件编码**（慢但可用）；只有拿不到 ffmpeg（含自动下载不可用，如 musl/Alpine 等未覆盖平台）时，帧率上限功能才自动关闭，壁纸保持原片播放，不影响其它任何功能。
-- **桌面端最小化 / 还原时仍可能有极短的白帧（壳侧）**：壁纸激活期间插件会给根元素垫一层不透明的**壁纸代表色**，于是「壁纸层的像素没送到屏上」这一类会退化成同色底而不是白闪；但窗口**一帧都没有可提交**的那一瞬，露出的是桌面壳的窗口底板（Windows 上 `BrowserWindow` 用的是默认底板色 = 白；壳侧只给 macOS 设了透明底板）。这一条要壳侧配合，插件侧改不动。
-- **遮挡暂停对视频壁纸与场景实时渲染生效**：视频壁纸直接暂停解码；场景实时渲染经控制面暂停渲染循环（GPU 占用随之回落）。纯网页（iframe）壁纸无法从外部暂停，只能随页面隐藏被浏览器节流。
+## 兼容与限制
 
-## 开发 / 重建
+- **三平台可安装不等于 WE 官方三平台可用**。没有 WE 客户端的平台通过项目目录或自定义上传使用壁纸。
+- 场景渲染依赖浏览器的 WebGL 能力和显卡驱动。失败会降级，复杂工坊项目可能存在兼容差异。
+- Application 壁纸不支持，插件不会为此启动第三方程序。
+- ffmpeg 不可获取时，转码 / 帧率上限不可用，但视频仍可按原片播放。
+- 桌面壳最小化 / 还原仍可能出现短暂白帧；窗口底板属于宿主能力，插件不能完全消除。
+- `dsh-better-sidebar` 可选；插件为它的侧栏提供独立玻璃参数与字体适配。不支持 `backdrop-filter` 的浏览器回退实色。
+- 与其他皮肤同时启用时，查看 [共存说明](https://github.com/elysia395/dsh-wallpaper-engine/blob/main/docs/COEXISTENCE.md)，避免让多个插件同时接管同一表面。
 
-想跑本地一份代码（`link:` 安装、构建与验证、热挂载与编码铁律、以及 **`lib/client.js` 到底是什么**）见
-[`CONTRIBUTING.md`](CONTRIBUTING.md)。
+![侧栏玻璃与字体适配](https://raw.githubusercontent.com/elysia395/dsh-wallpaper-engine/main/docs/images/better-sidebar-font.png)
+
+## 开发与贡献
+
+欢迎提交 Bug 复现、平台兼容反馈、文档修正和功能 PR。反馈时请附宿主 / 插件版本、操作系统、壁纸类型、复现步骤与相关日志；不要附带 API Key 等凭据。
+
+本地安装、构建、验证与客户端产物规则见 [贡献指南](https://github.com/elysia395/dsh-wallpaper-engine/blob/main/CONTRIBUTING.md)。宿主端改动需要重启 DSH；客户端产物由构建脚本生成，不要手工编辑生成文件。
+
+- [更新记录](https://github.com/elysia395/dsh-wallpaper-engine/blob/main/docs/CHANGELOG.md)
+- [升级指南](https://github.com/elysia395/dsh-wallpaper-engine/blob/main/docs/UPGRADING.md)
+- [工作原理](https://github.com/elysia395/dsh-wallpaper-engine/blob/main/docs/HOW-IT-WORKS.md)
+- [故障排查](https://github.com/elysia395/dsh-wallpaper-engine/blob/main/docs/TROUBLESHOOTING.md)
+
+> npm 包不包含 `docs/`。上面的技术资料与演示图使用源码仓库地址，避免在 npm 页面中出现无效的相对路径。
 
 ## 联系方式
 
-有问题、想反馈，或者想第一时间拿到新版本，欢迎加入交流群（插件里 **设置 → 壁纸引擎 → 关于** 页显示的就是下面这两张码）：
+Bug 与功能建议优先提交到 [GitHub Issues](https://github.com/elysia395/dsh-wallpaper-engine/issues)，方便追踪与复现。交流也可以加入以下群组；插件「关于」页使用同一份二维码。
 
-| 🐧 QQ 群 | 🎵 抖音群 |
+| QQ 群 | 抖音群 |
 |---|---|
 | <img src="lib/about/qq-group.png" alt="QQ 群二维码" width="260"> | <img src="lib/about/douyin-group.png" alt="抖音群二维码" width="260"> |
 | **DSHWE \| LLM 讨论群** | **dshwe 交流 2 群**（群号 917001335502） |
 
-> 图片用的是随包资源 `lib/about/*.png`（插件运行时由自己的路由提供同一份字节）；源截图与派生口径见 [`assets/about/README.md`](assets/about/README.md)。
-
 ## 致谢
 
-本插件是许多人贡献的成果，感谢他们：
+感谢所有提交代码、维护文档、反馈问题和帮助验证的朋友。以下按贡献方向整理，不按提交数量排名；历史方案的贡献同样保留。
 
-- **[oneincase](https://github.com/oneincase)** —— 内置 [WebWallGL](https://github.com/oneincase/webwallgl) 实时渲染引擎与 [media-bridge](https://github.com/oneincase/media-bridge) 媒体中间件的作者（[#103](https://github.com/elysia395/dsh-wallpaper-engine/pull/103)、[#104](https://github.com/elysia395/dsh-wallpaper-engine/pull/104)）：场景 / 网页壁纸的实时渲染与 Windows / macOS / Linux 三平台原生媒体链路都建立在它们之上。
-- **[YV3507](https://github.com/YV3507)** —— 提交量最大的贡献者：从早期场景渲染器起步，到静态帧系列修复、液态玻璃令牌体系、live 帧链路与多轮大型重构与文档 / 守卫体系，几乎每个里程碑都有他。
-- **[yuxilao](https://github.com/yuxilao)** —— scene-gl Linux 实时渲染管线（WebGL2 官方 shader 驱动 + 多轮性能优化）与轮换交接 / GPU 帧回填 / 官方资源路径（[#65](https://github.com/elysia395/dsh-wallpaper-engine/pull/65)、[#108](https://github.com/elysia395/dsh-wallpaper-engine/pull/108)）。
-- **[Jerry](https://github.com/ruijiaang-lab)** —— 在三平台原生支持落地之前，macOS 侧的适配与贡献路径由他维护（WaifuX 工坊目录扫描、黑胶缩略图兜底、上游移植与 macOS 贡献路径梳理，[#44](https://github.com/elysia395/dsh-wallpaper-engine/pull/44)、[#45](https://github.com/elysia395/dsh-wallpaper-engine/pull/45)、[#52](https://github.com/elysia395/dsh-wallpaper-engine/pull/52)、[#54](https://github.com/elysia395/dsh-wallpaper-engine/pull/54)）。
-- 还有 [SiriLee](https://github.com/SiriLee)（壁纸亮度 / 对比度 / 饱和度调节、吉祥物拉绳开关、WSL 下探测 Steam 根目录）、[libiwolve](https://github.com/libiwolve)（内容分级与类型过滤）、[0-007pro](https://github.com/0-007pro)（自动轮播）、[jujubaoj646-star](https://github.com/jujubaoj646-star)（字体与气泡样式自定义面板）、[xiahou001](https://github.com/xiahou001)（壁纸音轨音量控制）、[wilianyichen](https://github.com/wilianyichen)（MP4 按需缩略图与自上传内容分级）、[hecoococ](https://github.com/hecoococ)（侧栏玻璃与活动壁纸解耦）、[ShamSky88](https://github.com/ShamSky88)（玻璃模糊定位修复）、[Rekk0](https://github.com/Rekk0)（玻璃透明度令牌化、注册表定位 Steam）、[Y1X1n](https://github.com/Y1X1n)（小白向使用指南）、[wwexplorer](https://github.com/wwexplorer)（壁纸层取景：水平 / 垂直 / 缩放，数值可直接键入），以及所有通过 issue 反馈与 PR 参与改进的朋友 —— 谢谢你们！
+### 项目维护与核心建设
+
+| 贡献者 | 贡献 |
+|---|---|
+| [elysia395](https://github.com/elysia395) | 项目发起与维护、版本发布、预设策展、公告与社区维护 |
+| [YV3507](https://github.com/YV3507) | 早期场景渲染与静态帧修复、液态玻璃令牌、实时帧链路、架构重构、文档与回归守卫；整合社区 PR（含 [#181](https://github.com/elysia395/dsh-wallpaper-engine/pull/181)） |
+| [oneincase](https://github.com/oneincase) | [WebWallGL](https://github.com/oneincase/webwallgl) 与 [media-bridge](https://github.com/oneincase/media-bridge) 作者；实时渲染、三平台媒体链路、壁纸属性及合成 / 性能修复（[#103](https://github.com/elysia395/dsh-wallpaper-engine/pull/103)、[#104](https://github.com/elysia395/dsh-wallpaper-engine/pull/104)、[#165](https://github.com/elysia395/dsh-wallpaper-engine/pull/165)） |
+| [yuxilao](https://github.com/yuxilao) | Linux scene-gl 实时渲染探索、性能优化、轮换交接、GPU 帧回填与官方资源路径（[#65](https://github.com/elysia395/dsh-wallpaper-engine/pull/65)、[#108](https://github.com/elysia395/dsh-wallpaper-engine/pull/108)） |
+| [Jerry / ruijiaang-lab](https://github.com/ruijiaang-lab) | 早期 macOS / WaifuX 支持、工坊目录扫描、缩略图兜底、上游移植与贡献路径文档（[#44](https://github.com/elysia395/dsh-wallpaper-engine/pull/44)、[#45](https://github.com/elysia395/dsh-wallpaper-engine/pull/45)、[#52](https://github.com/elysia395/dsh-wallpaper-engine/pull/52)、[#54](https://github.com/elysia395/dsh-wallpaper-engine/pull/54)） |
+
+### 社区功能与修复
+
+| 贡献者 | 贡献 |
+|---|---|
+| [Fish-under-sea](https://github.com/Fish-under-sea) | 整机预设快照、资产携带与导出 / 导入；吉祥物 3D 转盘、外观分节与折叠（[#173](https://github.com/elysia395/dsh-wallpaper-engine/pull/173)、[#180](https://github.com/elysia395/dsh-wallpaper-engine/pull/180)） |
+| [WTStarMark](https://github.com/WTStarMark) | 侧边栏圆角与独立角控制；大型壁纸库 JSON 应答的协商式 gzip（[#177](https://github.com/elysia395/dsh-wallpaper-engine/pull/177)、[#183](https://github.com/elysia395/dsh-wallpaper-engine/pull/183)） |
+| [levodoubt](https://github.com/levodoubt) | 扩展模块基础、点击与拖尾、3D 视差，以及逐区域界面跟随（[#135](https://github.com/elysia395/dsh-wallpaper-engine/pull/135)、[#144](https://github.com/elysia395/dsh-wallpaper-engine/pull/144)） |
+| [Willhamster](https://github.com/Willhamster) | 标题栏液态玻璃与相关回归验证（[#145](https://github.com/elysia395/dsh-wallpaper-engine/pull/145)） |
+| [383891598](https://github.com/383891598) | 扩展思考区玻璃效果、Windows 窗口控制区黑底修复（[#134](https://github.com/elysia395/dsh-wallpaper-engine/pull/134)） |
+| [SiriLee](https://github.com/SiriLee) | 亮度 / 对比度 / 饱和度调节、吉祥物拉绳开关、WSL 下 Steam 根目录探测 |
+| [libiwolve](https://github.com/libiwolve) | 内容分级与壁纸类型过滤 |
+| [0-007pro](https://github.com/0-007pro) | 基于播放列表的自动轮播 |
+| [jujubaoj646-star](https://github.com/jujubaoj646-star) | 字体与气泡样式自定义面板 |
+| [xiahou001](https://github.com/xiahou001) | 壁纸音轨音量控制 |
+| [wilianyichen](https://github.com/wilianyichen) | MP4 按需缩略图、自上传壁纸内容分级 |
+| [hecoococ](https://github.com/hecoococ) | 侧栏玻璃与活动壁纸解耦 |
+| [ShamSky88](https://github.com/ShamSky88) | 输入框玻璃模糊与固定定位修复 |
+| [Rekk0](https://github.com/Rekk0) | 玻璃透明度令牌化、通过注册表定位 Steam |
+| [Y1X1n](https://github.com/Y1X1n) | 新手使用指南 |
+| [wwexplorer](https://github.com/wwexplorer) | 壁纸水平 / 垂直 / 缩放取景与直接数值输入 |
+
+完整、持续更新的代码贡献记录见 [GitHub Contributors](https://github.com/elysia395/dsh-wallpaper-engine/graphs/contributors) 与 [已合并 PR](https://github.com/elysia395/dsh-wallpaper-engine/pulls?q=is%3Apr+is%3Amerged)。也感谢没有代码提交、但通过 Issues、交流群和真机验证帮助项目的朋友。
+
+本项目基于 [MIT License](https://github.com/elysia395/dsh-wallpaper-engine/blob/main/LICENSE) 开源。感谢 [DeepSeek Harness](https://github.com/deepseek-ai/DeepSeek-Harness) 提供插件宿主，以及 WebWallGL、media-bridge 等上游项目提供基础能力。Wallpaper Engine 与工坊壁纸的版权归各自权利人，本插件不是 Wallpaper Engine 官方产品。
+
+## 支持与赞赏
+
+项目保持开源，赞赏完全自愿，不影响安装、使用或问题反馈。给仓库点 Star、提交可复现的 Issue、补充文档与参与测试，同样是在支持项目。
+
+**生鱼的赞赏码**：赞赏用于本插件的维护与更新。以下是生鱼个人的赞赏入口，不代表全部贡献者的收款账户。
+
+赞赏码展示在 [目录](#目录) 右侧，点击图片可查看原图。感谢每一份支持。
 
 ## Star History
 
