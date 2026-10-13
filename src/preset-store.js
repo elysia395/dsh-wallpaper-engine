@@ -418,14 +418,14 @@ function exportGlassPresetUrl(id, embeds, mascotPoint) {
  */
 async function importGlassPreset(file) {
   setPresetError("");
-  let text = "";
+  let text;
   try {
     text = await gpReadFileText(file);
   } catch {
     setPresetError(weT("读不出这个文件（换一个 .json 再试）"));
     return "";
   }
-  let doc = null;
+  let doc;
   try {
     doc = JSON.parse(text);
   } catch {

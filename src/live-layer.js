@@ -190,7 +190,7 @@ function liveRenderUrl(selLike) {
 const liveApplied = { frame: null, playing: null, volume: null, fit: null };
 function applyLiveControls(frame) {
   if (!frame) return;
-  let wp = null;
+  let wp;
   try { wp = frame.contentWindow && frame.contentWindow.__wp; } catch { return; }
   if (!wp) return; // 渲染页未就绪：心跳 tick 每秒重试
   // 新 iframe（或渲染页刚就绪）→ 强制全量同步一次。

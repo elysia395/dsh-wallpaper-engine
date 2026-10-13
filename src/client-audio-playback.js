@@ -159,7 +159,7 @@ function applyVideoPlayback(video) {
   }
   if (!video.paused && !video.ended && !video.error) { syncVideoState(video); return; }
   if (playRefusalBlocks(video)) { syncVideoState(video); return; } // 等用户显式重试
-  let p = null;
+  let p;
   try { p = video.play(); } catch { p = null; }
   if (!p || typeof p.then !== "function") { syncVideoState(video); return; }
   p.then(

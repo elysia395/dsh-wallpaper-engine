@@ -223,7 +223,7 @@ function weI18nAttach(ctx) {
   };
   const attempt = () => {
     if (disposed) return;
-    let service = null;
+    let service;
     try { service = ctx.get("locale"); } catch { service = null; }
     if (!service || typeof service.getSnapshot !== "function" || typeof service.register !== "function") {
       poll = scheduleWeTimeout(attempt, 250);

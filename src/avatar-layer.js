@@ -203,7 +203,7 @@ function avatarDecorateRow(row) {
 /** 扫一遍全文档，把还没补过的消息行补上（观察者只管新插入的，这一条管"已经在了的"）。 */
 function avatarSweep() {
   if (typeof document.querySelectorAll !== 'function') return;
-  let rows = [];
+  let rows;
   try { rows = document.querySelectorAll(AVATAR_ROW_SELECTOR); } catch { return; }
   for (const row of rows) avatarDecorateRow(row);
 }
@@ -226,7 +226,7 @@ function avatarOnMutations(records) {
         if (n.matches && n.matches(AVATAR_ROW_SELECTOR)) { avatarDecorateRow(n); continue; }
         if (n.closest && n.closest('[' + AVATAR_ROW_ATTR + ']')) continue; // 已在装饰过的行里
       } catch { continue; }
-      let inner = [];
+      let inner;
       try { inner = n.querySelectorAll ? n.querySelectorAll(AVATAR_ROW_SELECTOR) : []; } catch { inner = []; }
       for (const row of inner) avatarDecorateRow(row);
     }

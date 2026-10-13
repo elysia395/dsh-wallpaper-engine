@@ -56,7 +56,7 @@ function writeUnderlayColor(reason) {
  * 画面取样结果在场时它不覆盖（写入口的优先级在 writeUnderlayColor 里，只有一处）。
  */
 function refreshUnderlayColor() {
-  let next = "";
+  let next;
   try { next = underlayRgbText(themeFollowSchemeColorOf(selection)); } catch { next = ""; }
   if (next === underlayScheme) return;
   underlayScheme = next;

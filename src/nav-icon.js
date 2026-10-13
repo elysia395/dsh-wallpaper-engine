@@ -81,7 +81,7 @@ function installWeNavIcon() {
   let patched = new WeakSet();
   const patchIn = (root) => {
     if (!root || typeof root.querySelectorAll !== "function") return;
-    let buttons = [];
+    let buttons;
     try { buttons = root.querySelectorAll("nav button"); } catch { return; }
     const want = weT("壁纸引擎");
     for (const btn of buttons) {

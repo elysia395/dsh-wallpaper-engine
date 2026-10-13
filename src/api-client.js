@@ -71,7 +71,7 @@ async function apiFetch(path, options) {
   if (o.credentials) init.credentials = o.credentials;
   if (o.mode) init.mode = o.mode;
   if (o.integrity) init.integrity = o.integrity;
-  let response = null;
+  let response;
   try {
     response = await doFetch(url, init);
   } catch (e) {

@@ -181,7 +181,7 @@ function fxRemoveHost() {
  */
 function fxPlace() {
   if (!fxHost || !fxHost.parentNode) return;
-  let scrim = null;
+  let scrim;
   try {
     scrim = document.querySelector('.we-scrim');
   } catch (e) { return; }

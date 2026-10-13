@@ -73,7 +73,7 @@ function pollLivePayload(watch) {
   const token = String(watch.payloadToken || "");
   if (!token) return;
   watch.payloadPolling = true;
-  let pending = null;
+  let pending;
   try {
     pending = apiJson(SCENE_PAYLOAD_PROGRESS_PATH + "?token=" + encodeURIComponent(token));
   } catch { watch.payloadPolling = false; return; }

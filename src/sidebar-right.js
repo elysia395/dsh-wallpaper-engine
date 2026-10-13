@@ -389,7 +389,7 @@ function openSettingsSection(tabId) {
   if (tabId) setTransient("settingsTabRequest", String(tabId));
 
   const clickOurNavRow = () => {
-    let rows = [];
+    let rows;
     try { rows = document.body.querySelectorAll("nav button"); } catch { return false; }
     // 锚点是**本插件注册的 nav label** ⇒ 它随语言变（en 下是 "Wallpaper Engine"）。
     // 每次点击现取一次译文，别把中文原文冻结成常量（冻结 = en 模式下找不到自己那一行）。
@@ -408,7 +408,7 @@ function openSettingsSection(tabId) {
   const menuBtnEarly = findAccountMenuTrigger();
   const trigger = menuBtnEarly ? null : findSettingsTrigger();
   // 诊断：点的是谁 + 左栏可见按钮清单（成功/失败都落，一次点击即可精修匹配）。
-  let dump = "";
+  let dump;
   try {
     const visibleB = (b) => { const r = b.getBoundingClientRect(); return r.width > 0 && r.height > 0; };
     // 左栏底部（y>500）全列（设置钮就在那一段，slice 会把它切掉）+ 其余可见按钮摘要。

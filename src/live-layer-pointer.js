@@ -135,7 +135,7 @@ function retainFrameBytes(src, img) {
       if (!blob) return;
       // 异步回来时这一条可能已被淘汰 / 已被换掉：那时不能再写进去（否则又是一条没人释放的 object URL）。
       if (liveFrameBytes.get(src) !== entry) return;
-      let url = "";
+      let url;
       try { url = api.createObjectURL(blob); } catch { return; }
       entry.objectUrl = url;
     }, "image/png");
@@ -439,7 +439,7 @@ function maybeCaptureLiveFrame(frame, sel) {
   liveFrameCapturedFor = String(sel.id);
   setTimeout(() => {
     if (!frame.isConnected || selection.id !== sel.id) return;
-    let dataUrl = null;
+    let dataUrl;
     try {
       const wp = frame.contentWindow && frame.contentWindow.__wp;
       dataUrl = wp && typeof wp.capture === "function" ? wp.capture(1920) : null;
