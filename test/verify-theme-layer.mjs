@@ -147,36 +147,99 @@ section('② 载荷构建（白名单 + 双值 + 形状）');
 }
 
 // ── ③ 轮询（启动竞态） ──────────────────────────────────────────────────────
+// 2026-10-13 修「死控制腿」：旧桩是 `setTimeoutFn: (fn, ms) => scheduled.push(ms)` —— **推的是 ms**，
+// 推进循环取到的是数字 ⇒ 两条腿（拿到即停 / 超时放弃）从未真正执行过：那时的断言只在
+// "队列被掏空"上打转，`onReady`/`onGiveUp` 一次都没触发也能全绿。现在桩记**回调**、循环**执行**它，
+// 两条腿各自断言"触发了什么 + 触发后不许再排定时器"，并各配一条负对照（含"死腿形态回放"）。
 section('③ 轮询：拿到即停 / 超时放弃 / 不炸');
 {
-  const scheduled = [];
-  const timers = { setTimeoutFn: (fn, ms) => { scheduled.push(ms); return scheduled.length; }, clearTimeoutFn: () => {} };
-  let calls = 0;
+  /** 桩定时器：记**回调**（旧版只记 ms ⇒ 推进循环没法执行它）。返回值保持**句柄语义**
+   *  （`pollThemeService` 会把 `setTimeoutFn` 的返回值交给 `clearTimeoutFn`）。 */
+  const makeTimers = () => {
+    const queue = [];
+    return {
+      queue,
+      setTimeoutFn: (fn, ms) => { const h = { fn, ms }; queue.push(h); return h; },
+      clearTimeoutFn: (h) => { const i = queue.indexOf(h); if (i >= 0) queue.splice(i, 1); },
+    };
+  };
+  /** 手动推进时间：取出**最早排期**的那个回调并执行（= 时间走到那一刻）。返回实际执行次数。 */
+  const advance = (timers, max = 8) => {
+    let ran = 0;
+    while (timers.queue.length && ran < max) { timers.queue.shift().fn(); ran++; }
+    return ran;
+  };
   const themeObj = { overrideTokens() {} };
-  const ctx = { get: () => (++calls >= 3 ? themeObj : null) };
-  pollThemeService(ctx, { ...timers, onReady: () => {}, onGiveUp: () => {} });
-  // 手动推进：把排队的定时器记录掏空。桩的 setTimeoutFn 只记 ms、不存回调 ⇒ 这里不可能"执行"回调；
-  // 本块只断言队列被掏空（onReady/onGiveUp 在这条路径上不会触发）。
-  for (let i = 0; i < 5 && scheduled.length; i++) {
-    scheduled.shift();
-    // 重新构造调度记录（真实实现里 setTimeout 返回句柄，这里简化成"再跑一轮"）
-  }
+
+  // ── 腿 1：拿到即停（前两次拿不到 ⇒ 排队等，第三次命中）────────────────────────
+  const t1 = makeTimers();
+  const seen1 = { ready: [], giveUp: [], ms: [] };
+  let calls1 = 0;
+  pollThemeService({ get: () => (++calls1 >= 3 ? themeObj : null) }, {
+    ...t1,
+    setTimeoutFn: (fn, ms) => { seen1.ms.push(ms); return t1.setTimeoutFn(fn, ms); },
+    onReady: (t) => seen1.ready.push(t), onGiveUp: (w) => seen1.giveUp.push(w),
+  });
+  const ran1 = advance(t1);
+  const left1 = t1.queue.length;
+  /** 判「拿到即停」：命中时回调收到**那个 theme 对象**、恰好一次、没走放弃，且**命中后不再排定时器**。 */
+  const judgeStop = (seen, ran, calls, left) => seen.ready.length === 1 && seen.ready[0] === themeObj
+    && seen.giveUp.length === 0 && ran === 2 && calls === 3 && left === 0;
+  check('拿到即停：两次拿不到后命中 ⇒ onReady 收到那个 theme 对象且恰好一次，命中后不再排定时器',
+    judgeStop(seen1, ran1, calls1, left1),
+    `ran=${ran1} calls=${calls1} ready=${seen1.ready.length} 同一对象=${seen1.ready[0] === themeObj} giveUp=${seen1.giveUp.length} 余队=${left1} 排期=${JSON.stringify(seen1.ms)}`);
+
+  // ── 腿 2：超时放弃（一直拿不到 ⇒ 累计到 timeoutMs 才放弃）────────────────────
+  const t2 = makeTimers();
+  const seen2 = { ready: [], giveUp: [], ms: [] };
+  let calls2 = 0;
+  pollThemeService({ get: () => { calls2++; return null; } }, {
+    ...t2,
+    timeoutMs: 750,
+    setTimeoutFn: (fn, ms) => { seen2.ms.push(ms); return t2.setTimeoutFn(fn, ms); },
+    onReady: (t) => seen2.ready.push(t), onGiveUp: (w) => seen2.giveUp.push(w),
+  });
+  const ran2 = advance(t2);
+  const left2 = t2.queue.length;
+  /** 判「超时放弃」：按 intervalMs 累计到 timeoutMs 才放弃、放弃后不再排定时器、绝不误报 ready。 */
+  const judgeGiveUp = (seen, ran, calls, left) => seen.giveUp.length === 1 && seen.giveUp[0] === 'timeout'
+    && seen.ready.length === 0 && ran === 2 && calls === 3 && left === 0;
+  check('超时放弃：一直拿不到 ⇒ 累计到 timeoutMs 触发 onGiveUp(\'timeout\')，且放弃后不再排定时器',
+    judgeGiveUp(seen2, ran2, calls2, left2),
+    `ran=${ran2} calls=${calls2} giveUp=${JSON.stringify(seen2.giveUp)} ready=${seen2.ready.length} 余队=${left2} 排期=${JSON.stringify(seen2.ms)}`);
+
+  // ── 负对照：同一判据喂"另一种腿"的观测 ⇒ 必须判红 ────────────────────────────
+  check('负对照 A：「拿到即停」判据喂超时腿的观测 ⇒ 判红',
+    judgeStop(seen2, ran2, calls2, left2) === false);
+  check('负对照 B：「超时放弃」判据喂拿到即停腿的观测 ⇒ 判红',
+    judgeGiveUp(seen1, ran1, calls1, left1) === false);
+  // 死腿形态回放：桩丢回调 + 循环只出队 ⇒ 两条判据都必须判红。这正是本段修复前的真实形态
+  //（当时 4 条断言全绿，而 onReady/onGiveUp 一次都没触发）。
+  const replayDead = (judge) => {
+    const q = [];
+    const seen = { ready: [], giveUp: [] };
+    let calls = 0;
+    pollThemeService({ get: () => (++calls >= 3 ? themeObj : null) }, {
+      setTimeoutFn: (fn, ms) => { q.push(ms); return q.length; }, clearTimeoutFn: () => {},
+      onReady: (t) => seen.ready.push(t), onGiveUp: (w) => seen.giveUp.push(w),
+    });
+    for (let i = 0; i < 5 && q.length; i++) q.shift(); // 旧循环：只出队、不执行
+    return judge(seen, 0, calls, q.length);
+  };
+  check('负对照 C（死腿形态回放）：桩丢回调 + 循环只出队 ⇒ 两条判据都判红',
+    replayDead(judgeStop) === false && replayDead(judgeGiveUp) === false);
+
+  // ── 边界：首次查询就命中 / 已就绪不得放弃 / ctx.get 抛错不炸 ─────────────────
+  const t3 = makeTimers();
+  const seen3 = { ready: [], giveUp: [] };
+  pollThemeService({ get: () => themeObj }, {
+    ...t3, onReady: (t) => seen3.ready.push(t), onGiveUp: (w) => seen3.giveUp.push(w),
+  });
   check('首次查询就命中时不排任何定时器（拿到即停）',
-    pollThemeService({ get: () => ({ overrideTokens() {} }) }, { ...timers, onReady: () => {} }) !== undefined
-    && scheduled.length === 0);
+    seen3.ready.length === 1 && seen3.ready[0] === themeObj && t3.queue.length === 0);
+  check('负对照：服务已就绪时不应触发 onGiveUp', seen3.giveUp.length === 0);
   check('ctx.get 抛错不炸（当成 null）', (() => {
-    try { pollThemeService({ get: () => { throw new Error('boom'); } }, { ...timers, timeoutMs: 1, onGiveUp: () => {} }); return true; } catch { return false; }
-  })());
-  check('取不到服务 ⇒ 走 onGiveUp（回落 /style 双通道）', (() => {
-    let got = null;
-    const t = { setTimeoutFn: (fn) => { fn(); return 1; }, clearTimeoutFn: () => {} };
-    pollThemeService({ get: () => null }, { ...t, timeoutMs: 0, onGiveUp: (why) => { got = why; } });
-    return got !== null;
-  })(), 'onGiveUp 触发');
-  check('负对照：服务已就绪时不应触发 onGiveUp', (() => {
-    let gave = false;
-    pollThemeService({ get: () => ({ overrideTokens() {} }) }, { ...timers, onGiveUp: () => { gave = true; } });
-    return gave === false;
+    try { pollThemeService({ get: () => { throw new Error('boom'); } }, { ...makeTimers(), timeoutMs: 250, onGiveUp: () => {} }); return true; } catch { return false; }
   })());
 }
 
