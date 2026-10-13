@@ -474,11 +474,7 @@ function openSettingsSection(tabId) {
 }
 
 export {
-  weSidebarCtrl,
-  WE_SIDEBAR_KIND,
   sidebarRightMode,
-  sidebarRightOpen,
-  sidebarRightOursActive,
   ropeDrawerControl,
   wallSidebarOpen,
   wallSidebarClose,
@@ -487,11 +483,5 @@ export {
   clearWeTimeout,
   installSidebarRight,
   installWallSidebarShortcut,
-  findAccountMenuTrigger,
-  settingsLabelCandidates,
-  isSettingsText,
-  findSettingsMenuItem,
-  findSettingsTrigger,
-  openSettingsBusy,
   openSettingsSection,
 };
