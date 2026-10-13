@@ -101,10 +101,18 @@ jobs:
         continue-on-error: true
         run: npm run verify:docs
 
-      # src/client.js 改了却没重建产物 ⇒ 发出去的是旧行为（CONTRIBUTING 的 PR 清单
-      # 要求源码与产物同时包含，这一条把它变成机器判定）。
-      - name: lib/client.js 与 src/client.js 同步
-        run: git diff --exit-code -- lib/client.js
+      # 产物出库（v1.4 起）：`lib/client.js` 不再入库 —— 分发路径（npm / Release tgz）
+      # 由 prepack 打包时构建，开发路径（link:）先 `npm run build`。因此这里判"没有被跟踪"
+      # 而不是"与源码同步"（同步由 verify 链首条 verify-client-sync 真跑构建逐字节判）。
+      - name: 产物不入库（lib/client.js / docs/images 未被 git 跟踪）
+        shell: bash
+        run: |
+          tracked=$(git ls-files -- lib/client.js docs/images)
+          if [ -n "$tracked" ]; then
+            echo "::error::构建产物或展示图被 git 跟踪（产物出库策略）：$tracked"
+            exit 1
+          fi
+          echo "ok: lib/client.js 与 docs/images 均未被跟踪"
 
       - name: 无尾随空白 / 冲突标记
         run: git diff --check

@@ -1,0 +1,96 @@
+name: Bug report
+description: 报告一个可复现的问题（渲染 / 玻璃 / 安装 / 播放等）
+labels: ["bug", "status:needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        感谢反馈！**带日志的复现步骤**通常能在一天内定位问题。提交前请先搜一下 issue 列表里有没有同题。
+  - type: input
+    id: plugin-version
+    attributes:
+      label: 插件版本
+      description: 设置 → Wallpaper Engine → 关于，或 `dsh plugin list` 里的版本号
+      placeholder: 例：1.3.2
+    validations:
+      required: true
+  - type: input
+    id: host-version
+    attributes:
+      label: DSH 宿主版本
+      description: DSH CLI / 桌面壳版本（`dsh --version` 或应用「关于」）
+      placeholder: 例：0.1.5 / DSH Desktop 2.0.14
+    validations:
+      required: true
+  - type: dropdown
+    id: os
+    attributes:
+      label: 操作系统
+      options:
+        - Windows
+        - macOS
+        - Linux
+        - WSL
+        - 其它 / 不确定
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: 安装方式
+      options:
+        - npm 包名（dsh plugin add dsh-plugin-wallpaper-engine）
+        - GitHub Release 的 .tgz
+        - link: 本地源码
+        - 插件市场 / 插件中心
+    validations:
+      required: true
+  - type: dropdown
+    id: wallpaper-type
+    attributes:
+      label: 出问题的壁纸类型
+      options:
+        - Scene（场景）
+        - Web（网页）
+        - Video（视频）
+        - 自定义图片 / 视频上传
+        - 与壁纸无关（设置 / 玻璃 / 安装 / 其它）
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: 复现步骤
+      description: 从启动开始，列出具体操作步骤；能稳定复现最好，偶发也请说明频率
+      placeholder: |
+        1. 打开设置 → Wallpaper Engine → 壁纸库
+        2. 选择 ___ 壁纸
+        3. 看到 ___
+    validations:
+      required: true
+  - type: textarea
+    id: expected-actual
+    attributes:
+      label: 期望与实际
+      description: 期望发生什么、实际发生什么（可附截图 / 录屏链接）
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: 日志（重要）
+      description: |
+        宿主诊断日志在 `~/.dsh-wallpaper-engine/diag/` 下；DSH 终端里的报错也请贴上。
+        **贴前请删掉私人路径 / 壁纸库绝对路径中的用户名**。
+      render: text
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 确认
+      options:
+        - label: 我已用最新版本复现过（或说明无法升级的原因）
+          required: true
+        - label: 我搜索过现有 issue，没有重复
+          required: true

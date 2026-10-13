@@ -70,6 +70,7 @@
 | [CHANGELOG.md](./CHANGELOG.md) | **变更记录** —— 逐版本功能与修复（新版在前）。**英文版在 [`en/CHANGELOG.md`](./en/CHANGELOG.md)**（与其它文档同布局：basename 相同、顶部互换链接） |
 | [HOW-IT-WORKS.md](./HOW-IT-WORKS.md) | **工作原理** —— 出图来源链（实时渲染 → 内嵌 MP4 → 实时抓帧 → 自定义画面 → 空态）、宿主 / 客户端分工、**字体集通道**、遮挡暂停与客户端异常留痕、HTTP 路由表 |
 | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) | **排障** —— 安装失败排查与「症状 → 先看哪里」速查 |
+| [TRIAGE.md](./TRIAGE.md) | **问题分诊与认领** —— 标签体系（`status:*` / `area:*`）、`/assign` 自动认领、维护者分诊动作与贡献者路径 |
 | [COEXISTENCE.md](./COEXISTENCE.md) | **共存** —— 与皮肤中心 / 侧栏插件 / 其它 UI 插件一起装时的冲突矩阵（症状 → 嫌疑机制 → 三步自查）、「玻璃关不掉」的真相与共存四态的目标形态 |
 
 **分层约定**：门面 `README.md` / `README.en.md` 只放**不随版本变化、且新访客决策必需**的事实；
@@ -114,6 +115,7 @@
 | [0008](./adr/0008-glass-config-two-state.md) | 玻璃配置收成**两态**（"要不要玻璃"整层退役；每面一个「独立配置」= `inherit` / `custom`）并定下**门控策略**：恒挂属性做 CSS 侧的证书，**简化配置 / 高级配置**按 `ctx.surface` 分档（D4） |
 | [0009](./adr/0009-system-fonts-from-the-os.md) | 本机字体清单**由宿主问操作系统**（枚举 + 缓存，浏览器侧只当读者），而不是在进程内解析字体文件或从浏览器枚举；取不到权威来源就如实标 `approximate` |
 | [0010](./adr/0010-glass-off-revisit-four-states.md) | **修订 ADR-0008 的「放弃关玻璃」**：令牌层整组回退的前置条件已成立（账本 [`TOKEN-CONTRACT.md`](./TOKEN-CONTRACT.md) + 封闭白名单守卫）；目标形态 = **一个模式键四态**（full / glass-only / wallpaper-only / off），实施分三批、主开关最后 |
+| [0012](./adr/0012-artifact-untracking.md) | **构建产物出库**：`lib/client.js` 不入库（改由 build / prepack 现场构建），README 展示图迁至 Release 资产外链；修订 ADR-0003 的 D6 |
 
 ## 已归档（`archive/`，只作记录）
 
@@ -172,7 +174,7 @@
   再往前是 [`archive/wip/PLAN.md`](./archive/wip/PLAN.md)（`src/` 缺陷 · 注释审计 · 目录裁决 · 守卫重构）；
   **本机专用的临时待办不入库**，也不被任何入库文档引用 —— 读者打不开的东西不指向它。
 - 开发/发布：仓库根 `CONTRIBUTING.md`（含「`lib/client.js` 到底是什么」）；用户门面：`README.md` / `README.en.md` / `README.beginner.md`。
-- `images/`：README 引用的截图。
+- `images/`：本地工作截图目录 —— README 展示图已迁至 Release 资产（`media-v1`）外链，仓库不保留。
 - **已溶解进代码**的文档（结论进注释）：`RENDERER-OFFICIAL-STRUCTURE.md`、`RENDER-ISSUES-ANALYSIS.md`、
   `REFACTOR-ROUND-2026-08-28.md`、`REFACTOR-STATIC-FRAME.md`；
   废弃方向（`HOOK-PROGRESS` / `V6-DUMP-ANALYSIS` / `EYE-PREDICTION` / `FIX-PLAN-AMYA` /

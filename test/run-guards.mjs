@@ -51,6 +51,32 @@ const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const HERE = 'test/run-guards.mjs';
 
 /**
+ * npm 步骤的子进程姿势（Windows 上的实测坑，别再试别的写法）。
+ *
+ * 本 runner 的 `npmStep`（`all` 组的首步 `npm run build`）此前直接 `spawnSync('npm', …)`，
+ * 在 Node ≥ 18.20.2（CVE-2024-27980 的修法）之后于 Windows 上**必然起不来**：
+ *   · 裸 `'npm'` ⇒ ENOENT（PATH 上只有 `npm` bash 脚本与 `npm.cmd` 垫片，没有可执行体）；
+ *   · `'npm.cmd'` ⇒ EINVAL（Node 明确拒绝不经 shell 直接起 `.cmd`）；
+ *   · `'npm.cmd' + shell:true` 能跑，但会带 DEP0190 告警（args 不转义）且多一层壳。
+ * 可靠姿势：**用当前 node 直接跑 npm 自己的 CLI 入口 `npm-cli.js`**。
+ * 先试 `npm_execpath`（npm 起的进程自带、就是那个入口），再试 Node 官方安装布局
+ * `<nodeDir>/node_modules/npm/bin/npm-cli.js`（实测本机 D:\Nodejs 即此布局）。
+ * 两者都找不到时退 `npm.cmd + shell:true`：还能跑，只是带一层 shell（POSIX 上 `npm` 本来
+ * 就是脚本，同样的退路在那里也无副作用）。
+ */
+function npmLaunch(args) {
+  const candidates = [];
+  if (process.env.npm_execpath && /\.m?js$/.test(process.env.npm_execpath)) {
+    candidates.push(process.env.npm_execpath);
+  }
+  candidates.push(join(dirname(process.execPath), 'node_modules', 'npm', 'bin', 'npm-cli.js'));
+  for (const c of candidates) {
+    if (existsSync(c)) return { exe: process.execPath, argv: [c, ...args], shell: false };
+  }
+  return { exe: process.platform === 'win32' ? 'npm.cmd' : 'npm', argv: args, shell: process.platform === 'win32' };
+}
+
+/**
  * 一条步骤。
  *   `file`     —— 仓库根相对的守卫路径。
  *   `args`     —— 该守卫的参数（按旧链逐字抄）。
@@ -205,13 +231,16 @@ function runStep(s) {
   // `join(ROOT, target)` 解析目标（它的契约就是"收相对路径"），给绝对路径会被它拼成
   // `<ROOT>/<绝对路径>` ⇒ 前置缺失，全组以合成码 2 退出（实测踩过）。硬档那侧直接执行，
   // 传绝对路径无所谓。
-  const argv = s.npm
-    ? ['run', s.npm]
-    : s.tier === 'soft'
-      ? [join(ROOT, 'test', 'warn-only.mjs'), ...(s.probe ? ['--probe-spawn'] : []), s.file, ...s.args]
-      : [join(ROOT, s.file), ...s.args];
-  const exe = s.npm ? 'npm' : process.execPath;
-  const r = spawnSync(exe, argv, { cwd: ROOT, stdio: 'inherit' });
+  if (s.npm) {
+    // npm 步骤的姿势见 `npmLaunch()`：直接 spawn `'npm'` 在 Windows 上必然 ENOENT/EINVAL。
+    const l = npmLaunch(['run', s.npm]);
+    const r = spawnSync(l.exe, l.argv, { cwd: ROOT, stdio: 'inherit', shell: l.shell });
+    return r.status;
+  }
+  const argv = s.tier === 'soft'
+    ? [join(ROOT, 'test', 'warn-only.mjs'), ...(s.probe ? ['--probe-spawn'] : []), s.file, ...s.args]
+    : [join(ROOT, s.file), ...s.args];
+  const r = spawnSync(process.execPath, argv, { cwd: ROOT, stdio: 'inherit' });
   return r.status;
 }
 

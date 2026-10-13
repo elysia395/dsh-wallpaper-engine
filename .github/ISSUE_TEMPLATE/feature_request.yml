@@ -1,0 +1,48 @@
+name: Feature request
+description: 提出一个新功能 / 改进建议
+labels: ["enhancement", "status:needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        先说说**你要解决什么问题**，而不是直接给方案 —— 方案可以讨论，问题才是真需求。
+  - type: textarea
+    id: problem
+    attributes:
+      label: 想解决的问题
+      description: 现在哪里不方便 / 缺什么？在什么场景下遇到的？
+    validations:
+      required: true
+  - type: textarea
+    id: proposal
+    attributes:
+      label: 你设想的做法（可选）
+      description: 有具体方案就写；没有也没关系
+    validations:
+      required: false
+  - type: dropdown
+    id: area
+    attributes:
+      label: 涉及面
+      options:
+        - 浏览器半边（渲染 / 面板 / 玻璃外观）
+        - 宿主半边（扫描 / 媒体 / 配置 / 路由）
+        - 安装与升级
+        - 文档
+        - 不确定
+    validations:
+      required: true
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: 考虑过的替代方案（可选）
+      description: 例：用现有功能组合能不能达到类似效果
+    validations:
+      required: false
+  - type: checkboxes
+    id: checks
+    attributes:
+      label: 确认
+      options:
+        - label: 我搜索过现有 issue 和 README，没有重复
+          required: true

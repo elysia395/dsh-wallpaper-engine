@@ -8,7 +8,7 @@
 
 A DSH bundle that turns your **Wallpaper Engine** wallpapers into the **background of the DSH web GUI** (`dsh web`).
 
-![Main interface showcase](docs/images/main-interface.gif)
+![Main interface showcase](https://github.com/elysia395/dsh-wallpaper-engine/releases/download/media-v1/main-interface.gif)
 
 > Wallpaper + scrim + iOS liquid glass rendered behind the DSH GUI.
 
@@ -116,11 +116,11 @@ Step-by-step recovery (`ERR_PNPM_UNEXPECTED_VIRTUAL_STORE`, etc.) lives in
 3. Click **选择壁纸** to open the library **in-panel** (**not** a modal, and there is no backdrop), then click a wallpaper in the thumbnail grid (**Application** wallpapers are not supported and stay out of the grid); leaving the library view returns you to the settings page.
 4. Use **暂停/播放** to control a video wallpaper and **关闭** to clear it. Every choice and adjustment applies instantly and persists (see [Configuration](#configuration)).
 
-![Settings UI overview](docs/images/settings-ui.gif)
+![Settings UI overview](https://github.com/elysia395/dsh-wallpaper-engine/releases/download/media-v1/settings-ui.gif)
 
 > The settings page: the liquid-glass card with six tabs (Library / Appearance / Playback / System / Extensions / About).
 
-![Wallpaper library, opened in-panel](docs/images/wallpaper-library.gif)
+![Wallpaper library, opened in-panel](https://github.com/elysia395/dsh-wallpaper-engine/releases/download/media-v1/wallpaper-library.gif)
 
 > The wallpaper library, opened **in-panel** (a drill-in view, not a modal): browse every wallpaper thumbnail, batch-hide, and restore from the hidden tab.
 
@@ -219,7 +219,7 @@ The **System → 吉祥物** controls the chat **pull-cord** — a draggable rop
 | **吉祥物形态** | Pick the artwork on a **3D ring dial**: the 10 artworks sit at equal angles on a circle and the whole ring rotates (the ones facing away hide themselves), with **the centre being the one in use**; **drag** the ring, press ← / →, click a dot below, or **click any artwork** to bring it to the centre. Holds **10 built-ins + custom**: **Deepseek_Pro** (formerly 鲸御姐; whale-tailed maid, portrait 2:3 full-body — a **different artwork** from the model girl **DeepSeek** on the same line, so don't go by the name) / **菲比啾比** (portrait), plus eight **model girls** — **Claude · DeepSeek · Gemini · GPT · GLM · Grok · Kimi · Qwen** (each box height follows its own source ratio); the last item imports a **custom picture** (clicking another artwork while a custom one is active asks for confirmation first) | **DeepSeek** |
 | **吉祥物大小** | Scales the mascot (the rope box follows the ratio; drag / snap geometry adapts automatically) | see the control |
 
-![Mascot quick-adjustment drawer](docs/images/mascot-drawer.png)
+![Mascot quick-adjustment drawer](https://github.com/elysia395/dsh-wallpaper-engine/releases/download/media-v1/mascot-drawer.png)
 
 > Pull the top rope mascot to slide out the wallpaper-library drawer. All artworks are inlined as base64 (transparent background) at build time, so the single-file client bundle stays self-contained; **size** changes only the rope's own box, never the drawer below.
 >
@@ -330,7 +330,7 @@ near-opaque fill:
 > white); editor / terminal content surfaces have their own near-opaque fill +
 > transparency controls to keep text readable in the narrow panels.
 
-![dsh-better-sidebar compatibility & custom typography](docs/images/better-sidebar-font.png)
+![dsh-better-sidebar compatibility & custom typography](https://github.com/elysia395/dsh-wallpaper-engine/releases/download/media-v1/better-sidebar-font.png)
 
 > The sidebar glass adaptation with the custom typography (行楷) applied at the same time.
 

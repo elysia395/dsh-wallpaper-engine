@@ -1,7 +1,7 @@
 # ADR-0003: 浏览器半边靠构建期内联拆分，不用运行时模块（Build-time module inlining）
 
 - **Date**: 2026-09-30
-- **Status**: Accepted
+- **Status**: Amended by ADR-0012
 - **Deciders**: YV3507
 - **Amends**: 浏览器侧模块组织的实现约定（见 `docs/CODE-STRUCTURE.md`）
 

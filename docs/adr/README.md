@@ -64,3 +64,4 @@ ADR 里**不写会随代码漂移的具体数值**（条数、行数、体积、
 | [0009](./0009-system-fonts-from-the-os.md) | 本机字体清单由宿主问操作系统（不自己解析字体文件、也不让浏览器枚举） | Accepted |
 | [0010](./0010-glass-off-revisit-four-states.md) | 修订 ADR-0008 的"放弃关玻璃"结论（令牌层整组回退的前置条件已成立，由令牌契约守卫钉住）；目标形态定为**一个模式键四态**（full / glass-only / wallpaper-only / off），主开关最后落地 | Accepted |
 | [0011](./0011-preset-full-snapshot.md) | 预设从「玻璃子集快照」升为「整机配置快照」：键集由 `KINDS` 派生分四段（settings + 字体 / 吉祥物 / 头像资产段）；资产按需勾选携带；旧预设直接作废；新增导入导出 | Proposed |
+| [0012](./0012-artifact-untracking.md) | 构建产物出库（`lib/client.js` 不入库，改由 build / prepack 现场构建）＋ README 展示图迁至 Release 资产外链；修订 ADR-0003 的 D6 | Accepted |

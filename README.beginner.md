@@ -108,7 +108,7 @@ Mac / Linux：`~/.dsh-wallpaper-engine/config.json`）—— 重启、换端口�
 
 ### 常见问题（FAQ）
 
-> **装不上怎么办？** 本节的条目是**使用**层面的问题。安装失败（pnpm 报错，如 `ERR_PNPM_UNEXPECTED_VIRTUAL_STORE` / `ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED`）先试这一条：**用已发布版本安装**（`dsh plugin --profile web add dsh-plugin-wallpaper-engine`，就是本页第 1 步的写法），它不涉及 `github:` / `link:` 来源的构建脚本与虚拟存储差异。逐步处置见 [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md)（**在 GitHub 源码仓库里**，npm 包不带 `docs/`）。
+> **装不上怎么办？** 本节的条目是**使用**层面的问题。安装失败（pnpm 报错，如 `ERR_PNPM_UNEXPECTED_VIRTUAL_STORE` / `ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED`）先试这一条：**用已发布版本安装**（`dsh plugin --profile web add dsh-plugin-wallpaper-engine`，就是本页第 1 步的写法）——发布包在打包时已构建好客户端产物；`github:` 直装不构建产物、不再受支持。逐步处置见 [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md)（**在 GitHub 源码仓库里**，npm 包不带 `docs/`）。
 
 **1. 打开选择壁纸，里面是空的 / 一张都没有？**
 - 确认 Wallpaper Engine 装好并至少下载过一张壁纸。
@@ -284,7 +284,7 @@ macOS / Linux: `~/.dsh-wallpaper-engine/config.json`) — restarts, port changes
 
 ### FAQ
 
-> **Can't install it?** The entries below are **usage** questions. For install failures (pnpm errors such as `ERR_PNPM_UNEXPECTED_VIRTUAL_STORE` / `ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED`), try this first: **install the published version** (`dsh plugin --profile web add dsh-plugin-wallpaper-engine`, exactly what step 1 above does) — it avoids the `github:` / `link:` sources' build-script and virtual-store pitfalls. Step-by-step recovery is in [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) (**in the GitHub source repo**; the npm package does not include `docs/`).
+> **Can't install it?** The entries below are **usage** questions. For install failures (pnpm errors such as `ERR_PNPM_UNEXPECTED_VIRTUAL_STORE` / `ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED`), try this first: **install the published version** (`dsh plugin --profile web add dsh-plugin-wallpaper-engine`, exactly what step 1 above does) — the published tarball already ships a built client, while a raw `github:` install ships no client artifact and is no longer supported. Step-by-step recovery is in [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) (**in the GitHub source repo**; the npm package does not include `docs/`).
 
 **1. The wallpaper picker is empty — not a single wallpaper?**
 - Make sure Wallpaper Engine is installed and you have downloaded at least one wallpaper.

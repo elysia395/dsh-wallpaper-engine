@@ -17,13 +17,13 @@ scene-layers-out/
 
 /_refs/
 
-# README 展示图: 默认忽略工作截图, 仅放行当前 README 引用的 5 张 (勿删白名单)
+# README 展示图已迁至 GitHub Release 资产（media-v1，CDN 外链）；仓库与历史不再保留展示图。
+# 本地 docs/images/ 仅存源图 / 工作截图，一律不入库。
 /docs/images/*
-!/docs/images/main-interface.gif
-!/docs/images/settings-ui.gif
-!/docs/images/wallpaper-library.gif
-!/docs/images/mascot-drawer.png
-!/docs/images/better-sidebar-font.png
+
+# 构建产物出库（v1.4）：lib/client.js 由 `npm run build` 现场生成（开发者 / CI / prepack 三条路径），
+# 不再入库。安装 npm 包与 Release tgz 时由打包期的 prepack 构建。
+/lib/client.js
 
 /.git.bak-broken/
 

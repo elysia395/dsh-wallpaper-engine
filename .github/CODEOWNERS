@@ -1,0 +1,10 @@
+# CODEOWNERS —— 只为"自动请求评审"服务（不阻塞合并：main 的 Ruleset 要求 0 个强制审批）。
+# 语法：<pattern> <owner>。详细口径见 docs/TRIAGE.md。
+
+# 缺省：全部改动请求维护者看一眼（PR 会自动 @ 上，但不因此拦住任何人）
+*                           @elysia395
+
+# CI、发布面与仓库治理文件：这些改动的后果是"别人的 PR 全红/全绿"，单独标出来
+/.github/                   @elysia395
+/package.json               @elysia395
+/scripts/                   @elysia395
