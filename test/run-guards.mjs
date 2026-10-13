@@ -119,6 +119,7 @@ const VERIFY_STEPS = [
   step('test/verify-child-kill.mjs'),
   step('test/verify-host-diag.mjs'),
   step('test/verify-upload-store.mjs'),
+  step('test/verify-video-preview.mjs'),
 ];
 
 /** `npm run verify:docs` —— 软档（只出声）。全部经 warn-only 降级。 */
