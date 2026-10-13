@@ -54,6 +54,8 @@
 
 - **公告整体改版**（本仓迭代，用户口径）：配图换「星来」蓝发女仆（1408×1117 原图存档 `assets/about/`，发布物是 720² 白底等比垫 @q88 87KB），**摒弃以往「字小条多」的清单式**，改 16pt 大字四条：① 吉祥物系统来了很多新朋友 ② 新预设系统更一键式（作者自用 / 黑客绿 / 紫色心情都可尝试）③ 「系统」分页可选壁纸缓存路径、避免占用 C 盘 ④ 「外观」分页可调圆角。求星路径指引行（「关于页一键直达」）按用户口径**保留**在图下。`NOTICE_VERSION` → `1.3.2-r2`（1.3.2 未对外发布，看过旧 1.3.2 正文的只有开发机，r2 后缀让那些机器重弹一次）。
 
+- **修复：思考块正文里的行内代码模糊底板糊成整行矩形**（[#197](https://github.com/elysia395/dsh-wallpaper-engine/issues/197)）。插件给行内代码挂了 `backdrop-filter` 霜釉；而**推理正文**由宿主用 Markdown 的 **compact 变体**渲染（宿主模块类带 `_thinkBody` 后缀），那里 `:not(pre) > code` 是 `display: inline` —— 助手正文的标准变体是 `inline-flex`，不跨行折断。跨行折断的 inline 元素，其 `backdrop-filter` 取值区是**所有行盒的外接矩形**，于是胶囊霜釉长成一条横贯整列的模糊底板：糊掉同行普通文字、压在文字上方且不透字，流式输出时最明显。修法=在原行内代码规则**之后**补一条更局部的收口规则，`body[data-we-glass-page][data-we-thinking-glass] [data-chat-flow] :is([data-variant="think"], [class*="_thinkBody"], [data-vcp-reasoning-body], [data-vcp-reasoning]) :not(pre) > code` 只撤模糊载体（`backdrop-filter: none !important`），**保留胶囊填充** —— 宿主 compact 变体自带 `box-decoration-break: clone`，背景本就按行盒分片，因此没有该有而未有的磨砂；这也与推理面既有的"清底 + 无霜"立场（F2f）一致。**刻意不就地改原规则**：那条规则同时服务助手正文，就地摘霜等于把好胶囊一起废掉，且会打破 `verify-readability` 的 F2d3 契约 ⇒ 新增规则是唯一不回归的落点。守卫 `verify-readability` 新增三条判据：F2d3b（收口规则在位 + 必须带思考玻璃门 + 保留 `:not(pre)` 围栏排除 + 原 chip 霜釉仍在）、F2d3b2（收口规则的特异性必须**顺序无关地**压过原规则——承载 `[data-chat-flow]` 抬到 0-4-3 压原 0-3-3，因此不靠"写在后面"取胜）、F2d3b3（必须挂语义锚点 `[data-variant="think"]`，不能只挂 `_thinkBody` 这类构建期哈希类名），各配一条负对照（去掉门 / 撤掉语义锚 / 抽掉 `[data-chat-flow]` 使两条特异性相等 —— 均判红）。**刷新页面即生效。**
+
 - **杂项**：插件页图标换成带透明通道的 PNG（`icon.jpg` → `icon.png` 320×320 RGGB，宿主 `MAX_ICON_BYTES` 256KiB 上限内、零色损——贡献者反馈"图标不该保留背景"）；文档与注释的时效性复查（11 只内置 → 10 只、「鲸御姐」→ `Deepseek_Pro` 等，零行为变化）；测试台架修一处脆弱定位器。
 
 ### v1.3.1（2026-10-12 · npm 已发布）
