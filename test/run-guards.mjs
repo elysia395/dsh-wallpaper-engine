@@ -115,6 +115,9 @@ const VERIFY_STEPS = [
   step('test/verify-about.mjs'),
   step('test/verify-token-contract.mjs'),
   step('test/verify-config-store.mjs'),
+  step('test/verify-steam-discovery.mjs'),
+  step('test/verify-child-kill.mjs'),
+  step('test/verify-host-diag.mjs'),
 ];
 
 /** `npm run verify:docs` —— 软档（只出声）。全部经 warn-only 降级。 */

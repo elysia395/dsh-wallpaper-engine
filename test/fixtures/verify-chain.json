@@ -389,6 +389,30 @@
           "args": [],
           "tier": "hard",
           "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-steam-discovery.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-child-kill.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-host-diag.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
         }
       ]
     },
@@ -891,6 +915,30 @@
           "kind": "guard",
           "npm": null,
           "file": "test/verify-config-store.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-steam-discovery.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-child-kill.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-host-diag.mjs",
           "args": [],
           "tier": "hard",
           "probe": false

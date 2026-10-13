@@ -14,7 +14,7 @@
 
 | # | 路径 | 来源 | 形态 | 依赖（闭包状态 / `c` 字段） | 守卫提及 |
 |---|---|---|---|---|---|
-| 1 | `/inventory` | lib/index.js:1574 | async 箭头 | webServer disposers mediaOriginApi buildInventory | 23 |
+| 1 | `/inventory` | lib/index.js:1474 | async 箭头 | webServer disposers mediaOriginApi buildInventory | 23 |
 | 2 | `/media-info` | lib/routes/media-derived.js:57 | 箭头 | disposers base mediaMap log getMediaInfo faststartVariant …(+1) | 10 |
 | 3 | `/transcode-progress` | lib/routes/media-derived.js:100 | 箭头 | disposers base mediaMap transcodeJobs | 2 |
 | 4 | `/transcoded` | lib/routes/media-derived.js:153 | 箭头 | disposers base mediaMap serveFile transcodeToFps registerTranscodeWaiter | 1 |
@@ -25,11 +25,11 @@
 | 9 | `/scene-frame-cache` | lib/routes/scene-frame.js:152 | 箭头 | disposers base mediaMap GPU_FRAME_MAX_BYTES GPU_WRITE_INFLIGHT armBodyIdleTimeout …(+4) | 4 |
 | 10 | `/custom-frame` | lib/routes/scene-frame.js:237 | 箭头 | disposers base serveFile CUSTOM_FRAME_EXT CUSTOM_FRAME_MAX_BYTES armBodyIdleTimeout …(+3) | 3 |
 | 11 | `/scene-live` | lib/routes/scene-serve.js:82 | 箭头 | disposers base WEBWALLGL_DIR WEBWALLGL_PKG_DIR appendDiagLine traceRequests …(+3) | 9 |
-| 12 | `/scene-files` | lib/routes/scene-serve.js:149 | 箭头 | disposers base handleSceneFiles | 4 |
+| 12 | `/scene-files` | lib/routes/scene-serve.js:149 | 箭头 | disposers base handleSceneFiles | 5 |
 | 13 | `/media-origin` | lib/routes/scene-serve.js:157 | 箭头 | disposers base mediaOriginInfo | 1 |
 | 14 | `/scene-payload-progress` | lib/routes/scene-serve.js:177 | 箭头 | disposers base payloadProgress | 1 |
 | 15 | `/props` | lib/routes/props.js:42 | 箭头 | disposers base mediaMap userPropsFor | 7 |
-| 16 | `/live-frame` | lib/routes/live-frame.js:41 | 箭头 | disposers base mediaMap serveFile traceRequests liveFrameFile …(+2) | 2 |
+| 16 | `/live-frame` | lib/routes/live-frame.js:41 | 箭头 | disposers base mediaMap serveFile traceRequests liveFrameFile …(+2) | 3 |
 | 17 | `/media-status` | lib/routes/now-playing.js:82 | 箭头 | disposers base | 2 |
 | 18 | `/audio-spectrum` | lib/routes/now-playing.js:92 | 箭头 | disposers base | 2 |
 | 19 | `/now-playing` | lib/routes/now-playing.js:111 | 箭头 | disposers base | 3 |
@@ -37,8 +37,8 @@
 | 21 | `/media-control` | lib/routes/now-playing.js:143 | 箭头 | disposers base CONTROL_JSON_MAX_BYTES | 3 |
 | 22 | `/occlusion` | lib/routes/occlusion.js:47 | async 箭头 | disposers base hub | 4 |
 | 23 | `/client-diag` | lib/routes/diag.js:78 | 箭头 | disposers appendDiagLine notice base | 4 |
-| 24 | `/diag` | lib/routes/diag.js:142 | 箭头 | disposers | 10 |
-| 25 | `/diag` | lib/routes/diag.js:143 | 箭头 | disposers base | 10 |
+| 24 | `/diag` | lib/routes/diag.js:142 | 箭头 | disposers | 11 |
+| 25 | `/diag` | lib/routes/diag.js:143 | 箭头 | disposers base | 11 |
 | 26 | `/diag-log` | lib/routes/diag.js:144 | 箭头 | disposers log base | 2 |
 | 27 | `/api/local-assets` | lib/routes/we-assets.js:66 | async 箭头 | disposers serveFile listWeAssetNames weAssetsAvailable WE_ASSETS_SOURCE_ID getWeAssetsDir | 1 |
 | 28 | `/we-assets-dir` | lib/routes/we-assets.js:113 | 箭头 | disposers base CONTROL_JSON_MAX_BYTES normalizeUserDir setWeAssetsDir listWeAssetNames …(+2) | 3 |

@@ -23,7 +23,7 @@
 import { readFileSync, existsSync } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { buildMap, render, targetsOf, moduleSurface } from './tools/guard-targets.mjs';
+import { buildMap, render, targetsOf, moduleSurface, familyHelpers } from './tools/guard-targets.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const MAP_DOC = join(ROOT, 'docs', 'GUARD-MAP.md');
@@ -180,6 +180,45 @@ console.log('\n⑥b 前缀族读法（`scopeFiles(<前缀>)` 覆盖整族；零�
     targetsOf('scopeText(`' + q + '`);', fam).length === 0 && targetsOf('scopeText(prefix);', fam).length === 0);
   check('negative control: 带成员访问的写法不算（`x.scopeText(…)` 不是那个 API）',
     targetsOf('helper.scopeText(' + JSON.stringify(q) + ');', fam).length === 0);
+}
+
+// ═══ ⑥c 经共享族助手读（`import { panelText } from './tools/src-scope.mjs'` + 真调用）══
+console.log('\n⑥c 经共享族助手读（族口径封在 `src-scope.mjs` 里；只 import 不调用不算）');
+{
+  const P = (...p) => p.join('/');
+  const q = P('src', 'q1');
+  const fam = [P('src', 'q1.js'), P('src', 'q1-core.js'), P('src', 'q1-panel.js'), P('src', 'q1cat.js'), P('src', 'q2.js')];
+  // 合成助手表：不经磁盘（族在演进），也避免依赖真 `src-scope.mjs` 的当前形状。
+  const helpers = new Map([[ 'q1Text', [q] ], [ 'qzzzText', [P('src', 'zzz')] ], [ 'qvarText', [] ]]);
+  const lib = './tools/src-scope.mjs';
+  const imp = (names) => 'import { ' + names + " } from '" + lib + "';\n";
+  const got = targetsOf(imp('q1Text') + 'const src = q1Text();', fam, helpers);
+  check('导入了族助手并**真调用** ⇒ 覆盖整族（startsWith 语义，与 `scopeText` 同口径）',
+    got.join(' ') === [P('src', 'q1-core.js'), P('src', 'q1-panel.js'), P('src', 'q1.js'), P('src', 'q1cat.js')].join(' '),
+    '命中 ' + got.length + ' 个：' + got.join(' '));
+  check('别名导入（`import { q1Text as t }`）按**本地名**认',
+    targetsOf(imp('q1Text as t') + 'const src = t();', fam, helpers).length === 4);
+  check('negative control: 只 `import` 不调用 ⇒ 零命中（"导入后忘了用"不是覆盖）',
+    targetsOf(imp('q1Text') + 'const src = 1;', fam, helpers).length === 0);
+  check('negative control: 助手体里的前缀匹配不到模块 ⇒ 零命中（与 ⑥b 同一条地板，不许变成万能豁免）',
+    targetsOf(imp('qzzzText') + 'const src = qzzzText();', fam, helpers).length === 0);
+  check('negative control: 助手没有字面量前缀（`scopeFiles(prefix)` 用变量）⇒ 不进表、零命中',
+    targetsOf(imp('qvarText') + 'const src = qvarText();', fam, helpers).length === 0);
+  check('negative control: 不来自 `./tools/src-scope.mjs` 的同名调用不算（F 只跟这一个库）',
+    targetsOf("import { q1Text } from './tools/other.mjs';\nconst src = q1Text();", fam, helpers).length === 0);
+  check('negative control: **注释里**的导入与调用都不算（判据先剥注释）',
+    targetsOf('// ' + imp('q1Text') + '// const src = q1Text();\nconst a = 1;', fam, helpers).length === 0
+    && targetsOf('/* ' + imp('q1Text') + 'const src = q1Text(); */\nconst a = 1;', fam, helpers).length === 0);
+  // 真源自检：助手表是从那片库里**解析**出来的（期望值不与被测对象同源 —— 这里断言的是
+  // "两个已知助手的族前缀确实是那两串"，由 `src-scope.mjs` 的 API 契约决定）。
+  const real = familyHelpers();
+  check('真源：`familyHelpers()` 从 `test/tools/src-scope.mjs` 解析出 `panelText`/`styleText` 的族前缀',
+    (real.get('panelText') || []).join(' ') === P('src', 'panel-tabs')
+    && (real.get('styleText') || []).join(' ') === P('src', 'styles'),
+    'panelText=' + JSON.stringify(real.get('panelText')) + ' · styleText=' + JSON.stringify(real.get('styleText'))
+      + ' · 表内 ' + real.size + ' 个助手');
+  check('真源：收文本的助手（`cssBodyOf` / `cssPartsOf`）不进表（它们没有族前缀，不该被当成族读法）',
+    !real.has('cssBodyOf') && !real.has('cssPartsOf'), '表内：' + [...real.keys()].join(' '));
 }
 
 console.log('');

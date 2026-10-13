@@ -6,7 +6,7 @@
  * 于是"改了 `src/x.js` 该跑哪几条"只能靠猜。本工具从**守卫自己的代码**里派生这张映射，
  * 而不是让作者维护一份清单：清单漏一行只会让那个文件**静默脱离**（[`DEV-GUIDE.md`] §4.7 约定 4）。
  *
- * 覆盖本仓实际出现的五种写法：
+ * 覆盖本仓实际出现的六种写法：
  *   A) 字面量路径      `'src/picker-model.js'` / `'../src/client.js'`
  *   B) 目录拼接        `join(root, 'src', 'quick-panel.js')`（含嵌套如 `'font','apply.js'`）
  *   C) 纯文件名        `'quick-panel.js'`（切片 / 读源码用）—— 只在 basename **唯一**时认
@@ -14,6 +14,10 @@
  *   E) **前缀族读法**  `scopeFiles('src/i18n-copy')` / `scopeText('src/i18n-copy')`
  *      （`test/tools/src-scope.mjs` 的 API）—— 构建期内联族是"一族文件平铺进同一作用域"，
  *      于是"这条守卫管这一族"的自然写法就是**前缀**：路径以该前缀开头的模块全部算命中。
+ *   F) **经共享族助手读**  `import { panelText } from './tools/src-scope.mjs'` + 真调用
+ *      —— 守卫常常不写前缀字面量，而是调助手（`panelText()` / `styleText()` …），
+ *      族口径封在 `test/tools/src-scope.mjs` 里。那个库**同时是守卫的库**（DEV-GUIDE §4.6：
+ *      改它等于改判据），所以判据跟着走一层：解析助手体里的字面量前缀。
  *
  * ⚠️ 判据只看**代码**（先剥注释）：模块名出现在散文里不算"管它"——
  * 否则每个头注释提到 `src/client.js` 的守卫都会被算成 client 的守卫。
@@ -71,7 +75,34 @@ const SELF_REFERENTIAL = [
  * 判据（唯一一份）：从一段**守卫源码** + 模块面派生出它碰的模块。
  * 正判据与负对照调这一个函数。
  */
-function targetsOf(srcText, modules) {
+const SCOPE_LIB = 'test/tools/src-scope.mjs';
+
+/**
+ * F) 的解析层：`test/tools/src-scope.mjs` 里每个**导出的族助手** → 它体内引用的字面量前缀。
+ * （`panelText()` → `['src/panel-tabs']`；`styleText()` → `['src/styles']`；`cssBodyOf(text)`
+ *  收的是文本 ⇒ 没有前缀 ⇒ 不进表、也不该进表。）
+ *
+ * ⚠️ 四条**不许放宽**的边界（每一条都有负对照真的在跑，见 `test/verify-guard-map.mjs` ⑥c）：
+ *   ① 只认 `test/tools/src-scope.mjs` 这一个库（别的文件里同名函数不算）；
+ *   ② 助手体里必须有**字面量**前缀（`scopeFiles(prefix)` 用变量 ⇒ 解析不出，不认）；
+ *   ③ 守卫必须**真的调用**那个导入名（只 `import` 不调用不算 —— 否则"导入后忘了用"
+ *      会被算成覆盖，而真实读法是零）；
+ *   ④ 前缀匹配不到任何磁盘模块 ⇒ 零命中不算覆盖（与 E 同一条地板，防"万能豁免"）。
+ */
+function familyHelpers(root = ROOT) {
+  let text;
+  try { text = stripComments(readFileSync(join(root, SCOPE_LIB), 'utf8')); } catch { return new Map(); }
+  const out = new Map();
+  for (const chunk of text.split(/\bexport\s+function\s+/).slice(1)) {
+    const name = chunk.slice(0, chunk.indexOf('(')).trim();
+    if (!name) continue;
+    const prefixes = [...chunk.matchAll(/(?<![\w$.])(?:scopeFiles|scopeText)\s*\(\s*['"]([^'"]+)['"]/g)].map((m) => m[1]);
+    if (prefixes.length) out.set(name, [...new Set(prefixes)]);
+  }
+  return out;
+}
+
+function targetsOf(srcText, modules, helpers = familyHelpers()) {
   // 相对说明符的 `../` 前缀先剥掉：`'../lib/routes/system-fonts.js'` 里模块路径左邻是 `/`
   //（在下方的左边界排除类里）⇒ 直接匹配会漏（实测：verify-system-fonts 直接 import 的
   // 路由文件被判成零覆盖）。剥前缀只影响字符串开头的点斜杠段，不会把 `assets/../src/x.js`
@@ -137,17 +168,35 @@ function targetsOf(srcText, modules) {
     const prefix = m[1];
     for (const mod of modules) if (mod.startsWith(prefix)) hits.add(mod);
   }
+  // F) **经共享族助手读**：`import { panelText } from './tools/src-scope.mjs'` + 真调用 `panelText(…)`。
+  //    见 `familyHelpers()` 的四条边界。别名写法（`import { panelText as pt }`）按**本地名**
+  //    判"有没有真调用"，但族前缀要从**原名**查（`pt` 不在助手表里，`panelText` 才在）。
+  const scoped = new Map(); // 本地名 → 助手原名
+  for (const m of code.matchAll(/import\s*\{([^}]*)\}\s*from\s*['"][^'"]*tools\/src-scope\.mjs['"]/g)) {
+    for (const raw of m[1].split(',')) {
+      const parts = raw.trim().split(/\s+as\s+/).map((s) => s.trim()).filter(Boolean);
+      if (parts.length === 2) scoped.set(parts[1], parts[0]);
+      else if (parts.length === 1) scoped.set(parts[0], parts[0]);
+    }
+  }
+  for (const [local, orig] of scoped) {
+    if (!new RegExp('(?<![\\w$.])' + esc(local) + '\\s*\\(').test(code)) continue; // 只 import 不调用不算
+    for (const prefix of helpers.get(orig) || []) {
+      for (const mod of modules) if (mod.startsWith(prefix)) hits.add(mod);
+    }
+  }
   return [...hits].sort();
 }
 
 /** 整张映射（派生，不手写）。 */
 function buildMap(root = ROOT) {
   const modules = moduleSurface(root);
+  const helpers = familyHelpers(root); // F 的族助手表（解析一次，别在循环里反复读盘）
   const guards = guardSurface(join(root, 'test'))
     .filter((g) => !SELF_REFERENTIAL.includes(g)); // 结构性自指见上面的说明
   const rows = guards.map((g) => {
     const raw = readFileSync(join(root, 'test', g), 'utf8');
-    const targets = targetsOf(raw, modules);
+    const targets = targetsOf(raw, modules, helpers);
     // `viaBundle` 只作为**注释性**列：真源是 `targets` 里有没有 `lib/client.js`
     // （只用 `code.includes` 会与 targets 口径漂开 —— 实测踩过一次）。
     return { guard: g, targets, viaBundle: targets.includes('lib/client.js') };
@@ -169,7 +218,7 @@ function render(map) {
   out.push('> 由 `node test/tools/guard-targets.mjs --write` 重算；`test/verify-guard-map.mjs` 会重算并逐字比对。');
   out.push('> **怎么用**：改了 `src/` 或 `lib/` 的某个模块，在「模块 → 守卫」那张表里查该跑哪几条。');
   out.push('> 口径：只统计守卫**代码**里真正碰到的模块（先剥注释），并区分"直接读源文件"与"隔着产物 `lib/client.js`"。');
-  out.push('> 写法：字面量路径 / `join(...)` 拼接 / 唯一 basename / 产物配方 / **前缀族读法** `scopeFiles|scopeText(<前缀>)`（`test/tools/src-scope.mjs` 的 API，一族文件平铺进同一作用域）。');
+  out.push('> 写法：字面量路径 / `join(...)` 拼接 / 唯一 basename / 产物配方 / **前缀族读法** `scopeFiles|scopeText(<前缀>)` / **经共享族助手读**（`import { panelText } from \'./tools/src-scope.mjs\'` + 真调用；族口径封在那个库里，见 DEV-GUIDE §4.6「同时是守卫的库」）。');
   out.push('');
   out.push(`模块面 ${map.modules.length} 个 · 守卫 ${map.rows.length} 个`);
   out.push('');
@@ -194,7 +243,7 @@ function render(map) {
   return out.join('\n');
 }
 
-export { moduleSurface, guardSurface, targetsOf, buildMap, render };
+export { moduleSurface, guardSurface, targetsOf, buildMap, render, familyHelpers };
 
 // 作为脚本直接跑时才输出（被 import 时不得有副作用 —— 守卫要 import 本模块）
 const invokedDirectly = Boolean(process.argv[1]) && import.meta.url === new URL('file://' + process.argv[1].replace(/\\/g, '/')).href.replace(/^file:\/\/\//, 'file:///');
