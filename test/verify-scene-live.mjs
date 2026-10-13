@@ -32,6 +32,8 @@ import { Readable, Writable } from 'node:stream';
 import { execFileSync } from 'node:child_process';
 // 剥注释：共享的字符串感知实现（`verify-module-layout` 的『剥注释必须字符串感知』一节钉住"不许再用朴素正则"）。
 import { stripComments, stripExportBlocks } from './tools/js-text.mjs';
+// 刀3：样式族取文（8 个域模块 + 组装点，构建序拼接）。
+import { styleText } from './tools/src-scope.mjs';
 // 单独 import `src/**` 时补上 bundle 作用域的取词层（面板渲染器直接用 weT；见该 shim 的文件头）。
 import { installWeTShim } from './tools/weT-shim.mjs';
 installWeTShim();
@@ -867,7 +869,8 @@ check('前置：qpSrc 已剥掉 `export { … }`（两处 new Function 依赖这
 // 而文件头的散文里也写着这个名字（首个匹配落在注释里 ⇒ 判据恒真）。剥注释的共享实现见
 // `test/tools/js-text.mjs`（本仓纪律：字符串感知的剥注释，不用朴素块注释正则）。
 const qpCode = stripComments(qpSrc);
-const stylesSrc = readFileSync(join(root, 'src', 'styles.js'), 'utf8');
+// 刀3：样式族已拆成 8 个域模块 + 组装点 ⇒ 取整族源码文本（构建序拼接）；判据不变。
+const stylesSrc = styleText();
 const liveSrc = readFileSync(join(root, 'src', 'live-layer.js'), 'utf8');
 const prepSrc = readFileSync(join(root, 'src', 'media-prep.js'), 'utf8');
 const tabsSrc = readFileSync(join(root, 'src', 'panel-tabs.js'), 'utf8');
@@ -3947,7 +3950,8 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     // 位移实际落在 CSS 上：那一段必须（a）整段挂在开关属性下、（b）只用独立属性
     // translate / scale（transform 会被壁纸过场的 resetLayerSwitchStyles 清掉）、
     // （c）壁纸同时放大补边、（d）特效层不在里面。
-    const stylesSrc = readFileSync(join(root, 'src', 'styles.js'), 'utf8');
+    // 刀3：样式族取整族源码文本（8 个域模块 + 组装点，构建序拼接）；下面的锚点与切片不变。
+    const stylesSrc = styleText();
     const parCssAt = stylesSrc.indexOf('「扩展」三号模块');
     const parCss = parCssAt < 0 ? '' : stylesSrc.slice(parCssAt);
     check('styles.js 视差段：开关属性下才生效 · 只用独立属性 · 壁纸放大补边 · 特效层不参与 · 动的那几帧才提合成层 · 会话滚动容器不长横向滚动条',
@@ -4863,7 +4867,8 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       && !extAvSrc.includes('AVATAR_NAME_MAX') && !extAvSrc.includes('type: "text"'));
     // 排布落在样式表上：那一段必须（a）整段挂在开关属性下、（b）用户行反过来（头像在右）、
     // （c）消息内容那一格可伸缩（否则长消息会把头像挤出可视区）、（d）不得再有名字行。
-    const stylesSrcAv = readFileSync(join(root, 'src', 'styles.js'), 'utf8');
+    // 刀3：样式族取整族源码文本（8 个域模块 + 组装点，构建序拼接）；下面的锚点与切片不变。
+    const stylesSrcAv = styleText();
     const avCssAt = stylesSrcAv.indexOf('「扩展」页签一号模块');
     const avCss = avCssAt < 0 ? '' : stylesSrcAv.slice(avCssAt, stylesSrcAv.indexOf('「扩展」二号模块', avCssAt));
     // 断言一律打在**剥注释**的样式文本上：注释里写着锚点与 display: contents 这些词，

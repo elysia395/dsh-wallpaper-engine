@@ -18,6 +18,7 @@
 import { readFileSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { cssBodyOf } from './tools/src-scope.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 // 读**构建产物**（与 verify-readability 同源）：它才是实际注入浏览器的字符串。
@@ -33,7 +34,9 @@ function check(name, ok, detail) {
 // 注入的样式表：与 verify-readability 同法求值（选择器本身不含插值，但保持同一来源）。
 // ⚠️ 锚点**锚在行首且容忍缩进**（产物把内联模块整段缩进过）：否则注释/散文里出现同样的
 //    声明字面量会把锚点带偏，取出的"模板"会从注释一直吃到文件尾。
-const CSS_BODY = (SRC.match(/^\s*const CSS = `([^`]*)`;/m) || [])[1] || '';
+// 2026-10-13（刀3）：样式表拆成 8 个域模板 + 组装点 ⇒ 取文改走 cssBodyOf（按声明顺序拼回
+// 一份 CSS 体，与旧单模板取文逐字节相同）；取不到任何模板会抛错，不再静默拿空串当"通过"。
+const CSS_BODY = cssBodyOf(SRC);
 const num = (re) => Number((SRC.match(re) || [])[1]);
 let CSS = '';
 try {
@@ -78,8 +81,11 @@ const qualified = sels.filter((s) => s.includes(GATE));
   //   · 结束标记：写死 `'\n\t\t`;'`（正文里是 2 个 tab）就会失效 —— 样式表搬进**内联模块**
   //     后整段缩进变成 4 个 tab，写死的标记找不到，切片会一路吃到文件尾
   //（**实测**：那时 H0 报"模板长度 1130572 字符" = 整份 bundle）。
-  const startMatch = /^\s*const CSS = `([^`]*)`;/m.exec(SRC);
-  const region = startMatch ? startMatch[1] : '';
+  // 刀3：样式表已按视觉域拆成 8 个域模板（`const CSS_<域> = \`…\`;`）+ 一个组装点，
+  // 取文口径从"单个模板"换成"族内全部模板按构建序拼接"—— 判据（长度上下限）一字未改。
+  // 取不到任何域模板时给空串 ⇒ 下面的 length 判据必红（不是静默通过）。
+  let region = '';
+  try { region = cssBodyOf(SRC); } catch { region = ''; }
   // ⚠️ 这里**不许**断言"提取到的模板里没有裸反引号"：抽取正则本身就是 `[^`]*`，该断言对
   // 任何输入恒真（数学恒等式）；"注入一个反引号后被抓到 1/1"也只是拿测试自己刚写下的串跟同一段
   // 正则比（C3）。真正会失真的量是**抽取长度**，两个方向都要红：

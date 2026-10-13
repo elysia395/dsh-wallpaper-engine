@@ -49,6 +49,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Readable, Writable } from 'node:stream';
 // 剥注释：共享的字符串感知实现（test/tools/js-text.mjs）。
 import { stripComments } from './tools/js-text.mjs';
+// 刀3：样式族取文（8 个域模块 + 组装点，构建序拼接）。
+import { styleText } from './tools/src-scope.mjs';
 // 单独 import `src/**` 时补上 bundle 作用域的取词层（中文身份；见 test/tools/weT-shim.mjs）。
 import { installWeTShim } from './tools/weT-shim.mjs';
 installWeTShim();
@@ -1369,7 +1371,8 @@ section('⑨ 字体集编辑器（面板可驱动：意图映射 / confirm 门�
   check('「重命名」与「导出」挂的是同一枚类名（样式没有第二条来源）',
     btnClass !== '' && btnClass === linkClass && btnClass.includes('we-picker__btn'),
     btnClass + ' vs ' + linkClass);
-  const btnRule = (/\.we-picker__btn\s*\{([\s\S]*?)\}/.exec(readFileSync(join(root, 'src', 'styles.js'), 'utf8')) || [])[1] || '';
+  // 刀3：样式族已拆成 8 个域模块 + 组装点 ⇒ 取整族源码文本（构建序拼接）；判据不变。
+  const btnRule = (/\.we-picker__btn\s*\{([\s\S]*?)\}/.exec(styleText()) || [])[1] || '';
   const boxDecl = (txt) => ({
     'display:inline-flex': /display:\s*inline-flex/.test(txt),
     'box-sizing:border-box': /box-sizing:\s*border-box/.test(txt),

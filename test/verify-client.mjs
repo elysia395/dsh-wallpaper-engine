@@ -9,6 +9,8 @@ import assert from 'node:assert/strict';
 import vm from 'node:vm';
 // 剥注释：共享的字符串感知实现（test/tools/js-text.mjs）。
 import { stripComments, stripExportBlocks } from './tools/js-text.mjs';
+// 刀3：样式族取文（8 个域模块 + 组装点，构建序拼接）——别再自己 readFileSync 单文件。
+import { styleText } from './tools/src-scope.mjs';
 // 分支级"改了 store 却没通知"的分析与审计工具**同源**（避免两份判据分叉）；
 // `DEF`/`defName` 也从工具导入 —— 定义形态只有一份，形态补齐时两处一起动。
 import { pathNotifications, definitionsOf, DEF, defName } from './tools/branch-notify.mjs';
@@ -2147,7 +2149,8 @@ setTimeout(async () => {
       // ⚠️ 这条判据第一版我写成了 `assert.ok(!re.test('') || …)` —— 前半句恒真，
       //    于是整条**永远通过**（恒真的判据比没有判据更糟：它看起来有覆盖）。所以这里
       //    只留**单条**、可证伪的断言，并把反例写清楚。
-      const stylesForRing = readFileSync(new URL('../src/styles.js', import.meta.url), 'utf8');
+      // 刀3：样式族已拆成 8 个域模块 + 组装点 ⇒ 取整族源码文本（构建序拼接）；判据不变。
+      const stylesForRing = styleText();
       // nav 的样式规则也必须一起删干净（组件删了、样式留着就是死代码，而且下一个人看到
       // 规则还在会以为"这个控件本来有箭头"）。
       assert.ok(!/\.we-picker__mascot-nav\s*[\{:]/.test(stylesForRing),
@@ -2178,7 +2181,7 @@ setTimeout(async () => {
       assert.ok(!/MASCOT_RUBBER|MASCOT_STEP_PX/.test(tabsForRing),
         '环形布局没有端点 ⇒ 源码里不许再有端点阻尼/线性步长那套（"有界滚动"才需要）');
       // 拖动期关过渡这条必须落在 **CSS** 上（写在 JS 里没用）。
-      const stylesForDrag = readFileSync(new URL('../src/styles.js', import.meta.url), 'utf8');
+      const stylesForDrag = styleText();
       assert.ok(/\.we-picker__mascot-ring\.is-dragging\s*\{\s*transition:\s*none/.test(stylesForDrag),
         '★ 拖动期必须由 CSS 关掉**环**的过渡（.is-dragging 那一条）');
       // 3D 机制必须齐全（缺一个就不是 3D 环了：preserve-3d 缺 ⇒ 压平；backface 缺 ⇒ 后半圈透出来）

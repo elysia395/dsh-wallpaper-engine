@@ -110,9 +110,50 @@ const INLINE_MODULES = [
       'function useWeLocale()', 'function weOnLocaleChange('],
   },
   {
+    file: 'src/styles-base.js',
+    why: '样式域 base（原 styles.js 61–592）：画布兜底 · 玻璃总锚点与表面令牌 · markdown 底 · 对比度 · 全局 UI 配色 · 可读性下限常量（与消费它的 CSS 同处一文件）',
+    markers: ['const CSS_BASE = `', 'const READABILITY_FLOOR = ', 'const READABILITY_FLOOR_DARK = ', '/* ── 画布兜底色'],
+  },
+  {
+    file: 'src/styles-shell.js',
+    why: '样式域 shell（原 styles.js 593–1134）：iOS liquid glass · 思考触发条 · 输入座位 · composer card · 轨迹霜 · 吸顶条 · 原生左栏底 · 外壳画布底',
+    markers: ['const CSS_SHELL = `', '/* ── iOS liquid glass'],
+  },
+  {
+    file: 'src/styles-sidebar.js',
+    why: '样式域 sidebar（原 styles.js 1135–1622）：左侧栏液态玻璃 · 四角圆角 · 标题栏玻璃与模糊层 · better-sidebar glass · 官方右侧栏 · 内容面',
+    markers: ['const CSS_SIDEBAR = `', '/* ── 左侧栏液态玻璃'],
+  },
+  {
+    file: 'src/styles-chrome.js',
+    why: '样式域 chrome（原 styles.js 1623–1915）：统一控件 token · 原生设置整窗玻璃 · 插件源浮层 · corner-shape 兼容(#74)',
+    markers: ['const CSS_CHROME = `', '/* ── 统一控件 token'],
+  },
+  {
+    file: 'src/styles-settings.js',
+    why: '样式域 settings（原 styles.js 1916–2167）：预设圆角表格 · 原生下拉弹层 · 视觉分组 divider · 可折叠节头 · 窄栏兜底 · 页签栏 · 统一设置行 32px',
+    markers: ['const CSS_SETTINGS = `', '/* ── 预设方案'],
+  },
+  {
+    file: 'src/styles-panel.js',
+    why: '样式域 panel（原 styles.js 2168–2925）：吉祥物 3D 圆环转盘 · 圆点跳转 · 效果空态 · 黑胶 · 当前壁纸卡 · 壁纸属性面板 · 库下钻 · 目录浏览器',
+    markers: ['const CSS_PANEL = `', '/* ── 吉祥物形态'],
+  },
+  {
+    file: 'src/styles-quick.js',
+    why: '样式域 quick（原 styles.js 2926–3357）：Rope dock · 快捷播放面板 QuickPanel',
+    markers: ['const CSS_QUICK = `', '/* ── Rope dock'],
+  },
+  {
+    file: 'src/styles-ext.js',
+    why: '样式域 ext（原 styles.js 3358–3742）：软件渲染回退(#95) · 「关于」页签 · 扩展槽位与三号模块 · 侧栏全透明(#137)',
+    markers: ['const CSS_EXT = `', '/* ── 软件渲染回退'],
+  },
+  {
     file: 'src/styles.js',
-    why: '注入的整份样式表（纯数据，零分支；可读性下限与 CSS 必须同处一文件）',
-    markers: ['const READABILITY_FLOOR = ', 'const READABILITY_FLOOR_DARK = ', 'const CSS = '],
+    why: '样式族**组装点**（8 个域模块按本清单顺序相加 ⇒ 与原单模板逐字节相同；可读性下限由 styles-base.js 声明并导出）',
+    markers: ['const CSS = CSS_BASE + CSS_SHELL + CSS_SIDEBAR + CSS_CHROME + CSS_SETTINGS + CSS_PANEL + CSS_QUICK + CSS_EXT;',
+      'export { CSS };'],
   },
   {
     file: 'src/nav-icon.js',

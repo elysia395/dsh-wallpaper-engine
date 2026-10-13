@@ -48,14 +48,18 @@ const check = (name, ok, detail) => {
 // 两类例外，都按"文件 + 形态"登记（不是按内容片段），且**不许空转**：登记项在源码里找不到
 // 对应命中就判红（清单过期 = 判据的牙被拔了，本仓对允许清单的既有口径）。
 
-/** 整块纯数据：`src/styles.js` 的样式表模板（其中文只出现在 CSS 注释里，不进界面）。 */
+/** 整块纯数据：样式族的 8 个域模块（其中文只出现在 CSS 注释里，不进界面）。
+ *  2026-10-13（刀3）：原先登记的单文件 `src/styles.js` 已按视觉域拆成 8 个域模块 + 组装点
+ *  （组装点无 CSS）⇒ 逐域登记，判据（kind / minLength / 空转检查）一字未改。 */
 const DATA_BLOCKS = [
-  {
-    file: 'src/styles.js',
-    kind: 'template',
-    minLength: 10000,
-    why: '整份样式表是纯数据；其内的中文只出现在 CSS 注释（不渲染到界面）',
-  },
+  { file: 'src/styles-base.js', kind: 'template', minLength: 10000, why: '样式域 base 是纯数据；其内的中文只出现在 CSS 注释（不渲染到界面）' },
+  { file: 'src/styles-shell.js', kind: 'template', minLength: 10000, why: '样式域 shell 是纯数据；其内的中文只出现在 CSS 注释（不渲染到界面）' },
+  { file: 'src/styles-sidebar.js', kind: 'template', minLength: 10000, why: '样式域 sidebar 是纯数据；其内的中文只出现在 CSS 注释（不渲染到界面）' },
+  { file: 'src/styles-chrome.js', kind: 'template', minLength: 10000, why: '样式域 chrome 是纯数据；其内的中文只出现在 CSS 注释（不渲染到界面）' },
+  { file: 'src/styles-settings.js', kind: 'template', minLength: 10000, why: '样式域 settings 是纯数据；其内的中文只出现在 CSS 注释（不渲染到界面）' },
+  { file: 'src/styles-panel.js', kind: 'template', minLength: 10000, why: '样式域 panel 是纯数据；其内的中文只出现在 CSS 注释（不渲染到界面）' },
+  { file: 'src/styles-quick.js', kind: 'template', minLength: 10000, why: '样式域 quick 是纯数据；其内的中文只出现在 CSS 注释（不渲染到界面）' },
+  { file: 'src/styles-ext.js', kind: 'template', minLength: 10000, why: '样式域 ext 是纯数据；其内的中文只出现在 CSS 注释（不渲染到界面）' },
 ];
 
 /** 逐条精确值豁免（形如"是数据不是文案"的个别串）。每条都必须写明理由，且必须还在源码里。 */

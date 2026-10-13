@@ -29,6 +29,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildContract, scanTokenDecls, bucketOf, ungatedReason } from './tools/token-contract.mjs';
 import { stripComments } from './tools/js-text.mjs';
+// 刀3：样式族取文（8 个域模块 + 组装点，构建序拼接）。
+import { styleSources } from './tools/src-scope.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 let failed = 0;
@@ -57,7 +59,7 @@ console.log('\n② 无门控白名单封闭（M1 的止损线）');
 {
   const strays = buckets.ungated.filter((d) => !ungatedReason(d.chain));
   check('无门控声明全部落在白名单（thinking-native / .we-layer）', strays.length === 0,
-    strays.length ? strays.map((d) => 'styles.js:' + d.line + ' ' + d.token + ' @ ' + d.chain).join(' | ')
+    strays.length ? strays.map((d) => d.file + ':' + d.line + ' ' + d.token + ' @ ' + d.chain).join(' | ')
       : buckets.ungated.length + ' 条（' + new Set(buckets.ungated.map((d) => d.token)).size + ' 个令牌）');
   // 负对照 1：构造一条无门控声明 ⇒ 分类器必须把它报成白名单外（否则 ② 永远绿）
   const stray = scanTokenDecls('const CSS = `\n  body { --dsw-probe-stray: red; }\n`;\n');
@@ -145,7 +147,7 @@ console.log('\n③ `--dsw-alias-bg-base` 归壁纸半边（审计 §三.3 的关
   const bg = decls.filter((d) => d.token === '--dsw-alias-bg-base');
   check('bg-base 声明存在且全部挂壁纸门控',
     bg.length > 0 && bg.every((d) => bucketOf(d.chain) === 'wallpaper'),
-    bg.map((d) => 'styles.js:' + d.line).join(' + ') + ' → ' +
+    bg.map((d) => d.file + ':' + d.line).join(' + ') + ' → ' +
     bg.map((d) => bucketOf(d.chain)).join(' + '));
   // 负对照：bg-base 若出现在无门控下，必须被判红
   const probe = scanTokenDecls('const CSS = `\n  html { --dsw-alias-bg-base: transparent; }\n`;\n');
@@ -171,22 +173,32 @@ console.log('\n④ 解析口径负对照（契约的两条根基规则）');
 
 console.log('\n⑤ 口径完整性：CSS 模板外不许有漏网的属性位声明');
 {
-  const src = readFileSync(join(ROOT, 'src', 'styles.js'), 'utf8');
-  // extractCss 的前提：全文件恰好一个 `const CSS = \`` 模板。第二个模板出现时，
-  // 工具只会扫第一个 ⇒ 契约静默漏掉新模板里的一切（这条钉住那个前提）。
-  const count = (src.match(/const CSS = `/g) || []).length;
-  check('styles.js 只有一个 CSS 模板（多模板 ⇒ 契约会静默漏扫）', count === 1, count + ' 个');
+  // 刀3（2026-10-13）：样式表从单个模板拆成 8 个域模块 + 组装点 ⇒ 逐**族文件**判（判据一字未改）：
+  //   · 每个族文件至多一个 CSS 模板、且至少一个域模块带模板（多模板或锚点漂了 ⇒ 契约静默漏扫）；
+  //   · 每个族文件的模板之外不许出现 `--dsw-`（声明/写入都会漏出口径）。
+  const family = styleSources();
+  const texts = family.map((rel) => [rel, readFileSync(join(ROOT, rel), 'utf8')]);
+  const counts = texts.map(([rel, s]) => [rel, (s.match(/const CSS(?:_[A-Z][A-Z0-9_]*)? = `/g) || []).length]);
+  const withTemplate = counts.filter(([, n]) => n === 1).length;
+  const multi = counts.filter(([, n]) => n > 1);
+  check('样式族每个模块至多一个 CSS 模板、且至少一个域模块带模板（多模板 ⇒ 契约会静默漏扫）',
+    multi.length === 0 && withTemplate >= 1,
+    multi.length ? multi.map(([rel, n]) => rel + ':' + n).join(' ')
+      : withTemplate + '/' + counts.length + ' 个模块带模板（其余是组装点）');
   // 模板外（JS 正文 / 字符串）再出现属性位声明，契约口径就漏了它 —— 今天必须为 0。
   const templateOutside = (s) => {
-    const open = s.indexOf('const CSS = `');
-    const start = open + 'const CSS = `'.length;
+    const open = s.search(/const CSS(?:_[A-Z][A-Z0-9_]*)? = `/);
+    if (open < 0) return stripComments(s);
+    const start = s.indexOf('`', open) + 1;
     let i = start;
     for (; i < s.length; i++) { if (s[i] === '\\') { i++; continue; } if (s[i] === '`') break; }
     return stripComments(s.slice(0, start) + s.slice(i));
   };
-  const strays = templateOutside(src).match(/--dsw-[a-z0-9-]+/g) || [];
+  const strays = texts.flatMap(([rel, s]) =>
+    (templateOutside(s).match(/--dsw-[a-z0-9-]+/g) || []).map((t) => rel + ':' + t));
   check('CSS 模板外没有 `--dsw-` 提及（声明/写入都会漏出口径）',
-    strays.length === 0, strays.length ? strays.slice(0, 3).join(' | ') : '0 处');
+    strays.length === 0,
+    strays.length ? strays.slice(0, 3).join(' | ') : '0 处（' + texts.length + ' 个族文件）');
   // 负对照：把一条声明放进模板外（甚至行中形态），同一条判据必须判出（否则这条永远绿）
   const probe = templateOutside('const CSS = `body {}`;\nconst extra = `\n  body { --dsw-probe-outside: red; }\n`;');
   const pStrays = probe.match(/--dsw-[a-z0-9-]+/g) || [];
@@ -240,7 +252,7 @@ console.log('\n⑥ 门控计数自洽（A1-3：工具曾把每格算成 0，而�
     for (let i = 0; i < lines.length; i++) {
       const m = rowRe.exec(lines[i]);
       // 只认**全量令牌表**里那几行（tokenList 是 ⑥ 正在核对的那份名单），
-      // 别把无门控白名单表的行（第二格是 `styles.js:96`）或说明行当成计数格。
+      // 别把无门控白名单表的行（第二格是 `src/styles-base.js:46`）或说明行当成计数格。
       if (!m || !tokenList.some((t) => t.token === m[1])) continue;
       const gm = /\(([1-9]\d*)\)/.exec(m[3]);
       if (!gm) continue;

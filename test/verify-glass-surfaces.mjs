@@ -45,6 +45,8 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 // 共享实现（`new Function` 装入源码文本前必须先剥掉 `export { … }`）——别在这里再抄一份正则。
 import { stripExportBlocks } from './tools/js-text.mjs';
+// 刀3：样式族取文（8 个域模板 + 组装点）——源码侧用 styleText()，产物侧用 cssBodyOf()。
+import { styleText, cssBodyOf, cssPartsOf } from './tools/src-scope.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const CLIENT = process.argv[2] || join(ROOT, 'lib', 'client.js');
@@ -269,15 +271,20 @@ const FLOOR = {
   light: Number((SRC.match(/const READABILITY_FLOOR = ([\d.]+);/) || [])[1]),
   dark: Number((SRC.match(/const READABILITY_FLOOR_DARK = ([\d.]+);/) || [])[1]),
 };
-const CSS_BODY_MATCH = SRC.match(/^\s*const CSS = `([^`]*)`;/m);
-if (!CSS_BODY_MATCH) {
-  console.error('✗ 取不到样式表（产物结构变了？）—— ' + CLIENT);
+// 刀3（2026-10-13）：样式表从单个 CSS 模板拆成 8 个域模板 + 组装点 ⇒ 取文改走 cssBodyOf
+// （按声明顺序把族内每个域模板拼回一份 CSS 体，与旧单模板取文逐字节相同：276,804 B）。
+// 取不到任何模板会**抛错**（旧写法是静默拿到 undefined）——这里把失败显式转成退出码 1。
+let CSS_BODY = '';
+try {
+  CSS_BODY = cssBodyOf(SRC);
+} catch (err) {
+  console.error('✗ 取不到样式表（产物结构变了？）—— ' + CLIENT + '：' + (err && err.message));
   process.exit(1);
 }
 let CSS = '';
 try {
   CSS = new Function('READABILITY_FLOOR', 'READABILITY_FLOOR_DARK',
-    'return `' + CSS_BODY_MATCH[1] + '`;')(FLOOR.light, FLOOR.dark);
+    'return `' + CSS_BODY + '`;')(FLOOR.light, FLOOR.dark);
 } catch (err) {
   console.error('✗ 样式表模板求值失败：' + (err && err.message));
   process.exit(1);
@@ -419,7 +426,8 @@ const EFFECTS_SRC = readFileSync(join(ROOT, 'src', 'effects.js'), 'utf8');
 const EFFECTS = GLASS_SRC + '\n' + EFFECTS_SRC;
 // 第 ⑫ 组要读样式表：它需要从 CSS 的**内层兜底**反推"没被 JS 写出的变量实际取到哪个值"
 // （单层链 `var(--we-<面>-x, var(--we-global, lit))`）⇒ 判据与"管道形状"解耦。
-const STYLES_TEXT = readFileSync(join(ROOT, 'src', 'styles.js'), 'utf8');
+// 刀3：样式族已按域拆成 8 个模块 + 组装点 ⇒ 这里取**整族源码文本**（构建序拼接），判据文本不变。
+const STYLES_TEXT = styleText();
 // 「玻璃 UI」开关的读数/翻转处理器都住在 client.js（不在 effects.js）—— 第 ⑧ 组要看它。
 const CLIENT_SRC = readFileSync(join(ROOT, 'src', 'client.js'), 'utf8');
 // 「独立配置」开关的**两个落点**：登记表子项由 glass-panel 自动渲染，既有面（左侧栏 / 侧栏 /
@@ -1989,18 +1997,27 @@ console.log('\n⑬ CSS 契约（按面变量零兜底 / 门控许可证 / 双向
     written.length >= 15 && deadWrites.length === 0,
     deadWrites.length ? '写了没人读：' + deadWrites.join(', ') : written.length + ' 个全部有消费者');
 
-  // ⚠️ **模板字符串的边界**：`src/styles.js` 整份 CSS 住在一个 JS 模板字符串里
-  //    （`const CSS = \`…\`;`）⇒ 注释或规则里出现**裸反引号**会提前终止它，
+  // ⚠️ **模板字符串的边界**：样式族的每份 CSS 各自住在一个 JS 模板字符串里
+  //    （`const CSS[_域] = \`…\`;`）⇒ 注释或规则里出现**裸反引号**会提前终止它，
   //    产物随即是语法错误。构建会拦住，但它报的是 `Unexpected identifier` /
   //    `Invalid left-hand side expression` 这类**指不到原因**的 JS 错误 ——
   //    实测为此浪费了两轮。这条判据把它变成一句能读懂的话（并给出行号）。
+  //    刀3：取文从"单文件"换成族内拼接 ⇒ 分隔符行数从"恰好 2"换成"恰好 2 × 族内模板数"，
+  //    判据本身（**每个反引号行都必须是模板分隔符**）一字未改，覆盖面反而更全。
   {
     const lines = STYLES_TEXT.split(/\r?\n/);
     const backtickLines = lines.map((t, i) => [i + 1, t]).filter(([, t]) => t.includes('`'));
-    const delimiters = backtickLines.filter(([, t]) => /^\s*const CSS = `\s*$/.test(t) || /^\s*`;\s*$/.test(t));
+    // 开引号行 = `const CSS[_域] = \`` 起头（**允许同一行跟着该段的第一个 CSS 注释**：
+    // 拼装契约要求"7 个非 base 段的开引号紧跟本段首行"，所以那行本来就带内容）；
+    // 收引号行 = 独占一行的 `` `; ``。其余任何带反引号的行都是裸反引号 ⇒ 判红。
+    const openers = backtickLines.filter(([, t]) => /^\s*const CSS(?:_[A-Z][A-Z0-9_]*)? = `/.test(t));
+    const closers = backtickLines.filter(([, t]) => /^\s*`;\s*$/.test(t));
+    const parts = cssPartsOf(STYLES_TEXT).length;
+    const backtickChars = lines.reduce((n, t) => n + (t.match(/`/g) || []).length, 0);
     check('样式表里不许出现裸反引号（它会提前终止 CSS 模板字符串）',
-      backtickLines.length === delimiters.length && delimiters.length === 2,
-      '含反引号的行=' + backtickLines.map(([n]) => n).join(',') + '（应当只有 const CSS = \\` 与 \\`; 这两行）');
+      parts >= 1 && backtickChars === 2 * parts && openers.length === parts && closers.length === parts
+        && backtickLines.length === parts * 2,
+      '含反引号的行=' + backtickLines.map(([n]) => n).join(',') + '（族内 ' + parts + ' 份域模板 ⇒ 应当只有 ' + (2 * parts) + ' 行分隔符）');
     // 负对照：同一谓词喂一段"注释里带反引号"的合成输入，必须判出。
     const synth = 'const CSS = `\n.a { color: red; /* 见 `x` */ }\n`;';
     const synthLines = synth.split('\n');
@@ -2095,7 +2112,7 @@ console.log('\n⑭ 三方对账：写出的变量必须有人读（R4 死码清�
 // 这条判据防的是"哪次改动又把输入框塞回思考玻璃门下"——选择器文本级负向棘轮。
 console.log('\n⑪ 思考玻璃门不碰输入框（用户口径 2026-10-04）');
 {
-  const stylesSrc = readFileSync(join(ROOT, 'src', 'styles.js'), 'utf8');
+  const stylesSrc = styleText();
   // 剥 CSS 块注释后再逐条规则解析：注释里可以提 data-we-thinking-glass / 输入框
   //（记录口径的注释必须能写这些词），判据只看**真规则**。
   const css = stylesSrc.replace(/\/\*[\s\S]*?\*\//g, '');

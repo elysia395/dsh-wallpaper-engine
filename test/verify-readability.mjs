@@ -64,6 +64,7 @@
 //
 // Usage: node test/verify-readability.mjs
 import { readFileSync } from 'node:fs';
+import { styleSources, cssBodyOf } from './tools/src-scope.mjs';
 
 const results = [];
 function check(name, ok, detail) {
@@ -88,8 +89,9 @@ const FLOOR_JS = {
 // 2) the injected stylesheet: evaluate the CSS template literal with exactly
 // those constants (so the string checked here IS the string the plugin injects).
 // ⚠️ 锚点锚在行首且容忍缩进（产物把内联模块整段缩进过）：散文里出现同样的声明字面量会把锚点带偏。
-const CSS_BODY_MATCH = SRC.match(/^\s*const CSS = `([^`]*)`;/m);
-const CSS_BODY = CSS_BODY_MATCH ? CSS_BODY_MATCH[1] : '';
+// 2026-10-13（刀3）：样式表拆成 8 个域模板 + 组装点 ⇒ 取文改走 cssBodyOf（按声明顺序拼回一份
+// CSS 体，与旧单模板取文逐字节相同）；取不到任何模板会抛错，不再静默返回空串让判据恒真。
+const CSS_BODY = cssBodyOf(SRC);
 let CSS = '';
 let cssError = null;
 try {
@@ -808,26 +810,42 @@ function main() {
   // 本条把它变成**指名道姓**的判据。判据读**源码**（不是产物）: 产物构建失败时它根本不会
   // 更新, 拿产物判会测到上一次的旧文本。
   {
-    const stylesSrc = readFileSync(new URL('../src/styles.js', import.meta.url), 'utf8');
-    const open = stylesSrc.indexOf('const CSS = `');
-    // 结尾锚在行首的 `;`（与上面 C6s 取 CSS 的方式同源, 避免散文里的反引号影响）
-    const tail = stylesSrc.slice(open + 13).match(/^`;/m);
-    const bodyStart = open + 13;
-    const bodyEnd = tail ? bodyStart + tail.index : -1;
-    const body = bodyEnd > bodyStart ? stylesSrc.slice(bodyStart, bodyEnd) : '';
-    const strays = bodyEnd > bodyStart ? (body.match(/`/g) || []).length : -1;
-    // 行号定位（便于直接去改）: 第一个裸反引号所在行
-    const firstAt = body.indexOf('`');
-    const lineNo = firstAt >= 0 ? stylesSrc.slice(0, bodyStart + firstAt).split('\n').length : -1;
+    // 刀3（2026-10-13）：样式表从单个 CSS 模板拆成 8 个域模块（+ 组装点）⇒ 逐**族文件**取模板体
+    // 再数裸反引号。逐文件判（不是拼成一份再判）才能指名道姓到具体域文件；判据本身一字未改。
+    const parts = [];
+    for (const rel of styleSources()) {
+      const text = readFileSync(new URL('../' + rel, import.meta.url), 'utf8');
+      const open = text.search(/^[ \t]*const CSS(?:_[A-Z][A-Z0-9_]*)? = `/m);
+      if (open < 0) continue;
+      const bodyStart = text.indexOf('`', open) + 1;
+      // 结尾锚在行首的 `;`（与上面 C6s 取 CSS 的方式同源, 避免散文里的反引号影响）
+      const tail = text.slice(bodyStart).match(/^`;/m);
+      if (!tail) continue;
+      parts.push({ file: rel, text, bodyStart, body: text.slice(bodyStart, bodyStart + tail.index) });
+    }
+    const found = parts.length > 0;
+    const strays = found ? parts.reduce((n, p) => n + (p.body.match(/`/g) || []).length, 0) : -1;
+    const bodyBytes = parts.reduce((n, p) => n + Buffer.byteLength(p.body, 'utf8'), 0);
+    // 行号定位（便于直接去改）: 第一个裸反引号所在**文件与行**
+    let where = '';
+    for (const p of parts) {
+      const at = p.body.indexOf('`');
+      if (at >= 0) {
+        where = p.file + ':' + p.text.slice(0, p.bodyStart + at).split('\n').length;
+        break;
+      }
+    }
     check('C6t styles.js 的 CSS 模板内无裸反引号（会把模板提前终止, 报错却指向别处）',
-      bodyEnd > bodyStart && strays === 0,
-      strays < 0 ? '取不到模板体（锚点变了?）' : strays + ' 个裸反引号 · 首个在第 ' + lineNo + ' 行');
+      found && strays === 0,
+      !found ? '取不到模板体（锚点变了?）'
+        : strays + ' 个裸反引号 · 首个在 ' + where + ' · 族模板体 ' + bodyBytes + ' B');
     // 负对照: 同一判据必须能判出**合成**的裸反引号（否则它可能恒真）。
     // 用与正面**同一个谓词**（strays === 0）判, 而不是自己数一遍 —— 数一遍等于把判据抄成
     // 期望值, 那样"谓词写错"时正负对照会一起错（本仓的"期望值不许与被测对象同源"）。
-    const synth = body.slice(0, 200) + '\n/* `demo` */\n' + body.slice(200);
+    const pick = parts[0] ? parts[0].body : '';
+    const synth = pick.slice(0, 200) + '\n/* `demo` */\n' + pick.slice(200);
     check('negative control C6t-1: 合成一个裸反引号会被同一条判据判出',
-      (synth.match(/`/g) || []).length !== 0 && bodyEnd > bodyStart);
+      (synth.match(/`/g) || []).length !== 0 && found);
   }
 
   // ── F7: 侧栏全透明（issue #137）—— 放弃地板的显式开关链路（默认关）──────
