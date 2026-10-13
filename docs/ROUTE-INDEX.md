@@ -50,7 +50,7 @@
 | 34 | `/fontsets` | lib/routes/fontsets.js:245 | async 箭头 | disposers base readFontSetId | 6 |
 | 35 | `/glass-presets` | lib/routes/presets.js:491 | async 箭头 | disposers base | 1 |
 | 36 | `/star-count` | lib/routes/github-stars.js:107 | async 箭头 | disposers base repoSlug log | 2 |
-| 37 | `/system-fonts` | lib/routes/system-fonts.js:459 | async 箭头 | disposers base | 4 |
+| 37 | `/system-fonts` | lib/routes/system-fonts.js:460 | async 箭头 | disposers base | 4 |
 | 38 | `/about-qr` | lib/routes/about-qr.js:65 | 箭头 | disposers base aboutDir serveFile | 3 |
 | 39 | `/mascot` | lib/routes/mascot.js:50 | 箭头 | disposers base serveFile mascotDir mascotPath MASCOT_EXT …(+4) | 6 |
 | 40 | `/avatar` | lib/routes/avatar.js:54 | 箭头 | disposers base serveFile avatarDir avatarPath AVATAR_SIDES …(+5) | 5 |
