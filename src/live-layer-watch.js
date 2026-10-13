@@ -835,4 +835,4 @@ function scheduleLiveFrameBackfill(frame, opts) {
 }
 
 
-export { startLiveWatch, stopLiveWatch, liveFail, liveStats, scheduleLiveFrameBackfill, cancelLiveFrameBackfill, clearLiveSessionFailures, liveWatch };
+export { startLiveWatch, stopLiveWatch, liveStats, scheduleLiveFrameBackfill, cancelLiveFrameBackfill, clearLiveSessionFailures, liveWatch };

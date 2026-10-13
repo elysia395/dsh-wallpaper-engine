@@ -593,4 +593,4 @@ const CSS_BASE = `
 
 `;
 
-export { CSS_BASE, READABILITY_FLOOR, READABILITY_FLOOR_DARK };
+export { CSS_BASE };

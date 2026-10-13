@@ -665,5 +665,4 @@ function clearEffects() {
 
 export {
   applyEffects, clearEffects,
-  applyCaretStyles, removeCaretStyles, resolveWallpaperFadeBg,
 };

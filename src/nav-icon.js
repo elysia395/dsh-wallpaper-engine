@@ -139,8 +139,6 @@ function installWeNavIcon() {
 }
 
 export {
-  WE_ICON_PARTS,
   renderWeIcon,
-  weIconSvgString,
   installWeNavIcon,
 };
