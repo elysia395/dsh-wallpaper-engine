@@ -87,6 +87,14 @@ function glassPresetFailureReason(res) {
   if (bare && (res.status === 404 || res.status === 405)) {
     return weT("宿主里没有玻璃预设路由：重启 DSH 后再试（改过宿主代码要重挂，刷新页面不够）");
   }
+  // ⚠️ 404 **带** JSON body 也会漏英文给用户（#188）：宿主 404 `{"error":"unknown preset"}`
+  //    时 `bare` 为 false ⇒ 原句直落 `hostFailureReason` ⇒ "unknown preset" 原样上屏。
+  //    这句英文没有中文键、也没查 weT。已知 error 值的 404 归并到同一条"重启 DSH"的
+  //    出路文案 —— 升级窗口期（新客户端 + 旧后端）里，弹窗/卡片的所有动作都必然
+  //    失败，出路都是重启，不是"该重存"（那是 422 version-obsolete 的语义）。
+  if (res.status === 404 && res.data && res.data.error === "unknown preset") {
+    return weT("宿主里没有玻璃预设路由：重启 DSH 后再试（改过宿主代码要重挂，刷新页面不够）");
+  }
   return hostFailureReason(res);
 }
 
