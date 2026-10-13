@@ -43,6 +43,7 @@
     },
     "glassDarkSeparate": false,
     "glassFidelity": 75,
+    "extraGlassSelectors": "",
     "capsuleBlur": 14,
     "capsuleColor": "#0d1524",
     "chatGlassFidelity": 100,
