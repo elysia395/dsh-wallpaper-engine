@@ -5045,7 +5045,12 @@ setTimeout(async () => {
 // 判据（唯一真源）：补丁交给 replaceChild 的那个元素必须**本身是 svg**、且带上宿主那一格的
 // class；两个负对照各打一半（包 span / 用 className 属性取类名），与正判据共用这一条。
 {
-  const navSrc = readFileSync(new URL('../src/nav-icon.js', import.meta.url), 'utf8');
+  // ⚠️ 先归一成 LF（`\r\n?` → `\n`）：CI 的 Windows 检出是 CRLF（`core.autocrlf=true`），而
+  //    本组两条负对照的锚点是**跨行**字面量 —— 不归一时一个字都匹配不到、`replace` 原样返回
+  //    ⇒ 判据会在 Windows 上红成"锚点漂了"（实测：本判据第一次跑 CI 就是这么红的）。
+  //    与 verify-glass-surfaces / verify-scene-live 同一口径、同一处方。
+  const navRaw = readFileSync(new URL('../src/nav-icon.js', import.meta.url), 'utf8');
+  const navSrc = navRaw.replace(/\r\n?/g, '\n');
   const navSwapOk = (el) => !!el && el.tagName === 'svg' && el.attrs.class === 'Dws9Sa_navIcon';
 
   const navEl = (tag) => {
@@ -5102,9 +5107,17 @@ setTimeout(async () => {
 
   assert.equal(navSwapOk(runNavPatch(navSrc)), true,
     '#194①：补丁必须换上一个**本身是 svg**、且带宿主 class 的图标');
+  // 变异器：锚点漂了就自己红（不能静默原样返回 —— 那样负对照会退化成永远为真的空转）。
+  // 内部再归一一次换行，好让 CRLF 版源码也能被同一条变异命中（见本块末尾的装置自检③）。
+  const navMutate = (from, to) => (src) => {
+    const lf = src.replace(/\r\n?/g, '\n');
+    assert.ok(lf.includes(from), '装置自检：变异锚点必须在源码里（锚点漂了就该红）— '
+      + JSON.stringify(from.split('\n')[0]));
+    return lf.replace(from, to);
+  };
   // 负对照①：包一层 span（改动前的写法，且类名从属性上抄）⇒ 同一条判据必须判红。
-  const legacySpan = navSrc
-    .replace('        const holder = document.createElement("div");\n'
+  const toLegacySpan = navMutate(
+    '        const holder = document.createElement("div");\n'
       + '        holder.innerHTML = weIconSvgString(16);\n'
       + '        const icon = holder.firstElementChild;\n'
       + '        if (!icon) continue;                 // innerHTML 被拒 / 结构异常：这条按钮保齿轮\n'
@@ -5113,17 +5126,26 @@ setTimeout(async () => {
     '        const icon = document.createElement("span");\n'
       + '        icon.className = iconEl.className;\n'
       + '        icon.innerHTML = weIconSvgString(16);\n');
+  const legacySpan = toLegacySpan(navSrc);
   assert.notEqual(legacySpan, navSrc, '装置自检：负对照①的变异必须真的落在源码上（锚点漂了就该红）');
   assert.equal(navSwapOk(runNavPatch(legacySpan)), false,
     'negative control①：包一层 span（旧写法）即判红');
   // 负对照②：换 svg 这件事做对了，但类名走 `iconEl.className`（SVGAnimatedString 对象）
   // ⇒ 类名串成 "[object …]"、shell 的约束丢光 ⇒ 同一条判据必须判红。
-  const propClass = navSrc.replace('        const cls = iconEl.getAttribute ? iconEl.getAttribute("class") : "";\n'
-    + '        if (cls) icon.setAttribute("class", cls);\n',
-  '        icon.className = iconEl.className;\n');
+  const toPropClass = navMutate(
+    '        const cls = iconEl.getAttribute ? iconEl.getAttribute("class") : "";\n'
+      + '        if (cls) icon.setAttribute("class", cls);\n',
+    '        icon.className = iconEl.className;\n');
+  const propClass = toPropClass(navSrc);
   assert.notEqual(propClass, navSrc, '装置自检：负对照②的变异必须真的落在源码上');
   assert.equal(navSwapOk(runNavPatch(propClass)), false,
     'negative control②：类名改走 SVGElement.className（SVGAnimatedString）即判红');
+  // 装置自检③（判据自身的平台鲁棒性）：同一组变异喂给 **CRLF 版**源码也必须落地 —— 这条钉的
+  // 是"上面那次 LF 归一不是多余的"（CI 的 windows-latest 检出就是 CRLF；不归一的话本组判据会
+  // 红成"锚点漂了"，实测过）。
+  const crlfNav = navSrc.replace(/\n/g, '\r\n');
+  assert.notEqual(toLegacySpan(crlfNav), crlfNav, '装置自检：CRLF 检出上负对照①的变异也必须落地');
+  assert.notEqual(toPropClass(crlfNav), crlfNav, '装置自检：CRLF 检出上负对照②的变异也必须落地');
 }
 
 console.log('\nALL CLIENT CHECKS DONE');

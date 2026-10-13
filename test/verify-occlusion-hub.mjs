@@ -256,7 +256,11 @@ check('D2 GET-only + 405 + sendJson 单一实现', () => {
   assert.doesNotMatch(routeSrc, /res\.end\(/, '路由族不得出现内联 JSON 样板');
 });
 check('D3 lib/index.js 接线：语句形态 + hub 生命周期', () => {
-  const idx = readFileSync(join(ROOT, 'lib/index.js'), 'utf8');
+  // ⚠️ 归一成 LF 再匹配：下面两条正则都是**跨行**形态（把 `\n` 当行界），而 CI 的 Windows 检出
+  //    是 CRLF（`core.autocrlf=true`）⇒ 不归一时这两条在 ubuntu 上绿、在 windows 上红
+  //    （实测：本判据第一次跑 windows-latest 就是这么红的，报"input did not match"）。
+  //    与 verify-glass-surfaces / verify-scene-live / verify-client 同一口径、同一处方。
+  const idx = readFileSync(join(ROOT, 'lib/index.js'), 'utf8').replace(/\r\n?/g, '\n');
   assert.ok(idx.includes("import { registerOcclusionRoutes } from './routes/occlusion.js';"));
   assert.ok(idx.includes("import { createOcclusionHub } from './occlusion/index.js';"));
   assert.match(idx, /^\s*registerOcclusionRoutes\(webServer, \{\n\s*disposers, base: BASE, hub: occlusionHub,\n\s*log: log\.tag\('occlusion'\),\n\s*diag: \(obj\) => appendDiagLine\('occlusion', obj\),\n\s*\}\);/m);
