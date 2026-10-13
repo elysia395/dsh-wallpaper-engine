@@ -147,6 +147,23 @@ function weAccentInk(hex) {
   return lum > 0.45 ? "#0f1115" : "#ffffff";
 }
 
+// ── #164：选中行的墨（accent 填充 × 与填充成对比的墨）────────────────────────
+// 选中行不能吃 --we-popup-row-* 那一对（那对是"行底 vs 正文墨"，语义不同），也**不能
+// 直接吃 --we-accent-ink**：后者的 0.45 阈值是宿主按钮沿用下来的口径，在**中亮度**
+// accent 上会选到白字 —— 相对亮度 0.1783–0.45 区间白字只有 2.1–4.58:1，而同区间黑字
+// **恒优于**白字（两臂对比度的等点就是 0.1791）。所以这里按**对比度取大**选边，任意
+// accent 都拿到它上面更可读的那一边。深墨候选沿用 --we-accent-ink 的 #0f1115，视觉语言
+// 不变。纯函数、无 DOM：verify-readability 从产物里抽出来复算选中行网格（F10）。
+function weCheckedRowInk(hex) {
+  const m = /^#?([0-9a-fA-F]{6})$/.exec(String(hex || ""));
+  if (!m) return null;
+  const s2l = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+  const lum = (c) => 0.2126 * s2l(c[0]) + 0.7152 * s2l(c[1]) + 0.0722 * s2l(c[2]);
+  const contrast = (a, b) => (a > b ? (a + 0.05) / (b + 0.05) : (b + 0.05) / (a + 0.05));
+  const accLum = lum([0, 2, 4].map((i) => parseInt(m[1].slice(i, i + 2), 16)));
+  return contrast(1, accLum) >= contrast(lum([0x0f, 0x11, 0x15]), accLum) ? "#ffffff" : "#0f1115";
+}
+
 // ── #164：原生 <select> 弹层的行配对（不透明底 × 与底成对比的墨）───────────────
 // Chromium 的原生下拉弹层是**独立文档**：画布只在 select 自身背景不透明时才取它的
 // 底色，否则落回默认浅色画布；而选项文字**继承** select 的 color。本插件把宿主底色
@@ -479,6 +496,15 @@ function applyEffects(opts) {
       s.removeProperty("--we-popup-row-ink" + suffix);
     }
   }
+  // - #164：选中行的墨（单档，accent 不随主题分叉）。**刻意不进门控**：它修的是
+  //   "accent 填充上的字能不能读"，与用户有没有自定义正文墨色无关；而且 issue 的复现
+  //   入口（设置 → 模型 → 提供商）恰在**设置窗**内 —— 那个作用域块末尾把 --we-accent
+  //   主动掐成 initial，块内既有消费一律改读 --we-accent-src（见 styles.js 设置窗块
+  //   的注释）。所以填充侧读 runtime 写的 --we-accent-src，墨侧由这里按对比度取大下发。
+  //   不成立时摘掉，让样式表缺省落回来（缺省即默认 accent 上更可读的那一边）。
+  const checkedInk = weCheckedRowInk(selection.accent);
+  if (checkedInk) s.setProperty("--we-popup-row-checked-ink", checkedInk);
+  else s.removeProperty("--we-popup-row-checked-ink");
   // RGB 三元组形式：给 rgba() 槽位用（消息气泡 / 输入框的白釉染色）。
   s.setProperty("--we-surface-tint-rgb-light", toRgbTriple(weClampSurfaceColor(glassTintLight, "light", glassFidelity)));
   s.setProperty("--we-surface-tint-rgb-dark", toRgbTriple(weClampSurfaceColor(glassTintDark, "dark", glassFidelity)));
@@ -622,6 +648,7 @@ function clearEffects() {
   s.removeProperty("--we-accent");
   s.removeProperty("--we-accent-src");
   s.removeProperty("--we-accent-ink");
+  s.removeProperty("--we-popup-row-checked-ink");
   // 全局 UI 配色（与上面那组写入成对）：卸载 / 禁用后 DOM 上不留变量。
   s.removeProperty("--we-ui-send");
   s.removeProperty("--we-ui-link");

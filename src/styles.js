@@ -2050,12 +2050,22 @@ const CSS = `
     background-color: var(--we-popup-row-bg, #ffffff);
     color: var(--we-popup-row-ink, #1f2328);
   }
-  /* 选中行单钉：UA 用 Highlight 蓝画 option:checked，不吃上面那一对；蓝底配用户自定义
-     的墨色可能不达标。改用 accent 填充 + accent 反色墨（weAccentInk 已按亮度选边），
-     选中态仍表现为**另一种底色**（可辨识），且与全局主按钮同一套色语言。 */
+  /* 分组下拉（optgroup）的分组标签走的是同一个机制：只钉 option 会把它漏在「select 墨色
+     × 默认画布」那一档里 ⇒ 同一个洞。这条与上面那条同对令牌、同作用域深度。 */
+  select optgroup {
+    background-color: var(--we-popup-row-bg, #ffffff);
+    color: var(--we-popup-row-ink, #1f2328);
+  }
+  /* 选中行单钉：UA 用 Highlight 蓝画 option:checked，不吃上面那对行令牌。填充读
+     --we-accent-src 而**不是** --we-accent —— 设置窗那个作用域块末尾把 --we-accent 主动
+     掐成 initial、块内既有消费一律走 -src，而 #164 的复现入口恰在窗内：读 --we-accent
+     会恒落到兜底色，既与用户配色脱钩、又与**跟随用户的**墨色错配。墨读
+     --we-popup-row-checked-ink，由 effects.js 的 weCheckedRowInk 按**对比度取大**下发
+     （刻意不沿用按钮那条 0.45 阈值：中亮度 accent 上白字只有 2.1–4.58:1，同区间黑字恒
+     更优）；兜底取默认 accent 上更可读的深墨。选中态仍是「另一种底色」，可辨识。 */
   select option:checked {
-    background-color: var(--we-accent, #4f8cff);
-    color: var(--we-accent-ink, #ffffff);
+    background-color: var(--we-accent-src, #4f8cff);
+    color: var(--we-popup-row-checked-ink, #0f1115);
   }
   /* 自家 picker 子树上再钉一遍（同一对令牌）：这条特异性更高，宿主若有以类名压 option
      的规则也盖得过去。作用域同时钉类名（.we-picker__select —— 侧栏/抽屉的 select 不在
