@@ -77,7 +77,7 @@ const pump = async (rounds) => {
   for (let i = 0; i < (rounds || 8); i++) {
     const batch = timers.splice(0, timers.length);
     for (const t of batch) { try { t.fn(); } catch { /* ignore */ } }
-    await new Promise((r) => setImmediate(r));
+    await new Promise((r) => { setImmediate(r); });
   }
 };
 const sandbox = { window: { __ModuleLoader__: { load: (h) => { sandbox.__handoff = h; } },

@@ -76,7 +76,7 @@ function blockedBy(name, why) {
   blockedNames.push(name);
   console.log('  ⛔ ' + name + ' —— 未执行' + (why ? '：' + why : ''));
 }
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms) => new Promise((r) => { setTimeout(r, ms); });
 
 // ── 环境探针（"起来了但不吭声"的二义消解）──────────────────────────────────
 // 引导失败的典型现场是「进程活着、`hello` 不回、两路输出为空」。这在自检里是**二义**的：

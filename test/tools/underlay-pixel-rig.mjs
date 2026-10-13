@@ -161,7 +161,7 @@ function serve() {
 }
 function window_counter() { /* 诊断信标：只计数，不落盘 */ }
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms) => new Promise((r) => { setTimeout(r, ms); });
 const get = async (url) => (await fetch(url)).json();
 
 class Cdp {

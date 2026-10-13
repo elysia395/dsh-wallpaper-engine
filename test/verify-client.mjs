@@ -29,7 +29,7 @@ const React = {
     typeof type === 'function' ? type(props || {}) : ({ type, props: props || null, children }),
 };
 
-let byId = {};
+const byId = {};
 const rotationTimers = [];
 const sceneFrameHeadCalls = [];
 const sceneFrameDeleteCalls = [];
@@ -333,7 +333,7 @@ document.removeEventListener = removeListenerFrom(docListeners);
 // 30s TTL 过期）才能被行为断言测出是否真的走了门禁 —— 否则按钮路径与「选壁纸」
 // 路径共用同一条 gpuFramePins 缓存命中，改回直调也照样绿。
 const RealDate = Date;
-let nowOffset = 0;
+const nowOffset = 0;
 const FakeDate = function (...a) { return a.length ? new RealDate(...a) : new RealDate(RealDate.now() + nowOffset); };
 FakeDate.now = () => RealDate.now() + nowOffset;
 FakeDate.parse = RealDate.parse; FakeDate.UTC = RealDate.UTC; FakeDate.prototype = RealDate.prototype;
@@ -432,7 +432,7 @@ setTimeout(async () => {
   // 窗口真的关上：放行应答后**同一条判据**必须给出不同的答案 —— 否则"看见了首载态"可能只是
   // 渲染函数恒返回同一棵树（上面四条一起空转）。
   releaseInventoryHold();
-  await new Promise((r) => setTimeout(r, 80));
+  await new Promise((r) => { setTimeout(r, 80); });
   const afterBoot = startupState(pickerRenders[0]());
   // 只判**那句文案**：`we-picker__hint` 落定后在别处还有 9 个（页签提示等），
   // 拿"hint 总数为 0"当判据会把它们一起算进来 ⇒ 判据与首载态就不是同一件事了。
@@ -1230,7 +1230,7 @@ setTimeout(async () => {
     //    走**真实点击路径**（tab 按钮的 onClick → switchTab → loadStarCount），不是
     //    直接调加载器 —— 这条断言要防的正是"切页签没接上"这种接线级回归。
     {
-      const fresh = () => new Promise((r) => setTimeout(r, 0));
+      const fresh = () => new Promise((r) => { setTimeout(r, 0); });
       const tabButton = (root, label) => {
         let hit = null;
         (function walk(node) {
@@ -1720,7 +1720,7 @@ setTimeout(async () => {
     // 默认形态也**从真源推**（`DEFAULTS.ropeForm`）：2026-10-13「小女仆」除名、默认改 `deepseek`
     //   之后，"默认 = 枚举第一只"这条假设不再成立（第一只现在是「Deepseek_Pro」）⇒ 写死会假红。
     //   注意锚点：注释里也会出现 `ropeForm: "maid"` 这种字样 ⇒ 只认 `DEFAULTS` 那一行（缩进两格 + 行尾逗号）。
-    const ringDefaultForm = ((ringSchemaSrc.match(/^  ropeForm: "([a-z]+)",$/m) || [])[1] || '');
+    const ringDefaultForm = ((ringSchemaSrc.match(/^ {2}ropeForm: "([a-z]+)",$/m) || [])[1] || '');
     const defaultLabel = ringLabels[ringEnum.indexOf(ringDefaultForm)] || '';
     assert.ok(!!defaultLabel,
       '（判据前置）能从真源推出发默认形态的显示名（DEFAULTS.ropeForm=' + ringDefaultForm + '）');
@@ -2951,7 +2951,7 @@ setTimeout(async () => {
     const showsInventoryError = (t) => textOf(t).includes('未检测到 Wallpaper Engine：');
     inventoryFails = true;
     findBtnByText(tree, '刷新').props.onClick();
-    await new Promise((r) => setTimeout(r, 80)); // 等 loadInventory 的 promise 落定
+    await new Promise((r) => { setTimeout(r, 80); }); // 等 loadInventory 的 promise 落定
     tree = renderPicker();
     assert.ok(showsInventoryError(tree), '库存加载失败 ⇒ 显示「未检测到 Wallpaper Engine：<原因>」');
     assert.ok(findBtnByText(tree, '重试'), '错误态必须给「重试」按钮（否则用户无路可走）');
@@ -2962,7 +2962,7 @@ setTimeout(async () => {
     // 重试：开关放回成功 ⇒ 点「重试」⇒ 面板与网格都应回来
     inventoryFails = false;
     findBtnByText(tree, '重试').props.onClick();
-    await new Promise((r) => setTimeout(r, 80));
+    await new Promise((r) => { setTimeout(r, 80); });
     tree = renderPicker();
     assert.ok(!showsInventoryError(tree), '重试成功 ⇒ 错误态消失');
     assert.ok(findBtnByText(tree, '选择壁纸'), '恢复后回到正常面板（页签内容回来了；类型筛选在库视图里，下钻打开即有）');
@@ -3035,12 +3035,12 @@ setTimeout(async () => {
     assert.ok(pickerRenders.length > 0, 'picker render 回调必须已注册');
     // 等 boot 的 promise 链（loadPersisted → loadInventory →
     // revalidateSelection）全部落定：它会按持久化 id 覆盖选择。
-    await new Promise((r) => setTimeout(r, 80));
+    await new Promise((r) => { setTimeout(r, 80); });
     const renderPicker = () => {
       try { return pickerRenders[0](); } catch (e) { console.log('picker render threw:', e && e.message); return null; }
     };
     const reopenPicker = () => {
-      let tree2 = renderPicker();
+      const tree2 = renderPicker();
       const openBtn = [];
       (function walk(node) {
         if (Array.isArray(node)) { node.forEach(walk); return; }
@@ -3080,7 +3080,7 @@ setTimeout(async () => {
     // 前置：先点选一张视频壁纸把层建出来（上文「无活动壁纸」用例清掉了层），
     // 否则 scene C 是首层、无旧层可淡，手动淡出的断言失去对象。Wall 0 在虚拟
     // 首窗里（窗口第 1 个条目），直接可点。
-    let seedCard = findCard(tree3, 'Wall 0');
+    const seedCard = findCard(tree3, 'Wall 0');
     assert.ok(seedCard && typeof seedCard.props.onClick === 'function', 'video card (Wall 0) must be clickable');
     seedCard.props.onClick(); // 建首层（existing=null → 本步不淡，正常）
     tree3 = reopenPicker();
@@ -3098,13 +3098,13 @@ setTimeout(async () => {
     assert.ok(search3 && typeof search3.props.onInput === 'function', 'search box available for out-of-window cards');
     search3.props.onInput({ target: { value: 'Scene C' } });
     tree3 = reopenPicker();
-    let sceneCard = findCard(tree3, 'Scene C');
+    const sceneCard = findCard(tree3, 'Scene C');
     assert.ok(sceneCard && typeof sceneCard.props.onClick === 'function', 'scene C card must be clickable');
     findSearch(tree3).props.onInput({ target: { value: '' } });
     reopenPicker();
     const manualPreLayer = document.getElementById('dsh-wallpaper-engine-layer');
     sceneCard.props.onClick(); // 选中场景壁纸 → syncLayers → HEAD 探测
-    await new Promise((r) => setTimeout(r, 20)); // 等 HEAD 探测的 promise 回来
+    await new Promise((r) => { setTimeout(r, 20); }); // 等 HEAD 探测的 promise 回来
     // 「画面」section（含 GPU 提示行）在页签内容里，库视图只渲染网格且与页签内容
     // 互斥（页内下钻）→ 选中后退出库视图再断言（退出按钮文案恰为「返回」）。
     const modalClose = findBtn(renderPicker(), '返回');
@@ -3189,7 +3189,7 @@ setTimeout(async () => {
     cccClearUnlinkFails = true;
     const probesBeforeFail = animProbeSrcs.length;
     clearBtn.props.onClick();
-    await new Promise((r) => setTimeout(r, 40));
+    await new Promise((r) => { setTimeout(r, 40); });
     tree3 = renderPicker();
     assert.ok(findBtn(tree3, '清除 GPU 帧'),
       'P2-L：宿主回 200 + removed:false 时必须保留清除入口（不得当清除成功）');
@@ -3201,7 +3201,7 @@ setTimeout(async () => {
     const clearBtn2 = findBtn(renderPicker(), '清除 GPU 帧');
     assert.ok(clearBtn2, 'P2-L：失败后必须还能重试清除');
     clearBtn2.props.onClick();
-    await new Promise((r) => setTimeout(r, 40)); // 等 DELETE + 清除后的 HEAD 判据回来
+    await new Promise((r) => { setTimeout(r, 40); }); // 等 DELETE + 清除后的 HEAD 判据回来
     assert.ok(sceneFrameDeleteCalls.some((u) => u.includes('/scene-frame-cache/ccc')),
       '点击清除必须 DELETE /scene-frame-cache/<token>');
     tree3 = renderPicker();
@@ -3972,7 +3972,7 @@ setTimeout(async () => {
       assert.ok(tick.length >= 1,
         '启动加载完 inventory 后必须安排一次 sceneVideo 时序补拉（3000ms 定时器）');
       for (const t of tick) { t.cleared = true; t.fn(); }
-      await new Promise((r) => setTimeout(r, 40));
+      await new Promise((r) => { setTimeout(r, 40); });
       assert.equal(inventoryCalls.length, before + 1,
         'sceneVideo 补拉必须真的重拉一次 inventory');
       assert.ok(!rotationTimers.some((t) => !t.cleared && t.ms === 3000),
@@ -4645,9 +4645,9 @@ setTimeout(async () => {
     const fire = (type, target) => { for (const l of listeners.slice()) if (l.t === type) l.fn({ type, target }); };
     return { mod, listeners, focused, win, doc, hostInput, hostButton, frame, fire };
   };
-  const tick = () => new Promise((r) => setTimeout(r, 0));
+  const tick = () => new Promise((r) => { setTimeout(r, 0); });
   // 交还频率下限是 300ms ⇒ 需要"确实过了间隔"的判据就得真等过去（睡一段比造假时钟诚实）。
-  const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+  const sleep = (ms) => new Promise((r) => { setTimeout(r, ms); });
   const A = buildFh(fhSrc);
   const disposeA = A.mod.installFocusHandback();
   assert.ok(typeof disposeA === 'function', '#148 宿主半：installFocusHandback 必须返回拆除函数（挂 ctx.effect）');

@@ -50,7 +50,7 @@ const React = {
 };
 
 // ── DOM mock with a real-enough <video> ─────────────────────────────────────
-let byId = {};
+const byId = {};
 const timers = [];
 function makeEl(tag) {
   const handlers = {};
@@ -236,7 +236,7 @@ function findSelect(tree, ariaLabel) {
   return hit;
 }
 const renderTree = () => pickerRenders[0]();
-const tick = (ms = 20) => new Promise((r) => setTimeout(r, ms));
+const tick = (ms = 20) => new Promise((r) => { setTimeout(r, ms); });
 const treeText = () => JSON.stringify(renderTree());
 function layerVideo() {
   const layer = document.getElementById('dsh-wallpaper-engine-layer');

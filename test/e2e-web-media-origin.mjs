@@ -124,7 +124,7 @@ const appServer = createServer((req, res) => {
   if (!route) { res.statusCode = 404; res.end('no route'); return; }
   Promise.resolve(route.handler(req, res)).catch(() => { try { res.statusCode = 500; res.end('handler error'); } catch { /* ignore */ } });
 });
-await new Promise((r) => appServer.listen(0, '127.0.0.1', r));
+await new Promise((r) => { appServer.listen(0, '127.0.0.1', r); });
 const appPort = appServer.address().port;
 const APP = `http://127.0.0.1:${appPort}`;
 console.log(`迷你 host 监听 ${APP}（${routes.length} 条路由）`);
@@ -536,7 +536,7 @@ for (let i = 0; i < 80; i++) {
   const r = await fetch(`${APP}/wallpaper-engine/media-status`, { cache: 'no-store' });
   mstat = await r.json();
   if (mstat && mstat.nowPlaying && mstat.nowPlaying.status === 'running') break;
-  await new Promise((res) => setTimeout(res, 250));
+  await new Promise((res) => { setTimeout(res, 250); });
 }
 check('媒体后端走中间件（backend=bridge，没有回落）',
   Boolean(mstat) && mstat.ok === true && mstat.backend === 'bridge' && !mstat.fallback,
@@ -565,7 +565,7 @@ check('now-playing 给出曲目 + 时长（秒，不是毫秒）',
 check('进度按真实时间外推（不是卡在上报值）', await (async () => {
   if (!m) return false;
   const before = m.position;
-  await new Promise((res) => setTimeout(res, 1200));
+  await new Promise((res) => { setTimeout(res, 1200); });
   const again = await (await fetch(`${APP}/wallpaper-engine/now-playing`, { cache: 'no-store' })).json();
   const after = again && again.media ? again.media.position : 0;
   return after > before;
@@ -647,9 +647,9 @@ const child = spawn(browser, [
   NAV_URL,
 ], { stdio: 'ignore' });
 
-await new Promise((r) => setTimeout(r, 12000));
+await new Promise((r) => { setTimeout(r, 12000); });
 try { child.kill('SIGKILL'); } catch { /* ignore */ }
-await new Promise((r) => setTimeout(r, 400));
+await new Promise((r) => { setTimeout(r, 400); });
 
 // ── 第二次运行：带 <base href="./"> 的夹具（单独进程，不干扰上面的帧间隔断言）──────
 if (baseWrapperHtml) {
@@ -666,9 +666,9 @@ if (baseWrapperHtml) {
     '--window-size=1280,720',
     APP + '/e2e/base.html',
   ], { stdio: 'ignore' });
-  await new Promise((r) => setTimeout(r, 9000));
+  await new Promise((r) => { setTimeout(r, 9000); });
   try { child2.kill('SIGKILL'); } catch { /* ignore */ }
-  await new Promise((r) => setTimeout(r, 400));
+  await new Promise((r) => { setTimeout(r, 400); });
 }
 
 // ── 读回信标（按本次运行的标记过滤）────────────────────────────────────────

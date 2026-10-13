@@ -225,7 +225,7 @@ function enclosingFunction(src, at, mask) {
           if (src[k] === '{') bodyOpen = k;
         }
       } else {
-        let k = skipWs(src, m.index + m[0].length); // 配对到 `=>` 之后
+        const k = skipWs(src, m.index + m[0].length); // 配对到 `=>` 之后
         if (src[k] === '{') bodyOpen = k;
       }
       if (bodyOpen < 0) continue;

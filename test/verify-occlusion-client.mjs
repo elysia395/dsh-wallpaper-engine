@@ -123,7 +123,7 @@ await checkAsync('B1 立即首拍：缩放 + postMessage 形状 + targetOrigin',
   const sb = makeSandbox({ occlusionResponse: X11_SNAP });
   const frame = fakeFrame('http://127.0.0.1:1234/wallpaper-engine/scene-live/index.html?type=scene');
   sb.startOcclusionPolling(frame);
-  await new Promise((r) => setTimeout(r, 5)); // apiJson 微任务链
+  await new Promise((r) => { setTimeout(r, 5); }); // apiJson 微任务链
   assert.equal(sb.fetchCalls[0], '/wallpaper-engine/occlusion', '必须走 apiJson 统一前缀');
   assert.equal(frame.contentWindow.posted.length, 1);
   const [msg, origin] = frame.contentWindow.posted[0];
@@ -140,11 +140,11 @@ await checkAsync('B2 每拍必投：同内容连发两拍不抑制（渲染器�
   const sb = makeSandbox({ occlusionResponse: X11_SNAP });
   const frame = fakeFrame('http://127.0.0.1:1234/x');
   sb.startOcclusionPolling(frame);
-  await new Promise((r) => setTimeout(r, 5));
+  await new Promise((r) => { setTimeout(r, 5); });
   const n1 = frame.contentWindow.posted.length;
   assert.equal(n1, 1);
   sb.intervals[0].fn(); // 手动驱动第二拍（同内容同 gen）
-  await new Promise((r) => setTimeout(r, 5));
+  await new Promise((r) => { setTimeout(r, 5); });
   assert.equal(frame.contentWindow.posted.length, 2, '同内容抑制会饿死渲染器 3s 新鲜度');
   sb.stopOcclusionPolling();
 });
@@ -152,7 +152,7 @@ await checkAsync('B3 降级快照 ⇒ clearOcclusion（payload null）', async (
   const sb = makeSandbox({ occlusionResponse: { ok: 1, backend: 'none', epoch: '', gen: 9, own: null, rects: null, ts: Date.now() } });
   const frame = fakeFrame('http://127.0.0.1:1234/x');
   sb.startOcclusionPolling(frame);
-  await new Promise((r) => setTimeout(r, 5));
+  await new Promise((r) => { setTimeout(r, 5); });
   const [msg] = frame.contentWindow.posted[0];
   assert.equal(msg.op, 'clearOcclusion');
   assert.equal(msg.payload, null);
@@ -163,17 +163,17 @@ await checkAsync('B4 网络失败退避：3 败后换 5s 周期，成功复原 1
   const frame = fakeFrame('http://127.0.0.1:1234/x');
   sb.startOcclusionPolling(frame);
   // 第 1 败（start 的立即拍）
-  await new Promise((r) => setTimeout(r, 5));
+  await new Promise((r) => { setTimeout(r, 5); });
   assert.equal(sb.intervals[0].ms, 1000, '首败未到退避线，仍是 1s');
   sb.intervals[0].fn(); // 第 2 败
-  await new Promise((r) => setTimeout(r, 5));
+  await new Promise((r) => { setTimeout(r, 5); });
   assert.equal(sb.intervals[0].ms, 1000, '两败仍未退避');
   sb.intervals[0].fn(); // 第 3 败 ⇒ 触发退避
-  await new Promise((r) => setTimeout(r, 5));
+  await new Promise((r) => { setTimeout(r, 5); });
   assert.equal(sb.intervals[0].ms, 5000, '三连败必须进入 5s 退避');
   // 成功一拍 ⇒ 复原 1s 且照常投递
   sb.intervals[0].fn();
-  await new Promise((r) => setTimeout(r, 5));
+  await new Promise((r) => { setTimeout(r, 5); });
   assert.equal(sb.intervals[0].ms, 1000, '成功必须复原 1s 常频');
   assert.equal(frame.contentWindow.posted.length, 1);
   sb.stopOcclusionPolling();
@@ -183,13 +183,13 @@ await checkAsync('B5 document.hidden ⇒ 整拍跳过（不 fetch 不投递）',
   sb.document.hidden = true;
   const frame = fakeFrame('http://127.0.0.1:1234/x');
   sb.startOcclusionPolling(frame);
-  await new Promise((r) => setTimeout(r, 5));
+  await new Promise((r) => { setTimeout(r, 5); });
   assert.equal(sb.fetchCalls.length, 0);
   assert.equal(frame.contentWindow.posted.length, 0);
   // 恢复可见 ⇒ visibilitychange 补拍
   sb.document.hidden = false;
   sb.visListeners[0]();
-  await new Promise((r) => setTimeout(r, 5));
+  await new Promise((r) => { setTimeout(r, 5); });
   assert.equal(frame.contentWindow.posted.length, 1, '恢复可见必须补拍');
   sb.stopOcclusionPolling();
 });
@@ -197,14 +197,14 @@ await checkAsync('B6 about:blank / 视口为 0 ⇒ 不投半成品（负对照×
   const sb = makeSandbox({ occlusionResponse: X11_SNAP });
   const frame = fakeFrame('about:blank');
   sb.startOcclusionPolling(frame);
-  await new Promise((r) => setTimeout(r, 5));
+  await new Promise((r) => { setTimeout(r, 5); });
   assert.equal(frame.contentWindow.posted.length, 0, '延迟加载期没有渲染页可投');
   sb.stopOcclusionPolling();
 
   const sb2 = makeSandbox({ occlusionResponse: X11_SNAP, innerWidth: 0 });
   const frame2 = fakeFrame('http://127.0.0.1:1/x');
   sb2.startOcclusionPolling(frame2);
-  await new Promise((r) => setTimeout(r, 5));
+  await new Promise((r) => { setTimeout(r, 5); });
   assert.equal(frame2.contentWindow.posted.length, 0, 'innerWidth=0 时缩放无意义，跳过');
   sb2.stopOcclusionPolling();
 });
@@ -220,11 +220,11 @@ await checkAsync('B7 stop 幂等 + 解绑监听 + 清定时器', async () => {
   assert.equal(sb.visListeners.length, 0, 'visibilitychange 必须解绑');
   // iframe 已断连时 tick 安全无投递（首段已投 1 条，这里断言**增量**为 0）
   sb.startOcclusionPolling(frame);
-  await new Promise((r) => setTimeout(r, 5));
+  await new Promise((r) => { setTimeout(r, 5); });
   const postedBefore = frame.contentWindow.posted.length;
   frame.isConnected = false;
   sb.intervals[0].fn();
-  await new Promise((r) => setTimeout(r, 5));
+  await new Promise((r) => { setTimeout(r, 5); });
   assert.equal(frame.contentWindow.posted.length, postedBefore, '断连 iframe 不得投递');
   sb.stopOcclusionPolling();
 });
@@ -232,24 +232,24 @@ await checkAsync('B7 stop 幂等 + 解绑监听 + 清定时器', async () => {
 await checkAsync('B7b stop→换帧后旧 tick 不得投递（评审 C4：帧身份校验）', async () => {
   const resolvers = [];
   const sb = makeSandbox({
-    fetchOverride: () => new Promise((r) => resolvers.push(r)),
+    fetchOverride: () => new Promise((r) => { resolvers.push(r); }),
   });
   const frameA = fakeFrame('http://127.0.0.1:1234/x');
   const frameB = fakeFrame('http://127.0.0.1:1234/x');
   sb.startOcclusionPolling(frameA);
-  await new Promise((r) => setTimeout(r, 5)); // A 的 fetch 在途（挂起）
+  await new Promise((r) => { setTimeout(r, 5); }); // A 的 fetch 在途（挂起）
   assert.equal(resolvers.length, 1);
   sb.stopOcclusionPolling();          // 会话结束
   sb.startOcclusionPolling(frameB);   // 新会话（新帧，start 自带首拍 ⇒ 又一个在途 fetch）
   assert.equal(resolvers.length, 2);
   // 旧 tick 此刻才回来：必须被帧身份校验拦下，既不投旧帧也不错投新帧。
   resolvers[0]({ ok: true, status: 200, json: () => Promise.resolve(X11_SNAP) });
-  await new Promise((r) => setTimeout(r, 5));
+  await new Promise((r) => { setTimeout(r, 5); });
   assert.equal(frameA.contentWindow.posted.length, 0, '旧快照不得投给旧帧');
   assert.equal(frameB.contentWindow.posted.length, 0, '也不是新帧的拍，不得错投');
   // 新 tick 正常 resolve ⇒ 新帧正常收到（对照组）
   resolvers[1]({ ok: true, status: 200, json: () => Promise.resolve(X11_SNAP) });
-  await new Promise((r) => setTimeout(r, 5));
+  await new Promise((r) => { setTimeout(r, 5); });
   assert.equal(frameB.contentWindow.posted.length, 1, '新帧自己的拍照常投递');
   sb.stopOcclusionPolling();
 });
@@ -263,7 +263,7 @@ await checkAsync('B8 遮挡暂停镜像：全覆盖⇒true / 部分⇒false / cl
   const sbFull = makeSandbox({ occlusionResponse: fullSnap });
   const f1 = fakeFrame('http://127.0.0.1:1234/x');
   sbFull.startOcclusionPolling(f1);
-  await new Promise((r) => setTimeout(r, 5));
+  await new Promise((r) => { setTimeout(r, 5); });
   assert.equal(sbFull.occlusionRendererPaused(), true, '可见率 0（全覆盖）必须置 true');
   sbFull.stopOcclusionPolling();
 
@@ -271,7 +271,7 @@ await checkAsync('B8 遮挡暂停镜像：全覆盖⇒true / 部分⇒false / cl
   const sbPart = makeSandbox({ occlusionResponse: X11_SNAP });
   const f2 = fakeFrame('http://127.0.0.1:1234/x');
   sbPart.startOcclusionPolling(f2);
-  await new Promise((r) => setTimeout(r, 5));
+  await new Promise((r) => { setTimeout(r, 5); });
   assert.equal(sbPart.occlusionRendererPaused(), false, '可见 75% 不是暂停档');
   // 阈值两翼：可见 4% ⇒ true；可见 6% ⇒ false。（恰 0.05 处是浮点刀刃
   // ——1-0.95=0.05000000000000004——镜像只服务看护豁免，测试取稳定两翼即可；
@@ -281,7 +281,7 @@ await checkAsync('B8 遮挡暂停镜像：全覆盖⇒true / 部分⇒false / cl
   const sbEdge = makeSandbox({ occlusionResponse: edgeIn });
   const f3 = fakeFrame('http://127.0.0.1:1234/x');
   sbEdge.startOcclusionPolling(f3);
-  await new Promise((r) => setTimeout(r, 5));
+  await new Promise((r) => { setTimeout(r, 5); });
   assert.equal(sbEdge.occlusionRendererPaused(), true, '可见率 4% 属暂停档');
   sbEdge.stopOcclusionPolling();
   const edgeOut = { ok: 1, backend: 'x11', epoch: 'e', gen: 2, own: { w: 800, h: 600 },
@@ -289,14 +289,14 @@ await checkAsync('B8 遮挡暂停镜像：全覆盖⇒true / 部分⇒false / cl
   const sbOut = makeSandbox({ occlusionResponse: edgeOut });
   const f5 = fakeFrame('http://127.0.0.1:1234/x');
   sbOut.startOcclusionPolling(f5);
-  await new Promise((r) => setTimeout(r, 5));
+  await new Promise((r) => { setTimeout(r, 5); });
   assert.equal(sbOut.occlusionRendererPaused(), false, '可见率 6% 不是暂停档');
   // 清除路径：降级/无数据 ⇒ false（渲染器自会全速，看护不得留在豁免态）
   const noneSnap = { ok: 1, backend: 'none', epoch: '', gen: 3, own: null, rects: null, ts: Date.now() };
   const sbNone = makeSandbox({ occlusionResponse: noneSnap });
   const f4 = fakeFrame('http://127.0.0.1:1234/x');
   sbNone.startOcclusionPolling(f4);
-  await new Promise((r) => setTimeout(r, 5));
+  await new Promise((r) => { setTimeout(r, 5); });
   assert.equal(sbNone.occlusionRendererPaused(), false, 'clear 必须复位 false');
   sbNone.stopOcclusionPolling();
 });

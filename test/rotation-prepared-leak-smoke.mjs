@@ -381,7 +381,7 @@ function runScenario(name, opts, body) {
     init(opts.selection, opts.wallpapers);
     // boot 是 promise 链（loadPersisted → loadInventory → applySelection →
     // syncRotationTimer）：等它落定后再驱动轮换（同既有 smoke 的 50ms 等待）。
-    await new Promise((r) => setTimeout(r, 50));
+    await new Promise((r) => { setTimeout(r, 50); });
     return body(api);
   })();
 }

@@ -124,7 +124,7 @@ const appServer = createServer((req, res) => {
   if (!route) { res.statusCode = 404; res.end('no route'); return; }
   Promise.resolve(route.handler(req, res)).catch(() => { try { res.statusCode = 500; res.end('handler error'); } catch { /* ignore */ } });
 });
-await new Promise((r) => appServer.listen(0, '127.0.0.1', r));
+await new Promise((r) => { appServer.listen(0, '127.0.0.1', r); });
 const APP = `http://127.0.0.1:${appServer.address().port}`;
 
 // ── 库存 → 渲染页 URL（与 client 的 liveRenderUrl 同形） ──────────────────────
@@ -198,9 +198,9 @@ const child = spawn(browser, [
 ], { stdio: ['ignore', 'ignore', errFd] });
 
 console.log(`已启动（pid ${child.pid}），等 ${WAIT_MS} ms …`);
-await new Promise((r) => setTimeout(r, WAIT_MS));
+await new Promise((r) => { setTimeout(r, WAIT_MS); });
 try { child.kill('SIGKILL'); } catch { /* ignore */ }
-await new Promise((r) => setTimeout(r, 300));
+await new Promise((r) => { setTimeout(r, 300); });
 
 // ── 读回：本次新增的诊断 + 浏览器控制台 ──────────────────────────────────────
 console.log('\n· 渲染页实况（每秒一条）');

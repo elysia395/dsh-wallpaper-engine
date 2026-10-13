@@ -843,7 +843,7 @@ section('⑦ 客户端通道（静态契约：字体值不再经 settings 出去
     const count = (t) => FONT_KEYS.reduce((a, k) =>
       a + ((t.match(new RegExp('selection\\.' + k + '\\s*=[^=]', 'g')) || []).length), 0);
     // 整批重置的函数体：`onFontResetAll` 起，到下一个同级 `};` 止（该函数体内没有缩进 0 的声明）。
-    const body = (text.match(/const onFontResetAll = \(\) => \{[\s\S]*?\n  \};/) || [''])[0];
+    const body = (text.match(/const onFontResetAll = \(\) => \{[\s\S]*?\n {2}\};/) || [''])[0];
     return { total: count(text), inBody: body ? count(body) : 0, paired: /persistFontSet\(\)/.test(body) };
   };
   {
@@ -1188,7 +1188,7 @@ section('⑧ 面板渲染回归（配色区在总开关打开时必须渲染得�
   // 那是**视图**状态：重置清的是字体值，不该顺手把用户选的筛选也翻掉。
   check('「恢复默认」的函数体里不出现 themeTypeOnly（视图状态不归它管）',
     (() => {
-      const body = (/const onFontResetAll = \(\) => \{([\s\S]*?)\n  \};/.exec(clientSrc) || [])[1] || '';
+      const body = (/const onFontResetAll = \(\) => \{([\s\S]*?)\n {2}\};/.exec(clientSrc) || [])[1] || '';
       const negControl = 'selection.themeTypeOnly = false;\n' + body;
       return body.length > 0 && !/themeTypeOnly/.test(body)
         && /themeTypeOnly/.test(negControl); // 负对照：同一判据对"改前那版"会判红

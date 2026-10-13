@@ -160,7 +160,7 @@ check('A6 路由模块不缓存缓存根的副本（跨族共享可变量须每�
 // 最后读一次 —— 读的是"界面真正显示的那个值"，因此那一次必须等过 TTL（否则拿到的是上一态
 // 的缓存载荷，那正是本节最容易写出的恒真假通过）。
 section('B. cacheBaseDir() 的解析顺序（正负对照）');
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms) => new Promise((r) => { setTimeout(r, ms); });
 {
   const res = await postCache({ dir: CUSTOM, migrate: true });
   const body = json(res) || {};

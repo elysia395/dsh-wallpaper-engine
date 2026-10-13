@@ -311,7 +311,7 @@ if (token) {
     const req = { url, headers: {}, method };
     const res = fakeRes();
     gpuRoute.handler(req, res);
-    await new Promise((r) => setTimeout(r, 20));
+    await new Promise((r) => { setTimeout(r, 20); });
     return res;
   };
   const runHead = async (url) => {
@@ -511,7 +511,7 @@ if (token) {
     if (!hit) { res.statusCode = 404; res.end('no route'); return; }
     try { hit.handler(req, res); } catch (err) { res.statusCode = 500; res.end(String(err)); }
   });
-  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  await new Promise((r) => { server.listen(0, '127.0.0.1', r); });
   const port = server.address().port;
   // 结果里带上**是哪个信号先到**（`res end` / `res close` / `req error`）与响应状态码：
   // 偶发 `status=0` 时，这一条决定了"是服务端没送到"还是"客户端侧先报错、但 413 其实收到了"
@@ -569,7 +569,7 @@ if (token) {
   });
   check('真 socket：HEAD 探测可达且报 X-WE-GPU', headOver.status === 204 || headOver.status === 404,
     'status=' + headOver.status + ' gpu=' + headOver.gpu);
-  await new Promise((r) => server.close(r));
+  await new Promise((r) => { server.close(r); });
 }
 
 // ── Level B2: 用户图片资产路由（会话头像 + 吉祥物立绘；真 socket + 隔离的数据目录）──
@@ -598,7 +598,7 @@ if (token) {
     if (!hit) { res.statusCode = 404; res.end('no route'); return; }
     try { hit.handler(req, res); } catch (err) { res.statusCode = 500; res.end(String(err)); }
   });
-  await new Promise((r) => server.listen(0, '127.0.0.1', r));
+  await new Promise((r) => { server.listen(0, '127.0.0.1', r); });
   const port = server.address().port;
   const call = (method, path, headers, body) => new Promise((resolveFn) => {
     const chunks = [];
@@ -682,7 +682,7 @@ if (token) {
       mClear.status === 200 && /"removed":true/.test(mClear.body) && mAfter.status === 404,
       'status=' + mClear.status + ' then ' + mAfter.status);
   } finally {
-    await new Promise((r) => server.close(r));
+    await new Promise((r) => { server.close(r); });
     if (PREV_DATA_DIR === undefined) delete process.env.DSH_WE_DATA_DIR; else process.env.DSH_WE_DATA_DIR = PREV_DATA_DIR;
     rmSync(dataDir, { recursive: true, force: true });
   }

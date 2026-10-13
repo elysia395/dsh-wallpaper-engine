@@ -410,7 +410,7 @@ const slots = {
 const ctx = { slots, effect(fn) { fn(); return fn; } };
 exportsObj.apply(ctx);
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms) => new Promise((r) => { setTimeout(r, ms); });
 await sleep(80); // 等 loadPersisted → loadInventory → revalidateSelection 这条启动链落定
 
 // ── 标记等价 golden ──────────────────────────────────────────────────────────

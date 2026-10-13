@@ -21,7 +21,7 @@ import vm from 'node:vm';
 const React = { Fragment:'Fragment', useState:(i)=>[i,()=>{}], useEffect:()=>{}, useRef:(v)=>({current:v}),
   createElement:(t,p,...c)=>{ assertChildren(c); return typeof t==='function'?t(p||{}):({type:t,props:p||null,children:c}); } };
 
-let byId = {};
+const byId = {};
 const timers = [];
 const mediaEls = [];
 const audioEls = []; // 场景包 BGM（<audio>）——轮换音频闸的 BGM 断言用

@@ -1858,7 +1858,7 @@ for (const [name, ok] of clientChecks) check(name, ok);
     && TAB_FNS.every((n) => tabsHubSrc.includes('function ' + n + '(ctx) {')));
   // 每个渲染器的**首行**必须是 `const { … } = ctx;` —— "要什么"写在签名处，
   // 而不是靠闭包默默捕获（这正是这一刀的意义；也防止后来人图省事把捕获加回去）。
-  const tabBodies = tabsHubSrc.split(/^  function (render\w+Tab)\(ctx\) \{$/m).slice(1);
+  const tabBodies = tabsHubSrc.split(/^ {2}function (render\w+Tab)\(ctx\) \{$/m).slice(1);
   const noCtxLine = [];
   for (let i = 0; i < tabBodies.length; i += 2) {
     const fn = tabBodies[i], body = tabBodies[i + 1] || '';
@@ -2041,7 +2041,7 @@ const runGuard = (stub) => { new Function('window', guardSource)(stub); return s
 {
   // ① 赋值腿装上 ⇒ 帧级 focus 被吞、原函数不被调用、计数如实累加。
   const rawHits = [];
-  const win1 = { focus: function () { rawHits.push('raw'); } };
+  const win1 = { focus () { rawHits.push('raw'); } };
   const returned = runGuard(win1);
   const g1 = win1.__weFocusGuard;
   const patched1 = win1.focus;
@@ -2064,7 +2064,7 @@ const runGuard = (stub) => { new Function('window', guardSource)(stub); return s
   // ④ 兜底腿：focus 只长在原型上且不可写 ⇒ 赋值静默失败 ⇒ defineProperty 建自有属性顶上。
   const protoRaw = [];
   const proto2 = {};
-  Object.defineProperty(proto2, 'focus', { configurable: true, writable: false, value: function () { protoRaw.push('x'); } });
+  Object.defineProperty(proto2, 'focus', { configurable: true, writable: false, value () { protoRaw.push('x'); } });
   const win2 = Object.create(proto2);
   runGuard(win2);
   win2.focus();
@@ -2075,14 +2075,14 @@ const runGuard = (stub) => { new Function('window', guardSource)(stub); return s
   // ⑤ 不可补丁：自有且不可写不可配置 ⇒ installed 如实为 false，且**绝不抛**（注入体住在壁纸文档里，
   //    抛异常会毁掉作者脚本，而那正是要防的事）。
   const win3 = {};
-  Object.defineProperty(win3, 'focus', { configurable: false, writable: false, value: function () {} });
+  Object.defineProperty(win3, 'focus', { configurable: false, writable: false, value () {} });
   let guardThrew = false;
   try { runGuard(win3); } catch (e) { guardThrew = true; }
   check('focus guard reports installed=false when focus is unpatchable (never throws)',
     guardThrew === false && win3.__weFocusGuard.installed === false && win3.__weFocusGuard.blocked === 0);
   // ⑥ 负对照：把"吞掉"改回"转交" ⇒ ① 的核心断言（原函数一次都没被调用）必须变假。
   const mutantHits = [];
-  const winM = { focus: function () { mutantHits.push('raw'); } };
+  const winM = { focus () { mutantHits.push('raw'); } };
   new Function('window', guardSource.replace('return undefined;', 'return raw.apply(w, arguments);'))(winM);
   winM.focus();
   check('负对照：注入体改成转交 ⇒ 核心断言（原函数不被调用）变假',
@@ -2100,10 +2100,10 @@ const runGuard = (stub) => { new Function('window', guardSource)(stub); return s
   FakeHTMLElement.prototype.focus = function () { elRaw.push('el'); };
   const gestureHandlers = [];
   const win4 = {
-    focus: function () {},
+    focus () {},
     document: {},
     HTMLElement: FakeHTMLElement,
-    addEventListener: function (t, fn) { gestureHandlers.push({ t: t, fn: fn }); },
+    addEventListener (t, fn) { gestureHandlers.push({ t, fn }); },
   };
   runGuard(win4);
   const g4 = win4.__weFocusGuard;
@@ -2138,8 +2138,8 @@ const runGuard = (stub) => { new Function('window', guardSource)(stub); return s
   const elRawM = [];
   const ElM = function () {};
   ElM.prototype.focus = function () { elRawM.push('el'); };
-  const winM2 = { focus: function () {}, document: {}, HTMLElement: ElM,
-    addEventListener: function () {} };
+  const winM2 = { focus () {}, document: {}, HTMLElement: ElM,
+    addEventListener () {} };
   new Function('window', guardSource.replace('guard.allow || fresh', 'true'))(winM2);
   const gM = winM2.__weFocusGuard;
   new ElM().focus();
@@ -2148,8 +2148,8 @@ const runGuard = (stub) => { new Function('window', guardSource)(stub); return s
     'elBlocked=' + gM.elBlocked + ' raw=' + elRawM.length);
   // ⑨ 元素级补丁装不上时如实记账，且绝不抛（注入体住在壁纸文档里）。
   const ElFrozen = function () {};
-  Object.defineProperty(ElFrozen.prototype, 'focus', { configurable: false, writable: false, value: function () {} });
-  const win5 = { focus: function () {}, document: {}, HTMLElement: ElFrozen, addEventListener: function () {} };
+  Object.defineProperty(ElFrozen.prototype, 'focus', { configurable: false, writable: false, value () {} });
+  const win5 = { focus () {}, document: {}, HTMLElement: ElFrozen, addEventListener () {} };
   let elGuardThrew = false;
   try { runGuard(win5); } catch (e) { elGuardThrew = true; }
   check('元素级围栏：补丁装不上时 elInstalled=false 且绝不抛（帧级那一半仍有效）',
@@ -2217,7 +2217,7 @@ check('宿主端出场景载荷的源，且按 sceneLive 门控（没有场景�
 {
   // `ensureSceneMediaOrigin` 里不得出现 mediaOriginNeeded / adapterOverride：
   // 那就是把形态门控偷偷加回来（判据只取该函数体，取不到就显式报缺）。
-  const fn = (mediaOriginSrc.match(/function ensureSceneMediaOrigin\(\) \{[\s\S]{0,240}?\n  \}/) || [''])[0];
+  const fn = (mediaOriginSrc.match(/function ensureSceneMediaOrigin\(\) \{[\s\S]{0,240}?\n {2}\}/) || [''])[0];
   check('ensureSceneMediaOrigin 只做懒启动（不读 mediaOriginNeeded / adapterOverride）',
     fn.includes('ensureMediaOrigin()') && !fn.includes('mediaOriginNeeded') && !fn.includes('adapterOverride'),
     fn ? 'body=' + fn.replace(/\s+/g, ' ').slice(0, 80) : 'function 未找到');
@@ -4002,7 +4002,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     const storeOf = () => {
       const props = {};
       return {
-        props: props,
+        props,
         style: {
           setProperty: (k, v) => { props[k] = v; },
           getPropertyValue: (k) => (k in props ? props[k] : ''),
@@ -4048,7 +4048,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       box.querySelectorAll = () => box.children;
       box.contains = () => false;
       outlet.parentElement = box;
-      return { outlet: outlet, box: box };
+      return { outlet, box };
     };
     // 会话文本区 / 输入卡片 / 侧栏各一组 + 一个**嵌在会话文本区里**的组（只留最外侧那个）；
     // 输入卡片那个盒子里塞一个 fixed 后代 ⇒ 它必须整组不动（本仓 #89：translate 会让它成为
@@ -4147,7 +4147,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     const setLocalStorage = (value) => {
       try {
         Object.defineProperty(globalThis, 'localStorage', {
-          value: value, configurable: true, writable: true,
+          value, configurable: true, writable: true,
         });
       } catch (e) { /* 只读宿主 */ }
     };
@@ -4541,7 +4541,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
         && badDepthListed.indexOf('@audit/styled') >= 0
         && badDepthListed.indexOf('audit.clamped') >= 0;
       legacyDepthOut = { bad: badDepthNum, styled: styledNum, listed: badDepthListed,
-        unit: [unitX, unitY], base: chatRef, depthMax: depthMax,
+        unit: [unitX, unitY], base: chatRef, depthMax,
         before: composerBeforeNum, attr: composerAttrNum, gone: composerFixedGoneNum };
     } catch (e) { threw = String((e && e.message) || e); } finally {
       globalThis.selection = PREV_SEL;
@@ -4911,7 +4911,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     //    真跑才知道（宿主 DOM 在无头环境里不存在 ⇒ 只能自己搭一个够它用的替身）。
     {
       const created = [];
-      let rows = [];
+      const rows = [];
       class El {
         constructor(tag) { this.tagName = String(tag).toUpperCase(); this.children = []; this.attrs = {}; this.style = { props: {}, setProperty: (k, v) => { this.style.props[k] = v; }, removeProperty: (k) => { delete this.style.props[k]; } }; this.className = ''; this.textContent = ''; }
         get firstChild() { return this.children[0] || null; }
@@ -5683,7 +5683,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
           // ⚠️ 下面两条只在**玻璃 UI 整节展开**时成立：整节收起 ⇒ 简化配置也一并不画
           //    （那是 2026-10-11 的新门）。不按门分档的话，这条老判据会把"整节收起"
           //    误判成"简化配置丢了"。收起档要判的是**相反**的东西 —— 见上面那组整节判据。
-          if (!!(t.ctxOver && t.ctxOver.glassUiOpen)) {
+          if (t.ctxOver && t.ctxOver.glassUiOpen) {
             for (const sw of ['思考块液态玻璃', '左侧栏液态玻璃']) {
               check(t.fn + t.label + ' 侧栏档仍画总开关「' + sw + '」（简化配置，D4）',
                 labels.includes(sw), labels.includes(sw) ? '在' : '缺：' + sw);

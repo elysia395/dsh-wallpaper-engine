@@ -276,7 +276,7 @@ const React = {
 };
 
 // ── DOM mock with a real-enough <video> ─────────────────────────────────────
-let byId = {};
+const byId = {};
 const rotationTimers = [];
 function makeEl(tag) {
   const handlers = {};
@@ -335,7 +335,7 @@ const localStorage = {
 // transcode requests are deferred so the test decides WHEN each completes;
 // abort wiring lets us assert the stale request actually got cancelled.
 const transcodePending = []; // { fps, url, controller, resolve, reject }
-let transcodeResolved = []; // snapshots of completed requests (fps, aborted)
+const transcodeResolved = []; // snapshots of completed requests (fps, aborted)
 // 夹具**故意用原生可解的容器/编码**（mp4 里的 avc1 = H.264，浏览器直接能播）：这正是
 // 帧率上限必须仍然生效的那一类源。2026-10-02 的回归就是"原生可解 ⇒ 不抽帧"，而夹具当时写的是
 // `hvc1`（不在原生白名单里）⇒ 走的是"非原生必须转"那条路，回归**在夹具里看不见**。
@@ -473,7 +473,7 @@ function renderTree() { return pickerRenders[0](); }
 // ── Scenario ────────────────────────────────────────────────────────────────
 async function main() {
   // Let the initial apply() settle (inventory fetch etc.).
-  await new Promise((r) => setTimeout(r, 20));
+  await new Promise((r) => { setTimeout(r, 20); });
 
   // Open the picker modal and select the single video wallpaper.
   let tree = renderTree();
@@ -484,7 +484,7 @@ async function main() {
   const card = findWallpaperCard(tree, 'Video W1');
   assert(card && typeof card.props.onClick === 'function', 'wallpaper card found');
   card.props.onClick(); // applySelection('w1')
-  await new Promise((r) => setTimeout(r, 20)); // media-info probe resolves
+  await new Promise((r) => { setTimeout(r, 20); }); // media-info probe resolves
   // 页内下钻后库视图与页签内容互斥：选完经「返回」退出，帧率上限控件才渲染（真实路径）。
   findButton(renderTree(), 'we-picker__btn', '返回').props.onClick();
 
@@ -502,7 +502,7 @@ async function main() {
   const b30 = findButton(tree, 'we-picker__rate', '30fps');
   assert(b30 && typeof b30.props.onClick === 'function', '30fps button found');
   b30.props.onClick();
-  await new Promise((r) => setTimeout(r, 10));
+  await new Promise((r) => { setTimeout(r, 10); });
   check('click 30fps starts a transcode request', transcodePending.length === 1 && transcodePending[0].fps === 30);
   // 回归判据（行为层，不只是文本层）：源是**原生可解的 mp4/avc1** 且帧率 120 > 上限 30 ⇒
   // 必须真的起抽帧 —— 旧口径（原生可解即免转）在这里会停在 "native"、一个请求都不发。
@@ -522,7 +522,7 @@ async function main() {
   const b60 = findButton(tree, 'we-picker__rate', '60fps');
   assert(b60 && typeof b60.props.onClick === 'function', '60fps button found');
   b60.props.onClick();
-  await new Promise((r) => setTimeout(r, 10));
+  await new Promise((r) => { setTimeout(r, 10); });
   // The stale 30fps request must have been ABORTED, and a fresh 60fps one started.
   const stale30 = transcodePending.find((p) => p.fps === 30);
   check('30→60 direct: stale 30fps request is aborted (not left to swap in)',
@@ -535,11 +535,11 @@ async function main() {
   // ---- Complete the 60fps request → swap + ready with the CORRECT cap ----
   const req60 = activeAfter60[0];
   completeTranscode(req60, true);
-  await new Promise((r) => setTimeout(r, 20));
+  await new Promise((r) => { setTimeout(r, 20); });
   // loadedmetadata fires only after src swap; the mock fires it manually:
   assert(video._handlers.loadedmetadata, 'loadedmetadata handler registered after swap');
   video._handlers.loadedmetadata();
-  await new Promise((r) => setTimeout(r, 10));
+  await new Promise((r) => { setTimeout(r, 10); });
   check('60fps completes → video swapped to the 60fps re-encode',
     video.dataset.weTranscoded === '60' && video.src.includes('fps=60'));
   check('60fps completes → UI reports ready at 60fps',
@@ -552,15 +552,15 @@ async function main() {
   tree = renderTree();
   const b30b = findButton(tree, 'we-picker__rate', '30fps');
   b30b.props.onClick();
-  await new Promise((r) => setTimeout(r, 30)); // let several poll-emit cycles run
+  await new Promise((r) => { setTimeout(r, 30); }); // let several poll-emit cycles run
   const active30b = activePending();
   check('60→30 after swap starts a fresh 30fps request',
     active30b.length === 1 && active30b[0].fps === 30 && !active30b[0].signal.aborted);
   completeTranscode(active30b[0], true);
-  await new Promise((r) => setTimeout(r, 20));
+  await new Promise((r) => { setTimeout(r, 20); });
   assert(video._handlers.loadedmetadata, 'loadedmetadata handler registered (24)');
   video._handlers.loadedmetadata();
-  await new Promise((r) => setTimeout(r, 10));
+  await new Promise((r) => { setTimeout(r, 10); });
   check('30fps completes → video swapped to the 30fps re-encode',
     video.dataset.weTranscoded === '30' && video.src.includes('fps=30'));
   check('30fps completes → UI reports ready at 30fps',
@@ -571,14 +571,14 @@ async function main() {
   const b0 = findButton(tree, 'we-picker__rate', '无限制');
   assert(b0 && typeof b0.props.onClick === 'function', '无限制 button found');
   b0.props.onClick();
-  await new Promise((r) => setTimeout(r, 10));
+  await new Promise((r) => { setTimeout(r, 10); });
   check('无限制 reverts to the original + idle', !video.dataset.weTranscoded && video.src === '/wallpaper-engine/media/w1');
 
   // ---- Failure of a NEW cap reverts to the original (truthful 已回退原片) ----
   b30b.props.onClick();
-  await new Promise((r) => setTimeout(r, 10));
+  await new Promise((r) => { setTimeout(r, 10); });
   completeTranscode(activePending()[0], false); // 502/network failure
-  await new Promise((r) => setTimeout(r, 20));
+  await new Promise((r) => { setTimeout(r, 20); });
   check('failed transcode → video back on the original',
     !video.dataset.weTranscoded && video.src === '/wallpaper-engine/media/w1');
   check('failed transcode → UI reports fallback',

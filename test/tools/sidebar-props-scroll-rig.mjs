@@ -190,7 +190,7 @@ function serve() {
   });
 }
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms) => new Promise((r) => { setTimeout(r, ms); });
 const get = async (url) => (await fetch(url)).json();
 
 class Cdp {

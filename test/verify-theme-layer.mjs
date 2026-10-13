@@ -46,7 +46,7 @@ const section = (t) => console.log('\n' + t);
 /** 忠实模拟真服务语义的假 theme（替换 + 旧 disposer 变 no-op + 裸字符串抛错）。 */
 function fakeThemeService() {
   const log = [];
-  let layers = new Map(); // source -> {seq, tokens}
+  const layers = new Map(); // source -> {seq, tokens}
   let seq = 0;
   return {
     log,

@@ -997,7 +997,8 @@ console.log('\n⑦ 量纲统一（一把刻度：模糊 0–60 · 透明度 0–
     const re = /glassValue\(/g;
     let m;
     while ((m = re.exec(text))) {
-      let i = m.index + m[0].length, depth = 1, arg = '', args = [], inStr = null;
+      let i = m.index + m[0].length, depth = 1, arg = '', inStr = null;
+      const args = [];
       for (; i < text.length && depth > 0; i++) {
         const ch = text[i];
         if (inStr) { if (ch === inStr) inStr = null; arg += ch; continue; }
@@ -1142,7 +1143,8 @@ console.log('\n④ 接线 ↔ 注册表 ↔ 面名 三方对账');
     const re = /glassValue\(/g;
     let m;
     while ((m = re.exec(text))) {
-      let i = m.index + m[0].length, depth = 1, arg = '', args = [], inStr = null;
+      let i = m.index + m[0].length, depth = 1, arg = '', inStr = null;
+      const args = [];
       for (; i < text.length && depth > 0; i++) {
         const ch = text[i];
         if (inStr) { if (ch === inStr) inStr = null; arg += ch; continue; }

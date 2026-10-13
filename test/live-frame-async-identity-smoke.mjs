@@ -227,7 +227,7 @@ new vm.Script(code, { filename: 'client.js' }).runInContext(sandbox);
 const exportsObj = cap.handoff.factory((spec) => (spec === 'react' ? React : { createPortal: (n) => n }));
 exportsObj.apply({ slots: { inject: (k, cb) => cb(), register: () => {} }, effect(fn) { fn(); return fn; } });
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms) => new Promise((r) => { setTimeout(r, ms); });
 const fireLatest = (ms) => { const t = timers.filter((x) => !x.cleared && x.ms === ms).pop(); if (t) { t.cleared = true; t.fn(); } return t; };
 const animCount = (tok) => animSrcs.filter((s) => s.includes('/scene-anim/' + tok)).length;
 // 「B 的槽位有没有被误记账」的观测点：gpuFrameUi 的槽位探测是 HEAD /scene-frame/<token>，

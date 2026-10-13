@@ -198,7 +198,7 @@ async function runScenario({ mode = 'varied', blobSize = 120000, gpuAlreadyPinne
   // 挂载要等 loadPersisted → loadInventory 的 Promise 链跑完（纯微任务，但
   // 有若干 hop），轮询到 iframe 出现为止。
   for (let i = 0; i < 50 && iframeEls.length === 0; i++) {
-    await new Promise((r) => setTimeout(r, 10));
+    await new Promise((r) => { setTimeout(r, 10); });
   }
   if (!iframeEls.length) throw new Error('live iframe 未挂载（boot 未完成）');
 
@@ -214,7 +214,7 @@ async function runScenario({ mode = 'varied', blobSize = 120000, gpuAlreadyPinne
   const tickPoll = async () => {
     const t = intervals.filter((x) => !x.cleared && x.ms === 1500).pop();
     if (t) t.fn();
-    await new Promise((r) => setTimeout(r, 30));
+    await new Promise((r) => { setTimeout(r, 30); });
   };
   if (liveStall) {
     frame.contentWindow.__wpStats.frame = () => ({ fps: 0, running: true });
@@ -223,7 +223,7 @@ async function runScenario({ mode = 'varied', blobSize = 120000, gpuAlreadyPinne
       const t = intervals.filter((x) => !x.cleared && x.ms === 1000).pop();
       if (t) t.fn();
     }
-    await new Promise((r) => setTimeout(r, 60));
+    await new Promise((r) => { setTimeout(r, 60); });
     // liveFail 只 syncLayers；这里再点一次该壁纸卡片走一遍 applySelection，确认
     // 重新应用选中也不会拉起任何 CPU 渲染路径（场景 F 的零请求断言）。
     const collect = (root, pred) => {
@@ -255,14 +255,14 @@ async function runScenario({ mode = 'varied', blobSize = 120000, gpuAlreadyPinne
       // 地板放在 `if (openBtn)` / `if (card)` **外面**：元素没找到时整段不再静默通过。
       check('覆盖面：重跑 applySelection 的入口存在（选择壁纸按钮）', Boolean(openBtn), 'openBtn=' + Boolean(openBtn));
       check('覆盖面：重跑 applySelection 的目标存在（壁纸卡片）', Boolean(card), 'card=' + Boolean(card));
-      await new Promise((r) => setTimeout(r, 40));
+      await new Promise((r) => { setTimeout(r, 40); });
     }
     await tickPoll();
     animPollBefore = intervals.filter((t) => !t.cleared && t.ms === 1500).length;
     progBefore = progCalls.length;
   }
   if (backfill) backfill.fn();
-  await new Promise((r) => setTimeout(r, 30));
+  await new Promise((r) => { setTimeout(r, 30); });
   await tickPoll(); // 落地后再敲一次：修复生效时轮询已被清，不得再发进度请求
   const animPollAfter = intervals.filter((t) => !t.cleared && t.ms === 1500).length;
   return { frame, watchTick, backfill, headCalls, putCalls, clearCalls, slotOrder, progCalls, blobStub,

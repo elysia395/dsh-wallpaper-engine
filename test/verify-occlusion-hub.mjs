@@ -53,7 +53,7 @@ const checkAsync = async (name, fn) => {
   }
 };
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms) => new Promise((r) => { setTimeout(r, ms); });
 
 /** 假适配器：脚本化 poll 序列，模拟 X11 采集成功/失败。 */
 function fakeAdapter(script) {

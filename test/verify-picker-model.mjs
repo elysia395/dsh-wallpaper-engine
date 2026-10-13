@@ -355,7 +355,7 @@ const slots = {
 const ctx = { slots, effect(fn) { fn(); return fn; } };
 exportsObj.apply(ctx);
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms) => new Promise((r) => { setTimeout(r, ms); });
 const render = () => pickerRenders[0]();
 
 /** 渲染树里某个 props 字段等于给定值的节点。 */

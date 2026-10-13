@@ -127,7 +127,7 @@ function get(port, pathAndQuery, headers = {}) {
   });
 }
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms) => new Promise((r) => { setTimeout(r, ms); });
 async function waitUntil(fn, timeoutMs, intervalMs = 500) {
   const deadline = Date.now() + timeoutMs;
   for (;;) {

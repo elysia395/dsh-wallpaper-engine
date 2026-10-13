@@ -87,7 +87,7 @@ function check(name, ok, detail) {
   console.log((ok ? '✓ ' : '✗ ') + name + (detail ? ' — ' + detail : ''));
   return Boolean(ok);
 }
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms) => new Promise((r) => { setTimeout(r, ms); });
 const tail = (s, n = 25) => String(s).split('\n').slice(-n).join('\n');
 
 // win32：`dsh` / 浏览器都是 .cmd / .exe 垫片链，Node ≥18 在 shell:false 下拒绝启动 .cmd。

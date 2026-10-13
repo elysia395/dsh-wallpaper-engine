@@ -365,7 +365,7 @@ function fakeReq(url, method = 'GET', body = null) {
   r.headers = body === null ? {} : { 'content-type': 'application/json' };
   return r;
 }
-const waitRes = (res) => new Promise((r) => res.__state.ended ? r() : res.on('finish', r));
+const waitRes = (res) => new Promise((r) => { if (res.__state.ended) r(); else res.on('finish', r); });
 async function callRoute(route_, req) {
   const res = fakeRes();
   const done = route_.handler(req, res);
