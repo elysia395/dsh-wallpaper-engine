@@ -18,9 +18,11 @@
   - [4.2 两档：硬档挡 PR，软档只出声](#42-两档硬档挡-pr软档只出声)
   - [4.3 怎么跑（运行矩阵）](#43-怎么跑运行矩阵)
   - [4.4 覆盖范围](#44-覆盖范围每层各自保证什么)
-  - [4.5 怎么写一条新判据](#45-怎么写一条新判据最短路径--八条约定)
+  - [4.5 怎么写一条新判据](#45-怎么写一条新判据最短路径--十条约定)
   - [4.6 `test/tools/` 清单](#46-testtools-清单都没有-ci-消费者)
-  - [4.7 约定（八条）](#47-约定八条守卫会判)
+  - [4.7 约定（十条，守卫会判）](#47-约定十条守卫会判)
+  - [4.8 守卫链在哪（`test/run-guards.mjs`）](#48-守卫链在哪testrun-guardsmjs)
+  - [4.9 静态门禁（`npm run verify:static`）](#49-静态门禁npm-run-verifystatic)
 - [5. 改文件头注释（任何改动都要做）](#5-改文件头注释任何改动都要做)
 - [6. 提交前的自查清单](#6-提交前的自查清单)
 
@@ -35,10 +37,15 @@ npm run verify        # 硬档（挡 PR）：真机行为 / 发布面 / 平台�
 npm run verify:docs   # 软档（只出声）：模块布局 / 可达性 / 退役线 / 声明孤儿
 npm run verify:all    # = build + verify + verify:docs + smoke
 npm run smoke         # 节点级行为冒烟
+npm run lint          # 静态检查（ESLint；人读，见 §4.9）
+npm run typecheck     # 类型检查（tsc；人读，见 §4.9）
+npm run verify:static # 静态门禁（棘轮 + 负对照；CI 里是**独立步骤**，不在 verify 链上）
 ```
 
-**链条每档分别有哪些守卫、失败意味着什么**，真源是 `package.json` 的 `verify` / `verify:docs` /
-`smoke` 三个脚本 —— **别把条数记在这里**（会漂）。分档判据见本文 §4.2。
+**链条每档分别有哪些守卫、失败意味着什么**，真源是 `test/run-guards.mjs` 的 `MANIFEST`
+（有序清单 + 档位）—— `package.json` 的四个脚本只是指向它的**衬套**
+（`verify` / `verify:docs` / `smoke` / `verify:all`），不再是字符串链条。**别把条数记在这里**
+（会漂）。分档判据见本文 §4.2，清单结构与改法见 §4.8。
 
 **改 `lib/**` 必须重启 DSH**；改 `src/**` 必须 `npm run build`。这两条不对称，是本仓最常见的操作失误。
 
@@ -201,8 +208,8 @@ node test/tools/host-route-index.mjs --write   # 重算并写入 docs/ROUTE-INDE
 
 | 档 | 什么时候红 | 谁跑 | 清单 |
 |---|---|---|---|
-| **硬档** | 失败意味着**用户会撞上**：真机行为、发布面、平台契约、打包面 | `npm run verify`（在 `verify:all` 与 CI 里） | 真源是 `package.json` 的 `verify` 脚本 —— **不在这里列清单**（删/加守卫都会让它过时，本仓真实发生过）。其中 `verify-media-bridge` 经 `test/warn-only.mjs --probe-spawn`：环境起不了子进程时**点名式 SKIP**；CI 的 `verify:bridge` 变体另有两道门（平凡调用探针 + 产物 sha256 可信度），只有都指向环境才允许记"环境跳过"并点名 |
-| **软档** | 失败意味着**仓库内务 / 一次性清理的验收判据**不准了 —— 要人回来看，但不该拦住别人的改动 | `npm run verify:docs`（在 `verify:all` 与 CI 的一条 `continue-on-error` 步骤里） | 同样是 `package.json` 的 `verify:docs` 脚本（**步数与清单的真源都在那里**；含模块布局 / 可达性 / 退役线 / 声明孤儿 / **守卫映射**） |
+| **硬档** | 失败意味着**用户会撞上**：真机行为、发布面、平台契约、打包面 | `npm run verify`（在 `verify:all` 与 CI 里） | 真源是 `test/run-guards.mjs` 里 `tier: 'hard'` 的条目 —— **不在这里列清单**（删/加守卫都会让它过时，本仓真实发生过）。其中 `verify-media-bridge` 是**软档**条目且带 `probe: true`（经 `test/warn-only.mjs --probe-spawn`：环境起不了子进程时**点名式 SKIP**）；CI 的 `verify:bridge` 变体另有两道门（平凡调用探针 + 产物 sha256 可信度），只有都指向环境才允许记"环境跳过"并点名 |
+| **软档** | 失败意味着**仓库内务 / 一次性清理的验收判据**不准了 —— 要人回来看，但不该拦住别人的改动 | `npm run verify:docs`（在 `verify:all` 与 CI 的一条 `continue-on-error` 步骤里） | 同样是 `test/run-guards.mjs` 的 `docs` 组（**步数与清单的真源都在那里**；含模块布局 / 可达性 / 退役线 / 声明孤儿 / **守卫映射**），每条 `tier: 'soft'` ⇒ runner 经 `test/warn-only.mjs` 起它 |
 
 > **软档里只剩"守代码"的守卫。** 此前软档还有两条守**文档 / 注释散文**的守卫
 > （`verify-comment-discipline` · `verify-ledger`），已随
@@ -238,7 +245,8 @@ node test/tools/host-route-index.mjs --write   # 重算并写入 docs/ROUTE-INDE
 
 ### 4.3 怎么跑（运行矩阵）
 
-**真源是 `package.json` 的 scripts** —— 下面是"什么时候跑哪条"，**不列条数**（会漂）。
+**真源是 `test/run-guards.mjs` 的 `MANIFEST`**（`package.json` 的四个脚本都只是
+`node test/run-guards.mjs <组>` 的衬套）—— 下面是"什么时候跑哪条"，**不列条数**（会漂）。
 
 | 你的处境 | 跑什么 | 说明 |
 |---|---|---|
@@ -337,18 +345,20 @@ node test/tools/host-route-index.mjs --write   # 重算并写入 docs/ROUTE-INDE
 | `audit-import-closure.mjs` | `lib/` 的**运行时导入闭包** vs `package.json` 的 `files`（缺文件 ⇒ registry 装上就崩） | `node test/tools/audit-import-closure.mjs` |
 | `branch-notify.mjs` | **分支级**"改了 store 却没通知" —— **只印候选供人读**：改动 `src/client.js` 的 store 处理器之后跑一遍，逐条判"这条路径该不该通知"（该通知 ⇒ 改代码；误报 ⇒ 属文件头「已知边界」那几类）。真正的判据是 `verify-client` ①h/①i（与本工具共用同一份实现） | `node test/tools/branch-notify.mjs audit` |
 | `diagnose-web-blank.mjs` | 网页壁纸「白屏」排查台（无头真浏览器） | `node test/tools/diagnose-web-blank.mjs` |
+| `guard-chain.mjs` | **守卫链与冻结 fixture 的对账判据**（`test/verify-guard-chain.mjs` 用它）：把 `test/run-guards.mjs --list-json` 折成可比形状，逐条比成员 / 顺序 / 档位 / 参数，另有地板、死路径、组合三组派生判据 —— 抽出来是为了**正判据与负对照走同一段代码**（§4.7 约定 5） | `node test/verify-guard-chain.mjs [--write-fixture]` |
 | `guard-targets.mjs` | **「哪个守卫管哪个模块」的派生映射**（从守卫**代码**里派生，不维护清单）：`--write` 重算生成物 `docs/GUARD-MAP.md`；改了某模块后查"该跑哪几条"就看它 | `node test/tools/guard-targets.mjs [--write] [--json]` |
 | `host-route-index.mjs` | 生成 / 核对**宿主路由索引**（产出 `docs/ROUTE-INDEX.md`） | `node test/tools/host-route-index.mjs [--write]` |
 | `i18n-scan.mjs` | 源码里的**中文字面量**扫描（判"进没进 `weT(...)`"；迁移与 `verify-i18n` 共用同一实现） | `node test/tools/i18n-scan.mjs [--json] [paths…]` · `selftest` |
 | `js-text.mjs` | JS/TS 源码的**文本级**工具（字符串 / 正则感知的剥注释） | `node test/tools/js-text.mjs selftest` |
 | `regen-golden.mjs` | **设置 golden 夹具的漂移核对与重录**：逐侧列出与当前 `lib/settings-schema.js` 的差异（host 侧的值有判据管、client 侧没有），写入必须先声明意图（`--intend`）—— 防止把缺陷输出自动录成"期望" | `node test/tools/regen-golden.mjs [--write --intend <host\|client>:<键>]` |
 | `sidebar-props-scroll-rig.mjs` | 侧栏「壁纸属性」下钻的**真浏览器滚动判定台**：属性多的壁纸能不能滚到底（官方壳的页签内容区固定高 + overflow:hidden，面板必须自带滚动） | `node test/tools/sidebar-props-scroll-rig.mjs [bundle.js] [label]` |
+| `src-scope.mjs` | **构建期内联族**（组装点 + 域模块）的按序读法：清单从 `scripts/build-client.mjs` 的 `INLINE_MODULES` 现算（单一真源），供守卫读"同族并集"：`parseInlineModules()` / `scopeFiles(prefix)` / `scopeText(prefix, sep?)`（API 已冻结，空族抛错防静默全绿） | 守卫 `import` 消费，无 CLI |
 | `token-contract.mjs` | **`--dsw-*` 令牌契约的生成与核对**（共存审计 S2）：从 `src/styles.js` 的 CSS 模板现算「改写了哪些 token、在哪个门控下」，`--write` 重算生成物 `docs/TOKEN-CONTRACT.md`（守卫 `verify-token-contract` 逐字节比对） | `node test/tools/token-contract.mjs [--write] [--stats]` |
 | `underlay-pixel-rig.mjs` | **画布兜底色**的真浏览器像素对照：壁纸的像素没送到屏上时，页面自己画的是什么颜色（掉层 → 白闪还是同色底） | `node test/tools/underlay-pixel-rig.mjs <bundle.js> [label]` |
 | `weT-shim.mjs` | 给**单独 import `src/**`** 的守卫装身份译文层（`weT(k) === k`，与 bundle 里中文态逐字一致） | `node test/tools/weT-shim.mjs` |
 
-> 其中 `host-route-index.mjs` / `js-text.mjs` / `branch-notify.mjs` **同时是守卫的库**
-> ⇒ 改它们等于改判据，走 `npm run verify:all`。
+> 其中 `host-route-index.mjs` / `js-text.mjs` / `branch-notify.mjs` / `guard-chain.mjs`
+> **同时是守卫的库** ⇒ 改它们等于改判据，走 `npm run verify:all`。
 > 另有 **`test/warn-only.mjs`**（不在本清单里）：两档共用的**入口包装** —— 降级退出码
 > 与"本环境起不了子进程就显式 SKIP"。它自己不是判据，所以没有独立守卫覆盖它。
 
@@ -387,6 +397,112 @@ node test/tools/host-route-index.mjs --write   # 重算并写入 docs/ROUTE-INDE
    （范式：`test/compat-harness-pages.mjs` 的 `SKIP_MIN_CHECKS`、
    `test/e2e-web-media-origin.mjs` 的 `PRE_BROWSER_MIN_CHECKS`、`test/warn-only.mjs` 的具名 SKIP）。
 
+### 4.8 守卫链在哪（`test/run-guards.mjs`）
+
+**链条的形状是一份数据，不是一行 `&&` 字符串。** 四组清单都写在 `test/run-guards.mjs` 的
+`MANIFEST` 里（`verify` / `docs` / `smoke` 三个步骤表 + `all` 的组合），
+`package.json` 的四个脚本各自只是一行 `node test/run-guards.mjs <组>` 的衬套。
+
+**为什么**：旧写法里 `verify` 是 `package.json` 里一行 1.6KB、43 条 `&&` —— 想断言
+"链里漏没漏某条守卫"只能去正则抠那行字符串，字符串一改判据就静默缩水。清单落成数据后，
+`test/verify-package-files.mjs` 的 P5 直接读 `--list-json`。
+
+**一条步骤的形状**（`step(file, args, tier, probe)`）：
+
+| 字段 | 含义 |
+|---|---|
+| `file` | 仓库根相对的守卫路径 |
+| `args` | 该守卫的命令行参数（逐字抄，如 `['--allow-skip']`） |
+| `tier` | `'hard'`（挡 PR，失败即整组非零）/ `'soft'`（经 `test/warn-only.mjs` 降级，永不让组红） |
+| `probe` | 软档专用：带 `--probe-spawn`（环境起不了子进程时**点名** SKIP） |
+
+**加 / 删一条守卫**：改 `test/run-guards.mjs` 的对应步骤表 —— 一处改动，不是两处。
+两个不变量：
+
+- **顺序 = 执行顺序**，不得重排：链里有依赖前一步副作用的守卫（`verify-client-sync` 重建产物后
+  `verify-client` 才读它）。
+- **新守卫文件必须登记进清单**，否则它不进链、P5 也看不见它（与 §4.7 约定 4 的
+  "从磁盘枚举、不靠名单"是**例外关系**：链是**有意的有序清单**，不是"域枚举"）。
+
+**读清单（不执行）**：
+
+```sh
+node test/run-guards.mjs verify            # 跑 verify 组（缺省）
+node test/run-guards.mjs verify --list     # 只打印该组的等价命令串（` && ` 连起来）
+node test/run-guards.mjs verify --list-json # 机器可读的有序步骤表（P5 取源头）
+```
+
+**退出码语义**（与旧 `&&` 链逐条等价，别在 runner 里重写它）：
+硬档步骤非 0 ⇒ 立即以**同一个退出码**退出（短路）；软档步骤非 0 ⇒ 打印
+`⚠ … 已由 warn-only 降级` 后继续 —— 降级语义仍**只在** `test/warn-only.mjs` 一处定义。
+
+⚠️ **runner 起软档时传的是"仓库根相对路径"，不是绝对路径**：`test/warn-only.mjs` 的契约就是
+收相对路径并自己 `join(ROOT, target)`，喂绝对路径会被它拼成 `<ROOT>/<绝对路径>` ⇒ 每条软档都以
+合成码 2 退出（全组变成"看着绿、其实一条没跑"）。**这个坑真实发生过**，所以 `runStep` 里两侧
+刻意不一样：硬档直连 `node` 传绝对路径，软档传 `s.file`。
+
+**链的形状由 `test/verify-guard-chain.mjs` 钉住**（软档，在 `docs` 组里）：它把 `--list-json`
+折成可比形状，与**冻结在提交里的** `test/fixtures/verify-chain.json` 逐条比成员 / 顺序 / 档位 /
+参数，另加地板、死路径、`all` = 四段有序拼接三组派生判据，共 14 条 + 8 条负对照。
+有意改链（加/删/换顺序/换档位）⇒ 必须 `node test/verify-guard-chain.mjs --write-fixture`
+重冻结，**并与改动放进同一次提交**；只改链不重冻结会被它拦下（这正是它的用途：P5 只钉
+"零裸包 + 条数不低于地板"，**允许**换掉一条守卫；它钉的是"链的成员与顺序逐字不变"）。
+
+⚠️ **改"怎么跑"的东西时，`--list` 等价不等于执行等价。** 静态等价证明（比对 `--list` 渲染出的
+命令串）只覆盖清单本身；`runStep` 的 argv、cwd、env、退出码解读都**不在** `--list` 里。本仓的
+做法是两样都要：`--list` 逐字 diff **加上**至少一次真跑该组的端到端证据（上一条坑就是只有前者
+时漏掉的）。
+
+**清单漂了怎么发现**：runner 执行前先自检清单里每个 `file` 真实存在（不存在 ⇒ 退出码 2）；
+`test/verify-package-files.mjs` 的 P5 从 `--list-json` 取有序清单与档位，钉住"链上零裸包依赖"
+与"硬档条数不低于地板"。两侧的**逐字等价**由 `--list` 的渲染串与旧 `package.json` 字符串
+做一次纯文本 diff 来证明（切链的那一次，结论记在该次提交的说明里）。
+
+---
+
+### 4.9 静态门禁（`npm run verify:static`）
+
+**这一层补的是"结构性守卫看不见的那类错"**：拼错的名字、不存在的属性、重复声明、被解析器挡在门外的文件。
+判据脚本 `test/verify-static.mjs`，配置 `eslint.config.mjs`（文件头写了两套半边的口径）与 `tsconfig.json`。
+
+**它不是"零违规"，而是棘轮。** 50k 行历史代码一把修到零＝一场无法审查的改动（本仓铁律"不做无判别力的
+批量文本替换"要挡的正是这个）。基线冻在 `test/fixtures/static-baseline.json`：
+
+- **ESLint 按 `ruleId` 计数**（不按行/文件：规则级计数对"把代码挪到别的文件"稳定，行级基线一重构就碎）；
+- **tsc 按错误码计数**；
+- 另加**扫描面下限**（`filesLinted`）—— 只钉计数的话，往 `ignores` 加一条就能靠"少看文件"变绿。
+
+**任一格上涨即红**；基线里**没有**的规则名，配额视为 0（新规则一条即红）。
+有意收紧（修完一批后把地板压低）⇒ `node test/verify-static.mjs --write-baseline`，**并随同一次提交入库**。
+读当前基线别抄进文档：直接开 `test/fixtures/static-baseline.json`。
+
+**为什么是 CI 里的独立步骤、不并入 `verify` / `verify:all`**：链上保持零裸依赖是
+`test/verify-package-files.mjs` 的 P5 断言（CI 用 `npm ci --omit=peer`），而这两个工具是 devDependencies。
+把它塞进链里会为了"多跑一门检查"破坏一条真不变量。
+
+**`include` 边界（刻意划的）**：
+
+| 面 | 进不进 | 为什么 |
+|---|---|---|
+| `lib/**`、`scripts/**` | 进 | 真 ESM 模块，`no-undef`/属性名在这里有牙 |
+| `src/**` | ESLint 进、**tsc 不进** | 扁平作用域片段（见 §3 与 `eslint.config.mjs` 头）：`no-undef`/`no-unused-vars` 系统性误报，关掉；tsc 单文件看必然"名字都不存在" |
+| `test/**` | ESLint 进（求值手法豁免）、tsc 不进 | 守卫**故意**读畸形输入；`new Function`/`eval` 是判据手段本身 |
+| `lib/webwallgl/**`、`lib/we-focus-guard.js` | 进，带浏览器全局 | 物理在发布面、运行期在页面里 |
+
+**它已经抓到的真缺陷**（写在这里是为了说明"这一层值它占的 CI 分钟数"，不是编年史）：
+`lib/routes/now-playing.js` 里漏解构的常量（`POST` 带体必 `ReferenceError`）、
+`src/client.js` 里两份同名函数（脚本语义下**后声明静默胜出**，删掉活的那份会让死的那份无声复活）、
+守卫自身的块作用域越界引用与重复对象键、以及 `tsc` 报出的一批属性名错配。
+
+⚠️ **行内 disable 指令引用的规则名，本身也是判据面的一部分**：`src/client.js` 里一处
+`eslint-disable-next-line react-hooks/exhaustive-deps`，而本仓不装该插件 ⇒ ESLint 报
+`Definition for rule ... was not found`（是**假错误**，但会占一格棘轮预算）。在配置里把该规则声明成
+`off` **挡不住**它 —— 报错来自那条指令本身，只能改那一行。
+
+**`.editorconfig` 只管三件事**（`charset` / `end_of_line` / 尾随空白与末行换行）：
+这是"编辑器别替人改文件"的约定。**格式化决策（缩进宽度、换行位置）刻意不写** —— 一次全局重排会让
+review 失去意义；真正的格式守卫是无尾随空白那两条（CI 的 `git diff --check` 与 P8 的 BOM 扫描）。
+
 ---
 
 ## 5. 改文件头注释（任何改动都要做）
@@ -415,3 +531,4 @@ node test/tools/host-route-index.mjs --write   # 重算并写入 docs/ROUTE-INDE
 - [ ] 改过文档吗？→ **没有新增会漂的数值**（改成了符号引用或复算命令）。
 - [ ] 写进文档的每个路径 / 每个符号名**都真实存在**（这条最常出错）。
 - [ ] `npm run verify` 全绿；`npm run verify:docs` 的结论**没有比改动前更差**。
+- [ ] `npm run verify:static` 全绿（动过 `lib/**`/`scripts/**`/`test/**` 时尤其要看：棘轮只能降不能升）。

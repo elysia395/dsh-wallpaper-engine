@@ -1,0 +1,30 @@
+# 编辑器层的最小共识 —— 只写"机器可判且无争议"的那几条。
+#
+# 这里**刻意不做**格式化决策（缩进宽度、引号、换行位置）：本仓铁律含"不做无判别力的
+# 批量文本替换"，一次全局重排会造出无法逐行审查的巨型 diff，而真正的格式守卫是无尾随
+# 空白的那两条 —— `git diff --check`（CI 步骤）与 `test/verify-package-files.mjs` 的
+# P8（BOM 扫描）。所以本文件只管"编辑器不要替人改文件"。
+#
+# 缩进风格：本仓现状是**空格**（2 空格为主，`src/styles.js` 里的 CSS 模板内部不适用），
+# 不在此强按宽度 —— 按宽度写死会在既有文件上产生与内容无关的 diff。
+root = true
+
+[*]
+charset = utf-8
+end_of_line = lf
+insert_final_newline = true
+trim_trailing_whitespace = true
+indent_style = space
+
+# Markdown 里行尾两个空格是**有意义的换行**，不能当尾随空白裁掉。
+[*.md]
+trim_trailing_whitespace = false
+
+# 产物与快照类文件不参与编辑器的"顺手格式化"。
+# `lib/client.js` 由 scripts/build-client.mjs 生成，手改必被 `git diff --exit-code` 判红。
+[lib/client.js]
+insert_final_newline = false
+trim_trailing_whitespace = false
+
+[*.png]
+insert_final_newline = false

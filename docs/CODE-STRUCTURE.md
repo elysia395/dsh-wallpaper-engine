@@ -417,12 +417,13 @@ graph LR
 
 ---
 
-## 6. 守卫（与本文结构规则同名的那批；全量清单的真源是 `package.json`）
+## 6. 守卫（与本文结构规则同名的那批；全量清单的真源是 `test/run-guards.mjs`）
 
 > **本表只登记"与本文结构规则直接相关"的机器判定**，不是全量名册。**全量清单的真源是
-> `package.json` 的 `verify` / `verify:docs` / `smoke` 三个脚本**（读它们即得；抄一份进本文
-> 就是多一个无人复算的副本）—— 两档判据、逐条约定与运行矩阵见
-> [`DEV-GUIDE.md`](./DEV-GUIDE.md) §4。
+> `test/run-guards.mjs` 的 `MANIFEST`**（`verify` / `docs` / `smoke` 三组步骤表；读它即得 ——
+> `node test/run-guards.mjs verify --list`，抄一份进本文就是多一个无人复算的副本）——
+> 两档判据、逐条约定与运行矩阵见
+> [`DEV-GUIDE.md`](./DEV-GUIDE.md) §4（链条结构与改法见 §4.8）。
 >
 > 因此**不在表里 ≠ 没有机器判定**。链上还有一批同属"读**代码**"的结构性判据（路由索引生成物
 > 对照、i18n 双向对账、跨半边契约、`/about-qr` 资源在包内、死声明、可达性棘轮、退役线、
@@ -479,7 +480,7 @@ graph LR
 | **对上游的宿主要求** | `package.json` 的 **`engines.dsh`** | **插件市场与 DSH 自己的插件管理 UI** 直接从已发布的 manifest 读它（社区目录不参与），显示在插件卡片上并与运行中的宿主比对；人类读三份 README 与 [`UPGRADING.md`](./UPGRADING.md) 里的同一段散文 | 机读的那份**只有这一处**；散文是它的回声，**改一处就要改全部**。`dsh-better-sidebar` 这类**非** `@deepseek-ai/*` 的依赖**表达不了**，只存在于散文里 |
 
 > **文档一律不抄这些值**。想知道当前值：设置看 `lib/settings-schema.js`，路由看生成物，
-> 条数看 `package.json` 的 scripts —— 抄一份就是多一个无人复算的副本。
+> 守卫条数看 `test/run-guards.mjs` 的 `MANIFEST` —— 抄一份就是多一个无人复算的副本。
 >
 > **本表与 §8 用同一口径**：`localStorage` 里既有"设置的缓存"，也有**只属于这台设备**的字段
 > （见上表第 2 行）—— 后者不是任何宿主状态的回声，因此**不能**被"清缓存即可重建"这句话覆盖。

@@ -55,6 +55,14 @@ jobs:
       - name: install —— 运行期依赖（webwallgl）
         run: npm ci --omit=peer --ignore-scripts --no-audit --no-fund
 
+      # 静态门禁（ESLint + tsc）：**独立步骤**，刻意不并入 `verify` / `verify:all` ——
+      # `test/verify-package-files.mjs` 的 P5 断言整条链零裸依赖，而这两个工具是 devDependencies。
+      # 它也不是"零违规"而是**棘轮**：基线冻在 `test/fixtures/static-baseline.json`，任一格上涨即红，
+      # 有意收紧用 `npm run verify:static -- --write-baseline` 并**随同一次提交**入库。
+      # 放在 build 之前：解析错误 / 类型错配是最便宜的一类失败，没理由等完 4.4 MB 的产物重建才报。
+      - name: verify:static —— 静态门禁（ESLint / tsc 棘轮）
+        run: npm run verify:static
+
       - name: build —— 重建 lib/client.js
         run: npm run build
 

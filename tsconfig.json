@@ -1,0 +1,36 @@
+// tsconfig.json —— **只为 `npm run typecheck` 存在**：本仓没有 .ts 源码，也不产出类型。
+//
+// 为什么要它：本仓此前的静态保障只有"守卫"（运行期真跑 + 文本判据）。守卫擅长钉住
+// **已知**的判据，但对"这个属性名在这个对象上根本不存在"这类跨文件形状错配无能为力 ——
+// 而那正是把大文件拆成模块时最容易引入的错误（把一个函数搬到新文件、忘了它还引用
+// 老家的某个键）。`tsc --checkJs` 恰好补这一格：它不要求写类型注解，只做形状推断。
+//
+// 口径（与铁律"不做无判别力的批量改动"一致 —— 采用**基线棘轮**而不是"一次修到零"）：
+//   · 45,000+ 行历史 JS 首次打开 checkJs 必然有存量报错，逐一修完是一场无法审查的巨型改动；
+//   · 因此 `test/verify-static.mjs` 按**错误码**冻结基线，此后每个码只能减不能增；
+//   · 基线按**错误码**而不是按行/文件：拆文件会让行号全变，按码计数才能在重构中稳定。
+//
+// 覆盖面：宿主半边（`lib/**`，`lib/client.js` 是产物故排除）+ 构建脚本 + 类型声明文件。
+// **不含 `test/**`**：那些是判据脚本，它们大量"故意"读畸形输入、把函数体当文本抠出来，
+// 形状错配是手法而不是缺陷 —— 报出来只会训练人忽略这门检查。也**不含 `src/**`**：
+// 那些是平铺作用域的片段，单文件看必然"名字都不存在"（见 eslint.config.mjs 文件头）。
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "lib": ["ES2023", "DOM"],
+    "module": "NodeNext",
+    "moduleResolution": "NodeNext",
+    "types": ["node"],
+    "allowJs": true,
+    "checkJs": true,
+    "noEmit": true,
+    "strict": false,
+    "noImplicitAny": false,
+    "skipLibCheck": true,
+    "resolveJsonModule": true,
+    "allowSyntheticDefaultImports": true,
+    "forceConsistentCasingInFileNames": true
+  },
+  "include": ["lib/**/*.js", "scripts/**/*.mjs", "lib/types/**/*.d.ts"],
+  "exclude": ["node_modules", "lib/client.js"]
+}

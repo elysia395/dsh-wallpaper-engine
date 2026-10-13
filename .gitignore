@@ -55,3 +55,6 @@ scene-layers-out/
 /.integration-notes/
 .DS_Store
 **/.DS_Store
+
+# npm 本地缓存（沙箱内 ~/.npm 不可写，改用仓内缓存）
+.npm-cache/
