@@ -116,12 +116,6 @@ function acceptLists(src) {
 function acceptAssignments(src) {
   return [...src.matchAll(/input\.accept\s*=\s*([^;\n]+)/g)].map((m) => m[1].trim());
 }
-/** 一条赋值语句右侧里的字面量 MIME 清单（不是字面量则空数组）。 */
-function acceptAssignmentLiterals(assignments) {
-  return assignments
-    .filter((rhs) => /^['"]/.test(rhs))
-    .map((rhs) => uniq(rhs.replace(/^['"]|['"]$/g, '').split(',').map((s) => s.trim()).filter(Boolean)));
-}
 /** 负对照用的变异体：把每个 `input.accept` 清单**砍掉最后一项**。 */
 function weakenedAcceptAssignments(src) {
   return String(src).replace(/(input\.accept\s*=\s*)['"]([^'"]+)['"]/g,
@@ -179,7 +173,6 @@ const tabsSrc = panelText();
   //（加了 SVG 却没光栅化、直接落盘 ⇒ 这里当场红）；③ 选图腿真的把两层都挂上了（不是造了个
   // 常量没人用）。
   const clientAccept = acceptAssignments(clientSrc);
-  const clientAcceptLiterals = acceptAssignmentLiterals(clientAccept);
   /** 某个 accept 清单里是否存在与宿主表一致的列表（正判据与负对照共用这一条）。 */
   const acceptCovers = (lists, hostTable) =>
     Boolean(hostTable && hostTable.length >= 3) && lists.some((l) => sameSet(l, hostTable));

@@ -371,24 +371,6 @@ const selection = {
   cacheDirBusy: false,
   cacheDirError: "",
   cacheDirNote: "",
-  // 自定义吉祥物立绘的导入态（transient）：在途标志与最后一条错误（同上面两枚口径）。
-  mascotBusy: false,
-  mascotError: "",
-  // 待确认的**形态切换目标**（transient）：自定义立绘生效时点内置项 / 按 ‹ › 都会先把目标
-  // 记在这里并置 armedConfirm，由面板画一行两步确认 —— 切到内置形态必须先清除那张自定义
-  // 立绘，而清除**不可恢复**，所以是唯一需要确认的路径。空串 = 没有待确认的切换。
-  mascotPendingForm: "",
-  // Upload-directory editor (transient): open state + draft path.
-  editingUploadDir: false,
-  uploadDirDraft: "",
-  // 缓存位置编辑器（transient）：开态 + 草稿路径 + 上次错误。**生效值由 inventory.cacheDir
-  // 携带**（host 是唯一真相）—— 它给的是解析链的答案，设了 `DSH_WE_CACHE_DIR` 时这个答案
-  // 和用户填的值不同，界面据此提示"当前由环境变量覆盖"。
-  editingCacheDir: false,
-  cacheDirDraft: "",
-  cacheDirBusy: false,
-  cacheDirError: "",
-  cacheDirNote: "",
   // 缓存位置目录浏览器（transient）：null=关。列表条目是宿主给的 { name, path } ——
   // path 原样回传问下一级，客户端**不做任何路径拼接**（分隔符/盘符大小写都是宿主的口径）；
   // display 是地址栏草稿（可手输，Enter 跳转），选中即把它填进 cacheDirDraft 走既有保存链。
@@ -2789,7 +2771,7 @@ async function openAvatarCrop(side, file) {
     emit();
     return;
   }
-  let url = "";
+  let url;
   try {
     const src = await decodeImageFile(file);
     const w = Number(src.width) || 0;

@@ -210,7 +210,7 @@ function avatarDecorateRow(row) {
 /** 扫一遍全文档，把还没补过的消息行补上（观察者只管新插入的，这一条管"已经在了的"）。 */
 function avatarSweep() {
   if (typeof document.querySelectorAll !== 'function') return;
-  let rows = [];
+  let rows;
   try { rows = document.querySelectorAll(AVATAR_ROW_SELECTOR); } catch { return; }
   for (const row of rows) avatarDecorateRow(row);
   // 扫完立刻重算分组：`sweep` 本来就是一次全文档扫，分组复用同一次遍历的开销类别。
@@ -232,7 +232,7 @@ function avatarSweep() {
  */
 function avatarApplyGrouping() {
   if (!avatarActive || typeof document.querySelectorAll !== 'function') return;
-  let rows = [];
+  let rows;
   try { rows = document.querySelectorAll(AVATAR_ROW_SELECTOR); } catch { return; }
   let prev = '';
   for (const row of rows) {

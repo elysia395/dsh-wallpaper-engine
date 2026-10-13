@@ -3628,7 +3628,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     const PERF_KEYS = ['document', 'window', 'requestAnimationFrame', 'cancelAnimationFrame', 'selection', 'weNow'];
     const prevPerf = {};
     for (const k of PERF_KEYS) prevPerf[k] = globalThis[k];
-    let perfNote = '';
+    let perfNote;
     let ops = null;
     try {
       // 假 2D 上下文：只数贵操作。**模糊按"绘制时 shadowBlur > 0"计**（那才是真的
@@ -4002,7 +4002,6 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       return gateAt >= 0 && cropAt >= 0 && gateAt < cropAt
         && !/decodeImageFile|createImageBitmap/.test(body);
     };
-    const encFn = fnBody(gsrc, 'downscaleDecoded');
     /** 自动压缩是否无损优先（PNG 先于 WebP 出现）。 */
     const losslessFirst = (src2) => {
       const body = fnBody(src2, 'downscaleDecoded');
@@ -5276,7 +5275,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
           return acc;
         };
         const islandCtx = (sel) => ({
-          sel: sel,
+          sel,
           onAvatarEnabled: () => {}, onAvatarSize: () => {}, onAvatarRadius: () => {},
           onAvatarPick: () => {}, onAvatarClear: () => {}, onAvatarAutoCompress: () => {},
         });

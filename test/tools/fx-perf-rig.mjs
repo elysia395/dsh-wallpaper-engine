@@ -129,7 +129,7 @@ const server = createServer((req, res) => {
     req.on('data', (c) => { body += c; });
     req.on('end', () => {
       res.writeHead(204); res.end();
-      let parsed = null;
+      let parsed;
       try { parsed = JSON.parse(body); } catch { parsed = { error: 'bad json: ' + body.slice(0, 200) }; }
       if (resolveResult) resolveResult(parsed);
     });
@@ -165,7 +165,7 @@ const child = spawn(browser, [
   `http://127.0.0.1:${PORT}/`,
 ], { stdio: 'ignore' });
 
-const timeout = new Promise((_, rej) => setTimeout(() => rej(new Error('超时（60s 内没收到页面回传）')), 60000));
+const timeout = new Promise((_, rej) => { setTimeout(() => rej(new Error('超时（60s 内没收到页面回传）')), 60000); });
 
 try {
   const r = await Promise.race([resultPromise, timeout]);
