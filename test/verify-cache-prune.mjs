@@ -27,6 +27,9 @@ const MINUTE = 60 * 1000;
 const OLD = 30 * MINUTE; // 比 5 分钟（在途保护）与 10 分钟（.tmp 年龄门）都旧
 
 let passed = 0; let failed = 0;
+/** 跳过账本（`docs/DEV-GUIDE.md` §4.7 约定 10）：本文件当前的跳过出口只有 D6 一条，
+ *  但跳过必须**进汇总行带计数**，否则"没跑"与"通过"同形。 */
+const skipNotes = [];
 function check (name, ok, detail) {
   if (ok) passed++;
   else failed++;
@@ -175,7 +178,9 @@ function sizeCapIgnoresDirs (make, d) {
   const sub = join(d, 'tc_dir.mp4');
   mkdirSync(sub);
   const dirSize = statSync(sub).size;
-  if (dirSize < 4096) return null; // 该 FS 目录 size 为 0/极小 ⇒ 判据无判别力（G 段点名跳过）
+  // macOS/APFS 上目录 size 极小（< 4096）⇒ 本机无判别力，具名 SKIP 并进 G 段可见性；
+  // Linux/CI 的 ext4 腿目录恒 4096 字节，**那条腿才有牙**（matrix.os 双平台的意义，见 DEV-GUIDE §4.3）。
+  if (dirSize < 4096) return null;
   file(join(d, 'tc_real.mp4'), 100, OLD + MINUTE); // 比目录新 ⇒ 若目录计数，先删目录（失败）再轮到它
   make({}).pruneCacheDirBySize(d, 4096, /^tc_/);
   return existsSync(join(d, 'tc_real.mp4'));
@@ -308,8 +313,10 @@ await (async () => {
     sizeCapProtectsOwnTmp(realKit, dir('d4')));
   check('D5 matchRe 是调用方口径：不匹配的名字不参与计数也不被删', sizeCapRespectsMatcher(realKit, dir('d5')));
   const dirJudgment = sizeCapIgnoresDirs(realKit, dir('d6'));
-  if (dirJudgment === null) console.log('  ⚠ SKIP D6：本文件系统上目录 size 过小 ⇒ 该判据无判别力（不是通过）');
-  else check('D6 目录不计入总量：唯一"超额"来自目录时真文件活下来', dirJudgment);
+  if (dirJudgment === null) {
+    skipNotes.push('D6 目录不计入总量（本文件系统上目录 size 过小，无判别力）');
+    console.log('  ⚠ SKIP D6：本文件系统上目录 size 过小 ⇒ 该判据无判别力（不是通过）');
+  } else check('D6 目录不计入总量：唯一"超额"来自目录时真文件活下来', dirJudgment);
 
   const noOwn = await loadMutant('size-no-own-tmp', (s) => s.replace(
     'if (name.endsWith(ownTmpSuffix) || !matchRe.test(name)) continue;',
@@ -376,8 +383,14 @@ check('G3 本文件直读被测模块（guard-map 的覆盖认定靠这个路径
   && typeof createCachePruneKit === 'function');
 
 console.log('');
+if (skipNotes.length) {
+  console.log('  ⚠️ 本次**未执行**的判据（不计入通过）—— ' + skipNotes.length + ' 条：');
+  for (const s of skipNotes) console.log('     ○ ' + s);
+}
 if (failed) {
-  console.log(`CACHE-PRUNE CHECKS FAILED — ${failed} failed, ${passed} passed`);
+  console.log(`CACHE-PRUNE CHECKS FAILED — ${failed} failed, ${passed} passed`
+    + (skipNotes.length ? `, ${skipNotes.length} skipped` : ''));
   process.exit(1);
 }
-console.log(`ALL CACHE-PRUNE CHECKS PASSED (${passed})`);
+console.log(`ALL CACHE-PRUNE CHECKS PASSED (${passed})`
+  + (skipNotes.length ? ` —— ⚠️ ${skipNotes.length} 条未执行（不是通过，见上面的 ○ 行）` : ''));
