@@ -323,10 +323,6 @@ function main() {
     light: lightVars ? Number(lightVars[1]) : NaN,
     dark: darkVars ? Number(darkVars[1]) : NaN,
   };
-  const BASE = {
-    light: lightVars ? hex2rgb(lightVars[2]) : null,
-    dark: darkVars ? hex2rgb(darkVars[2]) : null,
-  };
 
   // ── F2: every text-bearing surface carries the floor, both themes ─────────
   const surfaceSpecs = [

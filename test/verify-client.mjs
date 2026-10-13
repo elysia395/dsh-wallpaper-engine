@@ -4,7 +4,7 @@
 // the four effect knobs (wallpaper blur/scrim/border/glass blur) push CSS
 // variables, the picker renders, and automatic rotation is scoped to a
 // user-defined rotation group (list) with its own interval.
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import assert from 'node:assert/strict';
 import vm from 'node:vm';
 // 剥注释：共享的字符串感知实现（test/tools/js-text.mjs）。
@@ -74,7 +74,7 @@ function makeEl(tag) {
     removeAttribute(k) { delete this.attributes[k]; },
     focus() { activeEl = this; },
     blur() { if (activeEl === this) activeEl = null; },
-    querySelector(sel) { return null; },
+    querySelector() { return null; },
   };
 }
 
@@ -1272,7 +1272,7 @@ setTimeout(async () => {
     //    qp-tab=appearance + 两块折叠块展开）钉高级行为（独立配置往返 / 胶囊 / 触发条 /
     //    字体开关）。两边的 handler 是同一份模块级实现，bodyEl 属性断言与哪棵树无关。
     setTab('appearance');
-    tree = renderPicker();
+    tree = renderPicker();   // eslint-disable-line require-atomic-updates -- 顺序 await 的判据；tree 无并发读写
     treeText = JSON.stringify(tree);
     assert.ok(treeText.includes('"we-tabs__tab we-tabs__tab--active"'), 'appearance tab active:');
     // ── 「全局 UI 配色」节（2026-10-11 用户口径）：配色**迁出「主题」节**、成为独立大项。
@@ -1877,16 +1877,13 @@ setTimeout(async () => {
       const cx = R * Math.sin(phi), cz = R * Math.cos(phi);
       const ux = Math.cos(phi), uz = -Math.sin(phi);
       const xs = [];
-      for (const sx of [-1, 1]) {
-        for (const sy of [-1, 1]) {
-          // sy 只影响纵坐标（环是绕水平轴转的，纵坐标不参与"会不会横向重叠"），
-          // 所以这里只需把两个 x 方向算出来；保留 sy 循环是为了让"四角投影"名副其实。
-          const x = cx + sx * (W / 2) * ux;
-          const z = cz + sx * (W / 2) * uz;
-          const k = P / (P - z);
-          xs.push(x * k);
-          void sy;
-        }
+      for (const [sx] of [[-1, -1], [-1, 1], [1, -1], [1, 1]]) {
+        // sy 只影响纵坐标（环是绕水平轴转的，纵坐标不参与"会不会横向重叠"），
+        // 所以这里只需把两个 x 方向算出来；四个角仍逐个走一遍，让"四角投影"名副其实。
+        const x = cx + sx * (W / 2) * ux;
+        const z = cz + sx * (W / 2) * uz;
+        const k = P / (P - z);
+        xs.push(x * k);
       }
       return { lo: Math.min(...xs), hi: Math.max(...xs) };
     };
@@ -2952,7 +2949,7 @@ setTimeout(async () => {
     inventoryFails = true;
     findBtnByText(tree, '刷新').props.onClick();
     await new Promise((r) => { setTimeout(r, 80); }); // 等 loadInventory 的 promise 落定
-    tree = renderPicker();
+    tree = renderPicker();   // eslint-disable-line require-atomic-updates -- 顺序 await 的判据；tree 无并发读写
     assert.ok(showsInventoryError(tree), '库存加载失败 ⇒ 显示「未检测到 Wallpaper Engine：<原因>」');
     assert.ok(findBtnByText(tree, '重试'), '错误态必须给「重试」按钮（否则用户无路可走）');
     assert.equal(findBtnByText(tree, '刷新'), null, '错误态下整块面板被替换（不是叠在面板上）');
@@ -2963,7 +2960,7 @@ setTimeout(async () => {
     inventoryFails = false;
     findBtnByText(tree, '重试').props.onClick();
     await new Promise((r) => { setTimeout(r, 80); });
-    tree = renderPicker();
+    tree = renderPicker();   // eslint-disable-line require-atomic-updates -- 顺序 await 的判据；tree 无并发读写
     assert.ok(!showsInventoryError(tree), '重试成功 ⇒ 错误态消失');
     assert.ok(findBtnByText(tree, '选择壁纸'), '恢复后回到正常面板（页签内容回来了；类型筛选在库视图里，下钻打开即有）');
 
@@ -4029,7 +4026,7 @@ setTimeout(async () => {
   // 负对照：故意植入一条**错期望**，检测器必须恰好抓到它（证明上面的比较真在比，
   // 而不是恒真）。
   const planted = CASES.concat([['植入的错期望', 'x == 1', { x: 2 }, true]]);
-  const plantedWrong = planted.filter(([label, expr, values, want]) => {
+  const plantedWrong = planted.filter(([, expr, values, want]) => {
     let got;
     try { got = weEvalCondition(expr, values); } catch { got = 'THREW'; }
     return got !== want;
@@ -4464,7 +4461,7 @@ setTimeout(async () => {
     // 只接管"替身里有"或"全局也没有"的名字 —— 否则连 `Math` / `String` 也会被当成自由名
     // 拿到一个记录用的替身（第一版就是这样炸的）。
     has: (t, k) => (k in t) || !(k in globalThis),
-    get: (t, k) => (k in t ? t[k] : (...a) => { named.push(String(k)); return undefined; }),
+    get: (t, k) => (k in t ? t[k] : () => { named.push(String(k)); return undefined; }),
     set: () => true,
   });
   // `new Function` 不是模块环境 ⇒ 先剥掉 `export { … }`（构建期内联时也是这么剥的；
@@ -4712,7 +4709,7 @@ setTimeout(async () => {
   //    判据就不精确了（首版正是这样"看着绿、其实测的不是这条"—— 它掩盖了阳性对照的失败）。
   await sleep(320);
   resetGap();
-  A.win.__weFocusHandback.lastAt = Date.now() - 200000;
+  A.win.__weFocusHandback.lastAt = Date.now() - 200000;   // eslint-disable-line require-atomic-updates -- 顺序 await 的判据；宿主对象无并发读写
   A.doc.activeElement = A.frame;
   const skippedBefore = A.win.__weFocusHandback.skipped;
   A.fire('focusout', A.hostButton);
@@ -4799,7 +4796,7 @@ setTimeout(async () => {
   bare.doc.addEventListener = undefined;
   let bareThrew = false;
   let bareRet = 'unset';
-  try { bareRet = bare.mod.installFocusHandback(); } catch (err) { bareThrew = true; }
+  try { bareRet = bare.mod.installFocusHandback(); } catch { bareThrew = true; }
   assert.ok(bareThrew === false && bareRet === null,
     '#148 宿主半：宿主 DOM 能力不全时必须安静退场（返回 null 且不抛），实测 ret=' + String(bareRet));
   assert.equal(bare.listeners.length, 0, '#148 宿主半：退场时不许留下半个监听器');

@@ -251,7 +251,7 @@ function runScenario(name, opts, body) {
     _store: Object.assign({ 'dsh-wallpaper-engine:selection': JSON.stringify(opts.selection), weRotationTestSec: '10' }, opts.localStorageSeed || {}),
     getItem(k){ return this._store[k] ?? null; }, setItem(k,v){ this._store[k]=v; }, removeItem(k){ delete this._store[k]; },
   };
-  const fetch = (url, init) => Promise.resolve({ ok:true, status:200, headers:{ get: () => '0' },
+  const fetch = (url) => Promise.resolve({ ok:true, status:200, headers:{ get: () => '0' },
     json: () => Promise.resolve(
       String(url).includes('/settings') ? { ok:true, betterSidebar:false } :
       String(url).includes('/media-info') ? { info:null } :
@@ -295,7 +295,7 @@ function runScenario(name, opts, body) {
   // 不喂时逐值转发宿主 Math，本档以外的行为与不给 Math 时一致。
   let randomPick = null;
   const setRandomSeq = (vals) => { let i = 0; randomPick = () => vals[Math.min(i++, vals.length - 1)]; };
-  const init = (selection, wallpapers) => {
+  const init = (selection) => {
     clock.offset = 0;
     localStorage._store['dsh-wallpaper-engine:selection'] = JSON.stringify(selection);
     const cap = { handoff: null };

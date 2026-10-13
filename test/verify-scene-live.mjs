@@ -29,7 +29,6 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync, rmSync, readdirSync
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Readable, Writable } from 'node:stream';
-import { execFileSync } from 'node:child_process';
 // 剥注释：共享的字符串感知实现（`verify-module-layout` 的『剥注释必须字符串感知』一节钉住"不许再用朴素正则"）。
 import { stripComments, stripExportBlocks } from './tools/js-text.mjs';
 // 刀3：样式族取文（8 个域模块 + 组装点，构建序拼接）。刀6：客户端正文族（正文 + 助手模块）。
@@ -1181,7 +1180,6 @@ const clientChecks = [
   ['both live guards share one aliveness predicate',
     liveFlagChecks.heartbeatSingle(liveSrc),
     (() => {
-      const body = liveFlagChecks.tickBody();
       return 'aliveBodies=' + (liveSrc.match(/function liveHeartbeatAlive\s*\(/g) || []).length
         + ' alias=' + liveSrc.includes('const liveHeartbeatReady = liveHeartbeatAlive;')
         + ' callSites=' + (liveSrc.match(/liveHeartbeatReady\(/g) || []).length;
@@ -2077,7 +2075,7 @@ const runGuard = (stub) => { new Function('window', guardSource)(stub); return s
   const win3 = {};
   Object.defineProperty(win3, 'focus', { configurable: false, writable: false, value () {} });
   let guardThrew = false;
-  try { runGuard(win3); } catch (e) { guardThrew = true; }
+  try { runGuard(win3); } catch { guardThrew = true; }
   check('focus guard reports installed=false when focus is unpatchable (never throws)',
     guardThrew === false && win3.__weFocusGuard.installed === false && win3.__weFocusGuard.blocked === 0);
   // ⑥ 负对照：把"吞掉"改回"转交" ⇒ ① 的核心断言（原函数一次都没被调用）必须变假。
@@ -2151,7 +2149,7 @@ const runGuard = (stub) => { new Function('window', guardSource)(stub); return s
   Object.defineProperty(ElFrozen.prototype, 'focus', { configurable: false, writable: false, value () {} });
   const win5 = { focus () {}, document: {}, HTMLElement: ElFrozen, addEventListener () {} };
   let elGuardThrew = false;
-  try { runGuard(win5); } catch (e) { elGuardThrew = true; }
+  try { runGuard(win5); } catch { elGuardThrew = true; }
   check('元素级围栏：补丁装不上时 elInstalled=false 且绝不抛（帧级那一半仍有效）',
     elGuardThrew === false && win5.__weFocusGuard.elInstalled === false
       && win5.__weFocusGuard.installed === true && win5.__weFocusGuard.elBlocked === 0);
@@ -2839,7 +2837,6 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     'onBackgroundBrightness', 'onBackgroundContrast', 'onBackgroundSaturate', 'onAccent',
     'onGlassColor', 'onGlassAlpha', 'onGlassFidelity', 'onChatGlassFidelity', 'onToggleThemeFollow'];
   {
-    const compStart = src.indexOf('function WallpaperPicker() {');
     // 界线判据提成命名函数：阳性侧喂真实源码（块底那个字面量就是同一份，只改了换行写法 ⇒ 不构成对照），
     // 阴性侧喂一份**改动过的源码副本** —— 删掉 `function WallpaperPicker() {` 这个界标，`compStart` 变 -1，
     // 同一条判据必须判红（`-1` 若被当成"都合格"，所有 `at > compStart` 反而恒真、判据静默放行）。
@@ -3486,7 +3483,6 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
   const REACT = globalThis.React;
   const labelStub = (label) => (typeof label === 'string' && label
     ? REACT.createElement('span', { className: 'stub-label' }, label) : null);
-  const PREV_STUBS = { SliderRow: globalThis.SliderRow, switchRow: globalThis.switchRow, ctlText: globalThis.ctlText };
   globalThis.SliderRow = labelStub;
   globalThis.switchRow = (label) => labelStub(label);
   globalThis.ctlText = (label) => labelStub(label);
@@ -4149,7 +4145,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
         Object.defineProperty(globalThis, 'localStorage', {
           value, configurable: true, writable: true,
         });
-      } catch (e) { /* 只读宿主 */ }
+      } catch { /* 只读宿主 */ }
     };
     try {
       globalThis.document = {
@@ -4203,7 +4199,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       const rescan = (x, y) => {
         for (let i = 0; i < 16; i += 1) step(20);            // 320ms ⇒ 推过节流窗
         if (typeof listeners.pointermove === 'function') listeners.pointermove({ clientX: x, clientY: y });
-        for (let i = 0; i < 400 && pending; i += 1) step(20);
+        for (let i = 0; i < 400 && pending; i += 1) step(20);   // eslint-disable-line no-unmodified-loop-condition -- pending 由 step() 改（跨函数副作用，规则看不见）
       };
       parallaxLayerMod.syncParallaxLayer();          // 起帧（假 rAF ⇒ 只排一帧）
       if (typeof listeners.pointermove === 'function') listeners.pointermove({ clientX: 1600, clientY: 900 });
@@ -4264,24 +4260,24 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
         && !('--we-parallax-x' in bodyStore.props) && !('--we-parallax-y' in bodyStore.props)
         && !('--we-parallax-mascot' in bodyStore.props)
         && bodyStore.props['--we-parallax-bg'] === '1';
-      for (let i = 0; i < 400 && pending; i += 1) step(20);   // 一直跑到收敛
+      for (let i = 0; i < 400 && pending; i += 1) step(20);   // eslint-disable-line no-unmodified-loop-condition -- pending 由 step() 改（跨函数副作用，规则看不见）
       settled = pending === null && targets.every((el) => !el.classList.contains('we-parallax--moving'));
       // 迟滞（用户口径 m01915-②：光标从屏幕一半挪到另一半时中央文本区与输入框会抖）：量化死区
       // 0.25 / 重新起跳 0.75 设备像素。先让它稳定在大位移那一档，再把光标挪到"本该归零"的 0.4
       // 设备像素档 —— 不带迟滞的写法（直接 Math.round）这一下会把 `translate` 摘掉，光标在零附近
       // 一磨就 0↔1 来回翻转 = 屏上一下一下地跳；带迟滞则**保留上一档的 1px**，直到真的落进死区。
       if (typeof listeners.pointermove === 'function') listeners.pointermove({ clientX: 1600, clientY: 900 });
-      for (let i = 0; i < 400 && pending; i += 1) step(20);
+      for (let i = 0; i < 400 && pending; i += 1) step(20);   // eslint-disable-line no-unmodified-loop-condition -- pending 由 step() 改（跨函数副作用，规则看不见）
       const engaged = !!numOf(chatGroup.box);
       if (typeof listeners.pointermove === 'function') listeners.pointermove({ clientX: 840, clientY: 450 });
-      for (let i = 0; i < 400 && pending; i += 1) step(20);
+      for (let i = 0; i < 400 && pending; i += 1) step(20);   // eslint-disable-line no-unmodified-loop-condition -- pending 由 step() 改（跨函数副作用，规则看不见）
       const holdNum = numOf(chatGroup.box);
       hysteresisOk = engaged && !!holdNum && Math.abs(holdNum[0]) === 1 && holdNum[1] === 0;
       // ① 各区域单独可调（用户口径 m01915-①；0 的语义见 m02697-③）：把会话文本区那一档的距离
       // 置 0 ⇒ 它一动不动，而侧栏照旧拿自己的偏移 —— 四个距离真的是各自的，不是共用同一个数。
       globalThis.selection.parallaxUiChatDepth = 0;
       if (typeof listeners.pointermove === 'function') listeners.pointermove({ clientX: 1600, clientY: 900 });
-      for (let i = 0; i < 400 && pending; i += 1) step(20);
+      for (let i = 0; i < 400 && pending; i += 1) step(20);   // eslint-disable-line no-unmodified-loop-condition -- pending 由 step() 改（跨函数副作用，规则看不见）
       regionsOk = !('translate' in chatGroup.box.props) && !!offsetNum(sidebarGroup.box);
       globalThis.selection.parallaxUiChatDepth = 1;
       // ② 插件前端那一整块**自己的开关**（用户诉求 m03549："把插件前端也单独归类加开关"；裁决 =
@@ -4332,11 +4328,11 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       const bgPrev = globalThis.selection.parallaxBg;
       globalThis.selection.parallaxBg = 0;
       if (typeof listeners.pointermove === 'function') listeners.pointermove({ clientX: 800, clientY: 450 });
-      for (let i = 0; i < 400 && pending; i += 1) step(20);
+      for (let i = 0; i < 400 && pending; i += 1) step(20);   // eslint-disable-line no-unmodified-loop-condition -- pending 由 step() 改（跨函数副作用，规则看不见）
       if (typeof listeners.pointermove === 'function') listeners.pointermove({ clientX: 1600, clientY: 900 });
       step(20);
       const firstFrameNum = numOf(pluginChild);
-      for (let i = 0; i < 400 && pending; i += 1) step(20);
+      for (let i = 0; i < 400 && pending; i += 1) step(20);   // eslint-disable-line no-unmodified-loop-condition -- pending 由 step() 改（跨函数副作用，规则看不见）
       const smoothSettledNum = numOf(pluginChild);
       pluginSmoothOk = !!firstFrameNum && !!smoothSettledNum && firstFrameNum[0] !== 0
         && Math.abs(firstFrameNum[0]) < Math.abs(smoothSettledNum[0]);
@@ -4358,7 +4354,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       //    符号相反**（跨零那一帧写的是 0，`translate` 被摘掉 ⇒ 采样值按 0 记），且确实跨了过去。
       const crossSeq = [];
       if (typeof listeners.pointermove === 'function') listeners.pointermove({ clientX: 200, clientY: 450 });
-      for (let i = 0; i < 400 && pending; i += 1) {
+      for (let i = 0; i < 400 && pending; i += 1) {   // eslint-disable-line no-unmodified-loop-condition -- pending 由 step() 改（跨函数副作用，规则看不见）
         step(20);
         const n = numOf(chatGroup.box);
         crossSeq.push(n ? n[0] : 0);
@@ -4373,7 +4369,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       // （属性只要在，包含块就成立 —— 静止的界面连一个空位移都不许留）；左栏摘的是 `left`/`top`，
       // 它那条 `position: relative` 留着（值与插件玻璃那一段逐字相同，摘挂反而是把锚点来回换）。
       if (typeof listeners.pointermove === 'function') listeners.pointermove({ clientX: 800, clientY: 450 });
-      for (let i = 0; i < 400 && pending; i += 1) step(20);
+      for (let i = 0; i < 400 && pending; i += 1) step(20);   // eslint-disable-line no-unmodified-loop-condition -- pending 由 step() 改（跨函数副作用，规则看不见）
       centerCleared = [chatGroup, nestedGroup, composerGroup]
         .every((g) => !('translate' in g.box.props) && !('translate' in g.outlet.props))
         && !('left' in sidebarGroup.box.props) && !('top' in sidebarGroup.box.props)
@@ -6112,7 +6108,7 @@ check('negative control: 门面里重新出现被搬走的路由体会被同一�
   movedOut(hostSrc + '\n  jsonOut(404, { error: `未知素材源：${id}` });'));
 
 // ── teardown ────────────────────────────────────────────────────────────────
-try { dispose && dispose(); } catch { /* ignore */ }
+try { if (dispose) dispose(); } catch { /* ignore */ }
 delete process.env.DSH_WE_STEAM_ROOT;
 delete process.env.DSH_WE_UPLOAD_DIR;
 rmSync(fixtureRoot, { recursive: true, force: true });

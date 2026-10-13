@@ -74,7 +74,6 @@ export function scanCjkStrings(src, options = {}) {
   let prevSig = '';
   let lastIdent = null;      // 最近的标识符（`(` 的候选被调函数名）
   let lastIdentEnd = -1;
-  let pendingMember = false; // 刚读过 `.` ⇒ 下一个标识符是成员名
 
   const push = (i, value, kind, quote, hasInterp, start, end) => {
     if (!hasCjk(value)) return;
@@ -231,16 +230,16 @@ export function scanCjkStrings(src, options = {}) {
       while (j < n && /[A-Za-z0-9_$]/.test(text[j])) j++;
       lastIdent = text.slice(i, j);
       lastIdentEnd = j;
-      i = j; prevSig = 'a'; pendingMember = false; continue;
+      i = j; prevSig = 'a'; continue;
     }
-    if (c === '.' && lastIdentEnd === i) { pendingMember = true; i++; prevSig = '.'; continue; }
+    if (c === '.' && lastIdentEnd === i) { i++; prevSig = '.'; continue; }
     // ── 括号 ────────────────────────────────────────────────────────────────
     if (c === '(') {
       // 被调函数名：紧邻的标识符（允许空白），且它必须与 `(` 之间只隔空白。
       let callee = null;
       if (lastIdent !== null && /^[\s]*$/.test(text.slice(lastIdentEnd, i))) callee = lastIdent;
       frames.push({ callee, parenIndex: i, endIndex: null });
-      i++; prevSig = '('; lastIdent = null; pendingMember = false; continue;
+      i++; prevSig = '('; lastIdent = null; continue;
     }
     if (c === ')' || c === ']' || c === '}') {
       const frame = frames.length ? frames.pop() : null;

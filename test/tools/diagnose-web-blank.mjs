@@ -32,7 +32,7 @@
  * 不碰 node_modules、不写插件数据目录；只在 .test-cache/ 下开一个隔离的迷你 host。
  */
 import { createServer } from 'node:http';
-import { mkdirSync, writeFileSync, rmSync, readFileSync, existsSync, statSync, createReadStream, openSync } from 'node:fs';
+import { mkdirSync, rmSync, readFileSync, existsSync, statSync, createReadStream, openSync } from 'node:fs';
 import { spawn } from 'node:child_process';
 import { join, resolve, dirname, extname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
@@ -133,7 +133,7 @@ const target = (inv.wallpapers || []).find((w) => String(w.id) === `up-dir-${WAL
 if (!target) {
   console.error(`库存里没有 ${WALL_ID}。可用 id 样例：`,
     (inv.wallpapers || []).slice(0, 8).map((w) => w.id).join(', '));
-  try { dispose && dispose(); } catch { /* ignore */ }
+  try { if (dispose) dispose(); } catch { /* ignore */ }
   appServer.close();
   process.exit(2);
 }
@@ -243,6 +243,6 @@ if (shotSize) {
   console.log('  注意体积只是粗判：画面本身接近纯色的壁纸也会很小，务必**亲眼看图**。');
 }
 
-try { dispose && dispose(); } catch { /* ignore */ }
+try { if (dispose) dispose(); } catch { /* ignore */ }
 appServer.close();
 process.exit(0);

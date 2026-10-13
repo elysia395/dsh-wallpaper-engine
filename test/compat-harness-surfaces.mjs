@@ -125,7 +125,7 @@ function resolveHarnessPkg() {
   try {
     const globalRoot = execSync('npm root -g', { encoding: 'utf8', stdio: ['ignore', 'pipe', 'ignore'] }).trim();
     return join(globalRoot, '@deepseek-ai', 'dsh');
-  } catch (err) {
+  } catch {
     return null;
   }
 }

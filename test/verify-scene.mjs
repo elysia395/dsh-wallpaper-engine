@@ -61,22 +61,6 @@ function platformSkip(name, why) {
 
 // ── Helpers ─────────────────────────────────────────────────────────────────
 
-/** Minimal PNG chunk writer for synthetic embedded-PNG tests. */
-function pngChunk(type, data) {
-  const out = Buffer.alloc(12 + data.length);
-  out.writeUInt32BE(data.length, 0);
-  out.write(type, 4, 'ascii');
-  data.copy(out, 8);
-  let crc = 0xffffffff;
-  const bytes = out.subarray(4, 8 + data.length);
-  for (let i = 0; i < bytes.length; i++) {
-    crc ^= bytes[i];
-    for (let k = 0; k < 8; k++) crc = (crc & 1) ? (0xedb88320 ^ (crc >>> 1)) : (crc >>> 1);
-  }
-  out.writeUInt32BE((crc ^ 0xffffffff) >>> 0, 8 + data.length);
-  return out;
-}
-
 /** Build a tiny packed scene.pkg with raw (uncompressed) entries. */
 function buildPkg(entries) {
   const parts = [];
@@ -1010,9 +994,7 @@ console.log('Level F — sceneVideo 文件版探测（issue #136）等价 / 读�
     const file = join(eqDir, name + '.pkg');
     writeFileSync(file, pkg);
     // ① 条目表（含压缩 flags）逐字段全等 —— probeCompressedEntry ≡ probeCompressedEntryAt。
-    let counted = 0;
     const readAt = async (pos, len) => {
-      counted += len;
       return pkg.subarray(pos, pos + Math.min(len, Math.max(pkg.length - pos, 0)));
     };
     const head = await parsePkgHead(readAt, pkg.length);

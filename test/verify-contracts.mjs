@@ -408,7 +408,7 @@ console.log('\n⑤ CI 工作流的工作流级表达式（作业作用域上下�
     const bad = [];
     for (const ctx of JOB_SCOPED) {
       const re = new RegExp('\\$\\{\\{[^}]*\\b' + ctx + '\\.', 'g');
-      for (const _ of head.match(re) || []) bad.push(ctx);
+      bad.push(...(head.match(re) || []).map(() => ctx));
     }
     return uniq(bad);
   };

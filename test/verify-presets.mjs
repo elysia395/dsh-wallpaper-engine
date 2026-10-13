@@ -1809,7 +1809,7 @@ section('④b 行为判据：删除令牌链 + broken 行禁用与可删 + 勾�
 // ⇒ 没有任何一条旧判据被"为了变绿"删除；每一条要么原样、要么加强、要么按新契约等价替换。
 
 // ── teardown ────────────────────────────────────────────────────────────────
-try { dispose && dispose(); } catch { /* ignore */ }
+try { if (dispose) dispose(); } catch { /* ignore */ }
 delete process.env.DSH_WE_STEAM_ROOT;
 delete process.env.DSH_WE_UPLOAD_DIR;
 rmSync(ISO, { recursive: true, force: true });

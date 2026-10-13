@@ -180,8 +180,10 @@ console.log('\n② 画面占比最大色（纯函数，供守卫直测）');
   check('负对照：同一判据把整图改透明后返回 null',
     m.themeFollowModeColorOf(mostlyRed, 2, 2) !== null
     && m.themeFollowModeColorOf(px([[255, 0, 0, 0], [255, 0, 0, 0], [255, 0, 0, 0], [0, 0, 255, 0]]), 2, 2) === null);
+  // 两次**独立调用**（同一行写两遍同一表达式会被 lint 当自比较）
+  const det = JSON.stringify(m.themeFollowModeColorOf(mostlyRed, 2, 2));
   check('确定性：同一张图两次得到同一个答案',
-    JSON.stringify(m.themeFollowModeColorOf(mostlyRed, 2, 2)) === JSON.stringify(m.themeFollowModeColorOf(mostlyRed, 2, 2)));
+    det === JSON.stringify(m.themeFollowModeColorOf(mostlyRed, 2, 2)));
 }
 
 // ═══ ③ 行为：判决 / 去重 / 让位 / 降级 ════════════════════════════════════════

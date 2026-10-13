@@ -16,7 +16,7 @@
  * ②为什么基线里留着检验者：它必须拼出退役词才能搜它们，否则本节一条都搜不到（假绿）。
  * 除它之外的任何文件命中退役词 = 有人把这条线接回了主线，必须失败。
  */
-import { readFileSync, existsSync, readdirSync, statSync } from 'node:fs';
+import { readFileSync, existsSync, readdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));

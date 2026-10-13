@@ -68,7 +68,7 @@ function fakeAdapter(script) {
       if (step instanceof Error) throw step;
       return step;
     },
-    onChange: (fn) => (listeners.add(fn), () => listeners.delete(fn)),
+    onChange: (fn) => { listeners.add(fn); return () => listeners.delete(fn); },
     stop: () => {},
     emit: () => { for (const fn of listeners) fn(); },
   };
@@ -163,7 +163,7 @@ await checkAsync('B4 getSnapshot 永不空/永不抛（从未启动也安全）'
 await checkAsync('B5 非候选会话 ⇒ 初始即降级且不建适配器', async () => {
   let built = 0;
   const hub = hubFor({
-    createAdapter: () => (built++, fakeAdapter([X11_OK])),
+    createAdapter: () => { built++; return fakeAdapter([X11_OK]); },
     isCandidate: () => false,
     retryStartMs: 1000,
   });
@@ -200,9 +200,8 @@ await checkAsync('B7 降级后重试必须真的重建适配器（评审 P1：st
   await hub.dispose();
 });
 await checkAsync('B8 poll 永挂 ⇒ 看门狗超时降级（评审 P1：busy 卡死防线）', async () => {
-  let built = 0;
   const hub = hubFor({
-    createAdapter: () => (built++, { ...fakeAdapter([X11_OK]), poll: () => new Promise(() => {}) }),
+    createAdapter: () => ({ ...fakeAdapter([X11_OK]), poll: () => new Promise(() => {}) }),
     pollTimeoutMs: 30,
     retryStartMs: 60_000, // 测试窗口内不让重试插进来
   });
@@ -272,7 +271,7 @@ check('D3 lib/index.js 接线：语句形态 + hub 生命周期', () => {
 const { registerOcclusionRoutes } = await import('../lib/routes/occlusion.js');
 function fakeWebServer() {
   const routes = [];
-  return { routes, register: (r) => (routes.push(r), () => {}) };
+  return { routes, register: (r) => { routes.push(r); return () => {}; } };
 }
 function fakeRes() {
   return {
@@ -317,7 +316,7 @@ await checkAsync('E3 trace=1：GET 与 405 都逐请求 log+diag（评审 F2）'
     await ws.routes[0].handler({ method: 'POST', url: '/x' }, fakeRes());
   } finally {
     if (prev === undefined) delete process.env.DSH_WE_OCCLUSION_TRACE;
-    else process.env.DSH_WE_OCCLUSION_TRACE = prev;
+    else process.env.DSH_WE_OCCLUSION_TRACE = prev;   // eslint-disable-line require-atomic-updates -- 顺序 await 的判据；env 无并发读写
   }
   assert.equal(logLines.length, 2, 'GET 一行 + 405 一行');
   assert.deepEqual(diagLines.map((o) => o.ev), ['get', '405']);
@@ -337,7 +336,7 @@ await checkAsync('E4 无 trace ⇒ 零留痕；c 缺 log/diag 也不炸（评审
   // c 连 log/diag 都不给 + trace 开着：可观测性缺省不得升级成 unhandled rejection
   const ws2 = fakeWebServer();
   registerOcclusionRoutes(ws2, { disposers: [], base: '/wallpaper-engine', hub: { getSnapshot: () => SNAPSHOT } });
-  process.env.DSH_WE_OCCLUSION_TRACE = '1';
+  process.env.DSH_WE_OCCLUSION_TRACE = '1';   // eslint-disable-line require-atomic-updates -- 顺序 await 的判据；env 无并发读写
   try {
     const res2 = fakeRes();
     await ws2.routes[0].handler({ method: 'GET', url: '/x' }, res2);

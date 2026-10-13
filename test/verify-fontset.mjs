@@ -1443,13 +1443,14 @@ section('⑨ 字体集编辑器（面板可驱动：意图映射 / confirm 门�
       const gen = (names) => new Function('weT', 'selection', fn + '\nreturn nextFontSetName;')(
         (s) => s, { fontSets: names.map((name, i) => ({ id: 's' + i, name })) })();
       const base = '我的字体集';
+      const detLeft = gen([base, base + ' 2']);   // 确定性对照的第一次调用
       return gen([]) === base                                   // 清单里没有 ⇒ 基础名
         && gen([base]) === base + ' 2'                          // 基础名被占 ⇒ 后缀 2
         && gen([base, base + ' 2']) === base + ' 3'             // 依次往后
         && gen([base, base + ' 2', base + ' 4']) === base + ' 3'  // 取**第一个**空位（"最大+1"会给 5）
         && gen(['别的名字']) === base                             // 无关的占用不影响
         && gen([base, null, undefined, '']) === base + ' 2'      // 空/错名字不算占用（与实现里的 filter(Boolean) 一致）
-        && gen([base, base + ' 2']) === gen([base, base + ' 2']); // 同清单同结果（确定性）
+        && detLeft === gen([base, base + ' 2']);                 // 同清单同结果（确定性：两次独立调用）
     })());
   check('接线（**源码形状**判据，不是行为判据）：面板新建走 createFontSet(nextFontSetName())，不先问名字',
     (() => {
@@ -1600,7 +1601,7 @@ section('⑨ 字体集编辑器（面板可驱动：意图映射 / confirm 门�
 }
 
 // ── teardown ────────────────────────────────────────────────────────────────
-try { dispose && dispose(); } catch { /* ignore */ }
+try { if (dispose) dispose(); } catch { /* ignore */ }
 delete process.env.DSH_WE_STEAM_ROOT;
 delete process.env.DSH_WE_UPLOAD_DIR;
 rmSync(ISO, { recursive: true, force: true });

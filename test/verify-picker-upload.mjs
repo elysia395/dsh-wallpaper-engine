@@ -307,7 +307,7 @@ const sandbox = {
 vm.createContext(sandbox);
 new vm.Script(code, { filename: 'client.js' }).runInContext(sandbox);
 
-const { id, factory } = cap.handoff;
+const { factory } = cap.handoff;
 const requireMock = (spec) => {
   if (spec === 'react') return React;
   if (spec === 'react-dom') return { createPortal: (node) => node }; // 模态框在 mock 里就地渲染
@@ -354,7 +354,6 @@ console.log('0. 挂载台自检');
 }
 
 const initialTree = render();
-const initialCount = inventoryCalls.length;
 
 console.log('1. 上传：选中 File → 上传中 → 成功计数');
 {

@@ -172,20 +172,6 @@ function mutateText(node, from, to) {
   return copy;
 }
 
-/** 深拷贝渲染树，从一个节点的 className 里剥掉一个令牌（其余不动）。 */
-function dropClassToken(node, cls) {
-  if (Array.isArray(node)) return node.map((n) => dropClassToken(n, cls));
-  if (!node || typeof node !== 'object') return node;
-  const copy = Object.assign({}, node);
-  if (copy.props && typeof copy.props.className === 'string' && hasClass(node, cls)) {
-    copy.props = Object.assign({}, copy.props, {
-      className: classTokens(node).filter((t) => t !== cls).join(' '),
-    });
-  }
-  if (Array.isArray(node.children)) copy.children = node.children.map((n) => dropClassToken(n, cls));
-  return copy;
-}
-
 /** 深拷贝渲染树，删掉第一个带该令牌的节点整棵子树。 */
 function withoutClass(node, cls) {
   if (Array.isArray(node)) return node.map((n) => withoutClass(n, cls));

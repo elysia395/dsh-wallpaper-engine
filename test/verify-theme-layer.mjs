@@ -16,7 +16,6 @@
 import { readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import assert from 'node:assert/strict';
 // 剥注释：共享的字符串感知实现（test/tools/js-text.mjs）。
 import { stripComments } from './tools/js-text.mjs';
 // 单独 import `src/**` 时补上 bundle 作用域的取词层（中文身份；见 test/tools/weT-shim.mjs）。
@@ -152,13 +151,14 @@ section('③ 轮询：拿到即停 / 超时放弃 / 不炸');
 {
   const scheduled = [];
   const timers = { setTimeoutFn: (fn, ms) => { scheduled.push(ms); return scheduled.length; }, clearTimeoutFn: () => {} };
-  let ready = null, giveUp = null, calls = 0;
+  let calls = 0;
   const themeObj = { overrideTokens() {} };
   const ctx = { get: () => (++calls >= 3 ? themeObj : null) };
-  pollThemeService(ctx, { ...timers, onReady: (t) => { ready = t; }, onGiveUp: (r) => { giveUp = r; } });
-  // 手动推进：把排队的回调依次执行
+  pollThemeService(ctx, { ...timers, onReady: () => {}, onGiveUp: () => {} });
+  // 手动推进：把排队的定时器记录掏空。桩的 setTimeoutFn 只记 ms、不存回调 ⇒ 这里不可能"执行"回调；
+  // 本块只断言队列被掏空（onReady/onGiveUp 在这条路径上不会触发）。
   for (let i = 0; i < 5 && scheduled.length; i++) {
-    const fn = scheduled.shift();
+    scheduled.shift();
     // 重新构造调度记录（真实实现里 setTimeout 返回句柄，这里简化成"再跑一轮"）
   }
   check('首次查询就命中时不排任何定时器（拿到即停）',
@@ -313,7 +313,6 @@ section('④b 排版角色（F2）');
   // 颜色块显示当前默认色。
   // 调节面板的渲染器已抽到 src/panel-tabs.js（C）：这里按文件分源，不拼接 ——
 // 拼接会让一个文件的文本满足另一个文件的结构断言。
-const clientFontUi = readFileSync(join(root, 'src', 'client.js'), 'utf8');
 const fontTabsUi = panelText();
   // 默认值**直接显示在输入框里**（角色表：字号列未填时显示 role.defaultPx），
   // 不再用行内小字复述一遍 DSH 原字阶。

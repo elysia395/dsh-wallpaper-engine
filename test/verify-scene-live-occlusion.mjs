@@ -23,7 +23,7 @@ import { readFileSync, mkdirSync, rmSync } from 'node:fs';
 import { createHash } from 'node:crypto';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { Readable, Writable } from 'node:stream';
+import { Writable } from 'node:stream';
 import { execFileSync } from 'node:child_process';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -282,7 +282,7 @@ function installBridge() {
 }
 
 // ── teardown ────────────────────────────────────────────────────────────────
-try { dispose && dispose(); } catch { /* ignore */ }
+try { if (dispose) dispose(); } catch { /* ignore */ }
 rmSync(TEST_CACHE_DIR, { recursive: true, force: true });
 
 console.log('');

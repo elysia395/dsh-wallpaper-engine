@@ -291,7 +291,7 @@ const web = (inv.wallpapers || []).find((w) => w.id === '990101') || null;
 check('inventory 列出网页壁纸且 webLiveSrc 是绝对 URL',
   Boolean(web && web.webLive === true && /^http:\/\/127\.0\.0\.1:\d+\//.test(String(web.webLiveSrc || ''))),
   web ? String(web.webLiveSrc || '').slice(0, 60) : 'not found');
-if (!web) { try { dispose && dispose(); } catch { /* ignore */ } appServer.close(); process.exit(1); }
+if (!web) { try { if (dispose) dispose(); } catch { /* ignore */ } appServer.close(); process.exit(1); }
 
 const rendererUrl = `${APP}/wallpaper-engine/scene-live/index.html?type=web&webSandbox=strict`
   + `&fit=cover&sceneFps=15&muted=true`
@@ -623,7 +623,7 @@ if (!browser) {
     + ' —— 已执行 ' + preBrowserChecks + ' 条前置判据（' + failed + ' 条判红），页面部分 0 条；退出码 ' + skipCode
     + (skipCode === 0 ? ' 仅表示"显式跳过"，不是"页面断言通过"'
       : '：前置判据不足或已有判红，按**失败**退出（不接受"没跑完"当通过）'));
-  try { dispose && dispose(); } catch { /* ignore */ }
+  try { if (dispose) dispose(); } catch { /* ignore */ }
   appServer.close();
   process.exit(skipCode);
 }
@@ -825,7 +825,7 @@ check('封面 data URL 到达壁纸且能加载显示',
   `thumb=${g('thumb') || 0}ch img=${g('img') || '?'}`);
 
 // ── teardown ────────────────────────────────────────────────────────────────
-try { dispose && dispose(); } catch { /* ignore */ }
+try { if (dispose) dispose(); } catch { /* ignore */ }
 try { appServer.close(); } catch { /* ignore */ }
 delete process.env.DSH_WE_STEAM_ROOT;
 delete process.env.DSH_WE_UPLOAD_DIR;

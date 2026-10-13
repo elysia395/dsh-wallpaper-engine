@@ -103,7 +103,7 @@ if (routes.length) {
     `实测 ${families.length}`);
   check('负对照：同一条判据对合成输入能判出越线族',
     groupFamilies([...routes, { path: '/probe' }, { path: '/probe/x' }, { path: '/probe/y' }])
-      .some(([k, v]) => v.length >= FAMILY_TRIGGER));
+      .some(([, v]) => v.length >= FAMILY_TRIGGER));
 
   // ── 触发线本体 ────────────────────────────────────────────────────────────
   check(`触发条件 6：没有任何族达到 ${FAMILY_TRIGGER} 条`, over.length === 0,

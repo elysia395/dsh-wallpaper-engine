@@ -309,7 +309,7 @@ function makeEl(tag) {
       load() { el._loadCount = (el._loadCount || 0) + 1; },
       play() { el.paused = false; return Promise.resolve(); },
       pause() { el.paused = true; },
-      addEventListener(type, fn, opts) { handlers[type] = fn; },
+      addEventListener(type, fn) { handlers[type] = fn; },
       removeEventListener(type) { delete handlers[type]; },
       _handlers: handlers,
     });

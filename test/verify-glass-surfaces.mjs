@@ -220,47 +220,15 @@ const PRIVATE_VARS = {
 const MODE_MARKERS = new Set(['data-ds-dark-theme', 'data-sidebar-right-open', 'data-dsh-desktop-mode', 'data-platform']);
 
 /**
- * 参数值语义化的**豁免登记表**（第 ⑦ 组判据用）。分两类，务必分清：
+ * 历史：这里曾登记三张**参数值语义化豁免表**（`SCALE_FREE_PARAMS` / `SAME_SCALE_PARAMS` /
+ * `NORM_FREE_KEYS`），供第 ⑦ 组判据查"哪些槽位不必 `norm()`"。
  *
- * · `SCALE_FREE_PARAMS` —— 该参数的两个槽位**不需要 `norm()`**，直接传值即可。两类：
- *   · **颜色**：它的"继承"语义是"改用全局那个色"，色值本身没有量纲；
- *     它的 profile 槽位还带一个字符串哨兵（`""` = 跟随主题面板色，见 §4.3）。
- *   · **保真度**：两侧都是 **0–100 的百分比**（`glassFidelity` / `chatGlassFidelity` /
- *     `<子项>Fidelity` 同一量纲），且下游 `effects.js` 自己会做 `/100` 归一化 ⇒
- *     再套一层 `norm()` 是重复的。**注意它并不是"无量纲"** —— 只是两侧量纲本来就一致。
- *   ⚠️ 这类豁免**必须登记**。第一版判据没登记、只是因为"颜色恰好没写 norm() 而漏检"，
- *   于是凡是量纲相关的裸键都会被放过 —— 那不是判据，是巧合。
- *
- * · `NORM_FREE_KEYS` —— 该参数允许用**零参** `norm()` 作占位（表示"待接线"）。
- *   纪律与 `SURFACES[].pending` 一致：登记表示"已知且有意"，不是"忘了"。
- *   当前为空集（四项接线都已归一化）。
+ * 它们在 ⑦ 改成**语法判定**后失去输入：⑦① 现在要求"调用点的每个取值槽位都是裸键"
+ * （不许出现 `norm()` / `denorm()` / 除法），这比逐表登记更强 —— 登记表只覆盖登记过的键，
+ * 语法判定覆盖全部槽位。表留着就会变成"第二份真源"（改了不生效、删了没人知道），
+ * 所以整表删除，只保留这段来历。豁免纪律（"已知且有意"必须留痕）现由 ⑦① 的失败输出
+ * 与 `SURFACES[].pending` 承担。
  */
-const SCALE_FREE_PARAMS = new Set(['color', 'fidelity']);
-
-/**
- * `SAME_SCALE_PARAMS` —— 两侧（profile 与 global）**量程本来就是同一个** ⇒ 不需要 `norm()`。
- *
- * ⚠️ 键是 **`面.参数`**，不是裸参数名。这一点是被判据自己逼出来的：
- *    最初按参数名豁免，于是 `sidebar.blur`（本面 0–200 对全局 0–60，**确实需要**归一化）
- *    也一起被豁免了 —— 覆盖面判据立刻报"需归一化的槽位变成 0"。
- *    按面×参数登记，豁免范围才精确。
- *
- * 与 `SCALE_FREE_PARAMS` 的区别：那一类是"参数本身没有量纲"（颜色），
- * 这一类是"**有**量纲，但两侧恰好一致"。分开列是因为**理由不同**。
- *
- * ⚠️ 登记在这里 = "同一个数字在两边的含义相同" ⇒ 直接传值是忠实的。
- *    哪一天某一侧的量程变了（例如把设置窗口的模糊上限改成 200），
- *    必须把对应项从本表**挪走**并改用 `norm()` + `denorm()` —— 那正是第 ⑦ 组要防的事。
- */
-const SAME_SCALE_PARAMS = new Set([
-  'settingsWindow.blur', 'settingsWindow.transparency',
-  // 左侧栏（W3）：本面键与全局键**同为 0–60**（`leftSidebarBlur` 对 `blur`、
-  // `leftSidebarTransparency` 对 `glassAlpha`）⇒ 直接传值即忠实。
-  'leftSidebar.blur', 'leftSidebar.transparency',
-  // 浮层（W4）：同上，`floatersBlur` / `floatersTransparency` 也都是 0–60。
-  'floaters.blur', 'floaters.transparency',
-]);
-const NORM_FREE_KEYS = new Set([]);
 
 // ── 从产物取样式表 ───────────────────────────────────────────────────────────
 // 与 `verify-glass-compositing` 同一口径：先把模板**求值**（带上源码声明的常量），
@@ -383,15 +351,6 @@ const ruleWith = (cssText, anchor, gateRe, bodyReqs) => rulesOf(cssText).some((r
 /** 剥 CSS 注释（与本文件顶部对整份样式表用的是同一口径；抽出来给负对照用，
  *  避免出现第二份"剥注释"实现）。CSS 没有行注释，所以朴素块注释正则是安全的。 */
 const stripCssComments = (s) => s.replace(/\/\*[\s\S]*?\*\//g, ' ');
-
-/** 判据：这份文本是否消费了某个私有变量前缀下的变量。纯函数，负对照喂它。 */
-function consumedPrivateVars(text, prefixes) {
-  const out = new Set();
-  for (const p of prefixes) {
-    for (const m of text.matchAll(new RegExp(p.replace(/[-]/g, '\\-') + '[\\w-]*', 'g'))) out.add(m[0]);
-  }
-  return out;
-}
 
 /**
  * 判据：样式表里出现的**全部** `--we-*` 变量名（完整 token）。
@@ -746,7 +705,6 @@ console.log('\n③ 档位声明与私有变量组一致（private 必须真接�
       missingGroupOf([{ id: 'synthetic-private', tier: 'private' }]).join() === 'synthetic-private'
         && missingGroupOf([{ id: profileIds[0], tier: 'private' }]).length === 0);
   }
-  void consumedPrivateVars;   // 保留前缀提取器（上面 ① / ② 与负对照用得到它的语义）
 }
 
 // ═══ ⑤ 保真度「同源不变量」：一对保真度内部同源、两对之间不串线 ════════════════

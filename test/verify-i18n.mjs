@@ -82,7 +82,7 @@ const VALUE_ALLOW = [
 ];
 
 /** 诊断/日志实参：不进界面的中文（由扫描器按"最内层被调函数"判定，无需登记具体串）。 */
-const DIAGNOSTIC_CALLEES_NOTE = 'liveLog / weLog / console.* / log / warn / error / weDiag …（见 test/tools/i18n-scan.mjs）';
+// （说明文字，未参与判据）诊断类调用名：liveLog / weLog / console.* / log / warn / error / weDiag …（见 test/tools/i18n-scan.mjs）
 
 // ══ 工具 ═════════════════════════════════════════════════════════════════════
 

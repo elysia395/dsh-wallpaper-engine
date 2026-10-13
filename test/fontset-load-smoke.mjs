@@ -56,11 +56,6 @@ const HOST_VALUES = {
   globalFamily: 'sys:PingFang SC',
   componentFonts: { markdown: { size: 15 } },
 };
-/** 本地缓存里"上次那份"（与宿主那份**明显不同**，才能分辨谁赢了）。 */
-const CACHED_VALUES = {
-  themeColors: {}, themeDarkSeparate: false, themeSize: { 'markdown-h1': 19 },
-  themeWeight: {}, themeFamily: {}, globalFamily: '', componentFonts: {},
-};
 const CACHE_KEY = 'we-fontset-active';
 
 function makeEl(tag) {
@@ -176,7 +171,7 @@ function collectTree(root, out = []) {
 }
 
 /** 一个"正常的宿主"：/settings + /fontsets（活动集是 compact）+ /inventory。settings 可参数化。 */
-const hostWith = (settings) => (url, init) => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(
+const hostWith = (settings) => (url) => Promise.resolve({ ok: true, status: 200, json: () => Promise.resolve(
   String(url).includes('/fontsets/import') ? { ok: true, id: 'imported-1', name: '导入的那份' }
     : url.includes('/fontsets/') ? { ok: true, id: 'compact', name: '紧凑', values: HOST_VALUES }
       : url.includes('/fontsets') ? { fontsets: [{ id: 'compact', name: '紧凑', origin: 'builtin', active: true }], active: 'compact', migrated: false, adopted: false }
@@ -553,7 +548,6 @@ const waitBoot = () => new Promise((r) => { setTimeout(r, 50); });
     let active = 'compact';
     const twoSets = (url, init) => {
       const u = String(url);
-      const method = String((init && init.method) || 'GET').toUpperCase();
       if (u.includes('/activate')) {
         const m = /\/fontsets\/([^/]+)\/activate/.exec(u);
         if (m) active = decodeURIComponent(m[1]);

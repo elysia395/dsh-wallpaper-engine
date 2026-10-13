@@ -719,7 +719,7 @@ section('⑧ 真渲染（构建产物）：内置族键 + 本机字体同列、�
   const quickRow = rowsOf(before).find((r) => rowLabelled(r, '字体自定义'));
   const quickSwitch = quickRow ? allNodes(quickRow).find((n) => n.type === 'input') : null;
   check('面板里找得到「字体自定义」总开关（侧栏外观页 · 字体节展开）', Boolean(quickSwitch));
-  quickSwitch && quickSwitch.props.onChange({ target: { checked: true } });
+  if (quickSwitch) quickSwitch.props.onChange({ target: { checked: true } });
   await new Promise((r) => { setTimeout(r, 80); }); // 开关 ⇒ ensureSystemFonts ⇒ 宿主回话
 
   const tree = renderSide();
