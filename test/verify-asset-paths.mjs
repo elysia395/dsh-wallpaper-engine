@@ -225,8 +225,14 @@ async function judgeWeResolve(make) {
     const k = mk({ weAssetsDir: '/cfg/we' });
     return k.resolveWeAssetsDir();
   });
-  const ok = envVal === normalize('/env/we/') && envVal.endsWith('/')
-    && cfgVal === '/cfg/we' && none.resolved === null && none.get === null && blankEnv === '/cfg/we';
+  // 期望值一律经 normalize() 求、尾分隔符按平台判定：Windows 上 `/` 会被归一成 `\`，
+  // 硬写 posix 字面量（`'/cfg/we'`、`endsWith('/')`）会让这条判据只在 posix 平台成立
+  // —— CI windows-latest 实测在此判红，而语义（「env 胜 config」「normalize 不剥尾斜杠」）
+  // 本身与分隔符无关。
+  const envWant = normalize('/env/we/');
+  const cfgWant = normalize('/cfg/we');
+  const ok = envVal === envWant && /[\\/]$/.test(envVal)
+    && cfgVal === cfgWant && none.resolved === null && none.get === null && blankEnv === cfgWant;
   return { ok, detail: `env='/env/we/'⇒${envVal}（normalize 不剥尾斜杠） · config='  /cfg/we  '⇒${cfgVal} · 都没有⇒${none.resolved} · 纯空白 env⇒${blankEnv}` };
 }
 
