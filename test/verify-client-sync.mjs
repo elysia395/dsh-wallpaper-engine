@@ -41,10 +41,13 @@ if (!existsSync(ARTIFACT) || !existsSync(BUILD)) {
 const before = readFileSync(ARTIFACT);
 
 // 跑构建（stdio:'ignore' —— 不捕获输出，绕开管道限制）。
+// timeout/killSignal：给"构建卡住"加界。没有它时，子进程一旦不退出，父进程会**无界静默等待**
+// （一个字都不输出）；加上之后超时由 SIGKILL 收掉，`e.status` 为 null ⇒ 下面按 1 计 ⇒ 判红
+// 并在判词里带上 `ETIMEDOUT`，使用者能从输出本身看出发生了什么。判据一条未改。
 let buildCode = 0;
 let buildErr = '';
 try {
-  execFileSync(process.execPath, [BUILD], { cwd: ROOT, stdio: 'ignore' });
+  execFileSync(process.execPath, [BUILD], { cwd: ROOT, stdio: 'ignore', timeout: 120000, killSignal: 'SIGKILL' });
 } catch (e) {
   buildCode = (e && typeof e.status === 'number') ? e.status : 1;
   buildErr = String((e && e.message) || e);
