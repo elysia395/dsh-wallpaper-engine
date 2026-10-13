@@ -122,6 +122,9 @@ function weakenedAcceptAssignments(src) {
 }
 
 const hostSrc = read('lib/index.js');
+// ⚠️ 读点变更（T2 #8）：`UPLOAD_EXT` / `CUSTOM_FRAME_EXT` 已搬进 lib/asset-paths.js ⇒ 只改"读哪个
+//    文件"（下面 hostMimeKeys 的两个实参），判据与期望值一字未改。`hostSrc` 仍供 BASE 等其余判据。
+const hostAssetsSrc = read('lib/asset-paths.js');
 const apiSrc = read('src/api-client.js');
 const clientSrc = read('src/client.js');
 const tabsSrc = panelText();
@@ -138,9 +141,9 @@ const tabsSrc = panelText();
 
 {
   const clientUp = clientMimeList(clientSrc, 'UPLOAD_TYPES');
-  const hostUp = hostMimeKeys(hostSrc, 'UPLOAD_EXT');
+  const hostUp = hostMimeKeys(hostAssetsSrc, 'UPLOAD_EXT');
   const clientFrame = acceptLists(tabsSrc);
-  const hostFrame = hostMimeKeys(hostSrc, 'CUSTOM_FRAME_EXT');
+  const hostFrame = hostMimeKeys(hostAssetsSrc, 'CUSTOM_FRAME_EXT');
 
   // 覆盖断言：两个集合都必须非空 —— 否则"两个空集相等"会让下面的相等断言恒真
   check('上传 MIME：两侧都解析出非空集合（判据非空转）',
@@ -168,12 +171,12 @@ const tabsSrc = panelText();
   check('覆盖面：选图腿确实写下了 input.accept 赋值点（抽取器退化 ⇒ 当场红，不静默恒真）',
     clientAccept.length >= 1, '赋值点=' + clientAccept.map((l) => l.join(',')).join(' | ') || '(没抽到)');
 
-  const hostAvatar = hostMimeKeys(hostSrc, 'AVATAR_EXT');
+  const hostAvatar = hostMimeKeys(hostAssetsSrc, 'AVATAR_EXT');
   check('会话头像 MIME：客户端选图腿自己的 input.accept 与宿主 AVATAR_EXT 键集一致',
     acceptCovers(clientAccept, hostAvatar),
     'host=' + (hostAvatar || []).join(',') + ' client=' + clientAccept.map((l) => l.join(',')).join(' | '));
 
-  const hostMascot = hostMimeKeys(hostSrc, 'MASCOT_EXT');
+  const hostMascot = hostMimeKeys(hostAssetsSrc, 'MASCOT_EXT');
   check('吉祥物立绘 MIME：客户端选图腿自己的 input.accept 与宿主 MASCOT_EXT 键集一致',
     acceptCovers(clientAccept, hostMascot),
     'host=' + (hostMascot || []).join(',') + ' client=' + clientAccept.map((l) => l.join(',')).join(' | '));
@@ -212,7 +215,9 @@ const tabsSrc = panelText();
   // **不走流式落盘**：上限只有 8MB（客户端导入前已按 512px 缩过一轮）⇒ 走共享读体器 +
   // 原子落盘，内联收集器那条棘轮因此不增（见 test/verify-body-caps.mjs 的两条棘轮）。
   const routeSrc = read('lib/routes/avatar.js');
-  const hostNow = read('lib/index.js');
+  // ⚠️ 读点变更（T2 #8）：`AVATAR_*` / `MASCOT_*` / `avatarDir()` / `mascotDir()` 的实现已搬进
+  //    lib/asset-paths.js ⇒ 本块只改"读哪个文件"，下面六条断言与期望值一字未改。
+  const hostNow = read('lib/asset-paths.js');
   // `const json = (code, payload) => sendJson(res, code, payload);` —— 恰好**三个**实参 ⇒ 走共享实现的
   // 默认 `no-store`。四参形态（`sendJson(res, code, payload, null)` 之类）**不**匹配：那等于把这条
   // 错误路径改回可缓存，正是本判据要挡的（`no-store` 的唯一落点是 lib/json-response.js）。

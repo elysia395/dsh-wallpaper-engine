@@ -70,6 +70,7 @@
     "lib/host-diag.js",
     "lib/upload-store.js",
     "lib/video-preview.js",
+    "lib/asset-paths.js",
     "lib/webwallgl/",
     "lib/we-props.js",
     "lib/we-focus-guard.js",

@@ -763,7 +763,9 @@ section('③d 资产段：install-assets 落盘与 applied 语义、export→imp
   //   必须与宿主 `lib/index.js` 里那份**逐字相同**。不同 ⇒ 下面所有"名字合不合法"的判据读的都是
   //   一份歪的尺子（这正是"看起来对、实际不是那回事"）。写这段守卫时它就以 ReferenceError 暴露了
   //   一次块内遮蔽，所以这条要留在跑测输出里当护栏。
-  const hostIdxSrc = readFileSync(join(root, 'lib', 'index.js'), 'utf8');
+  // ⚠️ 读点变更（T2 #8）：`MASCOT_FILE_RE` / `AVATAR_FILE_RE` 的定义已搬进 lib/asset-paths.js
+  //    ⇒ 只改"读哪个文件"，下面 hostLit 抽取式与那条逐字一致判据（含 check 文案）一字未改。
+  const hostIdxSrc = readFileSync(join(root, 'lib', 'asset-paths.js'), 'utf8');
   const hostLit = (name) => {
     const m = hostIdxSrc.match(new RegExp('const ' + name + ' = (/(?:[^/\\\\]|\\\\.)*/);'));
     return m ? m[1] : '(未找到)';
