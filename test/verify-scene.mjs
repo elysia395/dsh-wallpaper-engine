@@ -30,7 +30,7 @@ const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
  * 那个目录，否则"已搬走"会被误报成"契约丢了"（假红）。反之，断言"某路由**已不在正文**"的
  * 判据仍必须只读 `lib/index.js`。
  */
-const readHostHalf = () => ['lib/index.js',
+const readHostHalf = () => ['lib/index.js', 'lib/scene-probe.js',
   ...readdirSync(resolve(root, 'lib', 'routes')).filter((f) => f.endsWith('.js')).map((f) => 'lib/routes/' + f)]
   .map((f) => readFileSync(resolve(root, f), 'utf8')).join('\n');
 // Point the cache **root** at a workspace-relative dir so the suite passes under

@@ -257,7 +257,23 @@
         {
           "kind": "guard",
           "npm": null,
+          "file": "test/verify-cache-prune.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
           "file": "test/verify-we-install-probe.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-wallpaper-scan.mjs",
           "args": [],
           "tier": "hard",
           "probe": false
@@ -738,7 +754,23 @@
         {
           "kind": "guard",
           "npm": null,
+          "file": "test/verify-cache-prune.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
           "file": "test/verify-we-install-probe.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-wallpaper-scan.mjs",
           "args": [],
           "tier": "hard",
           "probe": false

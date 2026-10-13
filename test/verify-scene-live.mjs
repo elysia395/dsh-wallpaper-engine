@@ -1778,10 +1778,10 @@ for (const [name, ok] of clientChecks) check(name, ok);
     // 只靠 URL 判会**恒为假**（2026-10-02 实测回归：设了帧率上限时每次切换仍跑整片重编码）。
     // 两端各钉一条：宿主把 mediaExt 发出来、客户端把它接进 selection 再传进判据。
     // ⚠️ `mediaExt:` 的**产出点**已随清单构建族搬进 `lib/inventory.js`（§★ W-B B1）；
-    //    `extOf` 本身仍在 `lib/index.js`（被多族共用）⇒ 两处分开读，各钉各的落点。
+    //    `extOf` 本身随扫描族搬进 `lib/wallpaper-scan.js`（§★ W-B，host 第 3 刀）⇒ 两处分开读，各钉各的落点。
     check('② 真实容器由宿主给、客户端接（mediaExt 全链路在场）',
       readFileSync(join(root, 'lib', 'inventory.js'), 'utf8').includes('mediaExt: w.fileAbs ? extOf(w.fileAbs) : null,')
-      && readFileSync(join(root, 'lib', 'index.js'), 'utf8').includes('function extOf(p)')
+      && readFileSync(join(root, 'lib', 'wallpaper-scan.js'), 'utf8').includes('function extOf(p)')
       && videoSrc.includes('const e = String(ext || "").toLowerCase();')
       && videoSrc.includes('NATIVE_EXT_SET')
       && readFileSync(join(root, 'src', 'media-prep.js'), 'utf8').includes('selection.mediaExt = w.mediaExt || null;'));
@@ -3449,7 +3449,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     startEditGroup: () => {}, cancelEditGroup: () => {}, startCreateGroup: () => {},
     // 效果页**实时渲染组**（`sel.type` 为场景/网页时才画）此前从没渲染过 —— 它要的这批替身
     // 一个都没给，于是那几十行连"渲染得出"这一条都过不了。补上才能让它进入判据视野。
-    codecLabel: () => '', framePreviewSrc: () => '', frameVariantCount: () => 0,
+    codecLabel: () => '', framePreviewSrc: () => '',
     probeGpuFrameState: () => ({}), syncLayers: () => {},
     // `false` = 实时渲染未生效 ⇒ 「出图来源」那一行也画出来（覆盖更宽的那一支）。
     liveRenderEnabled: () => false, customFrameInput: null,
@@ -5755,7 +5755,10 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
         if (Array.isArray(n.children)) { for (const c of n.children) if (typeof c === 'string') all.push(c); }
         if (Array.isArray(n.children)) n.children.forEach(walk);
       })(tree);
-      console.log('    LABELS ' + t.fn + t.label + ' = ' + JSON.stringify(labels));
+      // ⚠️ 这里**不能**复用上面 `if (t.wantLabels)` 块里的 `labels`：那个 `const` 在块作用域内，
+      // 走到本行已经出界 ⇒ 一旦设了 `DSH_WE_SHOW_LABELS` 就 ReferenceError（本行原来就是那么写的，
+      // 是 ESLint `no-undef` 抓出来的真缺陷）。上面 `:5201` 那处 dump 一直是现算的，此处照同一写法。
+      console.log('    LABELS ' + t.fn + t.label + ' = ' + JSON.stringify(labelSeq(tree)));
       console.log('    STRINGS(' + all.length + ') hasFontPreset=' + all.some((s) => s.includes('字体集预设'))
         + ' hasRole=' + all.some((s) => s.includes('角色')) + ' sample=' + JSON.stringify(all.slice(0, 14)));
     }

@@ -6,11 +6,14 @@
  * 于是"改了 `src/x.js` 该跑哪几条"只能靠猜。本工具从**守卫自己的代码**里派生这张映射，
  * 而不是让作者维护一份清单：清单漏一行只会让那个文件**静默脱离**（[`DEV-GUIDE.md`] §4.7 约定 4）。
  *
- * 覆盖本仓实际出现的四种写法：
+ * 覆盖本仓实际出现的五种写法：
  *   A) 字面量路径      `'src/picker-model.js'` / `'../src/client.js'`
  *   B) 目录拼接        `join(root, 'src', 'quick-panel.js')`（含嵌套如 `'font','apply.js'`）
  *   C) 纯文件名        `'quick-panel.js'`（切片 / 读源码用）—— 只在 basename **唯一**时认
  *   D) 内联产物        `lib/client.js` —— 单独统计（多数行为判据是隔着产物做的）
+ *   E) **前缀族读法**  `scopeFiles('src/i18n-copy')` / `scopeText('src/i18n-copy')`
+ *      （`test/tools/src-scope.mjs` 的 API）—— 构建期内联族是"一族文件平铺进同一作用域"，
+ *      于是"这条守卫管这一族"的自然写法就是**前缀**：路径以该前缀开头的模块全部算命中。
  *
  * ⚠️ 判据只看**代码**（先剥注释）：模块名出现在散文里不算"管它"——
  * 否则每个头注释提到 `src/client.js` 的守卫都会被算成 client 的守卫。
@@ -21,7 +24,7 @@
  *   --json  机器可读
  */
 import { readFileSync, writeFileSync, readdirSync, statSync } from 'node:fs';
-import { join, relative, sep, dirname } from 'node:path';
+import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 // 剥注释走共享实现（§4.7 约定 3）：本文件自己的头注释里就写着 `'src/…'` 字面量。
 import { stripComments } from './js-text.mjs';
@@ -116,6 +119,24 @@ function targetsOf(srcText, modules) {
     if (list.length !== 1) continue;
     if (new RegExp(`['"]${esc(base)}['"]`).test(code)) hits.add(list[0]);
   }
+  // E) **前缀族读法**：`scopeFiles(<字面量前缀>)` / `scopeText(<字面量前缀>)`
+  //    （`test/tools/src-scope.mjs` 的 API；单一真源 = 解析 `scripts/build-client.mjs` 的
+  //    `INLINE_MODULES`）。本仓的构建期内联族天生是"一族文件平铺进同一作用域"，所以
+  //    "这条守卫管这一族"的自然写法只能是前缀 —— 逐个写 7 条字面量路径既不现实也会漂。
+  //
+  //    ⚠️ 三条**不许放宽**的边界：
+  //      ① 前缀必须是**代码里的字符串字面量**（先剥注释 ⇒ 注释里提一句不算，同 A–C）；
+  //      ② 只认 `scopeFiles` / `scopeText` 这两个**裸调用**（前面不许是 `.` ⇒ `x.scopeText(…)` 不算）；
+  //      ③ **零命中不算覆盖**：前缀若匹配不到任何磁盘模块，`hits` 里一个都不加。
+  //         这一条同时是"不许变成万能豁免"的地板 —— 前缀只覆盖**真实存在的同族文件**，
+  //         所以这里"按 `startsWith(prefix)`"不会比 `src-scope.mjs` 的族语义更宽
+  //         （它的族成员同样只能是 `INLINE_MODULES` 里真实存在的文件）。
+  //         负对照（`verify-guard-map.mjs` ⑥ 有一条真的在跑）：`scopeText('src/zzz')`
+  //         在磁盘上没有同族模块 ⇒ 必须**零命中**。
+  for (const m of code.matchAll(/(?<![\w$.])(?:scopeFiles|scopeText)\s*\(\s*['"]([^'"]+)['"]/g)) {
+    const prefix = m[1];
+    for (const mod of modules) if (mod.startsWith(prefix)) hits.add(mod);
+  }
   return [...hits].sort();
 }
 
@@ -148,6 +169,7 @@ function render(map) {
   out.push('> 由 `node test/tools/guard-targets.mjs --write` 重算；`test/verify-guard-map.mjs` 会重算并逐字比对。');
   out.push('> **怎么用**：改了 `src/` 或 `lib/` 的某个模块，在「模块 → 守卫」那张表里查该跑哪几条。');
   out.push('> 口径：只统计守卫**代码**里真正碰到的模块（先剥注释），并区分"直接读源文件"与"隔着产物 `lib/client.js`"。');
+  out.push('> 写法：字面量路径 / `join(...)` 拼接 / 唯一 basename / 产物配方 / **前缀族读法** `scopeFiles|scopeText(<前缀>)`（`test/tools/src-scope.mjs` 的 API，一族文件平铺进同一作用域）。');
   out.push('');
   out.push(`模块面 ${map.modules.length} 个 · 守卫 ${map.rows.length} 个`);
   out.push('');
