@@ -4765,12 +4765,20 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     }
     check('avatar-layer.js 可单独 import · 导出面固定 · 无 DOM 环境零抛错零副作用 · 纯函数面（URL 构造）',
       Object.keys(avatarLayerMod).sort().join(',')
-        === 'avatarGlyphSvgString,avatarImageUrl,disposeAvatarLayer,renderAvatarGlyph,syncAvatarLayer'.split(',').sort().join(',')
+        === 'avatarImageUrl,disposeAvatarLayer,renderAvatarGlyph,syncAvatarLayer'.split(',').sort().join(',')
       && typeof avatarLayerMod.syncAvatarLayer === 'function'
       && typeof avatarLayerMod.disposeAvatarLayer === 'function'
       && !threw && !pure, threw || pure);
     // 源码口径：这一层的要点全是"看不见的形态"或"只准碰哪几类行"。逐条钉住，改坏了当场红。
     const avSrc = readFileSync(join(root, 'src', 'avatar-layer.js'), 'utf8');
+    // 收窄导出面（task-17 第 56 条）：`avatarGlyphSvgString` 零跨模块按名引用 ⇒ 只删导出面。
+    // 它是内置默认头像的**几何真源**（:107 声明，:164 内部使用）⇒ 本体与用法必须仍在；
+    // 否则后人会把它当死代码连声明一起清掉，默认头像静默变成空 glyph。
+    check('avatar-layer.js 内置头像几何（avatarGlyphSvgString）仍存在且仍被内部使用 —— 本刀只收导出面',
+      avSrc.includes('function avatarGlyphSvgString(side, size) {')
+      && avSrc.includes('glyph.innerHTML = avatarGlyphSvgString(side, 16);'),
+      'decl=' + (avSrc.includes('function avatarGlyphSvgString(side, size) {') ? '1' : '0')
+        + ' use=' + (avSrc.includes('glyph.innerHTML = avatarGlyphSvgString(side, 16);') ? '1' : '0'));
     check('avatar-layer.js 只认三类消息行 + 关掉逐字节回原生 + 名字（默认取模型名）+ 观察者两级早退 + 不写设置',
       // ① 只给 user / steering / assistant-step 补头像（工具调用、思考、压缩标记一律不碰）。
       avSrc.includes("const AVATAR_FLOW_SIDES = { user: 'user', steering: 'user', 'assistant-step': 'ai' };")

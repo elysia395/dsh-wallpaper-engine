@@ -294,5 +294,5 @@ function disposeAvatarLayer() {
 
 export {
   syncAvatarLayer, disposeAvatarLayer,
-  avatarImageUrl, avatarGlyphSvgString, renderAvatarGlyph,
+  avatarImageUrl, renderAvatarGlyph,
 };
