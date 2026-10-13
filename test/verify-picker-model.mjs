@@ -113,10 +113,18 @@ const MODEL_API_NAMES = '{ ratingOf, matchesRatingFilter, matchesTypeFilter, isP
   + ' isRotatableWallpaper, keepPlayingWallpaper, isHiddenWallpaper, isUploadedWallpaper,'
   + ' isDirWallpaper, playableWallpapers, hiddenWallpapers, pageSlice, pickerModel,'
   + ' PICKER_PAGE_SIZE }';
-/** 该模块的完整导出清单（与 `src/picker-model.js` 末尾的 `export { … }` 逐字相同）。 */
+/** 该模块的完整导出清单（与 `src/picker-model.js` 末尾的 `export { … }` 逐字相同）。
+ *
+ *  注意它和上面 `MODEL_API_NAMES` 是**两个不同的面**，别一起改：
+ *  - `MODEL_API_NAMES` 是「从内联段落里解构出哪些名字来测」⇒ 需要的是**声明**存在
+ *    （`hiddenWallpapers` 在源文件 `:136` 声明、`:163` 主流程自用 ⇒ 必须留在这里）。
+ *  - `MODEL_EXPORTS` 是「这个模块对外发布哪些名字」⇒ 2026-10 收窄导出面时
+ *    `hiddenWallpapers` 因零跨模块按名引用被移出 `export { … }`（见仓库提交
+ *    `04b7750`），故这里同步移除；判据形状不变（导出名集合必须与钉住的清单逐字相等，
+ *    多一枚少一枚都判红）。 */
 const MODEL_EXPORTS = ['ratingOf', 'matchesRatingFilter', 'matchesTypeFilter', 'isPlayableType',
   'isRotatableWallpaper', 'keepPlayingWallpaper', 'isHiddenWallpaper', 'isUploadedWallpaper',
-  'isDirWallpaper', 'playableWallpapers', 'hiddenWallpapers', 'pageSlice', 'pickerModel',
+  'isDirWallpaper', 'playableWallpapers', 'pageSlice', 'pickerModel',
   'PICKER_PAGE_SIZE'];
 
 /** 把切出来的段落包进一个函数作用域求值 —— 返回模型 API（纯函数，无需宿主环境）。 */
