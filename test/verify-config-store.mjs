@@ -83,9 +83,25 @@ function readNeverThrows (make, d) {
   results.push(emptyObject(attempt(() => k.readConfig())));                 // 非对象：字符串
   writeFileSync(p, 'null');
   results.push(emptyObject(attempt(() => k.readConfig())));                 // 非对象：null
+  // JSON 数组的 `typeof` 也是 'object'：放它进来，后续 `cfg[SETTINGS_FIELD] = …` 挂的是
+  // 非索引属性、`JSON.stringify([])` 仍是 "[]" ⇒ 设置写静默丢失（`lib/config-store.js` 已修）。
+  writeFileSync(p, '[]');
+  results.push(emptyObject(attempt(() => k.readConfig())));                 // 非账本：空数组
+  writeFileSync(p, '[1,2]');
+  results.push(emptyObject(attempt(() => k.readConfig())));                 // 非账本：非空数组
   writeFileSync(p, '{"a":1}');
   results.push(JSON.stringify(attempt(() => k.readConfig())) === '{"a":1}'); // 正常原样
   return results.every(Boolean);
+}
+
+/** ①b 数组账本：读回 `{}`，且在其上的设置写必须真落盘（"写进 `[]` 壳"是静默丢数据）。 */
+async function arrayLedgerWriteLands (make, d) {
+  const p = join(d, 'config.json');
+  const k = make(p);
+  writeFileSync(p, '[]');
+  if (!emptyObject(attempt(() => k.readConfig()))) return false;
+  await k.writeSettings({ a: 1 });
+  try { return JSON.stringify(JSON.parse(readFileSync(p, 'utf8')).settings) === '{"a":1}'; } catch { return false; }
 }
 
 /** ② 原子发布（同步）：内容逐字节落盘、覆盖生效、不留临时件。 */
@@ -229,13 +245,25 @@ function writeCreatesParents (make, d) {
 }
 
 // ═══ A. 读语义 ══════════════════════════════════════════════════════════════
-section('A. 读永不抛：缺失 / 坏 JSON / 非对象 ⇒ {}');
-check('A1 readConfig 对缺失/坏 JSON/数字/字符串/null 一律回 {}，正常对象原样', readNeverThrows(realKit, dir('a1')));
+section('A. 读永不抛：缺失 / 坏 JSON / 非对象（含 JSON 数组）⇒ {}');
+check('A1 readConfig 对缺失/坏 JSON/数字/字符串/null/数组 一律回 {}，正常对象原样', readNeverThrows(realKit, dir('a1')));
 
+// 变异锚点只钉 `const o = JSON.parse(…)` 这一行 —— 谓词行会随真修改形（upload-store 那次教训）。
 const noValidation = await loadMutant('read-no-validation', (s) => s.replace(
-  'return o && typeof o === \'object\' ? o : {};', 'return o;'));
-check('A2 负对照：变异体去掉对象真值判据 ⇒ 非对象 JSON 直通 ⇒ A1 判据判红',
+  'const o = JSON.parse(readFileSync(configPath(), \'utf8\'));',
+  'return JSON.parse(readFileSync(configPath(), \'utf8\'));'));
+check('A2 负对照：变异体把解析结果原样返回 ⇒ 非对象 JSON 直通 ⇒ A1 判据判红',
   readNeverThrows(noValidation, dir('a2')) === false);
+
+check('A3 数组账本上 `writeSettings` 必须真落盘（数组不是账本 ⇒ 读回 `{}` 后正常写）',
+  await arrayLedgerWriteLands(realKit, dir('a3')));
+
+const arrayNotRejected = await loadMutant('array-not-rejected', (s) => s.replace(
+  'const o = JSON.parse(readFileSync(configPath(), \'utf8\'));',
+  'const o = JSON.parse(readFileSync(configPath(), \'utf8\'));\n      if (Array.isArray(o)) return o;'));
+check('A4 负对照：变异体删掉"数组不算账本"的裁决（数组直通）⇒ A1 与 A3 都判红',
+  readNeverThrows(arrayNotRejected, dir('a4')) === false
+  && await arrayLedgerWriteLands(arrayNotRejected, dir('a4b')) === false);
 
 // ═══ B. 原子发布 ════════════════════════════════════════════════════════════
 section('B. 原子发布：内容落盘 + 覆盖 + 不留临时件（含 rename 失败的兜底分支）');
