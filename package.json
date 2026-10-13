@@ -65,6 +65,7 @@
     "lib/wallpaper-scan.js",
     "lib/cache-prune.js",
     "lib/config-store.js",
+    "lib/steam-discovery.js",
     "lib/webwallgl/",
     "lib/we-props.js",
     "lib/we-focus-guard.js",

@@ -253,7 +253,13 @@ check('B8 只带工坊内容目录的 Steam 根被认成库（安装夹不存在
 
 // ── Level D: 源码棘轮（带负对照） ───────────────────────────────────────────
 section('Level D — lib/index.js 源码棘轮');
-const hostSrc = stripComments(readFileSync(resolve(root, 'lib', 'index.js'), 'utf8'));
+// 判据作用面 = lib/index.js + lib/steam-discovery.js：Steam/WE 安装探测族已搬进后者
+// （宿主在模块加载期建立套件，见该文件头的不变量）。断言与判据函数一字未改，只是读点
+// 跟着被移动的代码走。
+const hostSrc = stripComments(
+  readFileSync(resolve(root, 'lib', 'index.js'), 'utf8') + '\n'
+    + readFileSync(resolve(root, 'lib', 'steam-discovery.js'), 'utf8'),
+);
 
 check('D1 标记表同时容忍经典布局与 distribution/ 布局（含稳定标记 version.json）',
   /const WE_INSTALL_MARKERS = \[/.test(hostSrc)
