@@ -64,6 +64,13 @@
  *   **可信边界**：只有上面 7 条全部为"已闭"时，"零命中"才可采信（读面无洞 + 动态面不漏）。
  *   本刀补完后 B1 = 8 条（`command` · `baseVal` · `locales` · `_interval`×4 · `caption`），全部是
  *   六类结构性假阳；真死残差 0。
+ *   **读面靠 sourceType 回退才不漏**（实测，2026-10）：`:218` 对每个文件依次试 `['module',
+ *   'commonjs']`。读面 225 个文件里 216 个只能按 `module` 解析、**恰好 1 个只能按 `commonjs`
+ *   解析 = `src/client.js`**（尾部 `inject = inject;\nreturn module.exports;\n`；按 `module` 解析
+ *   会抛 `'return' outside of function` 且收集到 **0** 个名字，按 `commonjs` 解析得 349 个成员名 +
+ *   991 个裸名，含 `selection` / `setTransient`）。没有这个回退就会整体漏掉 hub 这个**最大消费面**
+ *   ⇒ 那一版读数多出 148 条假候选（把真被消费的字段报成"写而不读"）。
+ *   同理 **`零命中` 只有读面无洞时才可采信**：读面回退一旦被摘掉，本工具的"零真死"结论立刻失效。
  *
  * ## 边界：本工具只扫 `test/**`（`src/**` 的同类扫描必须换读面）
  * `src/**` 是构建期内联成**一个作用域**的，单文件 `eslint-scope` 天生看不见跨文件读
