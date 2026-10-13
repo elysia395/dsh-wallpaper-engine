@@ -36,6 +36,9 @@ import { stripComments, stripExportBlocks } from './tools/js-text.mjs';
 import { styleText, panelSources, panelText, liveText, clientText } from './tools/src-scope.mjs';
 // 单独 import `src/**` 时补上 bundle 作用域的取词层（面板渲染器直接用 weT；见该 shim 的文件头）。
 import { installWeTShim } from './tools/weT-shim.mjs';
+// 判据工具（计数打点 / 函数体取法）与 `test/verify-client.mjs` 共用同一份实现：
+// 两处各留一份就是两处会各自漂的判据面。契约见该文件头（`fnNameBody` 的朴素截断是契约）。
+import { createCheck, normCrlf, braceBody, fnNameBody as fnBody } from './tools/assert-harness.mjs';
 installWeTShim();
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -145,13 +148,9 @@ function writeUploadsFixture() {
 }
 writeUploadsFixture();
 
-let passed = 0;
-let failed = 0;
-function check(name, ok, detail) {
-  if (ok) passed++;
-  else failed++;
-  console.log((ok ? '  ✓ ' : '  ✗ ') + name + (detail ? ' — ' + detail : ''));
-}
+// 计数与打点由共享工具提供（迁移前是这两行 `let` + 下面那个函数；输出与语义逐字节一致，
+// 唯一区别是计数改成读 `stats.passed` / `stats.failed`）。
+const { check, stats } = createCheck();
 // 未执行的判据**必须**显式记名（DEV-GUIDE §4.7 约定 10：跳过不得与通过同形）。
 // 平台造不出链接时那两条围栏判据整条不存在 —— 只打印一句"平台跳过"就放过，
 // 汇总行仍是 `ALL … PASSED (N)`，调用方分不清"N 条判据都在"和"N 条里少两条"。
@@ -892,13 +891,8 @@ const prepSrc = readFileSync(join(root, 'src', 'media-prep.js'), 'utf8');
 const tabsSrc = panelText();
 // 组装点自身：只喂给"8 个 render*Tab 声明在 src/panel-tabs.js"那条不变量（族并集会让它变弱）。
 const tabsHubSrc = readFileSync(join(root, 'src', 'panel-tabs.js'), 'utf8');
-/** `function name() { … }` 的函数体源码（用于按内容而非脆弱的跨行正则断言）。 */
-function fnBody(source, name) {
-  const i = source.indexOf('function ' + name + '(');
-  if (i < 0) return '';
-  const j = source.indexOf('\n}', i);
-  return j < 0 ? source.slice(i) : source.slice(i, j);
-}
+// `fnBody` 的实现在 `test/tools/assert-harness.mjs`（`fnNameBody`，取首个 `\n}`；
+// 与 `verify-client.mjs` 共用一份 —— 朴素截断是有意的契约，见该文件头）。
 // resolveWallpaperFadeBg 自 P1-7 后半起住在 src/effects.js —— 断言改读该模块
 // （函数体判据本身不变；同时钉住它**不在** src/client.js，防两边各留一份）。
 const effectsSrc = readFileSync(join(root, 'src', 'effects.js'), 'utf8');
@@ -917,31 +911,11 @@ check('效果应用层已抽成独立模块并被内联',
 //      早退块上，函数主体根本不在切片里，判据恒假。所以这里用配平大括号取整段函数体，
 //      并显式跳过字符串/模板串/行注释/块注释里的花括号（`'${…}'`、`"{"` 否则会算错深度）。
 const liveFlagChecks = (() => {
-  const norm = (s) => String(s).replace(/\r/g, '');
-  const balancedBody = (source, name) => {
-    const s = norm(source);
-    const start = s.indexOf('function ' + name + '(');
-    if (start < 0) return '';
-    const open = s.indexOf('{', start);
-    if (open < 0) return '';
-    let depth = 0, mode = null;
-    for (let i = open; i < s.length; i++) {
-      const c = s[i], n = s[i + 1];
-      if (mode === 'line') { if (c === '\n') mode = null; continue; }
-      if (mode === 'block') { if (c === '*' && n === '/') { mode = null; i++; } continue; }
-      if (mode === 'single') { if (c === '\\') { i++; continue; } if (c === "'") mode = null; continue; }
-      if (mode === 'double') { if (c === '\\') { i++; continue; } if (c === '"') mode = null; continue; }
-      if (mode === 'tpl') { if (c === '\\') { i++; continue; } if (c === '`') mode = null; continue; }
-      if (c === '/' && n === '/') { mode = 'line'; i++; continue; }
-      if (c === '/' && n === '*') { mode = 'block'; i++; continue; }
-      if (c === "'") { mode = 'single'; continue; }
-      if (c === '"') { mode = 'double'; continue; }
-      if (c === '`') { mode = 'tpl'; continue; }
-      if (c === '{') depth++;
-      else if (c === '}') { depth--; if (depth === 0) return s.slice(open + 1, i); }
-    }
-    return '';
-  };
+  // 下面两个取法现在都由共享工具提供（`test/tools/assert-harness.mjs`）：CRLF 归一 +
+  // 配平大括号取整段函数体（跳过字符串/模板串/注释里的花括号）。原来内联在这里的那份实现
+  // 与本文件外（`verify-client.mjs`）的同类扫描是两份会各自漂的判据面，已合并成一份。
+  const norm = normCrlf;
+  const balancedBody = braceBody;
   // "模块顶层代码"提取器：把字符串/模板串/注释整段挖空，再把**函数体内部**（`function`
   // 关键字与块体箭头 `=> { }` 两种形态，本文件没有 class/方法简写）一并挖空 —— 留下的就是
   // "模块求值时就会跑"的那几行。判据用它回答「这条副作用是不是挂在模块作用域」。
@@ -6150,8 +6124,8 @@ console.log('');
 if (skipNotes.length) {
   console.log(`⚠️  ${skipNotes.length} 条未执行（不是通过，见上面的 ○ 行）：${skipNotes.join('；')}`);
 }
-if (failed > 0) {
-  console.log(`SCENE-LIVE CHECKS FAILED — ${failed} failed, ${passed} passed${skipNotes.length ? `, ${skipNotes.length} skipped` : ''}`);
+if (stats.failed > 0) {
+  console.log(`SCENE-LIVE CHECKS FAILED — ${stats.failed} failed, ${stats.passed} passed${skipNotes.length ? `, ${skipNotes.length} skipped` : ''}`);
   process.exit(1);
 }
-console.log(`ALL SCENE-LIVE CHECKS PASSED (${passed})${skipNotes.length ? ` —— ⚠️ ${skipNotes.length} 条未执行（不是通过，见上面的 ○ 行）` : ''}`);
+console.log(`ALL SCENE-LIVE CHECKS PASSED (${stats.passed})${skipNotes.length ? ` —— ⚠️ ${skipNotes.length} 条未执行（不是通过，见上面的 ○ 行）` : ''}`);

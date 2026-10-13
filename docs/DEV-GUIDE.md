@@ -340,6 +340,7 @@ node test/tools/host-route-index.mjs --write   # 重算并写入 docs/ROUTE-INDE
 | 工具 | 回答什么 | 怎么跑 |
 |---|---|---|
 | `analyze-host-apply.mjs` | 宿主 `apply(ctx)` 的拆分评估取证（路由数 / 按首段归组 / 巨石体量） | `node test/tools/analyze-host-apply.mjs` |
+| `assert-harness.mjs` | 两个大守卫（`test/verify-scene-live.mjs` / `test/verify-client.mjs`）共用的**判据工具**：计数打点 `createCheck()`、CRLF 归一 `normCrlf()`、取函数体 `fnNameBody()`（首个 `\n}`，朴素截断是契约）、配平大括号 `braceBody()`（跳过字符串 / 模板串 / 注释里的花括号）。**行为逐字节冻结**：迁移前后守卫的 PASS 数必须一致 | 守卫 `import` 消费，无 CLI |
 | `audit-fixture-coverage.mjs` | **夹具是不是把被测行为中和掉了** | `node test/tools/audit-fixture-coverage.mjs` |
 | `audit-guard-teeth.mjs` | 守卫"牙齿"普查 A–F（对照没被评估 / log 式伪判据 / 零引用判据 / 恒真 / 无红出口 / 朴素剥注释吃代码）—— **只给候选** | `node test/tools/audit-guard-teeth.mjs` |
 | `audit-import-closure.mjs` | `lib/` 的**运行时导入闭包** vs `package.json` 的 `files`（缺文件 ⇒ registry 装上就崩） | `node test/tools/audit-import-closure.mjs` |
@@ -357,7 +358,8 @@ node test/tools/host-route-index.mjs --write   # 重算并写入 docs/ROUTE-INDE
 | `underlay-pixel-rig.mjs` | **画布兜底色**的真浏览器像素对照：壁纸的像素没送到屏上时，页面自己画的是什么颜色（掉层 → 白闪还是同色底） | `node test/tools/underlay-pixel-rig.mjs <bundle.js> [label]` |
 | `weT-shim.mjs` | 给**单独 import `src/**`** 的守卫装身份译文层（`weT(k) === k`，与 bundle 里中文态逐字一致） | `node test/tools/weT-shim.mjs` |
 
-> 其中 `host-route-index.mjs` / `js-text.mjs` / `branch-notify.mjs` / `guard-chain.mjs`
+> 其中 `host-route-index.mjs` / `js-text.mjs` / `branch-notify.mjs` / `guard-chain.mjs` /
+> `src-scope.mjs` / `assert-harness.mjs`
 > **同时是守卫的库** ⇒ 改它们等于改判据，走 `npm run verify:all`。
 > 另有 **`test/warn-only.mjs`**（不在本清单里）：两档共用的**入口包装** —— 降级退出码
 > 与"本环境起不了子进程就显式 SKIP"。它自己不是判据，所以没有独立守卫覆盖它。
@@ -464,6 +466,18 @@ node test/run-guards.mjs verify --list-json # 机器可读的有序步骤表（P
 `'verify:all'`、查表却按组名 `all` ⇒ 取到 `undefined`，地板整条失效。写这类表时另外加一条
 "表的键集与主键集合逐一对齐"的体检。
 
+⚠️ **变异体规格写扁了 ⇒ 变异体其实什么都没改。** 变异体常写成"若干 `[find, replace]` 二元组"，
+若调用方把整组写成 `['find', 'replace']`（少一层数组），`for (const [f, r] of transforms)` 会把
+**字符串按字符**解构（`f = 'i'`、`r = 'f'`）⇒ 只把源码里第一个 `i` 换成 `f`，行为不变，
+而"变异体必须判红"的判据照样恒绿。样本：`test/verify-host-diag.mjs` 建守卫时的第一轮 9 条红。
+对策不是"写的时候小心"，而是**加形状判据**：断言规格形状是 `[标签, [[find, replace], …]]`
+（见该守卫的 H5），写扁立刻红。
+
+⚠️ **"变异体没被判红"要先查夹具是否真进了那条分支。** 钉"轮转只留一代"时，夹具先把盘上文件
+删掉、再让 kit 第一次写入 ⇒ 水位探测得 0，走的根本是"不轮转"那条分支，于是删掉 `rename`
+的变异体照样绿。夹具要顺着**被测代码的分支条件**造：先播一个略低于上限的文件、让第一次写入
+把内存水位推过上限，再删文件 ⇒ 第二次写入才真进 `rename` 分支。
+
 **清单漂了怎么发现**：runner 执行前先自检清单里每个 `file` 真实存在（不存在 ⇒ 退出码 2）；
 `test/verify-package-files.mjs` 的 P5 从 `--list-json` 取有序清单与档位，钉住"链上零裸包依赖"
 与"硬档条数不低于地板"。两侧的**逐字等价**由 `--list` 的渲染串与旧 `package.json` 字符串
@@ -539,6 +553,11 @@ review 失去意义；真正的格式守卫是无尾随空白那两条（CI 的 
 - [ ] 新增了设置项吗？→ 只改 `lib/settings-schema.js`，没另写 UI 表。
 - [ ] 新增了路由吗？→ `node test/tools/host-route-index.mjs --write` 重算索引。
 - [ ] 新增了守卫吗？→ 正负对照成对；工具已进 §4.6；没有去守文档散文。
+- [ ] 新增了 npm 脚本 / 新模块吗？→ **至少真跑一次 `npm run verify`**：新增脚本若引用了未随包发布的
+  路径，`test/verify-package-publish.mjs` ⑦ 会红（命令里真有那类引用才需要登记进它的 `DEV_ONLY` 表，
+  `lint` / `typecheck` 这种不需要）；新增 `lib/**` / `src/**` 文件会让 `verify-guard-map` ① 报
+  "零覆盖"，先让守卫读到它再 `node test/tools/guard-targets.mjs --write`。这两条**不在**改动者的常规
+  复跑清单里，只看单跑几条守卫会漏。
 - [ ] 改过文档吗？→ **没有新增会漂的数值**（改成了符号引用或复算命令）。
 - [ ] 写进文档的每个路径 / 每个符号名**都真实存在**（这条最常出错）。
 - [ ] `npm run verify` 全绿；`npm run verify:docs` 的结论**没有比改动前更差**。

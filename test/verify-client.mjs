@@ -14,6 +14,8 @@ import { styleText, panelText, scopeText } from './tools/src-scope.mjs';
 // 分支级"改了 store 却没通知"的分析与审计工具**同源**（避免两份判据分叉）；
 // `DEF`/`defName` 也从工具导入 —— 定义形态只有一份，形态补齐时两处一起动。
 import { pathNotifications, definitionsOf, DEF, defName } from './tools/branch-notify.mjs';
+// 判据工具（函数体取法）与本文件外的同类实现共用一份；**朴素**是契约的一部分（见该文件头）。
+import { naiveBlockBody, naiveFuncSlice } from './tools/assert-harness.mjs';
 
 const React = {
   Fragment: 'Fragment',
@@ -251,13 +253,8 @@ assert.ok(!code.includes(wallpaperGatedSidebarSelector), 'legacy wallpaper-gated
 // （bg-base / sidebar-fill 置透明）—— 壁纸不在场时那两条必须**不**生效，否则页面基色
 // 会变透明（窗口底板透出来）。下面两条互为负对照：把映射锚回壁纸门 ⇒ 第一条红；
 // 把让开那两条挪进页面玻璃块 ⇒ 第二条红。
-const blockBodyOf = (needle) => {
-  const i = code.indexOf(needle);
-  if (i < 0) return null;
-  const open = code.indexOf('{', i);
-  const close = code.indexOf('}', open);
-  return open < 0 || close < 0 ? null : code.slice(open + 1, close);
-};
+// 朴素块体切片：实现在 `test/tools/assert-harness.mjs`（契约 = 两个 `indexOf`，不跳字符串/注释）。
+const blockBodyOf = (needle) => naiveBlockBody(code, needle);
 const pageGlassBlock = blockBodyOf('body[data-we-glass-page] {');
 const wallpaperBlock = blockBodyOf('body[data-we-wallpaper] {');
 assert.ok(pageGlassBlock && pageGlassBlock.includes('--dsw-alias-bg-layer-1')
@@ -3865,17 +3862,8 @@ setTimeout(async () => {
       //       · 一次性迁移：让**存档形状**收敛到当前刻度。形状本身没有行为可观测，所以只能
       //         钉"那一步在场"，并在下面配负对照证明这条判据不是恒真。
       const schemaSrc = readFileSync(new URL('../lib/settings-schema.js', import.meta.url), 'utf8');
-      const bodyOf = (text, name) => {
-        const at = text.indexOf('function ' + name + '(');
-        if (at < 0) return '';
-        const open = text.indexOf('{', at);
-        let depth = 0;
-        for (let i = open; i < text.length; i += 1) {
-          if (text[i] === '{') depth += 1;
-          else if (text[i] === '}' && (depth -= 1) === 0) return text.slice(open, i + 1);
-        }
-        return '';
-      };
+      // 朴素"从头配平"切片（含外层花括号）：实现在 `test/tools/assert-harness.mjs`。
+      const bodyOf = naiveFuncSlice;
       const migrationHasV6 = (text) => /out\.glassColor\s*=\s*\{\s*light:\s*out\.glassColor\s*,\s*dark:\s*out\.glassColor\s*\}/.test(bodyOf(text, 'migrateSettings'));
       const readerHasScalar = (text) => /typeof\s+raw\s*===\s*'string'/.test(bodyOf(text, 'readGlassColors'));
       assert.ok(migrationHasV6(schemaSrc),
