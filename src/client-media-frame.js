@@ -260,6 +260,46 @@ function pushMediaSnapshot(frame, m) {
  * 所以「装了桥但宿主拿不到音频（未授权/无设备）」的后果是把壁纸的音频反应
  * 从内置模拟源换成一条死线。running=false 时保持不装，让渲染页用自己的源。
  */
+/**
+ * 「没有真实频谱」时，把场景里**靠频谱才有内容**的合成层收起来。
+ *
+ * **为什么**：这类层（WE 场景里常见的 `Simple_Audio_Bars`）画的是频谱柱 —— 有频谱
+ * 才是一排条；没有频谱时它退化成一整块**没有内容的矩形**，而作者往往还在同一层上叠了
+ * scroll 之类的时间驱动特效（`frac()` 循环平移）。结果屏幕上就是「一块图像在匀速横爬」，
+ * 用户第一眼只会当成渲染故障（#167）。收起它反而更接近作者意图：没有音乐，就没有频谱。
+ *
+ * **判据只用两个字段**：层的 `image` 是合成层，且它的效果链里有 `Simple_Audio_Bars`。
+ * 刻意不按「所有合成层」一刀切 —— 不碰任何别的层（水面 / 反射 / 粒子 / 时钟都不受影响）。
+ *
+ * **可逆**：只改渲染页内存里的 `visible`，并把改过的层记在集合里；恢复采集时逐层还原，
+ * 不写盘、不动场景文件。层对象在场景重建后会换新，集合里留的是旧引用 —— 旧对象被回收
+ * 即自动失效，新场景会在下一次同步时重新收集（每次同步都会重跑一遍收集）。
+ */
+const audioReactiveHidden = new Set();
+function syncAudioReactiveLayers(frame, running) {
+  try {
+    const win = frame && frame.contentWindow;
+    const layers = win && win.__scene && win.__scene.layers;
+    if (!Array.isArray(layers)) return;
+    const wantHide = !running;
+    for (const layer of layers) {
+      if (!layer || typeof layer.image !== "string") continue;
+      if (layer.image.indexOf("composelayer") < 0) continue;
+      const effects = Array.isArray(layer.effects) ? layer.effects : [];
+      if (!effects.some((fx) => fx && typeof fx.file === "string" && fx.file.indexOf("Simple_Audio_Bars") >= 0)) continue;
+      if (wantHide) {
+        layer.visible = false;
+        if (layer.visibleSelf !== undefined) layer.visibleSelf = false;
+        audioReactiveHidden.add(layer);
+      } else if (audioReactiveHidden.has(layer)) {
+        layer.visible = true;
+        if (layer.visibleSelf !== undefined) layer.visibleSelf = true;
+        audioReactiveHidden.delete(layer);
+      }
+    }
+  } catch { /* 渲染页内部结构不可读（跨源 / 未就绪）⇒ 保持原样 */ }
+}
+
 function syncAudioBridge(frame, running) {
   try {
     const wp = frame.contentWindow && frame.contentWindow.__wp;
@@ -271,6 +311,8 @@ function syncAudioBridge(frame, running) {
       wp.setAudioBridge(null);
       mediaAudioInstalled = false;
     }
+    // 与桥同拍：采集不可用时收起那些「没有频谱就只是一块空矩形」的层（见上）
+    syncAudioReactiveLayers(frame, running);
   } catch { /* ignore */ }
 }
 
