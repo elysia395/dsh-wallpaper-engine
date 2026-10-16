@@ -32,6 +32,17 @@
  * 产物）。只有"文件探针也判环境 + 产物可信"才记环境跳过，并在汇总行里**点名这条通道本次没有
  * 断言覆盖**；探针判回归、或产物不可信，都照旧判红。
  *
+ * **环境跳过不计失败（2026-10-16 修正）**：旧版在探针裁决之外还无条件 `check(..., ready)`
+ * 一条 ⇒ 环境跳过也记 failed ⇒ 退 1；CI 的 verify:bridge 没有 `--allow-skip`，windows
+ * runner 首启被 Defender 拖过引导预算时（run #244，整步 1m48s 判红；46 分钟后同提交
+ * 6s 过）就因此把整条 job 判红，冤枉无关改动。现在终审走 `decideNotReadyOutcome`（纯函数、
+ * 合成钉在 2b）：回归 / 产物不可信 ⇒ 红；环境且可信 ⇒ 跳过（不毒化退出码）。三种结局都
+ * 仍然喊出来（✗ 或 ○，二选一）——"不就绪必喊出来"的不变量不变。
+ *
+ * **首启预热重试**：探针判"环境"且产物可信且 `--provision` ⇒ 再给**一整段**引导预算
+ * （探针这次拉起顺便完成了 Defender 的首次扫描，再启通常秒级就绪；预热后通过 = 断言
+ * 全覆盖，比记跳过更有价值）。真回归不经此路——判 regression 直接红，不花重试预算。
+ *
  * 属于 `npm run verify`；用 npm run verify:bridge 单独跑也可以。
  */
 import { existsSync, rmSync, mkdirSync, writeFileSync, readFileSync, openSync, closeSync } from 'node:fs';
@@ -165,6 +176,107 @@ function artifactTrusted(bin, assetName) {
   }
 }
 
+/** 探针结果的一句人话（重试日志与汇总行共用；纯函数）。 */
+function probeBrief(p) {
+  return p.hello ? '文件通道拿到了 hello 应答' : (p.stdout || p.stderr
+    ? '子进程原话：' + String(p.stdout || p.stderr).replace(/\s+/g, ' ').slice(0, 160)
+    : (p.spawned ? '存活且文件全空' : '起不来：' + (p.detail || 'spawn 失败')));
+}
+
+/**
+ * 不就绪时的**终审**（纯函数，合成输入钉在 2b —— 它一旦写错，"环境跳过"就变成掩盖
+ * 真回归的后门）：
+ *   · regression          ⇒ 红（可行动的失败：探针带回了子进程的原话 / 提前退出）；
+ *   · 产物不可信          ⇒ 红（"文件被换过"不能归因给环境 —— 否则任何跑不起来的二进制
+ *                           都能被探针洗成"环境差异"）；
+ *   · 其余（environment） ⇒ 环境跳过。⚠️ **不计失败**：CI 的 verify:bridge 没有
+ *     `--allow-skip`，而 `check()` 记 failed 就退 1 —— windows runner 首启被 Defender
+ *     拖过引导预算时（环境差异）曾因此把整条 job 判红（run #244），冤枉无关改动。
+ */
+function decideNotReadyOutcome(verdict, trustedOk) {
+  if (verdict === 'regression') return 'fail-regression';
+  if (!trustedOk) return 'fail-untrusted';
+  return 'skip-environment';
+}
+
+/**
+ * 端到端断言体（握手就绪后的全部判据；`b` = 已就绪的门面实例）。
+ * 单独成函数的动机：不就绪路径要先做"文件探针消歧 + 首启预热重试"，两种结局
+ * （首次就绪 / 预热后就绪）都汇入同一份断言，判据不因多试一轮而少跑一条。
+ */
+async function runBridgeE2E(b) {
+  const info = b.bridgeInfo() || {};
+  check('hello.protocol = 1（协议版本一致才用）', Number(info.protocol) === 1);
+  check('hello 报告平台与后端', Boolean(info.platform) && Boolean(info.provider),
+    `${info.platform}/${info.arch} ${info.provider}`);
+
+  // 等第一份快照到位（mock 播放器立刻就有曲目）
+  let np = null;
+  for (let i = 0; i < 20 && !np; i++) { await sleep(150); np = b.nowPlaying(); }
+  check('快照映射出曲目信息', Boolean(np && np.title && np.artist),
+    np ? `${np.title} - ${np.artist}` : 'null');
+  check('播放态映射成旧 wire 的 1/2/0', Boolean(np) && [0, 1, 2].includes(np.state), np ? String(np.state) : '');
+  check('时长/进度是秒（不是毫秒）',
+    Boolean(np) && np.duration > 10 && np.duration < 10000 && np.position >= 0 && np.position <= np.duration + 1,
+    np ? `pos=${np.position.toFixed(1)}s dur=${np.duration.toFixed(1)}s` : '');
+  check('封面存在时给出宿主代理路径', Boolean(np && np.thumbnail) === Boolean(b.artworkFile()),
+    np && np.thumbnail ? String(np.thumbnail) : '（无封面）');
+  check('封面文件真的落盘了且 MIME 可用',
+    !b.artworkFile() || (existsSync(b.artworkFile()) && /^image\//.test(b.artworkMime())),
+    b.artworkFile() ? b.artworkMime() : '（无封面）');
+  check('歌词缺省时不硬塞空数组（不给渲染页假歌词）',
+    !np || np.lyrics === undefined || Array.isArray(np.lyrics));
+
+  // 频谱形状：音频关掉时也必须是「形状正确的 64 段」，而不是报错
+  const sp = b.spectrum();
+  check('频谱恒为 64 段（音频关时全 0，不是错误）',
+    sp && sp.length === 64 && typeof sp[0] === 'number');
+
+  // 位置外推：等一会儿再读，进度得往前走
+  const before = np ? np.position : 0;
+  await sleep(1200);
+  const after = b.nowPlaying();
+  check('位置随真实时间外推（不是卡在上报值）',
+    Boolean(after) && after.position > before,
+    `${before.toFixed(1)}s → ${after ? after.position.toFixed(1) : '?'}s`);
+
+  // ── 反向控制（端到端，mock 播放器）：壁纸里的播放/暂停按钮落到的就是这条链 ──
+  // 判据按**回读的状态**（不是只看 {ok:true}）：中间件发完命令会开突发窗口重轮询，
+  // 守护侧再把响应里的快照写进缓存 —— 宿主面板与壁纸图标靠的就是这一步即时性。
+  const ctlPause = await b.control('pause');
+  check('control(pause) 打到中间件且回读到暂停',
+    ctlPause && ctlPause.ok === true && (b.nowPlaying() || {}).state === 2,
+    JSON.stringify(ctlPause) + ' state=' + String((b.nowPlaying() || {}).state));
+  const ctlPlay = await b.control('play');
+  check('control(play) 恢复播放并回读到播放态',
+    ctlPlay && ctlPlay.ok === true && (b.nowPlaying() || {}).state === 1,
+    JSON.stringify(ctlPlay) + ' state=' + String((b.nowPlaying() || {}).state));
+  const ctlNext = await b.control('skipNext');
+  check('control(skipNext) 映射到中间件的 next', ctlNext && ctlNext.ok === true, JSON.stringify(ctlNext));
+
+  // 状态形状：与内置实现同名同形（调用点不必分支），外加 backend/回落说明
+  const st = b.status();
+  check('status 形状与内置实现同名同形（audio/nowPlaying 两段 + 后端标记）',
+    st.audio && typeof st.audio.status === 'string'
+    && st.nowPlaying && typeof st.nowPlaying.status === 'string'
+    && st.backend === 'bridge' && st.fallback === '',
+    `audio=${st.audio.status} nowPlaying=${st.nowPlaying.status}`);
+  check('用户关掉音频时不装音频桥（status.audio=off）', st.audio.status === 'off', st.audio.status);
+  check('mock 下 metadata 源在跑', st.nowPlaying.status === 'running', st.nowPlaying.status);
+
+  // ── 生命周期：stop() 不留孤儿 ────────────────────────────────────────────
+  const pid = Number(info.pid) || 0;
+  b.stop();
+  let alive = false;
+  for (let i = 0; i < 12; i++) {
+    await sleep(250);
+    alive = false;
+    if (pid) { try { process.kill(pid, 0); alive = true; } catch { alive = false; } }
+    if (!alive) break;
+  }
+  check('stop() 后子进程退出（不留孤儿）', !alive, pid ? 'pid ' + pid : '（hello 没给 pid）');
+}
+
 // ── 1. 产物表（纯静态，先跑，和有没有产物无关）──────────────────────────────
 console.log('· 产物解析表');
 check('darwin 两个架构都指向通用包',
@@ -250,6 +362,10 @@ check('探针：说了别的话或提前退出 ⇒ regression（可行动的失�
   && classifyProbe({ spawned: true, wrote: false, exited: true, timedOut: false, hello: false }) === 'regression');
 check('探针：存活且文件全空 ⇒ environment（连文件都不说话 = 进程被环境挂住）',
   classifyProbe({ spawned: true, wrote: false, exited: false, timedOut: true, hello: false }) === 'environment');
+check('终审三分支：回归⇒红 / 产物不可信⇒红 / 环境且可信⇒跳过（环境跳过不许记 failed）',
+  decideNotReadyOutcome('regression', true) === 'fail-regression'
+  && decideNotReadyOutcome('environment', false) === 'fail-untrusted'
+  && decideNotReadyOutcome('environment', true) === 'skip-environment');
 
 // ── 3. 找产物 ───────────────────────────────────────────────────────────────
 console.log('· 找中间件产物');
@@ -291,109 +407,60 @@ if (!binPath) {
   //    一旦放宽引导而不动它，测试会抢在握手结束前判失败，而且看起来像"中间件超时"）。
   const bootMs = PROVISION ? 90000 : (Number(process.env.DSH_WE_MEDIA_BOOT_MS) || 25000);
   process.env.DSH_WE_MEDIA_BOOT_MS = String(bootMs);
-  const backend = createMediaBackend({ dataDir: TEST_DIR, log: (m) => console.log('    · ' + m) });
+  let backend = createMediaBackend({ dataDir: TEST_DIR, log: (m) => console.log('    · ' + m) });
   backend.start({ audio: false, online: false });   // 不碰系统音频权限
   let ready = false;
   const readyDeadline = Date.now() + bootMs + 15000;   // 引导预算 + 收尾余量
   while (!ready && Date.now() < readyDeadline) { await sleep(150); ready = backend.usingBridge(); }
-  // ⚠️ 这条**必须在 `if (ready)` 外面**：放进去就成了"进得来块 ⇒ ready 为真 ⇒ 判据恒真"，
-  //    中间件根本没起来时它不会把失败喊出来，而是**整段静默跳过** —— 恒红与静默不可达是同一个洞的两面。
-  check('中间件就绪（握手通过、子进程在跑）', ready, `引导预算 ${bootMs}ms`);
-  if (ready) {
-    const info = backend.bridgeInfo() || {};
-    check('hello.protocol = 1（协议版本一致才用）', Number(info.protocol) === 1);
-    check('hello 报告平台与后端', Boolean(info.platform) && Boolean(info.provider),
-      `${info.platform}/${info.arch} ${info.provider}`);
-
-    // 等第一份快照到位（mock 播放器立刻就有曲目）
-    let np = null;
-    for (let i = 0; i < 20 && !np; i++) { await sleep(150); np = backend.nowPlaying(); }
-    check('快照映射出曲目信息', Boolean(np && np.title && np.artist),
-      np ? `${np.title} - ${np.artist}` : 'null');
-    check('播放态映射成旧 wire 的 1/2/0', Boolean(np) && [0, 1, 2].includes(np.state), np ? String(np.state) : '');
-    check('时长/进度是秒（不是毫秒）',
-      Boolean(np) && np.duration > 10 && np.duration < 10000 && np.position >= 0 && np.position <= np.duration + 1,
-      np ? `pos=${np.position.toFixed(1)}s dur=${np.duration.toFixed(1)}s` : '');
-    check('封面存在时给出宿主代理路径', Boolean(np && np.thumbnail) === Boolean(backend.artworkFile()),
-      np && np.thumbnail ? String(np.thumbnail) : '（无封面）');
-    check('封面文件真的落盘了且 MIME 可用',
-      !backend.artworkFile() || (existsSync(backend.artworkFile()) && /^image\//.test(backend.artworkMime())),
-      backend.artworkFile() ? backend.artworkMime() : '（无封面）');
-    check('歌词缺省时不硬塞空数组（不给渲染页假歌词）',
-      !np || np.lyrics === undefined || Array.isArray(np.lyrics));
-
-    // 频谱形状：音频关掉时也必须是「形状正确的 64 段」，而不是报错
-    const sp = backend.spectrum();
-    check('频谱恒为 64 段（音频关时全 0，不是错误）',
-      sp && sp.length === 64 && typeof sp[0] === 'number');
-
-    // 位置外推：等一会儿再读，进度得往前走
-    const before = np ? np.position : 0;
-    await sleep(1200);
-    const after = backend.nowPlaying();
-    check('位置随真实时间外推（不是卡在上报值）',
-      Boolean(after) && after.position > before,
-      `${before.toFixed(1)}s → ${after ? after.position.toFixed(1) : '?'}s`);
-
-    // ── 反向控制（端到端，mock 播放器）：壁纸里的播放/暂停按钮落到的就是这条链 ──
-    // 判据按**回读的状态**（不是只看 {ok:true}）：中间件发完命令会开突发窗口重轮询，
-    // 守护侧再把响应里的快照写进缓存 —— 宿主面板与壁纸图标靠的就是这一步即时性。
-    const ctlPause = await backend.control('pause');
-    check('control(pause) 打到中间件且回读到暂停',
-      ctlPause && ctlPause.ok === true && (backend.nowPlaying() || {}).state === 2,
-      JSON.stringify(ctlPause) + ' state=' + String((backend.nowPlaying() || {}).state));
-    const ctlPlay = await backend.control('play');
-    check('control(play) 恢复播放并回读到播放态',
-      ctlPlay && ctlPlay.ok === true && (backend.nowPlaying() || {}).state === 1,
-      JSON.stringify(ctlPlay) + ' state=' + String((backend.nowPlaying() || {}).state));
-    const ctlNext = await backend.control('skipNext');
-    check('control(skipNext) 映射到中间件的 next', ctlNext && ctlNext.ok === true, JSON.stringify(ctlNext));
-
-    // 状态形状：与内置实现同名同形（调用点不必分支），外加 backend/回落说明
-    const st = backend.status();
-    check('status 形状与内置实现同名同形（audio/nowPlaying 两段 + 后端标记）',
-      st.audio && typeof st.audio.status === 'string'
-      && st.nowPlaying && typeof st.nowPlaying.status === 'string'
-      && st.backend === 'bridge' && st.fallback === '',
-      `audio=${st.audio.status} nowPlaying=${st.nowPlaying.status}`);
-    check('用户关掉音频时不装音频桥（status.audio=off）', st.audio.status === 'off', st.audio.status);
-    check('mock 下 metadata 源在跑', st.nowPlaying.status === 'running', st.nowPlaying.status);
-
-    // ── 5. 生命周期：stop() 不留孤儿 ────────────────────────────────────────
-    const pid = Number(info.pid) || 0;
+  // 不就绪 ⇒ 文件探针（见 classifyProbe 上方那段）出场。它在这里**身兼二职**：
+  //   ① 二义消解：换一条不依赖管道的通道再问一次 hello，并要求**产物可信**（sha256 就是
+  //      发布产物）才允许记环境跳过；
+  //   ② **首启预热**：`--provision` 会在 CI runner 上**第一次**执行刚下载的二进制，windows
+  //      的 Defender / macOS 的首次执行校验都可能把它拖过引导预算（实测 windows-latest 连
+  //      放宽后的 90s 都可能不够 —— run #244 整步 1m48s 判红，46 分钟后同提交 6s 过）。
+  //      这类拦截是**一次性**的：扫描完成后再启就是秒级。所以探针判"环境"且产物可信 ⇒
+  //      再给**一整段**引导预算（预热后通过 = 断言全覆盖，比记一次跳过更有价值）；真回归
+  //      不经此路 —— 探针判 regression 直接终审判红，不花重试预算。重试只挂 PROVISION：
+  //      本机自备产物没有"首启"问题，与引导预算放宽（见上）同一条口径。
+  let probe = null;
+  let verdict = '';
+  let trust = { ok: false, why: '' };
+  if (!ready) {
     backend.stop();
-    let alive = false;
-    for (let i = 0; i < 12; i++) {
-      await sleep(250);
-      alive = false;
-      if (pid) { try { process.kill(pid, 0); alive = true; } catch { alive = false; } }
-      if (!alive) break;
-    }
-    check('stop() 后子进程退出（不留孤儿）', !alive, pid ? 'pid ' + pid : '（hello 没给 pid）');
-  } else {
-    backend.stop();
-    // 二义消解（见 classifyProbe 上方那段）：换一条不依赖管道的通道再问一次，并要求
-    // **产物可信**（sha256 就是发布产物）才允许记环境跳过。
-    const probe = await probeHandshakeViaFiles(binPath, bridgeServeArgs({
+    probe = await probeHandshakeViaFiles(binPath, bridgeServeArgs({
       cacheDir: join(TEST_DIR, 'probe-cache'), audio: false, online: false, mock: true,
     }), join(TEST_DIR, 'probe'));
-    const verdict = classifyProbe(probe);
-    const trust = artifactTrusted(binPath, asset);
-    const probeBrief = (probe.hello ? '文件通道拿到了 hello 应答' : (probe.stdout || probe.stderr
-      ? '子进程原话：' + String(probe.stdout || probe.stderr).replace(/\s+/g, ' ').slice(0, 160)
-      : (probe.spawned ? '存活且文件全空' : '起不来：' + (probe.detail || 'spawn 失败'))));
-    if (verdict === 'regression') {
-      check('中间件就绪（握手通过、子进程在跑）', false,
-        JSON.stringify(backend.status().fallback || '')
-        + `（引导预算 ${bootMs}ms；文件探针判**回归**：${probeBrief} ⇒ 不是环境差异）`);
-    } else if (!trust.ok) {
-      check('中间件就绪（握手通过、子进程在跑）', false,
-        JSON.stringify(backend.status().fallback || '')
-        + `（引导预算 ${bootMs}ms；探针判 ${verdict}，但产物不可信：${trust.why} ⇒ 不能归因给环境）`);
-    } else {
-      channelSkipped = probeBrief;
-      skip('中间件端到端用例', `文件探针判 ${verdict}：${probeBrief}；产物可信（${trust.why}）⇒ 判为环境差异（非协议回归）`);
+    verdict = classifyProbe(probe);
+    trust = artifactTrusted(binPath, asset);
+    if (verdict === 'environment' && trust.ok && PROVISION) {
+      console.log('    · 探针判环境且产物可信（' + probeBrief(probe) + '）—— 首启预热完成，再给一整段引导预算');
+      backend = createMediaBackend({ dataDir: TEST_DIR, log: (m) => console.log('    · ' + m) });
+      backend.start({ audio: false, online: false });
+      const retryDeadline = Date.now() + bootMs + 15000;
+      while (!ready && Date.now() < retryDeadline) { await sleep(150); ready = backend.usingBridge(); }
     }
+  }
+  // 终审（decideNotReadyOutcome，合成钉在 2b）。⚠️ 与旧版不同，环境差异**不再计 failed**：
+  // 旧版在这里无条件 `check(..., ready)`，环境跳过也记 failed ⇒ 退 1，而 CI 的 verify:bridge
+  // 没有 --allow-skip ⇒ windows runner 首启被 Defender 拖过预算（run #244）时整条 job 判红，
+  // 冤枉无关改动。三种结局都仍然**喊出来**（✗ 或 ○，二选一）—— "不就绪必喊出来"的不变量
+  // 不变，恒红与静默不可达还是同一个洞的两面；变的只是"环境"这种喊法不再毒化退出码。
+  if (ready) {
+    check('中间件就绪（握手通过、子进程在跑）', true,
+      `引导预算 ${bootMs}ms${probe ? '（首启预热后通过）' : ''}`);
+    await runBridgeE2E(backend);
+  } else if (decideNotReadyOutcome(verdict, trust.ok) === 'fail-regression') {
+    check('中间件就绪（握手通过、子进程在跑）', false,
+      JSON.stringify(backend.status().fallback || '')
+      + `（引导预算 ${bootMs}ms；文件探针判**回归**：${probeBrief(probe)} ⇒ 不是环境差异）`);
+  } else if (decideNotReadyOutcome(verdict, trust.ok) === 'fail-untrusted') {
+    check('中间件就绪（握手通过、子进程在跑）', false,
+      JSON.stringify(backend.status().fallback || '')
+      + `（引导预算 ${bootMs}ms；探针判 ${verdict}，但产物不可信：${trust.why} ⇒ 不能归因给环境）`);
+  } else {
+    backend.stop();
+    channelSkipped = probeBrief(probe);
+    skip('中间件端到端用例', `文件探针判 ${verdict}：${probeBrief(probe)}；产物可信（${trust.why}）⇒ 判为环境差异（非协议回归）`);
   }
 }
 
