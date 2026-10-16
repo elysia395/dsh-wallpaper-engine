@@ -266,7 +266,7 @@ section('② 消毒：settings 段补齐成完整快照 / 资产段缺席不写�
     // 排除表全量喂非默认值：任何一个出现在产物里都是"预设携带了运行期记忆/本机指向"。
     id: 'wallpaper-1', hiddenIds: ['a'], rotationGroups: [{ name: 'g' }], rotationGroupId: 'g',
     rotationSeeded: true, userProps: { tok: { opacity: 5 } }, sceneLiveFailures: { t: 1 },
-    noticeSeen: 'v1', skinYieldRestoreId: 'w', skinYieldRestoreRotation: true,
+    noticeSeen: 'v1', presetIntroSeen: 'v1', skinYieldRestoreId: 'w', skinYieldRestoreRotation: true,
     parallaxPluginDepths: { slot: 3 }, settingsVersion: 2,
     // 资产段全量喂非默认值：同理不得进 settings 段。
     themeColors: { primary: { light: '#111111', dark: '#222222' } }, themeDarkSeparate: true,
@@ -1524,9 +1524,9 @@ section('④ 客户端形态棘轮：新编排链（合并→落盘→reapplyAll
       /function PresetIntroDialog\(\)/.test(introSrc)
       && (introSrc.match(/React\.createElement\(PresetIntroDialog, null\)/g) || []).length === 2,
       (introSrc.match(/React\.createElement\(PresetIntroDialog, null\)/g) || []).length + ' 处挂载');
-    check('门控三件齐：hostLoaded + 未答过（localStorage 哨兵）+ 公告已处理（先公告后弹窗，不同屏）',
+    check('门控三件齐：hostLoaded + 未答过（settings 哨兵）+ 公告已处理（先公告后弹窗，不同屏）',
       /sel\.hostLoaded && !seen && sel\.noticeSeen === NOTICE_VERSION/.test(introSrc)
-      && /PRESET_INTRO_SEEN_KEY = "dsh-wallpaper-engine:preset-intro-seen"/.test(introSrc));
+      && /const seen = sel\.presetIntroSeen === PRESET_INTRO_VERSION;/.test(introSrc));
     // A 键：走预设卡片同一条 applyPreset 整快照链（settings 合并 + 资产落位 + 失败滚回），
     // 且**成功才记已读** —— 失败留弹窗可重试，"答过了"不能伪装成"应用过了"。
     const aGuard = (s) => /applyPreset\("factory-author"\)/.test(s)
@@ -1537,11 +1537,26 @@ section('④ 客户端形态棘轮：新编排链（合并→落盘→reapplyAll
     check('B 键只记已读不碰设置（onClick: markSeen 恰一处；A 键走 accept）',
       (introSrc.match(/onClick: markSeen/g) || []).length === 1,
       (introSrc.match(/onClick: markSeen/g) || []).length + ' 处');
-    // 哨兵住 localStorage ⇒ **不许**进 settings-schema（进了 schema 就会出现在 sanitize
-    // 输出与 golden 夹具里，两套"每机状态"口径打架；对照：noticeSeen 走 settings 是历史先例）。
+    // 哨兵住 **settings**（2026-10-16 修正 2026-10-12 的 localStorage 口径）：localStorage
+    // 按**源**（协议+主机+端口）隔离，而 DSH Desktop 每次启动都换随机 `--port 0` 端口 ⇒
+    // 旧口径的已读标记活不过一次重启，弹窗每次开机重弹（用户实测）。settings 落宿主
+    // config.json、与端口无关 ⇒ 真正的一次性；同时必须挂 PRESET_EXCLUDED_KEYS ——
+    // "答没答过"是每机状态不是外观配置，不许随预设快照旅行（noticeSeen 同款先例）。
     const introSchemaSrc = readFileSync(join(root, 'lib', 'settings-schema.js'), 'utf8');
-    check('哨兵是 localStorage 口径（键定义在 client.js；settings-schema 无 preset-intro 痕迹）',
-      /dsh-wallpaper-engine:preset-intro-seen/.test(introSrc) && !/preset-intro/.test(introSchemaSrc));
+    check('哨兵是 settings 口径（markSeen = setSetting + emit；client.js 无 localStorage 残留）',
+      /setSetting\("presetIntroSeen", PRESET_INTRO_VERSION\)/.test(introSrc)
+      && !/preset-intro-seen/.test(introSrc));
+    check('哨兵键在 schema：KINDS 收编（str）+ PRESET_EXCLUDED_KEYS 硬排除（不进预设快照）',
+      /presetIntroSeen: \{ kind: 'str' \}/.test(introSchemaSrc)
+      && /'presetIntroSeen',\s*\/\/ 「作者自用」推广弹窗/.test(introSchemaSrc));
+    check('negative control: 退回旧 localStorage 口径的源码会被上面两条判据判出（判据有牙）',
+      !(() => { const legacy = introSrc
+        .replace(/const seen = sel\.presetIntroSeen === PRESET_INTRO_VERSION;/,
+                 'const seen = localStorage.getItem("dsh-wallpaper-engine:preset-intro-seen") === PRESET_INTRO_VERSION;')
+        .replace(/setSetting\("presetIntroSeen", PRESET_INTRO_VERSION\);\s*emit\(\);/,
+                 'try { localStorage.setItem("dsh-wallpaper-engine:preset-intro-seen", PRESET_INTRO_VERSION); } catch { /* ignore */ }');
+        return /setSetting\("presetIntroSeen", PRESET_INTRO_VERSION\)/.test(legacy)
+          && !/preset-intro-seen/.test(legacy); })());
     // ── #199 窗口期门控：开之前先探一次宿主**正文**路由（与公告美术闸同思路）──
     //    探针打的是**这一份**预设的正文（清单 200 只说明路由挂着，说明不了它读得懂 ——
     //    旧后端读新 tag 文件正是读不懂）；判定按**模块级**缓存（页面级事实，多面板只探一轮）；

@@ -16,6 +16,10 @@
 > 完整逐提交历史见 GitHub Commits / Releases；升级前置条件见 [`UPGRADING.md`](./UPGRADING.md)。
 > `test/verify-scene-live.mjs` 这一类判据条数**只记该条写作当时的实测总数**（如 466 / 465），不是现在的总数 —— 后续条目会往上加（现为 502）；照原文保留，好让它与当次提交对得上。
 
+### v1.3.4（未发布）
+
+- **修复：「作者自用」推广弹窗每次启动重弹 —— 已读哨兵从 localStorage 搬进设置（宿主 config.json）**。用户实测：答过（无论 A/B）之后每次重启 DSH 弹窗又来。根因：哨兵原先住 localStorage，而 localStorage 按**源**（协议+主机+端口）隔离，DSH Desktop 每次启动都换一个随机 `--port 0` 回环端口 ⇒ 对浏览器来说每次开机都是"另一个网站"、存储全新为空，已读标记随启动自清。搬进新设置键 `presetIntroSeen` 后落宿主文件、与端口无关，跨重启存活；与 `noticeSeen` 同款挂 `PRESET_EXCLUDED_KEYS`（"答没答过"是每机状态，不随任何预设快照旅行）。三平台一致 —— 这从来不是系统差异，是存储口径。升级到本版会**最后再被问一次**（旧 localStorage 标记本就活不过一次重启，救不回来），答完即永久安静。判据：`test/verify-presets.mjs` 两条 localStorage 口径钉子改写为 settings 口径 + 负对照；sanitize golden 夹具重录（`presetIntroSeen`，18 用例 × 两侧）。**宿主与客户端半边都改 ⇒ 要重启 dsh web 生效。**
+
 ### v1.3.3（2026-10-15 · npm 已发布）
 
 - **公告追加一条 + 版本号升级（本仓迭代，用户口径）**：更新公告在四条 callout 之后新增第五条**加粗**提示 —— **「在设置中启用深色模式 + 「作者自用」预设，为本插件最佳效果之一！」**（沿用 16pt callout 样式，`<strong>` 加粗与❗前缀同其余四条）；`package.json` 版本号 `1.3.2` → `1.3.3`，`NOTICE_VERSION` 哨兵同步 `1.3.3`（看过 1.3.2 公告的机器重弹一次）。英文词表同步新增一条（`src/i18n-copy-ext.js`）。**纯客户端改动 ⇒ 刷新页面即可生效。**

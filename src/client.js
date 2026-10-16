@@ -4972,12 +4972,18 @@ function UpdateNotice() {
 // ── One-time preset intro dialog（「作者自用」推广弹窗，2026-10-12 用户口径）──────────
 // 方案：更新后弹**一次性**对话框，由用户自选 —— A：采用「作者自用」（作者日常在用、
 // 兼顾美观与可读性，降低新用户上手难度）；B：保持当前设置不变。不强制：老调参用户选
-// B 即可，答过就不再问。哨兵住 **localStorage**（与折叠态同一条"每机 UI 状态"口径；
-// 不进 settings ⇒ 不进任何预设快照，也不动 schema / sanitize golden）。
+// B 即可，答过就不再问。
+// ⚠️ 哨兵住 **settings**（`presetIntroSeen`，2026-10-16 修正 2026-10-12 的口径）：
+// 最初这标记放 localStorage —— 但 localStorage 按**源**（协议+主机+端口）隔离，而 DSH
+// Desktop 每次启动都换一个随机 `--port 0` 回环端口 ⇒ 每次启动都是一份全新空存储，已读
+// 标记自清 ⇒ 弹窗每次开机重弹（更新公告没这毛病：noticeSeen 一开始就走设置通道、落宿主
+// config.json，与端口无关）。搬进 settings 后跨重启存活；与 noticeSeen 一样挂
+// `PRESET_EXCLUDED_KEYS` ⇒ 不进任何预设快照（"答没答过"是每机状态，不是外观配置）。
+// 升级到本版时每个用户**最后再被问一次**（旧 localStorage 标记救不回来 —— 它本就活不过
+// 一次重启），答完（A/B 均可）之后永久安静。
 // ⚠️ 排在公告**之后**：门控借用 NOTICE_VERSION 本尊（noticeSeen 已写 = 公告已处理）
 // —— 同一次更新先读"有什么新"，再答"要不要换外观"，两个弹窗不同屏。
 const PRESET_INTRO_VERSION = "1";
-const PRESET_INTRO_SEEN_KEY = "dsh-wallpaper-engine:preset-intro-seen";
 // 后端代际探针（#188）：弹窗 A 键走 applyPreset("factory-author")，而宿主半边只在 DSH
 // 重启时换血 —— 升级窗口期（磁盘已是新版、宿主内存还是旧路由）里这个 GET 必然失败，
 // 弹窗必然报错。与更新公告的 art-gate 同一条防线：**探到 200 才允许弹**。
@@ -4992,19 +4998,21 @@ let presetIntroProbeVerdict = "";
 function PresetIntroDialog() {
   useWeLocale(); // 与公告同一条口径：文案跟随语言切换
   const sel = useStore();
-  // 已读标记同步读（localStorage 可同步拿）：不需要等 hostLoaded 才知道"答没答过"。
-  const [seen, setSeen] = React.useState(() => {
-    try { return localStorage.getItem(PRESET_INTRO_SEEN_KEY) === PRESET_INTRO_VERSION; } catch { return false; }
-  });
+  // 已答过 = 设置通道的哨兵（`sel.presetIntroSeen`）。hostLoaded 之前它可能还是启动缓存
+  // 或空值 —— 没关系，eligible 的 hostLoaded 门会把未定态挡住（与公告同一道防线，
+  // 见 UpdateNotice 里"localStorage 空源会闪一下"的对应注释）。
+  const seen = sel.presetIntroSeen === PRESET_INTRO_VERSION;
   // 探针态："pending"（在探，不弹）/"ok"（后端认，可弹）/"no"（后端不认，不弹）。
   // 组件本地 state 而不是 store 字段：纯视图态，进 store 会平白多一对瞬态字段要过
   // 直写棘轮（与公告 art 态同一条理由）。
   const [probe, setProbe] = React.useState(presetIntroProbeVerdict || "pending");
   const [applying, setApplying] = React.useState(false);
   const [failed, setFailed] = React.useState(false);
+  // 记已读 = 写设置通道（落宿主 config.json，跨重启存活）：与公告 dismiss 同一条路。
+  // emit() 让本组件经 useStore 重渲染 ⇒ seen 翻 true、eligible 翻 false，弹窗退场。
   const markSeen = () => {
-    try { localStorage.setItem(PRESET_INTRO_SEEN_KEY, PRESET_INTRO_VERSION); } catch { /* ignore */ }
-    setSeen(true);
+    setSetting("presetIntroSeen", PRESET_INTRO_VERSION);
+    emit();
   };
   // A 键 = 与预设卡片同一条 applyPreset 整快照链（settings 合并 + 资产落位 + 失败滚回）。
   // 失败**不**记已读：弹窗留在原地，错误文案读 glassPresetError 现值（与卡片同一通道，
