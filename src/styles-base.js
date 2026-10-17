@@ -332,6 +332,49 @@ const CSS_BASE = `
     --dsw-alias-border-l2: rgba(180, 180, 180, var(--we-border-alpha, 0.35));
     --dsw-alias-border-l2-darkmode-thin: rgba(180, 180, 180, var(--we-border-alpha, 0.35));
   }
+  /* ── 浮层不吃页面玻璃那张令牌映射（issue #161 的漏网形态）─────────────────────────
+     上面两处在令牌源头把面板梯度改成「底色压可读性下限 + 玻璃色」的半透明配方：对面板
+     正确（背后只有壁纸），对浮层错误 —— 浮层背后是界面自己的正文，任何 < 100% 的覆盖
+     都会让底下那行字透上来，表现成「两行字叠在一起」的重影。#161 只豁免了气泡那几条
+     填色规则、没豁免令牌映射，本组补的就是这道缺的豁免。
+     判据不能只取 role（dsh-context 只在部分浮层实例上写 role：趋势图与耗时时间轴的
+     tip 都没写）⇒ 同时认浮层的命名约定。子串匹配有意不区分大小写：宿主哈希类名是
+     camelCase（KZf9OG_brokenTip），只匹配 -tip 会漏；误伤面（multiply 这类）的后果
+     只是令牌在它上面被重声明，只有它真拿该令牌当底才有观感差异。
+     底色取 --we-panel-color（主题感知），一条规则同时覆盖深浅两主题，且与浮层文字
+     （宿主与第三方都读 --dsw-alias-label-primary）维持原生配对。不要改借宿主 Tooltip
+     那对专用令牌 —— 那是「深底 + 固定近白字」，浅色主题下浮层会变成黑底黑字。 */
+  body[data-we-glass-page] [role="tooltip"],
+  body[data-we-glass-page] [role="menu"],
+  body[data-we-glass-page] [role="listbox"],
+  body[data-we-glass-page] [class*="tip" i],
+  body[data-we-glass-page] [class*="hint" i],
+  body[data-we-glass-page] [class*="float" i],
+  body[data-we-glass-page] [class*="popover" i],
+  body[data-we-glass-page] [class*="hovercard" i],
+  body[data-we-glass-page] [class*="dropdown" i],
+  body[data-we-glass-page] [class*="popup" i] {
+    --dsw-alias-bg-layer-1: color-mix(in srgb, var(--we-panel-color, #1e1f26) 96%, transparent);
+    --dsw-alias-bg-layer-2: color-mix(in srgb, var(--we-panel-color, #1e1f26) 96%, transparent);
+  }
+  /* 第二类漏网：既没有 role、类名也不含浮层约定词的面板浮层（dsh-market 的 .opPanel、
+     @linxin666 插件管理器的更新面板）。判据取源码级属性优先（[data-update-panel]），
+     CSS Module 名只作兜底（[class*="opPanel"]：哈希前缀随构建变，语义后缀才稳）。
+     这里不给令牌、直接给不透明实底：三步探针证明选择器命中、该元素也是视觉容器，但
+     令牌赋值在这两个元素上不落地（92% / 96%、带不带 !important 都试过）。浮层本来
+     就不该玻璃化（#161 的口径），实底既满足可读性又少一层不确定性 —— 别把这两条
+     「优化」回令牌或 alpha 写法，否则它们会重新变透。
+     [data-install-registry]（插件源 fieldset）不放进本组：它属于「浮层玻璃」面的成员，
+     W5 要求整面同锚点（data-we-glass-floaters），混进来会让 verify-glass-surfaces 判红；
+     它的底色归 floaters 面那条既有规则管（见 lib/client.js 的 #156② 注释）。 */
+  body[data-we-glass-page] [data-update-panel],
+  body[data-we-glass-page] [class*="opPanel" i] {
+    background-color: #ffffff !important;
+  }
+  body[data-ds-dark-theme][data-we-glass-page] [data-update-panel],
+  body[data-ds-dark-theme][data-we-glass-page] [class*="opPanel" i] {
+    background-color: #1e1f26 !important;
+  }
   /* DSH rc.7+ injects the theme palette (design-platform.css) as a plugin-owned
      stylesheet appended to <head> AFTER this one, so in dark mode the shell's
      body[data-ds-dark-theme] rules (equal specificity 0,1,1, later in the
