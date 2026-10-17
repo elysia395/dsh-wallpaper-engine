@@ -90,6 +90,7 @@ dsh plugin --profile web add dsh-plugin-wallpaper-engine
 | **Video（视频）** | 浏览器播放，配合转码、帧率上限与暂停控制 | 支持 |
 | **Application（应用）** | 需要启动第三方可执行程序 | **不支持**，不进入壁纸库与轮播候选 |
 | **自定义图片 / 视频** | 上传本地 JPG / PNG / MP4 | 支持，文件保存在本机 |
+| **Picture（图片项目 / 幻灯片）** | 识别只带 `preset` 的 WE 项目目录（`wallpapermode` 1 单图 / 2 幻灯片），读取图片清单并在底层首图之上交叉淡化轮播 | 支持；切换周期取 WE 的 `imageswitchtimes`，缺省 30 秒 |
 
 ## 安装
 

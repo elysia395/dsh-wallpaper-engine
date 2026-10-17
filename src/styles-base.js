@@ -130,6 +130,11 @@ const CSS_BASE = `
      only .we-media--fit reads the variable (iframes have no object-fit). */
   .we-layer .we-media--fit { object-fit: var(--we-object-fit, cover); }
 
+  /* 图片 / 幻灯片壁纸的过场图（media-prep 的图片轮播腿）：.we-media 只有尺寸与
+     object-fit、没有定位 ⇒ 不加这条，两张过场图会在文档流里上下排开而不是叠放，
+     首图之上的交叉淡化永远看不见。 */
+  .we-layer .we-slide { position: absolute; inset: 0; }
+
   /* Scene live render (WebWallGL): static frame underlay + renderer iframe.
      Both stack absolutely inside .we-layer; the iframe starts transparent and
      fades in on the first heartbeat frame (.we-live-on, startLiveWatch) so the

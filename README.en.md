@@ -53,7 +53,7 @@ It discovers the Wallpaper Engine install on your machine, lists your wallpapers
 
 ## Which wallpaper types are supported?
 
-Wallpaper Engine itself splits wallpapers into four types; this plugin supports three of them:
+Wallpaper Engine itself splits wallpapers into four types; this plugin supports three of them, and additionally lists dependency-style picture / slideshow projects (the last row):
 
 | Type | Rendered by | Portable to DSH? |
 |---|---|---|
@@ -61,6 +61,7 @@ Wallpaper Engine itself splits wallpapers into four types; this plugin supports 
 | **Web** | Wallpaper Engine's built-in HTML/JS runtime | ✅ Live — WebWallGL's web mount with the **injected WE API** (audio / property / media listeners) under a strict sandbox; falls back to a plain iframe on failure |
 | **Video** | Wallpaper Engine's built-in player | ✅ Direct playback — the same hardened pipeline as uploaded video (transcode, fps cap, occlusion pause, speed / flip) |
 | **Application** | Wallpaper Engine launches a third-party executable | ❌ **Not supported** — it needs the host to run an external program, which this plugin does not offer |
+| **Picture (picture / slideshow projects)** | Recognises WE project directories that only carry a `preset` block (`wallpapermode` 1 = single picture / 2 = slideshow), reads the picture list and cross-fades it above the first picture | ✅ Supported — the switch interval comes from WE's `imageswitchtimes`, 30 s by default |
 
 > The render path, graceful degradation, out-figure chain and empty-frame gate for all four types — plus the
 > diagnostics rows used for troubleshooting — are in [`docs/HOW-IT-WORKS.md`](docs/HOW-IT-WORKS.md).

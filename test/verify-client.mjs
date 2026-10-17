@@ -3475,7 +3475,7 @@ setTimeout(async () => {
           why: '**整批应用**：`applySelection` 一族写一批字段后一次 `persistSelection()` / 一次 emit，逐个注入入口是仪式',
           fields: ['liveFrame', 'mediaExt', 'mediaInfo', 'previewUrl', 'propsUrl', 'sceneAudioUrl',
             'sceneFrameUrl', 'sceneHasAudio', 'sceneLiveActive', 'sceneLiveSrc', 'sceneVideo',
-            'schemeColor', 'transcodeState', 'type', 'webLiveSrc'],
+            'schemeColor', 'slideIntervalMs', 'slidesUrl', 'transcodeState', 'type', 'webLiveSrc'],
         },
         'src/persistence.js': {
           why: '启动加载期的一次性赋值（宿主→本地合并的结果），随后由调用方 emit',

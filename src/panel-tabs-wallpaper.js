@@ -165,7 +165,7 @@
   }
 
   function renderWallpaperRotationSection(ctx) {
-    const { INTERVALS, armedConfirm, editing, group, groups, onArmDeleteGroup, onDeleteGroup, onDisarmConfirm, onEditInterval, onEditName, onEditOrder, onGroupChange, onGroupInterval, onOpenPickerDraft, onToggleRotation, playableCount, sel } = ctx;
+    const { INTERVALS, armedConfirm, editing, group, groups, onArmDeleteGroup, onDeleteGroup, onDisarmConfirm, onEditInterval, onEditName, onEditOrder, onGroupChange, onGroupInterval, onOpenPickerDraft, onPictureSlideSeconds, onToggleRotation, playableCount, sel } = ctx;
     const groupToken = group ? "group:" + group.id : "";
     return React.createElement(React.Fragment, null,
     // ── 自动轮播: user-defined carousel lists, each with its own
@@ -280,6 +280,27 @@
           className: "we-picker__btn", type: "button",
           onClick: cancelEditGroup,
         }, weT("取消")),
+      ),
+    ),
+    React.createElement("div", { className: "we-picker__ctl" },
+      ctlText(weT("图片轮播"),
+        weT("幻灯片壁纸内部多张图之间的切换间隔；「跟随壁纸」= 用 WE 里设的周期")),
+      React.createElement("div", { className: "we-picker__ctl-side" },
+        React.createElement("select", {
+          className: "we-picker__picture-slide-interval",
+          value: String(sel.pictureSlideSeconds || 0),
+          onChange: onPictureSlideSeconds,
+          "aria-label": weT("图片轮播间隔"),
+        },
+          React.createElement("option", { value: "0" }, weT("跟随壁纸")),
+          React.createElement("option", { value: "5" }, weT("5 秒")),
+          React.createElement("option", { value: "10" }, weT("10 秒")),
+          React.createElement("option", { value: "15" }, weT("15 秒")),
+          React.createElement("option", { value: "30" }, weT("30 秒")),
+          React.createElement("option", { value: "60" }, weT("1 分钟")),
+          React.createElement("option", { value: "180" }, weT("3 分钟")),
+          React.createElement("option", { value: "300" }, weT("5 分钟")),
+        ),
       ),
     ),
     React.createElement("div", { className: "we-picker__ctl" },

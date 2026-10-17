@@ -265,6 +265,22 @@
         {
           "kind": "guard",
           "npm": null,
+          "file": "test/verify-slides.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-slideshow-client.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
           "file": "test/verify-cache-dir.mjs",
           "args": [],
           "tier": "hard",
@@ -835,6 +851,22 @@
           "kind": "guard",
           "npm": null,
           "file": "test/verify-route-families.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-slides.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-slideshow-client.mjs",
           "args": [],
           "tier": "hard",
           "probe": false

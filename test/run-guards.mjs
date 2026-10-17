@@ -125,6 +125,8 @@ const VERIFY_STEPS = [
   step('test/verify-host-paint-scope.mjs'),
   step('test/verify-route-index.mjs'),
   step('test/verify-route-families.mjs'),
+  step('test/verify-slides.mjs'),
+  step('test/verify-slideshow-client.mjs'),
   step('test/verify-cache-dir.mjs'),
   step('test/verify-cache-prune.mjs'),
   step('test/verify-we-install-probe.mjs'),

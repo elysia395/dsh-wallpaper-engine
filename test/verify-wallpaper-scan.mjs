@@ -305,8 +305,36 @@ await (async () => {
   writeFileSync(join(badJson, 'project.json'), '{ not json');
   check('C2 project.json 不是合法 JSON ⇒ null（不许把半解析结果漏出去）',
     await kit.readProjectP(badJson) === null);
-  check('C3 没有 file 字段 ⇒ null（缺主文件的"项目"不算条目）',
+  check('C3 没有 file 字段且没有 preset ⇒ null（缺主文件的"项目"不算条目）',
     await kit.readProjectP(project(join(env.base, 'c3'), { title: 'x' })) === null);
+
+  // C3b：WE 图片 / 幻灯片项目（dependency 型）—— project.json 没有 file，
+  // preset.wallpapermode/customdirectory 指向真正的图片目录。没有这条，整族
+  // 「自动轮播」壁纸会被扫描静默丢掉（用户可见形态 = 列表里根本没有它们）。
+  const picDir = project(join(env.base, 'c3-pic'), {
+    title: 'Pic', preview: 'preview.jpg',
+    preset: { wallpapermode: 2, customdirectory: 'directories/customdirectory', imageswitchtimes: 1 },
+  }, { 'preview.jpg': 'p' });
+  mkdirSync(join(picDir, 'directories', 'customdirectory'), { recursive: true });
+  writeFileSync(join(picDir, 'directories', 'customdirectory', 'b.jpg'), 'b');
+  writeFileSync(join(picDir, 'directories', 'customdirectory', 'a.jpg'), 'a');
+  const pic = await kit.readProjectP(picDir);
+  check('C3b preset 图片项目（无 file）⇒ image + 自然序清单 + WE 切换周期',
+    pic !== null && pic.type === 'image'
+      && pic.file === 'directories/customdirectory/a.jpg'
+      && Array.isArray(pic.slides) && pic.slides.length === 2
+      && pic.slides[1] === 'directories/customdirectory/b.jpg'
+      && pic.slideIntervalMs === 60000,
+    pic && [pic.type, pic.file, (pic.slides || []).length, pic.slideIntervalMs].join('|'));
+
+  // C3c：单图模式（wallpapermode 1 + image）也只算条目，清单退化成一项。
+  const singleDir = project(join(env.base, 'c3-single'), { preset: { wallpapermode: 1, image: 'wall.jpg' } });
+  writeFileSync(join(singleDir, 'wall.jpg'), 'w');
+  const single = await kit.readProjectP(singleDir);
+  check('C3c preset 单图模式（wallpapermode 1 + image）⇒ 一项清单',
+    single !== null && single.type === 'image' && single.file === 'wall.jpg'
+      && Array.isArray(single.slides) && single.slides.length === 1,
+    single && [single.type, single.file, (single.slides || []).length].join('|'));
 
   const bare = project(join(env.base, 'bare-title'), { file: 'scene.pkg' });
   const p1 = await kit.readProjectP(bare);
@@ -331,10 +359,12 @@ await (async () => {
     video: await kit.readProjectP(project(join(env.base, 'inf-v'), { file: 'a.MP4' })),
     web: await kit.readProjectP(project(join(env.base, 'inf-w'), { file: 'a.html' })),
     scene: await kit.readProjectP(project(join(env.base, 'inf-s'), { file: 'a.pkg' })),
+    image: await kit.readProjectP(project(join(env.base, 'inf-i'), { file: 'a.JPG' })),
   };
-  check('C10 没有 type ⇒ 按扩展名判（mp4 ⇒ video / html ⇒ web / 其它 ⇒ scene）',
-    inferred.video.type === 'video' && inferred.web.type === 'web' && inferred.scene.type === 'scene',
-    [inferred.video.type, inferred.web.type, inferred.scene.type].join('|'));
+  check('C10 没有 type ⇒ 按扩展名判（mp4 ⇒ video / html ⇒ web / 其它 ⇒ scene / 图片 ⇒ image）',
+    inferred.video.type === 'video' && inferred.web.type === 'web'
+      && inferred.scene.type === 'scene' && inferred.image.type === 'image',
+    [inferred.video.type, inferred.web.type, inferred.scene.type, inferred.image.type].join('|'));
 
   const rating = await kit.readProjectP(project(join(env.base, 'rating'), { file: 'scene.pkg', contentrating: 'Mature' }));
   check('C8 contentrating 原样透传（浏览器半边的分级筛选用它）', rating.contentrating === 'Mature');
@@ -343,7 +373,7 @@ await (async () => {
   check('C11 contentrating 非字符串 ⇒ null（不许把数字漏给前端的筛选）', badRating.contentrating === null);
 
   const openKinds = await loadMutant('kinds-open', (s) => s.replace(
-    'if (!KINDS.includes(type)) type = \'scene\';', 'if (false && !KINDS.includes(type)) type = \'scene\';'));
+    "KINDS.includes(declared) ? declared : 'scene'", "declared || 'scene'"));
   const envC = makeEnv('c-neg');
   check('C9 负对照：变异体拆掉类型白名单 ⇒ 同一条判据判红（QUAKE 会原样漏出去）',
     await unknownTypeFallsBack(() => openKinds({ WE_APPID: APPID, ...realDeps() }), envC) === false);

@@ -5,7 +5,7 @@
 > 口径：只统计守卫**代码**里真正碰到的模块（先剥注释），并区分"直接读源文件"与"隔着产物 `lib/client.js`"。
 > 写法：字面量路径 / `join(...)` 拼接 / 唯一 basename / 产物配方 / **前缀族读法** `scopeFiles|scopeText(<前缀>)` / **经共享族助手读**（`import { panelText } from './tools/src-scope.mjs'` + 真调用；族口径封在那个库里，见 DEV-GUIDE §4.6「同时是守卫的库」）。
 
-模块面 130 个 · 守卫 73 个
+模块面 131 个 · 守卫 75 个
 
 ## 守卫 → 模块
 
@@ -70,6 +70,8 @@
 | `verify-scene-probe.mjs` | `lib/pkg-read.js` `lib/scene-manifest.js` `lib/scene-probe.js` |  |
 | `verify-scene.mjs` | `lib/index.js` `lib/pkg-read.js` `lib/routes/live-frame.js` `lib/routes/media-bytes.js` `lib/routes/props.js` `lib/routes/scene-frame.js` `lib/routes/scene-media.js` `lib/routes/settings.js` `lib/scene-manifest.js` `lib/scene-probe.js` | ✅ |
 | `verify-settings-schema-exports.mjs` | `lib/index.js` | ✅ |
+| `verify-slides.mjs` | `lib/json-response.js` `lib/routes/slides.js` `lib/wallpaper-scan.js` |  |
+| `verify-slideshow-client.mjs` | `src/media-prep.js` |  |
 | `verify-softrender.mjs` | — | ✅ |
 | `verify-static.mjs` | — |  |
 | `verify-steam-discovery.mjs` | `lib/index.js` `lib/steam-discovery.js` |  |
@@ -78,7 +80,7 @@
 | `verify-theme-layer.mjs` | `lib/settings-schema.js` `src/client.js` `src/effects.js` `src/font/apply.js` `src/font/color-roles.js` `src/font/typography.js` `src/panel-tabs-advanced.js` `src/panel-tabs-appearance.js` `src/panel-tabs-effects.js` `src/panel-tabs-mascot.js` `src/panel-tabs-wallpaper.js` `src/panel-tabs.js` | ✅ |
 | `verify-token-contract.mjs` | `src/styles-base.js` `src/styles-chrome.js` `src/styles-ext.js` `src/styles-panel.js` `src/styles-quick.js` `src/styles-settings.js` `src/styles-shell.js` `src/styles-sidebar.js` `src/styles.js` |  |
 | `verify-transcode-state.mjs` | `lib/index.js` `lib/routes/media-derived.js` `lib/transcode.js` `src/client.js` `src/media-prep.js` `src/video-layer.js` | ✅ |
-| `verify-types.mjs` | `lib/inventory.js` `src/client.js` | ✅ |
+| `verify-types.mjs` | `lib/inventory.js` `lib/routes/slides.js` `src/client.js` | ✅ |
 | `verify-upload-store.mjs` | `lib/config-store.js` `lib/upload-store.js` |  |
 | `verify-video-preview.mjs` | `lib/video-preview.js` |  |
 | `verify-wallpaper-scan.mjs` | `lib/wallpaper-scan.js` |  |
@@ -98,7 +100,7 @@
 | `lib/http-body.js` | 2 | `verify-body-caps` `verify-package-files` |
 | `lib/index.js` | 22 | `e2e-web-media-origin` `verify-about` `verify-adapter` `verify-cache-dir` `verify-client` `verify-contracts` `verify-fontset` `verify-logging` `verify-module-layout` `verify-occlusion-hub` `verify-package-files` `verify-package-publish` `verify-presets` `verify-reachability` `verify-route-index` `verify-scene-frame-master` `verify-scene-live` `verify-scene` `verify-settings-schema-exports` `verify-steam-discovery` `verify-transcode-state` `verify-we-install-probe` |
 | `lib/inventory.js` | 3 | `verify-inventory-index` `verify-scene-live` `verify-types` |
-| `lib/json-response.js` | 2 | `verify-json-response` `verify-occlusion-hub` |
+| `lib/json-response.js` | 3 | `verify-json-response` `verify-occlusion-hub` `verify-slides` |
 | `lib/log.js` | 1 | `verify-logging` |
 | `lib/media-origin.js` | 1 | `verify-scene-live` |
 | `lib/media-probe.js` | 1 | `verify-media-probe` |
@@ -130,6 +132,7 @@
 | `lib/routes/scene-media.js` | 1 | `verify-scene` |
 | `lib/routes/scene-serve.js` | 2 | `verify-logging` `verify-scene-live` |
 | `lib/routes/settings.js` | 1 | `verify-scene` |
+| `lib/routes/slides.js` | 2 | `verify-slides` `verify-types` |
 | `lib/routes/system-fonts.js` | 1 | `verify-system-fonts` |
 | `lib/routes/upload.js` | 2 | `verify-body-caps` `verify-package-files` |
 | `lib/routes/we-assets.js` | 1 | `verify-scene-live` |
@@ -141,7 +144,7 @@
 | `lib/transcode.js` | 3 | `verify-child-kill` `verify-scene-live` `verify-transcode-state` |
 | `lib/upload-store.js` | 1 | `verify-upload-store` |
 | `lib/video-preview.js` | 1 | `verify-video-preview` |
-| `lib/wallpaper-scan.js` | 2 | `verify-scene-live` `verify-wallpaper-scan` |
+| `lib/wallpaper-scan.js` | 3 | `verify-scene-live` `verify-slides` `verify-wallpaper-scan` |
 | `lib/we-focus-guard.js` | 1 | `verify-scene-live` |
 | `lib/we-props.js` | 1 | `verify-scene-live` |
 | `lib/webwallgl/occlusion-bridge.js` | 1 | `verify-scene-live-occlusion` |
@@ -186,7 +189,7 @@
 | `src/live-layer-underlay.js` | 5 | `verify-glass-surfaces` `verify-logging` `verify-occlusion-client` `verify-scene-live` `verify-theme-follow` |
 | `src/live-layer-watch.js` | 6 | `verify-client` `verify-glass-surfaces` `verify-logging` `verify-occlusion-client` `verify-scene-live` `verify-theme-follow` |
 | `src/live-layer.js` | 6 | `verify-client` `verify-glass-surfaces` `verify-logging` `verify-occlusion-client` `verify-scene-live` `verify-theme-follow` |
-| `src/media-prep.js` | 5 | `verify-client` `verify-fontset` `verify-scene-live` `verify-theme-follow` `verify-transcode-state` |
+| `src/media-prep.js` | 6 | `verify-client` `verify-fontset` `verify-scene-live` `verify-slideshow-client` `verify-theme-follow` `verify-transcode-state` |
 | `src/module-reset.js` | 2 | `verify-fontset` `verify-scene-live` |
 | `src/nav-icon.js` | 2 | `verify-client` `verify-i18n` |
 | `src/occlusion.js` | 1 | `verify-occlusion-client` |

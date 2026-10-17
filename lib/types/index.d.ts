@@ -2,7 +2,7 @@
  * dsh-wallpaper-engine — host half type surface.
  *
  * The host plugin contributes no public Cordis services and registers no model
- * tool. It serves 43 same-origin HTTP routes through `ctx.webServer` and unwinds
+ * tool. It serves 44 same-origin HTTP routes through `ctx.webServer` and unwinds
  * them on unload; `docs/ROUTE-INDEX.md` is the generated table of those routes
  * and stays authoritative for their paths and handlers.
  *
@@ -27,11 +27,11 @@ export interface WallpaperDescriptor {
   /** Display title: project.json title, uploads/.meta.json title, or the id as fallback. */
   title: string;
   /** Kind assigned by the enumerator: 'scene' | 'video' | 'web' | 'application',
-   *  plus 'image' for a single-file upload. */
+   *  plus 'image' for a single-file upload or a WE picture/slideshow project. */
   type: string;
   /** Wallpaper Engine content rating from project.json (or uploads/.meta.json), or null. */
   contentrating: string | null;
-  /** Whether the entry has playable media (video/web, or any single-file upload). */
+  /** Whether the entry has playable media (video/web/image, or any single-file upload). */
   playable: boolean;
   /** Served media URL (`/wallpaper-engine/media/<token>`), or null. */
   media: string | null;
@@ -40,6 +40,13 @@ export interface WallpaperDescriptor {
    *  "the browser can play this natively" decision (skip the frame-rate-cap re-encode)
    *  has no other way to know the container. */
   mediaExt: string | null;
+  /** Number of pictures in a WE picture/slideshow project (0 for every other kind). */
+  slideCount: number;
+  /** Slideshow manifest URL (`/wallpaper-engine/slides/<token>`, token = first picture)
+   *  when the project holds more than one picture, or null. */
+  slidesUrl: string | null;
+  /** WE `preset.imageswitchtimes` interval in milliseconds, or null (client default). */
+  slideIntervalMs: number | null;
   /** Served preview URL (`/wallpaper-engine/preview/<token>`; uploads without a
    *  preview image fall back to `/wallpaper-engine/video-preview/<token>`), or null. */
   preview: string | null;

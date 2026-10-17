@@ -27,6 +27,12 @@
 >
 > 按用户视角归六类，每条都标了**要不要重启**：① 吉祥物与预设系统的大改（3D 环 / 指向四态 / 预设资产化）② 外观新增（侧边栏圆角 / 主题预设成节）③ 缓存与安装兼容（#172 回收 / WE 新版识别 / 原生浏览器背景）④ 内部重构与测试 ⑤ 本轮作者侧迭代（推广弹窗 / 公告改版 / 滚动条取色）⑥ 那 83 笔之后追加的一轮**用户反馈修复**（issue [#194](https://github.com/elysia395/dsh-wallpaper-engine/issues/194)：设置导航图标没对齐、切深浅色主页面不跟随；另记一条光标口径说明，不改代码）。
 
+- **新增：Wallpaper Engine 图片 / 幻灯片壁纸（dependency 型 `preset` 项目）能识别并自动轮播**。这类壁纸在创意工坊里很常见（「自动轮播 / 幻灯片」），`project.json` **没有 `file` / `type`**，只有 `preset`（`wallpapermode` 1 = 单图 / 2 = 幻灯片，+ `customdirectory` / `image`）—— 旧扫描链要求 `file` 字段，整族在列表里消失（用户报告「图片壁纸不支持」）。现在：
+  ① `lib/wallpaper-scan.js` 认 `preset` 型项目：`type: 'image'`、`file` = 首图、`slides` 清单（自然序、递归 ≤3 层、上限 2000 张）、`slideIntervalMs` 取 WE `imageswitchtimes`（1/5/10/30/60 分钟；缺省由客户端兜 30 秒）；
+  ② 新路由 `GET /wallpaper-engine/slides/<token>`（`lib/routes/slides.js`）：token 是**首图**的媒体 token，按 `dirname` 列同目录图片（复用扫描族的 `listImages`，顺序与首图严格一致），只回同源 `/media/<token>` URL；空目录 ⇒ 404 `no-images`、未知 token ⇒ 404、非 GET ⇒ 405；
+  ③ 客户端轮播腿（`src/media-prep.js`）：清单到齐后在**底层首图之上**叠两张 `we-slide` 过场图交叉淡化；不改底层 `src` / 内联 `opacity`（壁纸透明度归 CSS 变量管）；底层离开 DOM 的下一拍自行停表摘图；页面隐藏那拍不推进；清单每个壁纸 id 只拉一次，拉不到就退化成单张首图（与上传图片同形）。
+  新增两条守卫：`test/verify-slides.mjs`（路由：顺序 / 同源 URL / 404 / 405 + 变异负对照）与 `test/verify-slideshow-client.mjs`（轮播腿：两张过场图 / 推进 / 脱离停表 / 隐藏不推进 + 两个变异负对照）。（**客户端改动 ⇒ 刷新页面即可；新增的宿主路由需要重启 `dsh`**。）
+
 - **性能：光效层每帧的高斯模糊从上百次降到个位数（issue [#190](https://github.com/elysia395/dsh-wallpaper-engine/issues/190)）**。报告实测「点击光晕 / 拖尾光晕影响很大」「拖尾时长呈正相关」「星火比涟漪更吃 GPU」——这三条恰好对应同一件事：Canvas2D 的 `shadowBlur` 每次 `stroke()` / `fill()` 都要做一次离屏高斯模糊，而原实现把它落在**每帧每图元**上。两处结构性浪费：① 彗尾**逐段**描边（每帧模糊次数 ≈ 存活点数，与 `fxTrailLength` 正相关）；② 一簇星火**逐条**描边（12 条共享同一套 alpha / 颜色 / 线宽 / 模糊 —— 那些赋值本来就在循环外），却各付一次模糊。修法是**按"共享状态"合批**：拖尾按**年龄带**把同带图元合成一条路径只描一次（带数 = 性能档），星火 12 条合并成一条路径只描一次。合并的是**绘制调用**、不是形状 ⇒ 每条火花的角度与长度差异全部保留。另加**帧耗时驱动的自适应降级**（连续慢帧降档、连续快帧升档，升档阈值远大于降档以避抖；可回退 —— 只降不升等于一次抖动永久降级），以及 `getContext` 与 `.we-scrim` 查询的缓存。实测：假 canvas 计数下**一帧带光晕的绘制调用 109 → 4**；真浏览器帧间隔 **p95 16.70 ms → 8.50 ms**（修复前那个值正压在 60 fps 的 vsync 边界上 = 每帧掉一档）。新增手动装置 `test/tools/fx-perf-rig.mjs` 做 A/B 对照。**这是客户端改动 ⇒ 刷新页面即可，不用重启。**
 
 - **头像导入加两道闸 + 「自动压缩后导入」；头像开始支持 SVG 等格式（issue [#185](https://github.com/elysia395/dsh-wallpaper-engine/issues/185)）**。

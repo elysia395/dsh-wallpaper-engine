@@ -15,6 +15,7 @@
     "switchTransitionDir": "left",
     "switchTransitionSpeed": "normal",
     "rotationEnabled": false,
+    "pictureSlideSeconds": 0,
     "playbackRate": 1,
     "videoVolume": 0,
     "videoAudioEnabled": true,
