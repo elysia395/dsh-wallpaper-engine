@@ -34,7 +34,7 @@
  * 对外提供：THEME_TYPE_ROLES / buildTypePayload / THEME_TYPE_SOURCE / GLOBAL_FAMILY_TOKEN /
  *   字号上下限。
  *   建层与轮询复用 src/font/color-roles.js 的 createThemeLayer / pollThemeService ——
- *   **必须用不同的 source**：同 source 再注册会整层替换，会把 F1 的颜色层顶掉。
+ *   **必须用不同的 source**：同 source 再注册会整层替换，会把文字颜色角色的令牌层顶掉。
  *
  * 不变量（有守卫）：
  *   · 每个被接管的角色写 **shorthand**，设了字号时另写该角色的 `-font-size`

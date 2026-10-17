@@ -25,7 +25,7 @@ const CSS_QUICK = `  /* ── Rope dock: chibi pull-cord + glass repo drawer �
      settle class so the rope follows the pointer 1:1. Pulling it DOWN draws
      out the repo panel, which descends from the top like a drawer. Z-order:
      repo panel 995 < rope 996 (the rope stays grabbable/clickable as the
-     panel's handle while it is out) < repo modal scrim 1003 < repo modal 1004. ── */
+     panel's handle while it is out). ── */
   .we-rope {
     position: fixed;
     z-index: 996;
@@ -256,7 +256,11 @@ body[data-we-glass-floaters] .we-repo-panel__body {
     padding-top: 10px;
     border-top: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.22));
   }
-  .we-qp__current { display: flex; align-items: center; gap: 10px; }
+  /* 控制行允许**整组折行**（flex-wrap）：官方右栏最窄 276px，三枚按钮（暂停/刷新/清除）＋
+     圆盘＋间距已接近满宽，再加内容就会溢出。窄到放不下时按钮组整体落到第二行、靠右对齐
+     （.we-qp__current-actions 的 margin-left: auto；info 列独占首行）；宽容器里三枚仍同行。
+     不用按钮各自的 flex-wrap —— 那会碎出 3+1 之类的歪行。 */
+  .we-qp__current { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   /* 当前壁纸缩略图 = 一枚旋转圆盘（用户口径：圆形图片旋转、中心空心小圆）：预览图
      裁成整圆，播放时匀速自转、暂停停在原角度（复用设置页黑胶的 we-vinyl-spin 关键帧
      与 play-state 口径，--playing 由组件按 playbackLive 挂）。中心的孔用 radial mask
@@ -302,7 +306,11 @@ body[data-we-glass-floaters] .we-repo-panel__body {
     font-size: 0.82em; color: var(--we-ink-2, rgba(128, 128, 128, 0.9));
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
-  .we-qp__current-actions { flex: none; display: flex; gap: 6px; }
+  /* 控制行允许**整组折行**：官方右栏最窄 276px，三枚按钮（暂停/刷新/清除）加上圆盘与间距
+     已接近满宽，再加内容就会超宽。窄到放不下时按钮组整体落到第二行、靠右对齐（info 列独占
+     首行）；宽容器里三枚仍同行。不用按钮各自的 flex-wrap —— 那会碎出 3+1 之类的歪行。
+     margin-left: auto 只在折行的第二行生效（单行时 info 的 flex:1 已经吃掉全部余量）。 */
+  .we-qp__current-actions { flex: none; display: flex; gap: 6px; margin-left: auto; }
   /* 壁纸属性入口：页签栏下方独占整行、文字居中、字号与页签标签一致。
      边框显式写在这里：宿主的中性描边令牌在这套玻璃面板上近乎不可见；
      颜色取该主题下的文字色（--we-ink：深色主题是浅字、浅色主题是深字）再混 40% 透明，

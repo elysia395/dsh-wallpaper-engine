@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * verify-media-probe.mjs — `lib/media-probe.js`（`getMediaInfo`，一次 moov 盒走读）的自检。
+ * verify-media-probe.mjs — `lib/media/mp4-probe.js`（`createMp4ProbeKit().getMediaInfo`，一次 moov 盒走读）的自检。
  *
  * 为什么需要这个文件：它**此前零覆盖**（`node test/verify-guard-map.mjs` 的①直接点名
- * `lib/media-probe.js`）。而它的答案有两个**用户看得见**的消费者（`lib/index.js` 顶层静态 import）：
+ * `lib/media/mp4-probe.js`）。而它的答案有两个**用户看得见**的消费者（内核装配后注入路由族）：
  *   · `/media-info` 的面板提示（"源 4K · 120fps · H.264"）与 `runFfmpegTranscode` 的
  *     "源帧率 ≤ 上限就整段跳过转码"决策 —— 读错 fps/尺寸 ⇒ 要么白起一次 ffmpeg，要么画质被降。
  *   · `moovStart` / `moovSize` 就是「moov 落在头部还是尾部」这个事实本身（`lib/mp4-vfs.js`
@@ -22,9 +22,15 @@ import { mkdirSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs'
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { getMediaInfo } from '../lib/media-probe.js';
+// ⚠️ 重指真源（task-10 B）：被测实现住 `lib/media/mp4-probe.js` 的工厂返回值里。
+// 原先 import 的是上游同名副本 `lib/media-probe.js`（模块级状态；task-10 末次提交已随本批删除）——
+// 那份副本恰好带着 v1 `mdhd` 的偏移修法，而真源当时读成 u64@20/+28 ⇒ fps = timescale<<32
+// （实测同一份 v1 字节流：真源 128849018880 / 期望 30）。修法已搬进真源（见该文件 mdhd 段注释），
+// 本守卫随之重指 —— 于是 D3/D4 从"给孤儿做体检"变成"钉住发布面真源"。
+import { createMp4ProbeKit } from '../lib/media/mp4-probe.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+const { getMediaInfo } = createMp4ProbeKit();
 const ISO = join(root, '.test-cache', 'media-probe');
 rmSync(ISO, { recursive: true, force: true });
 mkdirSync(ISO, { recursive: true });
@@ -72,7 +78,7 @@ function mdhd ({ version, timescale, duration }) {
     : box('mdhd', u8(0), zeros(3), u32(0), u32(0), u32(timescale), u32(duration), u16(0x55c4), u16(0));
 }
 
-/** `stsd` 的样本描述项：`avc1` 的 width/height 在项内 +32/+34（见 `lib/media-probe.js` 的读法）。 */
+/** `stsd` 的样本描述项：`avc1` 的 width/height 在项内 +32/+34（见 `lib/media/mp4-probe.js` 的读法）。 */
 function stsdEntry (codec, width, height) {
   // ⚠️ 偏移从**项起点**（盒头之后）算：项长 78B = 8B 盒头 + 70B 载荷，width@32 / height@34，
   //    所以载荷内要写在 **24 / 26**（32-8 / 34-8）。把 32/34 直接写进载荷不会报错，
@@ -111,7 +117,7 @@ const mdat = (n, fill = 0) => box('mdat', Buffer.alloc(n, fill));
 // ═══ 独立走读（期望值的来源，不与被测对象同源）═══════════════════════════════
 /**
  * 按 mp4 规范自己走一遍盒树，算 `{width,height,codec,fps,duration,moovStart,moovSize}`。
- * 故意写成"另一条路径"：从**已知的盒布局**推，而不是抄 `lib/media-probe.js` 的偏移常量。
+ * 故意写成"另一条路径"：从**已知的盒布局**推，而不是抄 `lib/media/mp4-probe.js` 的偏移常量。
  */
 function ownInfo (buf, moovStart, moovSize, trackIndex = 0, frameAt = moovStart) {
   const typeAt = (o) => buf.toString('latin1', o + 4, o + 8);

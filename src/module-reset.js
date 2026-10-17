@@ -1,6 +1,5 @@
 /**
- * module-reset.js —— **模块级重置按钮节点**（名字带 Node：它与 panel-tabs 里那个同名薄包装（issue #192 的 ↺）。
- *
+ * module-reset.js —— **模块级重置按钮节点**（名字带 Node：与 panel-tabs 里那个同名薄包装，即 issue #192 的 ↺，
  * 必须区分开 —— 内联后同作用域，重名即构建失败）。
  *
  * 契约：

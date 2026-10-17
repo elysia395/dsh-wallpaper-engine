@@ -1,0 +1,61 @@
+{
+  "fps": 24,
+  "frameMs": 41.6667,
+  "source": "初始素材 时长表.json（素材方交付，2026-10-15）",
+  "entries": {
+    "walkRight": {
+      "asset": "通用-右侧螃蟹步",
+      "frames": 124,
+      "ms": 5167,
+      "loop": true
+    },
+    "walkLeft": {
+      "asset": "通用-左侧螃蟹步",
+      "frames": 124,
+      "ms": 5167,
+      "loop": true
+    },
+    "brace": {
+      "asset": "侧边栏-蓄力准备往后拉",
+      "frames": 124,
+      "ms": 5167,
+      "loop": false
+    },
+    "pull": {
+      "asset": "侧边栏-后拉接疲态结束",
+      "frames": 243,
+      "ms": 10125,
+      "loop": false
+    },
+    "mascotTumble": {
+      "asset": "吉祥物-跳抓眩晕落地起身",
+      "frames": 192,
+      "ms": 8000,
+      "loop": false
+    },
+    "eggKick": {
+      "asset": "彩蛋-侧边栏-半身转向踢腿",
+      "frames": 124,
+      "ms": 5167,
+      "loop": false
+    },
+    "eggFlung": {
+      "asset": "彩蛋-侧边栏-被弹飞",
+      "frames": 243,
+      "ms": 10125,
+      "loop": false
+    },
+    "eggLand": {
+      "asset": "彩蛋-侧边栏-落地",
+      "frames": 124,
+      "ms": 5167,
+      "loop": false
+    },
+    "eggHiss": {
+      "asset": "彩蛋-吉祥物-哈气",
+      "frames": 124,
+      "ms": 5167,
+      "loop": false
+    }
+  }
+}

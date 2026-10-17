@@ -8,8 +8,7 @@
 > 决策与取舍见 [`adr/0002`](./adr/0002-settings-schema-single-source.md)（值的单一真源）。
 > 官方令牌层约束（原 `V1–V10`）**由守卫执行，不靠散文**：白字保护与对比度见
 > `test/verify-readability.mjs`，玻璃合成与令牌落点见 `test/verify-glass-compositing.mjs`。
-> 那条约束的实测结论（F0 真机确认）作为历史记录留在
-> [`archive/wip/OPEN-ITEMS.md`](./archive/wip/OPEN-ITEMS.md) §9.1。
+> 那条约束的实测结论（F0 真机确认）由上面那些守卫的断言持有；历史记录见 [`CHANGELOG.md`](./CHANGELOG.md)。
 
 这个目录是**字体系统的全部实现**。之所以单独成目录：字体有三个**互不相同的作用通道**，
 如果不放在一起，改动时很容易用错通道（症状是"改了没反应"，且在真机上才看得出来）。
@@ -46,7 +45,7 @@
 - `config.json` 里只留根字段（活动字体集 id 与自定义项）—— **字体键不在 settings 的持久化
   白名单里**：它们由 `lib/settings-schema.js` 的 `FONTSET_KEYS` 定义 kind 元数据，
   客户端 [`src/fontset-store.js`](../src/fontset-store.js) 与宿主
-  [`lib/routes/fontsets.js`](../lib/routes/fontsets.js) **共用同一份**做消毒。
+  [`packages/fonts/lib/routes/fontsets.js`](../packages/fonts/lib/routes/fontsets.js) **共用同一份**做消毒。
   ⚠️ **加键是加性的**（老文件缺键 ⇒ 消毒时回落默认值，`FONTSET_SCHEMA_VERSION` 不随加键升 ——
   升版本会让所有已导出的 `.json` 变成"读不懂"）。
 - **写回是设计的一部分**：面板里改任何一个字体项都只落到**当前这一套**；导入导出按整份 `.json` 走
@@ -58,15 +57,15 @@
 
 - **内置族键**：`FONT_FAMILY_VALUES` 里那几个（雅黑 / 楷体 / 宋体 / 黑体 / 行楷 / 等宽 / 默认），
   CSS 栈写死在客户端 `FONT_FAMILY_STACKS`。
-- **本机字体键 `sys:<族名>`**：清单由**宿主枚举**（[`lib/routes/system-fonts.js`](../lib/routes/system-fonts.js)），
+- **本机字体键 `sys:<族名>`**：清单由**宿主枚举**（[`packages/fonts/lib/routes/system-fonts.js`](../packages/fonts/lib/routes/system-fonts.js)），
   客户端通道是 [`src/system-fonts.js`](../src/system-fonts.js)。为什么问操作系统而不是自己解析字体文件，
   见 [`adr/0009`](./adr/0009-system-fonts-from-the-os.md)。⚠️ **同一个字体可能有两个键**：macOS 上
   本地化名（`苹方-简`）与规范名（`PingFang SC`）**都在**清单里 —— 两条腿并行、名字取并集，
   这是刻意的（用户可能只认得其中一种；原生 `<select>` 的首字母跳转按**选项文本**匹配，
   合成一行反而两边都跳不到）。
-   ⚠️ 而**系统列出的族名 ≠ 浏览器能匹配的族名**：本机实测 309 个里有 64 个取不到
-  （系统保留字体 `Apple Color Emoji` / `Symbol` / `Zapf Dingbats`、以及 `苹方-繁` 这类同一字体的
-  另一种写法）。⇒ 客户端在**渲染下拉时**过一道 `filterUsableSystemFonts`（`src/system-fonts.js`：
+   ⚠️ 而**系统列出的族名 ≠ 浏览器能匹配的族名**：系统保留字体（`Apple Color Emoji` / `Symbol` /
+  `Zapf Dingbats`）与同一字体的另一种写法（`苹方-繁`）都可能取不到 —— 面板会**如实报出略过了几个**。
+  ⇒ 客户端在**渲染下拉时**过一道 `filterUsableSystemFonts`（`src/system-fonts.js`：
   同名分别配 monospace / serif 量同一段拉丁文字，宽度相同才算能匹配），只把**真的能用**的名字
   摆出来；量不到（替身 DOM）时**原样放行**。
 - **两类都只存"键"，不存 CSS 栈**：栈（引号 + fallback 链）由客户端的 `fontFamilyStack` 现拼

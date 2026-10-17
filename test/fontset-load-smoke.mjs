@@ -114,8 +114,8 @@ function mount({ fetchImpl, store }) {
     return fetchImpl(String(url), o);
   };
   const code = readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8');
-  const cap = { handoff: null };
-  // 2026-10-09 字体节迁侧栏：这台的面板渲染器必须把**官方侧栏 body** 也注册出来（字体 UI
+  const cap = { handoff: null, handoffs: [] };
+  //  字体节迁侧栏：这台的面板渲染器必须把**官方侧栏 body** 也注册出来（字体 UI
   // 现在只画在侧栏外观页），且要把「外观页 + 字体节展开」的 UI 状态播进 store ——
   // 与 verify-client / verify-system-fonts 同一套手法（qp-* 键仅 UI 状态，不进 config.json）。
   store['dsh-wallpaper-engine:qp-tab'] = 'appearance';
@@ -128,7 +128,7 @@ function mount({ fetchImpl, store }) {
   const stubTimeout = (fn, ms) => { const t = { fn, ms, cleared: false }; timers.push(t); return t; };
   const sandbox = {
     window: {
-      __ModuleLoader__: { load: (h) => { cap.handoff = h; } },
+      __ModuleLoader__: { load: (h) => { cap.handoff = h; cap.handoffs.push(h); } },
       setTimeout: stubTimeout,
       clearTimeout: (t) => { if (t) t.cleared = true; },
       addEventListener() {}, removeEventListener() {},
@@ -142,6 +142,21 @@ function mount({ fetchImpl, store }) {
   vm.createContext(sandbox);
   new vm.Script(code, { filename: 'client.js' }).runInContext(sandbox);
   const exportsObj = cap.handoff.factory((spec) => (spec === 'react' ? React : { createPortal: (n) => n }));
+  // P-C：外观页签第六节「全局字体」随字体包出产物 ⇒ 像真 loader 一样在同一个 vm 里把那份
+  // 子包产物也求值掉（它的 factory 用 require('主包名') 取主 bundle 的显式键集，再登记那一节）。
+  // 少了这一步，面板上就没有「字体集预设」开关与字体节控件 —— 本 smoke 的 33 条会全红。
+  {
+    const fontsRel = '../packages/fonts/lib/client.fonts.js';
+    const before = cap.handoffs.length;
+    new vm.Script(readFileSync(new URL(fontsRel, import.meta.url), 'utf8'), { filename: fontsRel })
+      .runInContext(sandbox);
+    const loaded = cap.handoffs.slice(before);
+    if (loaded.length !== 1) throw new Error(fontsRel + ' 必须恰好注册一份 bundle（实际 ' + loaded.length + ' 份）');
+    loaded[0].factory((spec) => {
+      if (spec === 'dsh-plugin-wallpaper-engine') return exportsObj;
+      throw new Error('unexpected require: ' + spec);
+    });
+  }
   exportsObj.apply({
     // 面板由 `slots.inject(名称, () => slots.register(meta, render))` 装配；产出元素树的是
     // **register 的第二个参数**。`apply()` 期就把首次渲染跑一遍（真机也这样），但那时库存还没到
@@ -382,7 +397,7 @@ const waitBoot = () => new Promise((r) => { setTimeout(r, 50); });
     //    `/fontsets/import` 永远收不到 POST，而失败**看起来像"导入功能坏了"**。
     //    本档原文就想避开这个陷阱，但"取第一个"恰好**没有**避开它（第一个 = 根）。
     //
-    //    2026-10-11 实测暴露：把设置页的字体节改成**默认展开**之后，设置页树里也出现了那枚
+    //     实测暴露：把设置页的字体节改成**默认展开**之后，设置页树里也出现了那枚
     //    按钮，"第一个"由**侧栏树**变成**设置页树的根** ⇒ 这个潜伏的定位错误当场现形
     //    （4 条判据红：POST 没发出、版本不符没文案）。**产品是好的，坏的是这个定位器。**
     //    ⇒ 取**最小**的候选容器：在"子树里既有那枚按钮、又有 .json input"的节点中，取子树
@@ -412,7 +427,7 @@ const waitBoot = () => new Promise((r) => { setTimeout(r, 50); });
   //    （玻璃预设那一枚 accept 逐字相同）。判据：它所在那一行里同时有「新建（以当前外观）」——
   //    那是字体集编辑器独有的按钮，预设行没有。缺了这条，"拿错了 input"会伪装成功能故障
   //    （喂进去的是预设导入 ⇒ `/fontsets/import` 收不到 POST ⇒ 看起来像"导入坏了"，
-  //    2026-10-11 实测就这么红过 4 条）。
+  //     实测就这么红过 4 条）。
   if (opened.fileInput) {
     // ⚠️ 必须**同时**要求"含这枚 input"**且**"含至少一个按钮" —— 只要求含 input 的话，
     //    最小的那个节点就是 **input 自己**（它的子树当然含它），于是同行按钮恒为空

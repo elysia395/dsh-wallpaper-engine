@@ -14,15 +14,30 @@
  * 口径（与 docs/DEV-GUIDE.md §4.7 一致）：
  *   · 期望值**从被测源码自行重推**，不复用被测代码里的常量/函数；
  *   · 每条正向判据与它的负对照喂**同一个判据函数**（变异体只改被测源码，不动判据）；
- *   · 注入面用**真实现**（`lib/config-store.js` 的 kit 提供队列与原子写）——"串行"这条由真队列见证，
+ *   · 注入面用**真实现**（`lib/kernel/config.js` 的 kit 提供队列与原子写）——"串行"这条由真队列见证，
  *     而不是由替身假装见证；`getUploadDir` 用活访问器以便模拟 `setUploadDir`；
  *   · 覆盖面地板写在 `if` 之外。
+ *
+ * ── Ⅰ 段（本文件第二个被测面）：`/upload-dir` **真路由**的行为面 ──────────────────────────
+ * 由来（zero-coverage 缺口）：`test/verify-scene-live.mjs` 只钉了 `/upload-dir` 的 405，
+ * 于是 `lib/upload-dir.js` 的两个真 bug 一直**没有任何判据**：
+ *   ① kit 按**无参**调 `ensureDir()`（内核注入的是收目录的 `ensureDirOnce`）⇒ POST 换目录直接 500
+ *      `ensureUploadDir is not a function`（上游形态是 `ensureUploadDir()` = `ensureDirOnce(getUploadDir())`）；
+ *   ② `setUploadDir` 末尾**丢了 `writeConfig`**（上游自己持久化 `cfg.uploadDir`）⇒ 改完重启就回落，
+ *      用户可见的"改了却像没生效"。
+ * 两段都用**真门面 `apply()` + 真路由 handler + 假 req/res**（形态抄 `verify-cache-dir.mjs`），
+ * 判据本体与负对照共用：负对照 = ①注入恒真 no-op 的 `ensureDir` / 源码变异回"丢参数"形态，
+ * ②源码变异去掉 `writeConfig(cfg);`。
  */
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { Readable, Writable } from 'node:stream';
 import { createUploadStoreKit } from '../lib/upload-store.js';
-import { createConfigStoreKit } from '../lib/config-store.js';
+// ⚠️ 重指真源（task-10 D）：配置内核住 `lib/kernel/config.js`（上游同名副本 `lib/config-store.js`
+// 已随删除提交移除）。本文件只借它的 `enqueueConfigWrite` / `atomicWriteFileSync` 两项，
+// 两项都在真源导出面上；注入的 `configPath` 是真源 task-10 D 补的注入缝。
+import { createConfigKit } from '../lib/kernel/config.js';
 import { createCheck } from './tools/assert-harness.mjs';
 import { stripComments } from './tools/js-text.mjs';
 
@@ -65,7 +80,7 @@ function makeEnsureDirOnce() {
 
 /** 组装一套（真 kit / 变异体）上传账本。`getDir` 是活访问器。 */
 function storeFor(getDir, opts = {}) {
-  const cfg = createConfigStoreKit({ configPath: () => join(getDir(), 'config.json') });
+  const cfg = createConfigKit({ configPath: () => join(getDir(), 'config.json') });
   const factory = opts.factory || createUploadStoreKit;
   const kit = factory({
     getUploadDir: getDir,
@@ -85,6 +100,25 @@ function loadMutant(label, transforms) {
   for (const [find, replace] of transforms) {
     if (!text.includes(find)) {
       throw new Error(`变异体 ${label} 的锚点没命中：${JSON.stringify(find.slice(0, 70))} —— 源码变了就同步改锚点`);
+    }
+    text = text.replace(find, () => replace);
+  }
+  mutants += 1;
+  const file = join(ISO, 'mutants', `${mutants}-${label}.mjs`);
+  mkdirSync(join(ISO, 'mutants'), { recursive: true });
+  writeFileSync(file, text);
+  return import(pathToFileURL(file).href);
+}
+
+/**
+ * `loadMutant` 的推广：把**任一**被测源码的锚点替换后落盘再 import（Ⅰ 段的被测面是
+ * `lib/upload-dir.js`，不是 `lib/upload-store.js`）。替换同样用**函数式** replacer。
+ */
+function loadMutantOf(srcFile, label, transforms) {
+  let text = readFileSync(srcFile, 'utf8');
+  for (const [find, replace] of transforms) {
+    if (!text.includes(find)) {
+      throw new Error(`变异体 ${label} 的锚点没命中（${srcFile}）：${JSON.stringify(find.slice(0, 70))} —— 源码变了就同步改锚点`);
     }
     text = text.replace(find, () => replace);
   }
@@ -229,7 +263,7 @@ async function judgeRoundTrip(make) {
 // ───────────────────────── E. 写必须过注入的串行队列（不变量 1） ─────────────────────────
 async function judgeConcurrentWrites(make) {
   const dir = freshDir('e-concurrent');
-  const base = createConfigStoreKit({ configPath: () => join(dir, 'config.json') });
+  const base = createConfigKit({ configPath: () => join(dir, 'config.json') });
   const calls = [];
   const { kit } = make(() => dir, {
     enqueue: (fn) => { calls.push(fn); return base.enqueueConfigWrite(fn); },
@@ -244,7 +278,7 @@ async function judgeConcurrentWrites(make) {
 
 async function judgeQueueOrder(make) {
   const dir = freshDir('e-order');
-  const base = createConfigStoreKit({ configPath: () => join(dir, 'config.json') });
+  const base = createConfigKit({ configPath: () => join(dir, 'config.json') });
   const order = [];
   const { kit } = make(() => dir, {
     enqueue: (fn) => base.enqueueConfigWrite(() => { order.push('module-write'); fn(); }),
@@ -388,6 +422,203 @@ await pair(
   [[`  const PREVIEW_CANDIDATES = ['preview.jpg', 'preview.png', 'preview.gif', 'preview.webp'];`,
     `  const PREVIEW_CANDIDATES = ['preview.png', 'preview.jpg', 'preview.gif', 'preview.webp'];`]],
 );
+
+// ───────────────────────── Ⅰ. `/upload-dir` 真路由（行为面） ─────────────────────────
+const UPLOAD_DIR_SRC = join(ROOT, 'lib', 'upload-dir.js');
+
+/**
+ * Ⅰ① 判据本体（生产与两个负对照共用）：一次 `/upload-dir` 换目录的可观察结果 ⇒ 问题清单。
+ * @param {{status: number, result: object|null, dirExists: boolean, expectedDir: string}} obs
+ */
+function uploadDirPostProblems(obs) {
+  const bad = [];
+  if (obs.status !== 200) bad.push('HTTP ' + obs.status + '（期望 200）');
+  if (!obs.result || typeof obs.result !== 'object') bad.push('应答不是 JSON 对象：' + JSON.stringify(obs.result));
+  else {
+    if (obs.result.uploadDir !== obs.expectedDir) bad.push('应答 uploadDir=' + JSON.stringify(obs.result.uploadDir) + ' ≠ ' + obs.expectedDir);
+    for (const k of ['migrated', 'skipped', 'same']) if (!(k in obs.result)) bad.push('应答缺字段 ' + k);
+  }
+  if (!obs.dirExists) bad.push('目标目录不存在（ensureDir 没真的建目录）');
+  return bad;
+}
+
+/**
+ * Ⅰ② 判据本体（生产与负对照共用）：落盘 + **重新加载** ⇒ 问题清单。
+ * `reloadedSame` 必须是 `true`：新实例把"同一个目录"认成 same，只可能是它的**起始目录就是从
+ * config 读到的那个新目录**（否则它从默认目录起步，`same` 会是 false，而 `uploadDir` 照样回目标值
+ * —— 这一格正是"重启回落"的落点，不能只看 `reloadedDir`）。
+ * @param {{cfgUploadDir: unknown, expectedDir: string, reloadedDir: unknown, reloadedSame: unknown}} obs
+ */
+function uploadDirPersistProblems(obs) {
+  const bad = [];
+  if (obs.cfgUploadDir !== obs.expectedDir) bad.push('config.json.uploadDir=' + JSON.stringify(obs.cfgUploadDir) + ' ≠ ' + obs.expectedDir);
+  if (obs.reloadedDir !== obs.expectedDir) bad.push('重载后 uploadDir=' + JSON.stringify(obs.reloadedDir) + ' ≠ ' + obs.expectedDir);
+  if (obs.reloadedSame !== true) bad.push('重载实例没把目标认成"当前目录"（same=' + JSON.stringify(obs.reloadedSame) + '）⇒ 它的起始目录不是 config 里的新目录（重启回落）');
+  return bad;
+}
+
+/** 假 res：收 body / 状态码（`Writable` 形态与 `verify-cache-dir.mjs` 同款）。 */
+function udRes() {
+  const state = { status: 200, headers: {}, body: Buffer.alloc(0), ended: false };
+  const res = new Writable({
+    write(chunk, enc, cb) {
+      state.body = Buffer.concat([state.body, Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk)]); cb();
+    },
+    final(cb) { state.ended = true; cb(); },
+  });
+  res.setHeader = (k, v) => { state.headers[k] = v; };
+  res.writeHead = (s, h) => { state.status = s; if (h) Object.assign(state.headers, h); };
+  Object.defineProperty(res, 'statusCode', { get: () => state.status, set: (v) => { state.status = v; } });
+  res.__state = state;
+  return res;
+}
+
+/** 一次 POST `/upload-dir`（**真 handler**，体走真 `bodyReader` 路径）⇒ `{status, json, raw}`。 */
+async function udPost(route, body) {
+  const req = Readable.from([Buffer.from(JSON.stringify(body))]);
+  req.url = '/wallpaper-engine/upload-dir';
+  req.method = 'POST';
+  req.headers = { 'content-type': 'application/json' };
+  const res = udRes();
+  const done = route.handler(req, res);
+  if (done && typeof done.then === 'function') await done;
+  if (!res.__state.ended) {
+    await new Promise((resolveFn) => {
+      const t = setTimeout(resolveFn, 8000);
+      res.on('finish', () => { clearTimeout(t); resolveFn(); });
+    });
+  }
+  let json = null;
+  try { json = JSON.parse(res.__state.body.toString('utf8')); } catch { /* 非 JSON 由判据报红 */ }
+  return { status: res.__state.status, json, raw: res.__state.body.toString('utf8') };
+}
+
+/** 一套**新实例**：fresh import 门面（带查询串隔离模块实例）+ `apply()` 到自己的 mock。 */
+async function udFreshInstance(tag) {
+  const routes = [];
+  const ctx = { webServer: { register(r) { routes.push(r); return () => {}; }, tapIndex() { return () => {}; } } };
+  const mod = await import(pathToFileURL(join(ROOT, 'lib', 'index.js')).href + '?' + tag);
+  const host = mod.default || mod;
+  const dispose = (host.apply || host.apply)(ctx);
+  return { route: routes.find((r) => r.path === '/wallpaper-engine/upload-dir'), dispose };
+}
+
+/**
+ * 用真 / 变异 kit 跑一次 `setUploadDir`，返回与真路由**同形**的可观察量（供 Ⅰ① 与 Ⅰ② 的负对照）。
+ * 注入面全是受控替身：`ensureDir` 默认做真 mkdir（丢参数即抛，与真 `ensureDirOnce` 同形）。
+ */
+async function udKitObservation(factory, { cfgFile, from, target, ensureDir }) {
+  const readConfig = () => { try { return JSON.parse(readFileSync(cfgFile, 'utf8')); } catch { return {}; } };
+  const writeConfig = (cfg) => { mkdirSync(dirname(cfgFile), { recursive: true }); writeFileSync(cfgFile, JSON.stringify(cfg)); };
+  const kit = factory({
+    defaultUploadDir: from,
+    resolveUploadDir: () => readConfig().uploadDir || from,
+    ensureDir: ensureDir || ((dir) => {
+      if (typeof dir !== 'string' || !dir) throw new TypeError('The "path" argument must be of type string. Received ' + JSON.stringify(dir));
+      mkdirSync(dir, { recursive: true });
+    }),
+    pathExistsP: async () => false,
+    moveFileP: async () => true,
+    enqueueConfigWrite: (fn) => fn(),
+    readConfig,
+    writeConfig,
+    previewCandidates: [],
+  });
+  let status = 200;
+  let result = null;
+  try { result = await kit.setUploadDir(target, false); } catch { status = 500; }
+  return { status, result };
+}
+
+section('Ⅰ. `/upload-dir` 真路由（行为面）：① 换目录不崩 ② 落盘 config + 重载生效');
+{
+  const { createUploadDirKit } = await import(pathToFileURL(UPLOAD_DIR_SRC).href);
+  // 环境隔离必须在 fresh import 门面**之前**设；`configPath()` 是调用期读 env 的访问器。
+  const DIR_ISO = join(ISO, 'upload-dir-behavior');
+  rmSync(DIR_ISO, { recursive: true, force: true });
+  const DATA = join(DIR_ISO, 'data');
+  mkdirSync(DATA, { recursive: true });
+  process.env.DSH_WE_DATA_DIR = DATA;
+  process.env.DSH_WE_CACHE_DIR = join(DIR_ISO, 'cache');
+  process.env.DSH_WE_STEAM_ROOT = join(DIR_ISO, 'steam-none');
+  delete process.env.DSH_WE_UPLOAD_DIR;
+  const { configPath } = await import(pathToFileURL(join(ROOT, 'lib', 'kernel', 'data-dir.js')).href);
+  check('Ⅰ0 夹具隔离：`configPath()` 落在 `.test-cache` 下（不碰用户真实 config.json）',
+    configPath().startsWith(DIR_ISO), configPath());
+
+  const TARGET = join(DIR_ISO, 'target-one');
+  const inst = await udFreshInstance('upload-dir-a');
+  check('Ⅰ1 真路由在册：`POST /wallpaper-engine/upload-dir`（exact）', Boolean(inst.route),
+    inst.route ? inst.route.kind + ' /wallpaper-engine/upload-dir' : '**没注册**');
+
+  // ① 崩溃路径：修前形态（kit 按无参调 ensureDir）在真路由上实测 500 `ensureUploadDir is not a function`
+  const r1 = await udPost(inst.route, { dir: TARGET, migrate: false });
+  const obs1 = { status: r1.status, result: r1.json, dirExists: existsSync(TARGET), expectedDir: TARGET };
+  check('Ⅰ2 ① POST 换目录：200 + {uploadDir,migrated,skipped,same} 且目标目录真的存在（修前形态：500 ensureUploadDir is not a function）',
+    uploadDirPostProblems(obs1).length === 0,
+    uploadDirPostProblems(obs1).join('；') || JSON.stringify(r1.json) + ' · dirExists=' + existsSync(TARGET));
+
+  // ② 落盘 + 重载：新实例（新 apply/kernel）若真从 config 起步，把同一目录再 POST 会回 same:true
+  const cfgAfter = JSON.parse(readFileSync(configPath(), 'utf8'));
+  const inst2 = await udFreshInstance('upload-dir-b');
+  const r2 = await udPost(inst2.route, { dir: TARGET, migrate: false });
+  const obs2 = {
+    cfgUploadDir: cfgAfter.uploadDir,
+    expectedDir: TARGET,
+    reloadedDir: r2.json && r2.json.uploadDir,
+    reloadedSame: r2.json && r2.json.same,
+  };
+  check('Ⅰ3 ② POST 后 `config.json.uploadDir` == 新目录，且**重新加载**（新 apply/kernel 实例）后仍以它为当前目录（修前形态：config 里根本没有该键 ⇒ 重启回旧目录）',
+    uploadDirPersistProblems(obs2).length === 0,
+    uploadDirPersistProblems(obs2).join('；')
+      || 'config.uploadDir=' + JSON.stringify(cfgAfter.uploadDir) + ' · 重载 same=' + JSON.stringify(obs2.reloadedSame));
+
+  // 负对照 1（① 的变异体）：注入的 `ensureDir` 换成**恒真 no-op** ⇒ "建目录"这件事没发生
+  const ncDirA = join(DIR_ISO, 'nc-noop-target');
+  const ncA = await udKitObservation(createUploadDirKit, {
+    cfgFile: join(DIR_ISO, 'nc-noop-config.json'), from: join(DIR_ISO, 'nc-noop-from'), target: ncDirA, ensureDir: () => {},
+  });
+  check('Ⅰ2-NC1 恒真 no-op 的 `ensureDir` ⇒ 目标目录不存在 ⇒ **同一条** `uploadDirPostProblems` 判红',
+    uploadDirPostProblems({ status: ncA.status, result: ncA.result, dirExists: existsSync(ncDirA), expectedDir: ncDirA }).length > 0,
+    uploadDirPostProblems({ status: ncA.status, result: ncA.result, dirExists: existsSync(ncDirA), expectedDir: ncDirA }).join('；'));
+
+  // 负对照 2（① 的变异体）：源码变异回**修前形态**（调用丢参数）
+  const mutNoArgs = await loadMutantOf(UPLOAD_DIR_SRC, 'ensure-call-no-args', [['ensureDir(UPLOAD_DIR);', 'ensureDir();']]);
+  const ncDirB = join(DIR_ISO, 'nc-noargs-target');
+  const ncB = await udKitObservation(mutNoArgs.createUploadDirKit, {
+    cfgFile: join(DIR_ISO, 'nc-noargs-config.json'), from: join(DIR_ISO, 'nc-noargs-from'), target: ncDirB,
+  });
+  check('Ⅰ2-NC2 源码变异（`ensureDir(UPLOAD_DIR)` → `ensureDir()`，= 修前形态）⇒ setUploadDir 抛、目录没建 ⇒ 同一条判据判红',
+    uploadDirPostProblems({ status: ncB.status, result: ncB.result, dirExists: existsSync(ncDirB), expectedDir: ncDirB }).length > 0,
+    uploadDirPostProblems({ status: ncB.status, result: ncB.result, dirExists: existsSync(ncDirB), expectedDir: ncDirB }).join('；'));
+
+  // 负对照 3（② 的变异体）：源码变异去掉 `writeConfig(cfg);`（= 修前形态）
+  const mutNoPersist = await loadMutantOf(UPLOAD_DIR_SRC, 'no-persist', [['writeConfig(cfg);', '']]);
+  const ncCfgFile = join(DIR_ISO, 'nc-nopersist-config.json');
+  const ncFrom = join(DIR_ISO, 'nc-nopersist-from');
+  const ncTarget = join(DIR_ISO, 'nc-nopersist-target');
+  mkdirSync(ncFrom, { recursive: true });
+  writeFileSync(ncCfgFile, JSON.stringify({ uploadDir: ncFrom }));
+  // 第一遍：跑一次变异体的 setUploadDir（副作用 = 试图落盘）；可观察量从磁盘与**重载**实例取。
+  await udKitObservation(mutNoPersist.createUploadDirKit, { cfgFile: ncCfgFile, from: ncFrom, target: ncTarget });
+  const ncCfgAfter = JSON.parse(readFileSync(ncCfgFile, 'utf8'));
+  const ncReload = await udKitObservation(mutNoPersist.createUploadDirKit, { cfgFile: ncCfgFile, from: ncFrom, target: ncTarget });
+  const obsNC = {
+    cfgUploadDir: ncCfgAfter.uploadDir,
+    expectedDir: ncTarget,
+    reloadedDir: ncReload.result && ncReload.result.uploadDir,
+    reloadedSame: ncReload.result && ncReload.result.same,
+  };
+  check('Ⅰ3-NC 源码变异去掉 `writeConfig(cfg);`（= 修前形态）⇒ config 仍是旧目录、重载实例不认新目录 ⇒ 同一条判据判红',
+    uploadDirPersistProblems(obsNC).length > 0,
+    uploadDirPersistProblems(obsNC).join('；') || JSON.stringify(obsNC));
+
+  if (typeof inst.dispose === 'function') { try { inst.dispose(); } catch { /* 收尾失败不影响判定 */ } }
+  if (typeof inst2.dispose === 'function') { try { inst2.dispose(); } catch { /* 收尾失败不影响判定 */ } }
+  delete process.env.DSH_WE_DATA_DIR;
+  delete process.env.DSH_WE_CACHE_DIR;
+  delete process.env.DSH_WE_STEAM_ROOT;
+}
 
 // ───────────────────────── H. 自检与地板 ─────────────────────────
 section('H. 自检与覆盖面地板');

@@ -21,18 +21,41 @@ import { EventEmitter } from 'node:events';
 import { createHash } from 'node:crypto';
 // 剥注释：共享的字符串感知实现（test/tools/js-text.mjs）。
 import { stripComments } from './tools/js-text.mjs';
+// 路由族文件面（`lib/routes/*.js` ∪ `packages/<pkg>/lib/routes/*.js`）的**同一份**发现真源。
+import { routeModuleCandidates } from './tools/host-route-index.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
 /**
- * 宿主半的**全部注册面** = `lib/index.js` + `lib/routes/*.js`。
+ * 宿主半的**全部注册面** = `lib/index.js` + `lib/routes/*.js` + `packages/<pkg>/lib/routes/*.js`
+ * （P-A 起路由族随子包走；面不跟着长 ⇒ 搬走的族静默掉出，相关断言变空真）。
  * 路由族拆出 `apply(ctx)` 之后 ⇒ 凡断言"宿主仍实现某契约"的判据都必须覆盖
  * 那个目录，否则"已搬走"会被误报成"契约丢了"（假红）。反之，断言"某路由**已不在正文**"的
  * 判据仍必须只读 `lib/index.js`。
  */
-const readHostHalf = () => ['lib/index.js', 'lib/scene-probe.js',
-  ...readdirSync(resolve(root, 'lib', 'routes')).filter((f) => f.endsWith('.js')).map((f) => 'lib/routes/' + f)]
-  .map((f) => readFileSync(resolve(root, f), 'utf8')).join('\n');
+// ⚠️ 扫描面分两层（口径不同，别混成一份）：
+//   · `readHostHalf()` —— **锚点扫描面**：要能定位实现符号（`sceneFrameSlot` / `gpuFrameFileFor`
+//     随 P0 库化搬进 `lib/kernel/**` 与 `lib/media/*`）。
+//   · `readKeyDerivationSurface()` —— **键派生点计数面**：只数"缓存键在哪几处被拼出来"，
+//     历史口径 = 门面 + 路由族（对齐本文件头 30–31 行的约定：族里的派生点随族搬走）。
+/** P-A：路由族也会住在子包里（`packages/<pkg>/lib/routes/*.js`）⇒ 两个扫描面都必须走**同一份**发现真源
+ *  （`host-route-index.mjs` 的 `routeModuleCandidates()`），否则搬走的族会**静默掉出**"宿主半"面
+ *  （面塌陷 ⇒ 相关断言恒真）。组件目录里的直接子文件不属"宿主半路由族"面（那条面由
+ *  verify-component-face 守），故从这里剔除。 */
+const routeFamilyFiles = () => routeModuleCandidates().filter((rel) => !rel.startsWith('lib/components/'));
+const readHostHalf = () => [
+  'lib/index.js',
+  'lib/scene-probe.js',
+  ...routeFamilyFiles(),
+  ...readdirSync(resolve(root, 'lib', 'kernel')).filter((f) => f.endsWith('.js')).map((f) => 'lib/kernel/' + f),
+  ...readdirSync(resolve(root, 'lib', 'media')).filter((f) => f.endsWith('.js')).map((f) => 'lib/media/' + f),
+]
+  .map((f) => { try { return readFileSync(resolve(root, f), 'utf8'); } catch { return ''; } }).join('\n');
+const readKeyDerivationSurface = () => ['lib/index.js', 'lib/scene-probe.js',
+  ...routeFamilyFiles(),
+  ...readdirSync(resolve(root, 'lib', 'kernel')).filter((f) => f.endsWith('.js')).map((f) => 'lib/kernel/' + f),
+  ...readdirSync(resolve(root, 'lib', 'media')).filter((f) => f.endsWith('.js')).map((f) => 'lib/media/' + f)]
+  .map((f) => { try { return readFileSync(resolve(root, f), 'utf8'); } catch { return ''; } }).join('\n');
 // Point the cache **root** at a workspace-relative dir so the suite passes under
 // sandboxes that cannot write outside the workspace (the real host has no
 // such restriction). ⚠️ `DSH_WE_CACHE_DIR` 是缓存**根**（帧缓存落在 `<root>/frames`）——
@@ -169,6 +192,22 @@ const dispose = apply(mockCtx);
 const sceneRoute = routes.find((r) => r.path === '/wallpaper-engine/scene-frame');
 check('scene-frame route registered', Boolean(sceneRoute), sceneRoute ? 'kind=' + sceneRoute.kind : 'missing');
 
+// ── 组件行也要 boot（本分支的路由族归属：`/avatar` / `/mascot` 归 `mascot-avatar` 组件行）──
+// ⚠️ 这条**不是**"判据放宽"，而是夹具的 boot 段要跟上本分支的结构：本分支把实现搬进了组件目录
+// （ADR-0013 D14「实现入包、主包不留注册点」，由 test/verify-route-ownership.mjs 的 M10 钉住）。
+// 上游那条判据按"门面 apply 后 /avatar 就可用"写 —— 那是单包单行形态的假设。
+// 处置（Lead 裁决 (a)）：**连组件一起 boot**，保住组件边界；判据判什么一个字没改。
+if (typeof hostMod.applyComponent === 'function') {
+  for (const comp of ['mascot-avatar', 'about-notice']) {
+    try { hostMod.applyComponent(mockCtx, {}, comp); } catch (err) {
+      console.log('  · 组件行 boot 失败（' + comp + '）：' + String(err && err.message));
+    }
+  }
+}
+check('组件行 boot 后 /avatar 已注册（组件边界与判据口径一致）',
+  routes.some((r) => r.path === '/wallpaper-engine/avatar'),
+  'avatar routes=' + routes.filter((r) => r.path.includes('avatar')).length);
+
 // Route requires a token that mediaMap knows; tokens are minted during
 // inventory. Emulate by calling the inventory route first with a req shim.
 const invRoute = routes.find((r) => r.path === '/wallpaper-engine/inventory');
@@ -212,7 +251,8 @@ let invBody;
   // workshop scene on this machine would still be listed alongside it.
   const scene = (invBody.wallpapers || []).find((w) => w.id === '990002' && w.frameUrl);
   token = scene ? scene.frameUrl.split('/').pop() : null;
-  check('inventory exposes the fixture scene frameUrl', Boolean(token), token ? 'frame token minted' : 'fixture scene missing from inventory');
+  const fx = (invBody.wallpapers || []).filter((w) => w.id === '990002');
+  check('inventory exposes the fixture scene frameUrl', Boolean(token), token ? 'frame token minted' : ('fixture scene missing from inventory（error=' + String(invBody.error || '-').slice(0,120) + '；清单共 ' + (invBody.wallpapers || []).length + ' 条；命中 ' + fx.length + ' 条；' + (fx[0] ? '字段=' + Object.keys(fx[0]).join('/') + ' frameUrl=' + String(fx[0].frameUrl) + ' type=' + String(fx[0].type) : '零命中') + '）'));
 }
 
 if (token) {
@@ -232,8 +272,17 @@ if (token) {
   // cache file written under the plugin data dir (env-overridden for tests)
   const cacheDir = TEST_FRAMES_DIR;
   // 缓存键版本从源码读（别写死：升版本时这里会静默测到旧文件，等于假通过）
-  const keyVersion = (/LIVE_FRAME_KEY_VERSION = '([^']+)'/.exec(
-    readFileSync(resolve(root, 'lib', 'index.js'), 'utf8')) || [])[1] || 'sf';
+  // ⚠️ 真源随 P0 库化搬到 `lib/media/frame-store.js`（门面已不持有实现）。**必须按声明处解析**：
+  // 固定在门面上时正则会落空并**静默回落到 `'sf'`** ⇒ 期望文件名与实际落盘名不符，
+  // 症状是"PUT 200 但盘上 missing"（实测就是这样骗过一轮排查的）。
+  const keyVersion = (() => {
+    const src = ['lib/media/frame-store.js', 'lib/index.js', 'lib/kernel/host-kernel.js']
+      .map((rel) => { try { return readFileSync(resolve(root, rel), 'utf8'); } catch { return ''; } })
+      .join('\n');
+    return (/LIVE_FRAME_KEY_VERSION = '([^']+)'/.exec(src) || [])[1] || '';
+  })();
+  check('缓存键版本可从源码解析（缺锚即红，不许回落默认值）', keyVersion.length > 0,
+    keyVersion ? 'keyVersion=' + keyVersion : '锚点缺失（LIVE_FRAME_KEY_VERSION 搬家了？）');
   // 只比较**本次请求前后**的差集：目录里可能有历史运行的残留（旧语义留下的静态帧），
   // 拿"目录为空"当判据会被那些残留绊倒。
   const addedNow = (existsSync(cacheDir) ? readdirSync(cacheDir) : []).filter((f) => !beforeList.includes(f));
@@ -490,9 +539,13 @@ if (token) {
 }
 
 // 帧上限从源码解析（别写死：上限一改，超限用例会静默测到旧尺寸 = 假通过）
+// ⚠️ 真源随 P0 库化搬到 `lib/media/frame-store.js`（门面已不持有实现）⇒ 这里按**声明处**解析，
+// 不固定在门面路径上（固定路径会在搬家后静默退化成 0 ⇒ 判据失去牙齿，而不是"搬家即红"）。
 const frameLimit = (() => {
-  const expr = (/const GPU_FRAME_MAX_BYTES = ([^;]+);/.exec(
-    readFileSync(resolve(root, 'lib', 'index.js'), 'utf8')) || [])[1] || '';
+  const src = ['lib/media/frame-store.js', 'lib/index.js', 'lib/kernel/host-kernel.js']
+    .map((rel) => { try { return readFileSync(resolve(root, rel), 'utf8'); } catch { return ''; } })
+    .join('\n');
+  const expr = (/const GPU_FRAME_MAX_BYTES = ([^;]+);/.exec(src) || [])[1] || '';
   return /^[\d\s*+()]+$/.test(expr) ? Number(new Function('return (' + expr + ')')()) : 0;
 })();
 check('帧上限常量可从源码解析（超限块尺寸不写死）', frameLimit > 0, 'GPU_FRAME_MAX_BYTES = ' + frameLimit);
@@ -829,7 +882,7 @@ if (token) {
   const hostSrc = readHostHalf();
   /** 共享判据：阳性（宿主半）与阴性对照（宿主半 + 一条合成派生）共用同一计数函数。 */
   const base64UrlDerivations = (t) => (t.match(/Buffer\.from\(abs, 'utf8'\)\.toString\('base64url'\)/g) || []).length;
-  const derivations = base64UrlDerivations(hostSrc);
+  const derivations = base64UrlDerivations(readKeyDerivationSurface());
   /**
    * 取一个顶层函数的函数体：起点锚 `function <name>(`，终点锚 `function <nextName>(`。
    * ⚠️ 终点锚**必须真实存在，且缺锚要判红**（返回 null）：此处此前把终点写成
@@ -856,7 +909,7 @@ if (token) {
     slotBody !== null && slotBody.includes('sceneFrameCacheKey(abs, mtime)') && !slotBody.includes('LIVE_FRAME_KEY_VERSION'),
     'reuse=' + (slotBody !== null && slotBody.includes('sceneFrameCacheKey(abs, mtime)')) + ' versionInSlot=' + (slotBody !== null && slotBody.includes('LIVE_FRAME_KEY_VERSION')));
   check('P1-6 negative control: 再写一份派生会被同一计数判据数出来',
-    base64UrlDerivations(hostSrc + "\nconst x = Buffer.from(abs, 'utf8').toString('base64url');") === derivations + 1);
+    base64UrlDerivations(readKeyDerivationSurface() + "\nconst x = Buffer.from(abs, 'utf8').toString('base64url');") === derivations + 1);
 
   // ── 槽位只给唯一产物（反向探针：删掉的死字段不许爬回来）─────────────────────
   // `sceneFrameSlot` 曾返回 `pngPath` / `jpgPath` / `gifPath` / `dir` 与一个 `_vN` 档位后缀，
@@ -1083,8 +1136,12 @@ console.log('Level F — sceneVideo 文件版探测（issue #136）等价 / 读�
       !stale.test(hostSrc)
         && famSrc.includes('path: `${BASE}/scene-video`')
         && famSrc.includes('path: `${BASE}/scene-audio`'));
-    check('G 去重账本只以引用进 c（声明仍在 apply()，生命周期未改）',
-      /const SCENE_VIDEO_INFLIGHT = new Map\(\);/.test(hostSrc)
+    // ⚠️ 该常量的**声明处**随 P0 库化搬到了会话段 `lib/kernel/host-session.js`（门面只剩装配 +
+    // 组件分发点）—— 判据守的不变量是「去重账本是**本 fiber 的单例**、只以引用进 `c`」，
+    // 因此按"在其所属半边里找声明"来判，而不是把它钉死在门面上（钉死会退化成无关搬家即红）。
+    const sessionSrc = stripComments(readFileSync(join(root, 'lib', 'kernel', 'host-session.js'), 'utf8'));
+    check('G 去重账本只以引用进 c（声明在本 fiber 的会话段，生命周期未改）',
+      /const SCENE_VIDEO_INFLIGHT = new Map\(\);/.test(sessionSrc)
         && /SCENE_VIDEO_INFLIGHT/.test(famSrc)
         && /registerSceneMediaRoutes\(webServer, \{/.test(hostSrc));
     check('G negative control: 门面里重新出现被搬走的路由字面量会被同一条判据拒掉',

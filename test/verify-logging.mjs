@@ -313,7 +313,11 @@ function prefixAlignment(hostSrc, routeSrc, clientSrc, pageSrc) {
 }
 {
   const src = {
-    host: read('lib/index.js'),
+    // ⚠️ 宿主面 = 门面 + **内核**：本分支 P0 库化后 `BASE` 由 `lib/kernel/host-boot.js` 定义并
+  // 被门面 import（门面正文里因此没有 `const BASE = '…'` 字面量）⇒ 只读门面会让
+  // 'N7③ 三者对齐'判据报"抠不到 BASE"。**判据的不变量不变**（仍是三者前缀必须一致），
+  // 只是把"BASE 从哪读"指向真源。
+  host: read('lib/index.js') + read('lib/host-boot.js') + read('lib/kernel/host-kernel.js'),
     route: read('lib/routes/scene-serve.js'),
     client: liveText(),
     page: read('lib/webwallgl/index.html') + '\n' + read('lib/webwallgl/renderer.js'),
@@ -340,7 +344,7 @@ function prefixAlignment(hostSrc, routeSrc, clientSrc, pageSrc) {
 }
 
 // ── N8 模块级代码不得引用 apply 作用域的 log（真机事故：宿主被杀、DSH 反复重启）──
-// 事故形态（2026-10-02 晚·官方壳，崩溃日志原文）：
+// 事故形态（晚·官方壳，崩溃日志原文）：
 //   `dsh: fatal load failure: ReferenceError: log is not defined at lib/index.js:1235`
 // 一个**模块级**助手在失败分支里写了 `log.warn(...)`，而 `log` 只在 `apply()` 体内存在：
 // ReferenceError 抛在 catch 里 ⇒ 那个 async 任务以 reject 收场且无人接管 ⇒ Node 24 按
@@ -376,11 +380,19 @@ function moduleScopeLogRefs(src) {
 }
 
 // ── 接线在位：两个宿主模块必须真的被入口 import（否则上面六条可以在死代码上全绿）──
-const wiredUp = (src) => /from\s*'\.\/log\.js'/.test(src) && /from\s*'\.\/notice\.js'/.test(src)
-  && /createNotice\(/.test(src) && consoleCalls(src) === 0;
+// ⚠️ 两个面**分开取**：
+//   · `importsSrc` —— "真的 import 并用上了这两个模块"：本分支 P0 库化后 import 点在内核段
+//     ⇒ 面 = 门面 + `lib/host-boot.js`。
+//   · `consoleSrc` —— "**门面自己**零 console.*"：这一半必须**只看门面正文**，扩面会把它稀释掉
+//     （本判据 N1 的口径是"终端只有一个收口"，而不是"没人写过 console"）。
+const wiredUp = (importsSrc, consoleSrc = importsSrc) =>
+  // specifier 用**任意相对形式**（真源在 lib/kernel/ 下 ⇒ 是 `../log.js` 而不是 `./log.js`）：
+  // 写死 `./` 会让"是否真的 import 了"的判据在实现搬家后假红（与 specifier 落空同一课）。
+  /from\s*'[^']*\/log\.js'/.test(importsSrc) && /from\s*'[^']*\/notice\.js'/.test(importsSrc)
+  && /createNotice\(/.test(importsSrc) && consoleCalls(consoleSrc) === 0;
 {
   check('接线在位：lib/index.js 真的 import 并用上了 log.js / notice.js，且自己零 console.*',
-    wiredUp(read('lib/index.js')));
+    wiredUp(read('lib/index.js') + '\n' + read('lib/kernel/host-session.js'), read('lib/index.js')));
   check('接线在位 negative control: 少一个 import 或自己打一行 console 都会被判出',
     wiredUp("import { createLog } from './log.js';\ncreateNotice(") === false
     && wiredUp("import { createLog } from './log.js';\nimport { createNotice } from './notice.js';\ncreateNotice(1);\nconsole.log('x');") === false);

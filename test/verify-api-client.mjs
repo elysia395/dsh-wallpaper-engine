@@ -35,7 +35,7 @@ const strip = stripComments;
 /**
  * 客户端全模块清单（① 与 ①b 共用）：**从磁盘枚举** `src/**`，不手抄名单。
  * 硬编码名单只守它自己：新增一个 `src` 模块、里面写裸 `fetch(`，扫描看不见它 ⇒ 全绿
- * （违反 `docs/DEV-GUIDE.md:363-364` 约定 4「判据的域应当从磁盘枚举」）。
+ * （违反 `docs/DEV-GUIDE.md` §4.7 约定 4「判据的域应当从磁盘枚举」——引用**章节号**而非会漂的行号）。
  */
 const walkSrc = (dir, out = []) => {
   let names;

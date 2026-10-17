@@ -17,7 +17,7 @@
  * 契约：需要的外界**无**；对外提供本域的样式表常量。不变量：浏览器安全（无 import / require / Node API）、
  * 不得有顶层可执行语句去读宿主状态（内联位置早于 client.js 正文）、整体是**纯数据**。
  */
-const CSS_PANEL = `  /* ── 吉祥物形态**3D 圆环转盘**（2026-10-11 四次返工；形态取自用户给的 28-3d.html）─────
+const CSS_PANEL = `  /* ── 吉祥物形态**3D 圆环转盘**（四次返工；形态取自用户给的 28-3d.html）─────
       三层，每层只干一件事：
         .we-picker__mascot-carousel  居中的一行（**只有舞台** —— 两侧箭头已按用户口径删掉）
         .we-picker__mascot-window    只负责**裁剪**与两端淡出遮罩
@@ -32,7 +32,7 @@ const CSS_PANEL = `  /* ── 吉祥物形态**3D 圆环转盘**（2026-10-11 �
         不剔会透到中间来、看着很乱（参考实现同款做法）。
       ⚠️ **窗口高度由渲染器算好写进行内样式**（这里刻意不写 height）：3D 透视会把卡片
         **整体**放大（前排约 1.20×），按卡高原样写高度就会切掉立绘头顶与名字底部 ——
-        用户实测的「上下有截断」正是这个。推导见 panel-tabs.js 的 FRONT_ZOOM / WINDOW_H_PX。
+        用户实测的「上下有截断」正是这个。推导见 panel-tabs-mascot.js 的 FRONT_ZOOM / WINDOW_H_PX。
       ⚠️ 只动 transform / opacity；prefers-reduced-motion 的降级是**去掉过渡、保留终态**。 */
   .we-picker__mascot-carousel {
     display: flex; align-items: center; justify-content: center; width: 100%;
@@ -113,7 +113,7 @@ const CSS_PANEL = `  /* ── 吉祥物形态**3D 圆环转盘**（2026-10-11 �
   .we-picker__mascot-item:disabled { cursor: default; }
   .we-picker__mascot-item:disabled:hover { border-color: transparent; }
   .we-picker__mascot-item:disabled:not(.we-picker__mascot-item--center) { opacity: 0.45 !important; }
-  /* ⚠️ 这里曾有 .we-picker__mascot-nav（‹ › 两个圆形箭头钮）。2026-10-11 按用户口径
+  /* ⚠️ 这里曾有 .we-picker__mascot-nav（‹ › 两个圆形箭头钮）。按用户口径
      「把左右两个箭头去掉」删掉了组件与样式 —— 它们与圆点功能重叠，而圆点更强（直接跳
      任意一只 + 显示总数）。**别把它加回来**：换形态仍有四条路（拖环 / 点圆点 / 点立绘 /
      键盘 ← →），而箭头会把舞台挤窄、并抢走最外侧那两张卡的点击。 */
@@ -395,7 +395,7 @@ const CSS_PANEL = `  /* ── 吉祥物形态**3D 圆环转盘**（2026-10-11 �
   .we-picker__slider-row { display: flex; align-items: center; gap: 10px; }
   .we-picker__label { min-width: 28px; flex: 0 0 auto; color: var(--we-ink, inherit); font-size: 0.88em; }
   /* 滑杆行左侧那个标签可能是**第三方自填的槽名**（别的插件注册进来的元素组，槽名就是 data-slot，
-     见 src/parallax-layer.js 的插件组）：超长时不许把滑块与右侧数值挤出卡片 —— 可收缩 + 省略号。
+     见 packages/parallax/src/parallax-layer.js 的插件组）：超长时不许把滑块与右侧数值挤出卡片 —— 可收缩 + 省略号。
      只作用于滑杆行内部，其它地方的 .we-picker__label（都是宿主自己的短标签）保持原样。 */
   .we-picker__slider-row .we-picker__label {
     flex: 0 1 auto; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;

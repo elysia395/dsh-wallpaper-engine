@@ -24,6 +24,8 @@ scene-layers-out/
 # 构建产物出库（v1.4）：lib/client.js 由 `npm run build` 现场生成（开发者 / CI / prepack 三条路径），
 # 不再入库。安装 npm 包与 Release tgz 时由打包期的 prepack 构建。
 /lib/client.js
+# P-A 起每包一产物（ADR-0003/0012 的同一口径）：子包的浏览器半边同样由 `npm run build` 现场生成。
+packages/*/lib/client.*.js
 
 /.git.bak-broken/
 
@@ -58,3 +60,10 @@ scene-layers-out/
 
 # npm 本地缓存（沙箱内 ~/.npm 不可写，改用仓内缓存）
 .npm-cache/
+
+# IDE 本地配置（.vscode/settings.json 等本机个性化设置，不入库；也未被 package.json files 收录）
+/.vscode/
+/.artifacts/
+/.migrate-pet-link.mjs
+/.pet-link-integration.patch
+*.rej

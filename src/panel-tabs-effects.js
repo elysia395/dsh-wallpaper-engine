@@ -1,5 +1,5 @@
 /**
- * 「播放」页签的节渲染器（原 src/panel-tabs.js 的 1618–1911 行）：滑块 / 实时帧 / 出图来源 /
+ * 「播放」页签的节渲染器（原 src/panel-tabs.js）：滑块 / 实时帧 / 出图来源 /
  * 转码进度 / 播放与出图 / 画面取景。renderEffectsTab 仍在组装点，只留空态与节外壳。
  * 本节渲染器从 src/panel-tabs.js 按域搬出，函数体逐字未改；内联顺序见 scripts/build-client.mjs（排在组装点之前）。
  */

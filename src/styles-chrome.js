@@ -193,7 +193,7 @@ const CSS_CHROME = `    /* ── 统一控件 token：一套高度/圆角/墨�
      [data-menu-material] 元素选择器上，子树里裸读 var() 会在 computed-value 阶段整条失效。
      于是玻璃开着时它仍是一块不透明板。这里只补霜，底色仍归宿主（不重声明
      --dsw-alias-bg-layer-2，免得与注册表内部那些面板色打架）。
-     模糊半径读「浮层玻璃」这条子项的私有量 --we-floaters-blur（src/glass.js:279 无条件接线，
+     模糊半径读「浮层玻璃」这条子项的私有量 --we-floaters-blur（src/glass.js:301 无条件接线，
      取不到时退回全局模糊），与 .we-update-notice / .we-repo-panel 同档。 */
   body[data-we-glass-floaters] [data-install-registry] {
     -webkit-backdrop-filter: blur(var(--we-floaters-blur)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);

@@ -14,7 +14,7 @@ const WE_I18N_EN_EXT = {
   "还没有可用的扩展模块": "No extension modules yet",
   "后续新增的功能会以模块形式收在这里，每个模块自带它的控件": "Features added later are collected here as modules, each with its own controls",
 
-  // ── src/ext-fx.js · 「扩展」页签二号模块（点击效果与拖尾效果）──
+  // ── packages/fx/src/ext-fx.js · 「扩展」页签二号模块（点击效果与拖尾效果）──
   //    范围/默认值不在这里写死：真源是 lib/settings-schema.js 的 14 个 `fx*` 键。
   //    最后那几条是**通用档位名**（混合模式与配色档），登记在本段。
   "点击效果与拖尾效果": "Click and trail effects",
@@ -61,9 +61,9 @@ const WE_I18N_EN_EXT = {
   "变亮": "Lighten",
   "跟随主题色": "Follow theme color",
 
-  // ── src/ext-parallax.js · 「扩展」页签三号模块（3D 效果）──
+  // ── packages/parallax/src/ext-parallax.js · 「扩展」页签三号模块（3D 效果）──
   //    范围/默认值不在这里写死：真源是 lib/settings-schema.js 的 11 个 `parallax*` 键
-  //    （插件槽位那一档的缺省值是 src/parallax-layer.js 的 PARALLAX_PLUGIN_DEFAULT）。
+  //    （插件槽位那一档的缺省值是 packages/parallax/src/parallax-layer.js 的 PARALLAX_PLUGIN_DEFAULT）。
   //    这一节刻意不登记 `%`（SliderRow 的单位后缀是代码里的字面量，不进词表），
   //    也没有与另两个模块共用的键 —— 文案都是这一个模块自己的。
   //    距离的口径只有一条（用户口径 m02697-①）：**最大位移 = 屏幕最长对角线的百分比**。
@@ -97,7 +97,7 @@ const WE_I18N_EN_EXT = {
   "0 = 立刻跟手，越大越柔和（跟得越慢、停下后还会飘一小段才归位）": "0 = follows the cursor instantly; higher values are softer (it trails behind and keeps drifting a little after the cursor stops)",
 
   // ── src/ext-avatar.js · 「扩展」页签**第一个**模块（自定义会话头像）──
-  //    范围/默认值不在这里写死：真源是 lib/settings-schema.js 的七个 `avatar*` 键。
+  //    范围/默认值不在这里写死：真源是 lib/settings-schema.js 的五个 `avatar*` 键。
   //    与别的模块共用的键（清除那种）**不重复登记** —— 上面已经有的直接复用。
   "自定义会话头像": "Custom session avatars",
   "给会话双方各配一张头像，消息像好友聊天一样左右分列（默认关）": "Give both sides of the conversation an avatar, so messages line up left and right like a chat with a friend (off by default)",
@@ -150,6 +150,10 @@ const WE_I18N_EN_EXT = {
   "项目以 MIT 协议开源、完全免费。如果它让你的 DSH 好看了一点点，去仓库点一颗 ⭐ 就是最直接的鼓励～": "The project is MIT-licensed and completely free. If it made your DSH look even a little nicer, a ⭐ on the repo is the most direct way to say thanks!",
   "⭐ 去 GitHub 点亮 Star": "⭐ Star it on GitHub",
   "在浏览器里打开项目仓库": "Open the project repository in your browser",
+  // 「重新查看本版更新公告」（关于页「开源与支持」节那枚按钮）：公告是等版本弹一次的
+  // 展示面，看过就调不出来 —— 这条给用户一条重看路径（也顺带能再看到配图下的求星入口）。
+  "重新查看本版更新公告": "Show this version's update notice again",
+  "再弹一次本版更新公告（含配图下方的求星入口）": "Show this version's update notice once more (it carries the star entry under the art)",
   "⭐ 正在获取 star 数…": "⭐ Fetching star count…",
   "⭐ 当前 {count} star": "⭐ {count} stars right now",
   "⭐ 暂时取不到 star 数": "⭐ Star count unavailable right now",
@@ -173,18 +177,20 @@ const WE_I18N_EN_EXT = {
   "正在应用…": "Applying…",
   "采用「作者自用」": "Apply “Author's preset”",
   "保持我的设置": "Keep my settings",
-  // ── 更新公告（2026-10-12 改版：简洁大字三条；旧清单条目全部退役）──
-  "🎉 更新：吉祥物新朋友 · 一键预设 · 缓存路径自选": "🎉 Update: new mascot friends · one-click presets · pick your cache drive",
+  // ── 更新公告（当前一版公告的标题 / 配图 caption / 四条正文 / 按钮）──
+  "🎉 更新：头像导入大升级 · 一组修复 · 省电与外观提示": "🎉 Update: avatar import overhaul · a batch of fixes · power saving & look tip",
   "新朋友「星来」登场": "The blue-haired maid mascot says hi",
-  "在设置中的壁纸引擎页面中的关于中可一键直达，谢谢喵！": "One click away under Settings → Wallpaper Engine → About — thank you, meow!",
-  "我们的吉祥物系统来了很多新朋友！": "Our mascot system has lots of new friends!",
-  "都在本插件设置里。": "All in this plugin's settings.",
-  "新的预设系统给你带来更一键式的操作": "The new preset system makes things one-click",
-  "：「作者自用」「黑客绿」「紫色心情」都可尝试！": ": try “Author's preset”, “Hacker Green (Fish)” and “Purple Mood”!",
-  "可以选择壁纸的缓存路径": "Pick where your wallpaper cache lives",
-  "：在本插件设置中的「系统」分页，避免占用 C 盘。": ": under this plugin's System tab, so it stops eating your C drive.",
-  "圆角效果也可以调了": "Rounded corners are adjustable too",
-  "：在本插件设置的「外观」分页。": ": under this plugin's Appearance tab.",
+  // 公告配图下那行（求星入口）的文案与关于页那枚 Star 按钮**同一句** ⇒ 复用其既有词条
+  //（上面 "⭐ 去 GitHub 点亮 Star"，151 行那份），此处**不得**再登记一份：
+  // 同键重复会被 test/verify-i18n.mjs 的「词表内无重复键」判红（同名键在对象字面量里静默去重，
+  // 后写的那份会被吃掉）。
+  "头像导入大升级！": "Avatar imports leveled up!",
+  "现支持 SVG / GIF 等更多格式，超大图可自动压缩，上传前还能先裁切 —— 都在「扩展」分页。": "SVG / GIF and more formats are supported, oversized images can be auto-compressed, and you can crop before uploading — all under the Extensions tab.",
+  "修复一批": "A batch of fixes",
+  "：多窗口实时渲染不再互相踢掉；网页壁纸音频可视化恢复跳动；设置图标对齐、思考块行内代码与下拉弹层显示恢复正常。": ": live scene wallpapers in multiple windows no longer kick each other off; web-wallpaper audio visuals react to music again; settings icons, inline code in thinking blocks and dropdown popups render correctly again.",
+  "Linux 用户更省电": "Linux users save more battery",
+  "：窗口被遮挡时自动降帧，完全遮挡时暂停渲染。": ": a covered window drops frames, a fully covered one pauses rendering.",
+  "在设置中启用深色模式 + 「作者自用」预设，为本插件最佳效果之一！": "Enable dark mode + the “Author's preset” in Settings — one of this plugin's best looks!",
   "升级后建议重启一次 DSH，改动才完整生效；本提示每个新版本只出现一次，点下方按钮关闭后不再弹出。": "Restart DSH once after upgrading so changes fully apply; this notice shows once per version — dismiss it and it won't come back.",
 };
 

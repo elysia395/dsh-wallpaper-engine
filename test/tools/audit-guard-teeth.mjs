@@ -27,13 +27,19 @@
  * 已知局限（写在工具头，别让读者以为它是穷尽的）：
  *   ① A 的判据是"**最后一次 push 晚于最后一次评估**"。成对交错（评估、push、评估、push…）里
  *      若最后一次评估仍晚于最后一次 push，就漏报 —— 那种形态要人读。
- *   ② A **按名字认变量，不看作用域** ⇒ 两个不同块里的同名数组（如两处 `offenders`、DOM 替身里
- *      的 `children`）会被并成一条，产出假阳性。输出里带**声明行**就是为了让人一眼识破。
+ *   ② A **按名字认变量，不看作用域** ⇒ 两个不同块里的同名数组会被并成一条。task-14 起对
+ *      **已实测的两类同形而不同绑定**做了排除（形参与同名 `const`；同名两处 `const`）——
+ *      排除靠"绑定唯一"（恰好一次 `const/let/var` 声明 + 不是形参），代价是那两类形态里的**真缺陷**
+ *      也会一起漏报，要人读。输出里仍带**声明行**。
  *   ③ B 比 `verify-client.mjs` 内那条棘轮**更窄**（那条还带 `/expect|应该|必须|不得/` 的词分支）
  *      —— 那个分支在别的文件里命中的几乎全是章节标题。代价：不带运算符的伪判据抓不到。
- *   ③b A **看不见"把数组交给判据函数"**那种评估（`noticeBudgetOk(KINDS, calls, …)`）—— 为了
+ *      ③b task-14 起排除"`console.log` 后紧跟 ✓/✗ 的**结论上报行**"（`check()` 助手那一行，
+ *      判决在调用方）⇒ 真写成 `console.log('✓ ' + (n === 1))` 的伪判据会被这条一起放过。
+ *   ③c A **看不见"把数组交给判据函数"**那种评估（`noticeBudgetOk(KINDS, calls, …)`）—— 为了
  *      躲开递归 walker 的假阳性而刻意不收。那种写法会**漏报**，要人读。
  *   ④ C 只认"全文只出现一次"的声明 ⇒ 名字出现在注释/字符串里就不算死（宁可漏报）。
+ *      ④b task-14 起扫描面含**表声明**（`const X = [...]` / `{…}` / `new Map()`），
+ *      修掉了"清单常量零引用一条都不报"的旧洞。
  *   ⑤ D 是**最粗形态**的 grep，不解析语法："恒真得绕一圈"的写法（如对恒空集合做 `.every()`）
  *      它看不见 —— 那类要人读。
  *   ⑥ E 只看"有没有会红的出口"，不看那条出口**是否可达**（`if (failed) exit(1)` 里 `failed`
@@ -84,11 +90,23 @@ function staleControls(src) {
     }
   });
   const out = [];
-  // 只认**本文件里用 `const/let/var` 声明过**的名字：`children`（假 DOM 的属性）、`calls`（HTTP 替身
-  // 的记录数组）这类"同名不同物"因此直接出局。实测：加这一条之前 7 个候选全是它们。
-  const declared = (id) => new RegExp('(?:const|let|var)\\s+' + esc(id) + '\\b').test(src);
+  // ⚠️ B3①（task-14 补的排除项）：**同名跨作用域**是本判据已证实的假阳性来源。两例实测：
+  //    · `verify-logging.mjs` 的 `calls`：`const calls = []`（本文件的对照）与
+  //      `noticeBudgetOk = (kinds, calls, …) =>` 的**形参**同名 ⇒ 行号一并，`.every(` 被当成
+  //      "最后一次评估"、之后的 `calls.push(` 被当成"评估之后还在推" ⇒ 假报。
+  //    · `verify-scene-live.mjs` 的 `hits`：`const hits = (text) => …`（函数）与
+  //      `stubHits()` 里的 `const hits = []`（数组）同名 ⇒ 同上。
+  // 判据因此要求这个标识符**绑定唯一**：①恰好被 `const/let/var` 声明**一次**；②没当过
+  // `function` / 箭头函数的**形参**。两条都满足才进入行号比较。
+  // 局限（宁可漏报，不造假阳性）：形参只按"定义形态"识别，所以"把对照当**实参**传给判据函数"
+  // 那种写法仍会漏报（工具头局限 ③b）；名字只在注释/字符串里出现也照样算"用过"。
+  const declCount = (id) => (src.match(new RegExp('(?:const|let|var)\\s+' + esc(id) + '\\b', 'g')) || []).length;
+  const isFormalParam = (id) =>
+    new RegExp('\\([^()]*\\b' + esc(id) + '\\b[^()]*\\)\\s*=>').test(src)
+    || new RegExp('function\\s*[A-Za-z_$][\\w$]*\\s*\\([^()]*\\b' + esc(id) + '\\b[^()]*\\)').test(src);
   for (const [id, decls] of idents) {
-    if (!declared(id)) continue;
+    if (declCount(id) !== 1) continue;   // 0 = 没声明；≥2 = 同名跨作用域 ⇒ 不能把行号并起来判
+    if (isFormalParam(id)) continue;     // 形参与同名 `const` 是两个绑定 ⇒ 同上
     const pushAt = [];
     const evalAt = [];
     lines.forEach((line, i) => {
@@ -128,6 +146,12 @@ function fakeJudgements(src) {
     if (/(?:failures|failed|problems|stray|failedCount)(?:\.length)?\s*===\s*0/.test(t)) return false; // 汇总（可能跨行）
     if (/===\s*0\s*\?/.test(t)) return false;            // 汇总形态：计数 == 0 ? PASS : FAIL
     if (/'(?:ALL[^']*PASSED|[^']*FAILED|OK|PASSED)'/.test(t)) return false; // 汇总文案
+    // ⚠️ B3②（task-14 补的排除项）：`check()` 助手的**失败上报行**不是伪判据 ——
+    // 判决在**调用方**（`if (ok) passed++ else failed++`），这一行只负责把结论打印出来；
+    // 它命中只是因为 `detail !== undefined ? … : …` 里带了个 `!==`。
+    // 判据：`console.log(` 后**紧跟一个已定的对错记号**（✓/✗）⇒ 这行是"报结论"，不是"算结论"。
+    // 局限：真写成 `console.log('✓ ' + (n === 1))` 的伪判据会被这条一起放过（见工具头局限 ③）。
+    if (/^console\.log\(\s*['"`]\s*[✓✗]/.test(t)) return false;
     return true;
   };
   return src.split('\n').map((line, i) => ({ n: i + 1, line: line.trim() })).filter((x) => hit(x.line));
@@ -161,11 +185,19 @@ function cannotFail(src) {
 //    真实代码一起删掉。实测 `verify-module-layout.mjs` 的 `devSpecifiers` 原文出现 4 次，
 //    剥完只剩 1 次 ⇒ 被判成死代码（假阳性）。所以：声明在**代码行**上认，计数用**原文**。
 //    代价：名字只出现在注释里就算"用过"（宁可漏报）。
+//
+// ⚠️ B4（task-14 补的扫描面）：原先只认 `function X(` 与 `const X = (` ⇒ 漏掉**表声明**
+//    （`const X = [...]` / `{…}` / `new Map(...)`）。task-13 实测的两条死声明正是这个形态
+//    （`DIAGNOSTIC_CALLEES_NOTE` 字符串、`CACHED_VALUES` 对象），旧口径一条都没报出来。
 function deadDeclarations(src) {
   const lines = src.split('\n');
   const DECL_RES = [
     /^\s*(?:async\s+)?function\s+([A-Za-z_$][\w$]*)\s*\(/,
     /^\s*const\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s*)?\(/,
+    // 表声明：数组 / 对象字面量 / Map / Set（"清单常量"最常见的三种形态）。
+    /^\s*const\s+([A-Za-z_$][\w$]*)\s*=\s*\[/,
+    /^\s*const\s+([A-Za-z_$][\w$]*)\s*=\s*\{/,
+    /^\s*const\s+([A-Za-z_$][\w$]*)\s*=\s*new\s+(?:Map|Set)\s*\(/,
   ];
   const decls = [];
   lines.forEach((line, i) => {
@@ -212,6 +244,29 @@ function tautologies(src) {
   return out;
 }
 
+// ── 合成夹具（task-14 的正/负对照；SELF 直接喂这两份文本）────────────────────────
+/** 含**真缺陷**：一个零引用表声明 + 一个恒真判据 ⇒ 改进后必须都报出来。 */
+const FIXTURE_BAD = [
+  'const NEVER_USED_TABLE = [1, 2];',                       // B4 新增的扫描面（表声明）
+  'const NEVER_USED_MAP = new Map();',                      // B4 新增的扫描面（Map）
+  'function run() { assert.ok(true); }',                     // 判据 D：恒真写法
+  'run();',                                                  // （配对项：让 `run` 不算零引用，夹具只留真缺陷）
+].join('\n');
+/** 含**两类已证实假阳性**：形参同名 + 同名两处 `const` + `check()` 助手的失败上报行 ⇒ 改进后一处都不报。 */
+const FIXTURE_FP = [
+  'const calls = [];',                                                            // 对照（真）
+  'const judge = (kinds, calls) => calls.every((k) => kinds.includes(k));',        // 形参同名 → 旧版假报 A
+  'calls.push("a");',
+  'judge(["a"], calls);',
+  'const hits = (t) => t.filter(Boolean);',                                        // 同名两处 const → 旧版假报 A
+  'for (const x of hits([])) { }',
+  'function walk() { const hits = []; hits.push("#"); return hits; }',
+  'function check(name, ok, detail) {',                                            // 助手上报行 → 旧版假报 B
+  '  if (ok) return;',
+  "  console.log('  ✗ ' + name + (detail !== undefined ? ' — ' + detail : ''));",
+  '}',
+].join('\n');
+
 // ── 自检：四个判据各自必须能抓到合成输入（否则工具本身是空转的）──────────────────
 const SELF = [
   ['A 能抓到"push 在评估之后"', staleControls([
@@ -224,11 +279,31 @@ const SELF = [
     'controls.push(["a", true]);',
     'for (const [w, ok] of controls) { if (!ok) failed++; }',
   ].join('\n')).length === 0],
+  // B3① 的两条排除项（各自都构造成"不排除就会假报"的形态，否则这条自检是空转的）
+  ['A 不误伤"形参与另处 const 同名"（旧版会假报）', staleControls([
+    'const calls = [];',
+    'const judge = (kinds, calls) => calls.every((k) => kinds.includes(k));',
+    'calls.push("a");',
+    'judge(["a"], calls);',
+  ].join('\n')).length === 0],
+  ['A 不误伤"同名两处 const"（旧版会假报）', staleControls([
+    'const hits = (t) => t.filter(Boolean);',
+    'for (const x of hits([])) { }',
+    'function walk() { const hits = []; hits.push("#"); return hits; }',
+  ].join('\n')).length === 0],
+  ['正对照：合成夹具（1 个零引用表 + 1 个恒真判据）改进后仍然报出',
+    deadDeclarations(FIXTURE_BAD).map((d) => d.name).sort().join() === 'NEVER_USED_MAP,NEVER_USED_TABLE'
+    && tautologies(FIXTURE_BAD).length === 1],
+  ['负对照：合成夹具（两类假阳性）改进后一处都不报',
+    staleControls(FIXTURE_FP).length === 0 && fakeJudgements(FIXTURE_FP).length === 0],
   ['B 能抓到 log 形式伪判据', fakeJudgements("  console.log('x (expect 1):', n === 1);").length === 1],
   ['B 不误伤真断言与 catch 上报', fakeJudgements([
     "  assert.equal(n, 1, 'x');",
     "  catch (e) { console.log('threw:', e && e.message); }",
   ].join('\n')).length === 0],
+  // B3②：`check()` 助手的失败上报行（旧版会假报）
+  ['B 不误伤 `check()` 助手的失败上报行（旧版会假报）',
+    fakeJudgements("  console.log('  ✗ ' + name + (detail !== undefined ? ' — ' + detail : ''));").length === 0],
   ['C 能抓到零引用声明', deadDeclarations('function neverCalled() {}\n').length === 1],
   ['C 不误伤有引用的声明', deadDeclarations('function used() {}\nused();\n').length === 0],
   ['D 能抓到 assert.ok(true)', tautologies('assert.ok(true);').length === 1],

@@ -3,7 +3,7 @@
 「关于」页签里那两张二维码与「更新公告」配图的**运行时字节**。与本目录并列的 `lib/fontsets/`（随包预设）、
 `lib/webwallgl/`（随包渲染页）同一口径：**随包发布、由插件自己的路由提供**。
 
-- 提供方：`lib/routes/about-qr.js`（`GET/HEAD <BASE>/about-qr/<文件名>`，白名单 + ETag/304）。
+- 提供方：`packages/about-notice/lib/routes/about-qr.js`（`GET/HEAD <BASE>/about-qr/<文件名>`，白名单 + ETag/304）。
   客户端只存路径（`src/about-assets.js`），`<img src>` 直接指过来。
 - **为什么不用内联 base64**：那版把两张图压进 `lib/client.js`（+240KB，每次冷启动都要解析这串
   字符），而它们与面板逻辑毫无关系 —— 拆成静态文件后 bundle 回到原大小，换码也只需要替换这里的

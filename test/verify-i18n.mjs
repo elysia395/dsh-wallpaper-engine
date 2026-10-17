@@ -33,7 +33,7 @@ import { scanCjkStrings, needsTranslation } from './tools/i18n-scan.mjs';
 import { stripExportBlocks } from './tools/js-text.mjs';
 // 词表族（组装点 + 7 个域模块）的**按构建顺序**读法：单一真源是 scripts/build-client.mjs 的
 // INLINE_MODULES（见 test/tools/src-scope.mjs）。词表已按域拆到同族模块，键序由内联顺序决定。
-import { scopeFiles } from './tools/src-scope.mjs';
+import { parseInlineModules } from './tools/src-scope.mjs';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 
@@ -49,7 +49,7 @@ const check = (name, ok, detail) => {
 // 对应命中就判红（清单过期 = 判据的牙被拔了，本仓对允许清单的既有口径）。
 
 /** 整块纯数据：样式族的 8 个域模块（其中文只出现在 CSS 注释里，不进界面）。
- *  2026-10-13（刀3）：原先登记的单文件 `src/styles.js` 已按视觉域拆成 8 个域模块 + 组装点
+ *  （刀3）：原先登记的单文件 `src/styles.js` 已按视觉域拆成 8 个域模块 + 组装点
  *  （组装点无 CSS）⇒ 逐域登记，判据（kind / minLength / 空转检查）一字未改。 */
 const DATA_BLOCKS = [
   { file: 'src/styles-base.js', kind: 'template', minLength: 10000, why: '样式域 base 是纯数据；其内的中文只出现在 CSS 注释（不渲染到界面）' },
@@ -64,6 +64,10 @@ const DATA_BLOCKS = [
 
 /** 逐条精确值豁免（形如"是数据不是文案"的个别串）。每条都必须写明理由，且必须还在源码里。 */
 const VALUE_ALLOW = [
+  ...[
+    ...JSON.parse(readFileSync(join(ROOT, 'packages/pet-link/src/pet-link-actions.json'), 'utf8')).animations.events.DSHWE,
+    ...readdirSync(join(ROOT, 'packages/pet-link/assets/memes')).filter(name => name.endsWith('.png')).map(name => name.slice(0, -4)),
+  ].map(value => ({ value, why: '桌宠资源池的实际动画名或配图键；必须与文件名一致，不能翻译。' })),
   {
     value: '设置',
     why: '**宿主的**标签候选（src/sidebar-right.js 的 settingsLabelCandidates）：' +
@@ -208,9 +212,26 @@ function componentsWithoutLocaleHook(sources) {
 const DICT_MODULE = 'src/i18n-copy.js';
 // 词表落在**一个族**里：组装点 `DICT_MODULE` + 各域模块 `src/i18n-copy-*.js`。族顺序 = 构建期内联
 // 顺序（INLINE_MODULES 单一真源）⇒ 扫描面、切片面、vm 装载面三处用同一份清单，不会各自漂移。
-const DICT_FAMILY = scopeFiles('src/i18n-copy');
+const DICT_FAMILY = parseInlineModules().map(({ file }) => file)
+  .filter((file) => /(?:^|\/)i18n-copy(?:-[^/]+)?\.js$/.test(file));
 const DICT_MODULES = new Set(DICT_FAMILY);
-const srcFiles = jsFiles(join(ROOT, 'src'));
+// A3（多包，BUNDLE-SPLIT §7.1）之后产品源码分居两处：主包 src/** 与 lib/**，子包 packages/<pkg>/{src,lib}/**。
+// 扫描面必须同源扩到 packages/**：否则迁出去的 weT(…) 调用点（如 packages/fx/src/ext-fx.js）
+// 与宿主「原句」出处（如 packages/fonts/lib/fontsets.js）双双掉出扫描面 —— 症状恰好是
+// 「一堆孤儿键 + 一堆凭空造句」，而源码两半其实都合规。这正是 A3 打崩本守卫的形态。
+const PACKAGES_ROOT = join(ROOT, 'packages');
+/** 子包面里的 <sub> 目录（src / lib）；没有 packages/ 时返回空数组。 */
+const subpackageDirs = (sub) => {
+  let entries;
+  try { entries = readdirSync(PACKAGES_ROOT, { withFileTypes: true }); } catch { return []; }
+  return entries.filter((e) => e.isDirectory())
+    .map((e) => join(PACKAGES_ROOT, e.name, sub))
+    .filter((d) => existsSync(d));
+};
+/** 产物（构建生成的浏览器半边）：主包 lib/client.js 与子包 lib/client.<short>.js —— 它们是源码的副本
+ *  （同一份中文原句已按源码面各判一遍），不是「原句」出处。 */
+const isGeneratedClient = (rel) => rel === 'lib/client.js' || /(^|\/)client\.[^/]+\.js$/.test(rel);
+const srcFiles = [join(ROOT, 'src'), ...subpackageDirs('src')].flatMap((d) => jsFiles(d));
 const srcHits = [];
 for (const file of srcFiles) {
   const rel = relative(ROOT, file).split(/[\\/]/).join('/');
@@ -226,9 +247,10 @@ const dictHits = DICT_FAMILY.flatMap((rel) => scanCjkStrings(readFileSync(join(R
 // 字符，连文件末尾的 `process.exit(failed ? 1 : 0)` 都一起吃掉 ⇒ `audit-guard-teeth` 判据 E 会
 // 假报「本文件既无 process.exit 也无 throw」）。本仓生产路径统一走字符串感知的剥注释，
 // 这里只是不给下一个"守守卫"的工具留同样的坑。
-const libFiles = jsFiles(join(ROOT, 'lib')).filter((f) => {
+const libFiles = [join(ROOT, 'lib'), ...subpackageDirs('lib')].flatMap((d) => jsFiles(d)).filter((f) => {
   const rel = relative(ROOT, f).split(/[\\/]/).join('/');
-  return rel !== 'lib/client.js' && !rel.startsWith('lib/vendor/') && !rel.startsWith('lib/webwallgl/');
+  // vendored 两个前缀对主包与子包同口径；产物见 isGeneratedClient。
+  return !isGeneratedClient(rel) && !/(^|\/)(vendor|webwallgl)\//.test(rel);
 });
 const libValues = new Set();
 for (const file of libFiles) {
@@ -313,7 +335,7 @@ console.log('② 词表双向对账（WE_I18N_EN ⇄ 代码里的 weT 字面量�
   const composerEnBlock = enBlockAt < 0 || enBlockEnd < 0 ? '' : copySrc.slice(enBlockAt, enBlockEnd + 3);
   const spreadOrder = [...composerEnBlock.matchAll(/\.\.\.(WE_I18N_EN_\w+)/g)].map((m) => m[1]);
   const wantOrder = DICT_FAMILY.filter((rel) => rel !== DICT_MODULE)
-    .map((rel) => 'WE_I18N_EN_' + rel.replace(/^src\/i18n-copy-/, '').replace(/\.js$/, '').toUpperCase());
+    .map((rel) => readFileSync(join(ROOT, rel), 'utf8').match(/^const (WE_I18N_EN_\w+) = \{$/m)?.[1]);
   check('组装点只按族顺序展开、自身不含字面量键（键只住在域模块里）',
     spreadOrder.length > 0 && spreadOrder.length === wantOrder.length
     && spreadOrder.every((name, i) => name === wantOrder[i])

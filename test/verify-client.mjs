@@ -288,10 +288,12 @@ assert.ok(code.includes(clearGated(' [class*="_frame"]')) && code.includes(clear
 assert.ok((blockBodyOf(clearGated(' [class*="_root"] {')) || '').includes('background: transparent !important'),
   'the container fallback needs background: transparent !important (host canvas paints an opaque base)');
 console.log('sidebar glass selectors are wallpaper-independent: true · page glass is anchored on data-we-glass-page: true');
-const cap = { handoff: null };
+// A3 之后客户端产物不再只有主 bundle 一份：packages/{fx,parallax}/lib/client.*.js 各自在
+// 同一个 loader 上注册一份 bundle（id = 子包真实包名）。所以这里收**数组**，主 bundle = 第一份。
+const cap = { handoffs: [] };
 const sandbox = {
   window: {
-    __ModuleLoader__: { load: (h) => { cap.handoff = h; } },
+    __ModuleLoader__: { load: (h) => { cap.handoffs.push(h); } },
     setTimeout: (fn, ms) => {
       const token = { fn, ms, cleared: false };
       rotationTimers.push(token);
@@ -343,7 +345,8 @@ sandbox.Date = FakeDate;
 vm.createContext(sandbox);
 new vm.Script(code, { filename: 'client.js' }).runInContext(sandbox);
 
-const { id, factory } = cap.handoff;
+assert.ok(cap.handoffs.length >= 1, '主 bundle 必须且只能在 loader 上注册一份（拿到 ' + cap.handoffs.length + ' 份）');
+const { id, factory } = cap.handoffs[0];
 console.log('registered id:', id);
 
 const requireMock = (spec) => {
@@ -352,6 +355,44 @@ const requireMock = (spec) => {
   throw new Error('unexpected require: ' + spec);
 };
 const exportsObj = factory(requireMock);
+// ── A3：fx/parallax 的扩展模块描述符住在各自子包里 ─────────────────────────────
+// 「扩展」页签的三张卡现在来自三个 bundle：avatar（本 bundle 模块作用域注册）、fx、parallax。
+// 子包产物只在 loader 上注册自己那份 bundle，真正的注册动作发生在它们各自的 factory：
+// 它们用 require('dsh-plugin-wallpaper-engine') 取主 bundle 的**显式键集**
+// （src/client.js 的 HOST_BRIDGE_BINDINGS），再 registerExtensionModule / registerLayerHooks。
+// 所以这里必须在 apply(ctx) **之前**、同一个 vm 上下文里把两份产物求值掉，且 requireMock 要把
+// 主 bundle 的导出面交给它们 —— 否则页签只剩 avatar，:788 会红（这正是本判据要看见的形态）。
+// 求值顺序**故意反着来**（先 parallax 后 fx）：屏上顺序必须由 descriptor.order 决定，
+// 不许靠 bundle 求值顺序（三份 bundle 的到达顺序在真实 loader 里不保证）。
+const SUBPACKAGE_CLIENT_ARTIFACTS = [
+  ['../packages/parallax/lib/client.parallax.js', 'dsh-plugin-wallpaper-engine-parallax'],
+  ['../packages/fx/lib/client.fx.js', 'dsh-plugin-wallpaper-engine-fx'],
+  // P-C 第一刀：字体节（「字体自定义」那一节）已随子包出产物 —— 设置页/外观页要看到它，
+  // 挂载台就必须像真实 loader 那样把这份 bundle 也求值掉（它的 factory 会往面板节注册表注册）。
+  ['../packages/fonts/lib/client.fonts.js', 'dsh-plugin-wallpaper-engine-fonts'],
+  // pet-link 收口（2026-10-17）：桌宠联动的浏览器半边也出产物了。它的 factory 会调
+  // 主 bundle 显式键集里的 registerPetLink 把服务登记回主包（门面缓冲 + 登记到达时补做）。
+  // 求值在 apply() **之前** ⇒ 这里正是"子包先到"那一半的真实形态。
+  ['../packages/pet-link/lib/client.pet-link.js', 'dsh-plugin-wallpaper-engine-pet-link'],
+];
+const subRequireMock = (spec) => {
+  if (spec === 'dsh-plugin-wallpaper-engine') return exportsObj;
+  return requireMock(spec);
+};
+for (const [rel, expectedId] of SUBPACKAGE_CLIENT_ARTIFACTS) {
+  const before = cap.handoffs.length;
+  const subCode = readFileSync(new URL(rel, import.meta.url), 'utf8');
+  new vm.Script(subCode, { filename: rel }).runInContext(sandbox);
+  const loaded = cap.handoffs.slice(before);
+  assert.equal(loaded.length, 1, rel + ' 必须恰好注册一份 bundle（实际 ' + loaded.length + ' 份）');
+  assert.equal(loaded[0].id, expectedId, rel + ' 的 bundle id 必须逐字等于子包真实包名（客户端 require 才命中）');
+  const subExports = loaded[0].factory(subRequireMock);
+  assert.equal(typeof subExports.apply, 'function', rel + ' 的浏览器半边必须导出 apply');
+  // 注意：产物在 vm 上下文里求值 ⇒ 它的数组是**另一个 realm** 的 Array，
+  // assert.deepEqual（strict 下即 deepStrictEqual）会因原型不同而误判 ⇒ 只判长度。
+  assert.equal(subExports.inject.length, 0, rel + ' 的浏览器半边不声明 inject');
+}
+console.log('subpackage bundles registered:', JSON.stringify(cap.handoffs.map((h) => h.id)));
 console.log('factory keys:', Object.keys(exportsObj));
 console.log('inject:', JSON.stringify(exportsObj.inject));
 console.log('Symbol.toStringTag:', Object.prototype.toString.call(exportsObj));
@@ -363,7 +404,7 @@ const slots = {
   inject: (key, cb) => cb(),
   register: (opts, render) => { registrations.push({ key: opts.name, id: opts.id, label: opts.label, order: opts.order }); pickerRenders.push(render); },
 };
-// 侧栏官方档（2026-10-09 字体节 / 玻璃高级行迁入侧栏后，它们的行为断言必须打在
+// 侧栏官方档（字体节 / 玻璃高级行迁入侧栏后，它们的行为断言必须打在
 // **侧栏 body 渲染台**上）：给 installSidebarRight 需要的两个可选服务桩 ——
 // register 返回 disposer、openTab 空转即可；其余服务名（locale / theme / shortcuts）
 // 一律 null ⇒ 各轮询路径停在第一次尝试（不 fire 它们的 250ms 定时器就不动）。
@@ -674,7 +715,7 @@ setTimeout(async () => {
     const renderPicker = () => {
       try { return pickerRenders[0](); } catch (e) { console.log('picker render threw:', e && e.message); return null; }
     };
-    // ── 侧栏 body 渲染台（2026-10-09 字体节 / 玻璃高级行迁入侧栏后的行为断言落点）──
+    // ── 侧栏 body 渲染台（字体节 / 玻璃高级行迁入侧栏后的行为断言落点）──
     // 注册路径真跑（installSidebarRight 经 ctx.get 桩拿到两个可选服务）⇒ registrations
     // 里 `sidebar.right.pane.tab` 与 pickerRenders **同一次 register 推入** ⇒ 按 key 定位。
     // 页签与两块折叠块的展开态都住 localStorage（qp-tab / qp-font-open / qp-glass-detail，
@@ -683,10 +724,10 @@ setTimeout(async () => {
       localStorage.setItem('dsh-wallpaper-engine:qp-tab', 'appearance');
       localStorage.setItem('dsh-wallpaper-engine:qp-font-open', '1');
       localStorage.setItem('dsh-wallpaper-engine:qp-glass-detail', '1');
-      // 「全局 UI 配色」节（2026-10-11）：第三个折叠块，默认收起 ⇒ 侧栏台也播种展开，
+      // 「全局 UI 配色」节：第三个折叠块，默认收起 ⇒ 侧栏台也播种展开，
       // 否则它的色板不进树、那几条断言会空转（"判据空转"比红更糟）。
       localStorage.setItem('dsh-wallpaper-engine:qp-ui-color-open', '1');
-      // ── 「细节 / 玻璃 UI / 侧边栏圆角」三节整节折叠（2026-10-11「在侧边栏默认收敛」）──
+      // ── 「细节 / 玻璃 UI / 侧边栏圆角」三节整节折叠（「在侧边栏默认收敛」）──
       //    同一条口径：这三节**默认收起** ⇒ 侧栏台播种展开，让**下面那批"能调到 X"的老断言
       //    继续在等价前提（展开态）下测它们本来要测的东西（控件在不在、接线通不通）。
       //    ⚠️ 别把老断言删掉或改成"判不在" —— 那会把"控件坏了"和"默认收起了"混成同一件事；
@@ -803,7 +844,7 @@ setTimeout(async () => {
         assert.ok(order.every((i) => i >= 0) && order.every((i, k) => k === 0 || i > order[k - 1]),
           '三张模块卡必须按注册表顺序排列（头像第一）：' + JSON.stringify(order));
       }
-      // 2026-10-04 用户口径：扩展模块的出厂开关**全部默认关、按需开启** ⇒ 三个模块的
+      //  用户口径：扩展模块的出厂开关**全部默认关、按需开启** ⇒ 三个模块的
       // 参数控件默认一律不画，否则会给人"关着也生效"的错觉；三条同时钉住默认值没被误改成 true。
       assert.ok(!extText.includes('头像大小') && !extText.includes('圆角强度'),
         '一号模块（自定义会话头像）总开关默认关 ⇒ 不得画出参数控件');
@@ -1269,7 +1310,7 @@ setTimeout(async () => {
     }
 
     // ── 外观 tab: swatches / sliders / sidebar-glass group. ──
-    // ⚠️ 2026-10-09 真迁移后**两棵渲染台分工**：设置页渲染台（renderPicker）钉简化配置与
+    // ⚠️ 真迁移后**两棵渲染台分工**：设置页渲染台（renderPicker）钉简化配置与
     //    页签行为 + 迁移负断言（独立配置 / 字体节不再画）；侧栏渲染台（renderSidePane，
     //    qp-tab=appearance + 两块折叠块展开）钉高级行为（独立配置往返 / 胶囊 / 触发条 /
     //    字体开关）。两边的 handler 是同一份模块级实现，bodyEl 属性断言与哪棵树无关。
@@ -1277,8 +1318,8 @@ setTimeout(async () => {
     tree = renderPicker();   // eslint-disable-line require-atomic-updates -- 顺序 await 的判据；tree 无并发读写
     treeText = JSON.stringify(tree);
     assert.ok(treeText.includes('"we-tabs__tab we-tabs__tab--active"'), 'appearance tab active:');
-    // ── 「全局 UI 配色」节（2026-10-11 用户口径）：配色**迁出「主题」节**、成为独立大项。
-    //    ⚠️ 2026-10-11 **二次修订**：设置页改为一律**默认展开**（用户口径「设置页则是全部
+    // ── 「全局 UI 配色」节（用户口径）：配色**迁出「主题」节**、成为独立大项。
+    //    ⚠️ **二次修订**：设置页改为一律**默认展开**（用户口径「设置页则是全部
     //    开启但也支持隐藏」）⇒ 这里不再"播种展开"，而是**直接判默认就是展开的**：
     //    没表过态的用户打开设置页就该看见色板（这正是"全部开启"的字面含义）。
     assert.ok(treeText.includes('全局 UI 配色'),
@@ -1379,8 +1420,8 @@ setTimeout(async () => {
     assert.equal(bodyEl.attributes['data-we-sidebar-follow'], 'on', '默认跟随 ⇒ body 上有跟随属性');
     // ── 迁移负断言（真迁移的"设置页那一侧"）：**玻璃**高级行搬进侧栏折叠块后，设置页
     //    一个都不许再画 —— 两个方向都钉：这里判"设置页没有"，renderSidePane 那侧判"侧栏有"。
-    //    ⚠️ **字体节是例外**（2026-10-11 三次修订，用户口径"两边都有"）：它在设置页也在。
-    //    2026-10-11 **二次修订**后设置页**默认展开** ⇒ 「字体自定义」开关直接进树；
+    //    ⚠️ **字体节是例外**（三次修订，用户口径"两边都有"）：它在设置页也在。
+    //     **二次修订**后设置页**默认展开** ⇒ 「字体自定义」开关直接进树；
     //    "它是一道折叠门（可收起）"这件事由下面的 aria-expanded 与翻转用例承担，
     //    不再靠"默认收起所以看不见"来表达。 ──
     assert.equal(findCtlInput(tree, '侧栏玻璃·独立配置'), null, '设置页不画「侧栏玻璃·独立配置」（已迁侧栏折叠块）');
@@ -1497,7 +1538,7 @@ setTimeout(async () => {
     assert.equal(sliderMax(findSliderRow(tree, '内容面透明度')), '100', '内容面透明度上限必须是 100（规范刻度，R4）');
     // §10.27 + v1.3.0 追版：新增的「思考触发条玻璃·独立配置」—— 打开后才画它自己的两项，量程同样
     // 钉在规范刻度上（这正是"拖过 60 跳回 20"那次事故的两侧之一：**面板量程**那一侧）。
-    // ⚠️ 这一面**挂在「思考块液态玻璃」三挡（2026-10-06）的「液态玻璃」挡**门下（登记表 `master`）：
+    // ⚠️ 这一面**挂在「思考块液态玻璃」三挡的「液态玻璃」挡**门下（登记表 `master`）：
     //    非"液态玻璃"挡时它一行都不画（画了就是"画出来又不生效"的死旋钮 ⇒ 本仓专门防这一类），
     //    所以各挡都钉 —— 关/原生 ⇒ 找不到；液态玻璃 ⇒ 出现且量程正确。
     // 三挡分段的替身驱动：找「思考块液态玻璃」那一行（we-picker__ctl），点其中目标挡位的按钮。
@@ -1570,7 +1611,7 @@ setTimeout(async () => {
     assert.equal(findCtlInput(tree, '侧栏玻璃·独立配置'), null, '重新打开跟随 ⇒ 「独立配置」又收起');
 
     // ── 「字体」已并入「外观」：老的 localStorage 页签值必须迁移过去（不能把用户
-    //    甩回「壁纸」）。⚠️ 2026-10-11 三次修订后**两档都画字体节**（用户口径"两边都有"）；
+    //    甩回「壁纸」）。⚠️ 三次修订后**两档都画字体节**（用户口径"两边都有"）；
     //    **二次修订**后设置页**默认展开** ⇒ 字体开关直接在树里。──
     setTab('font');
     tree = renderPicker();
@@ -1614,7 +1655,7 @@ setTimeout(async () => {
     }
 
     // ── 光标颜色（#83）：随「输入光标」节**整节撤销**后并入「全局 UI 配色」节
-    //    （2026-10-11 用户口径：「把输入光标这一栏目取消 …… 光标颜色 …… 并入里面」）。
+    //    （用户口径：「把输入光标这一栏目取消 …… 光标颜色 …… 并入里面」）。
     //    它仍然与「UI 配色自定义」总开关**无关**（始终可调）—— 那是并入时明确保留的性质。 ──
     assert.ok(treeText.includes('全局 UI 配色'), '外观 must host the 全局 UI 配色 section');
     assert.ok(!treeText.includes('输入光标'), '「输入光标」节已撤销（内容并入「全局 UI 配色」）');
@@ -1671,7 +1712,7 @@ setTimeout(async () => {
     } else {
       console.log('mascot rope toggle: false (not found)');
     }
-    // ── 吉祥物形态 = **横向 3D 轮播（coverflow）**（2026-10-11 用户口径：「把吉祥物选择
+    // ── 吉祥物形态 = **横向 3D 轮播（coverflow）**（用户口径：「把吉祥物选择
     //    这块做成一个转盘方式选择」）。从"卡片一排"改过来时**必须保留的三条不变量**：
     //    ① **中心 = 当前生效的那一个**（中心若不是选中项，用户一眼看不出现在用的是哪个）；
     //    ② 「自定义立绘」排最后 —— 它是**动作**（导入 / 替换）不是"形态"，故不进 ‹ › 循环；
@@ -1706,7 +1747,7 @@ setTimeout(async () => {
     // 容器与 a11y：容器缺席 ⇒ 后面拿到的项可能来自别处（先钉住这一条）。
     assert.ok(JSON.stringify(tree).includes('we-picker__mascot-carousel'),
       '转盘容器必须在场（we-picker__mascot-carousel）');
-    // ⚠️ **项数与序列都不写死**（2026-10-11 加进八只「模型娘」时这里假红过一次）：
+    // ⚠️ **项数与序列都不写死**（加进八只「模型娘」时这里假红过一次）：
     //    要守的性质是"**每只内置各一项 + 「自定义」排最后**"，与到底有几只内置无关。
     //    序列从**宿主 schema 的枚举**推（那是单点真源），所以"加了图忘了扩枚举"这条
     //    会在下面当场红，而不是等宿主把新形态 sanitize 掉才发现。
@@ -1719,7 +1760,7 @@ setTimeout(async () => {
     assert.ok(ringEnum.length >= 3 && ringLabels.length >= 3, '（判据前置）枚举与形态表都要数得到');
     assert.equal(ringLabels.length, ringEnum.length,
       '形态表条目数（' + ringLabels.length + '）必须等于 ROPE_FORM_VALUES 项数（' + ringEnum.length + '）');
-    // 默认形态也**从真源推**（`DEFAULTS.ropeForm`）：2026-10-13「小女仆」除名、默认改 `deepseek`
+    // 默认形态也**从真源推**（`DEFAULTS.ropeForm`）：「小女仆」除名、默认改 `deepseek`
     //   之后，"默认 = 枚举第一只"这条假设不再成立（第一只现在是「Deepseek_Pro」）⇒ 写死会假红。
     //   注意锚点：注释里也会出现 `ropeForm: "maid"` 这种字样 ⇒ 只认 `DEFAULTS` 那一行（缩进两格 + 行尾逗号）。
     const ringDefaultForm = ((ringSchemaSrc.match(/^ {2}ropeForm: "([a-z]+)",$/m) || [])[1] || '');
@@ -1755,7 +1796,7 @@ setTimeout(async () => {
     mascotItems = findMascotItems(tree);
     assert.ok(!!centerOf(mascotItems) && centerOf(mascotItems).props['aria-label'] === firstLabel,
       '中心应转回' + firstLabel);
-    // ③ ‹ › **两个箭头已按用户口径删掉**（2026-10-11）⇒ 判据反过来钉：**不许**再有它们。
+    // ③ ‹ › **两个箭头已按用户口径删掉**⇒ 判据反过来钉：**不许**再有它们。
     //    为什么不是"删掉判据就算了"：这个控件的箭头删过又加回来过一次（第二版为"按钮可点击"
     //    把它们从禁用改成可用），所以"它们不在了"是一条真实会回退的性质，值得钉住；
     //    而它们一旦回来就会挤窄舞台、并抢走最外侧那两张卡的点击（这正是历次缺陷的形态）。
@@ -1808,7 +1849,7 @@ setTimeout(async () => {
       itemByLabel(mascotItems, firstLabel).props.onClick(); tree = renderPicker();
       mascotItems = findMascotItems(tree);
     }
-    // ── ⑤ **3D 环的几何判据**（2026-10-11 四次返工：控件从"平面轨道"换成**真 3D 圆环**）────
+    // ── ⑤ **3D 环的几何判据**（四次返工：控件从"平面轨道"换成**真 3D 圆环**）────
     //    要守的性质（**都与"有几只形态"无关** ⇒ 判据里不出现硬编码项数）：
     //      ① **角度等分**：第 i 张卡的角度 = i·360/n —— 不等分就不是闭合的环；
     //      ② **可点盒宽 = 立绘显示宽**：留透明内边距的话，那圈透明边会盖在邻卡上抢走它的点击
@@ -1915,7 +1956,7 @@ setTimeout(async () => {
       // ② 可点盒宽统一 = MASCOT_BOX_PX；卡高**统一**且容得下最高的立绘；负 margin 把卡心落在环心
       assert.ok(geoms.every((g) => g.w === RING_BOX_PX),
         '★ 可点盒宽必须统一 = MASCOT_BOX_PX（' + RING_BOX_PX + '）；实测 ' + geoms.map((g) => g.w).join('/'));
-      // ⚠️ 卡高不再写死（2026-10-11）：它由「最高的那只立绘 + 排版余量」推出。**写死过 120，
+      // ⚠️ 卡高不再写死：它由「最高的那只立绘 + 排版余量」推出。**写死过 120，
       //    而最高的立绘是 96 ⇒ 96+12+4+13 = 125 > 120，名字行被挤出卡外** —— 这是用户实测
       //    「上下有截断」的第二个来源。所以这里必须判"容得下"，而不只是"等于某个数"。
       const cardH = geoms[0].h;
@@ -1936,7 +1977,7 @@ setTimeout(async () => {
           + '"看着能点、点了却是前排"，也就是前几版那个死带的同类缺陷');
       // 负对照：**必须能判出重叠**，否则主判据就是恒真的空转。
       //   ⚠️ 这里**不能**拿"系数 1.0"当负样本：按构造 (盒宽/2)/tan(π/n) 正是**相切**半径
-      //   （邻卡的投影边刚好碰到前排），残差完全由四舍五入决定。2026-10-13 并入 #180 时形态从
+      //   （邻卡的投影边刚好碰到前排），残差完全由四舍五入决定。并入 #180 时形态从
       //   11 涨到 12（环上 13 项，含「自定义」），同一组数字从 +0.20px 翻成 −0.09px ——
       //   于是"1.0 必须被判出重叠"这条自己先假了。负样本改取**明确过小**的 0.9，
       //   1.0 降级为单调性对照。
@@ -1954,7 +1995,7 @@ setTimeout(async () => {
             + ov9.toFixed(2) + 'px（0.9）vs ' + ov1.toFixed(2) + 'px（1.0 = 相切）');
       }
       // 立绘不得宽于可点盒（宽了会被盒裁掉；"立绘 64 / 盒 80"那类错配正是死带的来源）
-      // ── 等比缩放（2026-10-11 用户口径：「左右也可以拉宽一点，顶格就行」）──────────────
+      // ── 等比缩放（用户口径：「左右也可以拉宽一点，顶格就行」）──────────────
       // ① 算式本身：**独立复算**（不引用渲染器里的变量），把四种档位的语义钉住。
       assert.equal(scaleOf(0), 1, '量不到宽度（0）⇒ scale 退回 1 —— 安全兜底：宁可小，也不能画坏');
       assert.equal(scaleOf(undefined), 1, '量不到宽度（undefined）⇒ 同样退回 1');
@@ -1994,7 +2035,7 @@ setTimeout(async () => {
         assert.ok(!/perspective: MASCOT_PERSP_PX/.test(tabsForRing),
           'negative control: 透视也不许直接吃设计常量（必须与半径同乘，否则放大率会漂）');
       }
-      // ── 接线判据（2026-10-11 实测「左右拉宽没生效」的**唯一**防线）────────────────────
+      // ── 接线判据（实测「左右拉宽没生效」的**唯一**防线）────────────────────
       //    ⚠️ 为什么必须有这一条：上面那些几何判据都在测**渲染器**（隔离测试）。
       //    而真实链路上，宽度是在**面板组件**里量、经 ctx 的 `paneWidth` 进去的 ——
       //    我第一版把它加进了**外观**页签的 ctx，可是吉祥物由**系统**页签渲染
@@ -2020,7 +2061,7 @@ setTimeout(async () => {
           '★ `paneWidth` 不许留在**外观**页签的 ctx 里（外观页签不渲染吉祥物 ⇒ 那是死接线，'
             + '第一版就是这么错的：看着接好了，其实渲染器收到的是 undefined）');
       }
-      // ── 指针捕获的**时机**（2026-10-11 实测「自定义那个目前没法点击」的根因）──────────
+      // ── 指针捕获的**时机**（实测「自定义那个目前没法点击」的根因）──────────
       //    `setPointerCapture` 会把 pointerup 重定向到捕获元素，于是浏览器把 `click` 派发给
       //    「pointerdown 与 pointerup 的最近公共祖先」= **舞台** ⇒ 卡片自己的 onClick 收不到。
       //    所以：捕获**必须**发生在"越过拖动阈值"之后，**绝不许**在 pointerdown 里。
@@ -2136,7 +2177,7 @@ setTimeout(async () => {
     //    带 disabled**（唯一允许禁用的是"正在导入"那一瞬时的自定义项）。
     {
       const boxes = itemGeom(tree);
-      // ⚠️ 导航键已在 2026-10-11 按用户口径删除 ⇒ 这一组只判**卡本身**：内置项永不禁用。
+      // ⚠️ 导航键已在按用户口径删除 ⇒ 这一组只判**卡本身**：内置项永不禁用。
       //    （"不许有 nav" 那一条在 ③ 里判过了，这里不重复。）
       assert.ok(boxes.filter((b) => b.label !== '自定义').every((b) => !b.disabled),
         '★ 所有内置项**永不禁用**（自定义立绘生效时点它走带确认的切换，而不是"点了没反应"）');
@@ -2219,7 +2260,7 @@ setTimeout(async () => {
       tree = renderPicker();
       const ri2 = findRangeInput(findSliderRow(tree, '吉祥物大小'));
       assert.ok(ri2 && String(ri2.props.value) === '1.5', 'rope size slider updates to 1.5:');
-      // 设置页形态卡片固定基础尺寸（2026-10-04 用户口径）：「吉祥物大小」只作用于
+      // 设置页形态卡片固定基础尺寸（用户口径）：「吉祥物大小」只作用于
       // 主页面 RopeDock，卡片不跟着缩放 —— 若有人把 `form.w * sel.ropeScale` 的
       // 乘法加回去，1.5 倍下小女仆会是 78px、Deepseek_Pro 144px，这里当场红。
       const artsAtScale = [];
@@ -2235,7 +2276,7 @@ setTimeout(async () => {
       assert.equal(artsAtScale.length, ringLabels.length,
         '1.5 倍下形态卡片立绘应有 ' + ringLabels.length + ' 个（= 内置形态数；卡片不消失）');
       // 前两只（Deepseek_Pro / 菲比啾比）与第一只「模型娘」的固定基础尺寸逐条钉住 —— 顺序由枚举决定。
-      //   ⚠️ 2026-10-13「小女仆」从出厂形态除名（那只图改由「作者自用」预设携带）⇒ 这里从
+      //   ⚠️ 「小女仆」从出厂形态除名（那只图改由「作者自用」预设携带）⇒ 这里从
       //      "maid / whale / phoebe" 改成 "whale / phoebe / 第一只模型娘"，索引与数字同步前移。
       assert.equal(artsAtScale[0] && artsAtScale[0].props.style?.height, '96px', 'Deepseek_Pro卡片高度固定 96px（不随滑块缩放）');
       assert.equal(artsAtScale[1] && artsAtScale[1].props.style?.height, '87px', '菲比啾比卡片高度固定 87px（不随滑块缩放）');
@@ -2279,7 +2320,7 @@ setTimeout(async () => {
         // 自定义生效时的三条：按钮变「替换图片…」+「清除」、内置项**仍然可点**（点了走带确认的
         // 切换 —— 用户口径「按钮要可点击」，旧的 `disabled: Boolean(customArt)` 正是
         // "按钮都没办法点"的成因）、中心项类名。
-        // ⚠️ 原来还有第四条：渲染器的**提示行**里要写明"主页面用的是这张图"。2026-10-11
+        // ⚠️ 原来还有第四条：渲染器的**提示行**里要写明"主页面用的是这张图"。
         //    用户口径「上面文案去掉」把整行提示删了 ⇒ 这一条随之删掉。这**不是放宽判据**：
         //    那条提示已不存在，"它在不在"就没有对象了；剩下三条都仍可在源码里逐字查到。
         assert.ok(tabsNow.includes('customArt ? weT("替换图片…（再导入会覆盖上一次）") : weT("导入图片…")')
@@ -2287,7 +2328,7 @@ setTimeout(async () => {
           && tabsNow.includes('className: "we-picker__mascot-item" + (isCenter ? " we-picker__mascot-item--center" : "")')
           && !tabsNow.includes('disabled: Boolean(customArt)'),
           '自定义立绘生效时的三条（替换提示 / 只有导入中才禁用 / 中心项类名）必须在渲染器里逐条在位，且不得再按 customArt 禁用');
-        // ── 「点内置项 = 换回出厂自带」的那条链（2026-10-13 并入 #180 后的最终形态）──────
+        // ── 「点内置项 = 换回出厂自带」的那条链（并入 #180 后的最终形态）──────
         //   #180 把单击改成**两步确认**（第一下只上膛，确认才换），我们这侧补的是**删除不变式**：
         //   先删掉导入的立绘文件、**删成功**才写 ropeForm + 摘两个引用键。
         //   顺序不能反 —— 先写档位再删图，DELETE 失败就会留下"档位变了、图还在"的半截状态
@@ -2425,7 +2466,7 @@ setTimeout(async () => {
       if (hit && typeof hit.props.onClick === 'function') { try { hit.props.onClick(); } catch (e) { console.log('pager click threw:', e && e.message); } }
       return hit;
     };
-    // Virtual window（2026-10-04 用户口径：**库视图不再分页**）：本台 React 是替身 ⇒
+    // Virtual window（用户口径：**库视图不再分页**）：本台 React 是替身 ⇒
     // qpVirtWindow 的测量 effect 不跑，窗口恒为"未测量首窗" = 关闭卡 + 前 29 张
     // （PICKER_VP_FIRST = 30 条目）—— 恰好把窗口计算钉成**确定性**断言；滚动出的窗口
     // 归真浏览器（判定台/真机）。分页器从此不存在于库视图（轮换编辑器仍用它）。
@@ -3376,7 +3417,7 @@ setTimeout(async () => {
       //      · `src/effects.js` ×3 —— **卸载清理**（禁用 / HMR 后不留上一张壁纸的播放态）。
       //      · `src/preset-store.js` ×1 —— 通道失败文案的唯一写点（`setPresetError` 助手：
       //        清单 / 应用 / 保存 / 删除四条路的失败与清空都汇到它，写点收口是一处 ——
-      //        2026-10-04 引入玻璃预设时按本棘轮要求归的类）。
+      //         引入玻璃预设时按本棘轮要求归的类）。
       //      给它们注入入口是**仪式**而不是收口（"禁裸写会逼出任意豁免"那条注记就是这个意思）⇒ 这条
       //      棘轮的作用是**不许变多**：新增一处即红，由人判定它属于哪一类，并顺手把上界按实测下调。
       //
@@ -3771,11 +3812,19 @@ setTimeout(async () => {
       //    输出**（补键时按「引入时行为」重钉），
       //    所以它只证明「输出没有无理由地变化」，**不证明这些取值本身正确** —— 取值该不该
       //    是这样，看 `lib/settings-schema.js` 的 DEFAULTS / KINDS 与各键的设计意图。
-      //    ⚠️ 本段只比对 **host** 侧的值；夹具里 `client` 侧的值**没有任何判据比对**
-      //    （④ 在活值上钉住 client == host、⑥ 只用键集）⇒ client 侧与当前 schema 的差异
-      //    是提示、不是失败。重录走 `node test/tools/regen-golden.mjs`：不带
-      //    `--write --intend <侧>:<键>` 只能报告，且除声明键外的漂移会被拒绝写入
-      //    （期望值不许与被测对象同源 —— 重录 = 承认漂移，提交信息里要写明意图）。
+      //    ⚠️ **两侧都逐用例比对值**（本轮补上 client 侧）：
+      //      · **host 侧** = 宿主 `lib/index.js` 的 `sanitizeSettings`（落盘形状；整侧 null 用
+      //        夹具哨兵 `__null__` 表示）；
+      //      · **client 侧** = 浏览器 `src/client.js` 的 `sanitizeSettings`（含 CLIENT_ONLY 键，
+      //        如 `frameVariants`/`customFrames` —— 键集与 host **不同**，所以两侧必须各自比对，
+      //        不能只守半边）。
+      //      ⚠️ client 侧**必须逐用例比对值**：只守 host 时（④ 只在活值上钉 client == host、
+      //      ⑥ 只用键集），把夹具里 **18 个用例的 client 值全部改坏**仍会
+      //      `verify-client` 与 `verify-glass-surfaces` **双绿** ⇒ 那半数据是**死的**。
+      //      现在它同样被棘轮住：client 侧漂移 = 红。
+      //    重录走 `node test/tools/regen-golden.mjs`：不带 `--write --intend <侧>:<键>` 只能报告，
+      //    且除声明键外的漂移会被拒绝写入（期望值不许与被测对象同源 —— 重录 = 承认漂移，
+      //    提交信息里要写明意图）。
       //    键的**存在性**另有 `test/verify-glass-surfaces.mjs` 的 ⑥ 键集快照管：它比的是
       //    夹具自身逐用例的自洽（某用例漏补会红），**一个键在所有用例里都没补则抓不到**
       //    —— 那一类只有 `test/tools/regen-golden.mjs` 报。
@@ -3783,15 +3832,40 @@ setTimeout(async () => {
         new URL('../test/fixtures/settings-sanitize-golden.json', import.meta.url), 'utf8'));
       const canon = (o) => JSON.stringify(o && typeof o === 'object' && !Array.isArray(o)
         ? Object.fromEntries(Object.keys(o).sort().map((k) => [k, o[k]])) : o);
-      const goldenDrift = [];
+      const goldenDrift = { host: [], client: [] };
       for (const c of golden.cases) {
         const want = c.host === '__null__' ? null : c.host;
-        if (canon(sanitizeFromSchema(c.input, 'host')) !== canon(want)) goldenDrift.push(c.name);
+        if (canon(sanitizeFromSchema(c.input, 'host')) !== canon(want)) goldenDrift.host.push(c.name);
+        if (canon(sanitizeFromSchema(c.input, 'client')) !== canon(c.client)) goldenDrift.client.push(c.name);
       }
-      assert.deepEqual(goldenDrift, [],
+      assert.deepEqual(goldenDrift.host, [],
         '宿主设置规范化与夹具快照不一致 —— 夹具是**漂移棘轮**（期望值录自录制当时的实现输出，'
         + '只证明"没有无理由地变化"、不证明取值正确）：先判断这次漂移是不是有意的，'
-        + '有意则连同夹具一起更新并写明意图。漂移用例：' + goldenDrift.join(', '));
+        + '有意则连同夹具一起更新并写明意图。漂移用例：' + goldenDrift.host.join(', '));
+      assert.deepEqual(goldenDrift.client, [],
+        '**客户端**设置规范化与夹具快照不一致 —— client 侧同样是漂移棘轮（本轮补上；'
+        + '此前它没有任何判据比对 ⇒ 那半数据是死的）：有意则 `node test/tools/regen-golden.mjs '
+        + '--write --intend client:<键>` 重录并写明意图。漂移用例：' + goldenDrift.client.join(', '));
+      // 地板与两条负对照：证明上面那条 client 比对**不是空对空**、也确实有牙。
+      {
+        const withClient = golden.cases.filter((c) => c.client && typeof c.client === 'object'
+          && Object.keys(c.client).length > 0);
+        assert.ok(golden.cases.length >= 10 && withClient.length === golden.cases.length,
+          '两侧夹具都必须非空：' + golden.cases.length + ' 个用例里 client 侧非空的有 ' + withClient.length + ' 个');
+        // 负对照 1：拿**真实现输出**改一个键 ⇒ 必须与夹具不等（同一条 canon 比对判出）
+        const c0 = withClient[0];
+        const got = sanitizeFromSchema(c0.input, 'client');
+        const key = Object.keys(got)[0];
+        const v = got[key];
+        const bumped = (typeof v === 'number' ? v + 1
+          : typeof v === 'string' ? v + '__nc__'
+            : Array.isArray(v) ? [...v, '__nc__'] : { ...(v || {}), __nc__: true });
+        assert.ok(canon({ ...got, [key]: bumped }) !== canon(got),
+          'negative control: client 侧改坏一个键必须被同一条比对判出（否则这条棘轮没牙）');
+        // 负对照 2：client 侧不是 host 侧的复制品（否则"两份独立比对"是假的）
+        assert.ok(golden.cases.some((c) => canon(c.client) !== canon(c.host === '__null__' ? null : c.host)),
+          'negative control: 夹具里 client 与 host 必须至少有一例不同（证明两侧是两份独立数据）');
+      }
 
       // ③b #159② 玻璃色的形状规则（迁移 + 读容忍 + 半对补齐）。每条各钉一条真实的
       //     静默失败路径，而不是"函数返回了个对象"：
@@ -3801,7 +3875,7 @@ setTimeout(async () => {
       //          拒读前仍会先过一遍形状）；② **手改的 `config.json`**（用户本机那份就是标量
       //          `#0d1524` 且 `settingsVersion` 还是 5）；③ 测试台架自造的输入。
       //          ⚠️ 出厂预设正文**已不再是这条来路**：七套已按新 tag 重建、`glassColor` 写成一对
-      //          `{light, dark}`（t1），所以"出厂档是标量"这句话从 2026-10-11 起不再成立。
+      //          `{light, dark}`（t1），所以"出厂档是标量"这句话从起不再成立。
       //     · 只写一侧（历史形态 / 手改文件）⇒ 另一侧要跟着那一侧，不能掉回白釉（保住色相）。
       //     反过来"半对补齐"也意味着**不允许**再产出半对：`{light}` 那种入参进来必须成对出去
       //     （面板的选中态与"关掉开关收敛"都靠这个等式）。
@@ -3979,7 +4053,7 @@ setTimeout(async () => {
     }
   }
   assert.ok(effects.length > 0, '效果链至少要跑过一次（effects 记录 ' + effects.length + ' 条）');
-  
+
 // ⑦ 条件求值器住在独立模块（src/we-cond.js），因此可以直接 import 做**行为**测试
 // —— 这是抽模块的核心收益（不必对 src/client.js 做文本断言）。
 // 期望值是**行为快照**：抽模块只允许"行为不动"。
@@ -4253,7 +4327,12 @@ setTimeout(async () => {
 // 装配函数体内不得再出现那批标记，且必须调子渲染器；负对照证明同一条判据能判出
 // "标记确实在子渲染器里"（否则是个恒真判据）。
 {
-  const src = panelText();   // 刀4：页签族并集（helper 声明顺序判据按构建序）。
+  // P-C 第一刀：字体节（连同它的 `renderFont*` 子渲染器）已随子包出产物 ⇒ 这一族的"运行时真实
+  // 作用域"从"主包页签族"变成"主包页签族 ∪ 字体包的节源码"。判据强度不变（还是同一批标记与
+  // 声明序），只是取文来源跟着实现走 —— 不并上它，HELPERS 那五条会以"找不到"的形式假红。
+  const fontsSectionSrc = readFileSync(
+    new URL('../packages/fonts/src/appearance-font-section.js', import.meta.url), 'utf8');
+  const src = panelText() + '\n;\n' + fontsSectionSrc;   // 刀4：页签族并集（helper 声明顺序判据按构建序）。
   const bodyOf = (name) => {
     const i = src.indexOf('function ' + name + '(');
     assert.ok(i >= 0, '找不到 ' + name + '（判据不得空转）');
@@ -4869,10 +4948,11 @@ setTimeout(async () => {
   assert.equal(bare.listeners.length, 0, '#148 宿主半：退场时不许留下半个监听器');
 
   // 变异负对照（判据真的在判"手势"与"落点"）：喂同一份源码的两个改写版，各拆掉一条判据。
-  // ⚠️ A3-F2 之后手势分支的正文变了（里面多了一段补交）⇒ 这里只替换**判断头**；并且断言
-  // 改写确实生效（`replace` 落空会得到一个和原版逐字相同的"变异体"，那种绿是假绿）。
+  // ⚠️ 锚点必须与源码**逐字**相同（含行尾注释）：上游在判断头后面补过 `// ③ 是用户自己点的`，
+  // 少一个字符 `replace` 就落空 ⇒ 变异体与原版逐字相同 ⇒ 那抹绿是假的（下面那条 assert 就是防这个）。
   const mutGestureSrc = fhSrc.replace(
-    'if (now - state.gestureAt <= GESTURE_WINDOW_MS) {', 'if (false) { /* 去掉手势判定 */');
+    'if (now - state.gestureAt <= GESTURE_WINDOW_MS) { // ③ 是用户自己点的',
+    'if (false) { /* 去掉手势判定 */');
   assert.ok(mutGestureSrc !== fhSrc,
     'negative control 的改写必须真的命中源码（否则变异体 = 原版，绿是假的）');
   const mutGesture = buildFh(mutGestureSrc);
@@ -4939,19 +5019,32 @@ setTimeout(async () => {
   assert.ok(mutNoRetry.afterWindow === 0 && mutNoRetry.handbacks === 0 && mutNoRetry.pendingBeforeDispose === 0,
     'negative control（变异①去掉补交分支）：`窗口关闭后必须补一次`要判红 —— 实测 ' + JSON.stringify(mutNoRetry));
   // 变异②：窗口里跳过了却不记账 ⇒ `skipped` 自证面骗人（真机分不清"没触发"与"没装上"）。
-  const mutNoSkipSrc = fhSrc.replace('      state.skipped += 1;\n      // 跳过一次', '      // 跳过一次');
+  // ⚠️ 锚点**不跨行**：跨行（`;\n      //`）会踩 CRLF 检出（本仓全仓 LF 契约，但工作区可能是 CRLF）⇒
+  // `replace` 落空 ⇒ 变异体 = 原版 ⇒ 下面那条 assert 判红。只改顶格那一行即可达到同样效果。
+  const mutNoSkipSrc = fhSrc.replace('state.skipped += 1;', '/* 变异②：不记账 */');
   assert.ok(mutNoSkipSrc !== fhSrc, 'negative control 的改写必须真的命中源码（变异②skipped 不自增）');
   const mutNoSkip = replayA3F2(mutNoSkipSrc);
   assert.ok(mutNoSkip.skipped === 0,
     'negative control（变异②skipped 不自增）：`每次跳过都记账`要判红 —— 实测 skipped=' + mutNoSkip.skipped);
-  // 变异③：补交不等窗口（挂上定时器就把手势窗口当过去）⇒ 用户在窗口里刚点的壁纸被抢回焦点。
+  // 变异③：补交**不等窗口**（"挂上定时器就把手势窗口当过去"）⇒ 用户在窗口里刚点的壁纸被抢回焦点。
+  // ⚠️ 这个变异与 `GESTURE_WINDOW_MS` 的边界是**互相咬合**的：把延迟表达式换成 `0` 会让
+  // "跳过 ⇒ 补交 ⇒ 仍判定在窗口内 ⇒ 再跳过" 变成 **0ms 自旋** —— 夹具的虚拟时钟会在 10000 个任务处
+  // 抛 `同一段 advance 里跑了超过 10000 个任务（疑似 0ms 自旋）`。那是**夹具的自保在响**，不是判据在响；
+  // 但它同样构成"这个改写是有害的"证据。因此：把自旋**当作被拦住**记账（并断言它确实是自旋，不是别的错）。
+  // 生产侧正是靠 `+ 1` 避开这个自洽边界的 —— 这条注释与下面的兜底一起把该事实钉住。
   const mutEarlySrc = fhSrc.replace(
-    'retryTimer = setTimeout(() => { retryTimer = null; state.retrying = false; handBack(); },\n          Math.max(state.gestureAt + GESTURE_WINDOW_MS - now, 0) + 1);',
-    'retryTimer = setTimeout(() => { retryTimer = null; state.retrying = false; state.gestureAt = 0; handBack(); }, 0);');
+    'Math.max(state.gestureAt + GESTURE_WINDOW_MS - now, 0) + 1);', '0);');
   assert.ok(mutEarlySrc !== fhSrc, 'negative control 的改写必须真的命中源码（变异③提前补交）');
-  const mutEarly = replayA3F2(mutEarlySrc);
-  assert.ok(mutEarly.atWindowEdge === 1,
-    'negative control（变异③提前补交）：`窗口未到点不许补交`要判红 —— 实测 999ms 时已经补交 ' + mutEarly.atWindowEdge + ' 次');
+  let mutEarly = null;
+  let spun = null;
+  try { mutEarly = replayA3F2(mutEarlySrc); } catch (err) { spun = String(err && err.message); }
+  assert.ok(mutEarly !== null || /0ms 自旋/.test(spun || ''),
+    'negative control（变异③提前补交）：要么判红（窗口未到点就补交），要么被虚拟时钟的 0ms 自旋护栏拦下；'
+    + '实测抛的是别的错：' + spun);
+  if (mutEarly !== null) {
+    assert.ok(mutEarly.atWindowEdge === 1,
+      'negative control（变异③提前补交）：`窗口未到点不许补交`要判红 —— 实测 999ms 时已经补交 ' + mutEarly.atWindowEdge + ' 次');
+  }
 }
 
 // ── 滑块的取值域必须**同源于 schema**（为一个真实事故补的判据）────────────────────
@@ -5031,7 +5124,9 @@ setTimeout(async () => {
   //     `<DSH_WE_DATA_DIR || ~/.dsh-wallpaper-engine>/config.json` 的 `settings.id`
   //     （非空 ⇒ 首帧不画皮肤）。路径 / 环境变量名 / 键名是**双边契约**，单方面改动会把
   //     首帧预判打回"皮肤先闪一下"。
-  const hostSrc = readFileSync(new URL('../lib/index.js', import.meta.url), 'utf8');
+  // 数据目录内核已纯搬移到 lib/kernel/data-dir.js（P0 库化）⇒ 读取面 = 门面 + 该模块。
+  const hostSrc = readFileSync(new URL('../lib/index.js', import.meta.url), 'utf8')
+    + '\n' + readFileSync(new URL('../lib/kernel/data-dir.js', import.meta.url), 'utf8');
   assert.ok(hostSrc.includes('process.env.DSH_WE_DATA_DIR')
     && hostSrc.includes("join(pluginDataDir(), 'config.json')"),
     '首屏预判契约：数据目录环境变量名与 config.json 路径不能被单方面改名');

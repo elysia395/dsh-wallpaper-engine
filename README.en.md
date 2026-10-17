@@ -12,6 +12,14 @@ A DSH bundle that turns your **Wallpaper Engine** wallpapers into the **backgrou
 
 > Wallpaper + scrim + iOS liquid glass rendered behind the DSH GUI.
 
+## Optional dsh-pet Integration
+
+This branch adds an optional integration with [dsh-pet](https://github.com/PC2005-cloud/dsh-pet): sidebar pulling, jumping to grab the mascot, native-physics knockback, and a hiss effect synchronized with the actual video. The complete [pet-link subpackage](packages/pet-link/README.md) contains its runtime, explicit installer, required assets, and regression tests.
+
+**No hard dependency on dsh-pet and no automatic installation.** Without an eligible pet, the wallpaper mascot keeps its original behavior. **`Ctrl+Shift+D`** opens the draggable maintenance panel with four independent parameter pages, fixed bubble tracks, resets, and JSON export. Inspection remains available without a pet; test playback is disabled.
+
+The first-time installer explicitly patches a strictly matched `dsh-pet@0.3.6` build after backup and validation. Review the [installation and hot-plug boundaries](packages/pet-link/README.md) before trying it. The default drawer remains unchanged; pet interaction uses the official-sidebar mode. This is a cross-project review implementation, not an official dsh-pet control API.
+
 ## Contents
 
 - [What it does](#what-it-does) · [Prerequisites for updating](#prerequisites-for-updating) · [Which wallpaper types are supported?](#which-wallpaper-types-are-supported) · [How it works](#how-it-works)
@@ -67,7 +75,7 @@ Wallpaper Engine itself splits wallpapers into four types; this plugin supports 
 
 ## How it works
 
-In one line: the **host** (`lib/index.js` + `lib/routes/*.js`) locates Wallpaper Engine and your library
+In one line: the **host** (`lib/index.js` facade + the shared route families in `lib/routes/*.js` + each component's own subpackage `packages/<name>/lib/`) locates Wallpaper Engine and your library
 and feeds media to the browser; the **client** (`lib/client.js`) mounts the selected wallpaper as a fixed
 layer *behind* the app's three columns and registers a first-level "Wallpaper Engine" settings tab.
 
@@ -108,6 +116,26 @@ uses `--profile desktop` and must be **fully closed first**).
 
 Step-by-step recovery (`ERR_PNPM_UNEXPECTED_VIRTUAL_STORE`, etc.) lives in
 [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md).
+
+### The plugin bundle and its sub-plugins (per-row toggles)
+
+Once installed, this plugin shows up in the plugin manager as **several rows**: the main row (the wallpaper
+engine itself) plus one row per **sub-plugin**. Each row can be **disabled on its own**.
+
+- ⚠️ **A restart / reload is required for a row toggle to take effect.** Row state lives in the bundle's own
+  manifest, which is not on the hot-reload watch list — the UI will **not** change the moment you flip the switch.
+- After disabling a row: that sub-plugin's **host capabilities (its HTTP routes) disappear entirely**, and
+  the **browser-side blocks that belong to it stop rendering** (its UI and its settings go away together).
+- Conversely, **the browser half is loaded per package**: as long as the main row is enabled the whole settings
+  UI is there. Disabling the **main** row disables the entire plugin (wallpaper and UI both go away).
+- `media-bridge` is the **exception**: it is currently a transitional form of the wallpaper sub-plugin, so it does
+  **not** yet participate in this "UI follows the row" semantics (it will be folded into the wallpaper/UI core split later).
+
+| Sub-plugin row | Capabilities that disappear | UI that stops rendering |
+|---|---|---|
+| `about-notice` | `/star-count`, `/about-qr/*` | Star count, the two group-QR images and the update notice inside the About tab (intro and credits stay) |
+| `mascot-avatar` | `/mascot`, `/avatar/<side>` | The mascot form + artwork/avatar uploads on the System tab, the avatar card on the Extensions tab, the message avatar decoration (the tabs and their other sections stay) |
+| `media-bridge` | `/now-playing*`, `/media-status`, `/audio-spectrum`, `/media-control` | (not applicable yet, see above) |
 
 ## Usage
 
@@ -223,7 +251,7 @@ The **System → 吉祥物** controls the chat **pull-cord** — a draggable rop
 
 > Pull the top rope mascot to slide out the wallpaper-library drawer. All artworks are inlined as base64 (transparent background) at build time, so the single-file client bundle stays self-contained; **size** changes only the rope's own box, never the drawer below.
 >
-> One former built-in, the near-square chibi maid (小女仆), was **retired** on 2026-10-13 — its artwork now ships inside the 「作者自用」 preset as an easter egg, and the factory default form is **DeepSeek**.
+> The factory artwork list does **not** include the near-square chibi maid (小女仆) — that artwork ships inside the 「作者自用」 preset as an easter egg, and the factory default form is **DeepSeek**.
 
 ### Global UI colors · typography · caret
 
@@ -287,9 +315,9 @@ This plugin exposes no model-visible tools or prompt text — **zero token cost*
 | `DSH_WE_DATA_DIR` | overrides the plugin data directory (default `~/.dsh-wallpaper-engine`; self-check scripts use it so they never touch your real `config.json`) |
 | `DSH_WE_UPLOAD_DIR` | overrides the custom-wallpaper storage location (takes priority over the in-app 更改 setting and the default) |
 | `DSH_WE_ASSETS_DIR` | overrides the official-assets path (the WE `assets` tree; takes priority over the in-app setting) |
-| `DSH_WE_TRANSCODE_TIMEOUT_MS` | overrides the wall-clock budget for one transcode job (ms; default 15 min) |
+| `DSH_WE_TRANSCODE_TIMEOUT_MS` | overrides the wall-clock budget for one transcode job (ms; default see implementation) |
 
-**Where settings live**: since v0.4.0 every setting lives in the host-side file `~/.dsh-wallpaper-engine/config.json`
+**Where settings live**: every setting lives in the host-side file `~/.dsh-wallpaper-engine/config.json`
 (independent of the browser's port, so a restart / port change / cleared browser data cannot lose it; legacy
 localStorage settings are migrated automatically). File location, multi-device sharing and write behaviour: see the
 "Settings persistence" section of [`docs/UPGRADING.md`](docs/UPGRADING.md).

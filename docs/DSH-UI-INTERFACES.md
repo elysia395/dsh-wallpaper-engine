@@ -137,7 +137,7 @@ DSH 桌面端把整份客户端 + node 宿主打进 `resources/app.asar`（Elect
 | 我们钉的 `data-slot` | 是否真实槽名 | 用在哪 |
 |---|---|---|
 | `settings.section` | ✅ 是 | 设置窗口玻璃（`[data-slot="settings.section"]`） |
-| `sidebar` | ✅ 是 | 左侧栏液态玻璃（`div:has(> [data-slot="sidebar"])`；开关键 `leftSidebarGlass` —— 该面原先叫「左侧栏覆盖」，更名后旧名只在 CHANGELOG 的历史条目里） |
+| `sidebar` | ✅ 是 | 左侧栏液态玻璃（`div:has(> [data-slot="sidebar"])`；开关键 `leftSidebarGlass`） |
 
 （顺带排除了一个猜法：**没有** `settings.sidebar` 这种名字 —— 设置窗口那一族是 `settings.*`，
 左栏那一族是 `sidebar.*`，两者不同前缀。）
@@ -218,7 +218,7 @@ asar 里带着宿主自己的插件编写文档：`@deepseek-ai/dsh-agent-preset
   `div`（后缀 `_viewArea`）> [`conversation.view` 出口（`display:contents`）] > `…_root`。
   输入卡片（`[data-composer-card]`）是 `Views` 的**兄弟**、同在 scrollBody 里
   ⇒ 动 `_viewArea` 只挪会话文字，不会连带输入卡片。`[data-conversation-scroll]` 是**宿主自己**写的标记
-  （本插件"侧栏滚动"那条 CSS 已在用它）。`overflow-y:auto` 这一条是**双向**的坑（用户口径 m02410-①）：
+  （本插件"侧栏滚动"那条 CSS 已在用它）。`overflow-y:auto` 这一条是**双向**的坑：
   规范规定一轴不是 `visible` 时另一轴的 `visible` 计算成 `auto` ⇒ 这个容器的 `overflow-x` 实际也是
   `auto`。本插件界面跟随把**容器里面**的真实元素往右推出它的 inline-end（用户光标在左半边时）就会长出
   一条**横向滚动条**；它占掉约一条滚动条高的 scrollport，sticky 的输入卡片只能跟着上移 —— 现象正是
@@ -240,15 +240,15 @@ asar 里带着宿主自己的插件编写文档：`@deepseek-ai/dsh-agent-preset
   - 28px) / 2);z-index:30;-webkit-app-region:no-drag;position:fixed;left:12px}`，出自 asar 内
   `@deepseek-ai/dsh-desktop-host/node_modules/koffi/doc/composites.md`）—— 那个按钮就是这一列的后代
   ⇒ 给这一列写任何 `transform` / `translate` 都会让它成为按钮的**包含块**，按钮整体下移一个标题栏高
-  （`docs/CHANGELOG.md` 里 #131 是同一类事故；本插件早先给这一列**直接**画 `backdrop-filter` 时也踩过同样的坑，
-  后来改成画 `::before`，见 `src/styles.js` 里那段注释）。
+  （同一类事故见 `docs/CHANGELOG.md` 的 #131；本插件给这一列画玻璃走的是 `::before`，
+  见 `src/styles.js` 里那段注释）。
   ⇒ 要动左栏只能走**相对定位**（`position: relative` + `left` / `top`）：它**不**建立包含块，就不会换掉任何
   fixed 后代的锚点。本插件「3D 效果」的界面跟随正是这么做的（`parallaxGroupOffsets()` 里左栏是唯一的相对偏移档）。
 
 ### 3.6 想"自动认到别的插件注册的前端元素组"，只能扫 DOM，不能靠槽注册表（同一次核查的第三批补算）
 
-补算动机：用户口径 m02697-② 要求让别的插件注册的前端元素组也参与缓动（面板里逐组可调、设 0 = 该组不缓动，
-m02697-③；⚠️ 当初的"默认参与"后来被用户诉求 m03549 改成**独立的开关 `parallaxPlugin`、默认关**，见下面本节的
+补算动机：要求让别的插件注册的前端元素组也参与缓动（面板里逐组可调、设 0 = 该组不缓动；
+⚠️ 这一路有**独立的开关 `parallaxPlugin`、默认关**，见下面本节的
 结论段与 `HOW-IT-WORKS.md`）。先查的是"运行期能不能问槽注册表"，逐条核实后**否掉**了这条路：
 
 - **注册表在运行期确实可问，但问不出"归属"。** asar 内 `@deepseek-ai/dsh-client-ui-renderer/lib/client.js` 里
@@ -279,7 +279,7 @@ m02697-③；⚠️ 当初的"默认参与"后来被用户诉求 m03549 改成**
 里、或落在**另一个已认到的插件组**里的，一律不算 —— 外层组的位移本来就会把它带着走，它自己再写一次就是
 两段位移叠起来（重扫那一步"组里套组只留最外侧"的同一条）。⚠️ 第一道筛**只在「界面元素跟随」开着**时才这么
 算：关着时那四组的系数恒为 0、压根不是候选，拿它们去挡插件组会让"只开插件前端"变成一个拖了不动的空开关。
-这一路**由它自己的开关 `parallaxPlugin` 看着**（用户诉求 m03549：独立于 `parallaxUi`、**默认关** —— 它挪的是
+这一路**由它自己的开关 `parallaxPlugin` 看着**（独立于 `parallaxUi`、**默认关** —— 它挪的是
 别的插件画出来的真实界面）：关着时层**连扫都不扫**（不是把系数算成 0，而是连 `querySelectorAll('[data-slot]')`
 与那道 fixed 后代子树判定都不跑）、面板那一卡只有开关，那张距离表原样留着、开关一开照旧生效。
 **面板那一栏与屏上同源**：`parallaxDiscoveredGroups()` 与 `parallaxTargetsRefresh()` 共用同一个

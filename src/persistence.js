@@ -12,6 +12,7 @@
  *   SETTINGS_KEY     ← localStorage 键（client.js 顶层 const）
  *   SETTINGS_URL     ← 宿主设置路由（client.js 顶层 const）
  *   sanitizeSettings / serializeSettings / DEFAULTS ← lib/settings-schema.js（消毒 / 白名单 / 默认值）
+ *   settingsNamespaceOf / KINDS / SETTINGS_META_NAMESPACE ← 同文件（差分按组件簇分组）
  *   emit             ← 单向重渲染（启动加载完成后通知一次）
  *   applyEffects     ← src/effects.js（设置落地到 DOM）
  *   setAdapterFromHost ← src/adapter.js（宿主上报的适配目标观测值）
@@ -30,6 +31,11 @@
  *     的路径都必须有明确理由（目前只有一条：宿主还没有任何存档时做一次性迁移）。
  *   · **写必须 debounce 且可重试**：滑块每格都 JSON.stringify + 同步写 localStorage 会拖垮拖动；
  *     非 2xx 要留下脏标记（否则宿主文件变旧，下次加载会把用户的设置**回滚**）。
+ *   · **只发改动键**：宿主侧 `PUT /settings/<ns>` 是**按键合并**的，所以客户端维护"上一次
+ *     成功推送的快照"，把与它不同的键按组件簇分组、每簇一个请求发出去；无改动 ⇒ 一个请求都不发。
+ *     不进任何簇的键（`CLIENT_ONLY` 只住 localStorage、`settingsVersion` 属 `meta`）与 `kind:'const'`
+ *     的键（宿主侧改不动，发了只会被 ignored）一律不发。**唯一的整段路径**是首启迁移：宿主还没有
+ *     存档时不知道基线，仍走老 `PUT /settings`（兼容入口，请求体与改造前逐字节一致）。
  *   · **在途 GET 不许覆盖用户的新写**：`persistWrites` 计数器是这条的判据 —— 快照 → 比对 → 跳过合并。
  *   · 定时器只经 `window.*`（带守卫）：无定时器设施的验证环境退化为立即写，而不是抛。
  *   · 本文件必须保持浏览器安全（无 import / require / Node API），且**不得有顶层可执行语句**
@@ -88,23 +94,72 @@ let persistDirty = false;
 // host→selection merge when the user edited settings while the GET was in
 // flight (the user's pending PUT is newer than the host's answer).
 let persistWrites = 0;
+// 差分基线：宿主**已知持有**的那份快照（客户端形状，134 键）。`null` = 还不知道宿主
+// 有什么（loadPersisted 未跑 / 宿主不可达 / 首启迁移）⇒ pushPersisted() 走老整段入口。
+// 只在"写入成功 / 宿主值真的被采纳"时推进，所以失败会自动重发同一批键（宿主侧按键合并 ⇒ 重发幂等）。
+let pushedSnapshot = null;
 function writeLocalCache() {
   try { localStorage.setItem(SETTINGS_KEY, JSON.stringify(serializeSelection())); } catch { /* ignore */ }
 }
+// 一个键该发到哪个组件簇；不可路由（`CLIENT_ONLY` ⇒ `settingsNamespaceOf` 回 ''、`settingsVersion`
+// ⇒ 'meta'）与 `kind:'const'`（宿主侧改不动）都返回 ''，调用方一律跳过。
+function writableNamespaceOf(key) {
+  const ns = settingsNamespaceOf(key);
+  if (!ns || ns === SETTINGS_META_NAMESPACE) return "";
+  return KINDS[key] && KINDS[key].kind === "const" ? "" : ns;
+}
+// 逐键差分：与基线不同、且可路由的键按簇归组 ⇒ { ns: { 改动键: 值 } }（无改动 ⇒ 空对象）。
+// 基线为 null（首启/宿主不可达）时不该走到这里：那条路径整段发（见 pushPersisted）。
+function changedGroupsOf(snapshot, base) {
+  const groups = {};
+  for (const key of Object.keys(snapshot)) {
+    const ns = writableNamespaceOf(key);
+    if (!ns) continue;
+    if (base && base[key] === snapshot[key]) continue;
+    (groups[ns] || (groups[ns] = {}))[key] = snapshot[key];
+  }
+  return groups;
+}
+// 单次 PUT。「非 2xx」与「宿主不可达」对调用点是同一件事（都要重试）⇒ 只看 ok；
+// `keepalive` 让挂起的 flush 能活过 pagehide/close。apiFetch 不抛（见其契约）。
+async function putSettingsBody(url, body) {
+  const res = await apiFetch(url, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+    keepalive: true,
+  });
+  return !!(res && res.ok);
+}
 async function pushPersisted() {
+  let snapshot;
   try {
-    const res = await apiFetch(SETTINGS_URL, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify(serializeSelection()),
-      keepalive: true, // let a pending flush survive pagehide/close
-    });
-    // 「非 2xx」与「宿主不可达」对调用点是同一件事（都要重试）⇒ 这里只看 ok。
-    persistDirty = !res.ok;
+    snapshot = serializeSelection();
   } catch {
     // 只剩 serializeSelection() 自己抛这一条路径（apiFetch 不抛，见其契约）。
     persistDirty = true;
+    return;
   }
+  // 还不知道宿主有什么（首启迁移 / 宿主不可达）⇒ 老整段入口：整段快照一次发完。
+  if (!pushedSnapshot) {
+    /** @type {boolean} */
+    let ok;
+    try { ok = await putSettingsBody(SETTINGS_URL, snapshot); } catch { ok = false; }
+    persistDirty = !ok;
+    if (ok) pushedSnapshot = snapshot;
+    return;
+  }
+  const groups = changedGroupsOf(snapshot, pushedSnapshot);
+  const names = Object.keys(groups);
+  if (!names.length) { persistDirty = false; return; } // 无改动 ⇒ 一个请求都不发
+  let ok = true;
+  for (const ns of names) {
+    try { ok = (await putSettingsBody(SETTINGS_URL + "/" + ns, groups[ns])) && ok; }
+    catch { ok = false; }
+  }
+  // 失败 ⇒ **不推进基线**：下次 flush 把同一批键重发（宿主侧按键合并 ⇒ 重发幂等）。
+  persistDirty = !ok;
+  if (ok) pushedSnapshot = snapshot;
 }
 function flushPersist() {
   persistTimer = null;
@@ -176,6 +231,9 @@ async function loadPersisted() {
     if (!stale) {
       Object.assign(selection, sanitizeSettings(hostSettings));
       writeLocalCache();
+      // 差分基线 = 宿主现在持有的那份（客户端形状）。⚠️ 只在真的采纳宿主值时推进：GET 在途时
+      // 用户改过设置的话，他们那次整段 PUT 已经写进宿主，别拿过期应答当基线（会漏发后续改动）。
+      pushedSnapshot = serializeSelection();
     }
   } else if (hostOk) {
     // Host has nothing saved yet: migrate any existing localStorage data once.

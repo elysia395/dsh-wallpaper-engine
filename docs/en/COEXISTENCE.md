@@ -47,11 +47,12 @@
 
 ## The truth about "glass cannot be turned off"
 
-- The earlier conclusion ([`../adr/0008-glass-config-two-state.md`](../adr/0008-glass-config-two-state.md))
-  was "closing a surface yields half-glass ⇒ retire the whole layer, always wear glass", premised on
-  **a batch of ungated token rewrites in the token layer**. A re-count (recorded in
-  [`../adr/0010-glass-off-revisit-four-states.md`](../adr/0010-glass-off-revisit-four-states.md))
-  revised that premise: the ungated rewrites are down to a **closed allowlist**
+- The conclusion "closing a surface yields half-glass ⇒ retire the whole layer, always wear glass"
+  ([`../adr/0008-glass-config-two-state.md`](../adr/0008-glass-config-two-state.md)) is premised on
+  **a batch of ungated token rewrites in the token layer**; that premise **no longer holds**
+  (re-counted and revised in
+  [`../adr/0010-glass-off-revisit-four-states.md`](../adr/0010-glass-off-revisit-four-states.md)):
+  the ungated rewrites are down to a **closed allowlist**
   (`body[data-we-thinking-native]` — the thinking block's own switch — and `.we-layer`, the
   plugin's own element), so "the token layer can retreat as a whole" already holds —
   what is missing is a master switch and a batch of guard rewrites, not an architecture.

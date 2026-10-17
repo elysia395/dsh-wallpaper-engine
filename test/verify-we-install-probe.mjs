@@ -261,6 +261,17 @@ const hostSrc = stripComments(
     + readFileSync(resolve(root, 'lib', 'steam-discovery.js'), 'utf8'),
 );
 
+// ⚠️ D8 读点变更（内核化拆包）：清单载荷（`installDir` 的消费面）的组装族已从门面搬进
+//     `lib/inventory.js` —— 门面只剩路由注册，D8 的旧读点因此假红。断言字面量与期望值
+//     **一字未改**，只按真源读；缺文件回落到门面（上游布局）。注释一并剥掉，避免
+//     「注释里提过」就恒真（与 D1..D7 同款口径）。
+const inventorySrc = (() => {
+  for (const rel of ['lib/inventory.js', 'lib/index.js']) {
+    try { return stripComments(readFileSync(resolve(root, rel), 'utf8')); } catch { /* 试下一个 */ }
+  }
+  return '';
+})();
+
 check('D1 标记表同时容忍经典布局与 distribution/ 布局（含稳定标记 version.json）',
   /const WE_INSTALL_MARKERS = \[/.test(hostSrc)
     && hostSrc.includes("'wallpaper32.exe'")
@@ -296,7 +307,7 @@ check('D7 env 覆盖参与探测缓存键（改过的 override 不被 60s TTL �
     && hostSrc.includes('steamProbeCache = { t: Date.now(), key: envKey, dirs };'));
 
 check('D8 清单载荷仍把 installDir 作为消费面（客户端/播放列表读它）',
-  hostSrc.includes('locateWallpaperEngineP, owningLibrariesP, enumerateWallpapersAsync'));
+  inventorySrc.includes('locateWallpaperEngineP, owningLibrariesP, enumerateWallpapersAsync'));
 
 // ── 收尾 ───────────────────────────────────────────────────────────────────
 delete process.env.DSH_WE_STEAM_ROOT;

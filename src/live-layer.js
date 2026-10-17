@@ -455,7 +455,7 @@ function syncLayers() {
       // 画面却照旧在播（用户只看得到"壁纸有时候坏了"）。这里按**同一套就绪判据**把
       // 语义补回来：心跳在，且这一拍真的在出帧（网页壁纸按"渲染页可达"）。
       // 判据与心跳自愈共用**同一个函数体**（`liveHeartbeatReady`，见它自己的注释）：它要求
-      // 网页窗口的 `getState` 可读 ⇒ 可达到底但还没 load 完的窗口恒 false，而心跳那边早在
+      // 网页窗口的 `getState` 可读 ⇒ 可达到底但还没 load 完的窗口恒 false，而心跳那边早就在
       // 认这帧 —— 两边对同一帧答案不同，缝就出在那里。现在两处逐字同源；`liveFrameReady`
       // 只留给 `scheduleLiveMount` 的预热页。
       // 时序：本块在心跳起动（上面 adopt-live 分支的 startLiveWatch）之后 —— `liveWatch`

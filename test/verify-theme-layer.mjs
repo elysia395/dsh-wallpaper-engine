@@ -147,7 +147,7 @@ section('② 载荷构建（白名单 + 双值 + 形状）');
 }
 
 // ── ③ 轮询（启动竞态） ──────────────────────────────────────────────────────
-// 2026-10-13 修「死控制腿」：旧桩是 `setTimeoutFn: (fn, ms) => scheduled.push(ms)` —— **推的是 ms**，
+//  修「死控制腿」：旧桩是 `setTimeoutFn: (fn, ms) => scheduled.push(ms)` —— **推的是 ms**，
 // 推进循环取到的是数字 ⇒ 两条腿（拿到即停 / 超时放弃）从未真正执行过：那时的断言只在
 // "队列被掏空"上打转，`onReady`/`onGiveUp` 一次都没触发也能全绿。现在桩记**回调**、循环**执行**它，
 // 两条腿各自断言"触发了什么 + 触发后不许再排定时器"，并各配一条负对照（含"死腿形态回放"）。
@@ -455,7 +455,11 @@ section('④b 排版角色（F2）');
   // 颜色块显示当前默认色。
   // 调节面板的渲染器已抽到 src/panel-tabs.js（C）：这里按文件分源，不拼接 ——
 // 拼接会让一个文件的文本满足另一个文件的结构断言。
-const fontTabsUi = panelText();
+// P-C 例外（唯一一处）：外观页签第六节「全局字体」的渲染器已**随字体包搬出**页签族
+// （packages/fonts/src/appearance-font-section.js）⇒ 判字体节写法的判据必须把包内那一份
+// 也算进来，否则会因为"搬家"而假红（它们判的是写法，不是住处）。
+const fontTabsUi = panelText() + '\n;\n'
+  + readFileSync(join(root, 'packages', 'fonts', 'src', 'appearance-font-section.js'), 'utf8');
   // 默认值**直接显示在输入框里**（角色表：字号列未填时显示 role.defaultPx），
   // 不再用行内小字复述一遍 DSH 原字阶。
   // 三处「写法判据」提成命名函数 —— 函数名说的是它抓的**该种写法**（与标签同源），
@@ -510,7 +514,7 @@ const fontTabsUi = panelText();
           && !!both.payload['--dsw-font-markdown-h1-font-weight']; })());
     check('不调字重时组合式仍用 DSH 的写死前缀（行为不变）',
       typo.buildTypePayload({ 'markdown-h1': 24 }, all).payload['--dsw-font-markdown-h1'].light.startsWith('700 '));
-    check('非法绝对值（低于 8 / 高于 48）被拒', 
+    check('非法绝对值（低于 8 / 高于 48）被拒',
       typo.buildTypePayload({ 'markdown-h1': 2, 'markdown-h2': 99 }, all).roles.length === 0);
   }
   // G4 字族（角色级）：只调字族时**只写字族令牌**，组合式引用它（族键 → CSS 栈由调用方解析）。

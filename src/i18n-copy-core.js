@@ -102,7 +102,7 @@ const WE_I18N_EN_CORE = {
   "本地 Wallpaper Engine 壁纸 · 液态玻璃主题": "Local Wallpaper Engine wallpapers · liquid glass theme",
   "壁纸引擎设置分区": "Wallpaper Engine settings sections",
   "菲比啾比": "Phoebe Jiubi",
-  // ⚠️ **八只「模型娘」的名字刻意不进词表**（2026-10-11）。原因不是"忘了翻"，而是本仓 i18n 的
+  // ⚠️ **八只「模型娘」的名字刻意不进词表**。原因不是"忘了翻"，而是本仓 i18n 的
   //    模型：真源是**中文**，扫描器 `test/tools/i18n-scan.mjs` 的 `scanCjkStrings` 只提取
   //    **含中日韩字符**的字面量 —— 纯 ASCII 的名字（Claude / DeepSeek / …）压根不进这条管线，
   //    加进词表反而会被「零孤儿键」判据判成多余词条（实测：一次红 8 条）。
@@ -115,7 +115,7 @@ const WE_I18N_EN_CORE = {
   "角色": "role",
   "组件": "component",
   "字体集": "font set",
-  // ── 更新公告（2026-10-12 改版，旧清单条目退役；正文三条见 826 行区）──
+  // ── 更新公告（旧清单条目退役；正文三条见 i18n-copy-ext.js）──
   "知道了": "Got it",
 
 };

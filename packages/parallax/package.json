@@ -1,0 +1,27 @@
+{
+  "name": "dsh-plugin-wallpaper-engine-parallax",
+  "version": "1.3.3",
+  "description": "3D parallax for the DSH wallpaper engine: cursor-driven depth offsets for the wallpaper layers, the mascot, plugin-registered element groups and the UI block.",
+  "icon": "./icon.png",
+  "type": "module",
+  "main": "./lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.parallax.js",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json",
+    "./cordis.patch.yml": "./cordis.patch.yml"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": ["@deepseek-ai/dsh-client-runtime"],
+      "platform": "web",
+      "immediately": true
+    }
+  },
+  "files": ["lib/", "cordis.patch.yml", "locale/", "icon.png", "package.json"],
+  "license": "MIT"
+}

@@ -1,0 +1,16 @@
+{
+  "entry": "src/client.js",
+  "artifact": "lib/client.fx.js",
+  "inline": [
+    {
+      "file": "src/fx-layer.js",
+      "why": "点击拖尾层（宿主空壳行的浏览器半边；自 src/fx-layer.js 原样迁出）",
+      "markers": ["const FX_HOST_ID = 'we-fx-layer';", "const FX_CLICK_MAX = 24;", "function syncFxLayer() {"]
+    },
+    {
+      "file": "src/ext-fx.js",
+      "why": "「扩展」页签 fx 模块的描述符与渲染岛（自 src/ext-fx.js 原样迁出）",
+      "markers": ["function renderFxIsland(ctx) {", "const FX_EXTENSION_MODULE = {"]
+    }
+  ]
+}

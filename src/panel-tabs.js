@@ -5,8 +5,8 @@
  *
  * 为什么单独一个文件：这些渲染器**读**面板状态、**调**面板处理器，但自己不持有状态 ——
  * 正是最适合独立出去的一层。这样面板组件体只剩"状态 + 处理器 + 装配"，页签怎么画看这里。
- * （「关于」是唯一连面板状态都不读的渲染器：静态文案 + 两张随包二维码。「扩展」读得更少：
- * 它只画 `extensionModules()` 里登记过的模块，一张都没登记就画空态。）
+ * （「关于」除组件行状态外不读任何 ctx 字段：静态文案 + 两张随包二维码。「扩展」也只画
+ * `extensionModules()` 里登记过的模块（外加组件行状态与 `onResetModule`），一张都没登记就画空态。）
  *
  * 契约（构建期由 scripts/build-client.mjs 内联进 bundle 的工厂作用域，"外部作用域"=
  * 同一 prelude / src/client.js 的顶层）：
@@ -44,6 +44,18 @@
  * test/tools/src-scope.mjs 的 panelText()），搬出去不等于搬出判据。
  */
 
+/**
+ * 可见面判据的**本地包装**（同 `avatar-layer.js` 的口径）：本文件可被**独立求值**
+ * （判据逐页签抽函数真跑），因此不裸引用拼接作用域里的 `weComponentVisible`，改读
+ * `globalThis.__weComponentVisible`（`src/client.js` 启动时注入）；缺省 `true` = 不渲染（D3① 安全方向）。
+ */
+function weComponentVisibleOf(components, name) {
+  const f = globalThis.__weComponentVisible;
+  // 缺省 **true**（未知 ⇒ 按可用渲染）：注入缺失只可能是接线疏漏或独立求值上下文，
+  // 那种情况下"把整个面板藏掉"是更坏的失败；生产侧 src/client.js 启动时必定注入。
+  return typeof f === 'function' ? f(components, name) : true;
+}
+
   // 这一层只**按顺序组装**各节（"有哪几节、什么顺序"一眼可读；
   // 判据按真渲染的节序列钉住，见 verify-scene-live 的节顺序一节）。
   // 首行空解构是**契约**（test/verify-scene-live.mjs 的『每个页签首行都从 ctx 解构』）：
@@ -63,12 +75,20 @@
   // 判据按真渲染的节序列钉住，见 verify-scene-live 的节顺序一节）。
   // ⚠️ 这个顺序是**两个界面共用的**（侧边栏的 `qpRenderAppearancePane` 调的也是本函数）
   //    ⇒ 改这里等于同时改设置页与侧边栏 —— 这正是用户口径要的"两边同序"。
-  // 用户口径（2026-10-11）：主题 → 细节 → 玻璃 UI → 侧边栏圆角 → 全局 UI 配色 → 全局字体。
+  // 用户口径：主题 → 细节 → 玻璃 UI → 侧边栏圆角 → 全局 UI 配色 → 全局字体。
   // 与上一版的差别只有一处：**「玻璃 UI」与「侧边栏圆角」对调**（前者上移到细节之后）。
   // 首行的空解构是**契约**（test/verify-scene-live.mjs 的『每个页签首行都从 ctx 解构』）：
   // 本页签只把 ctx 转交给各节、自己不读字段 —— 所以那不是无操作声明。
   function renderAppearanceTab(ctx) {
     const { } = ctx;
+    // 第六节「全局字体」在 P-C 之后**住在 packages/fonts**（子包把渲染器登记进
+    // src/extension-registry.js 的面板节注册表）⇒ 这里按注册表续接，屏上位置仍**在最后**
+    //（描述符不写 `order` ⇒ 落到默认位 100；顺序口径与 extensionModules() 同源）。
+    // ⚠️ 注册表为空 = 该子包没装 / 被关：页签照画前五节，**不**整页签消失
+    //    （D3①/D3③ 在这条通道上的形态：缺的是那一节，不是这一页）。
+    const registered = wePanelSectionsOf("appearance").map((section) => (
+      React.createElement(React.Fragment, { key: section.id }, section.render(ctx))
+    ));
     return React.createElement(React.Fragment, null,
       renderAppearanceThemeSection(ctx),
       renderAppearanceDetailSection(ctx),
@@ -77,7 +97,7 @@
       // 「全局 UI 配色」在「全局字体」**上面**（用户口径：「变成全局UI配色放在全局字体上面」）；
       // 原「输入光标」节已撤销，其唯一一行（光标颜色）并入本节（见该渲染器的 ③）。
       renderAppearanceUiColorSection(ctx),
-      renderAppearanceFontSection(ctx),
+      registered,
     );
   }
 
@@ -121,6 +141,10 @@
 
   function renderMascotTab(ctx) {
     const { onRopeScaleChange, onRopeVisibilityChange, onMascotFormConfirm, onDisarmConfirm, sel, paneWidth } = ctx;
+    // ── D3 可见面 gate（ADR-0013 D3①/D3③）：该组件行关掉 ⇒ **整块不渲染**（返回 null，
+    // 界面不显示；配置项由调用方按同一判据隐藏）。判据：test/verify-component-visibility.mjs
+    // 的"声明落点必须被 gate"双向对账。唯一实现在 src/client.js 的 weComponentVisible。
+    if (!weComponentVisibleOf(ctx.sel && ctx.sel.inventory && ctx.sel.inventory.components, 'mascot-avatar')) return null;
     // 主页面那只吉祥物**当前用的立绘**（自定义优先 / 否则内置形态）—— 与 RopeDock 共用
     // 同一条解析（`ropeArtOf`）：设置页看到的盒与主页面那只的盒必须是同一个数。
     const previewArt = ropeArtOf(sel);
@@ -148,7 +172,7 @@
         // ── 自定义立绘（用户口径：可导入，已导入时下一次导入覆盖上一次）──────────
         // 它是**转盘（3D 环）上的最后一项**（用户口径：与内置立绘同样的卡片大小和样式）——
         // 点它导入 / 替换（再导入即覆盖），正在用时是 `--active` 那一项；内置项**不因**自定义
-        // 生效而禁用（2026-10-13 并入 #180 之后：点内置项 = 两步确认换回出厂自带，见
+        // 生效而禁用（并入 #180 之后：点内置项 = 两步确认换回出厂自带，见
         // `onMascotFormConfirm`），只有导入进行中才禁用（`disabled: mascotBusy`）。
         // 卡面尺寸口径与内置项一致（固定，不随「吉祥物大小」缩放）：图片按自己的宽高比
         // contain 进 64×96 的小舞台（那是最高的内置项「Deepseek_Pro」的盒）。清除入口排在最后。
@@ -230,19 +254,25 @@
   //     prelude 求值期撞 TDZ。既有写法是**getter**：
   //       get title() { return weT("点击效果与拖尾效果"); }
   //     这样 `weT(...)` 就落在字面量的最内层调用帧上，且取译文发生在渲染时（照抄
-  //     src/ext-fx.js 的 FX_EXTENSION_MODULE 即可）—— 因此**本文件不再套一层
+  //     packages/fx/src/ext-fx.js 的 FX_EXTENSION_MODULE 即可）—— 因此**本文件不再套一层
   //     weT**（套了就成了拿译文再查一次词表）。
   //   · `render(ctx)` 可选：给了就在这个模块的位置画它自己的控件；没给就只显示
   //     title + desc —— "功能还没做完"的模块可以先上架占位。
   //   · 模块**不得**自己写设置 / 发通知 / 持有状态：本文件是渲染器（契约见文件头），
   //     要动状态就把动作做成 src/client.js 的具名处理器、经 ctx 传进来。
-  // 现有三项：一号 = 自定义会话头像（src/ext-avatar.js + src/avatar-layer.js，会话界面上的
-  // DOM 补丁）、二号 = 点击效果与拖尾效果（src/ext-fx.js + src/fx-layer.js）、
-  // 三号 = 3D 效果（src/ext-parallax.js + src/parallax-layer.js，只有变量与事件、不建 DOM）。
-  // ⚠️ **顺序即屏上顺序**（数组第 0 项在最上面）：头像那一项排在**第一**（用户口径）。
-  // 加第四项照抄这三份。
+  // 现有三项 —— **本文件不再枚举它们**（P-A 起）：
+  //   一号 = 自定义会话头像（src/ext-avatar.js + src/avatar-layer.js，会话界面上的 DOM 补丁），
+  //          **留在主包**，由 src/client.js 在模块作用域自登记；
+  //   二号 = 点击效果与拖尾效果（packages/fx）、三号 = 3D 效果（packages/parallax）**各自
+  //          是一个独立包** —— 三份 bundle 的求值顺序不保证，同一个工厂作用域里再也放不下
+  //          一份"按数组顺序排好的清单"，于是"谁登记了什么"落在一张共享注册表上
+  //          （src/extension-registry.js；跨包通道见 BUNDLE-SPLIT §6.2）。
+  // ⚠️ **顺序即屏上顺序**：跨包顺序**不能**靠数组序（bundle 求值顺序不是契约），改由描述符的
+  //    `order` 声明（avatar=1 / fx=2 / parallax=3），排序 = (order, 注册序)。
+  //    加第四项 = 在它自己的包里调 `weRegisterExtensionModule(id, descriptor)`，本文件零改动。
+  // 注册表为空时页签照旧在、只画下面那个空态（形状见 :230-252 的注释）。
   function extensionModules() {
-    return [AVATAR_EXTENSION_MODULE, FX_EXTENSION_MODULE, PARALLAX_EXTENSION_MODULE];
+    return weExtensionModules();
   }
 
   // 这一页自己不读 ctx 的任何字段：整包（sel + 具名 on* 处理器）转交给各模块的 render。
@@ -250,6 +280,10 @@
   // 所以说明文字只能写在函数外面 —— 见 test/verify-scene-live.mjs 的『每个页签首行都从 ctx 解构』。
   function renderExtensionsTab(ctx) {
     const { onResetModule } = ctx;
+    // ── D3 可见面 gate（ADR-0013 D3①/D3③）：该组件行关掉 ⇒ **整块不渲染**（返回 null，
+    // 界面不显示；配置项由调用方按同一判据隐藏）。判据：test/verify-component-visibility.mjs
+    // 的"声明落点必须被 gate"双向对账。唯一实现在 src/client.js 的 weComponentVisible。
+    if (!weComponentVisibleOf(ctx.sel && ctx.sel.inventory && ctx.sel.inventory.components, 'mascot-avatar')) return null;
     const modules = extensionModules();
     return React.createElement(React.Fragment, null,
       React.createElement("div", { className: "we-picker__section" },
@@ -280,13 +314,20 @@
   }
 
   // ── 「关于」页签：项目简介 / 仓库与 Star / 交流群二维码 / 贡献者致谢（压尾）──────
-  // 这是**唯一不读面板状态**的页签：内容全是静态文案 + 两张内联二维码（数据在
-  // src/about-assets.js，构建期随 prelude 内联）。但契约是**逐页签**的 ——
-  // verify-scene-live 要求每个 render*Tab 首行从 ctx 解构（"要什么"写在签名处），
-  // 所以这里显式写下空解构：别让后来人以为"这个页签不用取外界"就能绕过接缝。
+  // 内容全是静态文案 + 两张内联二维码（数据在 src/about-assets.js，构建期随 prelude
+  // 内联）；**唯一的外部能力**是 `ctx.onReopenNotice`（「重新查看更新公告」按钮）。
+  // 它不是"读面板状态"：状态写入与 emit 都发生在 client.js 那一侧（回调体内），本渲染器
+  // 只读模块级真值 + 调一个交进来的回调 —— 这正是 test/verify-about.mjs 那条
+  // "渲染器只读模块级状态（不自己发请求 / 不写设置 / 不发通知）"允许的形状。
+  // 契约是**逐页签**的 —— verify-scene-live 要求每个 render*Tab 首行从 ctx 解构
+  //（"要什么"写在签名处），所以这里显式解构出那一个回调。
   // 四段的**顺序**是用户的明确口径（致谢压尾），判据按首次出现下标比大小钉住。
   function renderAboutTab(ctx) {
-    const { } = ctx;
+    const { onReopenNotice } = ctx;
+    // ── D3 可见面 gate（ADR-0013 D3①/D3③）：该组件行关掉 ⇒ **整块不渲染**（返回 null，
+    // 界面不显示；配置项由调用方按同一判据隐藏）。判据：test/verify-component-visibility.mjs
+    // 的"声明落点必须被 gate"双向对账。唯一实现在 src/client.js 的 weComponentVisible。
+    if (!weComponentVisibleOf(ctx.sel && ctx.sel.inventory && ctx.sel.inventory.components, 'about-notice')) return null;
     // star 数那一行（模块级：值 + 三态文案都在 client.js 的 starCountLabel 里；
     // 这里的"读"与 SliderRow 一类模块级助手同口径 —— 只读，不发请求）。
     const stars = starCountLabel();
@@ -347,7 +388,7 @@
             rel: "noopener noreferrer",
             title: weT("在浏览器里打开项目仓库"),
           }, weT("⭐ 去 GitHub 点亮 Star")),
-          // 实时 star 数：宿主代取（带缓存，见 lib/routes/github-stars.js）。
+          // 实时 star 数：宿主代取（带缓存，见 packages/about-notice/lib/routes/github-stars.js）。
           // 取不到时**整行不消失**、改说"暂时取不到" —— 数字是点缀，按钮才是主操作。
           stars
             ? React.createElement("span", {
@@ -362,6 +403,17 @@
           // 这条是给"点了没反应"的场景留的兜底（同字体集导出的"普通链接"口径）。
           React.createElement("code", { className: "we-about__url" }, ABOUT_REPO_URL),
         ),
+        // 「重新查看本版更新公告」：公告的哨兵 `noticeSeen` 让它**一版只弹一次** ⇒ 不给一条
+        // 重看路径的话，用户"想再看这版改了什么"就只能去改设置文件。
+        // ⚠️ 只调回调（`ctx.onReopenNotice`）：状态写入与 emit 都在 client.js 那一侧 ——
+        // 本渲染器因此保持"只读模块级状态"（判据见文件头那段说明）。
+        // 与上面那枚 Star 按钮**同放一节**是有意的：它们是同一件事的两个面（公告配图下那行
+        // 也是同一个求星入口，见 src/client.js 的 UpdateNotice）。
+        React.createElement("button", {
+          className: "we-picker__btn we-about__reopen", type: "button",
+          onClick: () => { if (typeof onReopenNotice === "function") onReopenNotice(); },
+          title: weT("再弹一次本版更新公告（含配图下方的求星入口）"),
+        }, weT("重新查看本版更新公告")),
         React.createElement("p", { className: "we-about__p" },
           weT("想要新功能、遇到问题，或者想看看接下来要做什么，都欢迎来仓库提 Issue / PR —— 一起把它做得更好 🧰")),
       ),

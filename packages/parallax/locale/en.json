@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "3D Parallax",
+    "description": "As the cursor moves, the wallpaper and mascot drift symmetrically away from the screen centre while the UI block drifts along with the wallpaper (parallax depth)."
+  }
+}

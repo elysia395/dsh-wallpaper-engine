@@ -87,7 +87,7 @@ const CSS_SHELL = `  /* ── iOS liquid glass ──────────�
        声明处解析），所以一次覆盖全应用，不需要逐个锚点补，也不碰任何类名哈希。
        色阶仍沿用宿主那一级（可视性不变），只把中性色的**色相**换成用户选的玻璃
        底色；浅色下取更暗一级的静态中性色，抵掉混色带来的提亮。
-       ⚠️ 权重 40% → 65%（2026-10-12）：40% 玻璃色 + 60% 灰阶在**深色低饱和**玻璃色
+       ⚠️ 权重 40% → 65%：40% 玻璃色 + 60% 灰阶在**深色低饱和**玻璃色
        （如藏青 #0d1524）下色相被灰阶洗光 —— 拇指复算 ≈#525659，与宿主原生灰
        （neutral-600 #545557）不可分，观感等于退回 #157 修复前（用户实测报回归）。
        65% 让色相在任何玻璃色下都存活；亮度台阶仍由中性色锚定档决定，锚不变。 */
@@ -121,8 +121,8 @@ const CSS_SHELL = `  /* ── iOS liquid glass ──────────�
      深底变浅底、白字不变 ⇒ 白字压浅底（实测 1.07–1.13:1，见 #161）。
      判据取宿主自己写在气泡上的 role="tooltip"（全 asar 仅出现一次，就是这一处），
      它同时免疫类名哈希漂移与浮层 DOM 位置，比 [data-chat-flow] 作用域更可靠。
-     ⇒ **本文件所有 [class*="_bubble"] 规则都必须带这道豁免**（当前 :613 / :622 / :945 / :3166 四条），
-     守卫：verify-readability「F2dN 每条 _bubble 规则都必须带 role="tooltip" 豁免」—— §11 A1-4：
+     ⇒ **本文件所有 [class*="_bubble"] 规则都必须带这道豁免**，
+     守卫：verify-readability「F2dN 每条 _bubble 规则都必须带 role="tooltip" 豁免」——
      这条判据以前还接受"头里有 [data-chat-flow] 就放行"，于是把某条的 :not(...) 摘掉仍全绿；
      作用域（在对话流里）与豁免（不是宿主 Tooltip 那个 _bubble）是两件事，现在分别钉住。 */
   body[data-we-glass-page][data-we-thinking-glass] [class*="_bubble"]:not([role="tooltip"]) {
@@ -317,7 +317,7 @@ const CSS_SHELL = `  /* ── iOS liquid glass ──────────�
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
   }
-  /* September 24 inline capsules: ten-percent white mist and independent 8px frost.
+  /* Inline capsules: ten-percent white mist and independent 8px frost.
      Host padding/radius and text colour stay intact; fences are excluded. */
   body[data-we-glass-page][data-we-thinking-glass] [data-chat-flow] :not(pre) > code,
   body[data-we-glass-page][data-we-thinking-glass] [data-vcp-rawhtml] :not(pre) > code {

@@ -20,10 +20,21 @@ export declare const inject: string[];
  */
 export declare function apply(ctx: Context): void;
 
+/**
+ * Frozen, sorted key table of the **cross-package host bridge** (`src/client.js`
+ * `HOST_BRIDGE_BINDINGS`): the bindings a sub-package browser half receives as
+ * `require("dsh-plugin-wallpaper-engine")`. Every sub-package bundle destructures
+ * these names from the host module and throws at evaluation time when one is
+ * missing (`packages/<pkg>/src/client.js` `*_HOST_REQUIRED`), so the list is a
+ * contract, not documentation — see docs/wip/BUNDLE-SPLIT.md §5.1 ②.
+ */
+export declare const hostBridgeKeys: readonly string[];
+
 /** The factory's return shape: the browser plugin exports consumed by the Cordis Loader. */
 export interface WallpaperEngineClientPlugin {
   apply: typeof apply;
   inject: typeof inject;
+  hostBridgeKeys: typeof hostBridgeKeys;
 }
 
 /**

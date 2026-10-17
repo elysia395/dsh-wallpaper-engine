@@ -37,7 +37,7 @@ if (!existsSync(abs)) {
 }
 
 if (PROBE) {
-  // 与 `lib/media/supervisor.js` 同口径：带管道是协议通道，detached/plain 是它试的两种姿势。
+  // 与 `packages/media-bridge/lib/supervisor.js` 同口径：带管道是协议通道，detached/plain 是它试的两种姿势。
   const blocked = [
     ['带管道（协议通道）', { stdio: ['pipe', 'pipe', 'pipe'] }],
     ['detached', { stdio: 'ignore', detached: true, windowsHide: true }],

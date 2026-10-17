@@ -1,9 +1,19 @@
 # dsh-plugin-wallpaper-engine bundle patch.
 #
-# Applied over the dsh-web-app layer. This bundle contributes ONE host row
-# (the plugin that scans Wallpaper Engine and serves its media) and relies on
-# its `dsh.client` manifest (in package.json) to load the browser half that
-# draws the wallpaper behind the DSH GUI and adds the settings UI.
+# Applied over the dsh-web-app layer. This bundle contributes EIGHT host rows:
+#   - four owned by the main package: the plugin that scans Wallpaper Engine and
+#     serves its media, the `about-notice` component row that owns the About tab's
+#     two routes, the `mascot-avatar` component row that owns the mascot image +
+#     the two session avatars, and the `media-bridge` component row that owns the
+#     system media integration;
+#   - three owned by `packages/{fx,parallax,fonts}`: the subpackages this main
+#     package depends on (BUNDLE-SPLIT §7.1). Semantics A (§2.3) — the main package
+#     owns these rows, each `name` is the subpackage's REAL package name, and this
+#     patch is the single source of truth for the row set; a subpackage's own
+#     cordis.patch.yml only takes effect when that subpackage is installed as a
+#     standalone bundle (not the shape used here).
+# The main package relies on its `dsh.client` manifest (in package.json) to load the
+# browser half that draws the wallpaper behind the DSH GUI and adds the settings UI.
 #
 # A patch replaces the targeted row's whole `config`, so only additive
 # `insert` rows appear here (we never override an existing shipped row).
@@ -18,6 +28,57 @@
     # and machine-checked, so the route count is deliberately not repeated here).
     - id: wallpaper-engine
       name: 'dsh-plugin-wallpaper-engine'
+    # Second row: the `about-notice` component's host half (C8′, P2-1). The host
+    # loads it as its own plugin — its entry re-enters this bundle's
+    # `applyComponent` — so disabling just this row removes the About tab's
+    # /star-count + /about-qr routes and leaves the other 40 untouched.
+    # P-F (2026-10-16): this component moved out to `packages/about-notice/`, so the
+    # row `name` is now the real package name (resolved through <profile>/node_modules,
+    # same as the fx / parallax / fonts rows below). The `id` is frozen.
+    - id: wallpaper-engine-about-notice
+      name: 'dsh-plugin-wallpaper-engine-about-notice'
+    # Third row: the `mascot-avatar` component's host half (C6, P2-2) — the custom
+    # mascot image (/mascot) and the two session avatars (/avatar/<side>). Same
+    # shape as the row above (independent plugin, re-enters `applyComponent`);
+    # disabling it removes just those two routes.
+    # P-F (2026-10-16): this component moved out to `packages/mascot-avatar/`, so the
+    # row `name` is now the real package name (resolved through <profile>/node_modules,
+    # same as the fx / parallax / fonts rows below). The `id` is frozen.
+    - id: wallpaper-engine-mascot-avatar
+      name: 'dsh-plugin-wallpaper-engine-mascot-avatar'
+    # Fourth row: the `media-bridge` component's host half (third component) — the
+    # system media integration (now playing / spectrum / artwork / reverse control)
+    # and its backend (the media-bridge child process with the built-in fallback).
+    # Same shape as the rows above (independent plugin, re-enters `applyComponent`);
+    # disabling it removes just those five routes. Default ON: turning it off loses
+    # the media integration (user-visible), so the row ships enabled and the user
+    # turns it off per-row if they do not want it.
+    # P-F (2026-10-16): this component moved out to `packages/media-bridge/`, so the
+    # row `name` is now the real package name (resolved through <profile>/node_modules,
+    # same as the fx / parallax / fonts rows below). The `id` is frozen.
+    - id: wallpaper-engine-media-bridge
+      name: 'dsh-plugin-wallpaper-engine-media-bridge'
       # webServer is a hard dependency (`inject = ['webServer']` in lib/index.js):
       # the Loader waits for the HTTP server to mount, so a headless/TUI profile
       # without one does not load this bundle at all.
+    # ── P-A 子包行（BUNDLE-SPLIT §7.1）────────────────────────────────────────────
+    # 行的 name 是**子包的真名**（不是主包的子路径）：开发期解析靠
+    # `scripts/dev-link-subpackages.mjs` 在 <profile>/node_modules 下建的目录 junction，
+    # 与发布期 pnpm hoist 布局同形（§8.1 spike 结论）。主包 apply 会先 resolve 这三行，
+    # 解析不到就**大声抛错**（宿主对行级失败是静默的 —— §4.1 I5）。
+    # 可选桌宠联动；没有 dsh-pet 或首次准备未完成时保留吉祥物原生行为。
+    - id: wallpaper-engine-pet-link
+      name: 'dsh-plugin-wallpaper-engine-pet-link'
+    # fx：点击拖尾 + 特效扩展（src/fx-layer.js、src/ext-fx.js），浏览器半边在本包自己的产物里。
+    - id: wallpaper-engine-fx
+      name: 'dsh-plugin-wallpaper-engine-fx'
+    # parallax：3D 视差层（src/parallax-layer.js、src/ext-parallax.js），同上。
+    - id: wallpaper-engine-parallax
+      name: 'dsh-plugin-wallpaper-engine-parallax'
+    # fonts：整个字体系统（P-C 之后宿主半边 + 浏览器半边都在本包）
+    #   · 宿主半边：lib/routes/fontsets.js、lib/routes/system-fonts.js 两条路由族；
+    #   · 浏览器半边：外观页签第六节「全局字体」+ 字体集编辑器 ⇒ 产物 lib/client.fonts.js。
+    # 注意（§6.1 = A / ADR-0013 D20）：随包走的只是**渲染器与描述符**；字体的键、默认值、
+    # 消毒与持久化仍在主包 lib/settings-schema.js（FONTSET_KEYS）与 fontsets/<id>.json。
+    - id: wallpaper-engine-fonts
+      name: 'dsh-plugin-wallpaper-engine-fonts'

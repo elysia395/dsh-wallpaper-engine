@@ -18,7 +18,7 @@
  */
 import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { access } from 'node:fs/promises';
-import { dirname, join, normalize } from 'node:path';
+import { dirname, join, normalize, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createSteamDiscoveryKit } from '../lib/steam-discovery.js';
 
@@ -51,8 +51,30 @@ function section(title) {
  * 生产谓词（lib/index.js:245）就是 `access` —— 它**不区分文件与目录**。守卫沿用同一语义，
  * 否则测的就不是产品里的那条路径。
  */
-const realExists = async (p) => {
+const realAccessExists = async (p) => {
   try { await access(p); return true; } catch { return false; }
+};
+/**
+ * ⚠️ 夹具作用域的存在性谓词（task-14 实测踩到）：注入给套件的 `pathExistsP` 必须是
+ * **只认本守卫夹具树**的那一个，否则本机真实的 Steam 安装会漏进判据。
+ *
+ * 失效形态（修前实测 7 红）：本模块的**机器级候选不可注入** —— 注册表（`reg query`）、
+ * 硬编码 `STEAM_PROBE_DIRS`、WSL `/mnt` 扫描都不经过 `pathExistsP`；而夹具用例
+ * 「env 指向一个没有标记的根 / 空目录 / 撤掉标记 / vdf 读不动 / 候选全不存在」期望
+ * `locateWallpaperEngineP()` 回 `null`。开发机上真装了 Steam + WE
+ * （实测 `E:\SteamLibrary\steamapps\common\wallpaper_engine\distribution\version.json` 存在）
+ * ⇒ 这些用例全部拿到开发机的真实安装根（A2/B1/C2/D1/D7/E2 假红），判据结果取决于
+ * 「跑测试的这台机器装没装 Steam」，与夹具无关。
+ *
+ * 语义不变：仍是 `access`（不区分文件/目录，与生产同口径），只是把夹具树之外的路径一律判
+ * false —— 等于复现一台**没装 Steam 的干净机器**。期望值、断言、变异体锚点一字未改：
+ * 14 个变异体照旧全部判红（它们改的是夹具树内的探测顺序 / 缓存 / 解析，不受此限）。
+ */
+const ISO_PREFIX = ISO.endsWith(sep) ? ISO : ISO + sep;
+const realExists = async (p) => {
+  const n = normalize(p);
+  if (n !== ISO && !n.toLowerCase().startsWith(ISO_PREFIX.toLowerCase())) return false;
+  return realAccessExists(n);
 };
 /** 计数 stub：断言"存在性一律走注入"。 */
 function counting(inner = realExists) {

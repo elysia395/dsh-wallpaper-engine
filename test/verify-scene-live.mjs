@@ -31,6 +31,8 @@ import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Readable, Writable } from 'node:stream';
 // 剥注释：共享的字符串感知实现（`verify-module-layout` 的『剥注释必须字符串感知』一节钉住"不许再用朴素正则"）。
 import { stripComments, stripExportBlocks } from './tools/js-text.mjs';
+// 子包登记面的**发现层**：T2 起子包构建数据是逐包配方 JSON，本守卫不写死 packages/fx / packages/parallax。
+import { discoverPackages } from './tools/packages.mjs';
 // 刀3：样式族取文（8 个域模块 + 组装点，构建序拼接）。刀6：客户端正文族（正文 + 助手模块）。
 import { styleText, panelSources, panelText, liveText, clientText } from './tools/src-scope.mjs';
 // 单独 import `src/**` 时补上 bundle 作用域的取词层（面板渲染器直接用 weT；见该 shim 的文件头）。
@@ -41,6 +43,100 @@ import { createCheck, normCrlf, braceBody, fnNameBody as fnBody } from './tools/
 installWeTShim();
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+
+// ── A3 之后 fx / parallax 两族的浏览器半边住在**自己的子包**里 ─────────────────────
+// 源码在 packages/<pkg>/src/**，产物在 packages/<pkg>/lib/client.<短名>.js（宿主按
+// cordis.patch.yml 的行名加载子包行，行再提供自己的浏览器半边）。本守卫里对这四个文件
+// 的读盘 / import 全都走下面这两枚定位器 —— 落点散在十处，写死字符串必再漂一次。
+const subFxFile = (f) => join(root, 'packages', 'fx', 'src', f);
+const subParallaxFile = (f) => join(root, 'packages', 'parallax', 'src', f);
+const SUB_FX_PRODUCT = join(root, 'packages', 'fx', 'lib', 'client.fx.js');
+const SUB_PARALLAX_PRODUCT = join(root, 'packages', 'parallax', 'lib', 'client.parallax.js');
+
+/** 子包构建配方（`packages/<pkg>/client.build.json`）的取文 —— 本守卫唯一的子包登记面。
+ *
+ *  T2 起 `scripts/build-client.mjs` 里**不再有** `SUBPACKAGE_BUILDS` 字面量表：前端构建数据逐包一份
+ *  配方 JSON（`artifact` / `inline[].file` 都**相对包目录**）。所以「哪两份源文件住在子包产物里」
+ *  只能从配方读 —— 继续从构建器源码文本里切片找那张表，在 T2 之后是**读空**（正面证据恒不成立）。
+ *
+ *  发现面走 `discoverPackages()`（不写死 packages/fx / packages/parallax）。子包目录里**没有**
+ *  配方文件是正常的（host-only 子包不编浏览器半边），因此只收在盘的配方；**在盘但读不出来**
+ *  逐包登记到 `broken`，调用方必须判红并点名（静默跳过 = 登记面判据恒真）。
+ */
+const subpackageRecipes = () => {
+  const dirs = [];
+  const broken = [];
+  const files = [];
+  const chunks = [];
+  for (const p of discoverPackages(root).packages) {
+    const rel = p.dir + '/client.build.json';
+    if (!existsSync(join(root, rel))) continue;
+    try {
+      const src = readFileSync(join(root, rel), 'utf8');
+      const recipe = JSON.parse(src);
+      dirs.push(p.dir);
+      chunks.push(src);
+      for (const inline of recipe.inline || []) if (inline && typeof inline.file === 'string') files.push(inline.file);
+    } catch {
+      broken.push(p.dir);
+    }
+  }
+  return { dirs, broken, files, text: chunks.join('\n') };
+};
+
+/** 配方里登记了某份源文件 —— **引号不敏感**：JSON `"file": "…"` 与旧 JS 字面量 `file: '…'` 同判。 */
+const registersFile = (text, rel) =>
+  new RegExp('["\']?file["\']?\\s*:\\s*["\']' + rel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '["\']').test(text);
+
+/** 装配共享注册表（src/extension-registry.js）并登记「扩展」页签的三项。
+ *
+ *  为什么挂载台需要它：三份 bundle（主包 / packages/fx / packages/parallax）的**求值顺序不保证**，
+ *  panel-tabs 的 extensionModules() 只问注册表。挂载台是**按文件** import 的，于是必须自己把表
+ *  装起来 —— 否则 weExtensionModules 是裸标识符（ReferenceError，且只在渲染「扩展」页签时才炸）。
+ *
+ *  ⚠️ 这里用字面量路径 join(root, 'src', 'extension-registry.js') 来 import：本守卫因此是
+ *  src/extension-registry.js 的真实覆盖（test/verify-guard-map.mjs 的「零覆盖」那条判据认它）。
+ *  幂等：两块挂载台共用同一个模块实例，重复登记会撞注册表的「id 重复注册」抛错。
+ */
+let weExtensionRegistryPromise = null;
+function installExtensionRegistry() {
+  // 幂等靠 promise memo：模块级变量只在**同步**段写一次（async 函数里 await 之后回写会被
+  // require-atomic-updates 判成竞态）；两块挂载台 await 同一个 promise ⇒ 同一个模块实例。
+  if (!weExtensionRegistryPromise) weExtensionRegistryPromise = loadExtensionRegistry();
+  return weExtensionRegistryPromise;
+}
+async function loadExtensionRegistry() {
+  const reg = await import(pathToFileURL(join(root, 'src', 'extension-registry.js')).href);
+  Object.assign(globalThis, reg);
+  const avatarMod = await import(pathToFileURL(join(root, 'src', 'ext-avatar.js')).href);
+  const fxMod = await import(pathToFileURL(subFxFile('ext-fx.js')).href);
+  const parallaxMod = await import(pathToFileURL(subParallaxFile('ext-parallax.js')).href);
+  // 故意**乱序**登记：屏上顺序必须由描述符的 order 决定（注册序 / 数组序不是契约）。
+  reg.weRegisterExtensionModule('fx', fxMod.FX_EXTENSION_MODULE);
+  reg.weRegisterExtensionModule('parallax', parallaxMod.PARALLAX_EXTENSION_MODULE);
+  reg.weRegisterExtensionModule('avatar', avatarMod.AVATAR_EXTENSION_MODULE);
+  check('扩展注册表：三项齐 · 顺序 = order（乱序登记下头像仍第一）· 不靠注册序',
+    reg.weExtensionModules().map((m) => m.id).join(',') === 'avatar,fx,parallax'
+    // 第二半是**牙**：注册序确实是 fxp/parallax/avatar，不等于输出序 ⇒ 排序真的在按 order 工作
+    //（把注册表的 (order, seq) 排序去掉，这条会立刻红）。
+    && ['fx', 'parallax', 'avatar'].join(',') !== reg.weExtensionModules().map((m) => m.id).join(','),
+    '注册序=fx,parallax,avatar · 输出序=' + reg.weExtensionModules().map((m) => m.id + '(' + m.order + ')').join(' '));
+  check('扩展注册表：id 唯一（重复注册当场抛 —— 注册链不许静默吞掉抢 id 的那一份）',
+    (() => {
+      try { reg.weRegisterExtensionModule('avatar', avatarMod.AVATAR_EXTENSION_MODULE); return false; }
+      catch { return true; }
+    })());
+  // P-C：外观页签的第六节「全局字体」已随字体包搬走 ⇒ 夹具按**真入口同形**登记它。
+  // 挂载台与 ext-fx / ext-parallax 一样是"按文件 import 包内源文件"，取的也是同一份渲染器；
+  // 描述符形状与 packages/fonts/src/client.js 逐字同形（title 是 accessor ⇒ 注册期不读译文）。
+  const fontSectionMod = await import(pathToFileURL(join(root, 'packages', 'fonts', 'src', 'appearance-font-section.js')).href);
+  reg.weRegisterPanelSection('appearance', 'fonts', {
+    id: 'fonts',
+    get title() { return globalThis.weT('全局字体'); },
+    render: fontSectionMod.renderAppearanceFontSection,
+  });
+  return reg;
+}
 // Keep every cache/config write inside the workspace (same stance as
 // verify-scene.mjs) — apply() may sweep/purge caches on startup.
 const TEST_CACHE_DIR = join(root, '.test-cache', 'scene-live');
@@ -243,6 +339,20 @@ const hostMod = await import(pathToFileURL(resolve(root, 'lib', 'index.js')).hre
 const host = hostMod.default || hostMod;
 const apply = host.apply || (host.inject && host.apply);
 const dispose = apply(mockCtx);
+
+// ── 组件行也要 boot（本分支的路由族归属：媒体状态族归 `media-bridge` 组件行）──
+// ⚠️ 这不是"放宽判据"，而是夹具的 boot 段要跟上本分支结构：`/media-status`、`/audio-spectrum`、
+// `/now-playing`、`/now-playing/artwork`、`/media-control` 五条路由的实现住在
+// `packages/media-bridge/lib/`（P2-2 入包、P-F 批 1c 出户，ADR-0013 D14「实现入包、主包不留注册点」，
+// 由 `verify-route-ownership` 的 M10 钉住）。上游那条判据按"门面 apply 后即可用"写（单包单行假设）。
+// 处置与第 4 轮 `/avatar` 一致：**连组件一起 boot**，判据判什么一个字没改。
+if (typeof hostMod.applyComponent === 'function') {
+  for (const comp of ['media-bridge', 'mascot-avatar', 'about-notice']) {
+    try { hostMod.applyComponent(mockCtx, {}, comp); } catch (err) {
+      console.log('  · 组件行 boot 失败（' + comp + '）：' + String(err && err.message));
+    }
+  }
+}
 
 // 本脚本全程模拟**带能力头栅栏的桌面端**：社区壳（DSH Desktop.app）会给每条插件
 // 路由注入 x-dsh-desktop-renderer，观测到它宿主才把网页壁纸载荷放进独立媒体源 ——
@@ -888,6 +998,12 @@ const liveSrc = liveText();
 const prepSrc = readFileSync(join(root, 'src', 'media-prep.js'), 'utf8');
 // 刀4：panel-tabs 已按域拆成 5 个兄弟模块 + 组装点 ⇒ 判"页签族的渲染/接缝"一律扫**并集**。
 const tabsSrc = panelText();
+// P-C：外观页签第六节「全局字体」的渲染器随字体包搬出页签族（packages/fonts/src/appearance-font-section.js）
+// ⇒ 判"该节画什么 / 有没有 surface 门 / 有没有 ↺ / 解构了哪些 ctx 字段"的判据必须读
+//    **页签族 + 包内那一节**的并集 —— 它们判的是行为口径，不是文件住处。
+const fontSectionSrc = readFileSync(join(root, 'packages', 'fonts', 'src', 'appearance-font-section.js'), 'utf8')
+  .replace(/\r\n/g, '\n');
+const tabsSrcWithFontSection = tabsSrc + '\n;\n' + fontSectionSrc;
 // 组装点自身：只喂给"8 个 render*Tab 声明在 src/panel-tabs.js"那条不变量（族并集会让它变弱）。
 const tabsHubSrc = readFileSync(join(root, 'src', 'panel-tabs.js'), 'utf8');
 // `fnBody` 的实现在 `test/tools/assert-harness.mjs`（`fnNameBody`，取首个 `\n}`；
@@ -1553,10 +1669,10 @@ for (const [name, ok] of clientChecks) check(name, ok);
       CH.includes('function probeVideoPoster(') && CH.includes('img.onload'));
     check('视频通道有兜底预算（拿不到海报也要能换下去 —— ⑥ 后它与执行器一起在通道里）',
       CH.includes('VIDEO_POSTER_BUDGET_MS') && CH.includes('setTimeout(stallGuard, VIDEO_POSTER_BUDGET_MS)'));
-    // 真机取证（2026-10-02）：旧行为"预算到期就放行"会在 `<video>` rs=0 时把层放上屏，
+    // 真机取证：旧行为"预算到期就放行"会在 `<video>` rs=0 时把层放上屏，
     // 屏上只剩这一层底色（用户看到"纯色帧"，实测 1–2 秒起）。判据：预算这一路**只许在
     // 屏上真有画面时放行**，停滞到上限就停手留旧壁纸，绝不放行空层。
-    // 审计收口（2026-10-02，合并 PR #128 后）：自续期链的取消句柄必须是读最新 id 的
+    // 审计收口（合并 PR #128 后）：自续期链的取消句柄必须是读最新 id 的
     // cancelStall 闭包 —— 快照 id 清不掉在途下一跳，连切时遗留 tick 会把下一层的空层推上屏；
     // 且链上放行只许经 recheck（video 有画面 ≠ 层有画面，Edge canvas 还要等第一笔）。
     check('兜底预算不得放行空层（停滞只留旧壁纸，不铺底色）',
@@ -1568,7 +1684,7 @@ for (const [name, ok] of clientChecks) check(name, ok);
       && LIVE.includes('p.cancelStall')
       && !CH.includes('budget: posterGiveUp')
       && !LIVE.includes('clearTimeout(p.posterGiveUp)'));
-    // 真机取证（2026-10-02，第二轮）：**只有设了「帧率上限」时才会再看到纯色帧** —— 抽帧就绪
+    // 真机取证：**只有设了「帧率上限」时才会再看到纯色帧** —— 抽帧就绪
     // 那一刻在在屏元素上 `src=transcoded; load()` 会清掉当前帧。判据：自动升级不许在"已上屏"
     // 的层上换源（推到下一次建层直接用抽帧版），只有"层还被闸门押着"或"用户刚主动改过上限"
     // 才当场换。
@@ -1622,11 +1738,18 @@ for (const [name, ok] of clientChecks) check(name, ok);
     const mediaBytesFam = readFileSync(join(root, 'lib', 'routes', 'media-bytes.js'), 'utf8');
     // 服务面与接线面的源文本就地读：本文件别处的同名常量声明在更后面（TDZ）。
     const serveLib = readFileSync(join(root, 'lib', 'serve.js'), 'utf8');
-    const hostLib = readFileSync(join(root, 'lib', 'index.js'), 'utf8');
+    // ⚠️ 合成宿主面：门面 + 内核段 + P0 拆出的模块。**不要**只读 lib/index.js ——
+// 判据自己的纪律是"每新增一个从 apply() 拆出的模块必须加进来"，否则该模块里的接线会被误报丢失。
+// 例：`createMp4VfsKit({ appendDiagLine })` 随 P0 库化搬进 lib/kernel/host-session.js。
+const hostLibComposed = ['lib/index.js',
+  ...readdirSync(join(root, 'lib', 'kernel')).filter((f) => f.endsWith('.js')).map((f) => 'lib/kernel/' + f),
+  'lib/mp4-vfs.js', 'lib/faststart.js', 'lib/diag-trace.js']
+  .map((f) => { try { return readFileSync(join(root, f), 'utf8'); } catch { return ''; } }).join('\n');
+const hostLib = hostLibComposed;
     check('① 视频字节布局：同一 token 钉住同一份布局，且"搬家"改为服务期合成（磁盘 0、不跑 ffmpeg）',
       faststartLib.includes('function pinnedFaststartVariant(')
       && faststartLib.includes('const MEDIA_CHOICE_PIN = new Map();')
-      // 钉子命中必须**续期**（审计 2026-10-02）：循环壁纸一次播放远超 TTL，固定窗口会在
+      // 钉子命中必须**续期**（审计）：循环壁纸一次播放远超 TTL，固定窗口会在
       // 会话中途（seek/重缓冲触发新 Range 请求时）换字节布局。
       && faststartLib.includes('pin.at = now;')
       && /pinnedFaststartVariant\(abs, token, log\)/.test(mediaBytesFam)
@@ -1720,7 +1843,7 @@ for (const [name, ok] of clientChecks) check(name, ok);
     check('③ 视频档两条腿都挂了类名（we-media--canvas + fitClass / we-media + fitClass）',
       videoFn.includes('canvas.className = \"we-media we-media--canvas\" + fitClass;')
       && videoFn.includes('media.className = \"we-media\" + fitClass;'));
-    // ⚠️ 实测回归（2026-10-05，Edge 里「视频壁纸切换无反应」）：切层闸门的镜像画布分支被写成
+    // ⚠️ 实测回归（Edge 里「视频壁纸切换无反应」）：切层闸门的镜像画布分支被写成
     // "有画布 ⇒ 判否"，本意是"等 weDrawFrame 画上第一笔" —— 但画笔的留痕（canvas.dataset.weDrawn）
     // 从来没被读，首笔落下时回调的 recheck 又撞回同一条判据 ⇒ Edge 腿的放行条件**永远不成立**，
     // 15s 停滞上限一到旧壁纸永久留屏。两半必须同时在场且指向同一留痕。
@@ -1736,7 +1859,7 @@ for (const [name, ok] of clientChecks) check(name, ok);
     // ── ② 帧率上限的判据是「上限能不能真的降帧」─────────────────────────────────
     // 设计口径：上限存在的唯一目的是压 GPU 解码占用（Video Decode 随帧率上升）。
     // 所以只有"源帧率高于上限"才值得整片重编码；源帧率 ≤ 上限时转码纯属白烧。
-    // ⚠️ 曾经把"原生可解"当免转条件（2026-10-02 修）：4K120 的 H.264 既原生可解、
+    // ⚠️ 曾经把"原生可解"当免转条件（修）：4K120 的 H.264 既原生可解、
     // 又远高于上限 ⇒ 帧率上限在实际在用的 mp4 上一律失效、只剩一句面板文案。
     // 判据（三态都钉住）：帧率已知且高于上限 ⇒ 转；已知且不高于 ⇒ skip；**未知**才轮到
     // "原生可解就别盲转"这条成本护栏。
@@ -1770,13 +1893,16 @@ for (const [name, ok] of clientChecks) check(name, ok);
       && OLD_NATIVE_EXEMPT_RE.test(OLD_NATIVE_EXEMPT_SAMPLE)
       && !OLD_NATIVE_EXEMPT_RE.test(videoSrc));
     // 容器**必须**能拿到真实后缀：媒体 URL 是 `/media/<base64url>`，路径里没有扩展名 ——
-    // 只靠 URL 判会**恒为假**（2026-10-02 实测回归：设了帧率上限时每次切换仍跑整片重编码）。
+    // 只靠 URL 判会**恒为假**（实测回归：设了帧率上限时每次切换仍跑整片重编码）。
     // 两端各钉一条：宿主把 mediaExt 发出来、客户端把它接进 selection 再传进判据。
     // ⚠️ `mediaExt:` 的**产出点**已随清单构建族搬进 `lib/inventory.js`（§★ W-B B1）；
-    //    `extOf` 本身随扫描族搬进 `lib/wallpaper-scan.js`（§★ W-B，host 第 3 刀）⇒ 两处分开读，各钉各的落点。
+    //    `extOf` 的**真源**在本分支是叶子 `lib/fs-paths.js`（F 接线后扫描族改为**注入**它，
+    //    见 `lib/wallpaper-scan.js` 文件头）—— 这一行是**落点更正**：它原先按"上游把 extOf 定义在
+    //    扫描族内部"的形状指 `lib/wallpaper-scan.js`，判的仍是同一条不变量（`extOf` 的声明存在），
+    //    不是放宽。
     check('② 真实容器由宿主给、客户端接（mediaExt 全链路在场）',
       readFileSync(join(root, 'lib', 'inventory.js'), 'utf8').includes('mediaExt: w.fileAbs ? extOf(w.fileAbs) : null,')
-      && readFileSync(join(root, 'lib', 'wallpaper-scan.js'), 'utf8').includes('function extOf(p)')
+      && readFileSync(join(root, 'lib', 'fs-paths.js'), 'utf8').includes('function extOf(p)')
       && videoSrc.includes('const e = String(ext || "").toLowerCase();')
       && videoSrc.includes('NATIVE_EXT_SET')
       && readFileSync(join(root, 'src', 'media-prep.js'), 'utf8').includes('selection.mediaExt = w.mediaExt || null;'));
@@ -1802,37 +1928,66 @@ for (const [name, ok] of clientChecks) check(name, ok);
   const moduleRegistered = (text) => /file:\s*'src\/live-layer\.js'/.test(text);
   check('negative control: 未登记的模块名会被判出',
     moduleRegistered(build) && /file:\s*'src\/nope\.js'/.test(build.replace("'src/live-layer.js'", "'src/nope.js'")));
-  // ── 点击效果与拖尾效果（「扩展」二号模块）：同样两条登记 + "产物里只有一份" ──
-  check('fx-layer.js 已登记进 INLINE_MODULES 且在产物里只有一份',
-    /file:\s*'src\/fx-layer\.js'/.test(build)
-    && (bundle.match(/function syncFxLayer\(\)/g) || []).length === 1
-    && (bundle.match(/function disposeFxLayer\(\)/g) || []).length === 1
-    // 帧循环只有一条：混回两份就是两个 rAF 各画各的、指针各记一份轨迹。
-    && (bundle.match(/function fxFrame\(\)/g) || []).length === 1);
-  check('ext-fx.js 已登记进 INLINE_MODULES 且在产物里只有一份',
-    /file:\s*'src\/ext-fx\.js'/.test(build)
-    && (bundle.match(/function renderFxIsland\(ctx\)/g) || []).length === 1
-    // 两个模块共用**一张**注册表 ⇒ 注册表本身恰好一份、两项都在。漏登记一项的失效模式
-    // 是静默的：屏上就是"这个功能根本不存在"，没有报错、也没有空态提示。
-    && (bundle.match(/function extensionModules\(\)/g) || []).length === 1
-    && bundle.includes('AVATAR_EXTENSION_MODULE, FX_EXTENSION_MODULE')
-    && bundle.includes('fxColorMode'));
-  // ── 3D 效果（「扩展」三号模块）：与前两个模块不同 —— 行为层不建 DOM（只写 CSS 变量）──
-  check('parallax-layer.js 已登记进 INLINE_MODULES 且在产物里只有一份',
-    /file:\s*'src\/parallax-layer\.js'/.test(build)
-    && (bundle.match(/function syncParallaxLayer\(\)/g) || []).length === 1
-    && (bundle.match(/function disposeParallaxLayer\(\)/g) || []).length === 1
+  // ── 点击效果与拖尾效果（「扩展」二号模块）：A3 起**整族搬进子包 packages/fx** ──────
+  // 口径翻了：不再是"登记进主 bundle 的 INLINE_MODULES"，而是"**不在主产物里、只住在自己的
+  // 子包产物里**"。子包行由宿主按 cordis.patch.yml 的行名加载，它的浏览器半边由
+  // packages/fx/lib/client.fx.js 提供（__ModuleLoader__.load({ id: <子包真名> })）。
+  // 主产物零残留是这条的重点：两份同样实现 = 两个 rAF 各画各的、指针各记一份轨迹。
+  const fxProduct = readFileSync(SUB_FX_PRODUCT, 'utf8');
+  const countOnce = (text, needle) => text.split(needle).length - 1;
+  // ⚠️ 判「不在 INLINE_MODULES 里」必须**切片**：build 文本里还有别的 `file:` 登记（构建器的
+  //   INLINE_MODULES 之外，子包配方是同名文件住在子目录）—— 拿整份文本判会恒红。
+  const inlineText = build.slice(build.indexOf('const INLINE_MODULES = ['), build.indexOf('\n];', build.indexOf('const INLINE_MODULES = [')));
+  const subRecipes = subpackageRecipes();
+  // 登记面判据：子包配方必须真的读到（读空 = T2 前的旧写法在 T2 之后的事故模式）。
+  check('子包构建配方在盘且读得出来（登记面判据不许静默跳过 · 逐包 client.build.json）',
+    subRecipes.broken.length === 0 && subRecipes.dirs.length >= 2,
+    subRecipes.broken.length
+      ? '读不出：' + subRecipes.broken.join(' ')
+      : '读到 ' + subRecipes.dirs.length + ' 份：' + subRecipes.dirs.join(' '));
+  check('negative control: 配方登记面判据引号不敏感且有牙（JSON 双引号 / 旧 JS 单引号同判；没登记的模块名判红）',
+    registersFile('{ "file": "src/fx-layer.js" }', 'src/fx-layer.js')
+    && registersFile("{ file: 'src/fx-layer.js' }", 'src/fx-layer.js')
+    && !registersFile('{ "file": "src/fx-layer.js" }', 'src/nope.js'));
+  check('fx-layer.js / ext-fx.js 已搬出主 bundle（零残留 · 只住在 packages/fx/lib/client.fx.js）',
+    !/file:\s*'src\/fx-layer\.js'/.test(inlineText) && !/file:\s*'src\/ext-fx\.js'/.test(inlineText)
+    // 正面证据：两处必须**登记在子包配方**里（否则子包产物从哪来）。配方是 JSON ⇒ 引号不敏感同判。
+    && registersFile(subRecipes.text, 'src/fx-layer.js') && registersFile(subRecipes.text, 'src/ext-fx.js')
+    && !bundle.includes('function syncFxLayer()') && !bundle.includes('function renderFxIsland(')
+    && countOnce(fxProduct, 'function syncFxLayer()') === 1
+    && countOnce(fxProduct, 'function disposeFxLayer()') === 1
+    // 帧循环只有一条：混回两份就是两个 rAF 各画各的。
+    && countOnce(fxProduct, 'function fxFrame()') === 1
+    && countOnce(fxProduct, 'function renderFxIsland(ctx)') === 1
+    && fxProduct.includes('fxColorMode')
+    // 产物自己是**按子包真名**注册的（与 patch 行名逐字相等）—— 名不对 ⇒ 客户端 require 不到。
+    // 两段分开判：产物头是跨行的（load({ \n \t id: "<包名>"）—— 合成一行会认不中。
+    && fxProduct.includes('__ModuleLoader__.load({')
+    && fxProduct.includes('id: "dsh-plugin-wallpaper-engine-fx"'));
+  // ── 3D 效果（「扩展」三号模块）：同上，整族搬进 packages/parallax ──────────────────
+  // 与前两族不同的设计要点：行为层**不建 DOM**（只写 CSS 变量）——"顺手 appendChild 一版"
+  // 是最容易走偏的写法，所以在**产物**层面断言它没有建 DOM 的痕迹（变量型行为层是它的要点）。
+  const parallaxProduct = readFileSync(SUB_PARALLAX_PRODUCT, 'utf8');
+  check('parallax-layer.js / ext-parallax.js 已搬出主 bundle（零残留 · 只住在 packages/parallax/lib/client.parallax.js）',
+    !/file:\s*'src\/parallax-layer\.js'/.test(inlineText) && !/file:\s*'src\/ext-parallax\.js'/.test(inlineText)
+    // 正面证据同上：登记在子包配方里（引号不敏感）。
+    && registersFile(subRecipes.text, 'src/parallax-layer.js') && registersFile(subRecipes.text, 'src/ext-parallax.js')
+    && !bundle.includes('function syncParallaxLayer()') && !bundle.includes('function renderParallaxIsland(')
+    && countOnce(parallaxProduct, 'function syncParallaxLayer()') === 1
+    && countOnce(parallaxProduct, 'function disposeParallaxLayer()') === 1
     // 位移只有一条帧循环：混回两份就是两个 rAF 各追各的目标，CSS 变量来回打架。
-    && (bundle.match(/function parallaxFrame\(/g) || []).length === 1
-    // 这一层一个节点都不建 —— "顺手 appendChild 一版"是最容易走偏的写法，
-    // 所以在产物层面断言它没有建 DOM 的痕迹（变量型行为层是它的设计要点）。
-    && !bundle.includes('parallaxHost'));
-  check('ext-parallax.js 已登记进 INLINE_MODULES 且在产物里只有一份',
-    /file:\s*'src\/ext-parallax\.js'/.test(build)
-    && (bundle.match(/function renderParallaxIsland\(ctx\)/g) || []).length === 1
-    // 一张注册表、三项都在（漏一版的失效模式是静默的：功能在屏上根本不存在）。
-    && bundle.includes('AVATAR_EXTENSION_MODULE, FX_EXTENSION_MODULE, PARALLAX_EXTENSION_MODULE')
-    && bundle.includes('parallaxSmooth'));
+    && countOnce(parallaxProduct, 'function parallaxFrame(') === 1
+    && countOnce(parallaxProduct, 'function renderParallaxIsland(ctx)') === 1
+    && parallaxProduct.includes('parallaxSmooth')
+    && !parallaxProduct.includes('parallaxHost')
+    && parallaxProduct.includes('id: "dsh-plugin-wallpaper-engine-parallax"'));
+  // 负对照：两侧都要有牙 —— ① 登记被加回 INLINE_MODULES；② 子包产物里少一份实现。
+  check('negative control: 登记被加回 INLINE_MODULES ⇒ 同一条判据判红',
+    !/file:\s*'src\/fx-layer\.js'/.test(inlineText)
+    && /file:\s*'src\/fx-layer\.js'/.test(inlineText.replace('const INLINE_MODULES = [', "const INLINE_MODULES = [\n  { file: 'src/fx-layer.js' },")));
+  check('negative control: 子包产物少一份实现 ⇒ 同一条判据判红（抽掉一处函数声明）',
+    countOnce(fxProduct, 'function disposeFxLayer()') === 1
+    && countOnce(fxProduct.split('function disposeFxLayer()').join('function goneDispose()'), 'function disposeFxLayer()') === 0);
   // ── 自定义会话头像（「扩展」页签**第一个**模块）：装饰层 + 扩展岛同样是两条登记 ──
   //    它跟另三个模块的关键差别是**它动宿主的会话 DOM**（给消息行补头像节点）——
   //    所以"产物里只有一份"在这里更要紧：两份注入逻辑就是同一行补两个头像。
@@ -1846,9 +2001,42 @@ for (const [name, ok] of clientChecks) check(name, ok);
   check('ext-avatar.js 已登记进 INLINE_MODULES 且在产物里只有一份',
     /file:\s*'src\/ext-avatar\.js'/.test(build)
     && (bundle.match(/function renderAvatarIsland\(ctx\)/g) || []).length === 1
-    // 一张注册表、三项都在，且**头像排在第一位**（用户口径：这一项作为「扩展」页签的第一项）。
-    && bundle.includes('AVATAR_EXTENSION_MODULE, FX_EXTENSION_MODULE, PARALLAX_EXTENSION_MODULE')
-    && bundle.includes('avatarRadius') && bundle.includes('avatarUserImage'));
+    && bundle.includes('avatarRadius') && bundle.includes('avatarUserImage')
+    // A3 起**不再**断言"三项写在同一张静态数组里"：avatar 仍住主包，fx / parallax 各住自己的
+    // 子包产物，屏上顺序由共享注册表按描述符 order 排（见下面那批注册表判据）。
+    && bundle.includes('weRegisterExtensionModule("avatar", AVATAR_EXTENSION_MODULE)'));
+  // ── 扩展页签的**注册表**契约（A3 起跨三份 bundle）──────────────────────────────
+  // 三份产物（主 + packages/fx + packages/parallax）的并集恰好注册这三项；屏上顺序**只**由
+  // 描述符的 order 决定（三份 bundle 的求值顺序不保证，静态数组序不是契约 —— §6.2 显式键集）。
+  const regIds = Array.from((bundle + '\n' + fxProduct + '\n' + parallaxProduct)
+    // 两种拼写都要认：宿主注入的显式键是 registerExtensionModule（小写 r），
+    // 包内的冻结表函数是 weRegisterExtensionModule（大写 R）—— 只认一种就会漏掉某一侧。
+    .matchAll(/[Rr]egisterExtensionModule\(\s*['"]([\w-]+)['"]/g)).map((m) => m[1]);
+  const unionIsThree = (ids) => Array.from(new Set(ids)).sort().join(',') === 'avatar,fx,parallax';
+  check('扩展模块 id 三份产物并集恰好三项（avatar 主包 / fx · parallax 各自子包）',
+    unionIsThree(regIds), regIds.join(',') || '一处注册调用都没找到');
+  check('negative control: 并集少一项 / 多一项都判红（同一份判据函数）',
+    !unionIsThree(['fx', 'parallax']) && !unionIsThree(regIds.concat(['zzz'])));
+  check('panel-tabs 的 extensionModules() 只问注册表（不留静态清单 —— 跨包顺序不是契约）',
+    /function extensionModules\(\) \{\s*\n?\s*return weExtensionModules\(\);/.test(tabsHubSrc));
+  // 顺序的真源 = **描述符声明的 order**（avatar=1 / fx=2 / parallax=3），不是任何数组序。
+  // 行为侧的排序在挂载台里由 installExtensionRegistry() 再判一次（乱序登记）。
+  const orderOfModule = (text, name) => {
+    const i = text.indexOf('const ' + name + ' = {');
+    if (i < 0) return null;
+    const m = /order:\s*(\d+)/.exec(text.slice(i, i + 4000));
+    return m ? Number(m[1]) : null;
+  };
+  const avatarExtSrc = readFileSync(join(root, 'src', 'ext-avatar.js'), 'utf8');
+  const fxExtSrc = readFileSync(subFxFile('ext-fx.js'), 'utf8');
+  const parExtSrc = readFileSync(subParallaxFile('ext-parallax.js'), 'utf8');
+  check('屏上顺序 = 描述符的 order（avatar 1 / fx 2 / parallax 3）· 不靠数组序',
+    orderOfModule(avatarExtSrc, 'AVATAR_EXTENSION_MODULE') === 1
+    && orderOfModule(fxExtSrc, 'FX_EXTENSION_MODULE') === 2
+    && orderOfModule(parExtSrc, 'PARALLAX_EXTENSION_MODULE') === 3,
+    [orderOfModule(avatarExtSrc, 'AVATAR_EXTENSION_MODULE'),
+      orderOfModule(fxExtSrc, 'FX_EXTENSION_MODULE'),
+      orderOfModule(parExtSrc, 'PARALLAX_EXTENSION_MODULE')].join('/'));
   // ── 面板页签（C）：渲染器只在 panel-tabs.js，且**只从一个参数取外界** ──
   const TAB_FNS = ['renderWallpaperTab', 'renderAppearanceTab', 'renderAudioTab',
     'renderMascotTab', 'renderEffectsTab', 'renderAdvancedTab', 'renderExtensionsTab',
@@ -1866,7 +2054,7 @@ for (const [name, ok] of clientChecks) check(name, ok);
   }
   check('每个页签首行都从 ctx 解构（不许再靠闭包捕获）', noCtxLine.length === 0,
     noCtxLine.join(' ') || TAB_FNS.length + ' 个页签都显式取外界');
-  // ── 外观页五节的**默认开合**（2026-10-11 二次修订的用户口径，**必须源码级判**）──────────
+  // ── 外观页五节的**默认开合**（二次修订的用户口径，**必须源码级判**）──────────
   //    用户口径：侧边栏「**后面三个默认隐藏**」、设置页「**全部开启**但也支持隐藏」。
   //    ⚠️ 为什么不能靠渲染用例：那些用例是**直接调渲染器**（隔离测试），默认值住在**面板组件**
   //    里（`readQpOpen` / `readSavedPickerOpen` 的default 参数）—— 隔离测试**看不见默认值**。
@@ -1993,7 +2181,21 @@ for (const [name, ok] of clientChecks) check(name, ok);
   }
 }
 
-const hostSrc = readFileSync(join(root, 'lib', 'index.js'), 'utf8');
+// ⚠️ 门面面 = lib/index.js + **组件行真源**。本分支把媒体桥实现搬进了
+// lib/components/media-bridge/**（P2 拆包）→ **P-F 批 1c 出户到 `packages/media-bridge/lib/**`**，
+// "中间件优先 / legacy 回落 / 音频已关透传"这些形态住在那儿 ⇒ 只扫门面会误报丢失
+// （判据纪律同 hostHalfSrc："拆出的模块必须加进来"）。
+const componentMediaSources = ['packages/media-bridge/lib/index.js', 'packages/media-bridge/lib/legacy.js',
+  'packages/media-bridge/lib/routes/now-playing.js', 'packages/media-bridge/lib/provision.js',
+  'packages/media-bridge/lib/supervisor.js']
+  .map((f) => { try { return readFileSync(join(root, f), 'utf8'); } catch { return ''; } }).join('\n');
+// 再补 **P0 拆出的 lib 模块**：这些模块的实现形态（如 upload-dir 的 `up-dir-${name}` 前缀与
+// `resolveSceneMainFileP` 解析）本就是"原门面里那段代码"，判据按门面面扫时必须能看到它们。
+const p0LibSources = ['lib/upload-dir.js', 'lib/upload-store.js', 'lib/inventory.js', 'lib/cache-dir.js',
+  'lib/fs-paths.js', 'lib/we-assets.js', 'lib/media-origin.js', 'lib/startup-sweep.js',
+  'lib/shim-seed.js', 'lib/we-props.js']
+  .map((f) => { try { return readFileSync(join(root, f), 'utf8'); } catch { return ''; } }).join('\n');
+const hostSrc = readFileSync(join(root, 'lib', 'index.js'), 'utf8') + '\n' + componentMediaSources + '\n' + p0LibSources;
 /** 壁纸媒体源 + 适配器形态观测：已从 `apply()` 拆出（见 lib/media-origin.js 文件头）。 */
 const mediaOriginSrc = readFileSync(join(root, 'lib', 'media-origin.js'), 'utf8');
 /** 清单构建族：已从 `apply()` 拆出（见 lib/inventory.js 文件头，工厂 `createInventoryBuilder`）。 */
@@ -2010,8 +2212,20 @@ const faststartSrc = readFileSync(join(root, 'lib', 'faststart.js'), 'utf8');
  *（如 /diag）的判据必须继续只用 `hostSrc` —— 拿扩面集合去检查"不在"，会把搬走的代码判成还在。
  * ⚠️ 每新增一个"从 apply() 拆出的独立模块"，此处**必须**同步加进来，否则该模块里的契约会被误报丢失。
  */
-const hostHalfSrc = [hostSrc, mediaOriginSrc, inventorySrc, serveSrc, faststartSrc, ...readdirSync(join(root, 'lib', 'routes')).filter((f) => f.endsWith('.js'))
-  .map((f) => readFileSync(join(root, 'lib', 'routes', f), 'utf8'))].join('\n');
+// ⚠️ 扫描面 = 门面 + P0 拆出的独立模块 + 路由族。**每新增一个从 apply() 拆出的模块必须加进来**
+//（本判据自己的纪律，见上方注释）—— 漏加会让该模块里的契约被**误报为丢失**。
+// 例：`traceMediaRequests` 随 P0 库化搬进 lib/diag-trace.js，而本数组原先只读门面与路由族，
+// 于是"双挂载"那条判据的第四个条件恒 false（形态在、扫描面不在 ⇒ 假红）。
+const extraHostHalfSources = [
+  'lib/diag-trace.js', 'lib/cache-dir.js', 'lib/http-lifecycle.js', 'lib/shim-seed.js',
+  'lib/startup-sweep.js', 'lib/we-assets.js', 'lib/media-origin.js',
+  ...readdirSync(join(root, 'lib', 'kernel')).filter((f) => f.endsWith('.js')).map((f) => 'lib/kernel/' + f),
+  ...readdirSync(join(root, 'lib', 'media')).filter((f) => f.endsWith('.js')).map((f) => 'lib/media/' + f),
+].map((f) => { try { return readFileSync(join(root, f), 'utf8'); } catch { return ''; } });
+const hostHalfSrc = [hostSrc, mediaOriginSrc, inventorySrc, serveSrc, faststartSrc,
+  ...extraHostHalfSources,
+  ...readdirSync(join(root, 'lib', 'routes')).filter((f) => f.endsWith('.js'))
+    .map((f) => readFileSync(join(root, 'lib', 'routes', f), 'utf8'))].join('\n');
 // 宿主设置白名单已改为**派生**（唯一真源 lib/settings-schema.js，P1-5）。因此这几条不再
 // 抠实现里的字面量，而是把值喂给宿主的规范化函数看它收不收 —— 断言的是**行为**。
 const schemaMod = await import(pathToFileURL(join(root, 'lib', 'settings-schema.js')).href);
@@ -2022,7 +2236,7 @@ check('host injects the engine shim into web HTML', /data-we-shim="host"/.test(s
 // ── 网页壁纸的**帧级夺焦围栏**（lib/we-focus-guard.js）────────────────────────────
 // 现象：播某些网页类壁纸时，DSH 的输入框 / 下拉选择框 / 左下角账号菜单每点一次就丢焦点 ——
 // 与点击位置无关、与组件类型有关（只有"必须持有键盘焦点才正常"的控件看得出来）。
-// 机制：宿主 window 捕获相把每次真实 mousedown 注入渲染页（src/live-layer.js:1178-1238，且只在
+// 机制：宿主 window 捕获相把每次真实 mousedown 注入渲染页（src/live-layer-pointer.js 的 `ensureLivePointer()`，且只在
 // `selection.sceneLiveActive` 时发 ⇒ 暂停即停）→ 严格沙箱下经 web-shim 的 op 通道 → shim 用
 // elementFromPoint + dispatchEvent 在壁纸文档里合成 pointer/mouse（isTrusted === false）→ 作者在
 // 捕获相 mousedown 里调 window.focus() 争键盘 ⇒ DSH 的焦点被搬进壁纸帧。
@@ -2260,9 +2474,15 @@ check('negative control: 调用点保持语句形态（加赋值前缀会被路�
 // 且缓存后缀按 MIME 决定（PNG 存成 .jpg 会按错误类型解码）。
 // 这套现为**回落实现**（lib/media/legacy.js），首选是 media-bridge 子进程（lib/media/*）
 // —— 断言因此两边都盯：回落能力不能退化，新链路的接缝要在。
-const legacyBridgeSrc = readFileSync(join(root, 'lib', 'media', 'legacy.js'), 'utf8');
-check('回落实现住在 lib/media/legacy.js（回落路径还在）',
-  existsSync(join(root, 'lib', 'media', 'legacy.js')) && !existsSync(join(root, 'lib', 'media-bridge.js')));
+// ⚠️ 实现归属随 P2 拆包搬进**组件行**（lib/components/media-bridge/legacy.js），P-F 批 1c 出户到
+// `packages/media-bridge/lib/legacy.js`：判据按**真源**读，候选表兼容三种排布，缺锚即判红。
+const legacyBridgePath = ['packages/media-bridge/lib/legacy.js', 'lib/components/media-bridge/legacy.js',
+  'lib/media/legacy.js']
+  .find((rel) => existsSync(join(root, rel)));
+const legacyBridgeSrc = legacyBridgePath ? readFileSync(join(root, legacyBridgePath), 'utf8') : '';
+check('回落实现住在 media-bridge 组件行 legacy.js（回落路径还在）',
+  Boolean(legacyBridgePath) && !existsSync(join(root, 'lib', 'media-bridge.js')),
+  legacyBridgePath || '未找到 legacy 实现（组件行与 lib/media 都没有）');
 check('封面走 media-control 的 artworkData（通用，不限 Spotify）',
   legacyBridgeSrc.includes('artworkData') && legacyBridgeSrc.includes('artworkMimeType')
     && legacyBridgeSrc.includes('function takeArtworkMac('));
@@ -2279,9 +2499,22 @@ check('回落实现尊重「音频已关」（不会偷偷开采集/申请权限
 check('host 按扩展名回封面 Content-Type', serveSrc.includes("bmp: 'image/bmp'"));
 
 // ── media-bridge 中间件的接缝（首选路径）────────────────────────────────────
-const provSrc = readFileSync(join(root, 'lib', 'media', 'provision.js'), 'utf8');
-const supSrc = readFileSync(join(root, 'lib', 'media', 'supervisor.js'), 'utf8');
-const facadeSrc = readFileSync(join(root, 'lib', 'media', 'index.js'), 'utf8');
+// ── media 域真源映射（P2 拆包把实现搬进组件行）────────────────────────────────
+// 上游把媒体域放在 `lib/media/<f>`；本分支随 P2 把整套实现搬进了**组件行**、P-F 批 1c 再出户到
+// `packages/media-bridge/lib/**`。判据按真源读：出户包优先、组件行兼容、`lib/media` 兜底；
+// 三处都没有时返回首选路径（后续 readFileSync 会响亮地 ENOENT）—— 绝不回落到"再调一次自己"。
+const mediaSrcCandidates = (f) => ['packages/media-bridge/lib/' + f, 'packages/media-bridge/lib/routes/' + f,
+  'lib/components/media-bridge/' + f, 'lib/media/' + f].map((rel) => join(root, rel));
+const mediaSrcPath = (f) => mediaSrcCandidates(f).find((abs) => existsSync(abs)) || mediaSrcCandidates(f)[0];
+const provSrc = readFileSync(mediaSrcPath('provision.js'), 'utf8');
+const supSrc = readFileSync(mediaSrcPath('supervisor.js'), 'utf8');
+// ⚠️ 门面面 = 媒体桥子包的**整面**（不是只有 index.js）：'中间件优先/回落/音频已关透传'这些形态
+// 分布在 index.js 与 legacy.js/supervisor.js 里 ⇒ 只读一个文件会误报丢失（判据纪律：拆出的模块必须加进来）。
+const mediaPkgDir = ['packages/media-bridge/lib', 'lib/components/media-bridge']
+  .map((rel) => join(root, rel)).find((abs) => existsSync(abs));
+const facadeSrc = (mediaPkgDir ? readdirSync(mediaPkgDir) : [])
+  .filter((f) => f.endsWith('.js'))
+  .map((f) => { try { return readFileSync(join(mediaPkgDir, f), 'utf8'); } catch { return ''; } }).join('\n');
 check('产物表：darwin 通用包 / linux x64 musl / win32 双架构',
   provSrc.includes("'media-bridge-darwin-universal'")
     && provSrc.includes("'media-bridge-linux-x64-musl'") && provSrc.includes("'media-bridge-win32-x64.exe'"));
@@ -2329,7 +2562,15 @@ const winHideSites = [
 ];
 const winHideBad = [];
 for (const site of winHideSites) {
-  const body = readFileSync(join(root, site.file), 'utf8');
+  // ⚠️ 真源解析：表内保留**上游坐标**（lib/transcode.js、lib/media/legacy.js），读取时按候选表
+  // 定位本分支的真源 —— P2 拆包把媒体域实现搬进了组件行（P-F 批 1c 再出户到 `packages/media-bridge/lib/`），
+  // 而 lib/transcode.js 在本分支是 lib/media/transcode.js。找不到就落回原路径（下面的判据会以"读了空/缺失"响亮地判红）。
+  const siteBase = site.file.split('/').pop();
+  const siteAbs = [join(root, site.file), join(root, 'lib', 'media', siteBase),
+    join(root, 'packages', 'media-bridge', 'lib', siteBase),
+    join(root, 'lib', 'components', 'media-bridge', siteBase)]
+    .find((abs) => existsSync(abs)) || join(root, site.file);
+  const body = readFileSync(siteAbs, 'utf8');
   const flags = (body.match(/windowsHide: true/g) || []).length;
   if (!site.spawn.test(body) || flags < site.minFlags) winHideBad.push(site.file);
 }
@@ -2343,7 +2584,7 @@ check('门面把「音频已关」传给回落实现（不让回落偷偷开采�
 // 媒体状态族已搬到 lib/routes/now-playing.js（P2-11）。判据按 diag 族的同一形态翻成三条：
 // ① URL 形状由**真实注册表**（mock webServer 跑一遍 apply 的结果）断言 —— 与代码住在哪个文件无关；
 // ② 该路由的实现契约在**它现在所在的文件**里断言；③ 正文侧钉住"已搬走"（零路径字面量 + 一次调用）。
-const nowPlayingSrc = readFileSync(join(root, 'lib', 'routes', 'now-playing.js'), 'utf8');
+const nowPlayingSrc = readFileSync(mediaSrcPath('now-playing.js'), 'utf8');
 const nowPlayingPaths = ['/media-status', '/audio-spectrum', '/now-playing', '/now-playing/artwork', '/media-control'];
 const missingNowPlaying = nowPlayingPaths.filter((p) => !routes.some((r) => r.path === '/wallpaper-engine' + p));
 check('host 路由形状不变（客户端/渲染页无需感知后端切换）',
@@ -2352,8 +2593,12 @@ check('negative control: 同一条判据能点出没注册的路径',
   ['/media-status', '/not-registered'].filter((p) => !routes.some((r) => r.path === '/wallpaper-engine' + p)).join() === '/not-registered');
 check('spectrum 路由回报 running（客户端据此决定装不装音频桥）',
   nowPlayingSrc.includes('running: st.audio.status ===') && nowPlayingSrc.includes('mediaBackend.status()'));
+// ⚠️ 拆成两个面看（这是**口径修正**，不是放宽）：
+//   · "门面**正文**零路径字面量" ⇒ 只看 lib/index.js（族文件的字面量本来就该在族文件里，
+//     把加宽后的 hostSrc 拿来判这一半会把正确结构判成假红）；
+//   · "一次调用" ⇒ 门面或**组件行入口**任一处有即可（本分支该族整体出户，调用点在组件入口）。
 check('媒体状态族已搬出 lib/index.js（正文零路径字面量 + 一次调用）',
-  !/path: `\$\{BASE\}\/(media-status|audio-spectrum|now-playing)/.test(hostSrc)
+  !/path: `\$\{BASE\}\/(media-status|audio-spectrum|now-playing)/.test(readFileSync(join(root, 'lib', 'index.js'), 'utf8'))
     && /registerNowPlayingRoutes\(webServer, \{/.test(hostSrc));
 check('settings 白名单保留 mediaLyricsOnline（否则开关会被丢）', hostKeeps('mediaLyricsOnline', true));
 
@@ -2419,7 +2664,7 @@ check('host 侧 /media-control 只收 POST + 动作走 mediaBackend.control（�
     leftoversIn('switchRow("在线歌词", v)').join(',') === '在线歌词'
       && leftoversIn('switchRow("媒体信息", v) && switchRow("系统音频反应", v)').length === 2);
 
-// 用户口径（2026-10-04 更新）：侧栏壁纸列表的类型档（全部 / 场景 / 网页 / 视频 / 图片）
+// 用户口径（更新）：侧栏壁纸列表的类型档（全部 / 场景 / 网页 / 视频 / 图片）
 // **与设置页是同一个键 `typeFilter`** —— 类型变动两处同步、不做单独的档（原「面板本地
 // 瞬态 qpType + 两层交集空态兜底」整套退役：不再 setTransient("qpType")、不再有默认档
 // 行、空态不再有"没有交集/完整操作链"提示）。「图片」是后补的一档（上传的单文件图片
@@ -2500,6 +2745,29 @@ check('「壁纸属性」按钮：仅场景/网页壁纸 + 常规按钮样式（
     && !tabsSrc.includes('we-picker__btn--props')
     && tabsSrc.indexOf('weT("壁纸属性")') !== -1
     && tabsSrc.indexOf('weT("壁纸属性")') < tabsSrc.indexOf('weT("暂停")'));
+// 「侧栏播放控制行」这一节钉两件事：全局主按钮款式不被二次覆盖、窄容器下控制行不溢出。
+// 两件都只看**当前形态**，不涉及某枚具体按钮。
+{
+  // 全局 primary 款式仍是"实心底 + 墨随 accent"（styles-ext.js 那条未限定作用域的覆盖
+  // 是历史上真实发生过的隐形 bug —— 这里正面钉住 panel 段那条主规则还在、且 styles-ext
+  // 中不再有第二份 .we-picker__btn--primary 覆盖把它压掉）。
+  const extStyleSrc = readFileSync(join(root, 'src', 'styles-ext.js'), 'utf8');
+  check('全局主按钮款式不被 styles-ext 二次覆盖（隐形 bug 防复发）',
+    stylesSrc.includes('color: var(--we-accent-ink, #fff);')
+      && !/^\s*\.we-picker__btn--primary\s*\{/m.test(extStyleSrc),
+    'ext 覆盖规则数=' + (extStyleSrc.match(/^\s*\.we-picker__btn--primary\s*\{/m) || []).length
+      + ' extStyleSrc.length=' + extStyleSrc.length);
+  // 窄容器不溢出：播放控制行多枚按钮（暂停/刷新/清除，外加场景壁纸的「壁纸属性」），
+  // 官方右栏最窄 276px 时可能放不下 ⇒ 控制行必须允许整组折行、按钮组带
+  // margin-left: auto（折行时靠右）。判据钉两个声明在**同一条规则**上。
+  const curRowRule = stylesSrc.match(/\.we-qp__current\s*\{[^}]*\}/);
+  const actsRule = stylesSrc.match(/\.we-qp__current-actions\s*\{[^}]*\}/);
+  check('窄容器防溢出：控制行 flex-wrap + 按钮组 margin-left: auto（折行右对齐）',
+    Boolean(curRowRule) && /flex-wrap:\s*wrap/.test(curRowRule[0])
+      && Boolean(actsRule) && /margin-left:\s*auto/.test(actsRule[0]),
+    'row=' + (curRowRule ? curRowRule[0].replace(/\s+/g, ' ').trim() : 'MISSING')
+      + ' | acts=' + (actsRule ? actsRule[0].replace(/\s+/g, ' ').trim() : 'MISSING'));
+}
 check('属性面板热更新走 __wp.updateWebProps',
   src.includes('function applyUserProps(') && src.includes('wp.updateWebProps(wire)'));
 check('属性面板值以渲染页实时表为准（getProperties）',
@@ -2591,7 +2859,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
   // 渲染器的 surface 档：侧栏档与设置页共用渲染器，差异一律走 `surface` 门 ——
   // 行为级 golden 在 verify-client.mjs。
   const gated = (text, label) => new RegExp('!sidebarSurface &&[\\s\\S]{0,240}?weT\\("' + label + '"\\)').test(text);
-  // ⚠️ 分档（ADR-0008 D4 **三次修订**，2026-10-11 用户口径）：**「全局字体」两档都画**。
+  // ⚠️ 分档（ADR-0008 D4 **三次修订**，用户口径）：**「全局字体」两档都画**。
   //    二次修订曾把它单向迁进侧栏（门 `!sidebarSurface` 反转为 `sidebarSurface &&`），随后
   //    用户在设置页找不到该节、报"字体自定义被干掉了" —— 用户口径是"两边都有"。现在**两个
   //    方向都不带 surface 门**，折叠门（`fontOpen`，默认收起）保留；「输入光标」照旧两档都画。
@@ -2601,9 +2869,9 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
   //    的 656 字符。
   const gatedSidebar = (text, label) => new RegExp('(?<!!)sidebarSurface &&[\\s\\S]{0,800}?weT\\("' + label + '"\\)').test(text);
   check('「全局字体」节两档都画（两个方向的 surface 门都已摘掉；折叠门保留；输入光标照旧无门）',
-    !gated(tabsSrc, '全局字体') && !gatedSidebar(tabsSrc, '全局字体')
-      && tabsSrc.includes('open && switchRow(weT("字体自定义"')
-      && !gated(tabsSrc, '输入光标'));
+    !gated(tabsSrcWithFontSection, '全局字体') && !gatedSidebar(tabsSrcWithFontSection, '全局字体')
+      && tabsSrcWithFontSection.includes('open && switchRow(weT("字体自定义"')
+      && !gated(tabsSrcWithFontSection, '输入光标'));
   check('播放页的准备与诊断行（出图来源 / 实时帧 / 自定义画面 / 帧率上限 / 源信息 / 转码进度）只在设置页档渲染',
     ['出图来源', '实时帧', '自定义画面', '帧率上限'].every((label) => gated(tabsSrc, label))
       && tabsSrc.includes('!sidebarSurface && sel.type === "video" && sel.mediaInfo')
@@ -2856,7 +3124,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     check('negative control: 仍住在组件里的处理器会被同一条判据判出',
       strayProcessors(src.replace('function WallpaperPicker() {', '')).length === PROMOTED.length);
   }
-  // 另：字体 / 主题处理器与三个 ctx 构造器**同样**必须在模块级（2026-10-07 从 WallpaperPicker
+  // 另：字体 / 主题处理器与三个 ctx 构造器**同样**必须在模块级（从 WallpaperPicker
   //    体内提到模块级）：它们只读模块级单例 `selection`、只调模块级函数（setFontValues /
   //    applyEffects / emit / ensureSystemFonts / fontset-store 与 preset-store 一族），
   //    不需要组件作用域；住在组件里等于每次渲染重建一份（函数 / 对象身份全变）。
@@ -2888,7 +3156,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     check('negative control: 把界线画到文件开头（等价于"全算组件内"）同一条判据会判出全部',
       PROMOTED_FONT.every((n) => posOf(n) > 0) && flagged(0).length === PROMOTED_FONT.length);
   }
-  // 另（2026-10-07 第三刀）：壁纸库 / 库视图的纯处理器与纯常量同样提到模块级 —— 判据同前
+  // 另（第三刀）：壁纸库 / 库视图的纯处理器与纯常量同样提到模块级 —— 判据同前
   //    （只读模块级单例 `selection` / 只调模块级函数 ⇒ 不需要组件作用域；住在组件里等于每次
   //    渲染重建一份，函数 / 对象身份全变）。
   // ⚠️ 例外（**必须留组件内**，故意不进名单）：`group` / `candidates` 是读**可变** store 算出的
@@ -2933,7 +3201,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       && flagged(hoisted('candidates'), compStart, inComponent).length === 0
       && !flagged(hoisted('candidates'), compStart, inComponent).includes('candidates'));
   }
-  // 另（2026-10-07 B3-a）：syncLayers 的 6 个分段助手也已提到模块级 —— 判据=只读模块级单例
+  // 另（B3-a）：syncLayers 的 6 个分段助手也已提到模块级 —— 判据=只读模块级单例
   //    `selection` / 只调模块级函数（`selection` 与 `IS_EDGE` 在本模块内是自由变量）⇒
   //    syncLayers 只留编排（键计算 / 取层 / 旧层处置 / Scrim / 抓帧探测 / 槽位收尾各一行调用）。
   const SYNC_LAYER_HELPERS = ['layerWantKey', 'obtainLayerNode', 'disposeOutgoingLayer',
@@ -2955,7 +3223,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     //    大多用 `\\s` 吃掉了那个 `\\r` —— 只有这条把换行写成了字面量 `\\n`，于是**候选恒为 0**：
     //    症状是 `候选 0 个` + 279 passed / 1 failed，本机（LF 检出）却全绿。
     //    实测复现：`git clone -c core.autocrlf=true` 的检出上 `node test/verify-scene-live.mjs`
-    //    得到与 CI 逐字相同的失败（2026-10-01，PR #125 首次推送）。
+    //    得到与 CI 逐字相同的失败（PR #125 首次推送）。
     const CTX_DESTRUCTURE = (fnName) =>
       new RegExp('function ' + fnName + '\\(ctx\\) \\{\\r?\\n\\s*const \\{([^}]*)\\} = ctx;');
     const ctxFieldsOf = (fnName, text = tabsSrc) => {
@@ -3014,7 +3282,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       qpSrc + '\nreturn { sidebarRenderCtx, QP_CTX_SETTINGS_ONLY, QP_TABS };');
     const bag = factory((k) => k, { createElement: () => null }, { getItem: () => null, setItem() {} });
     const ctx = bag.sidebarRenderCtx({ sel: {}, onAccent: () => 'ok' });
-    // 牙改钉**仍在名单里**的字段（2026-10-09 迁移后字体与玻璃高级行已移出占位器、
+    // 牙改钉**仍在名单里**的字段（迁移后字体与玻璃高级行已移出占位器、
     // 改传真值 ⇒ 拿它们戳会得到 "not a function" 而不是 [we-sidebar]，那是**预期**）：
     // 播放页专属的 onFpsCap（调用）与预设 glassPresets（取属性，单独那条也判）。
     const called = (() => { try { ctx.onFpsCap(); return 'no-throw'; } catch (e) { return String(e.message); } })();
@@ -3074,6 +3342,8 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     const mod = await import(pathToFileURL(join(root, rel)).href);
     for (const [k, v] of Object.entries(mod)) globalThis[k] = v;
   }
+  // A3：装共享注册表 —— 三项来自三份不同 bundle（求值顺序不保证）⇒ 挂载台必须自己登记。
+  await installExtensionRegistry();
   const schema = await import(pathToFileURL(join(root, 'lib', 'settings-schema.js')).href);
   const noop = () => null;
   // useState 的值由队列喂（QuickPanel 的调用序：[view, qpTab]）。
@@ -3112,7 +3382,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
   //    两个模块各有自己的作用域 ⇒ 必须自己把它挂成全局（与上面那批模块级助手同一条口径）。
   globalThis.renderAppearanceGlassSection =
     (await import(pathToFileURL(join(root, 'src', 'glass-panel.js')).href)).renderAppearanceGlassSection;
-  // 节头构件（2026-10-11：三节在侧边栏默认收敛）—— 同上一条口径，给**真实现**：
+  // 节头构件（三节在侧边栏默认收敛）—— 同上一条口径，给**真实现**：
   // 折叠逻辑（`collapsible` 短路 + aria-expanded + caret）正是本节新判据要验的东西，
   // 挂个替身等于"判据测替身"（比红更糟）。
   globalThis.sectionHead =
@@ -3179,7 +3449,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     // 设置页专属的（如 onFpsCap —— 帧率上限那行带 `!sidebarSurface` 门）才进占位器名单。
     'onLeftSidebarGlass', 'onTitlebarGlass', 'onSidebarGlass',
     'onSidebarAllCorners', 'onSidebarCornerRadius', 'onSidebarCornerSquare', 'onSidebarFullClear',
-    // 2026-10-09（ADR-0008 D4 二次修订）：字体节与玻璃高级行**迁入侧栏**（折叠块）⇒ 它们
+    // （ADR-0008 D4 二次修订）：字体节与玻璃高级行**迁入侧栏**（折叠块）⇒ 它们
     // 从 QP_CTX_SETTINGS_ONLY 占位器名单移出、由 quick-panel 真值接线 ⇒ 这些名字现在是
     // **quick-panel 源码里的裸标识符** ⇒ 必须在这里当形参给（漏一个就是 vm 求值 ReferenceError）。
     'onCaretColor', 'onSidebarAlpha', 'onSidebarBlur', 'onSidebarColor',
@@ -3191,7 +3461,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     // 「要不要玻璃」整层退役，已清掉（src 里零出现 = 死数据）。
     'onToggleChildIndependent',
     'onGlassChildParam', 'childIndependentOn',
-    // ── 全局字体节（2026-10-09 迁入侧栏）：渲染器与 ctx 构造器都是 quick-panel 的
+    // ── 全局字体节（迁入侧栏）：渲染器与 ctx 构造器都是 quick-panel 的
     //    自由变量 —— 与上面同一条纪律。`ensureSystemFonts` 是清单触发点随迁带来的
     //    （effect 在 QuickPanel 里调它）。
     'fontSetCtx', 'officialColorOf', 'ensureSystemFonts',
@@ -3199,7 +3469,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     'onGlobalFamily', 'onRefreshSystemFonts', 'onToggleFontCustom',
     'onThemeColor', 'onThemeColorClear', 'onThemeDarkSeparate', 'onThemeFamily',
     'onThemeSize', 'onThemeTypeOnly', 'onThemeWeight',
-    // ── 全局 UI 配色节（2026-10-11）：同一纪律 —— 渲染器与 ctx 构造器都在 quick-panel 的
+    // ── 全局 UI 配色节：同一纪律 —— 渲染器与 ctx 构造器都在 quick-panel 的
     //    作用域里引用这两个名字，漏一个就是 vm 求值 ReferenceError（本判据已经抓到过一次）。
     'onToggleUiColorCustom', 'onUiColorElement',
     // 子 UI 登记表：renderAppearanceGlassSection 按它逐项渲染。替身必须给**与 schema 同源**
@@ -3253,7 +3523,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       //（与 schema 同源，来自被内联的 panel 模块作用域）—— 手抄一份就会漂。
       onToggleChildIndependent: noop,
       onGlassChildParam: noop, childIndependentOn: () => false,
-      // 字体节（2026-10-09 迁入侧栏）：ctx 构造器给真形状的替身 —— `fontSetCtx()` 会被
+      // 字体节（迁入侧栏）：ctx 构造器给真形状的替身 —— `fontSetCtx` 会被
       // qpRenderAppearancePane 无条件调用（noop 返回 undefined 也不炸，但给真形状更接近
       // 运行期：`fontSet.open` 若被读到就是布尔而不是 undefined 属性错）。
       fontSetCtx: () => ({ open: false, fontSets: [], activeId: '', loading: false, error: '' }),
@@ -3289,7 +3559,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     wp.shape.includes('we-qp__library') && wp.shape.includes('we-qp__list')
       && wp.shape.includes('we-qp__viewtabs') // 列表/卡片视图切换也只在壁纸档（标签式，非页签栏成员）
       && !ap.shape.includes('we-qp__library') && !pb.shape.includes('we-qp__library'));
-  // ── 外观档的字体节（2026-10-09 迁入侧栏，默认收起）────────────────────────────
+  // ── 外观档的字体节（迁入侧栏，默认收起）────────────────────────────
   //    ⚠️ 本台的 switchRow / ctlText 是 noop ⇒ 标签文字不进 text，行级判据用**类名锚**
   //    （字体表 `we-picker__font-table` 是直接 createElement，收起/展开两态都看得见）。
   //    收起态：节头「全局字体」在、字体表不在；展开态（extraState 第三位 = true）+ 总开关开
@@ -3440,12 +3710,15 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     const mod = await import(pathToFileURL(join(root, rel)).href);
     for (const [k, v] of Object.entries(mod)) globalThis[k] = v;
   }
+  // A3：装共享注册表 —— 三项来自三份不同 bundle（求值顺序不保证）⇒ 挂载台必须自己登记。
+  await installExtensionRegistry();
   const schemaMod = await import(pathToFileURL(join(root, 'lib', 'settings-schema.js')).href);
   // ⚠️ 先归一成 LF 再切片：工作树是 CRLF，而下面的边界串是 `\n  }\n`（裸 LF）——
   // 在 CRLF 上它**匹配不到**，`indexOf` 回 -1 会让切片一路吃到文件尾（把别人的解构也当成
   // 这一节的），于是判据会把整个词表都报成"漏解构"。这类"切错了还照旧报"正是判据要防的形状。
   const tabsSrcNow = panelText()
-    .replace(/\r\n/g, '\n');
+    .replace(/\r\n/g, '\n')
+    + '\n;\n' + fontSectionSrc;
   // 这些名字在产物里是**内联同一作用域**的常量 / 纯组件 / 纯函数；单独 import 时按内联规则
   // 补 globalThis 替身（`weT` 由 tools/weT-shim.mjs 装、React 等由上面那块装）。
   Object.assign(globalThis, {
@@ -3559,8 +3832,8 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
   // 与一号模块同款覆盖方式：单独 import 真模块 + 真渲染一次。这一族的驱动源是**输入事件**
   // 与一个内容驱动的 rAF 循环 —— 沙箱里两者都没有，所以"零副作用"这条比一号模块更要紧：
   // 没有 rAF 时它连 DOM 都不该建（碰一下 `document` 就是 TypeError）。
-  const fxLayerMod = await import(pathToFileURL(join(root, 'src', 'fx-layer.js')).href);
-  const extFxMod = await import(pathToFileURL(join(root, 'src', 'ext-fx.js')).href);
+  const fxLayerMod = await import(pathToFileURL(subFxFile('fx-layer.js')).href);
+  const extFxMod = await import(pathToFileURL(subFxFile('ext-fx.js')).href);
   {
     const PREV_SEL = globalThis.selection;
     const restoreWeBase = stubWeBase();
@@ -3585,7 +3858,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     // 源码口径：这一层最要紧的几件事都是"看不见的行为"（层级、输入过滤、混合写在宿主、
     // 空闲零帧），运行期判据在沙箱里够不着 ⇒ 与一号模块同款用源码断言钉住形态。
     // ⚠️ 归一成 LF 再切片：CI（windows-latest）检出是 CRLF，字面量 \\n 的 includes 在那边恒 miss。
-    const fxSrc = readFileSync(join(root, 'src', 'fx-layer.js'), 'utf8').replace(/\r\n/g, '\n');
+    const fxSrc = readFileSync(subFxFile('fx-layer.js'), 'utf8').replace(/\r\n/g, '\n');
     check('fx-layer.js 内容驱动帧循环 + 层级压在暗化层之上 + 不接管输入 + 混合写在宿主 + 死锁负向',
       fxSrc.includes("const FX_HOST_ID = 'we-fx-layer';")
       && fxSrc.includes('const FX_UI_SELECTOR = ')
@@ -3623,7 +3896,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     // 这条判据用**假 canvas 数贵操作**：只数 stroke / fill / 非零 shadowBlur 赋值，
     // 在最小 DOM 替身下真跑一遍画布层，断言"一帧的贵操作数"落在一个**只许下降**的上界内。
     // 纯源码断言（例如"文件里不许出现 shadowBlur"）挡不住"换成别的贵写法"，故以计数为准。
-    const fxPerfSrc = readFileSync(join(root, 'src', 'fx-layer.js'), 'utf8').replace(/\r\n/g, '\n');
+    const fxPerfSrc = readFileSync(subFxFile('fx-layer.js'), 'utf8').replace(/\r\n/g, '\n');
     const restorePerfBase = stubWeBase();
     const PERF_KEYS = ['document', 'window', 'requestAnimationFrame', 'cancelAnimationFrame', 'selection', 'weNow'];
     const prevPerf = {};
@@ -3774,7 +4047,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     // ⚠️ 刀4 之后节的渲染器搬到了 src/panel-tabs-*.js 域模块 ⇒ 扫**页签族全文**（组装点在末尾），
     //    而不是组装点单文件（否则六处调用全在域模块里 ⇒ 假红 missing=theme,detail,…）。
     const appearanceModules = ['theme', 'detail', 'corners', 'uiColor', 'font'];
-    const panelAllSrc = panelText();
+    const panelAllSrc = panelText() + '\n;\n' + fontSectionSrc;
     const missingModules = appearanceModules.filter((m) => !panelAllSrc.includes('moduleResetButton("' + m + '"'));
     check('#192 外观六模块各挂 ↺ + 玻璃 UI 也挂 + 共用构件阻止冒泡',
       missingModules.length === 0
@@ -4189,7 +4462,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     rmSync(mdatMutDir, { recursive: true, force: true });
   }
   {
-    // ── 头像导入的两道闸 + 「自动压缩后导入」（#185 后续，用户口径 2026-10-13）──────────
+    // ── 头像导入的两道闸 + 「自动压缩后导入」（#185 后续，用户口径）──────────
     // 这道闸之前**根本不存在**：选什么图都直接 decodeImageFile，再缩到 512px 上传。
     // 危险在"解码炸弹"—— 一个 20000×20000 的 PNG 只有几百 KB，解码却要 1.6 GB 像素内存；
     // 而"这图多大"**不用解码就能从文件头读出来**。判据因此盯五件事：
@@ -4251,7 +4524,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       gateBeforeDecode(gsrc) === true && gateBeforeDecode(reversed) === false);
   }
   {
-    // ── 模块级 ↺ 的视觉对齐（#192 的回归，用户口径 2026-10-13）────────────────────────
+    // ── 模块级 ↺ 的视觉对齐（#192 的回归，用户口径）────────────────────────
     // 根因：`.we-picker__section-caret` 与 `.we-mod-reset` **都写了 margin-left: auto**，
     // 同一 flex 行里两个 auto 会把剩余空间**均分** ⇒ ↺ 停在行中间；而「主题」节头没有
     // 折叠三角、只剩一个 auto ⇒ 它贴在最右端。用户要的是**所有模块都长成主题那样**。
@@ -4307,7 +4580,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       ctxOf(Object.assign({}, schemaMod.DEFAULTS, { fxEnabled: true }))));
     globalThis.FX_BLEND_VALUES = PREV_BLEND;
     const mod = extFxMod.FX_EXTENSION_MODULE;
-    const fxSrc = readFileSync(join(root, 'src', 'ext-fx.js'), 'utf8');
+    const fxSrc = readFileSync(subFxFile('ext-fx.js'), 'utf8');
     const wantOff = [globalThis.weT('启用点击与拖尾效果')];
     const wantOn = wantOff.concat(PARAMS.map((k) => globalThis.weT(k)));
     check('ext-fx.js 可单独 import · 注册表项形状 · 关着只画总开关、开着才画 12 参数',
@@ -4359,8 +4632,8 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
   // 开关属性，位移在 src/styles.js 的视差段里算。所以"沙箱里零副作用"这条比前两层更硬：
   // 碰一下 `document` 就是 TypeError，而运行期判据（真的挪了多少像素）在无头环境够不着
   // ⇒ 一半靠"零抛错"、一半靠源码口径（下面第二条），与前两层同款。
-  const parallaxLayerMod = await import(pathToFileURL(join(root, 'src', 'parallax-layer.js')).href);
-  const extParallaxMod = await import(pathToFileURL(join(root, 'src', 'ext-parallax.js')).href);
+  const parallaxLayerMod = await import(pathToFileURL(subParallaxFile('parallax-layer.js')).href);
+  const extParallaxMod = await import(pathToFileURL(subParallaxFile('ext-parallax.js')).href);
   {
     const PREV_SEL = globalThis.selection;
     const restoreWeBase = stubWeBase();
@@ -4390,7 +4663,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       && !threw, threw);
     // 源码口径：这一层的要点全是"看不见的形态"（不建 DOM、只用独立属性可用量、中心对称、
     // 到位就停、系数可配、特效层不参与）。逐条钉住，改坏了当场红。
-    const parSrc = readFileSync(join(root, 'src', 'parallax-layer.js'), 'utf8');
+    const parSrc = readFileSync(subParallaxFile('parallax-layer.js'), 'utf8');
     const weBaseSrc = readFileSync(join(root, 'src', 'we-base.js'), 'utf8');
     check('parallax-layer.js 不建 DOM + 独立属性直接写位移 + 中心对称(负向) + 收敛驱动 + 特效不参与 + 帧内零测量',
       parSrc.includes("const PARALLAX_DIRECTION = -1;")
@@ -5092,7 +5365,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       // ⚠️ 四个区域距离必须**显式补齐**：`cleared` 那一步换掉的对象只剩 `parallaxEnabled`
       // ⇒ `parallaxSettings()` 的四条 `weClampTo(...)` 全部落到各自的**兜底常数**
       // （`PARALLAX_GROUP_CHAT` 1.2 / `COMPOSER` 1.8 / `SIDEBAR` 1.6 / `BUBBLE` 1.4，见
-      // `src/parallax-layer.js:172-175` 与 `:317-324`）—— 那样"会话基准"就不是 1.0 档、
+      // `packages/parallax/src/parallax-layer.js` 的这四枚常数与 `parallaxSettings()` 里那四条 `weClampTo(...)`）—— 那样"会话基准"就不是 1.0 档、
       // "输入卡片"也不是 1.5 档，下面所有分档断言全部对着错的档位（踩过：composer 读成 1.8 档
       // = −29，而判据在等 1.5 档 = −24）。
       globalThis.selection.parallaxUiChatDepth = 1;
@@ -5120,7 +5393,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       //    不成立，删掉不改变任何可达形态 ⇒ 那个方向由源码结构那条判据钉。）
       //    ⚠️ 位移落在哪一层：`mkGroup` 给的出口已经是 `display: contents`（照宿主 ANCHOR_STYLE），
       //    所以 `parallaxGroupBox()` 会走过出口、把记录与位移都落在**父盒子上**
-      //    （`src/parallax-layer.js:589-614`）⇒ 读数一律读 `.box` 的 `translate`，出口那份 props
+      //    （`packages/parallax/src/parallax-layer.js` 的 `parallaxGroupBox()`）⇒ 读数一律读 `.box` 的 `translate`，出口那份 props
       //    永远没有 translate（老腿里"出口无 translate"那条断言因此是恒真的，改读盒子才有牙）。
       const composerAttr = mkGroup({ 'data-composer-card': '' });
       docGroups.push(composerAttr.outlet);
@@ -5198,7 +5471,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
         && chatRef[0] < 0 && chatRef[1] < 0
         && chatRef[0] === chatRef[1] * 16 / 9;
       // 钳制上界从层源码现读（`10`）—— 台上那份 `__src` 是模块源码，直接正则取，别抄常数。
-      const depthMaxMatch = readFileSync(join(root, 'src', 'parallax-layer.js'), 'utf8')
+      const depthMaxMatch = readFileSync(subParallaxFile('parallax-layer.js'), 'utf8')
         .match(/const PARALLAX_GROUP_DEPTH_MAX = (\d+);/);
       const depthMax = depthMaxMatch ? Number(depthMaxMatch[1]) : 10;
       composerAttrOk = baseOk && !!composerAttrNum
@@ -5259,12 +5532,12 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     // 三号模块的岛：注册表项形状 + 「关着只画总开关、开着才画 3 个参数」这条可见行为。
     // 与另两个模块同一张注册表 ⇒ id 必须唯一（'parallax'），title/desc 取的就是译文。
     // 单独 import 时 `PARALLAX_PLUGIN_DEFAULT` / `PARALLAX_GROUP_DEPTH_MIN` / `PARALLAX_GROUP_DEPTH_MAX`
-    // 在**构建期**是同一作用域的兄弟模块符号（src/parallax-layer.js 里那三枚）⇒ 按内联规则补替身。
+    // 在**构建期**是同一作用域的兄弟模块符号（packages/parallax/src/parallax-layer.js 里那三枚）⇒ 按内联规则补替身。
     // 缺省值有导出、直接取层本尊；钳制范围那一对层**不导出** ⇒ 从层源码里现读（`const NAME = N;`，
     // 顺手把"面板回显的范围就是层那一对常量"钉住），值都是现取的、这里不抄数。
     const PREV_PLUGIN_DEFAULT = globalThis.PARALLAX_PLUGIN_DEFAULT;
     globalThis.PARALLAX_PLUGIN_DEFAULT = parallaxLayerMod.PARALLAX_PLUGIN_DEFAULT;
-    const parSrcIsland = readFileSync(join(root, 'src', 'parallax-layer.js'), 'utf8');
+    const parSrcIsland = readFileSync(subParallaxFile('parallax-layer.js'), 'utf8');
     const parConstNum = (name) => {
       const m = new RegExp('const ' + name + ' = (-?\\d+(?:\\.\\d+)?);').exec(parSrcIsland);
       return m ? Number(m[1]) : NaN;
@@ -5307,7 +5580,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       ctxOf(Object.assign({}, schemaMod.DEFAULTS, { parallaxEnabled: true, parallaxPlugin: true }),
         [SLOT_A, SLOT_B])));
     const mod = extParallaxMod.PARALLAX_EXTENSION_MODULE;
-    const extParSrc = readFileSync(join(root, 'src', 'ext-parallax.js'), 'utf8');
+    const extParSrc = readFileSync(subParallaxFile('ext-parallax.js'), 'utf8');
     const wantOff = [globalThis.weT('启用 3D 效果')];
     const wantOn = wantOff.concat(PARAMS.map((k) => globalThis.weT(k)));
     const wantOnUi = wantOff.concat(UI_PARAMS.map((k) => globalThis.weT(k)));
@@ -5389,7 +5662,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       && !extParSrc.includes('ui && (slots.length') && !extParSrc.includes('ui && slots.map(')
       && clientSrcPar.includes('function onParallaxPlugin(e) { setSetting("parallaxPlugin", e.target.checked); emit(); }')
       // 名单与"真的会动"同源：开关关着 ⇒ 连名单都不给（面板于是画不出行，也不会画完却一动不动）。
-      && clientSrcPar.includes('parallaxPluginSlots: sel.parallaxPlugin === true ? parallaxDiscoveredGroups().sort() : [],')
+      && clientSrcPar.includes('parallaxPluginSlots: sel.parallaxPlugin === true ? weDiscoveredGroupsOf(\'parallax\').sort() : [],')
       && schemaMod.DEFAULTS.parallaxPlugin === false
       && schemaMod.KINDS.parallaxPlugin.kind === 'boolFalse',
       'island=' + (extParSrc.includes('const pluginOn = on && sel.parallaxPlugin === true;') ? '1' : '0')
@@ -6114,7 +6387,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       // 玻璃四件套 + 雾化已归入新节「玻璃 UI」；「左侧栏液态玻璃」与它的子项也都在本节
       //（§10.25 起）。⚠️ 本档是**设置页**：只画**简化配置 + 预设方案 + 字体节头（收起）** ——
       //    **玻璃**高级行（独立配置层 / 胶囊细调）仍只住侧栏折叠块（边界判据翻转后双向钉住：
-      //    设置档一个「独立配置」都不许有）；**字体节**在 2026-10-11 三次修订后两档都画
+      //    设置档一个「独立配置」都不许有）；**字体节**在三次修订后两档都画
       //    （默认收起 ⇒ 本节只多一个节头，内容仍不进树）。
       // ⚠️ `selOver` 打开宿主能力位：`sidebarPresent` + `sidebarGlass` 之后，侧栏家族与内容面
       // 那几行才画得出来（`sidebarPresent` 为假时它们整段不渲染 —— 这正是"窗口与侧栏"那节
@@ -6122,11 +6395,11 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       selOver: { sidebarPresent: true, sidebarGlass: true, thinkingGlass: true },
       // 预设块的 ctx 替身：只给 `presets`（空清单）就够把它画出来 —— 空位虚框 + 保存行是
       // 渲染期就存在的构件，其余处理器只在点击时才用（本用例不点）。
-      // ⚠️ 2026-10-11 **二次修订**：五个整节门在**两档都能折叠** ⇒ 用例必须**显式**给出
+      // ⚠️ **二次修订**：五个整节门在**两档都能折叠** ⇒ 用例必须**显式**给出
       //    "这一档要展开哪几节"（`ctxFrom` 会把没给的字段填成 `noop` ⇒ `noop === true` 为假
       //    ⇒ 被当成"收起"）。本用例 = 设置页的**默认形态**：细节 / 主题预设 / 玻璃 UI /
       //    侧边栏圆角都展开；字体与配色那两节在本台按"收起"跑（它们各自有专门用例）。
-      //    「主题预设」并入本序列（main 480830b）：独立节；2026-10-12 起与其他节同口径
+      //    「主题预设」并入本序列：独立节；与其他节同口径
       //    可折叠（presetsOpen）。
       ctxOver: { glassPresets: { presets: [] }, detailOpen: true, glassUiOpen: true, cornersOpen: true, presetsOpen: true },
       want: ['主题', '细节', '主题预设', '玻璃 UI', '侧边栏圆角', '全局 UI 配色', '全局字体'],
@@ -6142,10 +6415,10 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       ctxOver: { glassPresets: { presets: [] }, detailOpen: true, glassUiOpen: true, cornersOpen: true },
       want: ['主题', '细节', '主题预设', '玻璃 UI', '侧边栏圆角', '全局 UI 配色', '全局字体'],
       wantLabels: ['主题随壁纸', '边框', '深色单独设置', '玻璃透明度', '雾化', '额外补雾化的选择器', '玻璃保真度', '思考块液态玻璃', '左侧栏液态玻璃', '标题栏液态玻璃', '侧栏液态玻璃', '侧栏全透明', '侧栏玻璃跟随全局', '左侧栏 · 统一圆角', '左侧栏 · 四角单独', '右侧栏 · 统一圆角', '右侧栏 · 四角单独'] },
-    // 侧栏档（默认收起）：**简化配置 + 两块折叠块的头**（ADR-0008 D4，2026-10-09）——
+    // 侧栏档（默认收起）：**简化配置 + 两块折叠块的头**（ADR-0008 D4）——
     // 「详细玻璃调节」开关在（收起 ⇒ 它后面的独立配置层一行都不画）；「全局字体」节头在
     // （收起 ⇒ 字体内容不画）。`selOver` 与设置页用例同位 ⇒ 侧栏家族开关同样画得出来。
-    // ⚠️ 2026-10-11 起「细节 / 玻璃 UI / 侧边栏圆角」三节**在侧边栏整节默认收起** ⇒ 这三条
+    // ⚠️ 起「细节 / 玻璃 UI / 侧边栏圆角」三节**在侧边栏整节默认收起** ⇒ 这三条
     //    老用例一律把三个门播种为**展开**（`ctxOver` 那三个字段）：它们要测的是"展开后控件在
     //    不在、接线通不通"，那是**等价前提**下的老断言，不该因为默认值变了就删/改判不在
     //    （那会把"控件坏了"与"默认收起了"混成同一件事）。默认收敛这条**新行为**由紧随的
@@ -6156,7 +6429,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       selOver: { sidebarPresent: true, sidebarGlass: true },
       want: ['主题', '细节', '玻璃 UI', '侧边栏圆角', '全局 UI 配色', '全局字体'],
       wantLabels: ['主题随壁纸'] },
-    // ⚠️ 2026-10-11「左右拉宽、顶格」：环按**面板实测宽度**等比缩放（`ctxOver.paneWidth`）。
+    // ⚠️ 「左右拉宽、顶格」：环按**面板实测宽度**等比缩放（`ctxOver.paneWidth`）。
     //    ⚠️ 这条必须打在 `renderMascotTab` 上 —— 吉祥物是**独立页签**，不在 `renderAppearanceTab`
     //    里（第一版我挂错了函数，于是 items=0、判据在空转：它"红"了但红的是对象不存在，
     //    而不是缩放不对）。本档喂宽面板 900，带 `geomProbe` ⇒ 下面那条判据**端到端**核对
@@ -6180,7 +6453,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     // ⚠️ 这一条是**覆盖缺口**补上的：字体那一节的细节（颜色角色 / 排版角色 / 字体族 / 组件字体 /
     // 字体集预设，~180 行）被 `sel.fontCustom` 挡着，而它的默认值是关 ⇒ **任何用例都没渲染过它**。
     // 打开它才能让那些行第一次进入判据的视野（这本身是找缺陷，不只是补锚）。
-    // 2026-10-09 迁移后这节只在侧栏档渲染 ⇒ 本档同步改 surface + `fontOpen: true`（展开）。
+    //  迁移后这节只在侧栏档渲染 ⇒ 本档同步改 surface + `fontOpen: true`（展开）。
     { fn: 'renderAppearanceTab', label: '（侧栏档 · 字体节展开 · 字体自定义开）', surface: 'sidebar',
       selOver: { fontCustom: true, sidebarPresent: true, sidebarGlass: true },
       ctxOver: { fontOpen: true, detailOpen: true, glassUiOpen: true, cornersOpen: true, fontSet: FONTSET_STUB },
@@ -6189,7 +6462,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
         '左侧栏 · 统一圆角', '左侧栏 · 四角单独', '右侧栏 · 统一圆角', '右侧栏 · 四角单独',
         '字体自定义', '默认字体', '终端字体', '文字颜色角色', '深色单独设置', '正文', '次要文字', '弱化说明', '极小说明', '禁用 / 更弱',
         '排版角色', '只看改过的', '高级字体设置', '字体集预设'] },
-    // ⚠️ 三次修订（2026-10-11）：字体节**回到设置页** ⇒ 必须有一条**设置档展开**的用例。
+    // ⚠️ 三次修订：字体节**回到设置页** ⇒ 必须有一条**设置档展开**的用例。
     //    为什么非有不可：上面那条设置档用例默认收起，只证明"节头在" —— 而这次改动的实质是
     //    "设置页那份能真用"，也就是**展开后整段字体内容（~180 行）要进树**。只有节头没有内容
     //    正是"接线断了一半"的形态（ctx 里少给一个 fontOpen / 处理器没接上），而那种形态在上面
@@ -6197,7 +6470,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     { fn: 'renderAppearanceTab', label: '（设置页 · 字体节展开 · 字体自定义开）', surface: 'settings',
       selOver: { fontCustom: true, sidebarPresent: true, sidebarGlass: true },
       // ⚠️ 前三个门同样要显式给（二次修订后两档都可折叠；不给会被当成收起）；
-      //    「主题预设」的门（presetsOpen，2026-10-12）同口径。
+      //    「主题预设」的门（presetsOpen）同口径。
       ctxOver: { fontOpen: true, glassPresets: { presets: [] }, detailOpen: true, glassUiOpen: true, cornersOpen: true, presetsOpen: true },
       want: ['主题', '细节', '主题预设', '玻璃 UI', '侧边栏圆角', '全局 UI 配色', '全局字体'],
       // ⚠️ 这条序列 = 上面设置档（收起）那 17 项玻璃标签 + 侧栏字体展开那 14 项字体标签，
@@ -6287,7 +6560,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     for (const [k, v] of savedGlobals) globalThis[k] = v;
     check(t.fn + t.label + ' 渲染得出', err === '', err || 'ok');
     if (err) continue;
-    // ── 端到端：**按面板宽度等比缩放**（2026-10-11「左右拉宽、顶格」）──────────────────
+    // ── 端到端：**按面板宽度等比缩放**（「左右拉宽、顶格」）──────────────────
     //    判据自己从源码取设计常量、**独立复算** scale，再逐个核对渲染树里的行内尺寸：
     //    只判"渲染得出"不够 —— 缩放漏接一处（卡放大了、立绘没放大）照样渲染得出。
     if (t.geomProbe) {
@@ -6362,11 +6635,11 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       check(t.fn + t.label + ' 的控件标签顺序与集合逐字不变',
         sameSeq(labels, t.wantLabels),
         'want=[' + t.wantLabels.join(' / ') + '] got=[' + labels.join(' / ') + ']');
-      // ── 简化配置 / 高级配置的**边界**（ADR-0008 **D4**；2026-10-09 二次修订）──
+      // ── 简化配置 / 高级配置的**边界**（ADR-0008 **D4**；二次修订）──
       //   简化配置（两档都画）= 全局四件套 + 各面**总开关**（思考块液态玻璃 / 左侧栏液态玻璃 /
       //   侧栏那三个开关）；**预设方案**只在设置档（跨面快照覆盖 + 无撤销 ⇒ 不进窄面板）；
       //   高级配置 = 每个面的「独立配置」层**及其子项**、思考块门下的细调行（胶囊雾化 /
-      //   胶囊颜色）—— 2026-10-09 起**迁入侧栏「详细玻璃调节」折叠块**（默认收起；
+      //   胶囊颜色）—— 起**迁入侧栏「详细玻璃调节」折叠块**（默认收起；
       //   设置页对话框挡住主页面、调完看不到实时效果是迁移动因），设置档一个都不许有。
       //   判定走 `ctx.surface` + `ctxOver.glassDetailOpen`（折叠态）；配套的 quick-panel
       //   占位器现在只剩 `glassPresets` 与播放页字段（高级行处理器已改传真值）。
@@ -6383,13 +6656,13 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       const PRESET_MARK = '保存当前为预设';
       const presetLeak = [PRESET_MARK, '预设方案'].filter((s) => flat.includes(s));
       if ((t.want || []).includes('玻璃 UI')) {
-        // 2026-10-09 真迁移后的 D4：**高级行（独立配置层 / 胶囊细调）只在侧栏档、且
+        //  真迁移后的 D4：**高级行（独立配置层 / 胶囊细调）只在侧栏档、且
         // 「详细玻璃调节」展开时画**；设置档一个都不许有（它们搬走了）。预设方案相反 ——
         // 仍只在设置档（跨面快照覆盖 + 无撤销，不进随手可点的窄面板）。
         // 折叠态用 `ctxOver.glassDetailOpen` / `ctxOver.fontOpen` 认（默认收起 ⇒ 用例不给 = 收起）。
         const detailOpen = !!(t.ctxOver && t.ctxOver.glassDetailOpen);
         const fontOpen = !!(t.ctxOver && t.ctxOver.fontOpen);
-        // ── 整节折叠（2026-10-11 **二次修订**：两档都能折叠，差别只在**默认值**）──────────
+        // ── 整节折叠（**二次修订**：两档都能折叠，差别只在**默认值**）──────────
         //    用户口径：侧边栏「后面三个默认隐藏」、设置页「全部开启但也支持隐藏」。
         //    ⚠️ 默认值由**面板组件**算（`readQpOpen` / `readSavedPickerOpen`），本台是
         //    **直接调渲染器**（隔离测试）⇒ 这里只能判"渲染器**尊重**传进来的开合"：
@@ -6454,7 +6727,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
           check(t.fn + t.label + ' 侧栏档不许出现预设块（预设仍设置页专属，D4）',
             presetLeak.length === 0, presetLeak.length ? '泄漏：' + presetLeak.join(' / ') : '无泄漏');
           // ⚠️ 下面两条只在**玻璃 UI 整节展开**时成立：整节收起 ⇒ 简化配置也一并不画
-          //    （那是 2026-10-11 的新门）。不按门分档的话，这条老判据会把"整节收起"
+          //    （那是的新门）。不按门分档的话，这条老判据会把"整节收起"
           //    误判成"简化配置丢了"。收起档要判的是**相反**的东西 —— 见上面那组整节判据。
           if (t.ctxOver && t.ctxOver.glassUiOpen) {
             for (const sw of ['思考块液态玻璃', '左侧栏液态玻璃']) {
@@ -6476,11 +6749,11 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
           // 设置档：**玻璃**高级行仍不许出现（真迁移的反向钉，未变）。
           check(t.fn + t.label + ' 设置档不许出现任何「独立配置」层（已迁侧栏折叠块，D4）',
             indep.length === 0, indep.length + ' 个：' + indep.join(' / '));
-          // ⚠️ 这里原有三条「设置档节头是**纯标题**（不随侧栏折叠）」的判据，2026-10-11
+          // ⚠️ 这里原有三条「设置档节头是**纯标题**（不随侧栏折叠）」的判据，
           //    **二次修订**后按用户口径（"设置页也支持隐藏"）**反转**了 —— 现在两档都必须是
           //    可折叠节头，那三条已由上面那组「节头必须可折叠（两档都支持隐藏）」取代。
           //    反转而不是删除：这条性质真的会回退（谁把 `collapsible` 写回 surface 判断就中了）。
-          // ⚠️ **字体节已回到设置页**（2026-10-11 三次修订，用户口径"两边都有"）⇒ 这一条不再是
+          // ⚠️ **字体节已回到设置页**（三次修订，用户口径"两边都有"）⇒ 这一条不再是
           //    "迁移的反向钉"，而是与侧栏**同形**的**折叠门**判据：展开 ⇒ 字体行必须在；
           //    收起 ⇒ 不许有。两个 surface 走同一条判据，正是"两档都画"的字面含义。
           if (fontOpen) {
@@ -6493,7 +6766,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
           check(t.fn + t.label + ' 设置档不许出现「详细玻璃调节」开关（那是侧栏折叠块的入口）',
             !labels.includes('详细玻璃调节'), '泄漏：' + labels.filter((l) => l === '详细玻璃调节').join(''));
           // 门的另一侧：能画出来的时候才判（用例给了 `presets` 替身）—— 否则这条会恒假。
-          // 2026-10-12 起「主题预设」与其他节同口径可折叠：ctxOver 给了 `presetsOpen: true`
+          //  起「主题预设」与其他节同口径可折叠：ctxOver 给了 `presetsOpen: true`
           // 的用例判**整块在**（网格 + 保存行）；没给（= 收起档）的用例反过来判**网格不许在**
           // —— 节头本身由 want 的节序列钉住（'主题预设' 一直在，它是重新展开的唯一入口）。
           if (t.ctxOver && t.ctxOver.glassPresets) {
@@ -6571,7 +6844,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
 
   check('负对照：外观页侧栏档确实渲染出了内容（不是空树 ⇒ 上面的"少节数"才有意义）',
     (() => {
-      // 侧栏档画「主题 / 细节 / 侧边栏圆角 / 玻璃 UI / 全局字体 / 输入光标」**六节** —— 2026-10-09 迁移后
+      // 侧栏档画「主题 / 细节 / 侧边栏圆角 / 玻璃 UI / 全局字体 / 输入光标」**六节** —— 迁移后
       //（2026-10 新增「侧边栏圆角」节 ⇒ 由五节变六节，与上面两组 want 同步改）
       // 字体节的**节头**进侧栏（折叠门只收内容不收节）；设置档反而只剩四节（字体节整节不在）。
       // ⚠️ 这个数字是**随节数变化**的：新增一节就要同步（它自己就是"节数"那条判据的负对照）。

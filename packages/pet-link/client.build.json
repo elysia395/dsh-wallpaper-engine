@@ -1,0 +1,16 @@
+{
+  "entry": "src/client.js",
+  "artifact": "lib/client.pet-link.js",
+  "inline": [
+    {
+      "file": "src/pet-link-tuner.js",
+      "why": "页内调参面板（Ctrl+Shift+D；调试工具，非产品功能；自 packages/pet-link/src/pet-link-tuner.js 原样迁出内联通路）",
+      "markers": ["const PET_TUNER_FIELDS = [", "function petTunerBuild(", "const petLinkTuner = {"]
+    },
+    {
+      "file": "src/pet-link.js",
+      "why": "桌宠联动的排播 / 吉祥物触摸面 / 能力探测（自 packages/pet-link/src/pet-link.js 原样迁出内联通路）",
+      "markers": ["const PET_BASE = ", "const PET_ANIM = {", "function petLinkProbe(", "const petLink = {"]
+    }
+  ]
+}

@@ -102,7 +102,7 @@ const WE_I18N_EN_GLASS = {
   "暗夜釉色": "Night glaze",
   "原色直出": "True color",
   "可读优先": "Readability first",
-    "正在处理…": "Working…",
+  "正在处理…": "Working…",
   "预设不可用：{reason}": "Preset unavailable: {reason}",
   "还没有任何预设 —— 出厂那几套加载失败或宿主未重挂。": "No presets yet — the factory sets failed to load or the host was not remounted.",
   "删除这个预设（会再问一次）": "Delete this preset (asks again)",

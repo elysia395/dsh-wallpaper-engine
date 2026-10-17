@@ -519,8 +519,7 @@ async function main() {
     }
 
     // 五分区走查。最后一项是**本插件自己的分区**：UI 重构把它从「Wallpaper Engine」
-    // 改名成「壁纸引擎」（2026-09-30，见 docs/archive/wip 的改版口径 —— 该目录原为 docs/wip，
-    // 文档收敛时整体归档）⇒ 按**候选名**匹配
+    // 改名成「壁纸引擎」（旧名仍在旧版宿主里用 ⇒ 改名属历史，见 CHANGELOG）⇒ 按**候选名**匹配
     // （第一个在 DOM 里找得到的），判据盯的是「点得到 + 我们的样式仍在场」，
     // 不盯死某个历史文案；两条候选都找不到才判红。
     const SECTIONS = [['通用设置'], ['模型'], ['插件'], ['Agent 预设'], ['壁纸引擎', 'Wallpaper Engine']];
@@ -690,7 +689,7 @@ async function main() {
 
     // ⚠️ `evS` 返回的是**值本身**（`ev` 才返回 {value} 包装）—— 这里曾写成
     //     `surfaceProbe.value`，于是 sp 恒为 null、下面三条判据**恒红且看不出原因**
-    //     （bb06fc2 起一直如此：harness-compat 是派发制，没人重跑就没人发现）。
+    //     （harness-compat 是派发制：没人重跑就没人发现）。
     const sp = surfaceProbe || null;
     if (process.env.DSH_WE_COMPAT_DEBUG) console.log('  [surfaceProbe raw] ' + JSON.stringify(surfaceProbe).slice(0, 900));
     // 两侧快照都在场才判（探针抛错时 evS 给 null ⇒ 这里的每条都落在"取不到 = 红"上）。

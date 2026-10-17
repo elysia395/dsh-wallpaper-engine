@@ -27,6 +27,8 @@ import { mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { Readable, Writable } from 'node:stream';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+// 面积守卫的容差**从真源现算**（不写死 0.95）：符号 → 唯一声明处。缺锚即红。
+import { locate } from './tools/source-locator.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const ISO = join(root, '.test-cache', 'scene-frame-master');
@@ -45,6 +47,56 @@ const check = (name, ok, detail = '') => {
   if (ok) { passed++; console.log('  ✓ ' + name + (detail ? ' — ' + detail : '')); }
   else { failed++; console.log('  ✗ ' + name + (detail ? ' — ' + detail : '')); }
 };
+
+/**
+ * 面积守卫的判据本体（生产与负对照共用）：逐字照
+ * `lib/routes/scene-frame.js` 的 `incomingArea < prevDim.width * prevDim.height * (1 - GPU_FRAME_AREA_TOL)`。
+ * @param {number} prevArea 盘上主帧面积
+ * @param {number} incomingArea 来帧面积
+ * @param {number} tol 容差（GPU_FRAME_AREA_TOL）
+ * @returns {200|409}
+ */
+function areaGuardStatus(prevArea, incomingArea, tol) {
+  return incomingArea < prevArea * (1 - tol) ? 409 : 200;
+}
+
+/** 一条**观测**是否与判据期望一致 —— 就是生产里那条 check 的判定式（负对照复用它）。 */
+function observedMatches(observedStatus, prevArea, incomingArea, tol) {
+  return observedStatus === areaGuardStatus(prevArea, incomingArea, tol);
+}
+
+/**
+ * 「`GPU_FRAME_AREA_TOL` 是**同一个旋钮**」的判据本体（生产与负对照共用）：两份拷贝必须
+ * **同值**且都落在 (0,1) 内。
+ *
+ * 取证（`git log -S GPU_FRAME_AREA_TOL` + 两处上下文注释）：
+ *   · 两份都由同一次合并（PR #206「单主帧 + 面积升级制」）引入 ⇒ **同一个设计来源**；
+ *   · 客户端那处的注释逐字写着「与宿主 `GPU_FRAME_AREA_TOL` **同值同义**，两端独立部署」
+ *     （浏览器半边不能 import 宿主常量，所以只能复制一份）；
+ *   · 它们守**同一条边界**的两侧：客户端「主帧面积 ≥ 画布 ×(1−TOL) ⇒ 保留」，宿主
+ *     「来帧面积 < 盘上主帧 ×(1−TOL) ⇒ 409」。
+ * ⇒ 判定：**同一个旋钮的两份拷贝**，必须钉相等（不是各自独立的策略）。
+ * 漂开的后果**不对称**：`tol_client > tol_host` ⇒ 客户端保留一张宿主会拒写的更小帧 ⇒
+ * 用户长期看到偏小/偏糊的主帧，且再也不会被重新抓帧顶掉（后果面负对照见 4l）。
+ */
+function tolerancePairProblems(hostTol, clientTol) {
+  const bad = [];
+  if (!(hostTol > 0 && hostTol < 1)) bad.push('宿主容差越界：' + JSON.stringify(hostTol));
+  if (!(clientTol > 0 && clientTol < 1)) bad.push('客户端容差越界：' + JSON.stringify(clientTol));
+  if (Number(hostTol) !== Number(clientTol)) {
+    bad.push('两份 `GPU_FRAME_AREA_TOL` 不同值：宿主 ' + JSON.stringify(hostTol)
+      + ' ≠ 客户端 ' + JSON.stringify(clientTol));
+  }
+  return bad;
+}
+
+/**
+ * 客户端的「保留主帧」判定 —— 逐字照 `src/live-layer-watch.js` 的 cover 阈值语义
+ * （`主帧面积 ≥ 画布 × (1 − TOL) ⇒ 不抓新帧`）。只用于**后果面**负对照。
+ */
+function clientKeepsMainFrame(frameArea, canvasArea, tol) {
+  return frameArea >= canvasArea * (1 - tol);
+}
 
 // ── PNG 工厂（合法 IHDR/IEND，尺寸/填充可调） ───────────────────────────────
 function pngChunkCrc32(type, payload) {
@@ -279,9 +331,106 @@ if (token) {
     && readFileSync(gpuPathOf()).equals(pngA2),
     'status=' + put4.__state.status + ' body=' + String(put4.__state.body).slice(0, 80));
 
-  // ── 5. 容差内：略小（≥95%）仍放行（相近窗口不互相顶掉） ──
-  const pngNear = makePng(790, 592, 4); // 面积 467,680 ≥ 480,000 × 0.95 = 456,000
-  const put5 = await runPut('/wallpaper-engine/scene-frame-cache/' + token, pngNear);
+  // ── 4b/4c. 面积守卫的**边界锚点**（容差两侧各贴一个 ±1% 的近邻用例）───────────────
+  // 为什么必须有两个**边界锚点**：只被 0.64 与 0.974 两个**远点**夹住时，容差存在一条**死带** ——
+  // 把常量从 0.05 弱化到 0.30（强度弱化 6 倍）仍 18/18 全绿。边界两侧各贴一个 ±1% 近邻用例后，
+  // 任何"跨过这两个点"的弱化/收紧都会当场红（见 4d/4e）。
+  // 容差**从真源现算**：`GPU_FRAME_AREA_TOL` 在 lib 半边唯一声明 —— ⚠️ 客户端半边
+  // `src/live-layer-watch.js` 有自己的同名副本（cover 阈值），所以必须限定 `{ in: 'lib' }`，
+  // 否则 source-locator 会（正确地）判"两处声明 ⇒ 谁对不确定"。
+  const tolDecl = locate('GPU_FRAME_AREA_TOL', { in: 'lib' });
+  const tolMatch = tolDecl.ok
+    ? /const\s+GPU_FRAME_AREA_TOL\s*=\s*([0-9.]+)\s*;/.exec(readFileSync(join(root, tolDecl.hit.rel), 'utf8'))
+    : null;
+  const tol = tolMatch ? Number(tolMatch[1]) : NaN;
+  check('4b-锚点：`GPU_FRAME_AREA_TOL` 在 lib 半边唯一声明且能抠出字面量（缺锚即红；阈值一律现算，不写死 0.95）',
+    tolDecl.ok && Number.isFinite(tol) && tol > 0 && tol < 1,
+    tolDecl.ok
+      ? `${tolDecl.hit.rel}:${tolDecl.hit.line} ⇒ ${Number.isFinite(tol) ? tol : '**抠不出字面量**'}`
+      : tolDecl.detail);
+  const prevW = Number(body4.have && body4.have.w);
+  const prevH = Number(body4.have && body4.have.h);
+  const prevArea = prevW * prevH;
+  const boundary = 1 - tol;
+  /** 固定高、调宽 ⇒ 面积比可控（返回 [w, h]）。 */
+  const dimsFor = (ratio) => [Math.max(2, Math.round(prevArea * ratio / prevH)), prevH];
+  const [wBelow, hBelow] = dimsFor(boundary - 0.01);
+  const [wAbove, hAbove] = dimsFor(boundary + 0.01);
+  const areaBelow = wBelow * hBelow;
+  const areaAbove = wAbove * hAbove;
+  const ratioBelow = areaBelow / prevArea;
+  const ratioAbove = areaAbove / prevArea;
+  check('4b-夹具：两个近邻用例确实贴住边界两侧（都在容差 ±2% 内、分处两侧、不与边界重合）',
+    Number.isFinite(tol) && prevArea > 0
+    && ratioBelow < boundary && ratioAbove > boundary
+    && (boundary - ratioBelow) <= 0.02 && (ratioAbove - boundary) <= 0.02,
+    `主帧 ${prevW}×${prevH}（${prevArea}）· 边界 ${boundary} · 下 ${ratioBelow.toFixed(4)}（${wBelow}×${hBelow}）`
+      + ` · 上 ${ratioAbove.toFixed(4)}（${wAbove}×${hAbove}）`);
+  const URL_TOKEN = '/wallpaper-engine/scene-frame-cache/' + token;
+  const putBelow = Number.isFinite(tol) ? await runPut(URL_TOKEN, makePng(wBelow, hBelow, 41)) : null;
+  check('4c. 边界**下方 1%** 的帧 → 409 frame-smaller（守卫在边界处真的有牙）',
+    Boolean(putBelow) && observedMatches(putBelow.__state.status, prevArea, areaBelow, tol)
+    && putBelow.__state.status === 409 && readFileSync(gpuPathOf()).equals(pngA2),
+    putBelow ? 'status=' + putBelow.__state.status + '（期望 409，主帧须毫发无损）' : '（容差锚点丢了 ⇒ 本用例不成立）');
+  const putAbove = Number.isFinite(tol) ? await runPut(URL_TOKEN, makePng(wAbove, hAbove, 42)) : null;
+  check('4d. 边界**上方 1%** 的帧 → 200 放行（容差内不互相顶掉）',
+    Boolean(putAbove) && observedMatches(putAbove.__state.status, prevArea, areaAbove, tol)
+    && putAbove.__state.status === 200,
+    putAbove ? 'status=' + putAbove.__state.status + '（期望 200）' : '（容差锚点丢了 ⇒ 本用例不成立）');
+  // 负对照：把**实现的容差**改坏（同一个判定式喂变异后的容差所产生的"观测"）⇒ 上面两条用例必须判红。
+  // 这正是审计的反证实验：0.05 → 0.30 时原判据全绿；现在被这两个近邻用例夹住。
+  const weakenedSeen = areaGuardStatus(prevArea, areaBelow, 0.30);   // 弱化 6 倍后：边界下方也会被放行
+  const tightenedSeen = areaGuardStatus(prevArea, areaAbove, 0.01);  // 收紧后：边界上方也会被拒
+  check('4e. negative control：容差被弱化到 0.30（审计反证实验）⇒ 边界下方那条观测会被**同一条判据**判红',
+    Number.isFinite(tol) && !observedMatches(weakenedSeen, prevArea, areaBelow, tol)
+    && weakenedSeen === 200 && areaGuardStatus(prevArea, areaBelow, tol) === 409,
+    `弱化后观测 ${weakenedSeen} vs 判据期望 ${areaGuardStatus(prevArea, areaBelow, tol)}`);
+  check('4f. negative control：容差被收紧到 0.01 ⇒ 边界上方那条观测会被**同一条判据**判红（另一个方向也有牙）',
+    Number.isFinite(tol) && !observedMatches(tightenedSeen, prevArea, areaAbove, tol)
+    && tightenedSeen === 409 && areaGuardStatus(prevArea, areaAbove, tol) === 200,
+    `收紧后观测 ${tightenedSeen} vs 判据期望 ${areaGuardStatus(prevArea, areaAbove, tol)}`);
+  check('4g. 正对照：真容差下的两条观测与判据期望一致（判据不是恒真/恒假）',
+    Number.isFinite(tol) && observedMatches(409, prevArea, areaBelow, tol) && observedMatches(200, prevArea, areaAbove, tol));
+
+  // ── 4h–4l：跨半边 —— 客户端那一份 `GPU_FRAME_AREA_TOL` 必须与宿主**同值同义** ─────────
+  // 取证见 `tolerancePairProblems` 的注释（同源于 PR #206；客户端注释写着"同值同义"）。
+  // 客户端半边不能 import 宿主常量 ⇒ 只能复制；**复制的就是必须被钉住的东西**：
+  // 早先只有"两边各自在 (0,1)"这种弱前提，两份值漂开没有任何判据看得见。
+  const clientTolDecl = locate('GPU_FRAME_AREA_TOL', { in: 'src' });
+  const clientTolMatch = clientTolDecl.ok
+    ? /const\s+GPU_FRAME_AREA_TOL\s*=\s*([0-9.]+)\s*;/.exec(readFileSync(join(root, clientTolDecl.hit.rel), 'utf8'))
+    : null;
+  const clientTol = clientTolMatch ? Number(clientTolMatch[1]) : NaN;
+  check('4h. 跨半边锚点：客户端 `GPU_FRAME_AREA_TOL` 在 src 半边唯一声明且能抠出字面量（缺锚即红）',
+    clientTolDecl.ok && Number.isFinite(clientTol),
+    clientTolDecl.ok
+      ? `${clientTolDecl.hit.rel}:${clientTolDecl.hit.line} ⇒ ${Number.isFinite(clientTol) ? clientTol : '**抠不出字面量**'}`
+      : clientTolDecl.detail);
+  const pairBad = tolerancePairProblems(tol, clientTol);
+  check('4i. **同一个旋钮**：客户端与宿主两份 `GPU_FRAME_AREA_TOL` 必须同值'
+    + '（同源 PR #206，客户端注释写着"同值同义"；漂开 ⇒ 客户端保留宿主会拒写的帧）',
+    pairBad.length === 0, pairBad.join('；') || `宿主 ${tol} == 客户端 ${clientTol}（都在 (0,1) 内）`);
+  check('4j. negative control：**任一侧**改成 0.30 ⇒ 同一条 `tolerancePairProblems` 判红（两个方向）',
+    tolerancePairProblems(0.30, clientTol).length > 0 && tolerancePairProblems(tol, 0.30).length > 0
+    && tolerancePairProblems(tol, clientTol).length === 0);
+  check('4k. negative control：把一份改成越界值（0 / 1 / NaN）⇒ 同一条判据判红（不只是"等不等"）',
+    tolerancePairProblems(0, clientTol).length > 0 && tolerancePairProblems(tol, 1).length > 0
+    && tolerancePairProblems(Number.NaN, clientTol).length > 0);
+  // 后果面：tol_client=0.30 时，**存在**一个面积让客户端保留、而宿主按自己的容差拒写。
+  // 这就是"两份拷贝漂开"的可观测代价（不是抽象不等）。
+  const riskArea = Math.round(prevArea * (boundary - 0.01));   // 边界下方 1%（宿主会 409 的那一档）
+  check('4l. negative control（后果面）：`tol_client=0.30` 时同一面积**客户端保留、宿主拒写** ⇒ 错配可见',
+    Number.isFinite(tol) && clientKeepsMainFrame(riskArea, prevArea, 0.30) === true
+    && areaGuardStatus(prevArea, riskArea, tol) === 409
+    && clientKeepsMainFrame(riskArea, prevArea, clientTol) === false,
+    `面积 ${riskArea}（主帧 ${prevArea}×${boundary - 0.01}）· 客户端(0.30)保留=${clientKeepsMainFrame(riskArea, prevArea, 0.30)}`
+      + ` · 宿主(${tol})${areaGuardStatus(prevArea, riskArea, tol)} · 真两侧(客户端 ${clientTol})保留=${clientKeepsMainFrame(riskArea, prevArea, clientTol)}`);
+
+  // ── 5. 容差内：略小仍放行（相近窗口不互相顶掉） ──
+  // ⚠️ 此刻主帧已被 4d 换成 `${wAbove}×${hAbove}`（边界上方那条被接受）⇒ 本用例的期望按**当前**
+  //    主帧算，不再写上一条注释里的 480,000。
+  const pngNear = makePng(790, 592, 4); // 面积 467,680 ≥ 当前主帧面积 × (1 - 容差)
+  const put5 = await runPut(URL_TOKEN, pngNear);
   check('5. 容差内略小帧（98%）→ 200 放行',
     put5.__state.status === 200, 'status=' + put5.__state.status);
 

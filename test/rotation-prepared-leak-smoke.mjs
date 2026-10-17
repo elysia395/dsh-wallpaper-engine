@@ -657,7 +657,7 @@ await runScenario('E. 静态帧预载按提交档位；不符（preview 回退�
     previewImg !== frameImg && t.mediaSrc(previewImg) === '/wallpaper-engine/preview/s3',
     'src=' + t.mediaSrc(previewImg));
   if (previewImg && typeof previewImg.onload === 'function') previewImg.onload(); // 就绪 → 提交
-  // ── 核心 2（186df3a 的 URL 校验不能退化）：src 与提交 URL 不符的元素（preview）
+  // ── 核心 2（URL 校验不能退化）：src 与提交 URL 不符的元素（preview）
   //    绝不能被原样收编成「当前档位的静态帧」──
   const layer2 = t.layerEl();
   const img2 = layer2 && layer2.querySelector('img');

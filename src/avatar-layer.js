@@ -14,7 +14,8 @@
  * （消息是动态插入的）。这与 `src/nav-icon.js` 的设置导航图标补丁是同一条路子。
  *
  * 契约：
- *   需要的外界：扁平设置 store `selection`（**只读**）、`apiUrl`（拼宿主路由）。
+ *   需要的外界：扁平设置 store `selection`（**只读**）、`apiUrl`（拼宿主路由）、
+ *     `weComponentVisible`（组件行可见面判据，唯一实现在 src/client.js；内联后同作用域）。
  *   对外提供：`syncAvatarLayer()`（设置变了就调一次）、`disposeAvatarLayer()`（卸载清理）、
  *     `avatarImageUrl(side)`（面板预览与层共用同一条 URL 构造）、
  *     `avatarGlyphSvgString(side, size)` / `renderAvatarGlyph(side, size)`（内置默认头像的几何，
@@ -25,6 +26,11 @@
  *
  * 不变量：
  *   · **只读 `selection`**：一个字节都不写（写设置只发生在 src/client.js 的具名处理器里）。
+ *   · **组件行不可用 = 整层不挂**（ADR-0013 D3①/D3③）：`mascot-avatar` 那一行关掉时
+ *     `/avatar/<side>` 整族 404 ⇒ 装饰出来的必然是破图，所以与"用户关掉开关"同一条 stop 路径。
+ *     判据经 `weComponentVisible(selection.inventory.components, 'mascot-avatar')` 一处读入。
+ *   · **`<img>` 一族的兜底**（D3③）：图加载失败 ⇒ 就地换成内置默认头像（按 URL 记账，
+ *     同一张不重试），绝不留在"破图"上 —— 见 `avatarFillNode`。
  *   · **零顶层可执行语句**：本文件的顶层只有声明 —— 读 `selection` 的语句一律在函数里
  *     （内联后 prelude 早于 `src/client.js` 正文求值，顶层读它必撞 TDZ）。
  *   · **关掉 = 逐字节回到原生**：摘掉所有注入的头像节点、抹掉加在消息行上的标记属性、
@@ -40,6 +46,24 @@
  *   · **默认头像是画出来的、不是资源**：两侧各一张内置 SVG（零件表在下面），
  *     与「我 / 助手」的角色一一对应；导入的图片只是**替换**这张默认头像。
  */
+
+/**
+ * 可见面判据的**本地包装**（模块边界真实化）。
+ *
+ * ⚠️ 本文件必须能**单独 import**，且**导出面固定为四项**（判据钉死）；输入一律走 `globalThis`
+ * ——与 `selection` / `apiUrl` 同一契约。因此这里**不裸引用** `weComponentVisible`
+ *（它只在拼接后的作用域里存在，单独 import 会 ReferenceError，实测），
+ * 而是读宿主注入的全局：`src/client.js` 启动时设置 `globalThis.__weComponentVisible`。
+ *
+ * 缺省返回 `true`：与 ADR-0013 D3①「组件行不可用 ⇒ 整层不挂」**同向**（安全方向）。
+ */
+function avatarComponentVisible(components, name) {
+  const f = globalThis.__weComponentVisible;
+  // 缺省 **true**（未知 ⇒ 按可用渲染）：注入缺失只可能是接线疏漏或独立求值上下文，
+  // 那种情况下"把整个面板藏掉"是更坏的失败；生产侧 src/client.js 启动时必定注入。
+  return typeof f === 'function' ? f(components, name) : true;
+}
+
 
 /** 三种"消息行"的 kind（官方 ChatNodeSeat 的 `data-chat-flow-kind` 值）→ 头像属于哪一方。 */
 const AVATAR_FLOW_SIDES = { user: 'user', steering: 'user', 'assistant-step': 'ai' };
@@ -58,6 +82,11 @@ const AVATAR_CONT_CLASS = 'we-avatar--cont';
 const AVATAR_ATTR = 'data-we-avatar';
 const AVATAR_VAR_SIZE = '--we-avatar-size';
 const AVATAR_VAR_ROUND = '--we-avatar-round';
+/**
+ * 「这张图试过、加载失败」的记账属性（值 = 失败时那个 URL）：失败后按"没设置过"画内置
+ * 头像，且**同一 URL 不再重试**（换图 ⇒ URL 变 ⇒ 自然重试）。见 `avatarFillNode`。
+ */
+const AVATAR_IMG_FAILED = 'data-we-avatar-imgfail';
 /** 两方在设置里对应的文件名键（**唯一**的 side → 设置键映射）。 */
 const AVATAR_IMAGE_KEYS = { user: 'avatarUserImage', ai: 'avatarAiImage' };
 /**
@@ -99,7 +128,7 @@ let avatarGroupRaf = 0;
 /**
  * 头像图的 URL：`/avatar/<side>?v=<文件名>`。
  * 文件名进查询串既是"这一方到底设置过没有"的判据，也是**缓存键** —— 换图 ⇒ 换名 ⇒
- * URL 变（路由那边因此敢给长缓存，见 lib/routes/avatar.js 的不变量 ④）。
+ * URL 变（路由那边因此敢给长缓存，见 packages/mascot-avatar/lib/routes/avatar.js 的不变量 ④）。
  * 没设置过就返回空串（调用方画内置默认头像）。
  */
 function avatarImageUrl(side, selLike) {
@@ -147,7 +176,10 @@ function renderAvatarGlyph(side, size) {
  */
 function avatarFillNode(node, side) {
   const url = avatarImageUrl(side);
-  const want = url ? 'img' : 'glyph';
+  // 这一方这张图**试过且失败**（宿主行关了 / 导入的文件被删）⇒ 本轮按"没设置过"画内置头像；
+  // URL 不变就不再重试，URL 变了（换了一张图）自然重试。
+  const failed = url && node.getAttribute(AVATAR_IMG_FAILED) === url;
+  const want = url && !failed ? 'img' : 'glyph';
   if (node.getAttribute('data-we-avatar-kind') === want) {
     if (want === 'img') {
       const img = node.firstElementChild;
@@ -163,6 +195,13 @@ function avatarFillNode(node, side) {
     img.className = AVATAR_NODE_CLASS + '__img';
     img.setAttribute('alt', '');
     img.setAttribute('draggable', 'false');
+    // D3③ 的 `<img>` 兜底：图加载失败 ⇒ 记下这次失败（按 URL 记）并把节点**就地**改成内置
+    // 头像 —— 会话里绝不会停在"破图"上。走 `avatarFillNode` 自己那条就地更新路，
+    // 于是后续设置变化（大小 / 圆角 / 换图）照常生效，不需要第二个状态机。
+    img.onerror = () => {
+      try { node.setAttribute(AVATAR_IMG_FAILED, url); } catch { /* ignore */ }
+      avatarFillNode(node, side);
+    };
     img.setAttribute('src', url);
     node.appendChild(img);
   } else {
@@ -327,7 +366,13 @@ function avatarStop() {
  * 但换来的是"任何时刻屏上的形态都等于当前设置"这条不需要额外状态机的性质。
  */
 function syncAvatarLayer() {
-  const on = selection.avatarEnabled === true;
+  // 组件行 gate（ADR-0013 D3①/D3③）：`mascot-avatar` 行不可用 ⇒ 这一层**整层不挂** —— 它画的
+  // 头像走宿主 `/avatar/<side>` 直出，那一行关掉时路由整族没了，挂上去必然是破图。
+  // 判据只有一处实现：src/client.js 的 `weComponentVisible`（内联后同作用域）；状态面是宿主
+  // 行状态（`selection.inventory.components`），本层与别处一样**只读** selection。
+  // 不可用与"用户关掉开关"走**同一条 stop 路径**（幂等，不留痕）。
+  const componentOn = avatarComponentVisible(selection.inventory && selection.inventory.components, "mascot-avatar");
+  const on = componentOn && selection.avatarEnabled === true;
   const body = weBody();
   if (!on || !body || typeof MutationObserver !== 'function') {
     if (avatarActive || avatarObserver) avatarStop();
@@ -355,6 +400,8 @@ function disposeAvatarLayer() {
 }
 
 export {
-  syncAvatarLayer, disposeAvatarLayer,
-  avatarImageUrl, renderAvatarGlyph,
+  syncAvatarLayer,
+  disposeAvatarLayer,
+  avatarImageUrl,
+  renderAvatarGlyph,
 };

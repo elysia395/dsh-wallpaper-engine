@@ -1,6 +1,17 @@
 #!/usr/bin/env node
 /**
- * 聚焦守卫：`lib/asset-paths.js`（上传 / 自定义画面 / 头像立绘 / 自动首帧 / WE 官方素材目录族）。
+ * 聚焦守卫：**资产路径族**（上传目录解析 / 自定义画面 / 头像立绘 / 自动首帧 / WE 官方素材目录）。
+ *
+ * ⚠️ 重指真源（asset-paths 删除前置 G-A2）：上游同名副本 `lib/asset-paths.js` 已不在 import 图上，
+ * 本分支把这一族拆成**三处单一真源**，本守卫改为**三源适配器**（判据与期望值一字未改，
+ * 只多一层"把三源合并成同一个 kit 面"的装配）：
+ *   · `lib/upload-dir.js` 的 `createUploadDirResolution()` —— 上传目录三级优先
+ *     （原先内联在 `lib/kernel/host-kernel.js` 工厂体内，G-A1 已提取成叶子导出）；
+ *   · `lib/media/media-dirs.js` 的 `createMediaDirsKit()` —— 三张 MIME 表 / 三个上限 / side 表 /
+ *     两条文件形状正则 / 五条目录与头像立绘挑选；
+ *   · `lib/we-assets.js` 的 `createWeAssetsKit()` —— WE 官方素材目录解析 / 探测门 / setter / 清单。
+ * 变异体随之变成**多源改写**：每条编辑显式带源键（`['mediaDirs', find, replace]`），
+ * 在**该源**的文本里做字面替换并自检命中（锚点落空即抛 —— 否则变异体 = 原版 = 假绿）。
  *
  * 为什么值得独立守卫：这一族的失效形态全是**静默**的，而且分散在四条不变量上 ——
  *   · ① 目录写死家目录 ⇒ `DSH_WE_DATA_DIR` 隔离开关失效，自检脚本会往真实数据目录里写/删
@@ -18,18 +29,32 @@
  */
 import { existsSync, mkdirSync, readFileSync, readdirSync, rmSync, writeFileSync } from 'node:fs';
 import { join, normalize } from 'node:path';
-import { fileURLToPath, pathToFileURL } from 'node:url';
-import { createAssetPathsKit } from '../lib/asset-paths.js';
+import { fileURLToPath } from 'node:url';
+import { createUploadDirResolution } from '../lib/upload-dir.js';
+import { createMediaDirsKit } from '../lib/media/media-dirs.js';
+import { createWeAssetsKit } from '../lib/we-assets.js';
 import { createCheck } from './tools/assert-harness.mjs';
+import { makeMultiSourceMutants } from './tools/multi-source-mutants.mjs';
 import { stripComments } from './tools/js-text.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const ISO = join(ROOT, '.test-cache', 'asset-paths-guard');
-const SRC = join(ROOT, 'lib', 'asset-paths.js');
-const SOURCE = readFileSync(SRC, 'utf8');
+/** 三处真源：源键 → 文件。变异体按源键分派（每条编辑必须在自己那一源里命中）。 */
+const SOURCES = {
+  uploadDir: join(ROOT, 'lib', 'upload-dir.js'),
+  mediaDirs: join(ROOT, 'lib', 'media', 'media-dirs.js'),
+  weAssets: join(ROOT, 'lib', 'we-assets.js'),
+};
+/** 源键 → 该源的工厂导出名（多源变异体加载器按这个名字取变异体里的工厂）。 */
+const FACTORY_NAMES = {
+  uploadDir: 'createUploadDirResolution',
+  mediaDirs: 'createMediaDirsKit',
+  weAssets: 'createWeAssetsKit',
+};
+/** 三源合并文本（供 G2 的"剥注释后不含 homedir(" 这条自检）。 */
+const SOURCE = Object.values(SOURCES).map((p) => readFileSync(p, 'utf8')).join('\n');
 const OWN = readFileSync(fileURLToPath(import.meta.url), 'utf8');
 const { check, stats } = createCheck();
-let mutants = 0;
 let seq = 0;
 
 rmSync(ISO, { recursive: true, force: true });
@@ -58,50 +83,52 @@ function withEnv(name, value, fn) {
 }
 
 /**
- * 与宿主同形的注入面：`pluginDataDir` 是**活访问器**（`dirRef.value` 可被测试改写，模拟
- * `DSH_WE_DATA_DIR` 切换）；`ensureDirOnce` 真建目录并**返回该目录**（宿主同名函数就这么用）；
- * `writeConfig` 落一份深拷贝以便回看；`enqueueConfigWrite` 是**真串行队列**并计数（用于判"必须入队"）。
+ * 与宿主同形的注入面（三源适配器）：把三处真源的工厂用**同一套 deps**建出来，合并成守卫要的
+ * 那个 kit 面。`factory` 是 loadMutant 交回的**源键 → 变异体工厂**映射（未变异的源用真源工厂）：
+ * `pluginDataDir` 是**活访问器**（`dirRef.value` 可被测试改写，模拟 `DSH_WE_DATA_DIR` 切换）；
+ * `ensureDirOnce` 真建目录并**返回该目录**；`writeConfig` 落一份深拷贝以便回看；
+ * `enqueueConfigWrite` 是**真串行队列**并计数（用于判"必须入队"）。
  */
 function makeKit({ dirRef, cfg = {}, factory } = {}) {
   const state = { cfg, written: [], queueCalls: 0, ensured: [] };
   let queue = Promise.resolve();
-  const F = factory || createAssetPathsKit;
-  const kit = F({
-    pluginDataDir: () => dirRef.value,
-    ensureDirOnce: (d) => { state.ensured.push(d); mkdirSync(d, { recursive: true }); return d; },
-    readConfig: () => state.cfg,
-    writeConfig: (next) => { state.cfg = next; state.written.push(JSON.parse(JSON.stringify(next))); },
-    enqueueConfigWrite: (fn) => {
-      state.queueCalls += 1;
-      const p = queue.then(fn);
-      queue = p.then(() => {}, () => {});
-      return p;
-    },
-  });
+  const mods = factory || {};
+  const ensureDirOnce = (d) => { state.ensured.push(d); mkdirSync(d, { recursive: true }); return d; };
+  const pluginDataDir = () => dirRef.value;
+  const readConfig = () => state.cfg;
+  const writeConfig = (next) => { state.cfg = next; state.written.push(JSON.parse(JSON.stringify(next))); };
+  const enqueueConfigWrite = (fn) => {
+    state.queueCalls += 1;
+    const p = queue.then(fn);
+    queue = p.then(() => {}, () => {});
+    return p;
+  };
+  const mkUploadDir = mods.uploadDir || createUploadDirResolution;
+  const mkMediaDirs = mods.mediaDirs || createMediaDirsKit;
+  const mkWeAssets = mods.weAssets || createWeAssetsKit;
+  const { defaultUploadDir, resolveUploadDir } = mkUploadDir({ pluginDataDir, readConfig });
+  const mediaDirs = mkMediaDirs({ pluginDataDir, ensureDirOnce });
+  const weAssets = mkWeAssets({ pluginRoot: ROOT, readConfig, writeConfig, enqueueConfigWrite });
+  // 合并成"一个 kit 面"：判据完全按原来那 21 个键使用它（键名逐个对得上）。
+  const kit = Object.assign({}, mediaDirs, weAssets, { defaultUploadDir, resolveUploadDir });
   return { kit, state };
 }
 
-function loadMutant(label, transforms) {
-  let text = SOURCE;
-  for (const [find, replace] of transforms) {
-    if (!text.includes(find)) {
-      throw new Error(`变异体 ${label} 的锚点没命中：${JSON.stringify(find.slice(0, 70))} —— 源码变了就同步改锚点`);
-    }
-    text = text.replace(find, () => replace);
-  }
-  mutants += 1;
-  const file = join(ISO, 'mutants', `${mutants}-${label}.mjs`);
-  mkdirSync(join(ISO, 'mutants'), { recursive: true });
-  writeFileSync(file, text);
-  return import(pathToFileURL(file).href);
-}
+/**
+ * 多源变异体：加载器住共享基础设施 `./tools/multi-source-mutants.mjs`（LF 归一 / 相对说明符
+ * 绝对化 / **每条编辑的命中自检**都在那里）；本守卫只声明"源键 → 文件 / 工厂导出名"。
+ * 负对照的装配形状不变：加载器交回"源键 → 变异体工厂"，未变异的源用真源工厂。
+ */
+const { loadMutant, mutantCount } = makeMultiSourceMutants({
+  sources: SOURCES, factories: FACTORY_NAMES, outDir: join(ISO, 'mutants'),
+});
 
-/** 同一个判据函数喂正向与负对照（负对照只换被测源码）。 */
+/** 同一个判据函数喂正向与负对照（负对照只换被测源码的那一源）。 */
 async function pair(name, judge, label, transforms) {
   const pos = await judge({});
   check(name, pos.ok === true, '正向读数：' + pos.detail);
-  const mod = await loadMutant(label, transforms);
-  const mut = await judge({ factory: mod.createAssetPathsKit });
+  const mods = await loadMutant(label, transforms);
+  const mut = await judge({ factory: mods });
   check(`${name} —— 负对照（${label}）必须判红`, mut.ok === false, '变异体读数：' + mut.detail);
 }
 
@@ -333,55 +360,65 @@ async function judgeWeAssetList(make) {
   };
 }
 
-// ───────────────────────── 变异体（锚点都是真修不会碰的行/整句） ─────────────────────────
+// ───────────────────── 变异体（多源分派：每条编辑带源键；锚点都是真修不会碰的行/整句） ─────────────────────
 const M_HOMEDIR = [
-  [`import { readdirSync, statSync } from 'node:fs';`,
-    `import { readdirSync, statSync } from 'node:fs';\nimport { homedir } from 'node:os';`],
-  [`function defaultUploadDir() { return join(pluginDataDir(), 'uploads'); }`,
+  ['uploadDir', `import { readdirSync } from 'node:fs';`,
+    `import { readdirSync } from 'node:fs';\nimport { homedir } from 'node:os';`],
+  ['uploadDir', `function defaultUploadDir() { return join(pluginDataDir(), 'uploads'); }`,
     `function defaultUploadDir() { return join(homedir(), '.dsh-wallpaper-engine', 'uploads'); }`],
 ];
 const M_UPLOAD_NO_TRIM = [[
+  'uploadDir',
   `    if (typeof cfg.uploadDir === 'string' && cfg.uploadDir.trim()) return cfg.uploadDir.trim();`,
   `    if (typeof cfg.uploadDir === 'string' && cfg.uploadDir) return cfg.uploadDir;`,
 ]];
 const M_ENV_IGNORED = [[
+  'uploadDir',
   `    if (process.env.DSH_WE_UPLOAD_DIR) return process.env.DSH_WE_UPLOAD_DIR;`,
   `    if (false) return process.env.DSH_WE_UPLOAD_DIR;`,
 ]];
 const M_FRAME_MAX = [[
+  'mediaDirs',
   `  const CUSTOM_FRAME_MAX_BYTES = 30 * 1024 * 1024;`,
   `  const CUSTOM_FRAME_MAX_BYTES = 31 * 1024 * 1024;`,
 ]];
 const M_AVATAR_NO_PREFIX = [[
+  'mediaDirs',
   `      if (!AVATAR_FILE_RE.test(name) || name.slice(0, s.length + 1) !== s + '-') continue;`,
   `      if (!AVATAR_FILE_RE.test(name)) continue;`,
 ]];
 const M_MASCOT_ANY = [[
+  'mediaDirs',
   `      if (!MASCOT_FILE_RE.test(name)) continue;`,
   `      if (false) continue;`,
 ]];
 const M_PROBE_LOOSE = [[
+  'weAssets',
   `    try { return statSync(join(WE_ASSETS_DIR, 'materials')).isDirectory(); } catch { return false; }`,
   `    try { statSync(join(WE_ASSETS_DIR, 'materials')); return true; } catch { return false; }`,
 ]];
 const M_WE_ENV_IGNORED = [[
+  'weAssets',
   `    if (process.env.DSH_WE_ASSETS_DIR && process.env.DSH_WE_ASSETS_DIR.trim()) {`,
   `    if (false) {`,
 ]];
 const M_SET_NO_DELETE = [[
+  'weAssets',
   `      else delete cfg.weAssetsDir;`,
   `      else cfg.weAssetsDir = dir;`,
 ]];
 const M_SET_NO_QUEUE = [[
+  'weAssets',
   `    return enqueueConfigWrite(() => {`,
   `    return (() => {`,
 ]];
 const M_READDIR_SYNC = [[
+  'weAssets',
   `import { readdir } from 'node:fs/promises';`,
   `import { readdir } from 'node:fs';`,
 ]];
-const M_CACHE_NO_CLEAR = [[`      weAssetsIndexCache.clear();\n`, ``]];
-const M_LIST_UNSORTED = [[`    names.sort();\n`, ``]];
+const M_CACHE_NO_CLEAR = [['weAssets', `      weAssetsIndexCache.clear();\n`, ``]];
+const M_LIST_UNSORTED = [['weAssets', `    names.sort();\n`, ``]];
 
 // ───────────────────────── 判据 ─────────────────────────
 section('A. 上传目录三级优先：env > config（trim）> pluginDataDir()/uploads');
@@ -412,10 +449,11 @@ await pair('F3 去掉排序 ⇒ 判红', judgeWeAssetList, 'list-unsorted', M_LI
 
 // ───────────────────────── G. 自检与地板 ─────────────────────────
 section('G. 自检与覆盖面地板');
-check('G1 本文件确实调用了被测模块（不是只 import）',
-  stripComments(OWN).includes('createAssetPathsKit('),
-  '剥注释后含 createAssetPathsKit(');
-check('G2 模块文本（剥注释）不含 homedir( —— 写死家目录会让 DSH_WE_DATA_DIR 隔离失效',
+check('G1 本文件确实调用了**三处真源**的工厂（不是只 import）',
+  ['createUploadDirResolution(', 'createMediaDirsKit(', 'createWeAssetsKit(']
+    .every((call) => stripComments(OWN).includes(call)),
+  '剥注释后含三个工厂调用');
+check('G2 三源合并文本（剥注释）不含 homedir( —— 写死家目录会让 DSH_WE_DATA_DIR 隔离失效',
   !stripComments(SOURCE).includes('homedir('),
   `剥注释后含 homedir( = ${stripComments(SOURCE).includes('homedir(')}`);
 
@@ -423,7 +461,7 @@ const CHECK_FLOOR = 18;
 const MUTANT_FLOOR = 8;
 const totalChecks = stats.passed + stats.failed;
 check(`G3 覆盖面地板：执行的判据 ≥ ${CHECK_FLOOR}`, totalChecks >= CHECK_FLOOR, `实测 ${totalChecks}`);
-check(`G4 负对照地板：变异体 ≥ ${MUTANT_FLOOR}`, mutants >= MUTANT_FLOOR, `实测 ${mutants}`);
+check(`G4 负对照地板：变异体 ≥ ${MUTANT_FLOOR}`, mutantCount() >= MUTANT_FLOOR, `实测 ${mutantCount()}`);
 
 console.log('');
 if (stats.failed > 0) {

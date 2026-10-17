@@ -1,5 +1,11 @@
 #!/usr/bin/env node
-// 聚焦守卫：`lib/host-diag.js`（宿主侧诊断落盘 sink）。
+// 聚焦守卫：`lib/diag-trace.js`（宿主侧诊断落盘 sink）。
+//
+// ⚠️ 重指真源（task-10 E）：被测实现住 `lib/diag-trace.js` 的工厂返回值里；本守卫原先 import
+// 上游同名副本 `lib/host-diag.js`（task-10 末次提交已随本批删除）。副本里带着轮转的**竞态保护**
+// （`existsSync` + 内层 `try/catch`，见 MUTANT_SPECS 的 `race-unguarded`），而真源当时是裸
+// `renameSync` —— 文件被外部清理/被并行实例抢先轮转后，每次 append 都在 rename 处抛、被外层
+// catch 吞 ⇒ 本进程诊断通道静默死亡。修法已搬进真源，判据随之重指（判据与期望值一字未改）。
 //
 // 为什么值得一条守卫：这条通道是**常开**的（请求记录 + 心跳），它有两个模块级状态
 // （轮转水位 `diagBytes`、去重表 `reqLogSeen`）。两者退化时的症状都不在功能面上：
@@ -17,15 +23,15 @@ import {
 } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { createHostDiagKit } from '../lib/host-diag.js';
+import { createDiagTraceKit } from '../lib/diag-trace.js';
 import { stripComments } from './tools/js-text.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const SELF = fileURLToPath(import.meta.url);
-const SRC = join(ROOT, 'lib', 'host-diag.js');
+const SRC = join(ROOT, 'lib', 'diag-trace.js');
 const ISO = join(ROOT, '.test-cache', 'host-diag-guard');
-const MAX_BYTES = 8 * 1024 * 1024;   // = lib/host-diag.js 的 DIAG_MAX_BYTES
-const SEEN_MAX = 2000;               // = lib/host-diag.js 的 REQ_LOG_SEEN_MAX
+const MAX_BYTES = 8 * 1024 * 1024;   // = lib/diag-trace.js 的 DIAG_MAX_BYTES
+const SEEN_MAX = 2000;               // = lib/diag-trace.js 的 REQ_LOG_SEEN_MAX
 
 let passed = 0;
 let failed = 0;
@@ -66,7 +72,9 @@ function fakeRes({ statusCode = 200, dest, hasReq = true } = {}) {
 /** 变异体：把源码里的锚点逐条替换后落盘再 import（锚点漂了 ⇒ 抛）。 */
 let mutantSeq = 0;
 async function loadMutant(label, transforms) {
-  const src = readFileSync(SRC, 'utf8');
+  // ⚠️ 锚点写的是 `\n`：源码文本先归一成 LF 再做字面替换（CRLF 检出下锚点会全不命中，
+  // 与 `test/verify-transcode-state.mjs` 的 `\r?\n` 处理同一个理由）。
+  const src = readFileSync(SRC, 'utf8').replace(/\r\n/g, '\n');
   let out = src;
   for (const [find, replace] of transforms) {
     if (!out.includes(find)) throw new Error('变异体锚点漂了：' + label + ' ⇐ ' + JSON.stringify(find));
@@ -144,11 +152,11 @@ function pair(name, label, judge) {
   const run = (makeKit, d) => {
     try { return judge(makeKit, d); } catch (err) { return { ok: false, detail: '抛了 ' + (err && err.message) }; }
   };
-  const pos = run((cfg) => createHostDiagKit({ configPath: cfg }), scratch('pos-' + label));
+  const pos = run((cfg) => createDiagTraceKit({ configPath: cfg }), scratch('pos-' + label));
   check(name, pos.ok, pos.detail);
 
   const mod = MUTANTS.get(label);
-  const mut = run((cfg) => mod.createHostDiagKit({ configPath: cfg }), scratch('mut-' + label));
+  const mut = run((cfg) => mod.createDiagTraceKit({ configPath: cfg }), scratch('mut-' + label));
   check('变异体 ' + label + ' ⇒ 同一判据必须变红', !mut.ok, mut.detail);
 }
 
@@ -432,20 +440,21 @@ pair('G1 灌入 ' + SEEN_MAX + ' 个新键把首键挤出后，首键又能落�
 // ---------------------------------------------------------------- H. 导出面 + 地板
 section('H. 导出面、自检与覆盖面地板');
 
-const kitProbe = createHostDiagKit({ configPath: () => '/tmp/config.json' });
-check('H1 kit 只暴露 3 个名字（内部常量与状态不外泄）',
-  JSON.stringify(Object.keys(kitProbe).sort()) === JSON.stringify(['appendDiagLine', 'foldTokenPath', 'traceRequests']),
+const kitProbe = createDiagTraceKit({ configPath: () => '/tmp/config.json' });
+check('H1 kit 只暴露被消费的 4 个名字（内部常量与状态不外泄）',
+  JSON.stringify(Object.keys(kitProbe).sort()) === JSON.stringify(
+    ['appendDiagLine', 'foldTokenPath', 'traceMediaRequests', 'traceRequests']),
   'keys=' + JSON.stringify(Object.keys(kitProbe).sort()));
 
 const ownSource = stripComments(readFileSync(SELF, 'utf8'));
-const realCallCount = (ownSource.match(/createHostDiagKit\(/g) || []).length;
+const realCallCount = (ownSource.match(/createDiagTraceKit\(/g) || []).length;
 check('H2 本文件确实静态读到被测模块（剥注释后仍有路径字面量 + 真调用）',
-  ownSource.includes("from '../lib/host-diag.js'") && realCallCount >= 3,
+  ownSource.includes("from '../lib/diag-trace.js'") && realCallCount >= 3,
   '真调用=' + realCallCount);
 
-const fakeSource = stripComments('// createHostDiagKit 只在注释里出现\nconst x = 1;\n');
-check('H3 负对照：只在注释里提到 createHostDiagKit 的源码不算真读（判据先剥注释）',
-  !fakeSource.includes('createHostDiagKit'), '剥注释后=' + JSON.stringify(fakeSource.trim()));
+const fakeSource = stripComments('// createDiagTraceKit 只在注释里出现\nconst x = 1;\n');
+check('H3 负对照：只在注释里提到 createDiagTraceKit 的源码不算真读（判据先剥注释）',
+  !fakeSource.includes('createDiagTraceKit'), '剥注释后=' + JSON.stringify(fakeSource.trim()));
 
 const unused = MUTANT_SPECS.map(([l]) => l).filter((l) => !usedLabels.has(l));
 check('H4 没有闲着不用的变异体规格（每条规格都真的喂给某个判据）',

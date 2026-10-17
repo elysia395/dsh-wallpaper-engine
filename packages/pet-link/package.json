@@ -1,0 +1,36 @@
+{
+  "name": "dsh-plugin-wallpaper-engine-pet-link",
+  "version": "1.3.3",
+  "description": "Optional pet link: runtime eligibility, four interaction sequences, tuning and explicit transactional preparation; no dsh-pet dependency.",
+  "icon": "./icon.png",
+  "type": "module",
+  "main": "./lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./client": "./lib/client.pet-link.js",
+    "./install": "./tools/install-bridge.mjs",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json",
+    "./cordis.patch.yml": "./cordis.patch.yml"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": ["@deepseek-ai/dsh-client-runtime"],
+      "platform": "web",
+      "immediately": true
+    }
+  },
+  "files": ["lib/", "cordis.patch.yml", "locale/", "icon.png", "package.json", "tools/", "assets/", "src/"],
+  "peerDependencies": {
+    "@deepseek-ai/dsh-host-webserver": ">=0.1.5-rc.1"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh-host-webserver": {
+      "optional": true
+    }
+  },
+  "license": "MIT"
+}

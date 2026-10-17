@@ -70,9 +70,9 @@ function switchFrames(id, dir) {
 // 过渡（即便渐变窗口内场景从 T0 播到 T1、目标是运动的）。与 ROTATION_FADE_MS
 // 保持独立常量，后续要单独调这条腿不必动轮换。
 // CSS .we-live-iframe 的 transition 必须与之同步。
-// ⚠️ 审计标注（"写而不读"扫描请勿再报它）：本常量在 JS 里**零按名读**，但它不是死代码 ——
+// ⚠️ 「写而不读」静态扫描请勿再报它：本常量在 JS 里**零按名读**，但它不是死代码 ——
 // ① `scripts/build-client.mjs` 的内联 markers 钉住它的声明字面量（构建期校验）；
-// ② `test/verify-client.mjs:3251` 断言产物文本里同时出现 ROTATION_FADE_MS 与本常量（1800）；
+// ② `test/verify-client.mjs:3252` 断言产物文本里同时出现 ROTATION_FADE_MS 与本常量（1800）；
 // ③ `src/styles-base.js:138/149` 的 CSS 注释要求 `.we-live-iframe` 的 transition 与之同步。
 // ⇒ 这条腿的时长实际由 CSS transition 承担，改值必须同时改这三处。
 const LIVE_FIRST_FADE_MS = 1800;

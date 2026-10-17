@@ -1,8 +1,8 @@
 # Linux 壳窗遮挡区域获取 → WebWallGL 降帧/暂停 —— 实施规格
 
 <!-- status-banner: work-in-progress -->
-> **状态：进行中（未落地）。** 本文按 [`docs/README.md`](../README.md) §目录的寿命规则只放
-> **还没做成事实的东西**；做完即整体移入 [`docs/archive/wip/`](../archive/wip/)。
+> **状态：进行中 —— P0（X11 适配器）已落地（2026-10-12，见 §10），Wayland 与后续项未落地。** 本文按 [`docs/README.md`](../README.md) §目录的寿命规则只放
+> **还没做成事实的东西**；做完即整体归档。
 > **本文不是进度真源**：机制 → 实现文件头注释、判据 → `test/`、取舍 → [`adr/`](../adr/)。
 >
 > **范围**：仅 Linux 会话（X11 / Wayland）。Windows/macOS 数据通路不同，另行立项。
@@ -50,8 +50,8 @@ bundle 是压缩产物，符号名（`me`/`Qb` 等）会随上游同步变化。
 - 控制器创建点：`const me=Xb({fullscreen:!0})`（全 bundle 唯一）；
 - 遮挡入口：`setOcclusion(t){const e=me.occlusion?.band`（控制器方法体开头）。
 
-上游同步后（[`lib/webwallgl/.upstream.json`](../../lib/webwallgl/.upstream.json) 变更）必须重新
-定位锚点并复验 §8 验收。
+上游 `webwallgl` 升级后（版本真源 = `package.json` 的 `dependencies.webwallgl`；引擎已从 vendored
+副本改为 npm 运行期依赖）必须重新定位锚点并复验 §8 验收。
 
 ## 2. 数据通路总览
 
@@ -116,7 +116,8 @@ bundle 是压缩产物，符号名（`me`/`Qb` 等）会随上游同步变化。
 ## 4. 宿主路由（`lib/routes/occlusion.js`）
 
 - `GET /wallpaper-engine/occlusion` → 快照 JSON（鉴权、JSON 响应族沿
-  [`lib/routes/now-playing.js`](../../lib/routes/now-playing.js) 等同族路由先例；
+  [`packages/media-bridge/lib/routes/now-playing.js`](../../packages/media-bridge/lib/routes/now-playing.js)
+  等同族路由先例；
   `lib/json-response.js` 工具）；
 - 加路由后**必须**跑 `node test/tools/host-route-index.mjs --write` 重算
   [`docs/ROUTE-INDEX.md`](../ROUTE-INDEX.md)（`verify-route-index` 会机检）。

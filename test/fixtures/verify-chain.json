@@ -7,6 +7,14 @@
         {
           "kind": "guard",
           "npm": null,
+          "file": "test/verify-eol.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
           "file": "test/verify-client-sync.mjs",
           "args": [],
           "tier": "hard",
@@ -16,6 +24,14 @@
           "kind": "guard",
           "npm": null,
           "file": "test/verify-client.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-component-visibility.mjs",
           "args": [],
           "tier": "hard",
           "probe": false
@@ -265,6 +281,14 @@
         {
           "kind": "guard",
           "npm": null,
+          "file": "test/verify-inject-contracts.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
           "file": "test/verify-cache-dir.mjs",
           "args": [],
           "tier": "hard",
@@ -337,6 +361,14 @@
         {
           "kind": "guard",
           "npm": null,
+          "file": "test/verify-component-face.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
           "file": "test/verify-fontset.mjs",
           "args": [],
           "tier": "hard",
@@ -346,6 +378,14 @@
           "kind": "guard",
           "npm": null,
           "file": "test/verify-presets.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-settings-namespaces.mjs",
           "args": [],
           "tier": "hard",
           "probe": false
@@ -394,6 +434,14 @@
           "kind": "guard",
           "npm": null,
           "file": "test/verify-token-contract.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-route-ownership.mjs",
           "args": [],
           "tier": "hard",
           "probe": false
@@ -461,6 +509,186 @@
           "args": [],
           "tier": "hard",
           "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-subpackage-boot.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-subpackage-client-half.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-subpackage-purity.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-subpackage-toggle-roundtrip.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-subpackage-manifests.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-host-teardown.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-pet-package.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-pet-hotplug-host.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-pet-hotplug-client.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-pet-rope-entry.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-pet-tuner.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-pet-bubble-timing.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-pet-mascot-motion.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-pet-egg1-motion.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-pet-egg1-rebound.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-pet-sidebar-rebound.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-pet-egg2-motion.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-pet-follow.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/tools/packages.mjs",
+          "args": [
+            "selftest"
+          ],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/tools/js-text.mjs",
+          "args": [
+            "selftest"
+          ],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-guard-chain.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-ci-steps.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
         }
       ]
     },
@@ -502,7 +730,7 @@
         {
           "kind": "guard",
           "npm": null,
-          "file": "test/verify-guard-map.mjs",
+          "file": "test/verify-undefined-refs.mjs",
           "args": [],
           "tier": "soft",
           "probe": false
@@ -510,7 +738,7 @@
         {
           "kind": "guard",
           "npm": null,
-          "file": "test/verify-guard-chain.mjs",
+          "file": "test/verify-guard-map.mjs",
           "args": [],
           "tier": "soft",
           "probe": false
@@ -584,6 +812,14 @@
         {
           "kind": "guard",
           "npm": null,
+          "file": "test/verify-eol.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
           "file": "test/verify-client-sync.mjs",
           "args": [],
           "tier": "hard",
@@ -593,6 +829,14 @@
           "kind": "guard",
           "npm": null,
           "file": "test/verify-client.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-component-visibility.mjs",
           "args": [],
           "tier": "hard",
           "probe": false
@@ -842,6 +1086,14 @@
         {
           "kind": "guard",
           "npm": null,
+          "file": "test/verify-inject-contracts.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
           "file": "test/verify-cache-dir.mjs",
           "args": [],
           "tier": "hard",
@@ -914,6 +1166,14 @@
         {
           "kind": "guard",
           "npm": null,
+          "file": "test/verify-component-face.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
           "file": "test/verify-fontset.mjs",
           "args": [],
           "tier": "hard",
@@ -923,6 +1183,14 @@
           "kind": "guard",
           "npm": null,
           "file": "test/verify-presets.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-settings-namespaces.mjs",
           "args": [],
           "tier": "hard",
           "probe": false
@@ -971,6 +1239,14 @@
           "kind": "guard",
           "npm": null,
           "file": "test/verify-token-contract.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-route-ownership.mjs",
           "args": [],
           "tier": "hard",
           "probe": false
@@ -1042,6 +1318,186 @@
         {
           "kind": "guard",
           "npm": null,
+          "file": "test/verify-subpackage-boot.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-subpackage-client-half.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-subpackage-purity.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-subpackage-toggle-roundtrip.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-subpackage-manifests.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-host-teardown.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-pet-package.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-pet-hotplug-host.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-pet-hotplug-client.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-pet-rope-entry.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-pet-tuner.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-pet-bubble-timing.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-pet-mascot-motion.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-pet-egg1-motion.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-pet-egg1-rebound.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-pet-sidebar-rebound.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-pet-egg2-motion.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-pet-follow.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/tools/packages.mjs",
+          "args": [
+            "selftest"
+          ],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/tools/js-text.mjs",
+          "args": [
+            "selftest"
+          ],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-guard-chain.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-ci-steps.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
           "file": "test/verify-module-layout.mjs",
           "args": [],
           "tier": "soft",
@@ -1074,7 +1530,7 @@
         {
           "kind": "guard",
           "npm": null,
-          "file": "test/verify-guard-map.mjs",
+          "file": "test/verify-undefined-refs.mjs",
           "args": [],
           "tier": "soft",
           "probe": false
@@ -1082,7 +1538,7 @@
         {
           "kind": "guard",
           "npm": null,
-          "file": "test/verify-guard-chain.mjs",
+          "file": "test/verify-guard-map.mjs",
           "args": [],
           "tier": "soft",
           "probe": false

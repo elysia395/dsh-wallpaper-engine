@@ -76,7 +76,14 @@ export default [
   {
     // `lib/client.js` 是**构建产物**（`npm run build` 生成、不入库；新鲜度由 `test/verify-client-sync.mjs` 真跑构建逐字节判）。
     // 对产物报违规没有任何可执行的含义 —— 要改就改 `src/**` 再重建。
-    ignores: ['lib/client.js', 'node_modules/**', '.npm-cache/**', '.test-cache/**', 'assets/**', 'lib/types/**'],
+    // `.integration-notes/**`：`.gitignore` 里的**本地移交/取证笔记**（含 scratch 脚本与**另一个 worktree**）。
+    // 不忽略它会把本机 lint 面从 ~260 撑到 ~1470（其中还有 `(fatal) Parsing error` 的历史探针），
+    // 于是 `verify-static` 的棘轮在本机量与 CI 量之间对不上 —— 与 `repo-face.mjs` 的"脏扫描面"
+    // （假绿）同一族：**扫描面必须来自 git 视角**。CI 上没有该目录 ⇒ CI 结论不变。
+    ignores: [
+      'lib/client.js', 'node_modules/**', '.npm-cache/**', '.test-cache/**', 'assets/**', 'lib/types/**',
+      '.integration-notes/**',
+    ],
   },
 
   // ── 宿主半边 + 工具链：真 ESM 模块 ──────────────────────────────────────────

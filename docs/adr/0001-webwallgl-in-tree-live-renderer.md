@@ -87,4 +87,4 @@ Wallpaper Engine 的三类壁纸里，**Scene（场景）**是最难移植的一
 - 渲染页与壁纸文件服务、目录围栏：`lib/routes/scene-serve.js`
 - 浏览器端图层与降级：`src/live-layer.js`
 - 网页壁纸兼容 shim 的提取与注入：`lib/index.js`（`extractWebShim`）
-- 已退役的离线路线取证（**不反映现行实现**）：原 `docs/archive/static-frame/` 一支已删除，见 git 历史
+- 已退役的离线路线取证（**不反映现行实现**）：那条线（离线成帧）已整体删除，见 git 历史

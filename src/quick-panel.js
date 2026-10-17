@@ -184,15 +184,15 @@
 
   // ── 侧栏档的渲染 ctx（与设置页共用同一批渲染器）────────────────────────────
   // 侧栏「外观」画**简化配置**（全局四件套与各面的**总开关**）+ 两块**默认收起的折叠块**
-  // （全局字体节、「详细玻璃调节」门后的高级行）。分档见 ADR-0008 **D4**（2026-10-11 三次修订）。
+  // （全局字体节、「详细玻璃调节」门后的高级行）。分档见 ADR-0008 **D4**（三次修订）。
   // 折叠态住 localStorage（本档 `qp-font-open` / `qp-glass-detail`；设置页那份字体节用它自己的
   // `picker-font-open`），经 `qpRenderAppearancePane` 作为 `fontOpen` / `glassDetailOpen`
   // 两个布尔传进渲染器。
   //
   // 仍指向占位器的只有两类（取用即抛错，与门互为负对照）：预设方案（跨面批量快照覆盖、
   // 无撤销 ⇒ 只在设置页画）与播放/画面页专属（出图来源 / 实时帧 / 自定义画面 / 帧率上限）。
-  // ⚠️ 字体节与玻璃高级行的处理器**已随 2026-10-09 的迁移移出本名单**（改传真值）——
-  //    2026-10-11 三次修订后**字体节两档都画**，它的处理器在两档都是真值；玻璃高级行仍
+  // ⚠️ 字体节与玻璃高级行的处理器**已随那次迁移移出本名单**（改传真值）——
+  //     三次修订后**字体节两档都画**，它的处理器在两档都是真值；玻璃高级行仍
   //    只在侧栏（含「详细玻璃调节」折叠门）。若有人再把某一行挪成"设置页专属"，记得同时
   //    改回占位器，否则渲染器解构到 undefined 会静默画出死旋钮。
   function sidebarCtxStub(name) {
@@ -235,7 +235,7 @@
   }
 
   // ── 外观页各节的折叠态（同 qp-view 口径：仅 UI 状态，localStorage，不进 config.json）。
-  //    用户口径（2026-10-11 **二次修订**）：**后面三节默认隐藏**、前面两节默认展开；
+  //    用户口径（**二次修订**）：**后面三节默认隐藏**、前面两节默认展开；
   //    每节各自独立、各自记忆（显式操作过的用户永远以他自己的选择为准）。
   //    「之后三节」= 侧边栏圆角 / 全局 UI 配色 / 全局字体 —— 与设置页同序的最后三节。
   const QP_FONT_OPEN_KEY = "dsh-wallpaper-engine:qp-font-open";
@@ -372,6 +372,9 @@
         sel.videoError && React.createElement("div", { className: "we-picker__current-error" }, sel.videoError),
       ),
       React.createElement("div", { className: "we-qp__current-actions" },
+        // ⚠️ **不变量：这一行只放日常操作**（暂停 / 播放 · 刷新 · 清除；场景与网页壁纸再加
+        // 「壁纸属性」）。求星之类不是日常动作，不放这里 —— 求星入口在「关于」页常驻
+        //（Star 按钮 + 重看公告按钮）与更新公告配图下那行，都不占这一行。
         React.createElement("button", {
           className: "we-picker__btn", type: "button",
           onClick: onTogglePlay, disabled: !sel.url,
@@ -485,7 +488,7 @@
       // ── 全局 UI 配色节（本档默认收起；处理器与设置页同一批模块级函数）──
       uiColorOpen: ui.uiColorOpen, onToggleUiColorSection: ui.onToggleUiColorSection,
       onToggleUiColorCustom, onUiColorElement,
-      // ── 整节折叠（2026-10-11「细节 / 玻璃 UI / 侧边栏圆角」三节默认收起）──
+      // ── 整节折叠（「细节 / 玻璃 UI / 侧边栏圆角」三节默认收起）──
       //    ⚠️ 只有本档传这三对 —— 设置页那三节恒展开（用户口径），渲染器那边 `collapsible`
       //    为假时**短路**、根本不读它们（所以设置页不传也不会 ReferenceError）。
       detailOpen: ui.detailOpen, onToggleDetailSection: ui.onToggleDetailSection,
@@ -493,8 +496,8 @@
       cornersOpen: ui.cornersOpen, onToggleCornersSection: ui.onToggleCornersSection,
       // ── 吉祥物 3D 环的等比缩放基准（见 QuickPanel 里 paneW 那段）──
       paneWidth: ui.paneWidth,
-      // ── 全局字体节（**本档**默认收起；2026-10-11 三次修订后该节两档都画，设置页那份
-      //    用它自己的 `picker-font-open` 键。原 setting-only 占位器早在 2026-10-09 摘掉）──
+      // ── 全局字体节（**本档**默认收起；三次修订后该节两档都画，设置页那份
+      //    用它自己的 `picker-font-open` 键。原 setting-only 占位器早已摘掉）──
       fontOpen: ui.fontOpen, onToggleFontSection: ui.onToggleFontSection,
       fontSet: fontSetCtx(), officialColorOf,
       onComponentFamily, onComponentFont, onFontAdvanced, onFontResetAll, onGlobalFamily,
@@ -664,7 +667,7 @@
     // 外观页两块折叠块的展开态（默认收起，localStorage 记忆；两块各自独立）。
     // 同 view / qpTab 一条纪律：useState 在早退分支之前，写状态即写 localStorage（不 emit、
     // 不进 config.json）—— 面板重渲染由 React 状态驱动。
-    // ── 各节折叠态的**默认值**（2026-10-11 二次修订：侧边栏「后面三节默认隐藏」）────────
+    // ── 各节折叠态的**默认值**（二次修订：侧边栏「后面三节默认隐藏」）────────
     //    顺序与设置页同序：主题 / 细节 / 玻璃 UI / 侧边栏圆角 / 全局 UI 配色 / 全局字体。
     //    侧边栏：**细节、玻璃 UI 默认展开**；**侧边栏圆角、全局 UI 配色、全局字体默认收起**。
     //    （主题没有门，恒展开。）
@@ -694,7 +697,7 @@
       setGlassDetailOpen(next);
       writeQpOpen(QP_GLASS_DETAIL_KEY, next);
     };
-    // ── 吉祥物 3D 环的「面板宽度」（2026-10-11：「左右拉宽、顶格」）──────────────────────
+    // ── 吉祥物 3D 环的「面板宽度」（「左右拉宽、顶格」）──────────────────────
     // 与设置页那侧同形（见 client.js 的 paneW effect）：环要随可用宽度等比放大才填得满，
     // 而渲染器是纯函数、拿不到宽度 ⇒ 在本档量一次、经 ctx 传下去。
     // 量的是 `.we-picker__mascot-carousel`（width:100% 的 flex 行）—— 它的宽度不随窗口
@@ -719,7 +722,7 @@
         window.removeEventListener("resize", measure);
       };
     }, [qpTab]);
-    // ── 本机字体清单（本档的触发点；2026-10-11 三次修订后字体节两档都画 ⇒ 设置页那侧
+    // ── 本机字体清单（本档的触发点；三次修订后字体节两档都画 ⇒ 设置页那侧
     //    也有一条同形 effect，见 src/client.js 的 pickerFontOpen 那段）──
     // 停在外观页 + 字体节**展开** + 「字体自定义」开着 ⇒ 才去要一次（宿主那次扫描
     // macOS 实测 ~10s，收起态下拉根本不可见，不付）。TTL 内是空操作。
@@ -796,7 +799,7 @@
     const tabBodyClass = "we-qp__tabbody" + (qpTab === "wallpaper" ? " we-qp__tabbody--library" : "");
     // 底栏入口随页签：壁纸页=打开设置（落在它自己记住的那页）；外观 / 播放页=深链到
     // 设置页同名页签 —— 玻璃详细调节仍只在侧栏（本页，折叠块），设置页那边留玻璃预设、
-    // 全量配置与**字体节**（2026-10-11 三次修订后字体节两档都画）；播放页的出图来源 /
+    // 全量配置与**字体节**（三次修订后字体节两档都画）；播放页的出图来源 /
     // 实时帧仍住设置页。
     const foot = qpTab === "appearance"
       ? {

@@ -38,8 +38,8 @@ const BASE = '/wallpaper-engine';
 /** 拼出带前缀的 URL（path 允许已含前缀 / 已含查询串 / 是绝对或 data:/blob: URL —— 后者原样返回）。 */
 function apiUrl(path) {
   const p = String(path == null ? '' : path);
-  // 绝对 URL = 带 scheme 的任何地址（含 dsh-app:// 等自定义协议）——只认 http(s)
-  // 会把  在自定义协议 origin 下重新拼接成畸形路径（实测症状：
+  // 绝对 URL = 带 scheme 的任何地址（含 dsh-app:// 等自定义协议）——只认 http(s) 的话，
+  // 会把这类地址在自定义协议 origin 下重新拼接成畸形路径（实测症状：
   // 应用侧封面恒 404，而同路径 curl 200）。
   if (/^[a-z][a-z0-9+.-]*:/i.test(p) || p.startsWith('data:') || p.startsWith('blob:')) return p;
   if (p.startsWith(BASE)) return p;

@@ -52,7 +52,21 @@ const read = (rel) => readFileSync(join(ROOT, rel), 'utf8');
 // ══ ① 仓库地址三边一致 ═══════════════════════════════════════════════════════
 console.log('① 仓库地址：package.json ⇄ 客户端 ⇄ 宿主解析');
 
-const hostSrc = read('lib/index.js');
+// P2-1：`/star-count` 与 `/about-qr` 的注册腿已出户到组件行 ⇒ 宿主侧「注册点声明了缓存路径与
+// 仓库地址」那条判据的读取源必须把组件入口拼上（字面量/正则/判据名一字未动，只扩读取面）。
+// P2-3D（D1 硬化）：这里必须喂**剥过注释的代码**。旧写法喂原文 ⇒ 下面被钉的注册点形态
+// （`registerGithubStarsRoutes(webServer, { … repoSlug: repoSlugFromPkg() … cachePath: … })`）
+// 只要**抄进一行注释**就能满足两条正则（p1b-recon 实验 E1 实测 = true）⇒ 真代码被删掉、注释里
+// 留一句样本，判据照样绿。剥注释走共享的字符串感知实现（本文件顶部已 import 的 `stripComments`），
+// **字面量 / 正则 / 判据名一字未动**，只把"看代码还是看注释"这一层补严。
+// 工具函数抽出来是**为了负对照能复用同一条"只看代码"的管道**（见下方 D1 负对照）；不改任何判据。
+const guardCode = (text) => stripComments(String(text));
+// P2-2b（拆环）：`hostKernel` / `BASE` / `PLUGIN_NAME` / `repoSlugFromPkg` 四个声明搬进了叶子
+// 模块 lib/host-boot.js ⇒ 读取面 + 该模块；**字面量 / 正则 / 判据名一字未动**。
+// P-F：组件行出户到 `packages/about-notice/`（宿主半边 + 两条路由族整体搬走）⇒ 读取面随之改路径，
+// **字面量 / 正则 / 判据名一字未动**。注册点形态仍是同一条（入口 `apply` 里那条调用）。
+const hostSrc = guardCode(read('lib/index.js')) + '\n' + guardCode(read('packages/about-notice/lib/index.js'))
+  + '\n' + guardCode(read('lib/host-boot.js'));
 /**
  * `owner/repo` 归一化：正则本体**从宿主实现里现抽**（`lib/index.js` 的 `repoSlugFromPkg`），
  * 不在测试里重打一份 —— 重打的那份一旦与产品漂移，判据就退化成"测试自己和自己一致"。
@@ -86,21 +100,54 @@ check('宿主没有把 owner/repo 写死成字面量',
 check('star 路由的注册点声明了缓存路径与仓库地址',
   /registerGithubStarsRoutes\(webServer, \{[\s\S]{0,240}repoSlug: repoSlugFromPkg\(\)/.test(hostSrc)
     && /cachePath: \(\) => join\(pluginDataDir\(\), 'star-count\.json'\)/.test(hostSrc));
+// P2-3D（D1）负对照：证明**旧的绕过手法**（把被钉住的注册点形态抄进一行注释）不再成立。
+// 谓词与上面那条判据的两条正则**逐字同形**；夹具是合成源码（不读真实文件）：
+//   · `starShapeIn(原文)` 为真 ⇒ 夹具确实含被钉的形态（证明判据不是恒假）；
+//   · `starShapeIn(guardCode(原文))` 为假 ⇒ 走"只看代码"的管道后，注释不再满足判据。
+// 若有人把 `guardCode`（或 `hostSrc` 的读取源）退回原文、即撤回 D1 硬化，这条当场变红。
+const starShapeIn = (src) =>
+  /registerGithubStarsRoutes\(webServer, \{[\s\S]{0,240}repoSlug: repoSlugFromPkg\(\)/.test(src)
+  && /cachePath: \(\) => join\(pluginDataDir\(\), 'star-count\.json'\)/.test(src);
+const commentedStarShape = [
+  "// registerGithubStarsRoutes(webServer, { repoSlug: repoSlugFromPkg(), cachePath: () => join(pluginDataDir(), 'star-count.json') })",
+  'export function nothingHere() {}',
+  '',
+].join('\n');
+check('negative control(硬化): 注册点形态只出现在注释里 ⇒ 判据不看它（旧写法此处为真）',
+  starShapeIn(commentedStarShape) === true && starShapeIn(guardCode(commentedStarShape)) === false);
 check('一键 star 不做：宿主侧没有任何写 GitHub 的调用',
-  !/user\/starred/.test(hostSrc) && !/method:\s*['"]PUT['"]/.test(read('lib/routes/github-stars.js')));
+  !/user\/starred/.test(hostSrc) && !/method:\s*['"]PUT['"]/.test(read('packages/about-notice/lib/routes/github-stars.js')));
 
 // ══ ② 路由行为（替身出站，不联网）════════════════════════════════════════════
 console.log('\n② /star-count 路由行为（替身 fetchJson）');
 
 const { registerGithubStarsRoutes } =
-  await import(pathToFileURL(join(ROOT, 'lib', 'routes', 'github-stars.js')).href);
-// 路由模块**只导出它的 register 函数**（`lib/routes/*.js` 的统一形状，verify-route-index
-// 按这个形状解析 context 契约）⇒ TTL 常量从源码里读，不去 import 一个不存在的导出。
-const starSrc = read('lib/routes/github-stars.js');
+  await import(pathToFileURL(join(ROOT, 'packages', 'about-notice', 'lib', 'routes', 'github-stars.js')).href);
+// P-F：路由族不再 import 主包的 `json-response.js`，应答通道改由调用点注入（`c.http`）⇒ 这里把
+// 主包的真实现喂进去（与组件入口从 `ctx.wallpaperEngineHost` 拿到的 `host.http.sendJson` 同一份）。
+const { sendJson } = await import(pathToFileURL(join(ROOT, 'lib', 'json-response.js')).href);
+// 路由模块的**形状**：只许一个 exported function（= 那一个注册入口，verify-route-index 按它
+// 解析 context 契约）+ 一处**白名单**声明面导出 ⇒ TTL 常量仍从源码里读，不去 import 多余导出。
+// ⚠️ 路由族模块（`lib/routes/*.js` ∪ 组件目录里的实现文件）带 `export const DEPS`（注入契约声明面，见
+// ADR-0013 的 D12②「每个路由族带一份显式声明键集，与调用点双向对账」；判据 = test/verify-inject-contracts.mjs）⇒ 判据不能停在"export 数量 == 1"，但也不能退化成"随便多导都行"：只放行
+// `DEPS` / `OPTIONAL_DEPS` 两个具名常量，多导一个函数或多导一个普通 const 都要红（见负对照）。
+const starSrc = read('packages/about-notice/lib/routes/github-stars.js');
 const STAR_TTL_MS = Number((starSrc.match(/const STAR_TTL_MS = ([0-9_*\s]+);/) || [])[1].replace(/[\s_]/g, '').split('*').reduce((a, b) => a * Number(b), 1));
-check('路由模块只导出 register 函数（与其它路由模块同形）',
-  (starSrc.match(/^export /gm) || []).length === 1
-    && starSrc.includes('export function registerGithubStarsRoutes(webServer, c) {'));
+const routeShapeOk = (src) => {
+  const exportedFns = src.match(/^export\s+(?:async\s+)?function\s+\w+/gm) || [];
+  const otherExports = (src.match(/^export\s+[^\n]*/gm) || [])
+    .filter((line) => !/^export\s+(?:async\s+)?function\s/.test(line.trim()))
+    .filter((line) => !/^export\s+const\s+(DEPS|OPTIONAL_DEPS)\s*=/.test(line.trim()));
+  return exportedFns.length === 1
+    && src.includes('export function registerGithubStarsRoutes(webServer, c) {')
+    && otherExports.length === 0;
+};
+check('路由模块只导出 register 函数 + 白名单声明面（与其它路由模块同形）', routeShapeOk(starSrc));
+check('negative control: 多导一个函数 / 多导一个普通 const ⇒ 同一条判据判红',
+  routeShapeOk(starSrc) === true
+    && routeShapeOk(starSrc + '\nexport function extra() {}\n') === false
+    && routeShapeOk(starSrc + '\nexport const EXTRA = 1;\n') === false
+    && routeShapeOk(starSrc.replace(/^export const DEPS = \[[\s\S]*?\];\n/m, '')) === true);
 check('TTL 常量解析出来了（判据非空转）', Number.isFinite(STAR_TTL_MS) && STAR_TTL_MS > 0, String(STAR_TTL_MS));
 
 /** 隔离的数据目录：缓存写这里，绝不碰用户真实目录（同 DSH_WE_DATA_DIR 口径）。 */
@@ -143,6 +190,7 @@ function mount(opts) {
     repoSlug: o.repoSlug === undefined ? 'elysia395/dsh-wallpaper-engine' : o.repoSlug,
     cachePath: () => CACHE,
     log: (m) => logs.push(String(m)),
+    http: { sendJson },
     fetchJson: async (url) => {
       calls.push(url);
       if (o.fail) throw new Error(o.fail);
@@ -274,9 +322,9 @@ check('TTL 常量在合理区间（几分钟量级，不是"永不刷新"也不�
 // ══ ③ 随包图：二维码 PNG + 公告配图 JPEG + 白名单路由 ══════════════════════════
 console.log('\n③ /about-qr 路由行为（白名单 / 304 / 405 / 404）');
 
-const { registerAboutQrRoutes } = await import(pathToFileURL(join(ROOT, 'lib', 'routes', 'about-qr.js')).href);
+const { registerAboutQrRoutes } = await import(pathToFileURL(join(ROOT, 'packages', 'about-notice', 'lib', 'routes', 'about-qr.js')).href);
 const ABOUT_DIR = join(ROOT, 'lib', 'about');
-const aboutSrc = read('lib/routes/about-qr.js');
+const aboutSrc = read('packages/about-notice/lib/routes/about-qr.js');
 const pkgFiles = JSON.parse(read('package.json')).files || [];
 
 /** 装一台只含 QR 路由的 mock webServer；serveFile 用**真实现**（在 lib/index.js 里是内联函数，
@@ -486,6 +534,50 @@ check('negative control: 门控判据对无门控的合成组件有牙',
   !/art === "ready" \? React\.createElement\("img"/.test('function UpdateNotice() { return React.createElement("img", { src: x }); }')
     && !/art === "ready" \|\| art === "timeout"/.test('function UpdateNotice() { const show = loaded; }'));
 
+// ── ⑤a′ 「重新查看本版更新公告」的两腿接线 ────────────────────────────────────
+// 公告的哨兵 `noticeSeen` 让它**一版只弹一次**；关于页那枚「重新查看本版更新公告」是唯一的
+// 重看路径。两腿都要钉住，否则"按钮在、但没人接"（点了没反应）或"能弹、但关不掉"（请求位不清）
+// 都会静默存在。
+{
+  // 腿一（渲染器侧）：关于页那枚按钮只调**回调**，不自己写状态/发通知 ——
+  // 这正是上面 ④ 那条"渲染器只读模块级状态"允许的形状，所以这里顺着同一口径断言。
+  check('关于页有「重新查看本版更新公告」按钮，且只调 ctx 回调（不自己 emit / setSetting）',
+    /weT\("重新查看本版更新公告"\)/.test(aboutBody)
+      && /onReopenNotice\(\)/.test(aboutBody)
+      && !ABOUT_EMIT_CALL_RE.test(aboutBody) && !ABOUT_SET_SETTING_RE.test(aboutBody));
+  // 腿二（client 侧）：调用点把回调接上、回调两件事都做（立请求位 + emit），
+  // 且 `dismiss()` 必须清掉请求位 —— 否则关掉后 `show` 仍为真、弹窗关不掉。
+  // ⚠️ 就地剥注释（`clientCode` 在下面 ⑤b 才定义，在前面引用它会 TDZ 报错）：
+  //    形态判据一律只看代码，注释里就写着 `onReopenNotice` 这类词。
+  const clientCodeHere = stripComments(clientSrc);
+  const reopenCall = /onReopenNotice:\s*\(\)\s*=>\s*\{[^}]*noticeReopenRequest\s*=\s*true[^}]*emit\(\)/.test(clientCodeHere);
+  check('调用点接上 onReopenNotice（立请求位 + emit 重渲染）',
+    reopenCall, 'wired=' + reopenCall);
+  check('公告的展示条件含"手动请求"支路（否则重看按不出来）',
+    /const show = componentOn && \(reopenRequested \|\| eligible\)/.test(noticeSrc));
+  check('dismiss() 清掉请求位（否则关不掉）',
+    /noticeReopenRequest = false;/.test(noticeSrc));
+  // ⚠️ 手动重看**不许吃页面级 art 缓存**（`noticeArtVerdict`）：它可能停在 `timeout`（那台
+  // 机器上一次没等到图、按无图降级过），而"配图"与"配图下那行求星链接"是同一条门控 ⇒
+  // 吃了缓存就会按无图公告渲染、求星那条腿整条不见（现象是"点了没反应"）。
+  // 两条都必须成立：① 手动请求时初始 art 从 pending 起步；② effect 里不吃那条缓存。
+  check('手动重看不吃页面级 art 缓存（否则 timeout 结论会让求星腿整条不渲染）',
+    /useState\(noticeReopenRequest \? "pending"/.test(noticeSrc)
+      && /noticeArtVerdict && !reopenRequested/.test(noticeSrc));
+  // 负对照：把两个条件任意一个改回"吃缓存"的写法 ⇒ 同一条判据判红。
+  const c1 = 'const [art, setArt] = React.useState(noticeArtVerdict || "pending");'
+    + 'if (noticeArtVerdict && !reopenRequested) { setArt(noticeArtVerdict); }';
+  const c2 = 'const [art, setArt] = React.useState(noticeReopenRequest ? "pending" : "x");'
+    + 'if (noticeArtVerdict) { setArt(noticeArtVerdict); }';
+  const cacheOk = (s) => /useState\(noticeReopenRequest \? "pending"/.test(s) && /noticeArtVerdict && !reopenRequested/.test(s);
+  check('negative control: 两种"吃缓存"写法都被判红',
+    cacheOk(c1) === false && cacheOk(c2) === false && cacheOk(noticeSrc) === true);
+  // 负对照：同一批正则对"按钮在、没人接"的合成源码必须判红。
+  check('negative control: 按钮只画不接 ⇒ 同一条判据判红',
+    !/onReopenNotice\(\)/.test("function renderAboutTab(ctx) { const { onReopenNotice } = ctx; return weT(\"重新查看本版更新公告\"); }")
+      && /weT\("重新查看本版更新公告"\)/.test("function renderAboutTab(ctx) { return weT(\"重新查看本版更新公告\"); }"));
+}
+
 // ── ⑤b 请求数上限 + 页面级结论缓存 ─────────────────────────────────────────
 // 缘起：未重启的后端 + 面板多开几次 ⇒ 约 150 行 404 红字（用户实测反馈）。请求本身是
 // 自清洁的（no-store/200 no-cache），但刷屏不是。两条腿都不读第二份字面量：退避表与
@@ -533,12 +625,15 @@ check('negative control: 接线判据对"退避表建了但组件仍按固定间
     && !noticeBackoffWired(noticeWiredOk + ' timers.push(setTimeout(probe, NOTICE_ART_POLL_MS));'));
 // 页面级结论缓存：面板可反复开关，但"这个后端有没有那张图"是页面级事实 ⇒ 第二轮起
 // 一个请求都不发。判据要求**读**与**写**同时在（只写不读 = 缓存白建）。
+// ⚠️ 读点带一个**手动重看例外**（`&& !reopenRequested`）：点那枚按钮的语义是"现在再看一次"，
+// 该拿现算结论，不吃旧缓存（实测故障：旧缓存停在 timeout ⇒ 重看按无图弹 ⇒ 求星腿没了）。
+// 缓存本身仍在水面：非手动路径照旧吃它，所以这条判据的意图（多开面板不复探）不变。
 const noticeVerdictCached = (s) => /let noticeArtVerdict\b/.test(s)
-  && /if \(noticeArtVerdict\) \{ setArt\(noticeArtVerdict\); return undefined; \}/.test(s)
+  && /if \(noticeArtVerdict && !reopenRequested\) \{ setArt\(noticeArtVerdict\); return undefined; \}/.test(s)
   && s.includes('noticeArtVerdict = "ready"') && s.includes('noticeArtVerdict = "timeout"');
 const noticeCacheOnlyWrite = 'let noticeArtVerdict = ""; noticeArtVerdict = "ready"; noticeArtVerdict = "timeout";';
 const noticeCacheOk = 'let noticeArtVerdict = "";'
-  + ' if (noticeArtVerdict) { setArt(noticeArtVerdict); return undefined; }'
+  + ' if (noticeArtVerdict && !reopenRequested) { setArt(noticeArtVerdict); return undefined; }'
   + ' noticeArtVerdict = "ready"; noticeArtVerdict = "timeout";';
 check('探针有页面级结论缓存（读在、两个终态都在：多开面板不复探）', noticeVerdictCached(clientCode));
 check('negative control: 缓存判据对"只写不读"的形态有牙',

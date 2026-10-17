@@ -1,6 +1,12 @@
 #!/usr/bin/env node
 /**
- * 聚焦守卫：`lib/video-preview.js`（picker 的视频缩略图：抽帧 → 落缓存 → 同键合流）。
+ * 聚焦守卫：`lib/media/video-preview.js`（picker 的视频缩略图：抽帧 → 落缓存 → 同键合流）。
+ *
+ * ⚠️ 重指真源（task-10 C）：被测实现住 `lib/media/video-preview.js` 的工厂返回值里；本守卫原先
+ * import 上游同名副本 `lib/video-preview.js`（task-10 末次提交已随本批删除）。副本里带着 `produced` 旗标
+ * 修法（"产出＝spawn 正常返回且留下文件"，见 D2 与 M_LEFTOVER），而真源当时只看"文件在不在"。
+ * 修法已搬进真源；真源的 deps 契约是 `{cacheBaseDir, ensureDirOnce, transcodeKit}`（宽度/闸值
+ * 为可选注入，缺省 960/2），夹具据此重建 —— 判据与期望值一字未改。
  *
  * 判据按模块文件头的四条不变量分组：
  *   1. **同键合流**（C 段）：同一输出路径的并发请求只 spawn 一次、只写一次盘。注意
@@ -15,16 +21,20 @@
  * 判红而不是让守卫挂死。
  */
 import { existsSync, mkdirSync, readdirSync, readFileSync, rmSync, statSync, utimesSync, writeFileSync } from 'node:fs';
-import { join } from 'node:path';
+import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { createVideoPreviewKit } from '../lib/video-preview.js';
+import { createVideoPreviewKit } from '../lib/media/video-preview.js';
 import { createCheck } from './tools/assert-harness.mjs';
 import { stripComments } from './tools/js-text.mjs';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const ISO = join(ROOT, '.test-cache', 'video-preview-guard');
-const SRC = join(ROOT, 'lib', 'video-preview.js');
-const SOURCE = readFileSync(SRC, 'utf8');
+const SRC = join(ROOT, 'lib', 'media', 'video-preview.js');
+// ⚠️ 变异体锚点写的是 `\n`：源码文本先归一成 LF 再做字面替换，否则 CRLF 检出（Windows 上
+// 常见）会让每条锚点都不命中、把负对照变成"锚点没命中"的异常。与
+// `test/verify-transcode-state.mjs` 的 `\r?\n` 处理同一个理由（`.gitattributes` 约定检出为 LF，
+// 但守卫不该依赖 checkout 的 EOL）。
+const SOURCE = readFileSync(SRC, 'utf8').replace(/\r\n/g, '\n');
 const OWN = readFileSync(fileURLToPath(import.meta.url), 'utf8');
 mkdirSync(ISO, { recursive: true });
 
@@ -35,10 +45,14 @@ const SENTINEL = Symbol('watchdog-timeout');
 
 function section(title) { console.log('\n' + title); }
 
+/** 一个空目录：**返回的就是缓存目录本身**（`<label>-<seq>/video-previews`）—— 与真源
+ *  `videoPreviewCacheDir()` = join(cacheBaseDir(), 'video-previews') 的落点对齐，这样
+ *  `tmpLeftovers(dir)` / `existsSync(out)` 判的仍是同一个目录。 */
 function freshDir(label) {
   seq += 1;
-  const d = join(ISO, `${label}-${seq}`);
-  rmSync(d, { recursive: true, force: true });
+  const base = join(ISO, `${label}-${seq}`);
+  const d = join(base, 'video-previews');
+  rmSync(base, { recursive: true, force: true });
   mkdirSync(d, { recursive: true });
   return d;
 }
@@ -98,10 +112,13 @@ function makeGateSpawn(delayMs) {
 
 function kitFor(dir, opts = {}) {
   const factory = opts.factory || createVideoPreviewKit;
+  // 真源 deps 契约（`lib/media/video-preview.js` 文件头）：目录一律由访问器注入。
+  // `cacheBaseDir: () => dirname(dir)` 让 videoPreviewCacheDir() 正好等于 dir；
+  // ffmpeg 的解析与 spawn 经 transcodeKit 注入；宽度/闸值是可选项（缺省 960/2）。
   return factory({
-    ensureVideoPreviewCacheDir: opts.ensureDir || (() => dir),
-    resolveFfmpeg: async () => '/fake/ffmpeg',
-    spawnFfmpeg: opts.spawn,
+    cacheBaseDir: () => dirname(dir),
+    ensureDirOnce: opts.ensureDir || ((p) => { mkdirSync(p, { recursive: true }); return p; }),
+    transcodeKit: { resolveFfmpeg: async () => '/fake/ffmpeg', spawnFfmpeg: opts.spawn },
     VIDEO_PREVIEW_WIDTH: opts.width === undefined ? 960 : opts.width,
     VIDEO_PREVIEW_MAX_CONCURRENT: opts.max === undefined ? 4 : opts.max,
   });

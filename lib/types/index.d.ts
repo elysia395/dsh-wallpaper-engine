@@ -2,7 +2,7 @@
  * dsh-wallpaper-engine — host half type surface.
  *
  * The host plugin contributes no public Cordis services and registers no model
- * tool. It serves 43 same-origin HTTP routes through `ctx.webServer` and unwinds
+ * tool. It serves 44 same-origin HTTP routes through `ctx.webServer` and unwinds
  * them on unload; `docs/ROUTE-INDEX.md` is the generated table of those routes
  * and stays authoritative for their paths and handlers.
  *
@@ -141,3 +141,43 @@ export declare function apply(ctx: Context): () => void;
 /** The plugin object form of the same two exports (`export default { inject, apply }`). */
 declare const plugin: { inject: string[]; apply: typeof apply };
 export default plugin;
+
+/**
+ * Lower-case container suffix of a path, without the dot (`''` when there is none).
+ *
+ * Re-exported from `lib/fs-paths.js` (the single source; the kernel and the facade share it).
+ * The media URL is token-shaped and carries no extension, so the browser half needs
+ * `WallpaperDescriptor.mediaExt` to decide "can the browser play this natively".
+ */
+export declare function extOf(p: string): string;
+
+/** Where a component row's browser-visible surface is rendered: file + symbol. */
+export interface ComponentVisibilitySite {
+  /** Repository-relative source file (e.g. `src/panel-tabs.js`). */
+  file: string;
+  /** Exported symbol inside that file (e.g. `renderAboutTab`). */
+  symbol: string;
+}
+
+/**
+ * Component row name → the browser-side render sites that must disappear when the row
+ * is disabled (`ADR-0013 D3②`). The host half owns this declaration; the browser half
+ * holds only the gate (`COMPONENT_GATE`), and `test/verify-component-visibility.mjs`
+ * reconciles the two sides. `media-bridge` is deliberately absent (no browser surface).
+ */
+export declare const COMPONENT_VISIBILITY: Record<string, ComponentVisibilitySite[]>;
+
+/** `{ file, symbol }` of the browser-side gate — the single implementation of the visibility decision. */
+export declare const COMPONENT_GATE: { file: string; symbol: string };
+
+/**
+ * "Load by component" entry point (the component rows in `cordis.patch.yml` reach the
+ * same implementations through their own `apply`). `component` is the sub-path segment
+ * of the row name (`'about-notice'` / `'mascot-avatar'` / `'media-bridge'`); unknown
+ * names throw. Returns the implementation's disposer.
+ */
+export declare function applyComponent(
+  root: Context,
+  rawConfig: unknown,
+  component: string,
+): () => void;

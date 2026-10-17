@@ -1,0 +1,16 @@
+{
+  "entry": "src/client.js",
+  "artifact": "lib/client.parallax.js",
+  "inline": [
+    {
+      "file": "src/parallax-layer.js",
+      "why": "3D/视差层（宿主空壳行的浏览器半边；自 src/parallax-layer.js 原样迁出）",
+      "markers": ["function syncParallaxLayer() {", "function parallaxDiscoveredGroups() {", "const PARALLAX_TARGET_SELECTOR"]
+    },
+    {
+      "file": "src/ext-parallax.js",
+      "why": "「扩展」页签 parallax 模块的描述符与渲染岛（自 src/ext-parallax.js 原样迁出）",
+      "markers": ["function renderParallaxIsland(ctx) {", "const PARALLAX_EXTENSION_MODULE = {"]
+    }
+  ]
+}

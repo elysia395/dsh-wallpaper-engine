@@ -41,7 +41,7 @@
 | | **随包发布** | **不发布（开发面）** |
 |---|---|---|
 | **浏览器进程** | `lib/client.js` —— **生成物，全仓唯一一个** | `src/**` —— 浏览器侧的**唯一真源** |
-| **宿主进程**（Node / Electron main） | `lib/index.js` ＋ 它 import 的 `lib/**` 模块 ＋ `lib/webwallgl/`（第三方副本；`lib/vendor/` 是**约定**允许的另一个落点，当前为空——最后一份自带副本已随其唯一消费者退役） ＋ `lib/types/` | **`test/`（守门：`verify-*` + `*-smoke` + `e2e-*`）· `test/tools/`（诊断/分析/生成工具）** · `scripts/`（只有 `build-client` / `prepare`，构建与发布期用）· `docs/` ＋ 本机未跟踪的研究 / 取证目录（由忽略规则覆盖，**不入库、也不被入库文档引用**） |
+| **宿主进程**（Node / Electron main） | `lib/index.js` ＋ 它 import 的 `lib/**` 模块 ＋ `lib/webwallgl/`（本仓渲染页适配层：`index.html` + `renderer.js` + `occlusion-bridge.js`；引擎本体走 npm 依赖 `webwallgl`，运行期由 `/scene-live/engine/` 从 `node_modules` 直出；`lib/vendor/` 是**约定**允许的另一个落点，当前为空——最后一份自带副本已随其唯一消费者退役） ＋ `lib/types/` | **`test/`（守门：`verify-*` + `*-smoke` + `e2e-*`）· `test/tools/`（诊断/分析/生成工具）** · `scripts/`（只有 `build-client` / `prepare`，构建与发布期用）· `docs/` ＋ 本机未跟踪的研究 / 取证目录（由忽略规则覆盖，**不入库、也不被入库文档引用**） |
 
 ### 1.1 一份代码，两个半边（两种运行形态）
 
@@ -68,7 +68,7 @@ graph TB
         ROUTES["lib/routes/*<br/>按职责分族的路由注册"]
         MEDIA["lib/media/*<br/>媒体桥与按需运行时"]
         SCAN["扫描链<br/>Steam → libraryfolders.vdf → 壁纸枚举"]
-        WEB["lib/webwallgl/*<br/>vendored 渲染页（按文本注入）"]
+        WEB["lib/webwallgl/*<br/>本仓适配页（按文本注入）"]
         STORE["~/.dsh-wallpaper-engine/<br/>config.json · 缓存 · 上传"]
     end
 
@@ -103,29 +103,50 @@ graph TB
 
 ---
 
-## 2. 宿主半边：门面、路由族与套件
+## 2. 宿主半边：门面、内核、路由族与组件行
 
-`lib/index.js` 是**门面**：它做注册与协议聚合，**不装新逻辑**。宿主半边里住着三类东西：
+`lib/index.js` 是**门面**：它做注册与协议聚合，**不装新逻辑**。宿主半边里住着五类东西
+（"主包 + 组件行 + 内核化"这套形态、它与上游单包形态的差异与迁移路径见
+[`ARCHITECTURE-SPLIT.md`](./ARCHITECTURE-SPLIT.md)）：
 
-- **路由族**（`lib/routes/<族>.js`，一文件一族）—— 从门面拿一个显式 context 对象，各自注册自己的路由。
-  族的成员是**派生量**，本文不列：路由枚举的真源是 `test/tools/host-route-index.mjs` 的 `buildIndex()`
-  （它把搬进 `lib/routes/` 的族按调用点放回原位），路由级视图是生成物 `docs/ROUTE-INDEX.md`
-  （`verify-route-index` 重算并逐字节比对）。`verify-route-families` 另按账本 §7-6 的触发线盯
-  「某族长到 ≥3 条 ⇒ 拆族或改线」。
-- **宿主侧套件**（`lib/*.js` 里的非路由模块）—— 纯逻辑，不碰 `ctx.webServer`：探测与账本
-  （`media-probe` / `scene-probe` / `wallpaper-scan` / `cache-prune`）、清单与文件服务
+- **宿主内核** `lib/kernel/*` —— 门面在**模块加载期**一次建成的各套件实例（`host-kernel.js`）、
+  一次 apply 的会话段（`host-session.js`）、组件行消费的组件视图与迷你会话（`component-session.js`）、
+  配置与数据目录（`config.js` / `data-dir.js`）。
+- **路由族**（`lib/routes/<族>.js`，或组件包内的 `packages/<组件>/lib/routes/<族>.js`，一文件一族）—— 拿一个显式
+  context 对象，各自注册自己的路由。族的成员是**派生量**，本文不列：路由枚举的真源是
+  `test/tools/host-route-index.mjs` 的 `buildIndex()`（它把搬进 `lib/routes/` 的族按调用点放回原位），
+  路由级视图是生成物 `docs/ROUTE-INDEX.md`（`verify-route-index` 重算并逐字节比对）。
+  `verify-route-families` 另按账本 §7-6 的触发线盯「某族长到 ≥3 条 ⇒ 拆族或改线」。
+- **组件行**（**组件包** `packages/<组件>/lib/` —— P-F 组件行统一，旧落点 `lib/components/<组件>/` 已不存在，`packages/about-notice/`、`packages/mascot-avatar/`、`packages/media-bridge/`，2026-10-16）—— 一个 bundle 多行（[`adr/0013`](./adr/0013-bundle-multi-component-rows.md)）：
+  组件入口 `index.js` + 它自己的路由族实现 + 该行消费的组件视图。行的开关是宿主的
+  （`cordis.patch.yml`）；"哪个实现属于哪一行"由 `test/verify-route-ownership.mjs` 钉住，
+  行的装载形态由 `test/verify-bundle-rows.mjs` 钉住。
+- **宿主侧套件**（`lib/*.js` 与 `lib/media/*.js` 里的非路由模块）—— 纯逻辑，不碰 `ctx.webServer`：发现与探测
+  （`steam-discovery` + `wallpaper-scan` / `media/mp4-probe` / `media/scene-probe`）、清单与文件服务
   （`inventory` / `serve` / `mp4-vfs` / `faststart` / `pkg-read` / `scene-manifest`）、
-  设置与配置（`settings-schema` / `config-store`）。
+  设置与配置（`settings-schema` / `kernel/config`）、清扫与诊断（`startup-sweep` / `diag-trace`）。
+  **哪些是活的以 §2.2 那张表和 `node test/verify-reachability.mjs` 为准**（上游同名副本已全部清掉，
+  该守卫现在是 0 不可达 / 0 行）。
 - **共享管道** `lib/http-body.js` —— 请求体读取的唯一实现，路由族共用，不各写一份。
+
+组件的**浏览器可见面**另有单一真源：`lib/component-visibility.js`（"哪个组件渲染哪一块"的宿主侧声明，
+门面再导出一次使它在 import 图上），两侧对账由 `test/verify-component-visibility.mjs` 承担；
+组件能拿到什么由 `test/verify-component-face.mjs` 按内核的组件视图逐键对账。
 
 ```mermaid
 graph LR
     IDX["lib/index.js<br/>（门面：apply 编排 + 共享闭包）"]
-    IDX --> R["lib/routes/*.js<br/>路由族（一文件一族）"]
-    IDX --> K["lib/*.js<br/>宿主侧套件（探测 / 清单 / 服务 / 设置）"]
-    IDX --> M["lib/media/*.js<br/>媒体源：生命周期 + 按需下载"]
+    BOOT["lib/host-boot.js<br/>BASE / 内核单例 / 组件记账"]
+    KN["lib/kernel/*<br/>套件实例 · 会话 · 组件视图"]
+    IDX --> R["lib/routes/*.js<br/>跨组件共享的路由族"]
+    IDX --> C["packages/&lt;组件&gt;/lib/<br/>（旧 lib/components/&lt;组件&gt;/ 已不存在）<br/>组件入口 + 自有路由族"]
+    IDX --> KN
+    BOOT --> KN
+    C --> BOOT
+    IDX --> K["lib/*.js · lib/media/*.js<br/>宿主侧套件（探测 / 清单 / 服务 / 设置）"]
     IDX --> H["lib/http-body.js<br/>请求体管道（唯一实现）"]
     R --> H
+    C --> H
 ```
 
 **族的形态有明文规定**（§4 第 1 条）：路由模块从 `apply(ctx)` 拿一个**显式 context 对象**
@@ -133,7 +154,8 @@ graph LR
 `verify-module-layout` 的『路由模块不得"继承" lib/index.js 的 import』一节钉住。
 
 **为什么门面不拆干净**：一部分共享可变状态（媒体源地址、载荷账本、缓存索引）必须与 `/inventory`
-同作用域。因此门面仍持有一组闭包状态，跨模块只能以**访问器**形式出去 —— 传值就是陈旧快照。
+同作用域。本分支把这组闭包搬进 `lib/kernel/host-session.js`（一次 apply 一段，工厂在 `apply()` 里
+被调用），但仍只能以**访问器**跨模块出去 —— 传值就是陈旧快照。
 
 ### 2.1 启动与生命周期
 
@@ -165,20 +187,27 @@ sequenceDiagram
 ### 2.2 非路由套件：职责与「为什么单独成模块」
 
 抽模块的接缝判据只有一条：**同一份推导被两个互不相干的消费者读到**（或者反过来，同一件事存在
-两个可以出错的实现）。下表把宿主半边现有的套件逐个说明：
+两个可以出错的实现）。下表把宿主半边**在 import 图上**的套件逐个说明 —— 每条的落点都是内核
+（`lib/kernel/host-kernel.js`）真正 import 的那个文件：
 
 | 模块 | 职责 | 接缝判据（为什么不能再摊在门面里） |
 |---|---|---|
-| `lib/media-probe.js` | MP4/MOV 容器探测：一次 moov 盒走读，回答尺寸 / 编码 / 帧率 / 时长与 moov 落点 | 同一份走读被两个消费者读：`/media-info` 的面板提示与 `runFfmpegTranscode` 的"源帧率 ≤ 上限就跳过转码"决策；`moovStart` / `moovSize` 又是 `mp4-vfs` 的 faststart 判据。抄两份就会各自漂移 |
-| `lib/scene-probe.js` | scene 的两本探测账本：独立音轨（BGM）与"主文件是否内嵌 MP4" | 两件事的消费者完全重合（`/scene-audio`、`/scene-video`、`/inventory`）。分开写会出现两份缓存键、两套陈旧判定：同一份 pkg 被探两次，两个回答还可能不一致 |
-| `lib/wallpaper-scan.js` | 「目录树 → 清单条目」的唯一推导链：扫描根推导、扫描签名、`project.json` → 条目、WE 播放列表 | 三个磁盘探测（存在 / 目录 / 文件）与 Steam 安装探测族共用同一份实现，注入后"扫描根少算一个"只剩一个出错点 —— 否则症状是签名一直"没变"、那一根里新增的壁纸永远不进库 |
-| `lib/cache-prune.js` | 启动期缓存清扫 + 容量上限（转码总量、缩略图份数、自定义画面孤儿 `.tmp`） | 四件事共享同一条纪律「只清本进程不拥有的、且够旧的孤儿产物」；它们原先分居门面两处，改一处的边界口径要回头确认另一处 |
-| `lib/config-store.js` | `config.json` 的读、原子发布（临时名 + `fsync` + `rename`）与 `settings` 段的读-改-写串行化 | **持久状态的写纪律与读改写排队**。`config.json` 被目录设置、上传元数据、字体集状态等多个业务面读-改-写共用，**每一次读改写都必须过同一条队列**（并发时后写者会基于旧快照吞掉先写者的改动）；摊在门面里就等于每个调用点各自排队，两处实现就会两处丢改动 |
+| `lib/media/mp4-probe.js` | MP4/MOV 容器探测：一次 moov 盒走读，回答尺寸 / 编码 / 帧率 / 时长与 moov 落点 | 同一份走读被两个消费者读：`/media-info` 的面板提示与 `runFfmpegTranscode` 的"源帧率 ≤ 上限就跳过转码"决策；`moovStart` / `moovSize` 又是 `mp4-vfs` 的 faststart 判据。抄两份就会各自漂移 |
+| `lib/media/scene-probe.js` | scene 的两本探测账本：独立音轨（BGM）与"主文件是否内嵌 MP4" | 两件事的消费者完全重合（`/scene-audio`、`/scene-video`、`/inventory`）。分开写会出现两份缓存键、两套陈旧判定：同一份 pkg 被探两次，两个回答还可能不一致 |
+| `lib/steam-discovery.js` + `lib/wallpaper-scan.js` | 发现与扫描两族：「Steam/WE 安装与库归属」与「目录树 → 清单条目」（扫描根推导、扫描签名、`project.json` → 条目、WE 播放列表） | 取上游的两族拆分：安装发现要跟 Steam 布局打交道，扫描族只消费三个注入谓词（存在 / 目录 / 文件）——"扫描根少算一个"的病根（签名一直"没变"、那一根里新增的壁纸永远不进库）因此只有一处推导；两族各有聚焦守卫。`extOf` / `schemeToCss` 由内核注入（单一真源在 `lib/fs-paths.js` 与 `lib/kernel/host-kernel.js`） |
+| `lib/startup-sweep.js` | 启动完成 3s 后的缓存清扫 + 容量上限（转码总量、缩略图份数、自定义画面孤儿 `.tmp`、旧版 faststart 副本） | 六件事共享同一条纪律「只清本进程不拥有的、且够旧的孤儿产物」；它们原先分居门面两处，改一处的边界口径要回头确认另一处。清扫器本体仍住各自套件（`lib/media/transcode.js` / `video-preview.js` / `media-dirs.js` / `lib/faststart.js`），本条只管**时点与顺序** |
+| `lib/kernel/config.js` | `config.json` 的读、原子发布（临时名 + `fsync` + `rename`）与 `settings` 段的读-改-写串行化 | **持久状态的写纪律与读改写排队**。`config.json` 被目录设置、上传元数据、字体集状态等多个业务面读-改-写共用，**每一次读改写都必须过同一条队列**（并发时后写者会基于旧快照吞掉先写者的改动）；摊在门面里就等于每个调用点各自排队，两处实现就会两处丢改动 |
+| `lib/diag-trace.js` | 诊断行的落盘账与请求追踪（`/diag-log` 读的就是它） | 多个族（媒体桥 / 场景 / 遮挡 / 设置）都要追加同一条环形账；每族各写一份就会各丢一段 |
+
+> ⚠️ **别按上游的文件名找这些套件**。本分支库化后曾有 9 个上游同名副本长期**不在 import 图上**、
+> 却仍留在发布面；它们**已逐个删掉或移回真源**（现在一个都不剩）⇒ `node test/verify-reachability.mjs`
+> 是 **0 不可达 / 0 行**（棘轮基线未动，绿是清干净换来的）。**改套件前先跑它**，别照着旧路径改。
 
 不变量写在各自的文件头（动它们之前先读那一段）。共同的一条：**套件不自己决定"缓存放哪"** ——
 音轨产物落点（`ensureFrameCacheDir`）、原子落盘（`atomicWriteFileP`）、转码 / ffmpeg / 缩略图三个
-目录（`transcodeCacheDir` / `ffmpegDataDir` / `videoPreviewCacheDir`）都由门面注入，因为这些路径带着
-`verify-cache-dir` 的文本锚点，留在门面才看得住。`config-store` 的调用点真源也现取：
+目录（`transcodeCacheDir` / `ffmpegDataDir` / `videoPreviewCacheDir`）都由内核装配时注入，
+路径访问器本身住 `lib/kernel/data-dir.js`（锚点在 `test/verify-cache-dir.mjs` 的读点里现取）。
+`lib/kernel/config.js` 的调用点真源也现取：
 
 ```sh
 grep -rn 'enqueueConfigWrite(' lib/
@@ -189,17 +218,26 @@ disposer、要门面闭包状态的，留在路由族或 `apply()` 里。
 
 ### 2.3 `lib/index.js` 现在还剩什么
 
-剩下的都是"必须同作用域，或必须留锚点"的东西，不是待拆的巨石：
+本分支的门面是**薄适配层**（P0 库化 / P1 内核化）：它只 import 各段、把内核返回的键按**真实引用面**
+投影回模块作用域、在 `apply()` 里按族注册并按 disposer 回卷。剩下的都是"必须与一次 apply 同生命周期，
+或必须留判据锚点"的东西，不是待拆的巨石：
 
-- **注册与编排**：`apply(ctx)` 建各套件、按族注册路由、把 disposer 推进 fiber；
-- **共享可变状态与访问器**：媒体源地址、载荷账本、缓存索引 —— 必须与 `/inventory` 同作用域，
-  跨模块只能以访问器形式出去（传值就是陈旧快照）；
-- **目录解析器与配置路径**：`pluginDataDir()` / `configPath()` / `cacheBaseDir()`（及其子目录）、
-  `repoSlugFromPkg()`。它们带着 `verify-client` / `verify-cache-dir` / `verify-about` 的文本锚点，
-  所以 `lib/cache-prune.js` 只**收**这三个解析器、不搬走它们；
-- **模块加载期就建好的套件**：`wallpaper-scan` / `scene-probe` / `cache-prune` / `config-store`
-  的 kit 与 `media-probe` 的 `getMediaInfo` 在门面**模块作用域**就可用（它们的注入点必须是可提升的
-  函数声明），不在 `apply()` 里惰性建。
+- **注册与编排**：`apply(ctx)` 调 `createHostSession()`、按族注册路由、把 disposer 推进 fiber；
+- **一次 apply 的共享可变状态与访问器**：媒体源地址、载荷账本、token 表、faststart 账、缓存索引
+  —— 住 `lib/kernel/host-session.js`，必须与 `/inventory` 同作用域，跨模块只能以**访问器**形式出去
+  （传值就是陈旧快照）；
+- **不复制、只 import 的基座**：`hostKernel` 单例与 `BASE` / `PLUGIN_NAME` / `repoSlugFromPkg()` 的声明住
+  叶子模块 `lib/host-boot.js`（组件入口取同一份 ⇒ 拆掉「门面 ⇄ 组件入口」的 import 环）；
+  `pluginDataDir()` / `configPath()` / `cacheBaseDir()` 住 `lib/kernel/data-dir.js`。它们带着
+  `verify-client` / `verify-cache-dir` / `verify-about` 的文本锚点，所以转码/预览两个套件
+  只**收**这几个解析器（经注入）、不搬走它们；
+- **组件分发与账本**：`componentImpls()`（组件名 → 实现的**声明面唯一真源**）与 `applyComponent()`
+  （"按组件加载"入口）；实例与唯一记账入口 `runComponent()` 在 `lib/host-boot.js`。
+
+⚠️ 组件 / 路由族的**注入面是显式契约**：每个族的 `DEPS` 声明与门面 / 组件入口调用点的实参键集
+**双向对账**（`test/verify-inject-contracts.mjs`），组件只从内核取**它那一格的组件视图**
+（`componentViewFrom()`，键集见 `lib/kernel/component-session.js`）⇒ 少一个键不是静默 `undefined`，
+而是当场报红。
 
 ---
 
@@ -214,8 +252,8 @@ graph LR
     subgraph SRC["src/**（手写真源，浏览器侧唯一真源）"]
         C["src/client.js<br/>正文"]
         A["src/styles-*.js + src/styles.js<br/>纯数据：样式域模板 + 组装点"]
-        B["src/panel-tabs.js（组装点）+ src/panel-tabs-*.js（域节渲染器）· src/picker-*.js · src/ext-fx.js · src/ext-parallax.js · src/ext-avatar.js<br/>UI 面"]
-        D["src/live-layer.js · src/video-layer.js · src/fx-layer.js · src/parallax-layer.js · src/avatar-layer.js · src/layer-core.js · src/media-prep.js<br/>行为面"]
+        B["src/panel-tabs.js（组装点）+ src/panel-tabs-*.js（域节渲染器）· src/picker-*.js · packages/fx/src/ext-fx.js · packages/parallax/src/ext-parallax.js · src/ext-avatar.js<br/>UI 面"]
+        D["src/live-layer.js · src/video-layer.js · packages/fx/src/fx-layer.js · packages/parallax/src/parallax-layer.js · src/avatar-layer.js · src/layer-core.js · src/media-prep.js<br/>行为面"]
         E["src/font/*<br/>字体系统"]
         F["lib/settings-schema.js<br/>唯一共享内核"]
     end
@@ -301,7 +339,8 @@ graph LR
 
 ### 3.2 样式与令牌：三层入口，各改一处
 
-界面样式**不在任何 `.css` 文件里**（除了 `lib/webwallgl/` 那套 vendored 渲染页，与插件 UI 无关）。
+界面样式**不在任何 `.css` 文件里**（除了 `lib/webwallgl/` 那套渲染页适配层 —— 引擎本体走 npm
+`webwallgl`，见 §4 第 4 条；它与插件 UI 无关）。
 它分三层，**每一层只有一个入口**：
 
 | 层 | 真源 / 入口 | 怎么生效 | 改哪里 |
@@ -348,8 +387,12 @@ graph LR
    这就是 `lib/settings-schema.js` 的形态（设置键单一真源），因此它同时受 §5 全部约束（浏览器安全）。
    **这是唯一被允许的共享形态**，第二个共享内核要显式登记（§6 的共享内核白名单）。
 3. **是宿主自己的实现吗？**
-   → `lib/<语义名>.js` **并加进 `files`**。按职责分子目录（现状：`lib/media/`、`lib/routes/`）。
+   → `lib/<语义名>.js` **并加进 `files`**。按职责分子目录（现状：`lib/kernel/`、`lib/media/`、
+   `lib/routes/`、`packages/<组件>/lib/routes/`）。
    门面 `lib/index.js` 只做注册与协议聚合，**不装新逻辑**。
+   ⚠️ 若这份实现属于**某个组件行**（它的路由与浏览器可见面随行开关启停），落 `packages/<组件>/lib/`
+   （**已出户的组件**落 `packages/<组件>/lib/` —— P-F，2026-10-16 起：`packages/about-notice/`、`packages/mascot-avatar/`）
+   并由该行入口装配 —— 别放进 `lib/routes/`（归属判据见 [`ARCHITECTURE-SPLIT.md`](./ARCHITECTURE-SPLIT.md)）。
    → **随包的数据文件**（不是代码，但要跟包走）也放 `lib/<语义名>/`，**同样加进 `files`**：
    现状 `lib/fontsets/`（随包预设，只读；用户的编辑按写时复制落 `pluginDataDir()`）。
    `verify-package-files` P1 要求 `files` 覆盖 `lib/` 下**每一个**文件 —— 漏一条这里就红。
@@ -367,7 +410,7 @@ graph LR
    → `assets/<用途>/`，与代码同仓、**不进 `files`**；运行时要用的那版是**派生物**，放
    `lib/<用途>/` **并进 `files`**（`verify-package-files` P1 盯着）。
    现状两处：`assets/mascot/` 与 `assets/about/`（二维码源图 → 裁码后的 `lib/about/*.png`，
-   由 `lib/routes/about-qr.js` 直出）。
+   由 `packages/about-notice/lib/routes/about-qr.js` 直出（该组件 2026-10-16 经 P-F 出户，原 `lib/components/about-notice/about-qr.js`）。
    ⚠️ 这类目录里的 `README.md` 是**该目录的自述**（替代不了文件头注释时就写在那里：派生口径、
    替换素材的步骤、"源资产不进包"这条不变量），**与 `lib/**` 的 `README.md` 同类**；
    它们**有意不进 `docs/` 的生命周期规则**（不是常青文档，也不随版本演进），
@@ -386,7 +429,7 @@ graph LR
 
 | 要加什么 | 落在哪 | 还必须在哪登记 |
 |---|---|---|
-| 一条宿主路由 | `lib/routes/<族>.js`（成族才单独成文件，否则就近） | 路由索引由生成器自动重算 |
+| 一条宿主路由 | `lib/routes/<族>.js`（成族才单独成文件，否则就近）；属于某组件行 ⇒ `packages/<组件>/lib/routes/<族>.js`（旧形态 `lib/components/<组件>/<族>.js` 已不存在） | 路由索引由生成器自动重算；组件归属另由 `verify-route-ownership` 判 |
 | 一个设置项 | `lib/settings-schema.js` 的 `DEFAULTS` + `KINDS` | 面板读取即可，**不要另写一张 UI 表**。⚠️ 若涉及**字体角色 / 字号上下限**，浏览器侧那份副本（`src/font/color-roles.js` / `typography.js`）**也要改**（见 §7 第 1 行） |
 | 两端都要用的状态 | `lib/<语义名>.js` | `INLINE_MODULES`（构建期内联；这是**唯一**被允许的共享形态） |
 | 浏览器端一块 UI / 行为 | `src/<语义名>.js` | `INLINE_MODULES`（**漏登记静默失效**） |
@@ -499,9 +542,7 @@ graph LR
 | **一次性清理的验收判据**（退役线里的"笔误「秡」不再出现"） | 修完即**恒真**；按 §写作纪律 5「删完清空即为零残留」，收口时就该撤。见 [`adr/0007`](./adr/0007-machine-checks-target-code-not-prose.md) |
 
 **本文怎样才算"规范"**：§5 的硬约束与 §6 在册的守卫同时成立即可 —— 两者现在都成立。
-升为规范的**过程记录**（当时的四条偏离如何逐条收敛）属于历史，已归档在
-[`archive/REFACTOR-ASSESSMENT.md`](./archive/REFACTOR-ASSESSMENT.md) 与
-[`archive/wip/OPEN-ITEMS.md`](./archive/wip/OPEN-ITEMS.md)，本文不重复。
+升为规范的**过程记录**（当时的四条偏离如何逐条收敛）属于历史（见 `CHANGELOG.md` 与 git 历史），本文不重复。
 
 ---
 
@@ -516,8 +557,8 @@ graph LR
 | **路由表** | `docs/ROUTE-INDEX.md`（生成物） | 人 + 守卫 | 由 `test/tools/host-route-index.mjs` 复算 |
 | **构建期内联清单** | `scripts/build-client.mjs` 的 `INLINE_MODULES` | 构建 + 守卫 | 带 `markers` 锚点 |
 | **发布面** | `package.json` 的 `files` | 守卫 P1–P8 | 留在 `lib/` 的一切都会被打进包 |
-| **star 数缓存**（全插件唯一出站请求的状态） | `lib/routes/github-stars.js`：进程内 TTL + `pluginDataDir()/star-count.json` | 客户端 `src/client.js` 的 `starCount` 镜像（**自己一份同量级 TTL**） | 仓库地址的真源是 `package.json` 的 `repository`，宿主**现读**（不另抄字面量）；拉到失败**不写**时间戳 |
-| **「关于」页静态数据** | `src/about-assets.js`（仓库地址 + 两条路由路径） | 客户端渲染 + `lib/routes/about-qr.js` 直出 PNG | 二维码**源图**在 `assets/about/`（不进包），随包的是裁码后的 `lib/about/*.png`；文件名白名单在服务侧**另有一份逐字副本**（换码只换 PNG，不重建产物） |
+| **star 数缓存**（全插件唯一出站请求的状态） | `packages/about-notice/lib/routes/github-stars.js`（2026-10-16 前在 `lib/components/about-notice/`）：进程内 TTL + `pluginDataDir()/star-count.json` | 客户端 `src/client.js` 的 `starCount` 镜像（**自己一份同量级 TTL**） | 仓库地址的真源是 `package.json` 的 `repository`，宿主**现读**（不另抄字面量）；拉到失败**不写**时间戳 |
+| **「关于」页静态数据** | `src/about-assets.js`（仓库地址 + 两条路由路径） | 客户端渲染 + `packages/about-notice/lib/routes/about-qr.js` 直出 PNG（2026-10-16 前在 `lib/components/about-notice/`） | 二维码**源图**在 `assets/about/`（不进包），随包的是裁码后的 `lib/about/*.png`；文件名白名单在服务侧**另有一份逐字副本**（换码只换 PNG，不重建产物） |
 | **退役线 / 死码基线** | `test/verify-retired-lines.mjs` · `test/verify-reachability.mjs` | 守卫（**软档**：失败只出声） | 前者 = "退役线里的东西**不许复活**"；后者 = 不可达计数**只许缩小**（棘轮） |
 | **对上游的宿主要求** | `package.json` 的 **`engines.dsh`** | **插件市场与 DSH 自己的插件管理 UI** 直接从已发布的 manifest 读它（社区目录不参与），显示在插件卡片上并与运行中的宿主比对；人类读三份 README 与 [`UPGRADING.md`](./UPGRADING.md) 里的同一段散文 | 机读的那份**只有这一处**；散文是它的回声，**改一处就要改全部**。`dsh-better-sidebar` 这类**非** `@deepseek-ai/*` 的依赖**表达不了**，只存在于散文里 |
 

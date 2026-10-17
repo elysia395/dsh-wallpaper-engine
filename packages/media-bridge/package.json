@@ -1,0 +1,29 @@
+{
+  "name": "dsh-plugin-wallpaper-engine-media-bridge",
+  "version": "1.3.3",
+  "description": "System media bridge host half: now-playing / spectrum / artwork / media control, plus the media-bridge child-process backend and its legacy fallback.",
+  "icon": "./icon.png",
+  "type": "module",
+  "main": "./lib/index.js",
+  "exports": {
+    ".": "./lib/index.js",
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json",
+    "./cordis.patch.yml": "./cordis.patch.yml"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "files": ["lib/", "cordis.patch.yml", "locale/", "icon.png", "package.json"],
+  "peerDependencies": {
+    "@deepseek-ai/dsh-host-webserver": ">=0.1.5-rc.1"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/dsh-host-webserver": {
+      "optional": true
+    }
+  },
+  "license": "MIT"
+}

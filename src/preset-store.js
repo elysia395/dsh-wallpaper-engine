@@ -299,7 +299,7 @@ async function applyPreset(id) {
 }
 
 /**
- * 旧名别名（2026-10-11 ADR-0011 改名 applyPreset 后保留）：构建脚本
+ * 旧名别名（ADR-0011 改名 applyPreset 后保留）：构建脚本
  * scripts/build-client.mjs 的 INLINE_MODULES marker 按旧签名 `applyGlassPreset(id)`
  * 钉住本文件，一行委托保住那个锚点 —— 语义已全部在 applyPreset 里。
  */
@@ -312,7 +312,7 @@ function newGlassPresetId() {
 
 /**
  * 保存时的资产勾选**提示语**（ADR-0011 D4 三态的客户端半边）。
- * `checks` 是三个布尔（字体 / 吉祥物 / 头像）。口径（2026-10-12 起）：
+ * `checks` 是三个布尔（字体 / 吉祥物 / 头像）。口径：
  *   · **勾上** = "按本机现状声明这一族" —— 本机没有自定义图 ⇒ 落盘的就是 `null`（**显式
  *     声明无**），套用它的人回到内置默认；宿主侧对"勾了但没有"就是这样落的，不需要客户端拦。
  *   · **不勾** = "这一族我不管" —— 段根本不出现，对方的现值一个键都不碰。

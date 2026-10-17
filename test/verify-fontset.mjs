@@ -292,6 +292,19 @@ const host = hostMod.default || hostMod;
 const apply = host.apply || (host.inject && host.apply);
 const dispose = apply(mockCtx);
 
+// P-A「一次翻」的两个方向：① 门面（`lib/index.js`）**零**字体族注册（实现已随子包行出户）；
+// ② 字体族由 `packages/fonts/lib/index.js` 那一行注册进**同一个** mockCtx 的路由表 ——
+// 于是下面"字体集路由族已注册"的断言打的是**子包行**的注册面，而不是主包门面（两条都要钉住）。
+const facadeFontRoutes = routes
+  .map((r) => String(r.path))
+  .filter((p) => p.startsWith('/wallpaper-engine/fontsets') || p === '/wallpaper-engine/system-fonts');
+check('门面（lib/index.js）零字体族注册：两族都已出户到子包行',
+  facadeFontRoutes.length === 0, facadeFontRoutes.join(' ') || '零残留');
+// junction（node_modules/dsh-plugin-wallpaper-engine-*）已通 ⇒ 子包入口的裸子路径 import 可解析。
+const fontsRowMod = await import(pathToFileURL(join(root, 'packages', 'fonts', 'lib', 'index.js')).href);
+const fontsRow = fontsRowMod.default || fontsRowMod;
+const fontsDispose = fontsRow.apply(mockCtx);
+
 function fakeRes() {
   const state = { status: 200, headers: {}, body: Buffer.alloc(0), ended: false };
   const res = new Writable({
@@ -449,7 +462,8 @@ section('② 迁移前外观 golden（绝对锚点逐条比对）');
 // ── ③ 迁移前护栏 + 一次性迁移（惰性）─────────────────────────────────────────
 section('③ 迁移前护栏 + 一次性迁移（老 config.json → fontsets/default.json，判据 = ② 的 golden）');
 check('settings 路由已注册（否则本节的护栏无从谈起）', Boolean(settingsRoute), settingsRoute ? settingsRoute.kind : 'missing');
-check('字体集路由族已注册（一个 prefix 覆盖七个端点）', Boolean(fontsetsRoute), fontsetsRoute ? fontsetsRoute.kind : 'missing');
+check('字体集路由族已注册（一个 prefix 覆盖七个端点；注册者是子包行 packages/fonts/lib/index.js）',
+  Boolean(fontsetsRoute), fontsetsRoute ? fontsetsRoute.kind : 'missing（子包行没注册 / 没起）');
 check('apply() 本身一个字节都不写字体集（启动期零写盘 ⇒ 未隔离 DSH_WE_DATA_DIR 的守卫不会被污染）',
   !existsSync(FONTSETS_DIR), existsSync(FONTSETS_DIR) ? 'fontsets/ 已存在' : '');
 
@@ -924,7 +938,7 @@ section('⑦ 客户端通道（静态契约：字体值不再经 settings 出去
   check('通道：绝不碰 settings 那条路由（两条通道不交叉）',
     !/\/settings/.test(strip(storeSrc)));
 
-  // 7g. **半对丢弃防线**（2026-10-06 用户反馈"重启后保存的自定义颜色没了"的根因之一）：
+  // 7g. **半对丢弃防线**（用户反馈"重启后保存的自定义颜色没了"的根因之一）：
   //     深浅分开只填一边 ⇒ {light:'',dark:'#x'} 半对。半对过不了任何一层消毒
   //     （readThemeColors / buildTokenPayload 都是"缺一套整角色丢弃"）⇒ 颜色落不了盘、
   //     也不生效，面板却显示着已选 —— 重启后"没了"。修法 = onThemeColor 在 separate
@@ -1052,11 +1066,11 @@ section('⑧ 面板渲染回归（配色区在总开关打开时必须渲染得�
     await import(pathToFileURL(join(root, 'src', 'we-cond.js')).href),
     // 面板会调 `renderFontSetEditor(...)`（在 bundle 里是同作用域的内联模块；独立 import 时
     // 得把它映成全局，否则 ⑧ 会以 "is not defined" 的形式假红）。
-    await import(pathToFileURL(join(root, 'src', 'fontset-editor.js')).href),
+    await import(pathToFileURL(join(root, 'packages', 'fonts', 'src', 'fontset-editor.js')).href),
     // 同理（wip §10.13）：「玻璃 UI」节的渲染器已抽到 `src/glass-panel.js`，
     // `panel-tabs.js` 里对它的调用只在**打包后**同作用域 ⇒ 这里也要映成全局。
     await import(pathToFileURL(join(root, 'src', 'glass-panel.js')).href),
-    // 同理（2026-10-11）：节头构件抽到了 `src/section-head.js`（三节在侧边栏默认收敛那一刀）。
+    // 同理：节头构件抽到了 `src/section-head.js`（三节在侧边栏默认收敛那一刀）。
     // ⚠️ 必须给**真实现**，不能靠上面那个"自动补 noop"的循环 —— 它在 client.js 里已找不到
     // `sectionHead`（搬走了），而就算找到、补成 noop 也会让**每个节头变成 `null`**：
     // 本段判的是"渲染得出"，节头全丢照样"渲染得出" ⇒ 判据静默空转。
@@ -1071,9 +1085,22 @@ section('⑧ 面板渲染回归（配色区在总开关打开时必须渲染得�
     schema,
   ];
   for (const mod of preludeMods) for (const [k, v] of Object.entries(mod)) globalThis[k] = v;
+  // P-C：外观页签第六节「全局字体」随字体包搬出页签族 ⇒ 判据要读"页签族 + 包内那一节"的并集；
+  // 并且要按**真入口同形**把那一节登记进共享注册表（否则 renderAppearanceTab 里的
+  // `wePanelSectionsOf` 是裸标识符 ⇒ 本段以 ReferenceError 的形式假红）。
+  const fontSectionSrc = readFileSync(join(root, 'packages', 'fonts', 'src', 'appearance-font-section.js'), 'utf8');
+  const panelAllSrcText = () => panelSrcText() + '\n;\n' + fontSectionSrc;
+  const regMod = await import(pathToFileURL(join(root, 'src', 'extension-registry.js')).href);
+  for (const [k, v] of Object.entries(regMod)) globalThis[k] = v;
+  const fontSectionMod = await import(pathToFileURL(join(root, 'packages', 'fonts', 'src', 'appearance-font-section.js')).href);
+  regMod.weRegisterPanelSection('appearance', 'fonts', {
+    id: 'fonts',
+    get title() { return globalThis.weT('全局字体'); },
+    render: fontSectionMod.renderAppearanceFontSection,
+  });
   check('前置：夹具不是空转的（角色表非空，且配色区确实按角色遍历）',
     colorRoles.THEME_COLOR_ROLES.length >= 5
-    && /THEME_COLOR_ROLES\.map/.test(panelSrcText()),
+    && /THEME_COLOR_ROLES\.map/.test(panelAllSrcText()),
     colorRoles.THEME_COLOR_ROLES.length + ' 个角色');
 
   /** 面板 ctx：只求"渲染得出"，处理器全 noop。`over.sel` 换夹具（负对照用）。 */
@@ -1104,7 +1131,7 @@ section('⑧ 面板渲染回归（配色区在总开关打开时必须渲染得�
       'onThemeWeight', 'onToggleFontCustom']) c[k] = noop;
     return c;
   };
-  // 2026-10-09 真迁移：字体节**只在侧栏档渲染**（设置页对话框挡主页面、看不到实时效果 ⇒
+  //  真迁移：字体节**只在侧栏档渲染**（设置页对话框挡主页面、看不到实时效果 ⇒
   // 迁侧栏），且默认收起 ⇒ 字体内容的渲染回归必须打在 `surface: 'sidebar'` + `fontOpen: true`
   // （展开）上 —— 打在缺省档上这些行根本不进树，判据会空转。
   const panelSideCtx = (sel) => Object.assign(panelCtx(sel), { surface: 'sidebar', fontOpen: true });
@@ -1201,7 +1228,7 @@ section('⑧ 面板渲染回归（配色区在总开关打开时必须渲染得�
     })(), '判据非空转（拿改动前那份函数体试过）');
 
   // ── surface 档（设置页 / 侧栏共用同一批渲染器）──────────────────────────────
-  // 快捷播放面板的「外观」页用的就是这个渲染器。分档口径（ADR-0008 D4，2026-10-09 修订）：
+  // 快捷播放面板的「外观」页用的就是这个渲染器。分档口径（ADR-0008 D4，修订）：
   // **节**层面「全局字体」**只在侧栏档画**（真迁移：设置页对话框挡主页面、调完看不到实时
   // 效果；侧栏里它默认收起 —— 节头在、内容收，见 panelSideCtx 的展开态判据）；**行**层面
   // 侧栏档还少画预设方案（由 glass-panel 的 `!sidebarSurface` 门与 quick-panel 的占位器管，
@@ -1228,7 +1255,7 @@ section('⑧ 面板渲染回归（配色区在总开关打开时必须渲染得�
   const setText = treeText(pickSurface(panelSel(), 'settings'));
   // ⚠️ 侧栏档的「全局字体」**节头**始终在（折叠只收内容、不收节 —— 收起时它就是"展开入口"）。
   //    所以这里判的是节**集合**；"收起时内容不进树"由上面 panelSideCtx 的展开态判据负对照。
-  //    ⚠️ 节集合随 2026-10-11 的两次改动作了两处更新：① 字体节**两档都画**（三次修订）；
+  //    ⚠️ 节集合随的两次改动作了两处更新：① 字体节**两档都画**（三次修订）；
   //       ② 原「输入光标」节**整节撤销**、其唯一一行并入新节「全局 UI 配色」（它同时在
   //       「全局字体」之上）。两档的节集合因此都是：主题 / 细节 / 侧边栏圆角 / 玻璃 UI /
   //       全局 UI 配色 / 全局字体。
@@ -1273,7 +1300,7 @@ section('⑧ 面板渲染回归（配色区在总开关打开时必须渲染得�
 // "哪个按钮对应哪个意图""删除有没有过 confirm"钉成行为判据（同 verify-picker-props 的手法）。
 section('⑨ 字体集编辑器（面板可驱动：意图映射 / confirm 门控 / 来源与用法规则）');
 {
-  const editorMod = await import(pathToFileURL(join(root, 'src', 'fontset-editor.js')).href);
+  const editorMod = await import(pathToFileURL(join(root, 'packages', 'fonts', 'src', 'fontset-editor.js')).href);
   const R = {
     Fragment: 'Fragment', useState: (i) => [i, () => {}], useEffect: () => {}, useRef: (v) => ({ current: v }),
     createElement: (t, p, ...c) => { assertChildren(c); return typeof t === 'function' ? t(p || {}, ...c) : { type: t, props: p || null, children: c }; },
@@ -1543,7 +1570,7 @@ section('⑨ 字体集编辑器（面板可驱动：意图映射 / confirm 门�
     let clicked = 0;
     const baseReact = globalThis.React;
     const storeSrc = readFileSync(join(root, 'src', 'fontset-store.js'), 'utf8');
-    const editorSrc = readFileSync(join(root, 'src', 'fontset-editor.js'), 'utf8');
+    const editorSrc = readFileSync(join(root, 'packages', 'fonts', 'src', 'fontset-editor.js'), 'utf8');
     // 让假 React 也调 ref 回调：`importInput` 是模块级 ref，面板靠它去 click()。
     globalThis.React = Object.assign({}, baseReact, {
       createElement: (t, p, ...c) => {
@@ -1591,7 +1618,7 @@ section('⑨ 字体集编辑器（面板可驱动：意图映射 / confirm 门�
       // 删字体集）全部走同一套面板内令牌（`armConfirm` + `renderConfirmRow`，见 src/client.js）。
       // 判据写成**等号**：0 是终态，回增必须红（`<= 0` 与 `=== 0` 等价，但等号才读得出这一点）。
       const confirmFiles = ['src/client.js', 'src/panel-tabs.js', 'src/picker-modal.js',
-        'src/picker-props-panel.js', 'src/media-prep.js', 'src/fontset-editor.js', 'src/fontset-store.js'];
+        'src/picker-props-panel.js', 'src/media-prep.js', 'packages/fonts/src/fontset-editor.js', 'src/fontset-store.js'];
       const confirmSites = confirmFiles.reduce(
         (n, f) => n + ((readFileSync(join(root, f), 'utf8').match(/window\.confirm\(/g) || []).length), 0);
       // 只看**代码**：注释里可以提 window.confirm（说明为什么禁用），代码里不许出现。
@@ -1607,7 +1634,7 @@ section('⑨ 字体集编辑器（面板可驱动：意图映射 / confirm 门�
 }
 
 // ── teardown ────────────────────────────────────────────────────────────────
-try { if (dispose) dispose(); } catch { /* ignore */ }
+try { if (dispose) dispose(); if (fontsDispose) fontsDispose(); } catch { /* ignore */ }
 delete process.env.DSH_WE_STEAM_ROOT;
 delete process.env.DSH_WE_UPLOAD_DIR;
 rmSync(ISO, { recursive: true, force: true });

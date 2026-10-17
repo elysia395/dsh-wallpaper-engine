@@ -4,7 +4,7 @@
 配图的**原始插画**。与 `assets/mascot/` 同一口径：它们是**源资产**，不是运行时载荷。
 
 - 运行时用的是这两张图**裁到码区**的派生版本，落在 **`lib/about/*.png`**（随包发布），由插件路由
-  `GET <BASE>/about-qr/<文件名>` 直出（白名单 + ETag/304，见 `lib/routes/about-qr.js`）；
+  `GET <BASE>/about-qr/<文件名>` 直出（白名单 + ETag/304，见 `packages/about-notice/lib/routes/about-qr.js`）；
   客户端只存路径（`src/about-assets.js`）。2026-10-01 之前那版把派生图**内联 base64** 进客户端
   bundle，用户要求改成 PNG 引入 —— bundle 因此省下约 240KB，换码也不必重建产物。
 - 因此**本目录**（源资产）**不进 npm 包**（不在 `package.json` 的 `files` 白名单内），只随仓库源码分发；

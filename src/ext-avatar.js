@@ -6,7 +6,7 @@
  * `extensionModules()` 上方）：panel-tabs 只负责把它排在「扩展」页签里（**第一个**），
  * 具体的控件与文案全在本文件。装饰本体在 `src/avatar-layer.js`（会话界面上的 DOM 补丁），
  * 设置项的真源在 `lib/settings-schema.js` 的五个 `avatar*` 键，图片本体在宿主的
- * `~/.dsh-wallpaper-engine/avatars/`（经 `lib/routes/avatar.js` 读写）。
+ * `~/.dsh-wallpaper-engine/avatars/`（经 `packages/mascot-avatar/lib/routes/avatar.js` 读写）。
  *
  * 契约：
  *   需要的外界：`ctx`（由 `src/client.js` 在 `renderExtensionsTab({...})` 的调用点组装）——
@@ -29,7 +29,7 @@
  *   · 关掉总开关时**只画总开关 + 一句说明**（参数跟着收起来，与别的模块同口径）。
  */
 
-/** 两方在界面上的名字与说明（`id` 与宿主路由的路径段一致，见 lib/index.js 的 AVATAR_SIDES）。 */
+/** 两方在界面上的名字与说明（`id` 与宿主路由的路径段一致，见 lib/media/media-dirs.js 的 AVATAR_SIDES）。 */
 const AVATAR_SIDE_ROWS = [
   {
     id: 'user',
@@ -79,9 +79,22 @@ function avatarSideRow(side, sel, acts) {
         },
       },
         url
-          ? React.createElement("img", {
-              className: "we-avatar-preview__img", src: url, alt: "", draggable: false,
-            })
+          ? React.createElement(React.Fragment, null,
+              // D3③ 的 `<img>` 兜底：垫一张内置头像（默认藏着），图加载失败（导入的图被删 /
+              // 路由那次没起来）就地露出它 —— 预览里不留"破图 + 空值"。错误回调里**不建 DOM**
+              // （本模块被 test/verify-scene-live.mjs 钉着"零 DOM 构造"那条判据）。
+              React.createElement("span", {
+                className: "we-avatar-preview__glyph", style: { display: "none" },
+              }, renderAvatarGlyph(side.id, AVATAR_PREVIEW_BOX)),
+              React.createElement("img", {
+                className: "we-avatar-preview__img", src: url, alt: "", draggable: false,
+                onError: (e) => {
+                  const img = e.currentTarget;
+                  const glyph = img && img.previousElementSibling;
+                  if (img) img.style.display = "none";
+                  if (glyph) glyph.style.display = "flex";
+                },
+              }))
           : React.createElement("span", { className: "we-avatar-preview__glyph" },
               renderAvatarGlyph(side.id, AVATAR_PREVIEW_BOX)),
       ),
@@ -188,7 +201,7 @@ function renderAvatarCropModal(ctx) {
 }
 
 /**
- * 超限提示行（#185 后续，2026-10-13）：原图过了两道闸就被拦在这里 ——
+ * 超限提示行（#185 后续）：原图过了两道闸就被拦在这里 ——
  * 一句话说清**哪一条超了、实测多少**，再给一枚「自动压缩后导入」作为出路。
  *
  * 为什么不是直接拒绝：用户口径是"提示无法导入**或**选择启用自动压缩"。只有拒绝没有出路，
@@ -254,6 +267,10 @@ function renderAvatarIsland(ctx) {
  *  `title` / `desc` 与别的模块同一条理由写成 getter（见 src/panel-tabs.js 的注册表契约）。 */
 const AVATAR_EXTENSION_MODULE = {
   id: 'avatar',
+  // 屏上顺序（P-A 起由描述符声明，不再靠数组序 —— 三份 bundle 的求值顺序不保证）：
+  // 头像必须在**第一**（用户口径），两项子包模块各自声明 2 / 3。
+  // 排序 = (order, 注册序)，唯一实现在 src/extension-registry.js。
+  order: 1,
   // 模块级重置的分组名（issue #192）：键集住在 lib/settings-schema.js 的 RESET_GROUPS，
   // 这一侧只报"我是哪一组" —— 键表不在渲染器里手抄第二份。
   resetGroup: 'avatar',

@@ -25,8 +25,8 @@ with the document.
   once per second, auto-`resume()`s once at `LIVE_STALL_TICKS` ticks as a self-rescue, and only declares
   `stall` at twice that). It then falls back to the **out-figure
   chain** below (which is allowed to come up honestly empty).
-  ⚠️ **A loose `scene.json` directory is no longer a reason to skip live rendering** (since v1.3.0):
-  WebWallGL 2.1.0 supports the loose form natively — the site root is identical for both forms and the
+  ⚠️ **A loose `scene.json` directory is not a reason to skip live rendering**:
+  WebWallGL supports the loose form natively — the site root is identical for both forms and the
   renderer decides from `project.json`'s `file` suffix, so the host only has to answer "is this a scene".
   **The first-frame timeout is not a fixed wall clock**: the first
   frame **cannot exist before the whole package has arrived**, so the budget is computed from the
@@ -69,7 +69,7 @@ with the document.
 
 ### Scene rendering: how it works
 
-Scenes are rendered live by the bundled **WebWallGL engine** (vendored under `lib/webwallgl/`; it parses
+Scenes are rendered live by the bundled **WebWallGL engine** (the engine itself comes from the npm dependency `webwallgl`; `lib/webwallgl/` holds only this repo's adapter page — see above; it parses
 `scene.pkg` / loose `scene.json` itself and replays the object tree, textures, particles and shaders,
 preferring the GPU and falling back to software): in WebGL2 it renders every image layer in real time
 (shader effects such as waterwaves / waterripple translated from HLSL and executed on the GPU), puppet
@@ -156,9 +156,9 @@ runtime the wallpaper is remembered and degrades to the legacy plain iframe (no 
   extensions / about — **extensions** is the module container for later features: its registry comes
   lazily from `extensionModules()` in `src/panel-tabs.js` (never a top-level reference to a sibling
   module's symbol — importing that source file on its own would throw a ReferenceError), an empty
-  registry renders an empty state, and the modules registered today are **click & trail effects**: descriptor `src/ext-fx.js` (the island — one master
+  registry renders an empty state, and the modules registered today are **click & trail effects**: descriptor `packages/fx/src/ext-fx.js` (the island — one master
   switch plus a sub-switch each for clicks and the trail, alongside their style, size, glow, duration,
-  width, opacity, blend mode and colors), canvas layer `src/fx-layer.js` (**client-only, no host half**) — it
+  width, opacity, blend mode and colors), canvas layer `packages/fx/src/fx-layer.js` (**client-only, no host half**) — it
   only listens passively to `pointermove` / `pointerdown` on `document` (the host is a `pointer-events: none`
   overlay, so it never captures input; a click whose target sits inside
   `button, a, input, select, textarea, label, [role="button"], [contenteditable="true"], .we-picker, .we-modal`
@@ -173,8 +173,8 @@ runtime the wallpaper is remembered and degrades to the legacy plain iframe (no 
   **host element** (on the canvas they would only blend against the host's own stacking context), composites
   with `lighter` inside, and takes its color from the theme accent / rainbow (a hue per instance, drifting
   over time) / custom.
-  The registry also holds the **3D depth** module (the **third** entry in that module container, after the avatar and click/trail effects — the ordinal is fixed by the registry order, not by this page): behaviour layer `src/parallax-layer.js` plus
-  descriptor `src/ext-parallax.js` — the opposite of the one above, it **builds no DOM node at all**. It
+  The registry also holds the **3D depth** module (the **third** entry in that module container, after the avatar and click/trail effects — the ordinal is fixed by the registry order, not by this page): behaviour layer `packages/parallax/src/parallax-layer.js` plus
+  descriptor `packages/parallax/src/ext-parallax.js` — the opposite of the one above, it **builds no DOM node at all**. It
   only listens passively to `pointermove` on `document`, `resize` on `window` and `visibilitychange`,
   turning the cursor's offset from the screen center into a displacement, and each frame writes the
   **final, fully multiplied displacement** straight onto **the layers that actually move** as the CSS
@@ -310,9 +310,9 @@ Besides the built-in family keys, the "default font (global)" and "terminal font
 of those answers, names are derived from **font file names** and the result is
 **honestly marked as a guess** (the panel says so). A single scan is expensive (seconds to tens of seconds
 on macOS) ⇒ two cache layers, stale values served first with a background rescan, and a "Rescan" button in
-the panel; **nothing is scanned at startup** (the first real use triggers it). ⚠️ **The names a system lists are not necessarily names a browser can match** (64 of 309 resolve to nothing on this machine: system-reserved faces such as `Apple Color Emoji` / `Symbol` / `Zapf Dingbats`, plus alternate spellings like `苹方-繁`) — when the panel renders it probes whether each name actually works in this browser, skips the ones that do not, and **says how many were skipped**, so a dead option is never mistaken for a broken feature. The decision and its costs
+the panel; **nothing is scanned at startup** (the first real use triggers it). ⚠️ **The names a system lists are not necessarily names a browser can match** (system-reserved faces such as `Apple Color Emoji` / `Symbol` / `Zapf Dingbats`, plus alternate spellings like `苹方-繁`, can all resolve to nothing) — when the panel renders it probes whether each name actually works in this browser, skips the ones that do not, and **says how many were skipped**, so a dead option is never mistaken for a broken feature. The decision and its costs
 are in [ADR-0009](../adr/0009-system-fonts-from-the-os.md); the mechanism invariants live in the headers of
-`lib/routes/system-fonts.js` and `src/system-fonts.js`.
+`packages/fonts/lib/routes/system-fonts.js` and `src/system-fonts.js`.
 
 ### Captured-frame geometry validation (viewport aspect ratio)
 

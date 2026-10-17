@@ -469,7 +469,7 @@ function applyEffects(opts) {
   //   用户配色后，主题静态墨色不再保证可读（浅色配色 × 浅色主题墨 = 白底黄钮）。
   //   .we-picker__btn--primary 与整窗映射消费它。
   s.setProperty("--we-accent-ink", weAccentInk(selection.accent));
-  // ── 全局 UI 配色（2026-10-11 用户口径）：把宿主界面里那几处「蓝色元素」接进调色板 ──
+  // ── 全局 UI 配色（用户口径）：把宿主界面里那几处「蓝色元素」接进调色板 ──
   // 空串 = 跟随「全局配色」（accent）⇒ 打开「UI 配色自定义」那一刻观感零变化，随后逐项微调。
   // ⚠️ 这五个变量**恒定义**（不随总开关消失）：关着自定义时这几处照样跟 accent —— 用户口径
   //    是「全局配色用于直接调整全部」。总开关只决定**面板显示哪几行**与「全局配色」可否点击。
@@ -546,7 +546,7 @@ function applyEffects(opts) {
   s.setProperty("--we-surface-tint-rgb-light", toRgbTriple(weClampSurfaceColor(glassTintLight, "light", glassFidelity)));
   s.setProperty("--we-surface-tint-rgb-dark", toRgbTriple(weClampSurfaceColor(glassTintDark, "dark", glassFidelity)));
 
-  // ── 玻璃管线在 src/glass.js（wip §10.13）：取值解析 / 各面釉层变量 / 门控属性；这里只留
+  // ── 玻璃管线在 src/glass.js：取值解析 / 各面釉层变量 / 门控属性；这里只留
   //    **一行调用**。本文件继续负责全局玻璃量（--we-glass-* / --we-surface-tint-*）与其余
   //    非玻璃效果（accent / 可读性 / 光标 / 壁纸 / 字体）。
   applyGlass(selection, s);
@@ -587,8 +587,8 @@ function applyEffects(opts) {
   // 色相那一份走样式表里的 --we-follow-tint（按主题取钳制后的玻璃色）—— 不能在这里写死，
   // 内联值会盖掉"按主题"这件事。
   // ⚠️ 合并 #132 口径：跟随关着时**不覆盖** —— 按面值由 applyGlass 的 glassValue 单一
-  //    取值路径供给（inherit→全局键 / custom→「独立配置」自己的键），WIP 里的旧曲线
-  //    （/200 刻度）已随 R4 规范刻度退役，不许再回来。UI 上跟随开着时「独立配置」收起，
+  //    取值路径供给（inherit→全局键 / custom→「独立配置」自己的键）；/200 刻度这类旧曲线
+  //    早已随规范刻度退役，不许再回来。UI 上跟随开着时「独立配置」收起，
   //    两套机制不会同时生效。
   if (selection.sidebarFollowGlobal) {
     s.setProperty("--we-sidebar-blur", "var(--we-blur)");

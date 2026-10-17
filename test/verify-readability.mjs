@@ -34,7 +34,7 @@
 //       the update toast (max() form).
 //   F3  the content-surface plate uses a literal max() clamp on its own alpha.
 //   F4  the software-render fallback plate still clears the floor (the #95
-//       fallback from 8894670/7ba5643 keeps working).
+//       fallback keeps working).
 //   F5  DSH Desktop 的外壳画布底必须被清掉，且插件侧**不得**钉模式名
 //       （模式名漂移免疫：漏清与"写回单一模式门控"两个方向都要红）
 //   C1  full grid 玻璃透明度 {0,15,30,45,60} × theme {light,dark} × 壁纸透明度
@@ -89,7 +89,7 @@ const FLOOR_JS = {
 // 2) the injected stylesheet: evaluate the CSS template literal with exactly
 // those constants (so the string checked here IS the string the plugin injects).
 // ⚠️ 锚点锚在行首且容忍缩进（产物把内联模块整段缩进过）：散文里出现同样的声明字面量会把锚点带偏。
-// 2026-10-13（刀3）：样式表拆成 8 个域模板 + 组装点 ⇒ 取文改走 cssBodyOf（按声明顺序拼回一份
+// （刀3）：样式表拆成 8 个域模板 + 组装点 ⇒ 取文改走 cssBodyOf（按声明顺序拼回一份
 // CSS 体，与旧单模板取文逐字节相同）；取不到任何模板会抛错，不再静默返回空串让判据恒真。
 const CSS_BODY = cssBodyOf(SRC);
 let CSS = '';
@@ -407,7 +407,7 @@ function main() {
       fills.length === 2 && fills.every(fill));
     check('negative control: the rejected 88% canvas fails the transparency contract',
       fills.length === 2 && !fill(fills[0].replace(/var\(--we-glass-alpha, [^)]+\)/, '0.88')));
-    // 2026-10-04 用户口径：输入框退出思考玻璃作用域 ⇒ fill 接管的名单只剩
+    //  用户口径：输入框退出思考玻璃作用域 ⇒ fill 接管的名单只剩
     // 气泡与两类代码围栏；输入卡在挂门规则里出现一次就算红（双向判据）。
     const roots = ['[class*="_bubble"]',
       '[data-chat-flow] .md-code-block', ':has(> pre > code)'];
@@ -426,9 +426,9 @@ function main() {
       && !r.header.includes('@supports'));
     // ⚠️ §11 A1-4：这里原先允许"头里有 [data-chat-flow] 就放行"，于是把
     //    `… [data-chat-flow] [class*="_bubble"]:not([role="tooltip"]) .md-code-block`（当前
-    //    `src/styles.js:945`）的 `:not(...)` 摘掉仍全绿。作用域与豁免是**两件事**：
+    //    `src/styles-shell.js` 里那一条）的 `:not(...)` 摘掉仍全绿。作用域与豁免是**两件事**：
     //    `[data-chat-flow]` 只说"在对话流里"，不说"不是宿主 Tooltip 那个 _bubble"。
-    //    今天四条 `_bubble` 规则（`src/styles.js:613` / `:622` / `:945` / `:3166`）都同时有两者
+    //    今天四条 `_bubble` 规则（三条在 `src/styles-shell.js`、一条在 `src/styles-ext.js`）都同时有两者
     //    ⇒ 收紧成"每条都必须带 role 豁免"：语义不放松，判据才有牙。
     const bubbleExempt = (r) => (r.header || '').includes(':not([role="tooltip"])');
     check('F2dN every [class*="_bubble"] rule excludes the host Tooltip (role="tooltip")',
@@ -873,7 +873,7 @@ function main() {
         + ' z-index=' + JSON.stringify(z));
   }
 
-  // ── C6t：CSS 模板里**不许有裸反引号**（2026-10-11 加, 因为这条连踩三次）──────────
+  // ── C6t：CSS 模板里**不许有裸反引号**（加, 因为这条连踩三次）──────────
   // 背景: `src/styles.js` 的整张样式表是一个**模板字符串**, 而它内部的注释很容易顺手
   // 写成 Markdown 那种 `` `token` `` 反引号 —— 那个反引号会**提前终止模板字符串**, 后面的
   // CSS 文本于是被当 JS 解析。症状极具误导性: `node scripts/build-client.mjs` 报
@@ -882,7 +882,7 @@ function main() {
   // 本条把它变成**指名道姓**的判据。判据读**源码**（不是产物）: 产物构建失败时它根本不会
   // 更新, 拿产物判会测到上一次的旧文本。
   {
-    // 刀3（2026-10-13）：样式表从单个 CSS 模板拆成 8 个域模块（+ 组装点）⇒ 逐**族文件**取模板体
+    // 刀3：样式表从单个 CSS 模板拆成 8 个域模块（+ 组装点）⇒ 逐**族文件**取模板体
     // 再数裸反引号。逐文件判（不是拼成一份再判）才能指名道姓到具体域文件；判据本身一字未改。
     const parts = [];
     for (const rel of styleSources()) {

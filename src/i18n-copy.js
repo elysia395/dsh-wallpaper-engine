@@ -31,6 +31,7 @@ const WE_I18N_EN = {
   ...WE_I18N_EN_PICKER,
   ...WE_I18N_EN_EXT,
   ...WE_I18N_EN_GLASS,
+  ...WE_I18N_EN_PET_LINK,
 };
 
 // ── 宿主文案（lib/** 里由客户端显示的那些原文）────────────────────────────────

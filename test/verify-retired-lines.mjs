@@ -39,7 +39,9 @@ function walk(dir, out = []) {
   }
   return out;
 }
-const FILES = [...walk('lib'), ...walk('src'), ...walk('scripts'), ...walk('test')]
+// P-A：`packages/**` 是**新的顶层目录**（子包 = 出户的宿主半 + 浏览器半边）⇒ 必须登记进扫描面，
+// 否则搬走的实现落进一个"退役词不看"的盲区（表层登记见下方覆盖面地板）。
+const FILES = [...walk('lib'), ...walk('src'), ...walk('scripts'), ...walk('packages'), ...walk('test')]
   // 本脚本必须把退役词**拼出来**才能搜它们 ⇒ 扫自己必然是假阳性。只排除这一个文件，
   // 不得扩大（新加的守卫若也要拼这些词，应改为从本脚本 import 词表，而不是再开一个豁免）。
   .filter((f) => f !== 'test/verify-retired-lines.mjs')
@@ -51,14 +53,15 @@ const read = (rel) => readFileSync(ROOT + rel, 'utf8');
 //    零命中不是"干净"，而是"根本没看"。所以先钉住面本身（本仓库实测：lib 43 / src 40 /
 //    test 71 / scripts 3，合计 157；这里按每条线各自的地板卡，防的是"某一条线整体掉出面"）。
 {
-  const faces = { lib: 0, src: 0, scripts: 0, test: 0 };
+  const faces = { lib: 0, src: 0, scripts: 0, packages: 0, test: 0 };
   for (const f of FILES) {
     const top = f.split('/')[0];
     if (top in faces) faces[top]++;
   }
-  const floors = { lib: 30, src: 30, test: 40, scripts: 2 };
+  // `packages` = P-A 的新顶层目录（子包）。地板 = 实测 13 的保守下限 ⇒ 目录被整体移出扫描面时点名。
+  const floors = { lib: 30, src: 30, test: 40, scripts: 2, packages: 8 };
   const thin = Object.entries(floors).filter(([k, n]) => faces[k] < n);
-  check('覆盖面地板：扫描面四条线各自非空（空面会让下面的"零残留"全部恒真）',
+  check('覆盖面地板：扫描面五条线各自非空（空面会让下面的"零残留"全部恒真）',
     thin.length === 0 && FILES.length >= 140,
     FILES.length + ' 个文件（' + Object.entries(faces).map(([k, n]) => k + ' ' + n).join(' / ') + '）'
       + (thin.length ? ' ⇒ 过薄：' + thin.map(([k, n]) => k + ' < ' + n).join(', ') : ''));

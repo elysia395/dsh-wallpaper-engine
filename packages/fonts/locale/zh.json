@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "字体系统",
+    "description": "字体系统整体：外观页签第六节「全局字体」+ 字体集编辑器（浏览器半边，产物 lib/client.fonts.js），加上宿主路由 /fontsets 与 /system-fonts。配置键与状态仍住主包（ADR-0013 D20），本包只提供渲染器与描述符。"
+  }
+}

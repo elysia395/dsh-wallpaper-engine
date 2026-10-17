@@ -107,6 +107,19 @@ function listLib(dir = LIB, out = []) {
   return out;
 }
 
+/** 扫描面的第二半：每个子包自己的 `lib/**`（P-F 出户后媒体桥的实现住这里）。
+ *  包目录由 `packages/*` 现算，不写死包名；目录不存在就跳过（未出户的组件没有这一层）。 */
+function listSubpackageLib() {
+  const out = [];
+  let dirs;
+  try { dirs = readdirSync(join(ROOT, 'packages'), { withFileTypes: true }).filter((e) => e.isDirectory()).map((e) => e.name).sort(); } catch { return out; }
+  for (const name of dirs) {
+    const dir = join(ROOT, 'packages', name, 'lib');
+    try { if (readdirSync(dir, { withFileTypes: true }).length) listLib(dir, out); } catch { /* 没有 lib/ 的子包 */ }
+  }
+  return out;
+}
+
 const results = [];
 function check(name, ok, detail) {
   results.push({ name, ok });
@@ -159,9 +172,11 @@ function check(name, ok, detail) {
   }
 }
 
-// ── 真实扫描：lib/** 的每个 kill / spawn 站点 ───────────────────────────────
+// ── 真实扫描：`lib/**` + **每个子包 `packages/<pkg>/lib/**`** 的每个 kill / spawn 站点 ──
+// ⚠️ P-F 起媒体桥的 spawn/kill 站点出户到 `packages/media-bridge/lib/**`（子包 `lib/` 不在主包
+//    `lib/` 下）⇒ 只扫主包会让覆盖面地板静默塌陷（kill 8→4、spawn 4→1），判据却仍然绿。
 {
-  const files = listLib();
+  const files = [...listLib(), ...listSubpackageLib()];
   let killSites = 0;
   let spawnSites = 0;
   const killOffenders = [];
@@ -188,25 +203,41 @@ function check(name, ok, detail) {
 }
 
 // ── 变异对照：把真源码里的守卫/监听删掉，同一条判据必须报红 ──────────────────
+// ⚠️ 读点按**真源**（本分支搬家后）：转码套件住 lib/media/transcode.js（上游在 lib/transcode.js）、
+//    媒体桥内置实现住 packages/media-bridge/lib/legacy.js（上游在 lib/media/legacy.js）。
+//    变异对照必须打在**跑起来的那份**上，否则"删掉守卫"删的是没人引用的副本 —— 判据会失去牙。
+const readFirst = (...rels) => {
+  for (const rel of rels) {
+    try { return { rel, code: readFileSync(join(LIB, rel), 'utf8') }; } catch { /* 试下一个 */ }
+  }
+  throw new Error('找不到源码：' + rels.join(' / '));
+};
+/** 同 `readFirst`，但路径按**仓库根**起算（P-F 出户后的包在 `packages/**`，不在 `lib/` 下）。 */
+const readRepoFirst = (...rels) => {
+  for (const rel of rels) {
+    try { return { rel, code: readFileSync(join(ROOT, rel), 'utf8') }; } catch { /* 试下一个 */ }
+  }
+  throw new Error('找不到源码：' + rels.join(' / '));
+};
 {
-  const real = readFileSync(join(LIB, 'transcode.js'), 'utf8');
+  const { rel, code: real } = readFirst('media/transcode.js', 'transcode.js');
   const needle = 'if (proc.pid !== undefined) { try { proc.kill(); } catch { /* ignore */ } }';
   const mutated = real.split(needle).join('if (true) { try { proc.kill(); } catch { /* ignore */ } }');
-  check('变异对照前提：lib/transcode.js 里存在被删的那一行（命中 ' + (real.split(needle).length - 1) + ' 处）',
+  check('变异对照前提：lib/' + rel + ' 里存在被删的那一行（命中 ' + (real.split(needle).length - 1) + ' 处）',
     mutated !== real);
   check('negative control(A): 同一条判据吃"删掉真源码 pid 守卫"的变异体必须报出调用点',
     unguardedKills(mutated).bad.length > 0,
     '报出=' + JSON.stringify(unguardedKills(mutated).bad.map((b) => b.line + ':' + b.recv)));
 }
 {
-  const legacyPath = join(LIB, 'media/legacy.js');
-  const real = readFileSync(legacyPath, 'utf8');
+  const { rel, code: real } = readRepoFirst('packages/media-bridge/lib/legacy.js',
+    'lib/components/media-bridge/legacy.js', 'lib/media/legacy.js');
   // 把两处 'error' 监听改名（保持语法合法、括号平衡），模拟"删掉监听"。
   const mutated = real.split(".on('error'").join(".on('errorDisarmed'");
   const { bad, sites } = unmonitoredSpawns(mutated);
   check('negative control(B): 同一条判据吃"legacy.js 的 error 监听被改名"的变异体必须报红',
     bad.length >= 2 && sites >= 2,
-    '报出=' + JSON.stringify(bad.map((b) => 'lib/media/legacy.js:' + b.line + ' ' + b.recv)));
+    '报出=' + JSON.stringify(bad.map((b) => 'lib/' + rel + ':' + b.line + ' ' + b.recv)));
 }
 
 const failed = results.filter((r) => !r.ok);

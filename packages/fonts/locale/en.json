@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Font System",
+    "description": "The font system as a whole: the appearance tab's \"Global fonts\" section and the font-set editor (browser half, artifact lib/client.fonts.js), plus the host routes /fontsets and /system-fonts. Config keys and state still live in the main bundle (ADR-0013 D20); this package ships renderers and descriptors only."
+  }
+}

@@ -30,6 +30,14 @@ Wallpaper Engine 实时壁纸 · 液态玻璃 · 自定义外观 · Windows / ma
 
 > 上方版本、下载量、Stars、Forks、贡献者数量与 CI 状态由 Shields.io 动态获取，受服务缓存影响，并非秒级实时；平台与 Node.js 徽章是兼容信息。没有手填测试通过数量或第三方榜单排名。
 
+## 可选桌宠联动
+
+本分支新增与 [dsh-pet](https://github.com/PC2005-cloud/dsh-pet) 的可选联动：侧栏后拉、跳抓吉祥物、踢侧栏后原生弹飞、张嘴哈气抖屏四条逻辑。桥接运行时、安装器、必要素材和回归均收在完整的 [pet-link 子包](packages/pet-link/README.md)，不是依赖开发者本机目录的外置脚本。
+
+**不硬依赖、不自动安装 dsh-pet。** 没有桌宠或不满足联动资格时，仍使用 wallpaper 吉祥物的原生行为。按 **`Ctrl+Shift+D`** 打开可拖动维护面板：四页参数与气泡时间节点独立，支持当前页重置、全部重置、JSON 导出；无资格时保留维护能力但禁用试跑。
+
+首次体验需显式运行严格指纹安装器，它会备份并修改受支持的 `dsh-pet@0.3.6`；请先阅读[安装风险、体验与热插拔边界](packages/pet-link/README.md)。当前是跨插件作者评审入口，不代表桌宠上游已提供稳定官方控制 API。
+
 ## 快速开始
 
 ```sh
@@ -46,19 +54,20 @@ dsh plugin --profile web add dsh-plugin-wallpaper-engine
 
 <table>
   <tr>
-    <td width="72%" valign="middle">
+    <td width="64%" valign="middle">
       <ul>
         <li><a href="#能做什么">能做什么</a> · <a href="#支持哪些壁纸类型">支持哪些壁纸类型</a> · <a href="#安装">安装</a> · <a href="#使用">使用</a></li>
         <li><a href="#配置与数据">配置与数据</a> · <a href="#兼容与限制">兼容与限制</a> · <a href="#开发与贡献">开发与贡献</a></li>
         <li><a href="#联系方式">联系方式</a> · <a href="#致谢">致谢</a> · <a href="#支持与赞赏">支持与赞赏</a> · <a href="#star-history">Star History</a></li>
       </ul>
     </td>
-    <td width="28%" align="center" valign="middle">
+    <td width="36%" align="center" valign="middle">
       <a href="https://github.com/elysia395/dsh-wallpaper-engine/blob/main/assets/about/sponsor-fish.png">
-        <img src="https://raw.githubusercontent.com/elysia395/dsh-wallpaper-engine/main/assets/about/sponsor-fish.png" alt="生鱼的微信赞赏码；点击查看原图" width="200">
+        <img src="https://raw.githubusercontent.com/elysia395/dsh-wallpaper-engine/main/assets/about/sponsor-fish.png" alt="生鱼的微信赞赏码；点击查看原图" width="320">
       </a>
       <br><strong>生鱼的赞赏码</strong>
-      <br><sub>用于插件维护与更新 · 自愿赞赏</sub>
+      <br><sub>“大肥鱼的白饭告急，收到的赞赏将统统用于本插件的维护与更新”</sub>
+      <br><sub>自愿赞赏 · 不影响安装与使用</sub>
     </td>
   </tr>
 </table>
@@ -289,6 +298,8 @@ Bug 与功能建议优先提交到 [GitHub Issues](https://github.com/elysia395/
 项目保持开源，赞赏完全自愿，不影响安装、使用或问题反馈。给仓库点 Star、提交可复现的 Issue、补充文档与参与测试，同样是在支持项目。
 
 **生鱼的赞赏码**：赞赏用于本插件的维护与更新。以下是生鱼个人的赞赏入口，不代表全部贡献者的收款账户。
+
+> “大肥鱼的白饭告急，收到的赞赏将统统用于本插件的维护与更新”
 
 赞赏码展示在 [目录](#目录) 右侧，点击图片可查看原图。感谢每一份支持。
 

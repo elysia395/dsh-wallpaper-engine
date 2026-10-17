@@ -83,7 +83,7 @@ const CSS_EXT = `  /* ── 软件渲染回退（upstream #95，运行时探测
   html[data-windows-titlebar] body[data-ds-dark-theme][data-we-glass-fallback][data-we-glass-page][data-we-titlebar-glass][data-we-adapter^="desktop-"] div[class*="pI_x6G_frame"]::before {
     background: color-mix(in srgb, var(--we-surface-tint-dark, #0d1524) 92%, transparent) !important;
   }
-  /* 内容面（编辑器/终端）本来就是近不透明底板（--we-content-surface-alpha，默认
+  /* 内容面（编辑器/终端）本来就是近不透明底板（--we-content-surface-alpha，兜底
      88%），这里把同一条声明再挂一遍，让软件渲染下三块侧栏区域落在同一个规则块里。 */
   body[data-we-glass-fallback][data-we-sidebar-glass] [data-dsh-better-sidebar] .cm-editor,
   body[data-we-glass-fallback][data-we-sidebar-glass] [data-dsh-better-sidebar] .xterm,
@@ -240,7 +240,7 @@ const CSS_EXT = `  /* ── 软件渲染回退（upstream #95，运行时探测
      margin-left: auto 把它推到行尾（两者都是 flex 行）。
      ⚠️ 与折叠三角同排时**必须让位**（见下面那条相邻选择器）：三角也靠 margin-left: auto
      推右，两个 auto 在同一 flex 行里会**均分**剩余空间 —— ↺ 于是停在行中间，而"主题"
-     （那个节头没有 caret）的 ↺ 贴在最右端，同一批模块两种位置（用户 2026-10-13 报的正是
+     （那个节头没有 caret）的 ↺ 贴在最右端，同一批模块两种位置（用户报的正是
      这个）。现在的次序是 标签 → 三角 → ↺，三角吃掉剩余空间、↺ 紧跟其后贴在最右一列。
      ⚠️ 本段注释不许出现反引号：整套样式文本是模板字符串，一个反引号就拼断 JS。 */
   .we-mod-reset {
@@ -336,7 +336,7 @@ const CSS_EXT = `  /* ── 软件渲染回退（upstream #95，运行时探测
   /* 上传裁切弹窗（issue #191 问题 1）：居中模态 + 方形取景框。
      取景框 overflow: hidden 是"框外不显示"的唯一手段；框内那张图由 client.js 现算的
      几何定位（left/top 负偏移），**不用 transform** —— transform 会建合成层，
-     而这里每拖一下都改值（见 styles.js 里"不常驻合成层"那条纪律）。 */
+     而这里每拖一下都改值（见 styles-base.js 里"不常驻合成层"那条纪律）。 */
   .we-crop {
     position: fixed; inset: 0; z-index: 40;
     display: flex; align-items: center; justify-content: center;
@@ -365,10 +365,12 @@ const CSS_EXT = `  /* ── 软件渲染回退（upstream #95，运行时探测
     box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.35);
   }
   .we-crop__actions { display: flex; gap: 8px; align-self: stretch; justify-content: flex-end; }
-  .we-picker__btn--primary {
-    border-color: color-mix(in srgb, var(--we-accent, #4f8cff) 60%, transparent);
-    color: var(--we-accent, #4f8cff);
-  }
+  /* ⚠️ 这里曾有一条**未限定作用域**的 .we-picker__btn--primary 覆盖（PR #202 随裁切弹窗
+     加入）：本意应只服务弹窗按钮，实际把**全局**主按钮的文字色改写成 accent，与实心 accent
+     底逐像素同色 ⇒ v1.3.2 之后所有主按钮（选择壁纸 / 关于页 Star / 确认并导入…）文字隐形。
+     已移除 —— 裁切弹窗的「确认并导入」用标准主按钮款式（styles-panel.js 那条）。
+     今后若确需按钮变体：必须带作用域前缀（如 .we-crop__actions 后代），且 background /
+     color / border 三类属性写全 —— 只改 color/border 会留下"同色隐形"这种半截状态。 */
   /* 自定义立绘那一格（「系统」页签 · 聊天吉祥物）：与形态卡片同一个画框口径 ——
      固定尺寸的透明底小舞台，图各自按自己的宽高比 contain 进去。未导入时画一句
      「未导入」占位（虚线框），导入后画的是**用户那张图**（与主页面那只同一份盒）。 */
@@ -385,11 +387,11 @@ const CSS_EXT = `  /* ── 软件渲染回退（upstream #95，运行时探测
     font-size: 1.2em; line-height: 1; color: var(--dsw-alias-label-tertiary, rgba(128, 128, 128, 0.8));
   }
 
-  /* ── 「扩展」二号模块：点击效果与拖尾效果（画布层见 src/fx-layer.js）──
+  /* ── 「扩展」二号模块：点击效果与拖尾效果（画布层见 packages/fx/src/fx-layer.js）──
      与 .we-layer / .we-scrim 同族：body 级的整屏浮层 ⇒ 同样必须
      pointer-events: none; -webkit-app-region: initial !important（同族的硬要求，
      见 test/verify-host-paint-scope.mjs H3）。
-     z-index -1、靠文档序压在暗化层之上（见 src/fx-layer.js 的 fxPlace），
+     z-index -1、靠文档序压在暗化层之上（见 packages/fx/src/fx-layer.js 的 fxPlace），
      所以这一层是"壁纸之上、暗化层之上、全部界面之下"。
      宽高恒为整屏：点击/拖尾的坐标直接取指针的视口坐标，不用做偏移换算。
      opacity（不透明度）与 mix-blend-mode（混合模式）由画布层按设置内联写在宿主上 ——
@@ -439,7 +441,7 @@ const CSS_EXT = `  /* ── 软件渲染回退（upstream #95，运行时探测
     background-image: none !important;
   }
 
-  /* ── 「扩展」三号模块：3D 效果（视差；行为层见 src/parallax-layer.js）──
+  /* ── 「扩展」三号模块：3D 效果（视差；行为层见 packages/parallax/src/parallax-layer.js）──
      这一层与前面几层刚好相反：**它一个 DOM 节点都不建**。位移由行为层每帧**直接写进
      .we-layer / .we-rope 自己的** translate（CSS 独立属性）—— 每帧一个自定义属性都不写，
      因为自定义属性是继承的，写一次就会让整棵子树重算样式。所以样式表这边只剩两件事：
@@ -466,7 +468,7 @@ const CSS_EXT = `  /* ── 软件渲染回退（upstream #95，运行时探测
      摘掉 —— 本仓刻意不留**常驻**合成层（见 .we-layer--repaint 的两帧微推）。
      只提示 translate：scale 是静态的，不提它就不会被冻结栅格化倍率。 */
   body[data-we-parallax="on"] .we-parallax--moving { will-change: translate; }
-  /* 界面跟随那一组挪的是会话滚动容器**里面**的真实元素（见 src/parallax-layer.js 的
+  /* 界面跟随那一组挪的是会话滚动容器**里面**的真实元素（见 packages/parallax/src/parallax-layer.js 的
      PARALLAX_GROUP_SELECTOR），于是多出一个副作用：横向位移一旦越出 scroller 的 inline-end，
      宿主写在它身上的 overflow-y: auto 会把这一轴的 overflow-x: visible 当 auto 用（规范：一轴
      不是 visible 时另一轴的 visible 计算成 auto）⇒ 长出一条**横向滚动条**。它占掉约一条滚动条高的

@@ -30,10 +30,15 @@
  * Usage:  node scripts/build-client.mjs
  */
 
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync } from 'node:fs';
 import { dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { Script } from 'node:vm';
+// 跨树 import（scripts/ → test/）是**刻意的单一事实源**：本仓有哪些包、每个包的浏览器半边产物
+// 叫什么，只能有一处枚举。scripts/ 与 test/ 都在根 package.json 的 files[] 之外（两者都是开发期
+// 专属、不进发布面），所以构建器直接读发现层既不扩大发布面，也不制造第二份会漂移的包清单。
+// 反过来把枚举复制一份才是病：新增包时两处要同时改，而漏改的那一处**不会红**（子包静默不产出）。
+import { discoverPackages } from '../test/tools/packages.mjs';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const pkg = JSON.parse(readFileSync(resolve(root, 'package.json'), 'utf8'));
@@ -70,7 +75,7 @@ const INLINE_MODULES = [
   },
   {
     file: 'src/i18n-copy-font.js',
-    why: '英文词表域：字体与配色（font/* · fontset-editor · fontset-store）',
+    why: '英文词表域：字体与配色（font/* · fontset-store；fontset-editor 与外观页签字体节已搬进 packages/fonts，词表仍住本域、由主包 weT 供词）',
     markers: ['const WE_I18N_EN_FONT = {', '"正文": "Primary text",'],
   },
   {
@@ -97,6 +102,11 @@ const INLINE_MODULES = [
     file: 'src/i18n-copy-glass.js',
     why: '英文词表域：玻璃预设与外观细项（思考块 · 系统字体 · 预设 · 侧栏圆角）',
     markers: ['const WE_I18N_EN_GLASS = {', '"思考块液态玻璃": "Thinking-block liquid glass",'],
+  },
+  {
+    file: 'src/i18n-copy-pet-link.js',
+    why: '英文词表域：桌宠联动（pet-link 的浏览器半边文字；源在包内时属"停在主 bundle"的域表，收口后按 fonts 惯例归主包 src/）',
+    markers: ['const WE_I18N_EN_PET_LINK = {'],
   },
   {
     file: 'src/i18n-copy.js',
@@ -238,13 +248,12 @@ const INLINE_MODULES = [
     markers: ['const gpFetch = ', 'function glassPresetFailureReason(res)', 'async function applyGlassPreset(id)',
       'async function saveGlassPreset(name)', 'async function deleteGlassPreset(id)'],
   },
+  // P-C：字体集编辑器面板 + 外观页签字体节**已搬进 packages/fonts**（本包自己的 inline 表），
+  // 主 bundle 不再内联它们；两条通道各有配方（packages/fonts/client.build.json）。
+  // 顺序注记：这两条原先排在 `src/preset-store.js` 之后、`src/section-head.js` 之前，搬走后
+  // 本数组里 `preset-store → section-head` 的相邻关系不变（各模块都按名字引用，顺序不承载语义）。
   {
-    file: 'src/fontset-editor.js',
-    why: '字体集编辑器面板（F3 阶段 3）：纯渲染 + 意图回调（网络与状态由 client 侧经显式 ctx 给）',
-    markers: ['function deleteLabel(row)', 'function renderFontSetEditor(ctx)'],
-  },
-  {
-    // 面板各节的统一节头构件（2026-10-11 二次修订：**两档都支持隐藏**）。
+    // 面板各节的统一节头构件（二次修订：**两档都支持隐藏**）。
     // ⚠️ 必须排在 `src/glass-panel.js` 与 `src/panel-tabs.js` **之前**：那两个模块都按名字
     //    直接调它（内联后同作用域）。虽然函数声明有提升、顺序其实不致命，但排在调用方前面
     //    才读得出依赖方向 —— 与 `we-base.js` 排最前是同一条理由。
@@ -269,35 +278,11 @@ const INLINE_MODULES = [
     why: '「玻璃 UI」节渲染器（注册表驱动：GLASS_CHILDREN + childGlassKey；只读 ctx、动作经 on* 处理器）',
     markers: ['function renderAppearanceGlassSection(ctx) {', 'const CHILD_CN = {'],
   },
-  {
-    // 「扩展」页签二号模块（点击效果与拖尾效果）："画布层 + 描述符"两份都排在 panel-tabs
-    // 之前（数组顺序 = 注入顺序）—— 描述符是 panel-tabs 的 `extensionModules()` 的返回值
-    // 来源；那是个**惰性**函数，所以顺序不再是"prelude 求值期"的硬约束，但依赖关系上仍该先注入。
-    file: 'src/fx-layer.js',
-    why: '「点击效果与拖尾效果」的画布层：跟着指针画点击光效与拖尾，内容驱动地起停 rAF（基座模块：只读 selection、零 ctx）',
-    markers: ['const FX_HOST_ID = ', 'function syncFxLayer()', 'function disposeFxLayer()'],
-  },
-  {
-    file: 'src/ext-fx.js',
-    why: '「扩展」页签二号模块的描述符（渲染该扩展岛；动作一律经 ctx 里的具名 on* 处理器）',
-    markers: ['const FX_EXTENSION_MODULE = {', 'function renderFxIsland(ctx)'],
-  },
-  {
-    // 「扩展」页签三号模块（3D 效果）：跟前两个模块不同 —— 它**不建 DOM**，行为层每帧把**最终位移**
-    // 直接写进要动的那几层自己的 CSS 独立属性 `translate`（一个自定义属性都不写：自定义属性是继承的，
-    // 每帧写一次会让整棵子树重算样式；body 上只剩一个"壁纸补边系数"，设置变了才写一次）与一个
-    // 开关属性，补边放大在 src/styles.js 的视差段里算（所以这里只注入"行为层 + 描述符"两份，
-    // 样式那份归 styles.js 管）。同样排在 panel-tabs 之前。
-    file: 'src/parallax-layer.js',
-    why: '「3D 效果」的行为层：把光标位置换算成各层的最终位移，直接写进要动的那几层自己的 CSS 独立属性 translate（每帧零自定义属性写入；body 上只留一个"壁纸补边系数"）与一个开关属性（基座模块：只读 selection、零 ctx、不建 DOM）',
-    markers: ['const PARALLAX_DIRECTION = ', 'const PARALLAX_TRANSLATE = ',
-      'function syncParallaxLayer()', 'function disposeParallaxLayer()'],
-  },
-  {
-    file: 'src/ext-parallax.js',
-    why: '「扩展」页签三号模块的描述符（渲染该扩展岛；动作一律经 ctx 里的具名 on* 处理器）',
-    markers: ['const PARALLAX_EXTENSION_MODULE = {', 'function renderParallaxIsland(ctx)'],
-  },
+  // ── P-A 起：点击拖尾与 3D 两份「画布层 + 描述符」**已迁出主 bundle**，各自住自己的包
+  //    （packages/fx、packages/parallax），由各包自己的 `client.build.json` 配方各出一份产物；主包只留
+  //    `src/extension-registry.js` 这张收件箱（谁登记了什么只能问它）。
+  //    迁出的等价性证据：两个子包产物里的 fx-layer/ext-fx/parallax-layer/ext-parallax 与迁出前
+  //    逐字节相同（`git diff --no-index` 可复核），差量只有 outline 的 host 绑定与空 apply/inject。
   {
     // 头像导入的两道闸 + 零解码尺寸探针（#185 后续）。**纯函数**，因此是本仓少数几个
     // 能被守卫**直接执行**的模块之一（用真字节喂真函数 —— 位域读错一位那种错，
@@ -331,6 +316,18 @@ const INLINE_MODULES = [
     markers: ['const SYSTEM_FONTS_CACHE_KEY = ', 'function readCachedSystemFonts()',
       'async function ensureSystemFonts(', 'function systemFontKeyList(',
       'function filterUsableSystemFonts('],
+  },
+  {
+    // ── P-A 起：跨包「扩展模块 / 层钩子」注册表（src/extension-registry.js）。三项扩展里
+    //    有**两项**（点击拖尾 packages/fx、3D packages/parallax）从 P-A 起各自住在自己的包
+    //    里，三份 bundle 的求值顺序不保证 ⇒ 谁登记了什么只能落在一张共享注册表上：
+    //    panel-tabs 只问它（屏上顺序 = (order, 注册序)）、client.js 只问它（挂载期接 sync /
+    //    拆卸期交 dispose）。零依赖、浏览器安全。必须排在 panel-tabs 与 client.js 正文之前。
+    file: 'src/extension-registry.js',
+    why: '跨包扩展模块/层钩子注册表：登记与排序（order）扩展模块描述符、登记层的 sync/dispose、迟到注册的补接与重画回调',
+    markers: ['const weExtensionModuleTable = ', 'const weLayerHookTable = ',
+      'function weRegisterExtensionModule(', 'function weExtensionModules()',
+      'function weRegisterLayerHooks(', 'function weDiscoveredGroupsOf('],
   },
   {
     // ── 刀4：panel-tabs 按域拆出的 5 个兄弟模块（必须在组装点 src/panel-tabs.js **之前**：
@@ -507,6 +504,87 @@ const INLINE_MODULES = [
 ];
 
 /**
+ * **子包各自的浏览器半边产物**（BUNDLE-SPLIT §7.1 / ADR-0013 D9「多包后每包一产物」）。
+ *
+ * 为什么不把 packages/* 追加进 INLINE_MODULES：INLINE_MODULES 的语义是「内联进**主** bundle 的
+ * prelude」，而 test/verify-module-layout.mjs（规则③）、test/tools/src-scope.mjs、
+ * test/verify-glass-surfaces.mjs 等一批守卫都按这张表交叉对账 ⇒ 往里塞子包文件会同时改掉一堆
+ * 不相关的判据。子包走自己的**配方**：同样的注入/撞名/浏览器安全判据（函数参数化，判据只有一份），
+ * 不同的产物落点。
+ *
+ * 产物名 lib/client.<pkg>.js（而不是 client.js）：主产物已经是 lib/client.js，同名会在
+ * 「按名字扫描产物」的守卫里撞面（包级约定 exports['./client'] 见 test/verify-package-publish.mjs:267）。
+ *
+ * **配方数据驱动 N（BUNDLE-SPLIT §7.2）**：子包清单不再写死在本文件里，而是「每个有浏览器半边的
+ * standalone 包一份 `packages/<pkg>/client.build.json`」：
+ *   { "entry": "src/client.js",         // 该包浏览器半边入口（相对包目录；缺省 src/client.js）
+ *     "artifact": "lib/client.fx.js",   // 产物落点（相对包目录，必须逐字 == exports['./client']）
+ *     "inline": [ { file, why, markers } ] }
+ * 包集合来自发现层（test/tools/packages.mjs）⇒ **新增一个子包只加"包目录 + 配方"两处数据，
+ * 本文件零改动**。配方只是构建输入，不进发布面（不在任何 package.json 的 files[] 里）。
+ */
+const RECIPE_FILE = 'client.build.json';
+const DEFAULT_SUBPACKAGE_ENTRY = 'src/client.js';
+
+/** `dir`/`entry` 一律正向斜杠：`label`/`bodyLabel` 会进产物正文，Windows 的反斜杠会**静默改产物字节**。 */
+function toPosix(rel) {
+  return rel.split('\\').join('/');
+}
+
+/**
+ * 读全部 standalone 子包的配方，并做**双向**一致性硬检查（缺配方 / 孤儿配方都判红，且点名包）。
+ *
+ * 判据（与发现层的不变量同源，这里是构建期的第二道，白拿一次交叉检查）：
+ *   · 声明了浏览器半边（清单 `exports['./client']` ⇒ 发现层给出 `clientArtifact`）⟺ 存在配方文件；
+ *   · 配方的 `artifact` 经包目录拼接后必须**逐字等于**发现层的 `clientArtifact`（防两处漂移）。
+ * 缺配方会让该包的浏览器半边**静默不产出**（页面白屏、构建却全绿），所以宁可让构建红。
+ */
+function loadSubpackageRecipes() {
+  const model = discoverPackages(root);
+  const recipes = [];
+  for (const p of model.packages) {
+    if (p.kind !== 'standalone') continue;
+    const relDir = toPosix(p.dir);
+    const recipeAbs = resolve(root, relDir, RECIPE_FILE);
+    const hasRecipe = existsSync(recipeAbs);
+    const declaresClient = typeof p.clientArtifact === 'string' && p.clientArtifact.length > 0;
+    if (declaresClient && !hasRecipe) {
+      console.error(`[build-client] ${p.name}（${relDir}）声明了浏览器半边`
+        + `（exports['./client'] ⇒ ${p.clientArtifact}）却没有构建配方 ${relDir}/${RECIPE_FILE}`
+        + '：该包的浏览器半边会静默不产出（用户页面白屏，而构建/守卫全绿）。'
+        + `请补上 ${relDir}/${RECIPE_FILE}（形状 { entry, artifact, inline:[{file,why,markers}] }，`
+        + '可照抄任一别包的同名文件）。');
+      process.exit(1);
+    }
+    if (!declaresClient && hasRecipe) {
+      console.error(`[build-client] ${p.name}（${relDir}）留着孤儿配方 ${relDir}/${RECIPE_FILE}`
+        + "，但清单没有声明浏览器半边（exports['./client']）：配方不会被消费，"
+        + "它描述的产物也没人会加载。请删掉该配方，或给清单补上 exports['./client']。");
+      process.exit(1);
+    }
+    if (!hasRecipe) continue;
+    const recipe = JSON.parse(readNormalized(recipeAbs));
+    const joined = `${relDir}/${recipe.artifact}`;
+    if (joined !== p.clientArtifact) {
+      console.error(`[build-client] ${p.name}（${relDir}）配方与清单漂移：${RECIPE_FILE} 的 artifact=`
+        + `${JSON.stringify(recipe.artifact)} ⇒ 产物 ${joined}，`
+        + `而清单 exports['./client'] ⇒ ${p.clientArtifact}。`
+        + '两者必须一致（否则构建出的产物没人加载，按产物名对账的守卫也会红）。');
+      process.exit(1);
+    }
+    recipes.push({
+      dir: relDir,
+      dirAbs: resolve(root, relDir),
+      name: p.name,
+      artifact: recipe.artifact,
+      entry: typeof recipe.entry === 'string' && recipe.entry ? recipe.entry : DEFAULT_SUBPACKAGE_ENTRY,
+      inline: recipe.inline,
+    });
+  }
+  return recipes;
+}
+
+/**
  * 读取一个构建输入、归一化成 LF，**并断言不再有孤立 CR**。
  *
  * 为什么这条断言值得让构建**红**：源文件里若混进多余的回车（历史形态：`src/i18n-copy.js` 曾有
@@ -538,58 +616,43 @@ function readNormalized(abs) {
  */
 const DECL_RE = /^([ \t]*)(?:async\s+)?(?:const|let|var|function|class)\s+([A-Za-z_$][\w$]*)/gm;
 
-const src = readNormalized(resolve(root, 'src', 'client.js'));
-// `codeStart` = 正文在原文件里的起始行偏移：判据报错必须指**原文件**的行号，而不是正文内的相对行。
-const { body: bodyText, codeStart } = stripHeader(src);
-const body = injectRopeArt(bodyText.replace(/\n+$/, ''));
-const prelude = readInlinedPrelude();
-// 这条必须在拼 `output` **之前**跑：它判的失败后果（后声明静默胜出）在语法解析层完全看不见，
-// 因此不能指望下面那道 `new Script(output)` 兜住（见该函数注释）。
-assertNoShadowedScopeDecls();
-
-const outline = [
-  'window.__ModuleLoader__.load({',
-  `\tid: ${JSON.stringify(id)},`,
-  '\tfactory: (require) => {',
-  '\t\tvar module = { exports: {} };',
-  '\t\tvar exports = module.exports;',
-  '\t\tObject.defineProperty(exports, Symbol.toStringTag, { value: "Module" });',
-  indent(prelude),
-  '\t\t// ── 客户端正文（src/client.js）────────────────────────────────────────',
+// ── 产物生成 ─────────────────────────────────────────────────────────────────
+// 主 bundle 与子包 bundle 走**同一套**注入 / 浏览器安全 / 撞名判据（`readInlinedPrelude` /
+// `assertNoShadowedScopeDecls` 都参数化了模块表与基准目录）：判据只有一份，只有模块表不同。
+const OUTPUTS = [
+  { label: 'lib/client.js', target: resolve(root, 'lib', 'client.js'), inlined: INLINE_MODULES, text: buildMainBundle() },
+  ...loadSubpackageRecipes().map((recipe) => ({
+    label: `${recipe.dir}/${recipe.artifact}`,
+    target: resolve(recipe.dirAbs, recipe.artifact),
+    inlined: recipe.inline,
+    text: buildSubpackageBundle(recipe),
+  })),
 ];
 
-// Indent the source body by two tabs. Preserve blank-line gaps; never indent
-// an already-blank line.
-outline.push(indent(body));
-outline.push('\t},');
-outline.push('});');
-outline.push('');
-
-const output = outline.join('\n');
-
-// 产物必须可解析 —— 内联后出现重复声明/括号错配时在这里就红，而不是等到用户页面白屏。
-try {
-  new Script(output, { filename: 'lib/client.js' });
-} catch (err) {
-  console.error(`[build-client] 产物语法错误：${err && err.message}`);
-  process.exit(1);
+for (const out of OUTPUTS) {
+  // 产物必须可解析 —— 内联后出现重复声明/括号错配时在这里就红，而不是等到用户页面白屏。
+  try {
+    new Script(out.text, { filename: out.label });
+  } catch (err) {
+    console.error(`[build-client] 产物语法错误（${out.label}）：${err && err.message}`);
+    process.exit(1);
+  }
+  mkdirSync(dirname(out.target), { recursive: true });
+  writeFileSync(out.target, out.text);
+  // 进度信息走 **stderr**，把 stdout 留给机读输出：`npm run build` 的输出会被 `prepare` 带进
+  // `npm pack` / `npm publish` 的 stdout，而它们的 `--json` 要求 stdout 上**只有 JSON**
+  // （实测：`npm pack --dry-run --json` 原本因这一行而无法解析）。错误本就打 stderr。
+  console.error(`built ${out.target} (${Buffer.byteLength(out.text)} bytes; inlined: ${out.inlined.map((m) => m.file).join(' + ')})`);
 }
-
-const target = resolve(root, 'lib', 'client.js');
-mkdirSync(dirname(target), { recursive: true });
-writeFileSync(target, output);
-const inlined = INLINE_MODULES.map((m) => m.file).join(' + ');
-// 进度信息走 **stderr**，把 stdout 留给机读输出：`npm run build` 的输出会被 `prepare` 带进
-// `npm pack` / `npm publish` 的 stdout，而它们的 `--json` 要求 stdout 上**只有 JSON**
-// （实测：`npm pack --dry-run --json` 原本因这一行而无法解析）。错误本就打 stderr。
-console.error(`built ${target} (${Buffer.byteLength(output)} bytes; inlined: ${inlined})`);
 
 function indent(text) {
   return text.split('\n').map((line) => (line.trim() === '' ? '' : '\t\t' + line)).join('\n');
 }
 
 /**
- * 读取 INLINE_MODULES 并拼成可内联的 prelude：
+ * 读取一张内联模块表（主 bundle = INLINE_MODULES，子包 = 该包 `client.build.json` 的 `inline`）拼成可内联的 prelude：
+ * `baseDir` / `label` / `bodySrc` 由调用方给（主 bundle = 仓库根 / '' / 主正文；子包 = 子包目录 /
+ * 'packages/<pkg>/' / 子包正文）—— 判据只有这一份，主包与子包走同一条路。
  *   · 断言每个模块**浏览器安全**（无 import/require/Node 全局）；
  *   · 断言形状符合预期（markers 全在）；
  *   · 剥掉 `export {...}` 块与声明前的 `export ` 关键字（内联后同作用域，不需要导出）；
@@ -597,11 +660,11 @@ function indent(text) {
  *     ⚠️ 这一条只管「注入 ↔ 正文」这一个方向；**同一作用域内**更广的重复声明（含正文内部、
  *     含内联模块彼此之间）由 `assertNoShadowedScopeDecls()` 判 —— 两者是互补判据，不是重复判据。
  */
-function readInlinedPrelude() {
+function readInlinedPrelude(modules, baseDir, bodySrc, label = '') {
   const parts = [];
   const injected = new Map(); // name -> file
-  for (const mod of INLINE_MODULES) {
-    const abs = resolve(root, mod.file);
+  for (const mod of modules) {
+    const abs = resolve(baseDir, mod.file);
     const text = readNormalized(abs);
     // 判据针对**代码**：先剥注释。否则模块头里写一句 `node -e "require('fs')…"` 的
     // 复核命令就会被判成"含 require"（**实测**：这类假阳性出现过多次）。
@@ -623,13 +686,13 @@ function readInlinedPrelude() {
     ];
     for (const [re, what] of browserSafetyChecks) {
       if (re.test(code)) {
-        console.error(`[build-client] ${mod.file} 必须浏览器安全，但含${what}`);
+        console.error(`[build-client] ${label}${mod.file} 必须浏览器安全，但含${what}`);
         process.exit(1);
       }
     }
     for (const marker of mod.markers) {
       if (!text.includes(marker)) {
-        console.error(`[build-client] ${mod.file} 缺少预期标记：${marker}（结构变了？请同步本脚本）`);
+        console.error(`[build-client] ${label}${mod.file} 缺少预期标记：${marker}（结构变了？请同步本脚本）`);
         process.exit(1);
       }
     }
@@ -644,22 +707,22 @@ function readInlinedPrelude() {
 
     const stripped = text.replace(EXPORT_BLOCK, '').replace(/^\s*export\s+/gm, '');
     if (/^\s*export\b/m.test(stripped)) {
-      console.error(`[build-client] ${mod.file} 剥除 export 后仍有残留（导出块不止一块？本仓约定每文件恰好一块）`);
+      console.error(`[build-client] ${label}${mod.file} 剥除 export 后仍有残留（导出块不止一块？本仓约定每文件恰好一块）`);
       process.exit(1);
     }
     parts.push(
-      `\t\t// ── 内联模块：${mod.file} —— ${mod.why}（构建期注入；勿手改本段）──\n` +
+      `\t\t// ── 内联模块：${label}${mod.file} —— ${mod.why}（构建期注入；勿手改本段）──\n` +
       indent(stripped.trim()) + '\n');
   }
 
   // 平铺后同作用域 ⇒ 与 `src/client.js` 正文撞名就是运行期 SyntaxError。判据同上去缩进口径
   // （否则带缩进的顶层声明漏判 —— 那正是这条断言存在的理由）。
-  const bodyDecls = new Set([...body.matchAll(/^([ \t]*)(?:async\s+)?(?:const|let|var|function|class)\s+([A-Za-z_$][\w$]*)/gm)]
+  const bodyDecls = new Set([...bodySrc.matchAll(/^([ \t]*)(?:async\s+)?(?:const|let|var|function|class)\s+([A-Za-z_$][\w$]*)/gm)]
     .filter((m) => m[1].length === 0)
     .map((m) => m[2]));
   const clashes = [...injected.keys()].filter((name) => bodyDecls.has(name));
   if (clashes.length) {
-    console.error('[build-client] src/client.js 重复声明了内联模块提供的常量/函数：' + clashes.join(', '));
+    console.error('[build-client] ' + (label || 'src/client.js') + ' 重复声明了内联模块提供的常量/函数：' + clashes.join(', '));
     process.exit(1);
   }
   return parts.join('\n');
@@ -762,7 +825,7 @@ function injectRopeArt(text) {
  *
  * 口径与撞名判据同源（`DECL_RE` + 该文件的最小缩进口径），因此不会因缩进写法漏判。
  */
-function assertNoShadowedScopeDecls() {
+function assertNoShadowedScopeDecls({ bodySrc, lineOffset, bodyFile, modules, baseDir, label = '' }) {
   const seen = new Map(); // name -> 'file:line'
   const dups = [];
   const scan = (file, text, lineOffset) => {
@@ -777,8 +840,8 @@ function assertNoShadowedScopeDecls() {
       else seen.set(m[2], at);
     }
   };
-  scan('src/client.js', body, codeStart);
-  for (const mod of INLINE_MODULES) scan(mod.file, readNormalized(resolve(root, mod.file)), 0);
+  scan(bodyFile, bodySrc, lineOffset);
+  for (const mod of modules) scan(`${label}${mod.file}`, readNormalized(resolve(baseDir, mod.file)), 0);
   if (dups.length) {
     console.error('[build-client] 平铺后同一作用域里有同名顶层声明（后声明静默胜出 ⇒ 前者是死代码；'
       + '反过来删掉后者会让前者无声复活，行为改变而语法层无感）：\n  ' + dups.join('\n  '));
@@ -801,4 +864,68 @@ function stripHeader(srcText) {
   // 返回 `codeStart`（正文在原文件里的起始行偏移）而不只是正文：所有报错判据都要能指回
   // **原文件**的行号 —— 报"正文第 3 行"对读日志的人毫无用处。
   return { body: lines.slice(codeStart).join('\n'), codeStart };
+}
+
+/**
+ * 组装一份客户端产物 —— 主 bundle 与子包 bundle **同形**（同一个 window.__ModuleLoader__.load
+ * 形状），差别只有两处：
+ *   · 子包 bundle 由构建发出 `const host = require('<主包名>')`，那是跨包通道的唯一入口
+ *     （ADR-0013 D13 / BUNDLE-SPLIT §5.1 ②：子包不 import 主包源码，只消费主 bundle 的
+ *     `module.exports`；`exports.hostBridgeKeys` 是冻结的显式键集）。
+ *     这一行**必须**由构建发出：源码面写 require 会被 test/verify-subpackage-purity.mjs 判红
+ *     （它只放行产物，只放行主包名出现在 packages/<pkg>/lib/client*.js 里）。
+ *   · 子包 bundle 的贡献（注册表登记）已在**模块作用域**完成 ⇒ 这里补一对幂等空 `apply` /
+ *     空 `inject` 满足装载契约（宿主客户端会为图里每个 bundle 调 apply，缺了它就可能被判成
+ *     「没有 apply 的插件」）；不接管任何 fiber、不注册任何 effect，因此没有可拆的东西。
+ * 主 bundle 的 `apply` / `inject` / `return module.exports` 都写在 src/client.js 正文末尾，
+ * 本函数不重复发（重复声明会让 assertNoShadowedScopeDecls 与运行期 var 提升语义打架）。
+ */
+function assembleBundle({ id: bundleId, prelude, bodySrc, hostPackage = null, bodyLabel }) {
+  const outline = [
+    'window.__ModuleLoader__.load({',
+    `\tid: ${JSON.stringify(bundleId)},`,
+    '\tfactory: (require) => {',
+    '\t\tvar module = { exports: {} };',
+    '\t\tvar exports = module.exports;',
+    '\t\tObject.defineProperty(exports, Symbol.toStringTag, { value: "Module" });',
+  ];
+  if (hostPackage) outline.push(`\t\tconst host = require(${JSON.stringify(hostPackage)});`);
+  outline.push(indent(prelude));
+  outline.push('\t\t// ── 客户端正文（' + bodyLabel + '）' + '─'.repeat(Math.max(0, 62 - bodyLabel.length)));
+  outline.push(indent(bodySrc));
+  if (hostPackage) {
+    outline.push('\t\texports.apply = () => undefined;');
+    outline.push('\t\texports.inject = [];');
+    outline.push('\t\treturn module.exports;');
+  }
+  outline.push('\t},');
+  outline.push('});');
+  outline.push('');
+  return outline.join('\n');
+}
+
+/** 主 bundle：立绘载荷注入只作用于它（子包没有 rope art）。 */
+function buildMainBundle() {
+  const source = readNormalized(resolve(root, 'src', 'client.js'));
+  const { body: rawBody, codeStart: lineOffset } = stripHeader(source);
+  const bodySrc = injectRopeArt(rawBody.replace(/\n+$/, ''));
+  const prelude = readInlinedPrelude(INLINE_MODULES, root, bodySrc);
+  // 这两条必须在拼产物**之前**跑：撞名/重复声明的失败后果在语法解析层完全看不见，
+  // 因此不能指望 `new Script(...)` 兜住（见 assertNoShadowedScopeDecls 的注释）。
+  assertNoShadowedScopeDecls({ bodySrc, lineOffset, bodyFile: 'src/client.js', modules: INLINE_MODULES, baseDir: root });
+  return assembleBundle({ id, prelude, bodySrc, bodyLabel: 'src/client.js' });
+}
+
+/** 子包 browser half：入口正文（配方 `entry`，缺省 `src/client.js`）+ 本包自己的内联件表，产物落 `packages/<pkg>/lib/client.<pkg>.js`。 */
+function buildSubpackageBundle(recipe) {
+  const dir = recipe.dirAbs;
+  const entryRel = toPosix(recipe.entry);
+  const source = readNormalized(resolve(dir, entryRel));
+  const { body: rawBody, codeStart: lineOffset } = stripHeader(source);
+  const bodySrc = rawBody.replace(/\n+$/, '');
+  const label = `${recipe.dir}/`;
+  const entryLabel = `${label}${entryRel}`;
+  const prelude = readInlinedPrelude(recipe.inline, dir, bodySrc, label);
+  assertNoShadowedScopeDecls({ bodySrc, lineOffset, bodyFile: entryLabel, modules: recipe.inline, baseDir: dir, label });
+  return assembleBundle({ id: recipe.name, prelude, bodySrc, hostPackage: id, bodyLabel: entryLabel });
 }

@@ -67,7 +67,7 @@ function stopOcclusionPolling() {
   occlusionFrame = null;
   occlusionInflight = false;
   // op 基线一并复位：否则换壁纸后首拍 op 与上一会话终态相同 ⇒ 不留日志，
-  // QA 对账（§10.2）在轮换场景丢首条证据。
+  // QA 对账在轮换场景丢首条证据。
   occlusionLastOp = null;
 }
 

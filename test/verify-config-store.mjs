@@ -1,10 +1,16 @@
 #!/usr/bin/env node
 /**
- * verify-config-store.mjs —— `lib/config-store.js` 的聚焦判据。
+ * verify-config-store.mjs —— `lib/kernel/config.js`（`createConfigKit`）的聚焦判据。
  *
- * 被测对象：`createConfigStoreKit({ configPath })` —— `config.json` 的读、原子发布、
- * 以及 `settings` 段的读-改-写串行化。注入点只有 `configPath`（解析路径的函数）⇒
+ * 被测对象：`createConfigKit({ configPath })`（`lib/kernel/config.js`）—— `config.json` 的读、
+ * 原子发布、以及 `settings` 段的读-改-写串行化。注入点 `configPath`（解析路径的函数）⇒
  * 所有判据都能落在 `.test-cache/` 里，不碰真机配置目录。
+ *
+ * ⚠️ 重指真源（task-10 D）：真源住 `lib/kernel/config.js` 的工厂返回值里；本守卫原先 import 上游
+ * 同名副本 `lib/config-store.js`（task-10 D 重指后已随删除提交移除）。副本里带着「数组不算账本」的硬化
+ * （`readConfig()` 的 `!Array.isArray(o)`，见 A1/A3/A4），而真源当时只判 `typeof 'object'`
+ * ⇒ 盘上是数组时设置写静默丢失。硬化已搬进真源（并补了 `configPath` 注入缝），判据随之重指 ——
+ * 判据与期望值除**两处形状**（导出面清单、E1 里那条冗余的常量名断言）外一字未改。
  *
  * 为什么值得独立守卫：这是宿主**唯一**的持久状态面，失效形态全是静默的 ——
  *   · 原子发布退化成直写 ⇒ 断电/HMR 中断留下截断的半份 JSON（读侧回 `{}` ⇒ 设置全丢，无报错）；
@@ -17,14 +23,14 @@
  * 临时名的跨模块契约（`atomicTmpPath` ↔ `cache-prune` 的孤儿清扫口径）在 C 段用真套件对钉。
  */
 import { mkdirSync, writeFileSync, readFileSync, existsSync, readdirSync, rmSync } from 'node:fs';
-import { join, basename } from 'node:path';
+import { join, basename, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { createConfigStoreKit } from '../lib/config-store.js';
-import { createCachePruneKit } from '../lib/cache-prune.js';
+import { createConfigKit } from '../lib/kernel/config.js';
+import { createTranscodeKit } from '../lib/media/transcode.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const ISO = join(ROOT, '.test-cache', 'config-store-guard');
-const SRC = join(ROOT, 'lib', 'config-store.js');
+const SRC = join(ROOT, 'lib', 'kernel', 'config.js');
 const PID = process.pid;
 
 let passed = 0; let failed = 0;
@@ -44,23 +50,34 @@ function dir (label) {
   mkdirSync(p, { recursive: true });
   return p;
 }
-/** 真套件；`configPath` 是唯一注入点。 */
-const realKit = (configPath) => createConfigStoreKit({ configPath: () => configPath });
+/** 真套件；`configPath` 是判据侧的注入点（真源缺省 = `./data-dir.js` 现算）。 */
+const realKit = (configPath) => createConfigKit({ configPath: () => configPath });
 
 // ── 变异体加载器（本模块只 import node: 内建 ⇒ 变异体可直接落在 tmp 里跑）────────
 // ⚠️ 替换串一律用**函数**：字符串形态的 `$'` / `$&` 会被 String.replace 当成引用模式，
 // 生成出语法坏掉的"变异体"（判据会失真成解析错误）。
+// ⚠️ 源码文本先归一成 LF 再做字面替换：锚点写的是 `\n`，CRLF 检出下会全不命中
+// （与 `test/verify-transcode-state.mjs` 的 `\r?\n` 处理同一个理由）。
 let mutantSeq = 0;
+/**
+ * 变异体落在 `.test-cache/` 跑 ⇒ 源码里的**相对说明符**必须改写成绝对 `file:` URL：
+ * 真源 import `'../settings-schema.js'` / `'./data-dir.js'`，相对变异体目录解析会
+ * ERR_MODULE_NOT_FOUND。改写只改"从哪解析"，被 import 的仍是**真源**模块（不是副本）。
+ */
+const absolutizeSpecifiers = (text) => text.replace(
+  /(from\s*|import\s*\(\s*|require\s*\(\s*)(['"])(\.[^'"]+)\2/g,
+  (m, head, q, spec) => head + q + pathToFileURL(join(dirname(SRC), spec)).href + q);
+
 async function loadMutant (label, transform) {
-  const src = readFileSync(SRC, 'utf8');
+  const src = readFileSync(SRC, 'utf8').replace(/\r\n/g, '\n');
   const out = transform(src);
   if (out === src) throw new Error('变异体没改到源码（判据会失真）: ' + label);
   const d = join(ISO, 'mutants');
   mkdirSync(d, { recursive: true });
   const f = join(d, (mutantSeq++) + '-' + label + '.mjs');
-  writeFileSync(f, out);
+  writeFileSync(f, absolutizeSpecifiers(out));
   const mod = await import(pathToFileURL(f).href);
-  return (configPath) => mod.createConfigStoreKit({ configPath: () => configPath });
+  return (configPath) => mod.createConfigKit({ configPath: () => configPath });
 }
 
 // ── 判据本体（正向与负对照共用同一段代码；`make` = (configPath) => kit）──────────
@@ -84,7 +101,7 @@ function readNeverThrows (make, d) {
   writeFileSync(p, 'null');
   results.push(emptyObject(attempt(() => k.readConfig())));                 // 非对象：null
   // JSON 数组的 `typeof` 也是 'object'：放它进来，后续 `cfg[SETTINGS_FIELD] = …` 挂的是
-  // 非索引属性、`JSON.stringify([])` 仍是 "[]" ⇒ 设置写静默丢失（`lib/config-store.js` 已修）。
+  // 非索引属性、`JSON.stringify([])` 仍是 "[]" ⇒ 设置写静默丢失（`lib/kernel/config.js` 已修）。
   writeFileSync(p, '[]');
   results.push(emptyObject(attempt(() => k.readConfig())));                 // 非账本：空数组
   writeFileSync(p, '[1,2]');
@@ -151,9 +168,14 @@ function tmpNameUnique (make, d) {
 }
 
 /**
- * ③b 跨模块契约（`lib/config-store.js` ↔ `lib/cache-prune.js`）：`atomicTmpPath` 的产物必须
- * 同时满足两条 —— 别的 pid 的同类产物会被孤儿清扫清掉（说明清扫口径认这个形状），本进程的
- * 产物必须被留住（说明"在途写"保护认得它）。任一侧改形状都会让这条判红。
+ * ③b 跨模块契约（`lib/kernel/config.js` ↔ 转码套件的孤儿清扫 `lib/media/transcode.js`）：
+ * `atomicTmpPath` 的产物必须同时满足两条 —— 别的 pid 的同类产物会被孤儿清扫清掉（说明清扫口径
+ * 认这个形状），本进程的产物必须被留住（说明"在途写"保护认得它）。任一侧改形状都会让这条判红。
+ *
+ * ⚠️ 读点更正：清扫侧原先取自上游同名副本 `lib/cache-prune.js`（已删）；真源是
+ * `createTranscodeKit().sweepTranscodeArtifacts()`，它扫的三个目录由注入的访问器派生
+ * （`join(cacheBaseDir(),'transcodes')` / `join(dirname(configPath()),'ffmpeg')` / `videoPreviewCacheDir()`）
+ * ⇒ 夹具把三个探针文件放进**派生后的**目录；断言形状与期望值一字未改。
  */
 function crossModuleTmpShape (make, d) {
   const p = join(d, 'config.json');
@@ -163,13 +185,22 @@ function crossModuleTmpShape (make, d) {
   const foreign2 = own.replace('.tmp' + PID, '.tmp' + (PID + 2));
   if (foreign === own) return false;
   const sub = ['t', 'f', 'p'].map((tag) => { const x = join(d, tag); mkdirSync(x, { recursive: true }); return x; });
-  writeFileSync(join(sub[0], own), 'x');
-  writeFileSync(join(sub[1], foreign), 'x');
+  const transcodeDir = join(sub[0], 'transcodes');
+  const ffmpegDir = join(sub[1], 'ffmpeg');
+  mkdirSync(transcodeDir, { recursive: true });
+  mkdirSync(ffmpegDir, { recursive: true });
+  writeFileSync(join(transcodeDir, own), 'x');
+  writeFileSync(join(ffmpegDir, foreign), 'x');
   writeFileSync(join(sub[2], foreign2), 'x');
-  createCachePruneKit({
-    transcodeCacheDir: () => sub[0], ffmpegDataDir: () => sub[1], videoPreviewCacheDir: () => sub[2],
+  createTranscodeKit({
+    cacheBaseDir: () => sub[0],
+    configPath: () => join(sub[1], 'config.json'),
+    videoPreviewCacheDir: () => sub[2],
+    getMediaInfo: () => null,
+    atomicTmpPath: (f) => f,
+    pluginRoot: ROOT,
   }).sweepTranscodeArtifacts();
-  return existsSync(join(sub[0], own)) && !existsSync(join(sub[1], foreign)) && !existsSync(join(sub[2], foreign2));
+  return existsSync(join(transcodeDir, own)) && !existsSync(join(ffmpegDir, foreign)) && !existsSync(join(sub[2], foreign2));
 }
 
 /** ④ 读-改-写串行化：fn 体全同步时不得丢改动。 */
@@ -227,7 +258,9 @@ async function settingsSectionSemantics (make, d) {
   const overwrite = JSON.stringify(k.readSettings()) === '{"a":9}';
   const finalCfg = k.readConfig();
   const keys = Object.keys(finalCfg).sort().join(',');
-  return noSection && nonObject && k.SETTINGS_FIELD === 'settings' && roundTrip && overwrite
+  // ⚠️ 字段名「settings」由 `keys === 'settings,uploadDir'` **行为**钉住（把字段改名会让键集变），
+  // 所以这条不再依赖「真源导出 `SETTINGS_FIELD` 常量」——真源只交出被内核消费的那些名字。
+  return noSection && nonObject && roundTrip && overwrite
     && finalCfg.uploadDir === '/u' && keys === 'settings,uploadDir';
 }
 
@@ -326,8 +359,13 @@ check('E2 负对照：变异体把"覆盖"兑成"合并" ⇒ E1 判据判红',
   (await settingsSectionSemantics(mergeSettings, dir('e2'))) === false);
 
 const kitNames = Object.keys(realKit(join(ISO, 'surface', 'config.json'))).sort();
-check('E3 导出面恰好 9 个名字（SETTINGS_FIELD 之外的队列/序号等内部状态不外泄）',
-  kitNames.join(',') === 'SETTINGS_FIELD,atomicTmpPath,atomicWriteFileP,atomicWriteFileSync,enqueueConfigWrite,readConfig,readSettings,writeConfig,writeSettings',
+// 真源的导出面 = **内核实际解构的那些**（`lib/kernel/host-kernel.js:169-175` 逐字解构这 15 个），
+// 内部状态（`atomicTmpSeq` / `configWriteQueue` / `SETTINGS_FIELD` 常量）一律不外泄 ——
+// 断言仍是"键集逐字相等"，外泄一个名字或多一个名字都判红。
+check('E3 导出面恰好 = 内核消费面（15 个名字；队列/序号/字段名常量等内部状态不外泄）',
+  kitNames.join(',') === 'atomicTmpPath,atomicWriteFileP,atomicWriteFileSync,commitFontSetMigration,'
+    + 'enqueueConfigWrite,fontSetsDir,glassPresetsDir,mergeSettings,readConfig,readFontSetId,readSettings,'
+    + 'setFontSetId,withLegacyFontValues,writeConfig,writeSettings',
   kitNames.join(','));
 
 // ═══ F. 写盘与降级 ══════════════════════════════════════════════════════════
@@ -344,8 +382,8 @@ section('G. 覆盖面地板（防"判据在空域上恒真"）');
 check('G1 正向判据数 ≥ 12', passed >= 12, 'passed=' + passed);
 check('G2 变异体负对照数 ≥ 7', mutantSeq >= 7, 'mutants=' + mutantSeq);
 check('G3 本文件直读被测模块（guard-map 的覆盖认定靠这个路径字面量）',
-  readFileSync(SRC, 'utf8').includes('export function createConfigStoreKit')
-  && typeof createConfigStoreKit === 'function');
+  readFileSync(SRC, 'utf8').includes('export function createConfigKit')
+  && typeof createConfigKit === 'function');
 
 console.log('');
 if (failed) {

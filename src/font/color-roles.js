@@ -56,7 +56,7 @@ function themeLayerOwnedRoles() { return (themeLayerRolesBySource[THEME_LAYER_SO
 /**
  * 扫描样式表，收集当前 DSH **真的定义了**的 `--dsw-*` 令牌名。
  * 权威来源是样式表：`getTheme().active.tokens` 为空、`exportInspectTokens()` 只有 14 条
- * （F0 实测），都不能当清单。
+ * （实测），都不能当清单。
  * @returns {Set<string>} 令牌名集合（跨源样式表读不到 cssRules 时跳过，不抛）。
  */
 function scanThemeTokens(doc) {

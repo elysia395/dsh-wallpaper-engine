@@ -1,5 +1,5 @@
 /**
- * 「系统」页签的节渲染器（原 src/panel-tabs.js 的 1943–2209 行）：浏览 / 兼容 / 适配器 /
+ * 「系统」页签的节渲染器（原 src/panel-tabs.js）：浏览 / 兼容 / 适配器 /
  * 电源 / 缓存 / 诊断。renderAdvancedTab 仍在组装点，按顺序调这六节。
  * 本节渲染器从 src/panel-tabs.js 按域搬出，函数体逐字未改；内联顺序见 scripts/build-client.mjs（排在组装点之前）。
  */

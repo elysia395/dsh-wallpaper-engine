@@ -72,7 +72,7 @@ const FLOOR = {
   dark: Number((SRC.match(/const READABILITY_FLOOR_DARK = ([\d.]+);/) || [])[1]),
 };
 // ⚠️ 锚点锚在行首且容忍缩进（产物把内联模块整段缩进过）：散文里出现同样的声明字面量会把锚点带偏。
-// 2026-10-13（刀3）：样式表由单个 CSS 模板拆成 8 个域模板 + 组装点 ⇒ 取文改走 cssBodyOf
+// （刀3）：样式表由单个 CSS 模板拆成 8 个域模板 + 组装点 ⇒ 取文改走 cssBodyOf
 // （按声明顺序把族内每个域模板拼回一份 CSS 体）。与旧单模板取文**逐字节相同**（实测 276,804 B），
 // 且一个模板都取不到时会**抛错**，不再像旧写法那样静默返回空串让本文件全部判据恒真。
 const CSS_BODY = cssBodyOf(SRC);
@@ -562,7 +562,7 @@ function main() {
       && r.header.includes('::before')
       && /backdrop-filter:\s*none\s*!important/.test(r.body)));
 
-  // ── TB: 标题栏玻璃的锚点与两层结构（2026-10-06 回归）──────────────────────────
+  // ── TB: 标题栏玻璃的锚点与两层结构（回归）──────────────────────────
   // 三条故障的来龙去脉（死类名锚点 / 嵌套 :has() 让逗号列表**整条**失效 / 底色与模糊同层
   // 导致的色差）**只写在 src/styles.js 的标题栏注释块**，此处不复述 —— 判据只钉结论：
   //   TB1 死锚点 · TB2a/TB2b 两层互斥 · TB3 壳层门 · TB4 六条同色声明 · TB4a 恒定釉光 ·
@@ -666,7 +666,7 @@ function main() {
   check('TB4a 负对照：三段渐变要被判红（判据有牙）',
     sheenIsConstant('linear-gradient(180deg, rgba(255,255,255,var(--we-panel-sheen-a)) 0%,'
       + ' rgba(255,255,255,var(--we-panel-sheen-b)) 38%, rgba(255,255,255,var(--we-panel-sheen-c)) 100%)') === false);
-  // ── TB4b: 恒定釉光**暗档也要有** —— 2026-10-06 漏网：暗档照抄左栏那条三段渐变，而 TB4a
+  // ── TB4b: 恒定釉光**暗档也要有** —— 漏网：暗档照抄左栏那条三段渐变，而 TB4a
   //    早先的 tbLightRule 显式排除 data-ds-dark-theme ⇒ 那条恰好是 TB4a 定义的失败形态，
   //    却不在被测集合里（深色主题是日常默认档，这个空白比浅色那条更该钉）。理由与算术同 TB4a。
   const tbDarkRule = tbRules.find((r) => r.header.includes('::before')
@@ -685,7 +685,7 @@ function main() {
         === String(declValue(tbLightRule.body, 'background-image')).replace(/\s+/g, ' ').trim(),
     'light=' + (tbSheen.replace(/\s+/g, ' ').slice(0, 52) || '(MISSING)')
       + ' · dark=' + (tbDarkSheen.replace(/\s+/g, ' ').slice(0, 52) || '(MISSING)'));
-  // ── TB4d: 暗档也要有 TB4 —— 2026-10-06 缺口：TB4 只比了**浅档**顶栏与浅档左栏，
+  // ── TB4d: 暗档也要有 TB4 —— 缺口：TB4 只比了**浅档**顶栏与浅档左栏，
   //    TB4b 只管釉光（background-image），暗档的底色与 accent 映射一度无人钉。
   // 暗档与浅档**有意不同**的地方只有两处（此处归一掉、算"同形"，不是放过）：
   //   ① 面底色 --we-surface-tint-light ⇄ -dark
@@ -727,7 +727,7 @@ function main() {
   check('TB6 负对照：发丝线要被判红（判据有牙）',
     tbHasBorder('border-bottom: 1px solid rgba(180, 180, 180, 0.6)') === true);
 
-  // ── TB5: 禁止**嵌套** :has()，且标题栏每条规则只许一个元素锚（2026-10-06 回归）──
+  // ── TB5: 禁止**嵌套** :has，且标题栏每条规则只许一个元素锚（回归）──
   // 这次故障**完全隐形**：文本在、结构对、静态正则也匹配，但壳层 Chromium 拒绝嵌套
   // :has() ⇒ 逗号列表整条丢弃 ⇒ 与"锚点没选对"现象同形。测试环境没有壳层的 Chromium，
   // 无法直接验引擎接受度，所以退而钉住**已知会被它拒绝的写法**。完整经过见 styles.js。

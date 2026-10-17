@@ -29,18 +29,41 @@
  * `definitionsOf` 与**定义形态正则 `DEF`**（`verify-client` ①h/①i 共用同一份，避免两处正则分叉）。
  * CLI 的扫描面**派生**自构建脚本的 `INLINE_MODULES`（同 `verify-client` ①h/①i），不手工列文件名。
  */
-import { readFileSync } from 'node:fs';
+import { existsSync, readFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { stripComments } from './js-text.mjs';
+import { discoverPackages } from './packages.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..', '..');
-// 扫描面 = 与 `verify-client` ①h/①i **同源**：正文 + 构建脚本的 INLINE_MODULES。
+// 扫描面 = 与 `verify-client` ①h/①i **同源**：正文 + 构建脚本的 INLINE_MODULES + 子包配方。
 // 手工清单会只审 2 个模块，人手跑 `audit` 时把其余模块的候选漏掉（判据本体用的一直是全量扫描面，
 // 所以差异只影响**人读工具**的覆盖面）。
 const inlineModuleFiles = () => [...readFileSync(join(ROOT, 'scripts', 'build-client.mjs'), 'utf8')
   .matchAll(/file:\s*'([^']+)'/g)].map((m) => m[1]);
-const FILES = [...new Set(['src/client.js', ...inlineModuleFiles()])];
+/**
+ * 子包浏览器半边的扫描面：**包枚举**来自发现层（`test/tools/packages.mjs` 的 `discoverPackages`），
+ * **文件清单**来自各包 `client.build.json` 的 `inline[].file` —— 与 `build-client.mjs` 的消费面同源，
+ * 子包数从 2 变 N 时这里自动跟着走，不再有"手工清单漏包"的口子。
+ *
+ * 为什么不再靠上面那个 `inlineModuleFiles()` 兜住这 4 个文件：配方是 JSON（双引号），而那个正则只认
+ * **单引号**字面量 ⇒ 构建改数据驱动后会**静默**少捞 4 个文件；且它捞出来的是**相对包目录**的
+ * `src/fx-layer.js`，拼到 ROOT 上指向不存在的路径（实测 `ROOT/src/fx-layer.js` 已不存在 ⇒ 旧口径下
+ * `audit` 会 ENOENT 崩在扫描途中，那 4 个文件的"覆盖"只是名义上的）。这里拼成 `包目录/文件` 的全路径；
+ * "有配方但文件不在盘"由下面的读取直接抛错，不静默跳过。
+ */
+const standaloneInlineFiles = () => {
+  const out = [];
+  for (const p of discoverPackages(ROOT).packages) {
+    if (p.kind !== 'standalone') continue;
+    const recipePath = join(ROOT, p.dir, 'client.build.json');
+    if (!existsSync(recipePath)) continue; // 无浏览器半边的包（如 packages/fonts）本就没有配方
+    const recipe = JSON.parse(readFileSync(recipePath, 'utf8'));
+    for (const mod of recipe.inline || []) out.push(p.dir + '/' + mod.file);
+  }
+  return out;
+};
+const FILES = [...new Set(['src/client.js', ...inlineModuleFiles(), ...standaloneInlineFiles()])];
 const NOTIFY_HELPERS = ['busy', 'done', 'armConfirm', 'disarmConfirm'];
 const WRITES = /(?:setTransient\(|setSetting\(|setFontValues\(|(?<![\w.$])selection\.[\w$]+\s*=(?!=))/;
 /**

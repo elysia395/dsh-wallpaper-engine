@@ -204,7 +204,9 @@ if (liveRoute) {
 // ── Level C: 桥脚本行为（假 realm 跑真源码）─────────────────────────────────
 console.log('Level C — occlusion-bridge.js 行为模拟');
 check('桥脚本语法（node --check）', (() => {
-  try { execFileSync(process.execPath, ['--check', join(root, 'lib', 'webwallgl', 'occlusion-bridge.js')], { stdio: 'pipe' }); return true; }
+  // ⚠️ `stdio: 'ignore'` 而不是 `'pipe'`：某些沙箱（本会话实测）禁止子进程管道捕获 ⇒ EPERM，
+  // 会让这条"语法是否合法"的判据因为**环境限制**而报假红（脚本本身 `node --check` 是通过的）。
+  try { execFileSync(process.execPath, ['--check', join(root, 'lib', 'webwallgl', 'occlusion-bridge.js')], { stdio: 'ignore' }); return true; }
   catch { return false; }
 })());
 /** 假 realm：装一次桥源码，收集 message 监听器，返回派发器。 */

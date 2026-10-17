@@ -91,10 +91,31 @@ const npmStep = (script) => ({ file: null, npm: script, args: [], tier: 'hard', 
 // `verify` 与 `smoke` 里有依赖前一步副作用的守卫（如 `verify-client-sync` 重建产物后
 // `verify-client` 才读它），重排会改变结论。
 
-/** `npm run verify` —— 硬档（挡 PR）。旧链 43 条，其中软档 1 条（媒体桥，探测式 SKIP）。 */
+/**
+ * `npm run verify` —— 硬档（挡 PR），本组的唯一真源。
+ *
+ * ⚠️ 这 5 条**必须在链上**：`verify-inject-contracts` / `verify-component-face` /
+ * `verify-route-ownership` / `verify-settings-namespaces` / `js-text selftest`。
+ * 它们是契约类强判据（注入面 M8、内核分级面、实现归属 M10、设置分区、文本工具自检）；
+ * 少了它们**不会有任何东西变红** —— 链的短路特性会让"链外的强判据"变成摆设。
+ * 它们零依赖、干净检出下全部 exit 0 ⇒ 全部挂 **hard**，不需要 SKIP。
+ * 链成员一变，必须重算 `test/fixtures/verify-chain.json`（`node test/verify-guard-chain.mjs --write-fixture`）
+ * 并把 `test/verify-package-files.mjs` 的 `CHAIN_FLOOR` 收紧到实测值（那里有"删一步即红"的负对照）。
+ */
 const VERIFY_STEPS = [
+  // ⓪ **行尾契约**（D-G1，2026-10-16 收口）：`.gitattributes:9` 的 `* text=auto eol=lf` 此前
+  //    **零判据** —— 而它坏了不会报错，只会让下面一大批"按行锚定的字面替换"负对照**假红**
+  //    （本仓真踩过：一次整轮改动被 CRLF 污染，靠人眼在 `git diff` 里找 `^M` 才发现；Windows 上
+  //    `core.autocrlf=true` 会把文本文件检出成 CRLF）。它是**字节级前提**，故放链首：破了就不该
+  //    继续往下跑（链的短路特性在这里是特性，不是缺陷）。判据 = `git ls-files` 全部入库文件减去
+  //    `.gitattributes` 的 `binary` 白名单与含 NUL 者，逐一验零 `0x0D`；含纯函数负对照。
+  step('test/verify-eol.mjs'),
   step('test/verify-client-sync.mjs'),
   step('test/verify-client.mjs'),
+  // ⚠️ D3 可见面判据必须留在链上：它不在链里时，一次取上游 panel-tabs.js 就能把 D3 gate 丢掉
+  // 而长期没人跑到（链的短路特性会让"链外的强判据"变成摆设）。
+  // 在链上：只要 gate 落点与声明表对不上，链就在这里断。
+  step('test/verify-component-visibility.mjs'),
   step('test/verify-windows-caption.mjs'),
   step('test/verify-transcode-state.mjs'),
   step('test/verify-playback-controls.mjs'),
@@ -125,6 +146,7 @@ const VERIFY_STEPS = [
   step('test/verify-host-paint-scope.mjs'),
   step('test/verify-route-index.mjs'),
   step('test/verify-route-families.mjs'),
+  step('test/verify-inject-contracts.mjs'),   // ← 还原（旧链位：route-families 之后、cache-dir 之前）
   step('test/verify-cache-dir.mjs'),
   step('test/verify-cache-prune.mjs'),
   step('test/verify-we-install-probe.mjs'),
@@ -134,14 +156,17 @@ const VERIFY_STEPS = [
   step('test/verify-theme-layer.mjs'),
   step('test/verify-api-client.mjs'),
   step('test/verify-component-fonts.mjs'),
+  step('test/verify-component-face.mjs'),     // ← 还原（旧链位：component-fonts 之后、fontset 之前）
   step('test/verify-fontset.mjs'),
   step('test/verify-presets.mjs'),
+  step('test/verify-settings-namespaces.mjs'), // ← 还原（旧链位：presets 之后、system-fonts 之前）
   step('test/verify-system-fonts.mjs'),
   step('test/verify-picker-upload.mjs'),
   step('test/verify-picker-model.mjs'),
   step('test/verify-picker-props.mjs'),
   step('test/verify-about.mjs'),
   step('test/verify-token-contract.mjs'),
+  step('test/verify-route-ownership.mjs'),    // ← 还原（旧链位：token-contract 之后、链尾附近）
   step('test/verify-config-store.mjs'),
   step('test/verify-steam-discovery.mjs'),
   step('test/verify-child-kill.mjs'),
@@ -150,6 +175,68 @@ const VERIFY_STEPS = [
   step('test/verify-video-preview.mjs'),
   step('test/verify-asset-paths.mjs'),
   step('test/verify-settings-schema-exports.mjs'),
+  // BUNDLE-SPLIT 7.6 的四条新判据（P2-5b）。全部 hard：
+  //   ① 启动自检：主包 apply 必须先 resolve 每个子包与其行，失败大声报错（I5 是行级静默失败）；
+  //   ② 浏览器半边在场：声明 dsh.client 的子包，其行必须被主 patch 插入、产物按 id 注册且只注册一份；
+  //   ③ 跨包纯度：子包只许 import 主包叶子 subpackage-boot.js + node: 内置，子包之间零 import；
+  //   ④ 开关往返：对 patch 里的每一行做 关 -> 开 -> 再关（整族在场/缺席、互不相交、只动自己那一行、零残留），
+  //      附真源码变异负对照（handOffTeardown -> 恒等 = 只 return dispose 必须变红）。
+  // ②③④ 目前对 P-A 范围数据驱动；缺构建产物时的报错文案会提示"先跑 npm run build"。
+  step('test/verify-subpackage-boot.mjs'),
+  step('test/verify-subpackage-client-half.mjs'),
+  step('test/verify-subpackage-purity.mjs'),
+  step('test/verify-subpackage-toggle-roundtrip.mjs'),
+  // ⑤ 子包包面（P2-5；2026-10-15 收口时**由软档升 hard**）：`packages/*/package.json` 的
+  //    name/version/main/exports/peer 与自带 patch 行、根 `exports` 三连对账（组件行 + 独立子包行两段）。
+  //    按 ADR-0004 的分档判据，它守的是**发布面 / 打包面**：版本漂离主包、peer 范围与主包不逐字相等
+  //    （I6：宿主整次安装被拒 + 回滚）、`dsh.client` ⟺ `exports['./client']` 失配（C2：浏览器半边静默不加载）
+  //    —— 每一条都是"用户会撞上"的后果，不是仓库内务 ⇒ 硬档。判据面与档位依据见 adr/0014 S3。
+  step('test/verify-subpackage-manifests.mjs'),
+  // ⑦ 主包 apply() 的**交接位置**（R-1 的真实形态；P2-6 gate-r1）：出货宿主的 `register` 判重在
+  //    插入**之前** ⇒ 文档点名的"40 处单表达式兜底"没有可失败的中间态（那 20 个文件安全、零改动）；
+  //    真缺陷是 `handOffTeardown(ctx, dispose)` 原本排在 `apply()` 最后一行 —— 中途抛错（最现实：
+  //    上次装载残留撞 `duplicate … route`）那一行永不执行 ⇒ `ctx.effect` 从未登记 ⇒ fiber 不回滚、
+  //    前序各族已注册路由全部残留。判据 = 源码序 + 行为（真 lib/index.js × 正序 mock 宿主，
+  //    残留 31 → 0、注册面 32 条两臂同序逐字节相等），另有 6 条负对照（NC1–NC5 带牙 + 1 条前提②负对照）
+  //    与 4 条覆盖面地板。
+  //    真 cordis 往返仍未跑（`@deepseek-ai/cordis` 是 peer，本轮口径 `npm ci --omit=peer`）⇒
+  //    fiber 回滚语义是**源码推读**，守卫只在文件头如实标注，不升级为"已验证"。
+  step('test/verify-host-teardown.mjs'),
+  // 可选桌宠联动的离线回归；安装和浏览器集成另走显式环境入口。
+  step('test/verify-pet-package.mjs'),
+  step('test/verify-pet-hotplug-host.mjs'),
+  step('test/verify-pet-hotplug-client.mjs'),
+  step('test/verify-pet-rope-entry.mjs'),
+  step('test/verify-pet-tuner.mjs'),
+  step('test/verify-pet-bubble-timing.mjs'),
+  step('test/verify-pet-mascot-motion.mjs'),
+  step('test/verify-pet-egg1-motion.mjs'),
+  step('test/verify-pet-egg1-rebound.mjs'),
+  step('test/verify-pet-sidebar-rebound.mjs'),
+  step('test/verify-pet-egg2-motion.mjs'),
+  step('test/verify-pet-follow.mjs'),
+  // ⑥ 包发现层 `test/tools/packages.mjs` 的**自检**（P-B 基石）：上面这一批"包面"判据
+  //    （client-sync 的产物集合 / bundle-rows 的行⇄包对账 / subpackage-manifests 的清单面 /
+  //    host-route-index 一族的行·包解析）与 `scripts/build-client.mjs` 都读它 ⇒ 它自己坏了会
+  //    连带整批判据失真（与下面 js-text 同理，属"判据底座的底座"）。11 条负对照全部经同一个
+  //    `enumerateViolations`，另有 `FLOORS` 地板防"包 / 产物 / 行数静默缩水"。
+  step('test/tools/packages.mjs', ['selftest']),
+  // ← 还原（旧链最末一步）：`js-text` 的**自检**（字符串感知的剥注释/作用域/函数体提取，
+  // 是上面一批"文本判据"的共同底座 ⇒ 它自己坏了会连带整批判据失真）。
+  step('test/tools/js-text.mjs', ['selftest']),
+  // ⑧ 链的**形状自检**（R-4 收口：由 docs 软档升 hard）。它把 MANIFEST 与
+  //    `test/fixtures/verify-chain.json` 逐条对账（顺序 / 档位 / 参数 / 文件名），另判每组硬档地板、
+  //    每个 file 真实存在、`all` = build + 三组有序拼接，以及 ⑤「守卫面上脱链者必须有代码内理由」。
+  //    原先它挂在 docs 组，而 CI 的 `verify:docs` 步是 `continue-on-error: true` ⇒ 把链上头两步
+  //    交换一下，**硬档可以全绿**、只有软档出声。"链的形状"是发布面（静默掉一条守卫 = 一条硬档
+  //    判据无声脱离 PR 门禁）⇒ 按 ADR-0004 归硬档，放本组末尾（它是全组的自检，读的是 MANIFEST
+  //    而非某一步的产物；`--list-json` 只打印不执行，不会递归）。
+  step('test/verify-guard-chain.mjs'),
+  // ⑨ CI 步骤表自检（R-7，task-11 交付）：`test/tools/ci-workflow.mjs` 的行扫描 + 判据（序列 / 脚本
+  //    存在性 / `continue-on-error` 只在 verify:docs / 产物出库与无尾随空白两步真的在跑 / install 在
+  //    第一条 npm run 之前），正判据与 10 条负对照共用一个纯函数（变异喂内存文本，不碰真 workflow）。
+  //    与 ⑧ 同理归硬档：删掉 `verify:static` 或 `verify:bridge` 这类改动只有它能拦。
+  step('test/verify-ci-steps.mjs'),
 ];
 
 /** `npm run verify:docs` —— 软档（只出声）。全部经 warn-only 降级。 */
@@ -158,8 +245,10 @@ const DOCS_STEPS = [
   step('test/verify-reachability.mjs', [], 'soft'),
   step('test/verify-retired-lines.mjs', [], 'soft'),
   step('test/verify-dead-declarations.mjs', [], 'soft'),
+  // 未定义引用普查（"用了但没 import/声明"）：先按软档出声若干轮，再有据可依地议升 hard
+  // （这一类；`node --check` 与聚焦判据都照不到它）。
+  step('test/verify-undefined-refs.mjs', [], 'soft'),
   step('test/verify-guard-map.mjs', [], 'soft'),
-  step('test/verify-guard-chain.mjs', [], 'soft'),
 ];
 
 /** `npm run smoke` —— 节点级行为冒烟（硬档）。 */

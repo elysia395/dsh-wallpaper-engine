@@ -1,6 +1,7 @@
 # docs — 决策与用户文档
 
-> **English**: [`en/README.md`](./en/README.md) —— 英文版索引（`adr/` **有意不译**，见该文件开头的说明）。
+> **English**: 用户向文档的英本在 [`en/`](./en/)（`adr/` 与维护者向文档**有意不译**）；英文门面在仓库根 [`README.en.md`](../README.en.md)。
+> 原先的 `en/README.md`（维护者向索引的英文镜像）已按本节规则撤除。
 >
 > 本项目采用**「代码即真相」**文档模式：渲染 / 逆向 / 根因知识直接内联在对应实现文件的代码注释里。
 > `docs/` 只保留**决策**（含验收判据）、**规范**与**用户文档**；实现机制不在这里。
@@ -58,6 +59,7 @@
 | 6 | **守卫判据只针对代码，不针对散文** —— 断言「源码里不再有 X」之前先剥注释 | [`DEV-GUIDE.md`](./DEV-GUIDE.md) §4.7 |
 | 7 | **跳过不得与通过同形** —— 缺前置要么红，要么要求显式 `--allow-skip`；静默跳过等于悄悄失去覆盖 | `test/verify-media-bridge.mjs`（`--provision` / `--allow-skip`） |
 | 8 | **决策进 ADR，机制进文件头** —— 有备选方案、有人付了代价的取舍写成 [`adr/`](./adr/)；"怎么实现的"写在对应实现文件的头注释 | 无守卫（写作约定）；格式见 [`adr/README.md`](./adr/README.md) |
+| 9 | **活文档不引用归档件** —— 归档区只作记录；活文档（含 `docs/wip/` 与 `src/**`、`test/**` 的注释）**不出现**指向归档的路径或归档条目号。需要那条信息就把它**写进活文档**：机制 → 实现文件头、判据 → `test/`、取舍 → `adr/`、历史 → `CHANGELOG.md` 或 git 历史。**例外**：本文与 [`adr/README.md`](./adr/README.md)（两级索引要列归档件）、`CHANGELOG.md`（账本）、命令与 pathspec 里的路径 | 无守卫（写作约定）。复算：`git grep -n 'archive/' -- ':!docs/archive' ':!docs/README.md' ':!docs/adr/README.md' ':!docs/CHANGELOG.md' ':!docs/en/CHANGELOG.md'` |
 
 **入库文档不得引用本机专用的未跟踪路径** —— 读者打不开的东西不要指向它。唯一豁免是 `docs/archive/`
 （历史记录，顶部已声明不反映现行实现）与其取证线索。
@@ -70,7 +72,6 @@
 | [CHANGELOG.md](./CHANGELOG.md) | **变更记录** —— 逐版本功能与修复（新版在前）。**英文版在 [`en/CHANGELOG.md`](./en/CHANGELOG.md)**（与其它文档同布局：basename 相同、顶部互换链接） |
 | [HOW-IT-WORKS.md](./HOW-IT-WORKS.md) | **工作原理** —— 出图来源链（实时渲染 → 内嵌 MP4 → 实时抓帧 → 自定义画面 → 空态）、宿主 / 客户端分工、**字体集通道**、遮挡暂停与客户端异常留痕、HTTP 路由表 |
 | [TROUBLESHOOTING.md](./TROUBLESHOOTING.md) | **排障** —— 安装失败排查与「症状 → 先看哪里」速查 |
-| [TRIAGE.md](./TRIAGE.md) | **问题分诊与认领** —— 标签体系（`status:*` / `area:*`）、`/assign` 自动认领、维护者分诊动作与贡献者路径 |
 | [COEXISTENCE.md](./COEXISTENCE.md) | **共存** —— 与皮肤中心 / 侧栏插件 / 其它 UI 插件一起装时的冲突矩阵（症状 → 嫌疑机制 → 三步自查）、「玻璃关不掉」的真相与共存四态的目标形态 |
 
 **分层约定**：门面 `README.md` / `README.en.md` 只放**不随版本变化、且新访客决策必需**的事实；
@@ -82,12 +83,15 @@
 | 文档 | 内容 |
 |---|---|
 | [CODE-STRUCTURE.md](./CODE-STRUCTURE.md) | **代码结构与边界** —— 两份文档合并而成（原 `MODULE-LAYOUT.md` ⊕ `ARCHITECTURE.md`）：`lib/` 与 `src/` 的分工规范、目录约定与准入门槛、两个半边与路由族、构建期内联、启停生命周期、数据流、**状态真源清单**、层间边界表、在册守卫 |
+| [ARCHITECTURE-SPLIT.md](./ARCHITECTURE-SPLIT.md) | **本分支的宿主半边形态：门面重写记录** —— "主包 + 组件行 + 内核化"三层各自是什么、门面现在只剩什么、能力分别搬去哪（组件目录 / 内核 / 叶子模块）、与上游单包形态的差异与迁移路径、组件行归属与开关的判据在哪 |
+| [SUBPACKAGE-GRAPH.md](./SUBPACKAGE-GRAPH.md) | **子包依赖图（人工维护快照，无判据）** —— 行树（组件行 vs 独立子包行）、**两张平面**的 Mermaid 图、允许/禁止边表、登记点矩阵（每个包 × 每个登记点）；规范条款在 [`adr/0014`](./adr/0014-subpackage-contract.md)，本文只画现状，文头给复算命令 |
 | [DEV-GUIDE.md](./DEV-GUIDE.md) | **二次开发指南** —— "怎么加一个 X"的配方（加路由 / 加设置项 / 加浏览器端代码）；**§4 是验证与测试**（原 `TEST-LAYOUT.md` 并入）：三层结构、两档判据、运行矩阵、覆盖范围、`test/tools/` 清单、写判据的八条约定 |
 | [FONT-SYSTEM.md](./FONT-SYSTEM.md) | 字体系统的通道分工、不变量、扩展步骤、进浏览器包的约束 |
 | [DSH-UI-INTERFACES.md](./DSH-UI-INTERFACES.md) | **我们去依赖了 DSH 的哪些 UI 接口** —— 按"客户端产物 / node 宿主 / 桌面壳 / 第三方插件"四层记账：哪些是宿主刻意提供的稳定契约（设计令牌、源码作者写的数据属性）、哪些是构建哈希或第三方私有类名、哪些**与预想不同**（宿主有正式的槽系统而我们钉渲染后的 DOM；`data-dsh-desktop-mode` 其实是桌面壳的 URL 参数）。含**复算方法**（asar 直读 + 偏移→包索引），升级前照它重跑 |
 | [ROUTE-INDEX.md](./ROUTE-INDEX.md) | 宿主路由的**生成索引**（由 `test/tools/host-route-index.mjs` 重算并逐字节比对 —— 手写必烂） |
 | [GUARD-MAP.md](./GUARD-MAP.md) | **守卫 ↔ 模块的双向派生映射**（"改了某个模块该跑哪几条"）：守卫→模块、模块→守卫两张表，由 `test/tools/guard-targets.mjs` 从**守卫代码里**派生（`--write` 重算，逐字节比对；生成物，不手改） |
 | [TOKEN-CONTRACT.md](./TOKEN-CONTRACT.md) | **`--dsw-*` 令牌契约的生成索引**（我们改写了哪些宿主设计令牌、各挂什么门控、无门控白名单）—— 由 `test/tools/token-contract.mjs` 重算并逐字节比对（`test/verify-token-contract.mjs` 守着，白名单封闭；生成物，不手改）—— 共存耦合面的账本，见 [`COEXISTENCE.md`](./COEXISTENCE.md) |
+| [TRIAGE.md](./TRIAGE.md) | **问题分诊与认领** —— 标签体系（`status:*` / `area:*`）、`/assign` 认领与失联回收、PR 与 issue 的关联要求；机器人实现 `.github/workflows/issue-claim.yml`，治理总纲见 issue [#212](https://github.com/elysia395/dsh-wallpaper-engine/issues/212) |
 
 > **上表的英文镜像已撤除**（维护者向文档只留中文，理由见 §语言结构；`ROUTE-INDEX.md` / `GUARD-MAP.md` / `TOKEN-CONTRACT.md` 是生成物，同样只出中文）；用户向文档仍中英成对。
 
@@ -115,7 +119,10 @@
 | [0008](./adr/0008-glass-config-two-state.md) | 玻璃配置收成**两态**（"要不要玻璃"整层退役；每面一个「独立配置」= `inherit` / `custom`）并定下**门控策略**：恒挂属性做 CSS 侧的证书，**简化配置 / 高级配置**按 `ctx.surface` 分档（D4） |
 | [0009](./adr/0009-system-fonts-from-the-os.md) | 本机字体清单**由宿主问操作系统**（枚举 + 缓存，浏览器侧只当读者），而不是在进程内解析字体文件或从浏览器枚举；取不到权威来源就如实标 `approximate` |
 | [0010](./adr/0010-glass-off-revisit-four-states.md) | **修订 ADR-0008 的「放弃关玻璃」**：令牌层整组回退的前置条件已成立（账本 [`TOKEN-CONTRACT.md`](./TOKEN-CONTRACT.md) + 封闭白名单守卫）；目标形态 = **一个模式键四态**（full / glass-only / wallpaper-only / off），实施分三批、主开关最后 |
-| [0012](./adr/0012-artifact-untracking.md) | **构建产物出库**：`lib/client.js` 不入库（改由 build / prepack 现场构建），README 展示图迁至 Release 资产外链；修订 ADR-0003 的 D6 |
+| [0011](./adr/0011-preset-full-snapshot.md) | 预设从**玻璃子集快照**升为**整机配置快照**（键集由 `KINDS` 派生、资产按需携带、旧预设作废、新增导入导出） |
+| [0012](./adr/0012-artifact-untracking.md) | 构建产物出库（`lib/client.js` 不入库，改由 build / prepack 现场构建）＋ README 展示图迁至 Release 资产外链；修订 ADR-0003 的 D6 |
+| [0013](./adr/0013-bundle-multi-component-rows.md) | **插件拆分（现行唯一版本）**：终态 = **多包**（主包 + 子包，版本一致；D6/D8 于 2026-10-14 就地改写），单包多行是**起点**；核心目标 = **降复杂度 / 锚定模块边界 / 解耦合**三件并列；**行级开关 = 宿主路由 ＋ 该组件的浏览器可见面**（可见面由宿主行状态派生、双向对账、"宁可显示不可静默消失"）；**不做**每组件一格客户端开关 / 包内懒块。**旧 0012–0016（该决定的旧编号）已归档**到 [`archive/adr/`](./archive/adr/)；本决定**重编号 0012 → 0013**（让位给上游的 `0012-artifact-untracking`） |
+| [0014](./adr/0014-subpackage-contract.md) | **子包规范**：`packages/<pkg>` 独立子包行的成文契约（条款号 `S*`）—— 术语（独立子包行 vs 组件行、宿主/浏览器半边）、布局、清单契约、行与接线、**依赖方向（两张平面 + 禁止边）**、生命周期、开关与重启、发布形态、登记点；判据只加在**代码与磁盘**，**不新增任何 markdown 判据**；依赖图是人工维护的 Mermaid（[`SUBPACKAGE-GRAPH.md`](./SUBPACKAGE-GRAPH.md)） |
 
 ## 已归档（`archive/`，只作记录）
 
@@ -140,6 +147,7 @@
 
 | 文档 | 内容 |
 |---|---|
+| [adr/](./archive/adr/README.md) | **拆分子插件重构的决策档案**：`0012`–`0016` 五份（含旧版 0012）已按用户口径**合并**进现行的 [`adr/0013`](./adr/0013-bundle-multi-component-rows.md)，旧件只作记录、各带**旧编号 → 现行 `D*` 编号**的映射 |
 | [wip/GLASS-CONFIG-REFACTOR.md](./archive/wip/GLASS-CONFIG-REFACTOR.md) | **玻璃配置重构（用户口径 → 审计 → 分期实施 → 收口，整体归档）** —— 现状测绘（§4 的实测取证）· 目标架构（§10.5）· 分期 R0–R4 与三轮实测修复（§10.9–§10.24）。**机制与不变量已留在 `src/glass.js` / `src/glass-panel.js` / `lib/settings-schema.js` 的文件头**，判据在 `test/verify-glass-surfaces.mjs`（每条带负对照；**组数与条数由该守卫自己报**，文档不抄），取舍与被证伪的方案在 [`adr/0008`](./adr/0008-glass-config-two-state.md) |
 | [wip/OPEN-ITEMS.md](./archive/wip/OPEN-ITEMS.md) | **重构账本（主动部分已结项，整体归档）** —— §2 现状基线（上界棘轮）、§3.1–§3.3 现状锚点、§5 状态列、§7 触发线、§9.1 令牌层约束。归档时活着的内容已挪走：**行为缺口 → [`TROUBLESHOOTING.md`](./TROUBLESHOOTING.md)**，**令牌层约束 → 守卫**（`verify-readability` / `verify-glass-compositing`）。⚠️ **状态列从来没有机器兜底**（账本守卫随 [`adr/0006`](./adr/0006-comment-discipline-as-written-convention.md) 下线），读它按"未经核对的记录"对待 |
 | [wip/POST-REFACTOR-AUDIT.md](./archive/wip/POST-REFACTOR-AUDIT.md) | **收官后审计（过程记录）** —— 2026-09-29 重构结项后的只读复核，**只收工程债**：宿主请求体上限 / 编码正确性 / 无界状态 / 中断泄漏 / 并发删产物、客户端启动链与状态拆除、注释与文档失真，以及**判据缺口**（为什么当时全绿却漏掉这些）。它开出的条目（账本的 P4 系列）**已全部收口** |
@@ -149,9 +157,10 @@
 | [audits/F0-THEME-SERVICE-CHECKLIST.md](./archive/audits/F0-THEME-SERVICE-CHECKLIST.md) | F0 真机确认（已关闭）—— 结论（`V1–V10` 约束）在账本 §9.1；原始证据在本地未跟踪目录 |
 | [audits/P3-11-PLAN.md](./archive/audits/P3-11-PLAN.md) | `WallpaperPicker` 拆分的过程记录（**已完成**：模型 / 模态框 / 属性面板三块都搬走）—— 开工前的事实核对、先决断言清单与收口时的牙齿证明；结论在账本的 `P3-11` 行，判据在守卫本身 |
 | [audits/LOGGING-PLAN.md](./archive/audits/LOGGING-PLAN.md) | 日志分级与提示通道的过程记录（**已完成**：G0 + P1–P5）—— 三档 `error` / `warn` / `info`（默认 `warn`）+ 一条独立的成功提示通道。**机制与不变量已留在 `lib/log.js` / `lib/notice.js` / `lib/routes/diag.js` 的文件头**，判据在 `test/verify-logging.mjs` |
-| [audits/F3-PLAN.md](./archive/audits/F3-PLAN.md) | 字体集文件化的过程记录（**已完成**：阶段 0–4）—— 随包预设 · 两层存储 · 人工切换 · 导入导出。**机制与不变量已留在 `lib/routes/fontsets.js` / `src/fontset-store.js` / `src/fontset-editor.js` / `lib/settings-schema.js` 的文件头**，判据在 `test/verify-fontset.mjs` + `test/fontset-load-smoke.mjs` |
+| [audits/F3-PLAN.md](./archive/audits/F3-PLAN.md) | 字体集文件化的过程记录（**已完成**：阶段 0–4）—— 随包预设 · 两层存储 · 人工切换 · 导入导出。**机制与不变量已留在 `packages/fonts/lib/routes/fontsets.js` / `src/fontset-store.js` / `packages/fonts/src/fontset-editor.js` / `lib/settings-schema.js` 的文件头**，判据在 `test/verify-fontset.mjs` + `test/fontset-load-smoke.mjs` |
 | [audits/TEST-ANTIPATTERN-AUDIT.md](./archive/audits/TEST-ANTIPATTERN-AUDIT.md) | **测试框架的反模式审计（逐条现状）** —— `test/` 的 72 个 `.mjs`（顶层 57 + `test/tools/` 15）与 2 份夹具按 A1–A4（面向结果编程）/ B1–B4（无意义测试）/ C1–C6（自欺欺人）三族口径逐条过了一遍：每条守什么、**牙齿**（`yes` / `no` / `partial`，即"产品真按它声称守护的方式回归时它会不会红"）如何、现址 `file:line` 在哪。**106 处发现已全部定案**（R 47 / H 33 / D 20 / 不改·声明 5 / 取消 2），未决 0 |
 | [audits/TEST-ANTIPATTERN-FIX-PLAN.md](./archive/audits/TEST-ANTIPATTERN-FIX-PLAN.md) | 同一轮审计的**遗留与风险清单**（收口后重写为"现在还有什么问题"）—— 只剩仍未解决或本机证明不了的项（F4/F5 两个手动工具、harness 与 e2e 的覆盖空洞、M16 只剩正判据、设置夹具是漂移棘轮、`%TEMP%` 里删不掉的探针）+ 需要决定的事 + 复核命令。逐条现状在审计报告里，不在这里重复 |
+| [wip/](./archive/wip/) 的**第二期收口批** | **追版本第二期（追链 / 文档注释同步 / 测试锚定）的过程记录整体归档**：`TEST-ANCHORING.md`（task-8 判据锚定）· `TEST-CREDIBILITY-AUDIT.md`（对抗性审计 + 修复落地账）· `UNWIRED-MODULES.md`（task-9 孤儿盘点）· `DOC-DRIFT-REPORT.md` + `DOC-ROT-REPORT-2.md` + `DOC-ROT-REPORT-3.md`（三轮文档 / 注释腐化复核）· `COMPONENT-TOGGLE-REPORT.md`（P2-11 开关语义实测取证）· `ISSUE-190-FX-PERF-DESIGN.md`（#190 光效层治理）· `ISSUE-AUDIT-148PLUS.md`（issue ≥148 核查；**残留 6 条未做项写在它的归档横幅里**）。各件的结论已分头落位：机制 → 实现文件头注释、判据 → `test/`、取舍 → [`adr/`](./adr/README.md) |
 
 ### 其它归档
 
@@ -168,13 +177,15 @@
   [`archive/wip/OPEN-ITEMS.md`](./archive/wip/OPEN-ITEMS.md)（**都不反映现行实现**）。
   **尚在进行的工作**的计划可临时住 `docs/wip/`（**保留目录**：它随工作项的开工与收口一进一出，
   门槛与去向见 §目录的寿命规则；**里面放了哪些文件不写在这里** —— 那是会漂的清单，按目录自身枚举即得）；
-  最近一次收口的是
+  最近一次收口的是 [`archive/wip/`](./archive/wip/) 的**第二期收口批**（8 份过程记录 + issue ≥148 核查，
+  见上表最后一行）；再往前是
   [`archive/wip/GLASS-CONFIG-REFACTOR.md`](./archive/wip/GLASS-CONFIG-REFACTOR.md)
   （玻璃配置重构：R0–R4 + 三轮实测修复 + 收口，**已成历史**，结论已按上表分头落位）；
   再往前是 [`archive/wip/PLAN.md`](./archive/wip/PLAN.md)（`src/` 缺陷 · 注释审计 · 目录裁决 · 守卫重构）；
   **本机专用的临时待办不入库**，也不被任何入库文档引用 —— 读者打不开的东西不指向它。
 - 开发/发布：仓库根 `CONTRIBUTING.md`（含「`lib/client.js` 到底是什么」）；用户门面：`README.md` / `README.en.md` / `README.beginner.md`。
-- `images/`：本地工作截图目录 —— README 展示图已迁至 Release 资产（`media-v1`）外链，仓库不保留。
+- `images/`：**已不是门面截图的来源** —— 展示图走 Release 外链（取舍见 [`adr/0012`](./adr/0012-artifact-untracking.md)），
+  该目录在 `.gitignore` 内、仓库里没有它（本地可能残留构建/截图产物，不入库）。
 - **已溶解进代码**的文档（结论进注释）：`RENDERER-OFFICIAL-STRUCTURE.md`、`RENDER-ISSUES-ANALYSIS.md`、
   `REFACTOR-ROUND-2026-08-28.md`、`REFACTOR-STATIC-FRAME.md`；
   废弃方向（`HOOK-PROGRESS` / `V6-DUMP-ANALYSIS` / `EYE-PREDICTION` / `FIX-PLAN-AMYA` /

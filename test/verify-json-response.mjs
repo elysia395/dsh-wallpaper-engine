@@ -25,9 +25,14 @@
  *     （`upload.js` / `scene-frame.js` 各一处）—— 抹掉样板后还剩 `if (failed) return;` 等语句。
  * 判据面 = `lib/` 下**除共享实现外**的 `.js`：命中必须为 **0**。
  *
- * 调用点不做"名单"：从磁盘枚举 `lib/routes/*.js`，凡是出现 `sendJson(` 的文件都必须
- * `import … from '../json-response.js'`（防"另一个同名东西"），并设**棘轮**（调用点只许增，
- * 防"只剩一份实现"靠删调用点达成 —— 与 verify-body-caps 的 `READER_FLOOR` 同源）。
+ * 调用点不做"名单"：从磁盘枚举路由族文件（`lib/routes/*.js` ∪ 组件目录直接子文件 —— P2-8 起
+ * 实现随组件走），凡是出现 `sendJson(` 的文件都必须属于下面**三条正当来路**之一：
+ *   a) 从 `../json-response.js` 引入共享实现；
+ *   b) 经叶子 `subpackage-boot.js` 的 `httpView` 具名视图取（历史形态，**判据保留**，不因真文本收敛而删）；
+ *   c) **跨包服务视图**（§5.1 ① 之后子包路由族的唯一形态）：本族 `DEPS` 声明 `'http'` 且真的用
+ *      `c.http.sendJson(`，同时**包入口**把 `http: host.http` 传下来（`host = ctx.<HOST_SERVICE_NAME>`）。
+ * 三条来路都设**棘轮**（调用点只许增，防"只剩一份实现"靠删调用点达成 —— 与
+ * verify-body-caps 的 `READER_FLOOR` 同源）。判据面 = `lib/**` ∪ `packages/<pkg>/lib/**`（生成物除外）。
  *
  * ── 判据必须有牙（正/负对照喂**同一个**判据函数）──────────────────────────────
  *   · 覆盖面地板：扫到的 `lib/` 下 .js 文件 ≥ 20 个（解析退化 ⇒ 当场红）；
@@ -49,6 +54,8 @@ import { dirname, join, relative } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { gunzipSync } from 'node:zlib';
 import { stripComments } from './tools/js-text.mjs';
+// 路由族文件面（`lib/routes/*.js` ∪ 组件目录直接子文件）的**同一份**枚举真源。
+import { routeModuleFiles } from './tools/host-route-index.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const LIB = join(ROOT, 'lib');
@@ -56,12 +63,13 @@ const LIB = join(ROOT, 'lib');
 /** 扫描面排除：vendored 第三方（不归我们维护）与本半边的生成物。 */
 const EXCLUDE_DIRS = new Set(['vendor', 'webwallgl']);
 const EXCLUDE_FILES = new Set(['client.js']);
+const EXCLUDE_FILE_RE = /^client(\.[\w.-]+)?\.js$/;
 
 /** 唯一允许出现"内联 JSON 应答助手"的文件（判据的**收敛终点**）。 */
 const SOLE_IMPLEMENTATION = 'lib/json-response.js';
 
 /**
- * 棘轮：`lib/routes/` 下 `sendJson(` 的调用点下限。
+ * 棘轮：路由族文件（`lib/routes/*.js` ∪ 组件目录直接子文件）下 `sendJson(` 的调用点下限。
  * P4-14 迁移后实测 16 处（10 个文件的薄别名 + `fontsets`/`presets` 里各 2 处直呼）。
  * **只许增**：它防的是"靠删调用点凑出一份实现"这种假收敛。
  */
@@ -79,7 +87,7 @@ function walk(dir, out = []) {
     if (entry.isDirectory()) {
       if (EXCLUDE_DIRS.has(entry.name)) continue;
       walk(p, out);
-    } else if (entry.name.endsWith('.js') && !EXCLUDE_FILES.has(entry.name)) {
+    } else if (entry.name.endsWith('.js') && !EXCLUDE_FILES.has(entry.name) && !EXCLUDE_FILE_RE.test(entry.name)) {
       out.push(p);
     }
   }
@@ -168,6 +176,51 @@ function inlineJsonHelpers(src) {
   return out.sort((a, b) => a.line - b.line);
 }
 
+/**
+ * 叶子具名视图（`lib/subpackage-boot.js` 的 `httpView`）—— 子包路由族取 `sendJson` 的**唯一**正当来路。
+ * 跨包不许直接 import 另一包的模块级导出（BUNDLE-SPLIT §5.2 四条反模式），只许走这一个裸子路径。
+ */
+const LEAF_REL = 'lib/subpackage-boot.js';
+
+/**
+ * 跨包服务名真源：`lib/subpackage-boot.js` 的 `HOST_SERVICE_NAME`（不抄字面量 —— 名字漂移由身份对账抓）。
+ * 装载失败不回退成"永远放行"，由下面的 check 判红。
+ */
+const bootMod = await import(pathToFileURL(join(ROOT, LEAF_REL)).href);
+const HOST_SERVICE_NAME = typeof bootMod.HOST_SERVICE_NAME === 'string' ? bootMod.HOST_SERVICE_NAME : '';
+
+/**
+ * 调用点来路正当性（生产扫描与负对照走**同一份**判据）：文件里出现 `sendJson(` 时，
+ *   · a) 从共享实现 `../json-response.js` 引入；或
+ *   · b) 从叶子 `subpackage-boot.js` 引入 `httpView` 并 `const { sendJson … } = httpView;`（保留）；或
+ *   · c) **跨包服务视图**：本族 `DEPS` 含 `'http'`、文件真的用 `c.http.sendJson(`（或从 `c` 解构出的
+ *     `http` 上直呼），且**包入口**把 `http: <host>.http` 传下来（`<host> = ctx.<HOST_SERVICE_NAME>`）。
+ * 返回 `{ ok, why }`。
+ * @param {string} code 路由族文件源码（已剥注释）
+ * @param {{ entryCode?: string }} [opts] 该族的包子包入口源码 —— c 来路要有它才能判"面真的传下来了"
+ */
+function sendJsonProvenance(code, opts) {
+  const o = opts || {};
+  if (/from\s+['"][^'"]*json-response\.js['"]/.test(code)) return { ok: true, why: '共享实现' };
+  const leafImport = new RegExp('from\\s+[\'"][^\'"]*subpackage-boot\\.js[\'"]').test(code);
+  const viewBind = /const\s*\{[^}]*\bsendJson\b[^}]*\}\s*=\s*httpView\s*;/.test(code);
+  if (leafImport && viewBind) return { ok: true, why: '叶子 httpView' };
+  // c) 跨包服务视图：三条同时成立才算（缺一条 = 判红；"看见 .http 就放行"被负对照钉死）。
+  const depsHttp = /export\s+const\s+DEPS\s*=\s*\[([^\]]*)\]/.exec(code);
+  const depsHasHttp = Boolean(depsHttp) && /['"]http['"]/.test(depsHttp[1]);
+  const usesHttp = /(?<![\w.$])c\s*\.\s*http\s*\.\s*sendJson\s*\(/.test(code)
+    || (/\{\s*[^}]*\bhttp\b[^}]*\}\s*=\s*c\b/.test(code) && /(?<![\w.$])http\s*\.\s*sendJson\s*\(/.test(code));
+  const entryCode = typeof o.entryCode === 'string' ? o.entryCode : '';
+  const recv = new RegExp('const\\s+([A-Za-z_$][\\w$]*)\\s*=\\s*ctx\\s*\\.\\s*' + HOST_SERVICE_NAME + '\\b').exec(entryCode);
+  const entryPassesHttp = Boolean(recv) && new RegExp('\\bhttp\\s*:\\s*' + recv[1] + '\\s*\\.\\s*http\\b').test(entryCode);
+  if (depsHasHttp && usesHttp && entryPassesHttp) return { ok: true, why: 'c.http 宿主视图' };
+  const why = [];
+  if (leafImport) why.push('引入了叶子但没有 `const { sendJson } = httpView;`');
+  else why.push('既没引入共享实现、也没走叶子 httpView');
+  if (depsHasHttp && usesHttp && !entryPassesHttp) why.push('DEPS 有 http 且用了它，但包入口没有把 `http: <host>.http` 传下来');
+  else if (depsHasHttp && !usesHttp) why.push('DEPS 声明了 http 但文件里没用 `c.http.sendJson(`');
+  return { ok: false, why: why.join('；') };
+}
 // ── ① 判据自身的正/负对照（先证明它有牙，再看真实代码）──────────────────────
 const INLINE_COPY = [
   'const json = (code, payload) => {',
@@ -207,7 +260,15 @@ const THIN_ALIAS = "const json = (code, payload) => sendJson(res, code, payload)
 }
 
 // ── ② 真实代码：从磁盘枚举（**共享实现本身不在判据面内**）────────────────────
-const files = walk(LIB).sort().filter((f) => relative(ROOT, f).split('\\').join('/') !== SOLE_IMPLEMENTATION);
+// 判据面 = `lib/**` ∪ `packages/<pkg>/lib/**`：P-A 起路由族随子包行出户（fonts 的两族），只扫 `lib/` 会让
+// 子包里的内联副本**静默脱离**本判据（面塌陷 ⇒ 判据恒真）。子包的 `src/**` 是浏览器半边，不进 Node 侧判据面。
+const PKGS = join(ROOT, 'packages');
+const packageLibFiles = existsSync(PKGS)
+  ? readdirSync(PKGS, { withFileTypes: true }).filter((e) => e.isDirectory()).sort()
+    .flatMap((e) => { const d = join(PKGS, e.name, 'lib'); return existsSync(d) ? walk(d) : []; })
+  : [];
+const files = [...walk(LIB), ...packageLibFiles].sort()
+  .filter((f) => relative(ROOT, f).split('\\').join('/') !== SOLE_IMPLEMENTATION);
 const hits = [];
 for (const file of files) {
   const rel = relative(ROOT, file).split('\\').join('/');
@@ -215,13 +276,19 @@ for (const file of files) {
   for (const h of inlineJsonHelpers(text)) hits.push({ ...h, file: rel });
 }
 
-console.log(`\n  扫描面：lib/**/*.js（排除 ${[...EXCLUDE_DIRS].join(' / ')} / ${[...EXCLUDE_FILES].join(' / ')}`
-  + ` / ${SOLE_IMPLEMENTATION}） —— ${files.length} 个文件`);
+console.log(`\n  扫描面：lib/**/*.js ∪ packages/<pkg>/lib/**/*.js（排除 ${[...EXCLUDE_DIRS].join(' / ')}`
+  + ` / ${[...EXCLUDE_FILES].join(' / ')} / ${SOLE_IMPLEMENTATION}） —— ${files.length} 个文件`);
 console.log(`  内联 JSON 应答助手：${hits.length} 处`);
 for (const h of hits) console.log(`    · ${h.file}:${h.line}（${h.name}）`);
 console.log('');
 
-check('覆盖面：lib 下扫到 ≥ 20 个 .js（判据面为空即失败）', files.length >= 20, `实测 ${files.length}`);
+check('覆盖面：判据面扫到 ≥ 20 个 .js（lib ∪ packages/<pkg>/lib；判据面为空即失败）', files.length >= 20, `实测 ${files.length}`);
+// 覆盖面地板（子包那一半）：随子包行出户的路由族必须在判据面内 —— walk(packages) 静默返回空时这里点名。
+const judgedRels = files.map((f) => relative(ROOT, f).split('\\').join('/'));
+const subpackageRouteRels = routeModuleFiles().filter((rel) => rel.startsWith('packages/'));
+check('覆盖面：判据面包含全部子包路由族（塌回 `lib/`-only ⇒ 红）',
+  subpackageRouteRels.length > 0 && subpackageRouteRels.every((rel) => judgedRels.includes(rel)),
+  '子包路由族 ' + subpackageRouteRels.length + ' 个 · 面内 packages 文件 ' + judgedRels.filter((r) => r.startsWith('packages/')).length + ' 个');
 check(`唯一实现：${SOLE_IMPLEMENTATION} 之外**零**份内联 JSON 应答助手`,
   hits.length === 0, hits.map((h) => `${h.file}:${h.line}(${h.name})`).join(', ') || '零副本');
 
@@ -252,26 +319,104 @@ check(`唯一实现：${SOLE_IMPLEMENTATION} 之外**零**份内联 JSON 应答�
 
 // ── ④ 每个调用点都必须来路正当（`sendJson(` ⇒ 必须 import 自共享实现）────────
 {
-  const ROUTES = join(LIB, 'routes');
-  const routeFiles = existsSync(ROUTES)
-    ? readdirSync(ROUTES).filter((n) => n.endsWith('.js')).sort().map((n) => 'lib/routes/' + n)
-    : [];
+  // 路由族文件面走 `host-route-index.mjs` 的同一份枚举真源：P2-8 把四个族搬进组件目录后，
+  // 只扫 `lib/routes/` 会让它们**静默脱离**本判据（§10 风险 12 的同款形态）。
+  const routeFiles = routeModuleFiles();
   const callers = [];
   for (const rel of routeFiles) {
     const raw = readFileSync(join(ROOT, rel), 'utf8');
     const code = stripComments(raw);
     const calls = (code.match(/\bsendJson\s*\(/g) || []).length;
     if (!calls) continue;
-    callers.push({ rel, calls, imported: /from\s+['"][^'"]*json-response\.js['"]/.test(code) });
+    // c) 来路要**包入口**当证据：包入口把 `http: host.http` 传下来，跨包面才算真的到位。
+    const pkg = /^packages\/([^/]+)\//.exec(rel);
+    const entryRel = pkg ? `packages/${pkg[1]}/lib/index.js` : '';
+    const entryCode = entryRel && existsSync(join(ROOT, entryRel))
+      ? stripComments(readFileSync(join(ROOT, entryRel), 'utf8')) : '';
+    callers.push({ rel, calls, ...sendJsonProvenance(code, { entryCode }) });
   }
   const callSites = callers.reduce((n, c) => n + c.calls, 0);
 
   check('覆盖面：路由模块被枚举到（≥ 10 个 .js）', routeFiles.length >= 10, `实测 ${routeFiles.length}`);
   check(`棘轮：\`sendJson(\` 调用点 ≥ ${CALL_SITE_FLOOR}（只许增，防"靠删调用点凑出的假收敛"）`,
     callSites >= CALL_SITE_FLOOR, `实测 ${callSites} 处 / ${callers.length} 个文件`);
-  const notImported = callers.filter((c) => !c.imported).map((c) => c.rel);
-  check('每个调用 `sendJson(` 的路由文件都 import 自共享实现（否则是另一个同名东西）',
-    notImported.length === 0, notImported.join(', ') || '全部已 import');
+  const notLegit = callers.filter((c) => !c.ok);
+  check('每个调用 `sendJson(` 的路由文件都来路正当（共享实现，或叶子 `httpView` 的同一函数）',
+    notLegit.length === 0, notLegit.map((c) => c.rel + '（' + c.why + '）').join(', ') || '全部来路正当');
+
+  // 子包路由族走叶子 `httpView` ⇒ 必须证明那不是"另一个同名东西"：实跑 identity 对账。
+  const leafView = bootMod;
+  const sharedMod = await import(pathToFileURL(join(ROOT, SOLE_IMPLEMENTATION)).href);
+  check('等价来源：叶子 `httpView.sendJson` === 共享实现的 `sendJson`（同一函数对象，不是同名副本）',
+    Boolean(leafView.httpView) && leafView.httpView.sendJson === sharedMod.sendJson,
+    leafView.httpView ? 'identity = ' + (leafView.httpView.sendJson === sharedMod.sendJson) : '叶子没有导出 httpView');
+  const viaLeaf = callers.filter((c) => c.why === '叶子 httpView');
+  const viaHttp = callers.filter((c) => c.why === 'c.http 宿主视图');
+  const subpackageCallers = callers.filter((c) => c.rel.startsWith('packages/'));
+  check('服务面真源：lib/subpackage-boot.js 导出 HOST_SERVICE_NAME（读不到 = c 来路没法判）',
+    HOST_SERVICE_NAME !== '', 'HOST_SERVICE_NAME=' + JSON.stringify(HOST_SERVICE_NAME));
+  // 覆盖面无牙判据：子包调用点必须**全部**被已知来路解释，且 c 这一新形态必须真的被验到
+  // （真文本零个案 ⇒ 这条判据就是空转）。
+  check('覆盖面：子包路由族的正当来路全部被验到（叶子 httpView ∪ c.http 宿主视图；c 形态没被验到 = 判据没牙）',
+    subpackageCallers.length > 0 && viaLeaf.length + viaHttp.length === subpackageCallers.length && viaHttp.length > 0,
+    '叶子形态 ' + (viaLeaf.map((c) => c.rel).join(' ') || '（0 个）') + ' · c.http 形态 '
+    + (viaHttp.map((c) => c.rel).join(' ') || '（0 个）') + ' · 子包调用点 ' + subpackageCallers.length + ' 个');
+
+  // 正/负对照（合成，b 形态）：真文本里 b 已收敛掉，也必须证明"这条来路仍被认、且不是看见 import 就放行"。
+  const LEAF_VIEW_IMPORT = 'import { httpView } ' + 'from' + ' ' + JSON.stringify('./lib/subpackage-boot.js') + ';';
+  const synthLeaf = LEAF_VIEW_IMPORT + '\nconst { sendJson } = httpView;\n'
+    + 'const json = (code, payload) => sendJson(res, code, payload);';
+  check('正对照（合成）：叶子 httpView 形态仍被同一条来路判据放行（历史形态没被悄悄删掉）',
+    sendJsonProvenance(synthLeaf).ok === true && sendJsonProvenance(synthLeaf).why === '叶子 httpView',
+    sendJsonProvenance(synthLeaf).why);
+  const synthLeafNoBind = synthLeaf.split('const { sendJson } = httpView;').join('');
+  check('负对照（合成）：叶子 import 了 httpView 但没有取出 sendJson ⇒ 判红（不是"看见 import 就放行"）',
+    sendJsonProvenance(synthLeafNoBind).ok === false, sendJsonProvenance(synthLeafNoBind).why);
+
+  // 真实输入扰动（c 形态）：把真实包入口的 `http: <host>.http` 换成**内联副本** ⇒ 来路判据必须判红。
+  const httpVictim = viaHttp[0];
+  if (httpVictim) {
+    const pkg = /^packages\/([^/]+)\//.exec(httpVictim.rel);
+    const entryRel = pkg ? `packages/${pkg[1]}/lib/index.js` : '';
+    const realEntry = stripComments(readFileSync(join(ROOT, entryRel), 'utf8'));
+    const realRoute = stripComments(readFileSync(join(ROOT, httpVictim.rel), 'utf8'));
+    const inlineHttp = 'http: { sendJson: (res, code, payload) => {\n'
+      + '  res.statusCode = code;\n'
+      + "  res.setHeader('Content-Type', 'application/json; charset=utf-8');\n"
+      + '  res.end(JSON.stringify(payload));\n} }';
+    const perturbedEntry = realEntry.replace(/http\s*:\s*[A-Za-z_$][\w$]*\s*\.\s*http\b/g, inlineHttp);
+    const prov = sendJsonProvenance(realRoute, { entryCode: perturbedEntry });
+    check('负对照（真实输入）：把真实包入口的 `http: <host>.http` 换成内联副本 ⇒ 来路判据判红',
+      perturbedEntry !== realEntry && prov.ok === false, entryRel + ' → ' + prov.why);
+    check('正对照：真实子包路由族（c.http 形态）被同一条来路判据放行（判据不恒假）',
+      sendJsonProvenance(realRoute, { entryCode: realEntry }).ok === true
+      && sendJsonProvenance(realRoute, { entryCode: realEntry }).why === 'c.http 宿主视图');
+  } else {
+    check('负对照（真实输入）：找到一个经 c.http 取 sendJson 的子包路由族做扰动', false, '（零个）');
+  }
+
+  // 扰动真实输入（b 形态，若本仓仍有这一形态）：换回本地内联三行样板 ⇒ 内联 + 来路两条判据都要报出。
+  const leafVictim = viaLeaf[0];
+  if (leafVictim) {
+    const real = stripComments(readFileSync(join(ROOT, leafVictim.rel), 'utf8'));
+    const inline = 'const sendJson = (res, code, payload) => {\n'
+      + '  res.statusCode = code;\n'
+      + "  res.setHeader('Content-Type', 'application/json; charset=utf-8');\n"
+      + "  res.setHeader('Cache-Control', 'no-store');\n"
+      + '  res.end(JSON.stringify(payload));\n};';
+    const perturbed = real.replace(/const\s*\{[^}]*\bsendJson\b[^}]*\}\s*=\s*httpView\s*;/, inline);
+    const found = inlineJsonHelpers(perturbed);
+    const prov2 = sendJsonProvenance(perturbed);
+    check('负对照（真实输入）：子包路由族把叶子 `httpView` 取用换回本地内联 ⇒ 内联副本被判出且来路判据判红',
+      perturbed !== real && found.length === 1 && found[0].name === 'sendJson' && prov2.ok === false,
+      leafVictim.rel + ' → 内联报出=[' + found.map((h) => h.name).join() + '] 来路=' + prov2.why);
+    check('正对照：真实子包路由族的叶子视图取用被同一条来路判据放行（判据不恒假）',
+      sendJsonProvenance(real).ok === true && sendJsonProvenance(real).why === '叶子 httpView', sendJsonProvenance(real).why);
+  } else {
+    check('负对照（真实输入）：本仓当前没有经叶子 httpView 取 sendJson 的路由族（形态已收敛到 c.http）—— 该形态的牙由上面的合成正/负对照覆盖',
+      viaHttp.length > 0 && subpackageCallers.every((c) => c.ok),
+      '叶子形态 0 个 · c.http 形态 ' + viaHttp.length + ' 个');
+  }
 
   // 扰动真实输入：把某个真实薄别名在**内存里**换回内联形态，同一判据必须报出它。
   const victim = callers.find((c) => /const\s+\w+\s*=\s*\([^)]*\)\s*=>\s*sendJson\(/.test(
@@ -343,8 +488,9 @@ if (failed) {
   console.log(`JSON-RESPONSE CHECKS FAILED — ${failed} 条不合格`);
   // ⚠️ 文案里**不得**出现 `from` 紧跟引号的字样：verify-package-files 的 P5 裸依赖扫描只剥注释、
   // 不剥字符串，那种字样会被当成真的裸包 import，把本守卫（它自己就在被扫的链里）判红。
-  console.log('修法：删掉那份内联副本，改成薄别名 —— 路由文件里从 `../json-response.js` 引入 '
-    + '`sendJson`（例 `const json = (code, payload) => sendJson(res, code, payload);`）；调用点不用改。');
+  console.log('修法：删掉那份内联副本 —— 主包路由文件从 `../json-response.js` 引入薄别名；子包路由族走**跨包服务视图**（§5.1 ①）：'
+    + '本族 `DEPS` 声明 `http`、用 `c.http.sendJson(`，包入口把 `http: host.http`（host = ctx.wallpaperEngineHost）传下来；'
+    + '（历史形态：从叶子 `subpackage-boot.js` 取 `httpView`，判据仍认。）调用点不用改。');
   process.exit(1);
 }
 console.log('JSON-RESPONSE CHECKS PASSED');

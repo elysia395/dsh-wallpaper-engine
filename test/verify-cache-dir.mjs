@@ -116,7 +116,18 @@ async function runHandler(route, req) {
 const routeFor = (path) => routes.find((r) => r.path === path);
 const CACHE_URL = '/wallpaper-engine/cache-dir';
 const json = (res) => { try { return JSON.parse(res.__state.body.toString('utf8')); } catch { return null; } };
-async function postCache(obj) { return runHandler(routeFor(CACHE_URL), fakeReqBody(CACHE_URL, 'POST', obj)); }
+async function postCache(obj) {
+  const res = await runHandler(routeFor(CACHE_URL), fakeReqBody(CACHE_URL, 'POST', obj));
+  // 诊断（保留）：缓存根路由的早期错误分支会返回没有 migrated 字段的信封 ⇒ 判据只会说
+  // "migrated=undefined"，看不出走了哪条分支。把 status 与体打出来，一眼定位。
+  try {
+    const b = json(res) || {};
+    console.log('   [diag] POST dir=' + String(obj && obj.dir) + ' migrate=' + String(obj && obj.migrate)
+      + ' → ' + res.__state.status + ' migrated=' + b.migrated + ' same=' + b.same + ' effective=' + String(b.effective).slice(-40)
+      + (b.error ? ' error=' + b.error : ''));
+  } catch { /* 诊断不参与判据 */ }
+  return res;
+}
 
 const cacheRoute = routeFor(CACHE_URL);
 const invRoute = routeFor('/wallpaper-engine/inventory');
@@ -259,12 +270,38 @@ const CACHE_SUBDIR_FILES = {
 // ── D. 「六处都派生自同一条链」+ 两处旧缺口的棘轮 ────────────────────────────
 section('D. 派生棘轮：六个子目录 / 两处 homedir 缺口（带负对照）');
 const hostSrc = readFileSync(join(root, 'lib', 'index.js'), 'utf8');
-// ⚠️ 读点变更（T2 #8）：`defaultUploadDir()` / `customFrameDir()` 已搬进 lib/asset-paths.js ⇒ D8 的
-//    两条正则改读该模块（判据文案、正则、期望值一字未改）；`hostSrc` 仍供 D7 等其余判据用。
-const assetPathsSrc = readFileSync(join(root, 'lib', 'asset-paths.js'), 'utf8');
-const faststartSrc = readFileSync(join(root, 'lib', 'faststart.js'), 'utf8');
-const mediaIndexSrc = readFileSync(join(root, 'lib', 'media', 'index.js'), 'utf8');
-const legacySrc = readFileSync(join(root, 'lib', 'media', 'legacy.js'), 'utf8');
+// ⚠️ 读点更正（T2 #8 + 删除前置 G-A3）：`defaultUploadDir()` / `customFrameDir()` 的真源在本分支是
+//    `lib/upload-dir.js`（`createUploadDirResolution()`）与 `lib/media/media-dirs.js` —— D8 的两条正则
+//    按**本分支真源**读（判据文案、正则、期望值一字未改）；上游同名副本 `lib/asset-paths.js` 已删。
+// ⚠️ 下面几个"读点"按**本分支真源**解析（缺文件不再让整条链 ENOENT 崩掉）：
+//   · `defaultUploadDir()` 住 `lib/upload-dir.js`、`customFrameDir()` 住 `lib/media/media-dirs.js`；
+//   · 媒体子系统在本分支住**媒体桥子包** packages/media-bridge/lib（P-F 批 1c 出户）：
+//     媒体后端门面（中间件 --cache-dir + 内置封面工厂的缺省）真源是 backend.js。
+//   · 三个缓存子目录的实现已从门面 lib/index.js 搬进内核媒体模块（内核化拆包）：
+//     transcodes → lib/media/transcode.js、frames → lib/media/frame-store.js、
+//     video-previews → lib/media/video-preview.js。
+const readAnyOf = (...rels) => {
+  for (const rel of rels) { try { return readFileSync(join(root, rel), 'utf8'); } catch { /* 试下一个 */ } }
+  return '';
+};
+/** D8 的两条正则各自的真源：`defaultUploadDir()` 住 `lib/upload-dir.js` 的
+ *  `createUploadDirResolution()`，`customFrameDir()` 住 `lib/media/media-dirs.js`
+ *  （上游副本 `lib/asset-paths.js` 已删）⇒ 用**两源合并文本**，断言与期望值一字未改。 */
+const assetPathsSrc = readAnyOf('lib/upload-dir.js') + '\n' + readAnyOf('lib/media/media-dirs.js');
+// `pluginDataDir()` 的默认值（`join(homedir(), '.dsh-wallpaper-engine')`）本分支住内核：
+// 门面已不再持有它（D7 第二腿改读真源；断言与期望值一字未改）。
+const dataDirSrc = readAnyOf('lib/kernel/data-dir.js', 'lib/index.js');
+const faststartSrc = readAnyOf('lib/faststart.js');
+// 中间件缓存（`cacheDir: join(cacheRoot(), 'media-bridge')`）真源在**后端门面**：它才是构造
+// 中间件监督者 / 内置实现的那一层（组件入口只登记路由）。组件行优先、上游 lib/media 兜底。
+const backendSrc = readAnyOf('packages/media-bridge/lib/backend.js', 'lib/components/media-bridge/backend.js', 'lib/media/index.js');
+const legacySrc = readAnyOf('packages/media-bridge/lib/legacy.js', 'lib/components/media-bridge/legacy.js', 'lib/media/legacy.js');
+// D1 按名字对号入座地读各自真源：合并成一个池子会让某个名字被别的文件的文本满足（更松）。
+const CACHE_SUBDIR_SRC = {
+  transcodes: readAnyOf('lib/media/transcode.js', 'lib/index.js'),
+  frames: readAnyOf('lib/media/frame-store.js', 'lib/index.js'),
+  'video-previews': readAnyOf('lib/media/video-preview.js', 'lib/index.js'),
+};
 // 两个媒体工厂共用的「现问缓存根」解析器（字符串调用点照用、访问器就现算）。
 const LAZY_ROOT = /const cacheRoot = \(\) => \(typeof cacheBaseDir === 'function' \? cacheBaseDir\(\) : cacheBaseDir\)/;
 function walkJs(dir, out = []) {
@@ -278,17 +315,17 @@ function walkJs(dir, out = []) {
 const libFiles = walkJs(join(root, 'lib'));
 
 check('D1 transcodes / frames / video-previews 三处都写 `join(cacheBaseDir(), …)`',
-  ['transcodes', 'frames', 'video-previews']
-    .every((n) => new RegExp("join\\(cacheBaseDir\\(\\), '" + n + "'\\)").test(hostSrc)));
+  Object.entries(CACHE_SUBDIR_SRC)
+    .every(([n, src]) => new RegExp("join\\(cacheBaseDir\\(\\), '" + n + "'\\)").test(src)));
 check('D2 faststart 变体缓存跟缓存根走（旧写法是 configPath() 的父目录）',
   /join\(cacheBaseDir\(\), 'faststart'\)/.test(faststartSrc));
 check('D3 媒体中间件 / 封面缓存跟缓存根走（工厂每次现问，不留值快照）',
-  /cacheDir: join\(cacheRoot\(\), 'media-bridge'\)/.test(mediaIndexSrc)
+  /cacheDir: join\(cacheRoot\(\), 'media-bridge'\)/.test(backendSrc)
     && /join\(cacheRoot\(\), 'artwork'\)/.test(legacySrc)
-    && LAZY_ROOT.test(mediaIndexSrc) && LAZY_ROOT.test(legacySrc));
+    && LAZY_ROOT.test(backendSrc) && LAZY_ROOT.test(legacySrc));
 // 「传访问器」而不是「传现算的值」：值快照会让用户在设置页改完缓存位置之后，
 // 新的封面 / 中间件缓存又写回旧盘（宿主重启才纠正）—— 与 cacheBaseDir() 不收快照同一个理由。
-const nowPlayingSrc = readFileSync(join(root, 'lib', 'routes', 'now-playing.js'), 'utf8');
+const nowPlayingSrc = readAnyOf('packages/media-bridge/lib/routes/now-playing.js', 'lib/components/media-bridge/now-playing.js', 'lib/routes/now-playing.js');
 const ROOT_SNAPSHOT = /cacheBaseDir: cacheBaseDir\(\),/;
 check('D3b now-playing 把访问器交给媒体后端，而不是起动时现算的值',
   /^\s{4}cacheBaseDir,$/m.test(nowPlayingSrc) && !ROOT_SNAPSHOT.test(nowPlayingSrc));
@@ -296,7 +333,7 @@ check('D3c negative control: 值快照写法会被 D3b 判红',
   ROOT_SNAPSHOT.test('    cacheBaseDir: cacheBaseDir(),'));
 // 缺省参数仍与从前逐字一致：这两个工厂被别处单独调用时不该因为这次改动换目录。
 check('D4 媒体工厂的缺省仍是 <dataDir>/cache（缺省行为不因本次改动而变）',
-  /cacheBaseDir = join\(dataDir, 'cache'\)/.test(mediaIndexSrc)
+  /cacheBaseDir = join\(dataDir, 'cache'\)/.test(backendSrc)
     && /cacheBaseDir = join\(dataDir, 'cache'\)/.test(legacySrc));
 
 // 负对照：这两条正则必须判得出"改动之前"的写法，否则 D5/D6 是恒真。
@@ -311,7 +348,7 @@ check('D6 lib/ 全域再无「按 configPath() 的父目录拼缓存根」',
 check('D7 lib/ 全域再无「dataDir 之外还写死 homedir 的子目录」'
   + '（pluginDataDir() 的默认值本身不算 —— 它前面没有第二个片段）',
   !libFiles.some((p) => STALE_HOMEDIR_GAP.test(readFileSync(p, 'utf8')))
-    && hostSrc.includes("join(homedir(), '.dsh-wallpaper-engine')"),
+    && dataDirSrc.includes("join(homedir(), '.dsh-wallpaper-engine')"),
   '默认数据目录仍在：join(homedir(), \'.dsh-wallpaper-engine\')');
 check('D8 默认上传目录 / 自定义画面目录都改成 pluginDataDir() 派生',
   /function defaultUploadDir\(\) \{ return join\(pluginDataDir\(\), 'uploads'\); \}/.test(assetPathsSrc)

@@ -1,0 +1,14 @@
+# cordis.patch.yml — 「点击效果与拖尾效果」子包自己的行（ADR-0014 S4.1 / S4.2 / S4.4）。
+#
+# ⚠️ 一次安装形态（主包 patch 用 name 引用子包，ADR-0014 S4.1）下，这一行由**主包**的
+# cordis.patch.yml 插入；只有把这个子包自己当成独立 bundle 时
+# （各自 dsh.bundle.patch + 各自进 dsh.profile.bundles，**不采纳**）本文件才生效。
+# 两处同时插同一个 id 会撞车 ⇒ 接线时以主包那份为准，本文件保持与它逐字一致（ADR-0014 S4.2）。
+#
+# 行名 = 真实包名（裸真名）：本版 DSH 不传 bareModuleBaseUrl ⇒ 行名一律从 <profile>/cordis.yml
+# 旁起算，裸名 → <profile>/node_modules/<name>；开发期靠 scripts/dev-link-subpackages.mjs 建的
+# junction 让这个名字出现在 profile/node_modules 里（ADR-0014 S4.4），发布期靠传递依赖 hoist。
+# id 一旦定下不再改（ADR-0014 S4.3）。
+- insert:
+    - id: wallpaper-engine-fx
+      name: 'dsh-plugin-wallpaper-engine-fx'

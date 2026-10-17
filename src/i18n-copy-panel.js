@@ -161,7 +161,7 @@ const WE_I18N_EN_PANEL = {
   "字体集预设": "Font set preset",
   "预设 = 一整套字体外观；改动只落到当前这一套，随时可以恢复原样": "A preset is a complete font look; edits land only in the current set and can be restored anytime",
   "光标颜色": "Caret color",
-  // ── 全局 UI 配色（2026-10-11）：新节 + 五个元素行 + 跟随语义 ──
+  // ── 全局 UI 配色：新节 + 五个元素行 + 跟随语义 ──
   "全局 UI 配色": "Global UI colors",
   "全局配色": "Global accent",
   "一处调全部：界面强调色、按钮、选中态与下面那几处都会跟着变": "One control for everything: the UI accent, buttons, selection states and the items below all follow it",
@@ -216,7 +216,7 @@ const WE_I18N_EN_PANEL = {
   "关闭后隐藏吉祥物与壁纸仓库抽屉": "Hides the mascot and the wallpaper-library drawer when off",
   "关闭后隐藏吉祥物与壁纸仓库抽屉；可随时在本页重新开启": "Hides the mascot and the wallpaper-library drawer when off; turn it back on here anytime",
   "吉祥物形态": "Mascot form",
-  // ⚠️ 2026-10-11 删掉四条**只服务已删 UI 的**词条（不改文案、直接删）：
+  // ⚠️ 删掉四条**只服务已删 UI 的**词条（不改文案、直接删）：
   //    · 「自定义立绘生效中：…点其他立绘可换…」与「拖一拖、按 ‹ ›、…」—— 两句都是**提示行**
   //      的文案，而提示行按用户口径「上面文案去掉」整行删了（它还写着按 ‹ ›，而 ‹ › 同一轮
   //      被删 —— 留着等于指导用户去点不存在的东西）；

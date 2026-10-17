@@ -434,7 +434,7 @@ const OLD_TAG = 'dsh-we/glass-preset@1';
     builtinRows.map((r) => r.id).join(','));
 
   // 出厂预设正文本身必须是新契约的产物（t1 交付物的独立复核，不看自述）。
-  // 资产段（2026-10-12 四态口径）：出厂预设**允许携带**、也允许**指向内置**或**声明无** ——
+  // 资产段（四态口径）：出厂预设**允许携带**、也允许**指向内置**或**声明无** ——
   // 但必须是 `sanitizePresetAssets` 的**规范形**（round-trip 逐字节相等），随包文件里不许有
   // 消毒会改写/丢弃的形状；`data` 由应用路径的 `installAssets` 落盘，清单端点只回
   // {id,name,origin} 不会把它漏出去。
@@ -463,12 +463,12 @@ const OLD_TAG = 'dsh-we/glass-preset@1';
     check('「黑客绿(Fish)」的 mascot 指向内置 `deepseek`（字符串态 = 零字节，不再内嵌立绘副本）',
       author.assets && 'font' in author.assets && author.assets.mascot === 'deepseek',
       JSON.stringify(author.assets ? author.assets.mascot : null));
-    // ★ 四态回归钉子（2026-10-12）：七套出厂预设**每套都必须显式声明吉祥物指向**（不留缺席）
+    // ★ 四态回归钉子：七套出厂预设**每套都必须显式声明吉祥物指向**（不留缺席）
     //   —— 缺席就是本次缺陷的载体：A（不携带立绘）→ B（携带立绘）→ A 之后，屏上留着 B 的图
     //   （A 的 110 键 settings 快照里根本没有 mascotImage 这两个键）。指向按维护者口径分配：
-    //   「作者自用」→ **携带内嵌自定义立绘**（彩蛋：原内置「小女仆」，2026-10-13 从出厂形态除名
+    //   「作者自用」→ **携带内嵌自定义立绘**（彩蛋：原内置「小女仆」，从出厂形态除名
     //   后搬进这份预设）；「紫色心情」→ 携带自定义图片；其余五套（含「黑客绿(Fish)」—— 它内嵌的
-    //   那张立绘 2026-10-13 认出就属内置 GLM）→ 内置 DeepSeek（`deepseek`，也是出厂默认）。
+    //   那张立绘认出就属内置 GLM）→ 内置 DeepSeek（`deepseek`，也是出厂默认）。
     //   头像族一律不声明（出厂预设都不携带头像，声明 `null` 只会删掉用户自己上传的头像文件）。
     const undeclared = [];
     const ptr = {};
@@ -557,7 +557,7 @@ const OLD_TAG = 'dsh-we/glass-preset@1';
   await del('preset-rename-1');
   await del('preset-freed-1');
 
-  // 不可恢复（2026-10-04 口径）：删墓碑 = 复活的那条通道已封 —— 再删一次 404，
+  // 不可恢复（口径）：删墓碑 = 复活的那条通道已封 —— 再删一次 404，
   // 清单依旧没有它；就算那个名字已经空出来，出厂预设也不会回来。
   const restoreAttempt = await del('factory-frosted');
   list = await getList();
@@ -764,9 +764,10 @@ section('③d 资产段：install-assets 落盘与 applied 语义、export→imp
   //   必须与宿主 `lib/index.js` 里那份**逐字相同**。不同 ⇒ 下面所有"名字合不合法"的判据读的都是
   //   一份歪的尺子（这正是"看起来对、实际不是那回事"）。写这段守卫时它就以 ReferenceError 暴露了
   //   一次块内遮蔽，所以这条要留在跑测输出里当护栏。
-  // ⚠️ 读点变更（T2 #8）：`MASCOT_FILE_RE` / `AVATAR_FILE_RE` 的定义已搬进 lib/asset-paths.js
-  //    ⇒ 只改"读哪个文件"，下面 hostLit 抽取式与那条逐字一致判据（含 check 文案）一字未改。
-  const hostIdxSrc = readFileSync(join(root, 'lib', 'asset-paths.js'), 'utf8');
+  // ⚠️ 读点更正（T2 #8 / task-10 G）：`MASCOT_FILE_RE` / `AVATAR_FILE_RE` 的真源在本分支是
+  //    `lib/media/media-dirs.js`（上游同名副本 `lib/asset-paths.js` 已不在 import 图上，
+  //    本笔只改"读哪个文件"——下面 hostLit 抽取式与那条逐字一致判据（含 check 文案）一字未改）。
+  const hostIdxSrc = readFileSync(join(root, 'lib', 'media', 'media-dirs.js'), 'utf8');
   const hostLit = (name) => {
     const m = hostIdxSrc.match(new RegExp('const ' + name + ' = (/(?:[^/\\\\]|\\\\.)*/);'));
     return m ? m[1] : '(未找到)';
@@ -850,7 +851,7 @@ section('③d 资产段：install-assets 落盘与 applied 语义、export→imp
     Object.keys(iaOnly.applied || {}).length === 1 && 'mascot' in (iaOnly.applied || {}),
     JSON.stringify(Object.keys(iaOnly.applied || {})));
 
-  // ★ 三态（2026-10-12）：`assets.<seg> === null` = **显式声明「无」** ⇒ 那一族回内置默认
+  // ★ 三态：`assets.<seg> === null` = **显式声明「无」** ⇒ 那一族回内置默认
   //   （宿主先删本机同族文件再置空键；读侧 `mascotPath()` / `avatarPath()` 是**按前缀扫目录
   //   取第一个命中**、不看 settings 记的文件名 ⇒ 只置空键清不干净）。这是"范围小的预设必须
   //   能撤销范围大的预设装上的资产"的落点：四套不带立绘的出厂预设就此声明 null（见 ① 段钉子）。
@@ -860,8 +861,8 @@ section('③d 资产段：install-assets 落盘与 applied 语义、export→imp
     && JSON.stringify(schema.sanitizePresetAssets({ mascot: false })) === '{}',
     JSON.stringify(schema.sanitizePresetAssets({ mascot: null })) + ' / false⇒'
     + JSON.stringify(schema.sanitizePresetAssets({ mascot: false })));
-  // ★ 第四态（2026-10-12「同一个字段两种指向」）：mascot 也可以是**字符串** = 指向出厂自带形态，
-  //   值域就是 ROPE_FORM_VALUES（`maid` 已于 2026-10-13 从出厂形态除名，见本文件 ① 段）。认不清的
+  // ★ 第四态（「同一个字段两种指向」）：mascot 也可以是**字符串** = 指向出厂自带形态，
+  //   值域就是 ROPE_FORM_VALUES（`maid` 已从出厂形态除名，见本文件 ① 段）。认不清的
   //   字符串**整段丢掉** ⇒ 语义回到"缺席 = 不动"—— 不猜 'builtin:whale'、也不把垃圾折成 'whale'。
   check('★ sanitizePresetAssets 认「指向内置形态」（字符串原样保留；值域外 / 其它类型不猜）',
     JSON.stringify(schema.sanitizePresetAssets({ mascot: 'phoebe' })) === '{"mascot":"phoebe"}'
@@ -1444,7 +1445,7 @@ section('④ 客户端形态棘轮：新编排链（合并→落盘→reapplyAll
   check('导出走普通链接（无 blob / showSaveFilePicker / window.confirm）',
     !/createObjectURL|new Blob|showSaveFilePicker/.test(storeCode + panelCode)
     && !/window\.confirm/.test(panelCode));
-  // 2026-10-12 第四态：正文除 `embed` 名单外多了一处 `point` **声明**（`{mascot:'whale'}` —— 只带
+  //  第四态：正文除 `embed` 名单外多了一处 `point` **声明**（`{mascot:'whale'}` —— 只带
   //   形态名、零字节）。意图不变：正文里**没有图片字节**（base64 只在宿主侧进出），所以判据同步为
   //   "名单 + 声明都在"，负对照仍是 `readAsDataURL` 缺席。
   check('保存只传 embed 名单与「指向」声明、不上传图片字节（base64 只在宿主侧进出）',
@@ -1461,7 +1462,7 @@ section('④ 客户端形态棘轮：新编排链（合并→落盘→reapplyAll
   check('broken 文案按 origin 分：出厂点名"版本已作废"+ 重存出路（不是笼统读不出来）',
     /这份出厂预设的版本已作废/.test(panelSrc) && /从预设栏重新保存一份/.test(panelSrc)
     && /这份预设读不出来/.test(panelSrc));
-  // D4（2026-10-12 三态）：勾选对话框必须把**三态**口径写出来 —— 勾了而本机没有 = 声明「无」
+  // D4（三态）：勾选对话框必须把**三态**口径写出来 —— 勾了而本机没有 = 声明「无」
   // （对方回内置），不勾 = 一个字都不动对方。旧文案写的是"不勾吉祥物 ⇒ 回落内置立绘"，与
   // "资产段缺席 = 保持现值"自相矛盾（实测 A→B→A 30/42 不收敛）—— 这条棘轮就是那颗钉子。
   check('★ 资产勾选对话框按三态写明后果（勾了没有 = 声明「无」/ 不勾 = 不动对方；三族都在）',
@@ -1482,7 +1483,7 @@ section('④ 客户端形态棘轮：新编排链（合并→落盘→reapplyAll
     /saveTarget === "export"/.test(panelSrc) && /saveTarget === "save"/.test(panelSrc)
     && /onExportCommit\(\)/.test(panelSrc) && /assetRows/.test(panelSrc));
 
-  // 玻璃节 ctx 的两档接线完整性（承旧判据，2026-10-04 实测教训）
+  // 玻璃节 ctx 的两档接线完整性（承旧判据，实测教训）
   {
     const destr = stripComments(panelSrc).match(
       /function renderAppearanceGlassSection\(ctx\) \{\s*const \{([\s\S]*?)\} = ctx;/);
@@ -1496,13 +1497,13 @@ section('④ 客户端形态棘轮：新编排链（合并→落盘→reapplyAll
     // 侧栏专属处理器（设置页 ctx 里**故意**没有）：设置页那一档不需要它们，硬塞一个死处理器
     // 反而会把"这一档根本不会调它"这件事藏起来。
     //   · `onToggleGlassDetail` —— 「详细玻璃调节」子门（只有侧栏有折叠块）；
-    //   · `onToggleGlassUiSection` —— 「玻璃 UI」**整节**折叠门（2026-10-11 二次修订后设置页
+    //   · `onToggleGlassUiSection` —— 「玻璃 UI」**整节**折叠门（二次修订后设置页
     //     也传了 ⇒ 本豁免对它已无实际作用，保留作兜底）；
     //   · 同批的 `onToggleDetailSection` / `onToggleCornersSection` 是另外两节的整节门，
     //     同样只在侧栏（那两节的渲染器在 panel-tabs.js，不在这段扫描范围里）。
     const SIDEBAR_ONLY = ['onToggleGlassDetail', 'onToggleGlassUiSection'];
     // 设置页专属处理器（侧栏 ctx 里**故意**没有）—— 与上面同一原理的镜像：
-    //   · `onTogglePresetsSection` —— 「主题预设」整节折叠门（2026-10-12）。该节 `!sidebarSurface`
+    //   · `onTogglePresetsSection` —— 「主题预设」整节折叠门。该节 `!sidebarSurface`
     //     门控**只在设置页渲染** ⇒ 侧栏档根本不会调它，硬塞进侧栏 ctx 反而是死处理器。
     const SETTING_ONLY = ['onTogglePresetsSection'];
     const missingClient = handlers.filter((h) => !SIDEBAR_ONLY.includes(h)
@@ -1516,7 +1517,7 @@ section('④ 客户端形态棘轮：新编排链（合并→落盘→reapplyAll
       handlers.concat('onNoSuchHandler').some((h) => !new RegExp('\\b' + h + '\\b').test(qpAll)));
   }
 
-  // ── 「作者自用」推广弹窗（PresetIntroDialog，2026-10-12 用户口径：更新后一次性二选一）──
+  // ── 「作者自用」推广弹窗（PresetIntroDialog，用户口径：更新后一次性二选一）──
   // 组件挂在 RopeDock 根上（渲染台够不到）⇒ 源码级判据，与 verify-about ⑤ 公告守卫同思路。
   {
     const introSrc = stripComments(readFileSync(join(root, 'src', 'client.js'), 'utf8'));
@@ -1594,14 +1595,14 @@ section('④b 行为判据：删除令牌链 + broken 行禁用与可删 + 勾�
       ] };
     },
     swatchRow: (label) => ({ type: 'swatch', label }),
-    // ⚠️ glass-panel.js 在 bundle 里与 src/client.js（`ROPE_FORMS` 定义在 `src/client.js:4892`）和
-    //   lib/settings-schema.js（`ROPE_FORM_VALUES` 定义在 `lib/settings-schema.js:32`）**同处一个
-    //   作用域**（build 把各 src 文件顺序拼成一个 lib/client.js；`src/panel-tabs.js:1090` 的
+    // ⚠️ glass-panel.js 在 bundle 里与 src/client.js（`ROPE_FORMS` 定义在 `src/client.js`）和
+    //   lib/settings-schema.js（`ROPE_FORM_VALUES` 定义在 `lib/settings-schema.js`）**同处一个
+    //   作用域**（build 把各 src 文件顺序拼成一个 lib/client.js；`src/glass-panel.js` 的
     //   `ROPE_FORMS[k].label` 早就是同一形态的既有用法）。单独 eval 时这两个模块作用域符号必须由
     //   台架按**真实形状**补上，否则渲染第一步就 ReferenceError —— 判据根本跑不到（本仓最忌的
     //   "台架自己造字段"：这里只补作用域，不替代任何被判定为真的字段）。
-    //   值域**从真源读**（本文件已在 `:71` 把 `lib/settings-schema.js` 取成 `schema`）—— 手抄一份必然
-    //   漂移：2026-10-13 并入 #180 时形态从 3 只涨到 12 只（同日晚「小女仆」除名 ⇒ 现为 10 只），于是"一组 4 键"那条判据自己先聋了。
+    //   值域**从真源读**（本文件已把 `lib/settings-schema.js` 取成 `schema`）—— 手抄一份必然
+    //   漂移：并入 #180 时形态从 3 只涨到 12 只（同日晚「小女仆」除名 ⇒ 现为 10 只），于是"一组 4 键"那条判据自己先聋了。
     //   显示名照 `src/client.js` 的 `ROPE_FORMS` 抄（那边是 `weT("Deepseek_Pro")` 的取值路径，还挂着 img
     //   的 data URL，无法内联）；下面紧跟着一条判据钉住"标签表的键集 == 真源值域"，两边不许打架。
     ROPE_FORM_VALUES: schema.ROPE_FORM_VALUES,
@@ -1737,7 +1738,7 @@ section('④b 行为判据：删除令牌链 + broken 行禁用与可删 + 勾�
   check('勾选对话框渲染出三个勾选项（字体 / 吉祥物立绘 / 会话头像）',
     toggles.length >= 3 && Boolean(fontToggle) && Boolean(avatarToggle),
     toggles.map((t) => t.label).join(','));
-  // D4 三态（2026-10-12）：本机没有的资产项**不再禁用** —— 勾上就是"声明「无」"，禁用等于
+  // D4 三态：本机没有的资产项**不再禁用** —— 勾上就是"声明「无」"，禁用等于
   // 剥夺用户声明无的能力（旧版 `disabled: !xxxAvailable` 正是本次缺陷的客户端半边）。
   check('★ 本机没有的资产项不再禁用（勾上 = 声明「无」；字体可用同样不禁）',
     Boolean(avatarToggle) && avatarToggle.disabled === false
@@ -1767,10 +1768,10 @@ section('④b 行为判据：删除令牌链 + broken 行禁用与可删 + 勾�
       JSON.stringify(findToggles(allAvail)));
   }
 
-  // ★ 第四态（2026-10-12 用户口径）：勾选对话框里多一行「吉祥物 · 指向」——把这一族存成**指向某只
+  // ★ 第四态（用户口径）：勾选对话框里多一行「吉祥物 · 指向」——把这一族存成**指向某只
   //   出厂自带**（正文里只留形态名、零字节），而不是只能"带我的图 / 声明无"两态。这一行的行为判据
   //   读渲染树：一组 1 + N 键（本机现状 + 真源 `ROPE_FORM_VALUES` 里的每一只内置形态，当前 N = 10）+ **受控**选中态（aria-pressed 跟 ctx.mascotPoint 走）+ 点击回传**形态名**。三条缺一条就会出现"面板上能选、正文里存不进去/选不中"的静默空转
-  //   （本仓 2026-10-11 的实测教训：`has("mascot")` 与 `mascotPoint` 各自对，合起来却互斥）。
+  //   （本仓的实测教训：`has("mascot")` 与 `mascotPoint` 各自对，合起来却互斥）。
   {
     const calls = [];
     const checksBase = { font: true, mascot: true, avatar: false, fontAvailable: true, mascotAvailable: true, avatarAvailable: false };
@@ -1832,7 +1833,7 @@ section('④b 行为判据：删除令牌链 + broken 行禁用与可删 + 勾�
   check('negative control: 未展开对话框时没有「下载 .json」（判据不空转）',
     !collect(tree1, []).some((n) => n.type === 'button' && textOf(n) === '下载 .json'));
 
-  // ── 导出入口**独立**且目标**可选**（2026-10-11 用户口径）─────────────────────
+  // ── 导出入口**独立**且目标**可选**（用户口径）─────────────────────
   //   旧形态：**逐格**挂一个「导出」键（一排同名键挤在格子里，且只能导出那一格）。
   //   新形态：动作行一个「导出预设…」+ 对话框里选「导出哪一份」。
   //   两条都要钉住 —— 逐格键**不该**回来（回来了格子又被挤满且与独立入口重复），

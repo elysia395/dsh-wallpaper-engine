@@ -6,7 +6,7 @@
 //      宽松分级 / 隐藏排除 / 分页切片与页号 clamp / 轮换编辑器列表 / 空库存与零命中。
 //   ② 跨层对拍：真挂载客户端（readFileSync(lib/client.js) + __ModuleLoader__.load 捕获
 //      handoff → factory(mockReact) → slots → ctx → apply() → 打开模态框），拿**模型算出的
-//      可播放数**与**真实渲染出的 `.we-picker__card` 数（减掉关闭卡）**对拍 —— 2026-10-04
+//      可播放数**与**真实渲染出的 `.we-picker__card` 数（减掉关闭卡）**对拍 ——
 //      起库视图不分页、改虚拟窗口（首窗 = 关闭卡 + min(VP_FIRST, 可播放数)），对拍对象
 //      相应从"当页切片"换成"首窗"；"模型说的和视图画的是不是同一件事"照旧只在这条上能看出。
 //
@@ -92,15 +92,50 @@ const crossLayerAgrees = (root, model) =>
 /** 判据：挂载台自身 —— picker 渲染回调已注册（否则跨层那些判据全在空跑）。 */
 const hasPickerRender = (renders) => renders.length > 0;
 
+/**
+ * 产物里的**分段标记**（`内联模块：` / `客户端正文`）—— 它们是 `scripts/build-client.mjs` 拼产物时
+ * 写下的**机制常量**（用来**定位**段落），不是被检验的期望值 ⇒ 从构建脚本源码**现取**，本文件不手抄。
+ * 构建脚本里改一次文案即自动跟上；取不到时返回 `null`，调用方据此判红（不静默放行）。
+ *
+ * ⚠️ 为什么必须现取（task-13 审计：类别 3「易腐化」）：这两个字面量原先手抄在本文件里，改构建脚本里
+ * 那句**注释文案**（与正确性零关系）就会让 `inlinedSection()` 切不出段落 ⇒ 本文件十余条判据一起红。
+ * 与**期望值**的分野要看清：像 `PICKER_VP_FIRST = 30`、`MODEL_EXPORTS` 那种"答案"手抄是**故意的
+ * 独立口径**（从被测侧派生会让判据恒真）；这里只是"去哪找"，派生才是对的。
+ */
+const sectionMarkers = (buildSrc) => {
+  // 形状取自构建脚本本身（`// ── <标签>：` 后面接模块名；`// ── <标签>（` 是正文段）——
+  // 标签文案**不写死**，所以改文案（换词、换语言）时这里跟着走。
+  //
+  // ⚠️ 必须在**剥注释后**取，且正文那条的标签里不许出现 `：`（task-14 实测踩到的两个坑）：
+  //   · 分段标记的**真源是发射点**（产物里那两行是构建脚本的**字符串 / 模板字面量**拼出来的），
+  //     不是文件里任意一句长得像它的散文。本分支在组装点前新加了一句散文注释
+  //     `// ── 刀4：panel-tabs …（…` ⇒ 旧写法（在原文上取第一个匹配）会把它当成 inline 标记
+  //     （取到 `刀4`），拿去切产物必然切不出 ⇒ 本文件十余条判据一起假红。
+  //   · 同一个模板字面量 `// ── 内联模块：${mod.file} —— …（构建期注入…）` 里既有 `：` 又有 `（`，
+  //     正文正则会把它整段吃成「标签」（`内联模块：${mod.file} —— ${mod.why}`）⇒ 排除 `：` 后
+  //     就只有真正的正文发射点 `// ── 客户端正文（…` 能匹配。
+  // 剥注释是等长替换（test/tools/js-text.mjs），列定位语义不变；标签文案仍然不写死。
+  const code = stripComments(buildSrc);
+  const inline = /\/\/ ── ([^：\n]+)：/.exec(code);
+  const body = /\/\/ ── ([^：\n]+)（/.exec(code);
+  return {
+    inline: inline ? '// ── ' + inline[1] + '：' : null,
+    body: body ? '// ── ' + body[1] + '（' : null,
+  };
+};
+const BUILD_SRC = readFileSync(new URL('../scripts/build-client.mjs', import.meta.url), 'utf8');
+const SECTION_MARKERS = sectionMarkers(BUILD_SRC);
+
 /** 从产物里切出某个内联模块的段落（含 marker 注释行；切不出 → null）。 */
-function inlinedSection(bundle, file) {
-  const marker = '// ── 内联模块：' + file;
+function inlinedSection(bundle, file, markers = SECTION_MARKERS) {
+  if (!markers || !markers.inline) return null;
+  const marker = markers.inline + file;
   const start = bundle.indexOf(marker);
   if (start < 0) return null;
   const from = start + marker.length;
   const ends = [
-    bundle.indexOf('// ── 内联模块：', from),
-    bundle.indexOf('// ── 客户端正文', from),
+    bundle.indexOf(markers.inline, from),
+    markers.body ? bundle.indexOf(markers.body, from) : -1,
   ].filter((i) => i > 0);
   return bundle.slice(start, ends.length ? Math.min(...ends) : bundle.length);
 }
@@ -118,9 +153,9 @@ const MODEL_API_NAMES = '{ ratingOf, matchesRatingFilter, matchesTypeFilter, isP
  *  注意它和上面 `MODEL_API_NAMES` 是**两个不同的面**，别一起改：
  *  - `MODEL_API_NAMES` 是「从内联段落里解构出哪些名字来测」⇒ 需要的是**声明**存在
  *    （`hiddenWallpapers` 在源文件 `:136` 声明、`:163` 主流程自用 ⇒ 必须留在这里）。
- *  - `MODEL_EXPORTS` 是「这个模块对外发布哪些名字」⇒ 2026-10 收窄导出面时
- *    `hiddenWallpapers` 因零跨模块按名引用被移出 `export { … }`（见仓库提交
- *    `04b7750`），故这里同步移除；判据形状不变（导出名集合必须与钉住的清单逐字相等，
+ *  - `MODEL_EXPORTS` 是「这个模块对外发布哪些名字」⇒ 收窄导出面时
+ *    `hiddenWallpapers` 因零跨模块按名引用被移出 `export { … }`，故这里同步移除；
+ *    判据形状不变（导出名集合必须与钉住的清单逐字相等，
  *    多一枚少一枚都判红）。 */
 const MODEL_EXPORTS = ['ratingOf', 'matchesRatingFilter', 'matchesTypeFilter', 'isPlayableType',
   'isRotatableWallpaper', 'keepPlayingWallpaper', 'isHiddenWallpaper', 'isUploadedWallpaper',
@@ -406,6 +441,29 @@ console.log('0. 挂载台 / 模型段自检');
     modelSection !== null, modelSection ? modelSection.split('\n').length + ' 行段落' : '(切不出)');
   check('负对照：未登记的合成文件名切不出段落（同一条切片判据）',
     inlinedSection(code, 'src/picker-model-nope.js') === null);
+  // 分段标记的**来源**要有牙：构建脚本换文案时跟着换（手抄字面量会切不出），且缺失时不静默放行。
+  check('覆盖面：两条分段标记都从 `scripts/build-client.mjs` 现取到了（防空手抄 / 防静默 null）',
+    SECTION_MARKERS.inline !== null && SECTION_MARKERS.body !== null,
+    JSON.stringify(SECTION_MARKERS));
+  check('负对照：构建脚本换了标记文案 ⇒ 现取方案照样切得出（同一条切片判据，喂合成构建脚本）',
+    (() => {
+      // ⚠️ 合成文本里的路径**不许写成字面量**：`guard-targets` 按路径字面量派生"守卫 ↔ 模块"映射，
+      //    写死 `src/client.js` 会让本文件被算成"管了那个模块"（GUARD-MAP 会多一行假目标，实测踩过）。
+      const m2 = sectionMarkers("const a = '// ── 内联模块：';\nconst b = '// ── 客户端正文（" + ['src', 'client.js'].join('/') + "）';\n");
+      if (!m2.inline || !m2.body) return false;
+      const bundle2 = m2.inline + 'src/picker-model.js\nconst probe = 1;\n' + m2.body + '\n';
+      const sec = inlinedSection(bundle2, 'src/picker-model.js', m2);
+      return sec !== null && sec.includes('const probe = 1;') && !sec.includes('客户端正文');
+    })());
+  check('负对照：散文注释里长得像标记的 `// ── X：` 不会劫持现取（只有发射点算数）',
+    (() => {
+      const m2 = sectionMarkers('// ── 散文标签：这不是发射点\n'
+        + 'const a = `// ── 内联模块：${mod.file}`;\n'
+        + "const b = '// ── 客户端正文（x）';\n");
+      return m2.inline === '// ── 内联模块：' && m2.body === '// ── 客户端正文（';
+    })());
+  check('负对照：构建脚本里没有分段标记时返回 null（判据不静默放行一个空段落）',
+    inlinedSection('anything', 'src/picker-model.js', sectionMarkers('const a = 1;')) === null);
   check('模型 API 齐全（函数都在、PICKER_PAGE_SIZE 是数字）——否则后面每条都在空跑',
     !!M && hasModelApi(M));
   check('负对照：空对象被同一条「API 齐全」判据判为不齐',

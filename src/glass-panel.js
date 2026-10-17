@@ -11,8 +11,7 @@
  *   · 浏览器安全（无 import / require / Node API），且不得有顶层可执行语句读 client.js 的 const。
  *
  * 渲染源是**注册表驱动**的：`GLASS_CHILDREN`（`lib/settings-schema.js` 的登记表）+ `childGlassKey()`
- * 决定每个子项有哪些参数、叫什么 ⇒ 这里**不硬编码四项**（硬编码正是"面板渲染死旋钮"的来源，
- * 见 wip §10.12）。
+ * 决定每个子项有哪些参数、叫什么 ⇒ 这里**不硬编码四项**（硬编码正是"面板渲染死旋钮"的来源）。
  */
 /**
  * 「主题预设」节 + 「玻璃 UI」节 —— 预设升为整机快照（ADR-0011）后自成一节，玻璃节只留玻璃。
@@ -102,15 +101,15 @@ function renderGlassPresetsBlock(gp) {
   const has = (k) => checks[k] === true;
   // ── 资产勾选对话框的行（保存与导出共用同一组勾选项与后果说明；非模态、就地展开）──
   // 每行 = 胶囊开关（复用 switchRow）+ 一行**三态后果**（D4）。
-  // 口径（2026-10-12 起）：**勾上 = 按本机现状声明这一族**（有就带上；没有就**显式声明「无」**），
+  // 口径：**勾上 = 按本机现状声明这一族**（有就带上；没有就**显式声明「无」**），
   // **不勾 = 不动对方的这一族**。所以开关**不再按 available 禁用** —— 旧版禁用导致"本机没有
   // 自定义立绘"的用户永远无法声明「无」，那一族只能靠出厂预设的 null 来清（本次缺陷的客户端半边）。
   // available 只决定提示文案（说清"勾上会存成无"还是"勾上会把这张带过去"）。
   const fontAvailable = checks.fontAvailable === true;
   const mascotAvailable = checks.mascotAvailable === true;
   const avatarAvailable = checks.avatarAvailable === true;
-  // 吉祥物族的**指向**（第四态，2026-10-12 用户口径）：`""` = 按本机现状（老行为），任一形态
-  // id（`ROPE_FORM_VALUES`，2026-10-13 起 10 只）= 这一段只存"指向出厂自带的那一只"（零字节）。
+  // 吉祥物族的**指向**（第四态，用户口径）：`""` = 按本机现状（老行为），任一形态
+  // id（`ROPE_FORM_VALUES`，10 只）= 这一段只存"指向出厂自带的那一只"（零字节）。
   const mascotPoint = typeof checks.mascotPoint === "string" ? checks.mascotPoint : "";
   const assetRows = React.createElement(React.Fragment, null,
     switchRow(weT("字体"), has("font"), (e) => onAssetToggle("font", e.target.checked), {
@@ -127,7 +126,7 @@ function renderGlassPresetsBlock(gp) {
         : weT("本机没有自定义立绘 —— 勾着存 = 声明「无」，套用它的人回到内置立绘（Deepseek_Pro / 菲比啾比）；不勾 = 不动对方的立绘"),
       tooltip: weT("把自定义吉祥物立绘的图片与显示盒一并存进预设（默认勾选）"),
     }),
-    // ── 吉祥物族的**指向**（ADR-0011 D4 第四态，用户口径 2026-10-12）──────────────────
+    // ── 吉祥物族的**指向**（ADR-0011 D4 第四态，用户口径）──────────────────
     // 勾上这一族才有意义（不勾 = 不动对方那一族，指向无处可落）。两种选择：
     //   ·「本机现状」= 老行为：有自定义立绘就带上它（内嵌字节），没有就声明「无」；
     //   · 选一只出厂自带 = 正文里只存**指向**（`assets.mascot` 字符串，零字节），套用它的人
@@ -140,7 +139,7 @@ function renderGlassPresetsBlock(gp) {
         ? weT("「本机现状」= 把这台的自定义立绘带进预设；选一只出厂自带 = 只存「指向它」（不占体积），套用它的人换回那一只")
         : weT("本机没有自定义立绘 —— 「本机现状」会存成「无」；也可以直接选一只出厂自带，让套用它的人换回那一只")),
       React.createElement("div", { className: "we-picker__seg", role: "group", "aria-label": weT("吉祥物 · 指向"),
-        // 2026-10-13（并入 #180 后形态 3 → 11，同日「小女仆」除名后为 10）：这一行现在最多 1 + 10 = 11 个键，而 `.we-picker__seg`
+        // （并入 #180 后形态 3 → 11，「小女仆」除名后为 10）：这一行现在最多 1 + 10 = 11 个键，而 `.we-picker__seg`
         // 是不换行的 flex 行、每个键 `flex: 1` ⇒ 不换行就会被压成同样窄的一格、标签互相截断。
         // 用**行内** `flexWrap` 就地解决（不动 styles.js 的规则行数 —— 那份文件的注释行数被打红过
         // `verify-token-contract`，它记的是 styles.js 的行锚点）。
@@ -210,7 +209,7 @@ function renderGlassPresetsBlock(gp) {
           : weT("应用「{name}」：整机配置快照立即生效（观感 / 行为 / 勾选的字体与图片），之后可以继续微调", { name: labelOf(row) }),
         onClick: () => onApply(row.id),
       }, labelOf(row)),
-      // ⚠️ 这里**没有**导出的格子键（2026-10-11 用户口径）：导出已独立成网格下方的
+      // ⚠️ 这里**没有**导出的格子键（用户口径）：导出已独立成网格下方的
       //    「导出预设…」入口 —— 导出是**对"哪一份"**的动作，逐格挂一排同名键既挤格子
       //    又和"导出自己想要的那份"重复；独立入口 + 对话框里选目标，一处就够。
       // ⚠️ 删除键对**所有格**都有（用户口径：出厂预设可删，删除即永久、
@@ -230,7 +229,7 @@ function renderGlassPresetsBlock(gp) {
   const chipRow = React.createElement("div", { className: "we-picker__preset-grid", key: "gp-grid" }, cells);
   // 网格下方的**动作行**（不在格子里 —— 格子属于预设本身）：保存 / 导出 / 导入。
   //   · 保存：满 8 个禁用并指路（删除腾位）；
-  //   · 导出：**独立入口**（2026-10-11 用户口径）—— 对话框里再选"导出哪一份"；
+  //   · 导出：**独立入口**（用户口径）—— 对话框里再选"导出哪一份"；
   //   · 导入：隐藏 file input + 按钮。
   const openSaveRow = saving
     ? null
@@ -288,7 +287,7 @@ function renderGlassPresetsBlock(gp) {
   // ── 保存 / 导出对话框（非模态，同一组资产勾选项；ADR 修订版第③条：两处都先问）────
   //   · saveTarget === "save"   → 名字行 + 勾选 + 「保存预设」（真正落盘）；
   //   · saveTarget === "export" → **选目标** + 勾选 + 「下载 .json」。导出是"对某一份"的
-  //     动作，而入口已独立成一行（2026-10-11 用户口径）⇒ 目标由这里的下拉选，值经
+  //     动作，而入口已独立成一行（用户口径）⇒ 目标由这里的下拉选，值经
   //     `onExportTargetChange` 落进 `glassPresetTargetId`。下载走普通链接导航（宿主带
   //     Content-Disposition 应答），导出**不走**改名/正文路径 —— 正文由宿主读到的值重建。
   //   取消把对话框与名字行一起收起。
@@ -407,7 +406,7 @@ function renderAppearanceGlassSection(ctx) {
     onThinkingMode, glassDetailOpen, onToggleGlassDetail, glassUiOpen, onToggleGlassUiSection,
     presetsOpen, onTogglePresetsSection,
   } = ctx;
-  // ── 简化配置 vs 高级配置（ADR-0008 **D4**，2026-10-09 用户口径修订）────────────
+  // ── 简化配置 vs 高级配置（ADR-0008 **D4**，用户口径修订）────────────
   //   · **简化配置**（侧栏档 + 设置页都画）：全局四件套（玻璃颜色 / 玻璃透明度 / 雾化 /
   //     玻璃保真度）、"要不要这一面吃玻璃"的**总开关**（思考块液态玻璃 / 侧栏液态玻璃 /
   //     侧栏全透明 / 侧栏玻璃跟随全局 / 左侧栏液态玻璃）；
@@ -476,11 +475,11 @@ function renderAppearanceGlassSection(ctx) {
   // ⇒ 这一节只剩一层：每个子面一个「独立配置」开关 —— 它回答的是
   //   "读自己那套参数 还是 跟全局"。
   const childRows = [];
-  // ── 高级配置（D4，2026-10-09）：只在**侧栏档且「详细玻璃调节」展开时**构建/渲染。
+  // ── 高级配置（D4）：只在**侧栏档且「详细玻璃调节」展开时**构建/渲染。
   //    设置页档不再画这些行（真迁移）；侧栏收起时连构建都不做（省一遍无用遍历）。
   //    处理器在侧栏 ctx 里是**真值接线**（已从 setting-only 占位器名单移出）。
   const detailOpen = sidebarSurface && glassDetailOpen === true;
-  // ── 整节折叠门（2026-10-11 **二次修订**：两档都支持隐藏）────────────────────────────
+  // ── 整节折叠门（**二次修订**：两档都支持隐藏）────────────────────────────
   //    与「详细玻璃调节」子门**并存**：外层收起时这一节只剩节头；展开后子门照旧管高级行。
   //    ⚠️ 差别只在**默认值**（由面板组件算好，当 `glassUiOpen` 传进来）：两档默认都展开。
   //    ⚠️ 子门 `detailOpen` 那行的 `sidebarSurface &&` 保持不动 —— 那是"高级行只住侧栏"的
@@ -506,7 +505,7 @@ function renderAppearanceGlassSection(ctx) {
     const P = (param) => childGlassKey(c.id, param);
     // ⚠️ 按登记表的 `params` 渲染，**不硬编码四项** —— 不是每个子项都拿得到全部参数。
     //    `fidelity` 只有 `conversation` 有：它的面纱有专属的 `--we-chat-readability-*`，
-    //    而共享面纱的面受 F2a / F1c 约束、**逐面保真度不可达**（见 wip §4.14）。
+    //    而共享面纱的面受 F2a / F1c 约束、**逐面保真度不可达**。
     //    硬编码会让那两个面多出一个"点了没反应"的旋钮 —— 正是要消灭的那类死开关。
     if (c.params.blur !== undefined) {
       childRows.push(SliderRow(cn.blur, 0, 60, 1,
@@ -542,7 +541,7 @@ function renderAppearanceGlassSection(ctx) {
     onClick: () => onThinkingMode(id),
     "aria-pressed": thinkMode === id ? "true" : "false",
   }, label);
-  // ── 高级配置行（D4，2026-10-09 起 = 侧栏「详细玻璃调节」折叠块的内容）────────────
+  // ── 高级配置行（D4 = 侧栏「详细玻璃调节」折叠块的内容）────────────
   //   胶囊细调 + 各面「独立配置」层及其子项参数 + 子 UI 独立配置 —— 只在侧栏档
   //   **且展开时**构建（`detailOpen`）；设置页档不再画这些行（真迁移 ⇒ 恒空）。
   //   每行的**内在门**（思考玻璃挡 / 各面总开关 / 宿主能力位 / 跟随全局）原样保留 ——
@@ -551,7 +550,7 @@ function renderAppearanceGlassSection(ctx) {
   if (detailOpen) {
     // 胶囊雾化（capsuleBlur，默认 8px）：**只在思考玻璃开着时渲染** —— 消费它的规则
     // 全部挂在 data-we-thinking-glass 门下，门关着时这个滑杆就是"画出来又不生效的旋钮"
-    //（本仓要防的那类死旋钮，见 glass-panel 文件头 wip §10.12）。
+    //（本仓要防的那类死旋钮，见 glass-panel 文件头）。
     if (sel.thinkingGlass === true && sel.thinkingNative !== true) {
       advRows.push(SliderRow(weT("胶囊雾化"), 0, 60, 1,
         sel.capsuleBlur, onCapsuleBlur, sel.capsuleBlur + "px", "capsule-blur", {
@@ -666,7 +665,7 @@ function renderAppearanceGlassSection(ctx) {
   //    分类理由：它不是"总开关"也不是"逐面覆盖"，而是**跨面批量覆盖**（一份预设 = 整机配置
   //    完整快照，应用即 Object.assign 整套覆盖、**无确认无撤销**），且出厂预设**删除即永久** ——
   //    这类动作按 D4 的取向属高阶；侧栏是窄面板 + 随手调的场合。
-  // 折叠（2026-10-12）：与其他节同口径升 sectionHead —— 两档都可折叠的统一构件；本节只在
+  // 折叠：与其他节同口径升 sectionHead —— 两档都可折叠的统一构件；本节只在
   // 设置页渲染 ⇒ 折叠态只有设置页一份（picker-presets-open，默认展开，经 usePickerSectionOpen）。
   const presetSectionOpen = presetsOpen === true;
   const presetSection = (!sidebarSurface && ctx.glassPresets)
@@ -683,7 +682,7 @@ function renderAppearanceGlassSection(ctx) {
         title: weT("把这一块的参数恢复为默认值（不需要确认）"),
         aria: weT("重置本模块"),
       })),
-    // ── 折叠门（2026-10-11 用户口径「这三个在侧边栏改成默认收敛」）：**只在侧边栏**生效 ——
+    // ── 折叠门（用户口径「这三个在侧边栏改成默认收敛」）：**只在侧边栏**生效 ——
     //    设置页 `collapsible` 为假、`open` 恒真 ⇒ 这一层 Fragment 里的内容照旧整个渲染。
     //    ⚠️ 包一层 Fragment 是刻意的：本节约有 80 个并列 children，逐个挂门既啰嗦又容易漏；
     //    而 React 的 Fragment 不产生 DOM 节点 ⇒ 观感与无障碍树都没有多出来的层级。
@@ -698,7 +697,7 @@ function renderAppearanceGlassSection(ctx) {
       // 只写**浅色那一侧** —— 侧栏的玻璃色变量就只消费浅色半（`src/glass.js` / `src/effects.js`
       // 的 sidebar 分支都取 `glassColorOf(sel,"light")`：侧栏没有 `data-ds-dark-theme` 孪生，
       // 有意不分深浅）。**不要**改回"写当前配色那一侧"：深色主题下那等于让用户改一个他看不到的
-      // 值（§11 A2-F2）；面板也不许自己采样主题（`panelThemeIsDark` 已随之删除）。
+      // 值（判据 A2-F2）；面板也不许自己采样主题（`panelThemeIsDark` 已随之删除）。
       !sidebarSurface && switchRow(weT("深色单独设置"), sel.glassDarkSeparate === true, (e) => onGlassDarkSeparate(e.target.checked), {
         key: "glass-dark-separate",
         tooltip: weT("关闭时一个颜色同时用于浅色与深色两套（内部仍存两套值）；开启后浅色/深色分别设置"),
@@ -811,7 +810,7 @@ function renderAppearanceGlassSection(ctx) {
       }),
       // ── 「详细玻璃调节」折叠开关（**仅侧栏档**；默认收起）──────────────────────────
       //    开关后面的 `advRows` = 全部高级行（胶囊细调 / 各面独立配置及参数 / 子 UI 独立配置），
-      //    见函数头构建处。设置页档不画开关也不画这些行（真迁移，D4 2026-10-09）。
+      //    见函数头构建处。设置页档不画开关也不画这些行（真迁移，D4）。
       //    开合状态住 localStorage（quick-panel 的 qp-glass-detail），渲染器只经 ctx 读它。
       sidebarSurface && switchRow(weT("详细玻璃调节"), glassDetailOpen === true,
         (e) => onToggleGlassDetail && onToggleGlassDetail(e.target.checked), {

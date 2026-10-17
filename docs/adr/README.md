@@ -65,3 +65,5 @@ ADR 里**不写会随代码漂移的具体数值**（条数、行数、体积、
 | [0010](./0010-glass-off-revisit-four-states.md) | 修订 ADR-0008 的"放弃关玻璃"结论（令牌层整组回退的前置条件已成立，由令牌契约守卫钉住）；目标形态定为**一个模式键四态**（full / glass-only / wallpaper-only / off），主开关最后落地 | Accepted |
 | [0011](./0011-preset-full-snapshot.md) | 预设从「玻璃子集快照」升为「整机配置快照」：键集由 `KINDS` 派生分四段（settings + 字体 / 吉祥物 / 头像资产段）；资产按需勾选携带；旧预设直接作废；新增导入导出 | Proposed |
 | [0012](./0012-artifact-untracking.md) | 构建产物出库（`lib/client.js` 不入库，改由 build / prepack 现场构建）＋ README 展示图迁至 Release 资产外链；修订 ADR-0003 的 D6 | Accepted |
+| [0013](./0013-bundle-multi-component-rows.md) | **插件拆分**：终态 = **多包**（主包 + 子包，版本一致；2026-10-14 **就地改写 D6/D8**，原为「单包多行 / 不做多包」）＋ 单包多行是**起点与已落地形态**；三件核心目标并列（降复杂度 / 锚定模块边界 / 解耦合）；行级开关 = 宿主路由 + 该组件的浏览器可见面；组件化前先库化 + 内核化。**原编号 0012**（与上游 `0012-artifact-untracking` 撞号 ⇒ 让位顺延） | Accepted |
+| [0014](./0014-subpackage-contract.md) | **子包规范（`packages/<pkg>` 的成文契约，条款号 `S*`）** —— 术语把「独立子包行」与「组件行」分开；依赖方向定成**两张平面**（宿主平面 = 主包 `provide` 服务 → 子包 `inject` 只读；浏览器平面 = 主包冻结面 → 子包产物 `require` 真名且唯一）＋禁止边；判据**只加在代码与磁盘**、**不再新增任何 markdown 判据**；树形依赖图 = 人工维护的 Mermaid（[`docs/SUBPACKAGE-GRAPH.md`](../SUBPACKAGE-GRAPH.md)），放弃机器对账 | Accepted |

@@ -64,7 +64,7 @@
    面板侧只有一行「名字 + 保存 / 取消」（`renderGlassPresetsBlock` 的 `saveRow`）。
    ⇒ D4 的资产勾选必须**新增**这一步，且要能表达"不勾会怎样"。
 
-10. **本仓有成熟的"对话框 + 勾选"先例可照抄。** `src/fontset-editor.js` 的
+10. **本仓有成熟的"对话框 + 勾选"先例可照抄。** `packages/fonts/src/fontset-editor.js` 的
     `<input type="file">` 隐藏 + 按钮触发（`accept` 只做提示，真正的门是 `$schema`），
     以及 `renderConfirmRow` 的两步确认行 —— 都不使用原生模态（本仓纪律：
     `verify-presets` ④ 断言预设 UI 无 `window.confirm`）。D4 / D7 的对话框必须沿用这条形态。
@@ -131,9 +131,9 @@
 - **字体段**：内嵌活动字体集的 `FONTSET_KEYS` 值 + 集名。应用时**写回字体集**
   而不是塞进 settings（它们不在 settings 白名单里），走 `setFontValues` / `persistFontSet`。
 - **吉祥物段**：内嵌图片本体（base64）+ 文件名 + 显示盒。应用时落盘到 `mascot/`
-  再写文件名（形状必须过 `MASCOT_FILE_RE`，复用 `lib/routes/mascot.js` 的落盘语义）。
+  再写文件名（形状必须过 `MASCOT_FILE_RE`，复用 `packages/mascot-avatar/lib/routes/mascot.js` 的落盘语义）。
 - **头像段**：内嵌两张图的本体 + 文件名。应用时落盘到 `avatars/` 再写文件名
-  （形状过 `AVATAR_FILE_RE`，复用 `lib/routes/avatar.js` 的落盘语义）。
+  （形状过 `AVATAR_FILE_RE`，复用 `packages/mascot-avatar/lib/routes/avatar.js` 的落盘语义）。
 - **勾选默认值**：字体段**默认勾**、吉祥物段**默认勾**、头像段**默认不勾**
   （用户口径：头像体积翻倍、与「分享一份外观配置」关系最弱）。
 - **不勾的后果必须在对话框里写出来**（用户明确要求）：不勾 = **那一族一个字都不动接收方**
@@ -211,7 +211,8 @@
 **D5 — 上限与安全重新论证（承 Context 第 8 条）。**
 携带 base64 资产后上限必须重算，并给**单份资产的字节闸**（超限则拒绝并说明是**哪一项**，
 不做静默截断）。资产文件名与内容一律走既有消毒路径，**不新增第二条落盘通道**：
-落盘复用 `lib/routes/mascot.js` / `lib/routes/avatar.js` 已经验证过的原子写 + 同族清理语义。
+落盘复用 `packages/mascot-avatar/lib/routes/mascot.js` / `packages/mascot-avatar/lib/routes/avatar.js`
+已经验证过的原子写 + 同族清理语义。
 
 **D6 — 旧预设直接作废，不做兼容（撤销初版 D4 的读容忍）。**
 schema tag 升版后，**旧 tag 的预设文件一律读不出**：宿主按「读不懂」处理（沿用
@@ -228,12 +229,12 @@ schema tag 升版后，**旧 tag 的预设文件一律读不出**：宿主按「
 
 **D7 — 新增导入 / 导出，形态照抄字体集族（不另造一套）。**
 - **导出**：`GET /glass-presets/<id>/export`，`Content-Disposition: attachment`，
-  正文由**读到的值重建**（不照抄磁盘字节）—— 与 `lib/routes/fontsets.js` 的
+  正文由**读到的值重建**（不照抄磁盘字节）—— 与 `packages/fonts/lib/routes/fontsets.js` 的
   `<id>/export` 逐条同形。走**普通链接**，不引入 blob / `showSaveFilePicker`
   （本仓既有纪律，见 `src/preset-store.js` 的形态棘轮）。
 - **导入**：`POST /glass-presets/import`，本地预检三道（读不出 / 非 JSON / tag 不对各给
   一句可判定文案）后交宿主权威校验，再按占用情况分配新 id —— 照抄
-  `src/fontset-store.js` 的 `importFontSet` 与 `lib/routes/fontsets.js` 的 `import` 段。
+  `src/fontset-store.js` 的 `importFontSet` 与 `packages/fonts/lib/routes/fontsets.js` 的 `import` 段。
 - **导出对话框**：点「导出」先弹资产勾选对话框（D4 的三项 + 后果说明），确认后才发起下载。
 - ⚠️ **与 `lib/routes/presets.js` 文件头「没有 import/export」那条既有决策的关系**：
   该段原文要求「导出/导入若要做，应当连着『分享到市场』一起设计」。本 ADR **推翻它的

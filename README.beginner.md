@@ -18,7 +18,7 @@
 - 装好之后，打开 `dsh web`，你的聊天界面后面就会显示一张动态壁纸（视频 / 网页 / 场景都由插件实时渲染）。
 - 壁纸上面还会盖一层 **iOS 风格的「液态玻璃」**，让文字依然看得清。
 - 你可以随时换壁纸、调透明度、调颜色，甚至上传自己的图片/视频当壁纸。
-- **所有设置从 v0.4.0 起保存在你电脑上的一个文件里**，重启、换浏览器、清缓存都不会丢。
+- **所有设置都保存在你电脑上的一个文件里**，重启、换浏览器、清缓存都不会丢。
 
 ### 开始前，请确认你有
 
@@ -99,7 +99,7 @@ dsh plugin --profile web add dsh-plugin-wallpaper-engine
 
 ### 我的设置存在哪？
 
-**从 v0.4.0 起，全部设置都保存在电脑上的一个文件里**（Windows：`C:\Users\<你的用户名>\.dsh-wallpaper-engine\config.json`；
+**全部设置都保存在电脑上的一个文件里**（Windows：`C:\Users\<你的用户名>\.dsh-wallpaper-engine\config.json`；
 Mac / Linux：`~/.dsh-wallpaper-engine/config.json`）—— 重启、换端口、清浏览器数据都不丢，从老版本升级会**自动迁移**。
 
 > 为什么改、多设备共享同一份设置、读写与防抖行为见 [`docs/UPGRADING.md`](docs/UPGRADING.md) 的「设置持久化」。
@@ -113,7 +113,7 @@ Mac / Linux：`~/.dsh-wallpaper-engine/config.json`）—— 重启、换端口�
 **1. 打开选择壁纸，里面是空的 / 一张都没有？**
 - 确认 Wallpaper Engine 装好并至少下载过一张壁纸。
 - 确认 Steam 没装在特别奇怪的位置（一般默认位置没问题；非默认盘插件也会自动找）。
-- 确认装好了却还是空：看一眼 `installDir`（插件诊断文件里，或直接访问 `GET /wallpaper-engine/inventory`）—— 它是 `null` 就说明**安装目录没被认出来**。1.3.1 起同时支持新旧两种安装布局（新版本把 `wallpaper32.exe` 放进了 `distribution\` 子目录），旧版本遇到新布局会一律判成"没装"、界面只显示空库。
+- 确认装好了却还是空：看一眼 `installDir`（插件诊断文件里，或直接访问 `GET /wallpaper-engine/inventory`）—— 它是 `null` 就说明**安装目录没被认出来**。插件同时支持新旧两种安装布局（有的版本把 `wallpaper32.exe` 放进了 `distribution\` 子目录）。
 - 实在认不出来时：用环境变量 `DSH_WE_STEAM_ROOT` 指到**含 `steamapps\` 的那一层**（Steam 根目录，**不是** WE 的安装文件夹），再重启一次 `dsh web`。
 - 重启一次 `dsh web`。
 
@@ -127,7 +127,7 @@ Mac / Linux：`~/.dsh-wallpaper-engine/config.json`）—— 重启、换端口�
 - 正常情况下**它应该是动的** —— 插件内置的实时渲染引擎会在浏览器里重放场景（粒子 / 脚本 / 视差 / 包内音频）。
 - 若看到的是静止画面，说明实时渲染**降级**了（首帧超时或运行中断）：此时显示的是**实时抓帧**；重开「场景实时渲染」开关可清空记忆重试。注意大壁纸（`scene.pkg` 上百 MB 的那种）的**首帧本来就要等整包传完**，插件按包大小放大预算、并且传输还在进字节时不算超时；只有**渲染页真不出画面**才按壁纸记失败，而"传输没传完"那种失败会自己重试（不用你手动重开开关）。
 - **第一次**打开一张场景壁纸时，实时渲染还在启动，屏幕上先垫的是**作者的预览图**（就是你在 Wallpaper Engine 里看到的那张缩略图）—— 出首帧之前不留黑屏。等你**下次再切回**这张壁纸，垫的就是上一轮抓下来的**实时帧**了。
-- 连作者预览图都没有时，插件才会**诚实地留空**并说明原因 —— 它**不再**"替作者猜一张图"（那会是一张糊图），这是 1.0 之后的有意行为。
+- 连作者预览图都没有时，插件才会**诚实地留空**并说明原因 —— 它**不**"替作者猜一张图"（那会是一张糊图），这是有意的。
 
 **4. 我想让壁纸自动换，怎么做？**
 - 在「轮播列表」里点「新建」，给列表起个名，勾选你想轮换的壁纸，设置**切换间隔**（按分钟），勾上「自动轮转」就行。每个列表至少要 2 张壁纸。
@@ -136,7 +136,7 @@ Mac / Linux：`~/.dsh-wallpaper-engine/config.json`）—— 重启、换端口�
 - 「自定义壁纸」区有个「更改」按钮，点它选一个新文件夹（比如 `D:\wallpapers`），已有的文件会**自动搬过去**，不用手动复制。
 
 **6. 设置改了没生效 / 重启后又变回去了？**
-- v0.4.0 已经不存在这个问题了（设置存文件里）。如果你还在用老版本，升级到 0.4.0 即可：重新跑一次第一步的安装命令。
+- 设置存在宿主端文件里（见上面「我的设置存在哪？」），重启不会丢。若确实回退，先分清是哪一类设置 —— 见 [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) 的对应条目。
 
 **7. 这个插件会不会让 AI 变笨 / 多花 token？**
 - **不会。** 插件不向模型暴露任何工具或提示文本，对 agent 是零 token 开销。它纯粹是个界面美化。
@@ -171,7 +171,7 @@ macOS 上没有 **Wallpaper Engine 客户端**，所以没有 Steam 壁纸库可
 | **液态玻璃** | iOS 那种半透明、带模糊和光泽的玻璃效果。 |
 | **轮播** | 让几张壁纸按时间间隔自动轮流切换。 |
 | **软删除（隐藏）** | 把壁纸从列表里藏起来，但**不删源文件**，随时能恢复。 |
-| **localStorage** | 浏览器自己存数据的地方——**v0.4.0 起插件不再用它存设置了**，改存电脑上的文件。 |
+| **localStorage** | 浏览器自己存数据的地方——插件**不用它存设置**，设置存在电脑上的文件里。 |
 | **`config.json`** | 插件保存设置的文件，在你用户目录的 `.dsh-wallpaper-engine` 文件夹里。 |
 
 ### 还想看更详细的？
@@ -196,7 +196,7 @@ In one sentence: **it puts your Steam Wallpaper Engine wallpapers behind the Dee
 - Once installed, open `dsh web` and a live wallpaper appears behind your chat (video / web / scene all render live through the plugin).
 - An **iOS-style "liquid glass"** layer sits on top of it, so your text stays readable.
 - You can switch wallpapers, tune transparency and colors, or even upload your own images/videos as wallpapers.
-- **Since v0.4.0 every setting is stored in one file on your computer** — restarting, switching browsers or clearing browser data no longer loses it.
+- **Every setting is stored in one file on your computer** — restarting, switching browsers or clearing browser data does not lose it.
 
 ### Before you start, make sure you have
 
@@ -277,7 +277,7 @@ With a wallpaper active, the **「效果」 (effects)** tab has the picture slid
 
 ### Where are my settings stored?
 
-**Since v0.4.0 every setting lives in one file on your computer** (Windows: `C:\Users\<your-name>\.dsh-wallpaper-engine\config.json`;
+**Every setting lives in one file on your computer** (Windows: `C:\Users\<your-name>\.dsh-wallpaper-engine\config.json`;
 macOS / Linux: `~/.dsh-wallpaper-engine/config.json`) — restarts, port changes and cleared browser data do not lose it, and upgrading from an older version **migrates automatically**.
 
 > Why it changed, multi-device sharing, and the read/write (debounced) behaviour: see the 「设置持久化」 section of [`docs/UPGRADING.md`](docs/UPGRADING.md).
@@ -289,7 +289,7 @@ macOS / Linux: `~/.dsh-wallpaper-engine/config.json`) — restarts, port changes
 **1. The wallpaper picker is empty — not a single wallpaper?**
 - Make sure Wallpaper Engine is installed and you have downloaded at least one wallpaper.
 - Make sure Steam is not installed somewhere truly unusual (the default location is fine; the plugin also auto-detects non-default drives).
-- Still empty once you know it is installed? Check `installDir` (in the plugin diagnostics, or `GET /wallpaper-engine/inventory`): `null` means the **install directory was not recognised**. Since 1.3.1 both install layouts are supported (current releases keep `wallpaper32.exe` inside a `distribution\` subfolder); older versions judged such an install "not installed" and simply showed an empty library.
+- Still empty once you know it is installed? Check `installDir` (in the plugin diagnostics, or `GET /wallpaper-engine/inventory`): `null` means the **install directory was not recognised**. Both install layouts are supported (some releases keep `wallpaper32.exe` inside a `distribution\` subfolder).
 - If it still cannot find it, point `DSH_WE_STEAM_ROOT` at the level **containing `steamapps\`** (the Steam root, **not** the WE install folder) and restart `dsh web`.
 - Restart `dsh web` once.
 
@@ -312,7 +312,7 @@ macOS / Linux: `~/.dsh-wallpaper-engine/config.json`) — restarts, port changes
 - The 「自定义壁纸」 area has a 「更改」 (change) button: pick a new folder (e.g. `D:\wallpapers`) and existing files are **migrated automatically** — no manual copying.
 
 **6. My settings don't stick / revert after a restart?**
-- That problem no longer exists since v0.4.0 (settings live in a file). If you are still on an older version, update to 0.4.0 by re-running the install command from step 1.
+- Settings live in a host-side file (see "Where are my settings stored?" above), so a restart does not lose them. If they do revert, first work out which family of settings it is — see the matching entry in [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md).
 
 **7. Will this plugin make the AI dumber / cost more tokens?**
 - **No.** It exposes no tools or prompt text to the model — zero token cost for the agent. It is purely cosmetic.
@@ -347,7 +347,7 @@ System media (track title / artwork / spectrum) is built in on macOS too — not
 | **Liquid glass** | The translucent, blurred, glossy glass look iOS uses. |
 | **Rotation** | Letting several wallpapers switch automatically on a timer. |
 | **Soft delete (hide)** | Hiding a wallpaper from the list **without deleting the source file**; restorable at any time. |
-| **localStorage** | Where browsers keep their own data — **since v0.4.0 the plugin no longer stores settings there**, it uses a file instead. |
+| **localStorage** | Where browsers keep their own data — the plugin **does not store settings there**; settings live in a file instead. |
 | **`config.json`** | The file the plugin saves its settings in, inside the `.dsh-wallpaper-engine` folder in your user directory. |
 
 ### Want more detail?

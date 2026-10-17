@@ -1,5 +1,5 @@
 /**
- * 「壁纸库」页签的四个节渲染器（原 src/panel-tabs.js 的 38–506 行）。
+ * 「壁纸库」页签的四个节渲染器（原 src/panel-tabs.js）。
  * 本节渲染器从 src/panel-tabs.js 按域搬出，函数体逐字未改；父渲染器 renderWallpaperTab 仍在组装点
  * （src/panel-tabs.js），按顺序调这四个节。内联顺序见 scripts/build-client.mjs：本模块排在组装点之前。
  * 与另四个同族模块共享同一契约：只读 ctx、不写 selection、不调 emit（判据扫全族并集）。

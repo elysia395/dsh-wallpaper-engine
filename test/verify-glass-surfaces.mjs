@@ -2,8 +2,8 @@
  * verify-glass-surfaces.mjs —— 「玻璃面登记表」守卫。
  *
  * 回答的边界问题：**插件到底接管了哪些玻璃面，以及每个面的参数档位是谁。**
- * 这是 [`docs/archive/wip/GLASS-CONFIG-REFACTOR.md`](../../docs/archive/wip/GLASS-CONFIG-REFACTOR.md)
- * 的 P0：先把现状钉成机器事实，重构才有基线。
+ * 目的：先把**现状**钉成机器事实 —— 接管了哪些面、每个面的参数档位是谁。
+ * 没有这份基线，任何重构都无从判定"改坏了没有"。
  *
  * 为什么需要它（既有五个玻璃守卫都不回答这件事）：
  *   · `verify-readability` 管**可读性下限**（每个文字面必须带面纱）；
@@ -46,7 +46,7 @@ import { fileURLToPath } from 'node:url';
 // 共享实现（`new Function` 装入源码文本前必须先剥掉 `export { … }`）——别在这里再抄一份正则。
 import { stripExportBlocks } from './tools/js-text.mjs';
 // 刀3：样式族取文（8 个域模板 + 组装点）——源码侧用 styleText()，产物侧用 cssBodyOf()。
-import { styleText, cssBodyOf, cssPartsOf, panelText, liveText } from './tools/src-scope.mjs';
+import { styleText, cssBodyOf, cssPartsOf, panelText, liveText, parseInlineModules } from './tools/src-scope.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const CLIENT = process.argv[2] || join(ROOT, 'lib', 'client.js');
@@ -122,7 +122,7 @@ const SURFACES = [
     // W3 起它接了自己的按面变量（`--we-left-sidebar-blur` / `-alpha`，CSS 读
     // `var(--we-left-sidebar-<x>, <全局>)`）⇒ 档位 private 并登记进 PRIVATE_VARS
     // （⚠️ 原先标 `global` 是过期的：那两个前缀在产物 CSS 里各有 2 处 var() 消费）。
-    // ⚠️ 标签在 v1.3.0 追版时随上游改名（「左侧栏覆盖」→「左侧栏液态玻璃」，4eafb04）——
+    // ⚠️ 标签在 v1.3.0 追版时随上游改名（「左侧栏覆盖」→「左侧栏液态玻璃」）——
     //    它管的是**宿主原生左栏**，与 dsh-better-sidebar 那套「侧栏液态玻璃」分工不同
     //    （见 schema 里 leftSidebarGlass 的注释）。
     // ⚠️ 它的门控是**两个**：`leftSidebarGlass`（「左侧栏液态玻璃」本身）**且**
@@ -211,7 +211,7 @@ const PRIVATE_VARS = {
   'glass-child-settings-window': ['--we-settings-window-blur', '--we-settings-window-alpha'],
   'glass-child-floaters': ['--we-floaters-blur', '--we-floaters-alpha'],
   'left-sidebar-override': ['--we-left-sidebar-blur', '--we-left-sidebar-alpha'],
-  // 标题栏（2026-10-06）：与左栏完全同构的一组按面变量（glass.js 写、CSS 读）。
+  // 标题栏：与左栏完全同构的一组按面变量（glass.js 写、CSS 读）。
   'titlebar-override': ['--we-titlebar-blur', '--we-titlebar-alpha'],
   'conversation-thinking-trigger': ['--we-thinking-trigger-blur', '--we-thinking-trigger-alpha'],
 };
@@ -239,7 +239,7 @@ const FLOOR = {
   light: Number((SRC.match(/const READABILITY_FLOOR = ([\d.]+);/) || [])[1]),
   dark: Number((SRC.match(/const READABILITY_FLOOR_DARK = ([\d.]+);/) || [])[1]),
 };
-// 刀3（2026-10-13）：样式表从单个 CSS 模板拆成 8 个域模板 + 组装点 ⇒ 取文改走 cssBodyOf
+// 刀3：样式表从单个 CSS 模板拆成 8 个域模板 + 组装点 ⇒ 取文改走 cssBodyOf
 // （按声明顺序把族内每个域模板拼回一份 CSS 体，与旧单模板取文逐字节相同：276,804 B）。
 // 取不到任何模板会**抛错**（旧写法是静默拿到 undefined）——这里把失败显式转成退出码 1。
 let CSS_BODY = '';
@@ -708,7 +708,7 @@ console.log('\n③ 档位声明与私有变量组一致（private 必须真接�
 }
 
 // ═══ ⑤ 保真度「同源不变量」：一对保真度内部同源、两对之间不串线 ════════════════
-// 出处：[`docs/archive/wip/GLASS-CONFIG-REFACTOR.md`](../../docs/archive/wip/GLASS-CONFIG-REFACTOR.md) §3.2 ——
+// 不变量（同源）：
 // "某个面用它自己的保真度 f_s 时，它的釉色混合系数与它的下限覆盖度必须用同一个 f_s"。
 // 否则会出现"釉色按低保真回退了、地板却按满档压着"这种自相矛盾的合成
 //（观感上就是"颜色对了但底下还是白的/黑的"）。
@@ -819,8 +819,9 @@ console.log('\n⑤ 保真度同源不变量（tint 的钳制与 floor 的覆盖�
 
 // ═══ ⑥ settings golden 夹具的**键集快照**（防静默过期）════════════════════════
 // 为什么需要它：`test/fixtures/settings-sanitize-golden.json` 的**值**由
-// `verify-client` 的 `canon(sanitizeFromSchema(input))` 对 `canon(want)` 逐用例比对 ——
-// 那是**回放**：每个用例只验证"记录下来的输入仍产出记录下来的输出"。
+// `verify-client` 的 `canon(sanitizeFromSchema(input, side))` 对 `canon(want)` 逐用例比对 ——
+// **host 与 client 两侧都比**（client 侧是本轮补上的：此前那半数据没有任何判据，
+// 全改坏也双绿）—— 那是**回放**：每个用例只验证"记录下来的输入仍产出记录下来的输出"。
 // 于是它**不覆盖键的存在性**：夹具里某个对象少一个键时，值比对照样全过，守卫**照样绿**。
 // 而夹具的同步一直靠 note 里的人工约定（"新键按引入时行为补入"、"安全阀＝其余键零漂移"）。
 //
@@ -1182,7 +1183,7 @@ console.log('\n④ 接线 ↔ 注册表 ↔ 面名 三方对账');
 //     **逐字共享**（共享规则里插一层变量名就会让两边文本不同）。
 // 这两条正是防"判据退化成恒真"的手段，不该为了给新结构让路而放宽。
 //
-// ⇒ **结论**（同时记进 docs/archive/wip/GLASS-CONFIG-REFACTOR.md）：按面独立只能靠
+// ⇒ **结论**：按面独立只能靠
 //   **改全局变量的取值来源**（侧栏那条路：自己的变量 + 解析器），
 //   不能在共享规则里插入一层变量名。
 //
@@ -1299,10 +1300,10 @@ console.log('\n⑨ W5：各面的锚点门控覆盖率（防"关掉后还剩一�
     //    不加前瞻会被算进左栏的覆盖统计里，而它们带的是 data-we-titlebar-glass 门 ⇒ 假红。
     //    判据：左栏那条以 `)` 收尾（选择器到此为止），顶栏那条后面还跟着外层的 `)`。
     { id: 'left-sidebar-override', member: /:has\(> \[data-slot="sidebar"\]\)(?!\))/, anchor: /data-we-left-sidebar/, done: true },
-    // 标题栏（2026-10-06）：与左栏同族的"乙类"面，门是 body[data-we-titlebar-glass]
+    // 标题栏：与左栏同族的"乙类"面，门是 body[data-we-titlebar-glass]
     // （开关），另加 html[data-windows-titlebar]（壳层形态锚，只出现在 Windows Electron）。
     // ⚠️ member 必须是**这一面自己的选择器形态**（顶栏那个 CSS 模块哈希类名的子串
-    //    `div[class*="pI_x6G_frame"]`，见 src/styles.js:1177），**不能**写成门控属性本身 ——
+    //    `div[class*="pI_x6G_frame"]`，见 src/styles-sidebar.js 的标题栏 `::before` 规则），**不能**写成门控属性本身 ——
     //    两者写成同一条正则时，"这条规则丢了门控"会让它同时不再是 member ⇒ ungated 恒空、
     //    该面的 W5 判据**不可能红**（正是这条要防的失效模式：锚点外新增一条同面规则）。
     { id: 'titlebar-override', member: /pI_x6G_frame/, anchor: /data-we-titlebar-glass/, done: true },
@@ -2007,8 +2008,14 @@ console.log('\n⑬ CSS 契约（按面变量零兜底 / 门控许可证 / 双向
 // 的唯一真源，省得这里再抄一份文件列表（抄了必然漂）。
 console.log('\n⑭ 三方对账：写出的变量必须有人读（R4 死码清理的判据）');
 {
-  const BUILD_SRC = readFileSync(join(ROOT, 'scripts', 'build-client.mjs'), 'utf8');
-  const CLIENT_MODULES = [...BUILD_SRC.matchAll(/file:\s*'(src\/[^']+)'/g)].map((m) => m[1]);
+  // ⚠️ A3（每包一产物）之后，scripts/build-client.mjs 里**不止** INLINE_MODULES 一张表：
+  // SUBPACKAGE_BUILDS 的 `file:` 是**相对各包目录**的（src/fx-layer.js 等）。
+  // 早先这里用全文正则 `/file:\s*'(src\/…)'/` 抓模块，于是把子包文件当主包路径读 ⇒ ENOENT 硬崩。
+  // 现在只取 **INLINE_MODULES** 块（读法 = test/tools/src-scope.mjs 的 parseInlineModules，
+  // 单一真源；与 test/verify-module-layout.mjs 的 parseInlineModules 同款口径）。
+  // 覆盖面无损：迁走的四个浏览器半边文件里没有**字面量** setProperty("--we-…") 写入，
+  // 也没有 var(--we-…) 消费（只有一处注释提及）⇒ 本组两个集合与迁移前逐字相同。
+  const CLIENT_MODULES = parseInlineModules().map((e) => e.file);
   const texts = CLIENT_MODULES.map((f) => readFileSync(join(ROOT, f), 'utf8'));
   const written = new Set();
   for (const t of texts) {
@@ -2062,12 +2069,12 @@ console.log('\n⑭ 三方对账：写出的变量必须有人读（R4 死码清�
     '对照变量 ' + victim + '：摘掉消费者 → 判出；原状 → 不判出');
 }
 
-// ═══ ⑪ 思考玻璃门**不碰输入框**（2026-10-04 用户口径）══════════════════════════
+// ═══ ⑪ 思考玻璃门**不碰输入框**（用户口径）══════════════════════════
 // 口径：思考块液态玻璃开关开着时，输入框（[data-composer-card] 一族，含它内部的
 // 「+」按钮 [class*="_add"]）必须与开关关着时**逐位相同** —— 输入框只受基础对话栏
 // 玻璃（data-we-glass-chat 恒挂层）与「对话框玻璃·独立配置」管。
 // 历史：#134 原稿给输入卡也铺了 fill 接管与「+」白釉（连同 --dsw-specific-selector
-// 令牌改写），审计时补了门；2026-10-04 用户实测口径 = 整族退出，规则已删。
+// 令牌改写），审计时补了门；用户实测口径 = 整族退出，规则已删。
 // 这条判据防的是"哪次改动又把输入框塞回思考玻璃门下"——选择器文本级负向棘轮。
 console.log('\n⑪ 思考玻璃门不碰输入框（用户口径 2026-10-04）');
 {

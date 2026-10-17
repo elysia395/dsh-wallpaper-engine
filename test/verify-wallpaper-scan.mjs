@@ -2,8 +2,10 @@
 /**
  * verify-wallpaper-scan.mjs —— `lib/wallpaper-scan.js` 的聚焦判据。
  *
- * 被测对象：`createWallpaperScanKit({ WE_APPID, pathExistsP, isFileP, isDirectoryP })` ——
+ * 被测对象：`createWallpaperScanKit({ WE_APPID, pathExistsP, isFileP, isDirectoryP, extOf, schemeToCss })` ——
  * 「目录树 → 清单条目」的唯一推导链（扫描根 → 签名 → project.json → 条目 → WE 播放列表）。
+ * ⚠️ 后两个是**本分支的注入项**（上游把这两个 helper 定义在扫描族内部；本分支的单一真源分别是
+ * `lib/fs-paths.js` 与 `lib/kernel/host-kernel.js`）—— 判据面据此注入，见 `realDeps()` 与 D8。
  *
  * 为什么值得独立守卫：这条链错了，症状不是报错而是**静默少东西** ——
  *   · 扫描根少算一个 ⇒ 那一根里新增的壁纸永远不进库（签名一直"没变"，见 #158）；
@@ -21,10 +23,13 @@ import { mkdirSync, writeFileSync, readFileSync, existsSync, statSync, utimesSyn
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createWallpaperScanKit } from '../lib/wallpaper-scan.js';
+import { extOf } from '../lib/fs-paths.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const ISO = join(ROOT, '.test-cache', 'wallpaper-scan-guard');
 const SRC = join(ROOT, 'lib', 'wallpaper-scan.js');
+/** `extOf` 的真源（本分支把它做成注入项 ⇒ 它的变异体改这里，见 loadExtOfMutant）。 */
+const EXTOF_SRC = join(ROOT, 'lib', 'fs-paths.js');
 const APPID = '431960';
 const CONTENT = ['steamapps', 'workshop', 'content', APPID].join('/');
 
@@ -40,11 +45,30 @@ rmSync(ISO, { recursive: true, force: true });
 mkdirSync(ISO, { recursive: true });
 
 // ── 真磁盘替身（注入点）+ 夹具 ──────────────────────────────────────────────
-/** 注入点用**真实** fs 语义：被测对象自己不做任何路径语义判断，这正是注入的意义。 */
+/**
+ * 注入点用**真实** fs 语义：被测对象自己不做任何路径语义判断，这正是注入的意义。
+ *
+ * ⚠️ 本分支把 `extOf` / `schemeToCss` 也做成了注入项（见 `lib/wallpaper-scan.js` 文件头的差异说明）：
+ *   · `extOf` 注入**真源** `lib/fs-paths.js` 的那份（E1 的"只认真后缀"判据因此钉的是真源行为）；
+ *   · `schemeToCss` 的**真源**住 `lib/kernel/host-kernel.js`（未导出），这里按"期望值自行重推"
+ *     的纪律给一份同语义实现 —— 它只负责把 `schemecolor.value` 转成 CSS 色，C6/C7 判的是
+ *     "条目把作者配色带出来了、无效值不编色"这条**通过性**语义；那条转换的端到端真源
+ *     （目录形态上传 → inventory 的 `schemeColor`）由 `test/verify-scene-live.mjs` 的金值
+ *     `rgb(29, 56, 84)` 覆盖。
+ */
+const schemeToCssForFixture = (v) => {
+  if (typeof v !== 'string') return null;
+  const parts = v.trim().split(/\s+/).map(Number);
+  if (parts.length < 3 || parts.slice(0, 3).some((x) => !Number.isFinite(x))) return null;
+  const c = parts.slice(0, 3).map((x) => Math.max(0, Math.min(255, Math.round(x * 255))));
+  return `rgb(${c[0]}, ${c[1]}, ${c[2]})`;
+};
 const realDeps = () => ({
   pathExistsP: (p) => existsSync(p),
   isFileP: (p) => { try { return statSync(p).isFile(); } catch { return false; } },
   isDirectoryP: (p) => { try { return statSync(p).isDirectory(); } catch { return false; } },
+  extOf,
+  schemeToCss: schemeToCssForFixture,
 });
 const makeKit = (deps = {}) => createWallpaperScanKit({ WE_APPID: APPID, ...realDeps(), ...deps });
 
@@ -83,6 +107,23 @@ async function loadMutant (label, transform) {
   const file = join(dir, (mutantSeq++) + '-' + label + '.mjs');
   writeFileSync(file, out);
   return (await import(pathToFileURL(file).href)).createWallpaperScanKit;
+}
+
+/**
+ * ⚠️ `extOf` 在本分支是**注入项**（真源 `lib/fs-paths.js`）⇒ 它的变异体要改真源、再把变异体
+ * 作为注入项喂进扫描族 —— 这样 D8 钉的仍是"真后缀"这条语义，只是落点从扫描族内部挪到真源。
+ * 同一份源码只 import node: 内建 ⇒ 变异体可直接落 tmp 跑。
+ */
+let extMutantSeq = 0;
+async function loadExtOfMutant (label, transform) {
+  const src = readFileSync(EXTOF_SRC, 'utf8');
+  const out = transform(src);
+  if (out === src) throw new Error('extOf 变异体没改到源码（判据会失真）: ' + label);
+  const dir = join(ISO, 'mutants');
+  mkdirSync(dir, { recursive: true });
+  const file = join(dir, 'ext-' + (extMutantSeq++) + '-' + label + '.mjs');
+  writeFileSync(file, out);
+  return (await import(pathToFileURL(file).href)).extOf;
 }
 
 // ── 判据本体（正/负对照共用同一段代码）──────────────────────────────────────
@@ -189,7 +230,8 @@ await (async () => {
     const deps = realDeps();
     return createWallpaperScanKit({ WE_APPID: APPID,
       pathExistsP: (p) => { probes.push(p); return deps.pathExistsP(p); },
-      isFileP: deps.isFileP, isDirectoryP: deps.isDirectoryP });
+      isFileP: deps.isFileP, isDirectoryP: deps.isDirectoryP,
+      extOf: deps.extOf, schemeToCss: deps.schemeToCss });
   };
   check('A3 四个候选根（defaultprojects / myprojects / 两个库）都被探到，且每个恰好一次',
     await everyRootProbedOnce(countingKit, envProbe, probes), 'probes=' + JSON.stringify(probes));
@@ -208,7 +250,8 @@ await (async () => {
     const deps = realDeps();
     return { WE_APPID: APPID,
       pathExistsP: (p) => { probes3.push(p); return deps.pathExistsP(p); },
-      isFileP: deps.isFileP, isDirectoryP: deps.isDirectoryP };
+      isFileP: deps.isFileP, isDirectoryP: deps.isDirectoryP,
+      extOf: deps.extOf, schemeToCss: deps.schemeToCss };
   };
   check('A5 负对照：变异体把一个根探两次 ⇒ "每个只探一次"判红',
     await everyRootProbedOnce(() => twice(twiceDeps()), env3, probes3) === false);
@@ -394,11 +437,11 @@ await (async () => {
       return await kit.resolveSceneMainFileP(dir, 'nope.json') === 'scene.pkg';
     })());
 
-  const extMut = await loadMutant('ext-any-dot', (s) => s.replace(
+  const extMut = await loadExtOfMutant('ext-any-dot', (s) => s.replace(
     'return dot > sepAt + 1 ? s.slice(dot + 1).toLowerCase() : \'\';',
     'return dot >= 0 ? s.slice(dot + 1).toLowerCase() : \'\';'));
   check('D8 负对照：变异体把"真后缀"放宽成"有点就算" ⇒ extOf 判据判红（.bashrc 会变成 bashrc）',
-    extOnlyForRealSuffixes(() => extMut({ WE_APPID: APPID, ...realDeps() })) === false);
+    extOnlyForRealSuffixes(() => makeKit({ extOf: extMut })) === false);
 })();
 
 // ═══ E. pathKey / extOf / playlistItemId ═══════════════════════════════════

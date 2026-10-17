@@ -30,7 +30,20 @@
  * 所以判据是**换一条不依赖管道的通道再问一次**（`probeHandshakeViaFiles`：同一套参数把 stdio
  * 落文件、写一行 hello）**加上**产物可信度（`artifactTrusted`：手上这份的 sha256 是否就是发布
  * 产物）。只有"文件探针也判环境 + 产物可信"才记环境跳过，并在汇总行里**点名这条通道本次没有
- * 断言覆盖**；探针判回归、或产物不可信，都照旧判红。
+ * 断言覆盖**。
+ *
+ * ⚠️ **退出码 + 判词契约（CI 修法 B；`test/verify-bridge-ci.mjs` 的包装器按它消费）**：
+ *   · `0` = 判据全 ok；
+ *   · **`3` = 唯一失败来源是"环境差异"**（文件探针判 environment **且** 产物 sha256 可信）
+ *     —— 与环境跳过配套：红的原因归因给环境，退出码显式区分于"回归"；
+ *   · 其它任何失败（回归 / 产物不可信 / 探针缺失或自相矛盾）= `1`；
+ *   · 汇总附近**恰好打印一次**机器可读判词行
+ *     `[media-bridge] verdict=ok|environment|regression|untrusted`（包装器 fail-closed：没这行就当红）。
+ *   ⚠️ 但"环境差异"与"通过"**仍然不同形**：判词行 + 那条 ✗ + 末尾"这条通道本次没有断言覆盖"的
+ *   明细都在，退出码非 0（3）—— 严格入口直接跑依旧是"红"，只是红的原因可被机器区分。
+ *   这三条判别式是**纯函数** `resolveOutcome()`，文末用合成输入钉住四判词（见负对照）。
+ *   取舍口径：**"环境跳过"不能与"通过"同形**（否则静默失去覆盖），所以判词行 + 非 0 退出码
+ *   必须同时在位；`--allow-skip` 是显式开口，不给默认值。
  *
  * 属于 `npm run verify`；用 npm run verify:bridge 单独跑也可以。
  */
@@ -41,12 +54,12 @@ import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { homedir } from 'node:os';
 
-import { createMediaBackend } from '../lib/media/index.js';
+import { createMediaBackend } from '../packages/media-bridge/lib/backend.js';
 import {
   MEDIA_BRIDGE_TAG, MEDIA_BRIDGE_ASSETS, MEDIA_BRIDGE_SHA256, MEDIA_BRIDGE_FALLBACKS,
   mediaBridgeAssetFor, mediaBridgeCachePath, binaryMagicOk, provisionMediaBridge,
-} from '../lib/media/provision.js';
-import { lyricsToTuples, bridgeServeArgs, MEDIA_CONTROL_ACTIONS, createBridgeSupervisor } from '../lib/media/supervisor.js';
+} from '../packages/media-bridge/lib/provision.js';
+import { lyricsToTuples, bridgeServeArgs, MEDIA_CONTROL_ACTIONS, createBridgeSupervisor, bootAttemptBudgets } from '../packages/media-bridge/lib/supervisor.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const TEST_DIR = join(root, '.test-cache', 'verify-media-bridge');
@@ -61,7 +74,15 @@ let blocked = 0;
 const blockedNames = [];
 /** 被环境挡掉的**整条**通道（探针判决，见 classifyProbe 上方那段）：汇总行要点名。 */
 let channelSkipped = '';
+/** 文件探针的判决（'' = 没跑过）：退出码契约要区分「环境」与「回归」。 */
+let probeVerdict = '';
+/** 产物可信度（null = 没跑过探针；false = 产物不可信 ⇒ 判词 untrusted）。 */
+let artifactTrustOk = null;
+/** 判据名台账：同一条判据被数两次会把"1 个失败"读成"2 个失败"（失败支路曾经如此），
+ *  也会让覆盖面地板这类计数失真 —— 文末有一条判据专门钉"名字不许重复"。 */
+const checkNames = [];
 function check(name, ok, detail) {
+  checkNames.push(name);
   if (ok) passed++; else failed++;
   console.log((ok ? '  ✓ ' : '  ✗ ') + name + (detail ? ' — ' + detail : ''));
 }
@@ -97,6 +118,52 @@ function classifyProbe({ spawned, wrote, exited, timedOut, hello }) {
   if (hello) return 'environment';           // 文件通道能握手 ⇒ 坏的是管道那一层
   if (wrote || exited) return 'regression';  // 说了别的话 / 提前退出 ⇒ 可行动的失败
   return timedOut ? 'environment' : 'regression';
+}
+
+/**
+ * 「握手失败 ⇒ 换 spawn 姿势重试」的判据本体（生产与全部负对照共用）。
+ *
+ * ⚠️ 语义**分结局**，不能无条件要求"失败行"：**就绪结局上根本不存在失败行**。
+ * 本判据原先写成无条件的"必须有失败行 + 两次尝试" ⇒ 中间件在 CI 上握手成功时它**恒红**
+ * （CI 实测：唯一失败项就是它，明细「没有失败行 —— 说明没走到这条结局」；判据自己的注释
+ * 早已写明"只在产物在位但握手没成的分支里断言（OK 路径上不会出现失败行）"，但代码没照做）。
+ * 两个结局各有**可判红的**要求：
+ *   · **失败结局**（ready=false）：失败行必须在位，且逐次点名 **≥2 种姿势**（带耗时与存活位），
+ *     并出现「换 spawn 姿势重试」行 ⇒ 重试真的发生过。把重试短路（不试第二种姿势）⇒ 只剩一次尝试 ⇒ 红。
+ *   · **就绪结局**（ready=true）：成功行必须在位；**若**中途换过姿势，换姿势行必须齐形
+ *     （两种**不同**姿势 + 耗时 + 存活位）⇒ "换姿势"不许退化成同姿势空转或没有记账。
+ * @param {{ready: boolean, logs: string[]}} input
+ * @returns {{ok: boolean, detail: string}}
+ */
+function judgeBootRetry({ ready, logs }) {
+  const lines = (logs || []).map(String);
+  const failLine = lines.filter((l) => l.includes('中间件启动失败：')).join('\n');
+  const attempts = failLine.match(/尝试 \d+\/\d+：(detached|plain) \d+ms 存活=(true|false)/g) || [];
+  const postures = [...new Set(attempts.map((s) => /：(detached|plain)/.exec(s)[1]))];
+  const retryLines = lines.filter((l) => l.includes('换 spawn 姿势重试'));
+  const retryShapes = retryLines
+    .map((l) => /姿势=(\w+)，(\d+)ms，存活=(true|false)[\s\S]*?⇒ 换 spawn 姿势重试：(\w+) → (\w+)/.exec(l))
+    .filter(Boolean)
+    // ⚠️ 组号：1=首姿势 · 2=耗时 · 3=存活位 · **4=换之前** · **5=换之后**（off-by-one 会让
+    //    "同姿势空转"检出恒真 —— 本判据的负对照第一次跑就踩到了这个，改完才区分得开）。
+    .map((m) => ({ from: m[4], to: m[5], ms: Number(m[2]) }));
+  const readyLine = lines.some((l) => l.includes('中间件就绪：'));
+  if (ready) {
+    const badShape = retryShapes.filter((s) => s.from === s.to || !(s.ms >= 0));
+    const ok = readyLine && badShape.length === 0 && (!failLine || attempts.length >= 1);
+    return {
+      ok,
+      detail: `结局=就绪 · 成功行=${readyLine} · 换姿势行 ${retryLines.length} 条（齐形 ${retryShapes.length}${badShape.length ? '，坏形 ' + badShape.length : ''}）`
+        + ` · 失败行=${failLine ? '有（' + attempts.length + ' 次尝试明细）' : '无（就绪结局正常）'}`,
+    };
+  }
+  const ok = attempts.length >= 2 && postures.length >= 2 && retryLines.length >= 1;
+  return {
+    ok,
+    detail: failLine
+      ? `结局=失败 · 尝试 ${attempts.length} 次 / 姿势 ${postures.length} 种 / 换姿势行 ${retryLines.length} 条 ⇒ ` + failLine.slice(0, 220)
+      : '（失败结局却没有失败行 ⇒ 判据或夹具失效）',
+  };
 }
 /**
  * 文件探针：同一套参数起一次 `serve`，stdio 全部落文件（不经过管道），写一行 `hello`。
@@ -283,7 +350,7 @@ if (!binPath) {
   // 用中间件自带的假播放器：不需要真播放器、也不碰系统音频权限，断言才是确定的。
   // （这也是给用户的联调开关：DSH_WE_MEDIA_PROVIDER=mock 起插件就能看到假曲目。）
   process.env.DSH_WE_MEDIA_PROVIDER = 'mock';
-  // 引导预算：**必须与宿主（`lib/media/supervisor.js`）用的是同一个数**。`--provision`
+  // 引导预算：**必须与宿主（`lib/components/media-bridge/supervisor.js`）用的是同一个数**。`--provision`
   // 这条路会在 CI runner 上首次执行一个刚下载的二进制 —— 实测 windows-latest 25s 拿不到
   // `hello`（同一个产物、同一套参数，在本机 <25s 就绪），所以这条路显式放宽；本机自备
   // 产物那条仍按宿主默认。
@@ -291,15 +358,34 @@ if (!binPath) {
   //    一旦放宽引导而不动它，测试会抢在握手结束前判失败，而且看起来像"中间件超时"）。
   const bootMs = PROVISION ? 90000 : (Number(process.env.DSH_WE_MEDIA_BOOT_MS) || 25000);
   process.env.DSH_WE_MEDIA_BOOT_MS = String(bootMs);
-  const backend = createMediaBackend({ dataDir: TEST_DIR, log: (m) => console.log('    · ' + m) });
+  // 两姿势重试的预算**在总预算内分配**（不翻倍）—— 纯函数判据，下面还用行为面验证"确实试了两次"。
+  const budgets = bootAttemptBudgets(bootMs);
+  check('两姿势重试的预算在总预算内分配（第二次不额外加时间）',
+    budgets.second > 0 && budgets.first >= 1000 && budgets.first + budgets.second <= bootMs,
+    `总 ${bootMs}ms = 第一次 ${budgets.first}ms + 换姿势第二次 ${budgets.second}ms`);
+  // 守护侧日志要能被断言（"换姿势重试真的发生了"），但仍原样打到 stdout。
+  const bootLogs = [];
+  const backend = createMediaBackend({ dataDir: TEST_DIR, log: (m) => { bootLogs.push(String(m)); console.log('    · ' + m); } });
   backend.start({ audio: false, online: false });   // 不碰系统音频权限
   let ready = false;
   const readyDeadline = Date.now() + bootMs + 15000;   // 引导预算 + 收尾余量
   while (!ready && Date.now() < readyDeadline) { await sleep(150); ready = backend.usingBridge(); }
-  // ⚠️ 这条**必须在 `if (ready)` 外面**：放进去就成了"进得来块 ⇒ ready 为真 ⇒ 判据恒真"，
-  //    中间件根本没起来时它不会把失败喊出来，而是**整段静默跳过** —— 恒红与静默不可达是同一个洞的两面。
-  check('中间件就绪（握手通过、子进程在跑）', ready, `引导预算 ${bootMs}ms`);
+  // ⚠️ 这条判据**必须覆盖到每一个结局**（不能只写在 `if (ready)` 里）：放进去就成了"进得来块 ⇒
+  //    ready 为真 ⇒ 判据恒真"，中间件根本没起来时它不会把失败喊出来，而是**整段静默跳过** ——
+  //    恒红与静默不可达是同一个洞的两面。
+  //    做法：给每个结局各留**一次**计数（`judgeReady` 自带去重），失败支路把探针判决写进**同一行**
+  //    的明细里。⚠️ 失败支路曾经**再数一次同名判据** ⇒ 一个失败被读成 `failed=2`（同一条判据在
+  //    报告里出现两行 ✗），所以这里收成唯一入口。
+  const READY_NAME = '中间件就绪（握手通过、子进程在跑）';
+  const readyWhyBase = `引导预算 ${bootMs}ms`;
+  let readyJudged = false;
+  const judgeReady = (ok, why) => {
+    if (readyJudged) return;   // 同名判据只计数一次（文末"判据名唯一"那条判据钉住这件事）
+    readyJudged = true;
+    check(READY_NAME, ok, why ? `${readyWhyBase}；${why}` : readyWhyBase);
+  };
   if (ready) {
+    judgeReady(true);
     const info = backend.bridgeInfo() || {};
     check('hello.protocol = 1（协议版本一致才用）', Number(info.protocol) === 1);
     check('hello 报告平台与后端', Boolean(info.platform) && Boolean(info.provider),
@@ -373,27 +459,67 @@ if (!binPath) {
   } else {
     backend.stop();
     // 二义消解（见 classifyProbe 上方那段）：换一条不依赖管道的通道再问一次，并要求
-    // **产物可信**（sha256 就是发布产物）才允许记环境跳过。
+    // **产物可信**（sha256 就是发布产物）才允许把失败归因给环境。三种结局都把原因写进
+    // **同一条**判据的明细（唯一入口 `judgeReady`），退出码照旧是红 —— 见文件头。
     const probe = await probeHandshakeViaFiles(binPath, bridgeServeArgs({
       cacheDir: join(TEST_DIR, 'probe-cache'), audio: false, online: false, mock: true,
     }), join(TEST_DIR, 'probe'));
     const verdict = classifyProbe(probe);
     const trust = artifactTrusted(binPath, asset);
+    probeVerdict = verdict;
+    artifactTrustOk = trust.ok;
     const probeBrief = (probe.hello ? '文件通道拿到了 hello 应答' : (probe.stdout || probe.stderr
       ? '子进程原话：' + String(probe.stdout || probe.stderr).replace(/\s+/g, ' ').slice(0, 160)
       : (probe.spawned ? '存活且文件全空' : '起不来：' + (probe.detail || 'spawn 失败'))));
     if (verdict === 'regression') {
-      check('中间件就绪（握手通过、子进程在跑）', false,
-        JSON.stringify(backend.status().fallback || '')
-        + `（引导预算 ${bootMs}ms；文件探针判**回归**：${probeBrief} ⇒ 不是环境差异）`);
+      judgeReady(false, JSON.stringify(backend.status().fallback || '')
+        + `；文件探针判**回归**：${probeBrief} ⇒ 不是环境差异`);
     } else if (!trust.ok) {
-      check('中间件就绪（握手通过、子进程在跑）', false,
-        JSON.stringify(backend.status().fallback || '')
-        + `（引导预算 ${bootMs}ms；探针判 ${verdict}，但产物不可信：${trust.why} ⇒ 不能归因给环境）`);
+      judgeReady(false, JSON.stringify(backend.status().fallback || '')
+        + `；探针判 ${verdict}，但产物不可信：${trust.why} ⇒ 不能归因给环境`);
     } else {
+      // 环境差异：**仍然判红**（明细里点名"本次没有断言覆盖"）。新契约下退出码 = 3（唯一失败
+      // 来源是环境差异 + 产物可信），与"通过"（0）和"回归"（1）都不同形 —— 别把这条支路改成不计数。
       channelSkipped = probeBrief;
-      skip('中间件端到端用例', `文件探针判 ${verdict}：${probeBrief}；产物可信（${trust.why}）⇒ 判为环境差异（非协议回归）`);
+      const why = `文件探针判 ${verdict}：${probeBrief}；产物可信（${trust.why}）⇒ 判为环境差异（非协议回归）`;
+      judgeReady(false, why + '；这条通道本次没有断言覆盖，不得与"通过"同形（唯一失败来源是环境差异 ⇒ 退出码 3，不是 0）');
+      skip('中间件端到端用例', why);
     }
+  }
+  // 兜底：上面若新增了不调 `judgeReady` 的支路，这条判据仍会红一次 —— 判据宁可恒红，不可静默。
+  judgeReady(false, '（没有走到任何结局分支：这条判据本身是红的，别让它变成静默跳过）');
+
+  // ── 两姿势重试的**行为面**判据（CI 修法 B）────────────────────────────────
+  // 判据本体 = `judgeBootRetry`（纯函数，按**结局**分派，见它的注释）。生产扫描与这里的全部
+  // 负对照都调它：合成日志各喂一次，覆盖"就绪结局"（CI 上真实发生的那个 —— 原先在这里恒红）
+  // 与"失败结局"（重试短路 / 只有一行 / 没有换姿势行都要红）。
+  {
+    const r = judgeBootRetry({ ready, logs: bootLogs });
+    check('握手失败会换 spawn 姿势重试（按结局分派：失败结局要求失败行逐次点名姿势与耗时；'
+      + '就绪结局要求成功行在位 + 换姿势行齐形）',
+      r.ok, r.detail);
+    // 负对照（同一份 judgeBootRetry，纯合成日志）
+    const READY_LINE = '系统媒体中间件就绪：mock 0.1.5（win32/x64），仅元数据';
+    const RETRY_OK = '中间件握手失败（姿势=detached，1234ms，存活=true，两路输出都为空）'
+      + ' ⇒ 换 spawn 姿势重试：detached → plain（总预算 90000ms 不翻倍）';
+    const FAIL_2 = '中间件启动失败：hello 超时（预算 25000ms，存活=false，姿势=plain，'
+      + '尝试 1/2：detached 15000ms 存活=true 两路输出都为空；尝试 2/2：plain 8000ms 存活=false 两路输出都为空）';
+    check('negative control：**就绪结局**（CI 上真实形态：成功行在位、无失败行 ⇒ 曾在此恒红）⇒ 判据放行',
+      judgeBootRetry({ ready: true, logs: [READY_LINE] }).ok === true,
+      judgeBootRetry({ ready: true, logs: [READY_LINE] }).detail);
+    check('negative control：就绪结局 + 中途换过姿势且行齐形 ⇒ 放行（这是"重试成功"的正常形态）',
+      judgeBootRetry({ ready: true, logs: [RETRY_OK, READY_LINE] }).ok === true);
+    check('negative control：就绪结局但换姿势行**同姿势空转**（detached → detached）⇒ 判红（口径没退化成恒绿）',
+      judgeBootRetry({ ready: true, logs: [RETRY_OK.replace('detached → plain', 'detached → detached'), READY_LINE] }).ok === false);
+    check('negative control：就绪结局但**成功行缺失**（说就绪却没有任何成功记账）⇒ 判红',
+      judgeBootRetry({ ready: true, logs: [] }).ok === false);
+    check('negative control：失败结局 + 两次尝试 + 两种姿势 + 换姿势行 ⇒ 放行（原判据的语义仍被钉住）',
+      judgeBootRetry({ ready: false, logs: [RETRY_OK, FAIL_2] }).ok === true);
+    check('negative control：失败结局但**重试被短路**（失败行只剩一次尝试、没有换姿势行）⇒ 判红（牙齿与原判据一致）',
+      judgeBootRetry({ ready: false, logs: [FAIL_2.replace('尝试 2/2：plain 8000ms 存活=false 两路输出都为空', '')] }).ok === false
+      && judgeBootRetry({ ready: false, logs: [FAIL_2.replace('（总预算', '（')] }).ok === false);
+    check('negative control：失败结局却**没有失败行** ⇒ 判红（"没走到这条结局"不许当通过）',
+      judgeBootRetry({ ready: false, logs: [READY_LINE] }).ok === false);
   }
 }
 
@@ -426,12 +552,21 @@ const bogus = join(TEST_DIR, 'bogus-binary');
   writeFileSync(bogus, filler, { mode: 0o755 });
 }
 process.env.DSH_WE_MEDIA_BRIDGE = bogus;
-const bog = createMediaBackend({ dataDir: join(TEST_DIR, 'bogus'), log: () => {} });
+// ⚠️ 这个夹具是"握手失败 ⇒ 换姿势重试"的**确定性**来源：坏产物必然握不上手（不需要 CI 抖动、
+//    也不需要本地有可用产物）⇒ 两次尝试 + 换姿势行 + 失败行必然出现。把它记下来喂同一条
+//    `judgeBootRetry`，于是"重试被短路 / 换姿势行丢了"在任何一次运行里都会红。
+const bogLogs = [];
+const bog = createMediaBackend({ dataDir: join(TEST_DIR, 'bogus'), log: (m) => { bogLogs.push(String(m)); } });
 bog.start({ audio: false, online: false });
 let bogFallback = '';
 for (let i = 0; i < 120 && !bogFallback; i++) { await sleep(150); bogFallback = bog.status().fallback || ''; }
 check('坏产物 → 回落内置实现（不无限等）', Boolean(bogFallback) && bog.usingBridge() === false,
   bogFallback || '（超时未回落）');
+{
+  const r = judgeBootRetry({ ready: bog.usingBridge(), logs: bogLogs });
+  check('确定性夹具：坏产物逼出握手失败 ⇒ 同一条判据的**失败结局分支**真被走到（两次尝试 + 两种姿势 + 换姿势行）',
+    r.ok, r.detail);
+}
 bog.stop();
 await sleep(1500);
 if (process.platform === 'win32') {
@@ -452,11 +587,120 @@ rmSync(join(TEST_DIR, 'probe'), { recursive: true, force: true });
 rmSync(join(TEST_DIR, 'probe-cache'), { recursive: true, force: true });
 rmSync(bogus, { force: true });
 
-// 覆盖面地板（全局）：离线那一段（产物表 7 / 歌词 3 / 反向控制 5 / 探针判定 4 = 19 条）与有没有
-// 产物无关，恒在。整段被短路或删空时，下面的"全绿 / --allow-skip"就是**空域上的通过**，所以钉一个
-// 绝对下界（改离线判据条数时同步改这个数）。
-check('覆盖面地板：本次至少执行 19 条判据（否则汇总的"通过"是空域上的）', passed + failed >= 19,
+// 判据名唯一：同一条判据被数两次会把"1 个失败"读成"2 个失败"（失败支路曾经如此），也让下面的
+// 覆盖面地板失去意义。**这条有牙**：任何重名都会红。
+check('判据名唯一（同一条判据不许计数两次）',
+  checkNames.length === new Set(checkNames).size,
+  `${checkNames.length} 条判据 / ${new Set(checkNames).size} 个唯一名字`);
+
+// ── 退出码 + 判词契约（CI 修法 B；包装器 `test/verify-bridge-ci.mjs` 按它消费）──────────────
+// 判别式收成**纯函数**：ok=0 / environment=3 / 其它=1（回归 · 产物不可信 · 探针缺失或自相矛盾）。
+// `verdict` 四值就是包装器认的那四个；下文用合成输入钉住映射（负对照与生产走同一函数）。
+function resolveOutcome({ failedCount, envOnly, probeVerdict, trustOk, blockedCount, allowSkip }) {
+  // "没跑"与"通过"不能同形：缺前置且没显式接受 ⇒ fail-closed 判回归。
+  if (blockedCount > 0 && !allowSkip) return { verdict: 'regression', code: 1 };
+  if (failedCount === 0) return { verdict: 'ok', code: 0 };
+  if (trustOk === false) return { verdict: 'untrusted', code: 1 };
+  // ⚠️ **这两条的先后顺序就是语义**，必须是显式决定的（不是"碰巧"）：
+  //   探针说 `regression` ⇒ 直接判回归，**不许**被 `envOnly` 降级成"环境跳过"。
+  //   反例（本判据修之前的样子）：`envOnly` 那条排在前面 ⇒
+  //   `envOnly=true + trustOk=true + probeVerdict='regression'` 会落成 environment/3，
+  //   即"探针说这是真回归，却被记成环境差异"⇒ fail-closed 静默失效。
+  //   生产路径当前**不可达**（`channelSkipped` 只在探针**不是** regression 的分支里赋值），
+  //   但正是这一格要由下面的矩阵钉住 —— 将来谁把赋值分支重构走，矩阵会红。
+  if (probeVerdict === 'regression') return { verdict: 'regression', code: 1 };
+  // 环境差异必须是**唯一**失败来源，且产物 sha256 可信 —— 两个条件缺一不可。
+  if (envOnly && trustOk === true && failedCount === 1) return { verdict: 'environment', code: 3 };
+  return { verdict: 'regression', code: 1 };   // 探针缺失 / 自相矛盾 ⇒ fail-closed
+}
+const outcome = resolveOutcome({
+  failedCount: failed, envOnly: Boolean(channelSkipped), probeVerdict,
+  trustOk: artifactTrustOk, blockedCount: blocked, allowSkip: ALLOW_SKIP,
+});
+
+/**
+ * 退出码矩阵的判据本体（生产与负对照共用）：喂一个"解析器"跑完整张矩阵 ⇒ 不合格清单。
+ * @param {Array<[object, string, number]>} rows `[输入, 期望 verdict, 期望退出码]`
+ * @param {(input: object) => {verdict: string, code: number}} resolveFn
+ * @returns {string[]} 空 = 全对
+ */
+function outcomeMatrixFailures(rows, resolveFn) {
+  const bad = [];
+  for (const [input, verdict, code] of rows) {
+    const o = resolveFn(input);
+    if (o.verdict !== verdict || o.code !== code) {
+      bad.push(JSON.stringify(input) + ' ⇒ 期望 ' + verdict + '/' + code + ' 实测 ' + o.verdict + '/' + o.code);
+    }
+  }
+  return bad;
+}
+/**
+ * 合成输入矩阵（**6 组，无重复行**）。
+ * ⚠️ 本表**不许有重复行**（逐字相同的行零新增判别力），且必须含最能区分分支顺序的那组：
+ *    `envOnly=true + trustOk=true + failedCount=1 + probeVerdict='regression'`。
+ *    那组**必须**落 `regression/1`：它是唯一能区分判定顺序的输入（落 `environment/3` 就说明顺序被绕过）。
+ */
+const OUTCOME_ROWS = [
+  [{ failedCount: 0, envOnly: false, probeVerdict: '', trustOk: null, blockedCount: 0, allowSkip: false }, 'ok', 0],
+  [{ failedCount: 1, envOnly: true, probeVerdict: 'environment', trustOk: true, blockedCount: 0, allowSkip: false }, 'environment', 3],
+  [{ failedCount: 1, envOnly: false, probeVerdict: 'regression', trustOk: true, blockedCount: 0, allowSkip: false }, 'regression', 1],
+  [{ failedCount: 1, envOnly: false, probeVerdict: 'environment', trustOk: false, blockedCount: 0, allowSkip: false }, 'untrusted', 1],
+  [{ failedCount: 0, envOnly: false, probeVerdict: '', trustOk: null, blockedCount: 1, allowSkip: false }, 'regression', 1],
+  // ★ 原先缺失的那格：环境差异与"产物可信"都成立，但**探针判回归** ⇒ 必须是回归，不许降级成跳过。
+  [{ failedCount: 1, envOnly: true, probeVerdict: 'regression', trustOk: true, blockedCount: 0, allowSkip: false }, 'regression', 1],
+];
+{
+  const bad = outcomeMatrixFailures(OUTCOME_ROWS, resolveOutcome);
+  check('退出码契约：四个判词的映射（合成输入钉住 ok / environment / regression / untrusted；'
+    + '含"环境差异成立但探针判回归 ⇒ 必须回归"那格）',
+    bad.length === 0,
+    bad.join('；') || `${OUTCOME_ROWS.length} 组输入全部相符 · 生产路径本次 = verdict ${outcome.verdict} / code ${outcome.code}`);
+  // 负对照 1：**键序**对调 ⇒ 结论不变（函数按名字解构，不许依赖对象的键序）
+  const flipped = OUTCOME_ROWS.map(([input, v, c]) => {
+    const reordered = {};
+    for (const k of Object.keys(input).reverse()) reordered[k] = input[k];
+    return [reordered, v, c];
+  });
+  check('negative control：同一批输入把**键序**对调 ⇒ 同一条矩阵判据结论不变（不靠对象遍历顺序碰巧对）',
+    outcomeMatrixFailures(flipped, resolveOutcome).length === 0
+    && outcomeMatrixFailures([...OUTCOME_ROWS].reverse(), resolveOutcome).length === 0);
+  // 负对照 2：**分支序**对调的变异体（把"环境差异"那条挪回"探针判回归"之前 = 修前的样子）⇒
+  //   同一张矩阵必须把它判红。这条证明矩阵真的锚定了顺序，而不是"顺序换了也照样绿"。
+  const mutantResolve = ({ failedCount, envOnly, probeVerdict, trustOk, blockedCount, allowSkip }) => {
+    if (blockedCount > 0 && !allowSkip) return { verdict: 'regression', code: 1 };
+    if (failedCount === 0) return { verdict: 'ok', code: 0 };
+    if (envOnly && trustOk === true && failedCount === 1) return { verdict: 'environment', code: 3 }; // ← 修前的顺序
+    if (trustOk === false) return { verdict: 'untrusted', code: 1 };
+    if (probeVerdict === 'regression') return { verdict: 'regression', code: 1 };
+    return { verdict: 'regression', code: 1 };
+  };
+  const mutantBad = outcomeMatrixFailures(OUTCOME_ROWS, mutantResolve);
+  check('negative control：把 `envOnly` 判据挪到 `probeVerdict=regression` 之前的变异体 ⇒ 同一张矩阵判红'
+    + '（顺序即语义，且被矩阵钉住）',
+    mutantBad.length === 1 && /environment\/3/.test(mutantBad[0]), mutantBad.join('；') || '**没判红**');
+}
+
+// 「环境跳过」那条判据按**新契约**改口径：它要防的仍是"跳过不与通过同形"（现在两者退出码不同：
+// 3 vs 0），但断言从「failed ≥ 1」升级成「退出码=3 **且** 仍有 ✗ 计数」—— 比原来更严。
+check('环境差异不与通过同形（唯一失败来源是环境差异 ⇒ 退出码 3，且仍有 ✗ 计数）',
+  !channelSkipped || (outcome.code === 3 && outcome.verdict === 'environment' && failed >= 1),
+  channelSkipped
+    ? `本次环境跳过：verdict=${outcome.verdict} code=${outcome.code} failed=${failed}（必须 code=3 且 failed ≥ 1）`
+    : '本次没有环境跳过');
+
+// 覆盖面地板（全局）：离线那一段（产物表 7 / 歌词 3 / 反向控制 5 / 探针判定 4 = 19 条，加文末
+// 两条契约判据 = **21** 条）与有没有产物无关，恒在。整段被短路或删空时，下面的"全绿 / --allow-skip"
+// 就是**空域上的通过**，所以钉一个绝对下界（改离线判据条数时同步改这个数）。
+check('覆盖面地板：本次至少执行 21 条判据（否则汇总的"通过"是空域上的）', passed + failed >= 21,
   '已执行 ' + (passed + failed) + ' 条');
+
+/** 机器可读判词行**恰好一次**（包装器 fail-closed：缺这行当红）。 */
+let verdictEmitted = false;
+const emitVerdict = (v) => {
+  if (verdictEmitted) return;
+  verdictEmitted = true;
+  console.log(`[media-bridge] verdict=${v}`);
+};
 
 console.log(`\nmedia-bridge 自检：${passed} 通过 / ${failed} 失败`
   + `${skipped ? ` / ${skipped} 平台跳过` : ''}`
@@ -465,7 +709,8 @@ if (blocked && !ALLOW_SKIP) {
   console.log(`\n✗ 有 ${blocked} 段因缺前置**没有执行**（${blockedNames.join('、')}）—— `
     + '默认判失败，因为"没跑"与"通过"不能同形。');
   console.log('  要么补前置（--provision / 设 DSH_WE_MEDIA_BRIDGE），要么显式接受：--allow-skip');
-  process.exit(1);
+  emitVerdict(outcome.verdict);
+  process.exit(outcome.code);
 }
 if (blocked) {
   console.log(`\n⚠️  ${blocked} 段被显式允许跳过（--allow-skip）：${blockedNames.join('、')} —— `
@@ -476,5 +721,10 @@ if (channelSkipped) {
   console.log('   这条通道本次**没有断言覆盖**（不是通过）：产物存在且 sha256 通过，失败形态是'
     + '"存活但不吭声"，与协议回归不可区分 ⇒ 交给探针裁决，探针也判环境。');
   console.log('   在有媒体栈的机器（或本机 `node test/verify-media-bridge.mjs --provision`）上这一步会真跑。');
+  console.log('   ⚠️ **本次仍然不是绿**（退出码 3，"中间件就绪"那条给的是 ✗）：'
+    + '这条通道没被断言，就不能与"通过"同形。判词里的"环境差异"说的是**红的原因**，不是"可以不管"。');
 }
-process.exit(failed ? 1 : 0);
+emitVerdict(outcome.verdict);
+// 退出码契约：0 = 全 ok；3 = 唯一失败来源是环境差异（探针判 environment 且产物可信）；
+// 其它（回归 / 产物不可信 / 探针缺失或矛盾）= 1 —— 见文件头与 `resolveOutcome()`。
+process.exit(outcome.code);

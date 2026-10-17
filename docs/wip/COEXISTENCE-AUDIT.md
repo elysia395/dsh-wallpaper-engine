@@ -1,9 +1,25 @@
 # 共存审计与玻璃/壁纸解耦计划（原始记录）
 
-> **状态**：进行中（住 `wip/` 的活计划，按 [`docs/README.md`](../README.md) §目录的寿命规则收口后移入 `archive/wip/`）。
+> **状态**：进行中（住 `wip/` 的活计划，按 [`docs/README.md`](../README.md) §目录的寿命规则收口后归档）。
 > 本文是 2026-10-09 交付的共存审计原始记录 + 重构计划（S1–S8 分批落地）。
 > **第一批已随本分支落地**：S2 令牌契约 → [`../TOKEN-CONTRACT.md`](../TOKEN-CONTRACT.md)（生成物）+ `test/verify-token-contract.mjs`；
 > S8 共存文档 → [`../COEXISTENCE.md`](../COEXISTENCE.md) + [`../adr/0010-glass-off-revisit-four-states.md`](../adr/0010-glass-off-revisit-four-states.md)。
+>
+> **2026-10-14 逐批复核（本机复算）**：
+>
+> | 批次 | 状态 | 证据 / 复算 |
+> |---|---|---|
+> | S1 玻璃主开关 / 共存四态 | **未落地** | schema 里没有四态键（`glass-only` / `wallpaper-only` / `off` 在 `lib/settings-schema.js` + `src/**` 命中 0）；ADR-0010 已定案（实施分三批、主开关最后） |
+> | S2 令牌契约文件化 + 漂移守卫 | **已落地** | [`../TOKEN-CONTRACT.md`](../TOKEN-CONTRACT.md) + `test/verify-token-contract.mjs` |
+> | S3 让路协议通用化（属性级 opt-out + 对外信号） | **未落地** | [`../COEXISTENCE.md`](../COEXISTENCE.md) 自己写明"属性级 opt-out 在计划中（ADR-0010 D3）" |
+> | S4 共存自诊断 + 一键降级到"仅壁纸" | **未落地** | `src/**` 无"仅壁纸"入口 |
+> | S5 第三方面契约集中化（一个映射表 + 版本漂移测试） | **疑似已随 S2 落地** | 同上行（映射表 = 契约生成物）；请 owner 确认后改本行 |
+> | S6 包含块预检常开（不依赖视差开关） | **未核对** | 该坑的解释在 `src/glass-extra.js` / `src/parallax-layer.js` 的注释里，但"常开预检"本身未见 |
+> | S7 卸载健壮性（逐步 try/catch + 幂等 + 单一属性表） | **未核对** | 需 owner 逐条过 |
+> | S8 共存文档 | **已落地** | [`../COEXISTENCE.md`](../COEXISTENCE.md) + [`../adr/0010`](../adr/0010-glass-off-revisit-four-states.md) |
+>
+> ⇒ **结论：不能归档**（S1 / S3 / S4 未落地）。本文继续住 `wip/`；S1 / S3 / S4 的落地口径在
+> [`../adr/0010`](../adr/0010-glass-off-revisit-four-states.md)，落地后按寿命规则整体归档。
 >
 > ⚠️ **数字与行号以复算为准**：本文的聚合数与部分 `file:line` 出自审计当时的工具口径与代码状态
 > （核对结论：`verify-client` / `verify-glass-surfaces` 的行号锚对应 f73f6f1 一带，`styles.js` 的行号对应更早状态，
@@ -241,5 +257,5 @@ S1 玻璃主开关/四态（含守卫改写）；S5 第三方契约集中化 + �
 ## 附：审计方法与产物
 
 - 量化脚本：`.integration-notes/scratch-scripts/tmp-token-gate-scope.mjs`（花括号栈 CSS 解析器，只计真实声明、排除 `var(--dsw-…)` 回退读取）。运行：`node .integration-notes/scratch-scripts/tmp-token-gate-scope.mjs src/styles.js`。
-- 覆盖范围：`src/**`（41 个模块）、`lib/**`（宿主 facade/路由/schema/serve/媒体监督）、`test/**` 的守卫与兼容 harness、`docs/**` 全部（含 `adr/`、`archive/`、`wip/`）、三份 README。
+- 覆盖范围：`src/**`（41 个模块）、`lib/**`（宿主 facade/路由/schema/serve/媒体监督）、`test/**` 的守卫与兼容 harness、`docs/**` 全部（含决策记录、归档区与 `wip/`）、三份 README。
 - 子代理审计 4 路，其中「开关矩阵」「第三方危险清单」两路**静默失败无产出**（教训：本仓这种需要精确 `file:line` 的审计要自己做，不要外包）；「文档审计」「耦合地图」两路有效，其结论已并入本文件。

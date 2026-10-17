@@ -22,15 +22,17 @@ import { readFileSync, mkdirSync, writeFileSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
-import { createTranscodeKit } from '../lib/transcode.js';
+import { createTranscodeKit } from '../lib/media/transcode.js';
 import { stripComments } from './tools/js-text.mjs';
 
 const results = [];
 /** 转码编码器兜底（issue：只有 NVENC ⇒ 无 NVENC 的 ffmpeg 必然全失败）。 */
 {
-  // 抽帧转码实现已搬进 lib/transcode.js（第 10 刀）⇒ 文本判据合并两处；判据/期望值一字未改。
+  // 抽帧转码实现住 lib/media/transcode.js（P0 库化；判据原先直读上游同名副本 lib/transcode.js，
+  // task-10 A 已把该副本的修复搬进真源、把本判据重指过来，并在本批末次提交删掉了该副本）
+  // ⇒ 文本判据合并两处；判据/期望值一字未改。
   const idx = readFileSync(new URL('../lib/index.js', import.meta.url), 'utf8')
-    + readFileSync(new URL('../lib/transcode.js', import.meta.url), 'utf8');
+    + readFileSync(new URL('../lib/media/transcode.js', import.meta.url), 'utf8');
   const oldBaseForm = idx.includes("'-map', '0:v:0', '-an', '-preset', 'p1',");
   const p1OnlyInEncTune = idx.includes("av1_nvenc: ['-preset', 'p1'")
     && idx.includes("h264_nvenc: ['-preset', 'p1'");
@@ -74,10 +76,10 @@ const results = [];
  *  的回答必须来自只读的 `transcodeCached`，**顺手起转码**要被拒；③ 客户端确实带着当前上限去问，
  *  并把这个回答记成 `selection.transcodeReady`。 */
 {
-  // 三处被钉的文本里，`transcodeCacheKey`/`transcodeCachePathFor` 的实现已搬进 lib/transcode.js
-  // （第 10 刀）；`transcodeCached` 仍在门面 ⇒ 合并两处文本，判据/期望值一字未改。
+  // 三处被钉的文本里，`transcodeCacheKey`/`transcodeCachePathFor` 的实现住 lib/media/transcode.js
+  // （P0 库化；task-10 A 起本判据重指真源）；`transcodeCached` 仍在门面 ⇒ 合并两处文本，判据/期望值一字未改。
   const host = readFileSync(new URL('../lib/index.js', import.meta.url), 'utf8')
-    + readFileSync(new URL('../lib/transcode.js', import.meta.url), 'utf8');
+    + readFileSync(new URL('../lib/media/transcode.js', import.meta.url), 'utf8');
   const derived = readFileSync(new URL('../lib/routes/media-derived.js', import.meta.url), 'utf8');
   const layer = readFileSync(new URL('../src/video-layer.js', import.meta.url), 'utf8');
   check('抽帧缓存键只有一份：落盘与"有没有缓存"共用 transcodeCacheKey(abs, mtimeMs, fps)',
@@ -134,16 +136,23 @@ const results = [];
  *  所以：加入者登记只用**同步观测**（不需要取消），账本语义用**手造条目**跑（不需要真任务）。
  */
 {
-  const root = fileURLToPath(new URL('../.test-cache/transcode-waiter-ledger/', import.meta.url));
+  // ⚠️ 沙盒路径**动态拼**（不用 `new URL('../.test-cache/…')` 这种静态相对说明符）：
+  // `test/verify-module-layout.mjs` 的口径是"源码里的静态相对路径必须指向存在的文件"，
+  // 而 `.test-cache/**` 是运行时产物目录（本段跑完就 rmSync）⇒ 静态写法会随"目录当前是否在盘上"翻面。
+  const root = join(fileURLToPath(new URL('..', import.meta.url)), '.test-cache', 'transcode-waiter-ledger');
   mkdirSync(root, { recursive: true });
   const src = join(root, 'fake.mp4');
   writeFileSync(src, 'not-really-an-mp4');
   process.env.DSH_WE_FFMPEG = join(root, 'no-such-ffmpeg');
   const kit = createTranscodeKit({
+    // 真源 deps 契约（`lib/media/transcode.js` 文件头）：目录一律由访问器注入，
+    // 本段只关心"在途命中是否登记加入者"，所以 getMediaInfo 给 null、其余指向沙盒。
+    cacheBaseDir: () => join(root, 'cache'),
     configPath: () => join(root, 'config.json'),
-    transcodeCacheDir: () => join(root, 'transcodes'),
-    ensureDirOnce: (d) => { mkdirSync(d, { recursive: true }); return d; },
+    videoPreviewCacheDir: () => join(root, 'video-previews'),
+    getMediaInfo: () => null,
     atomicTmpPath: (f) => f + '.tmp' + process.pid + '1',
+    pluginRoot: root,
   });
   /** 路由侧最小的 res 替身：账本只用到 `once('close', …)`。 */
   function fakeRes() {
@@ -194,7 +203,7 @@ const results = [];
 
   // 源码形态：在途命中分支**在返回同一个 promise 之前**先回调 onEntry。负对照按字面要求做
   // "把那一行删掉"——阳性与变异跑的是同一条判据函数。
-  const tcText = readFileSync(new URL('../lib/transcode.js', import.meta.url), 'utf8');
+  const tcText = readFileSync(new URL('../lib/media/transcode.js', import.meta.url), 'utf8');
   const joinsThroughOnEntry = (text) => {
     const at = text.indexOf('TRANSCODE_INFLIGHT.get(cachePath)');
     if (at < 0) return false;
@@ -232,7 +241,7 @@ const results = [];
  *  报红（守卫自身卡住，CI 只能超时）。
  */
 {
-  const tcText = readFileSync(new URL('../lib/transcode.js', import.meta.url), 'utf8');
+  const tcText = readFileSync(new URL('../lib/media/transcode.js', import.meta.url), 'utf8');
   /** 判据：返回没有「子进程已建立」守卫包裹的 kill 调用点（行号）。 */
   const pidUnguarded = (text) => {
     const lines = stripComments(text).split('\n');
@@ -340,8 +349,7 @@ const localStorage = {
 const transcodePending = []; // { fps, url, controller, resolve, reject }
 const transcodeResolved = []; // snapshots of completed requests (fps, aborted)
 // 夹具**故意用原生可解的容器/编码**（mp4 里的 avc1 = H.264，浏览器直接能播）：这正是
-// 帧率上限必须仍然生效的那一类源。2026-10-02 的回归就是"原生可解 ⇒ 不抽帧"，而夹具当时写的是
-// `hvc1`（不在原生白名单里）⇒ 走的是"非原生必须转"那条路，回归**在夹具里看不见**。
+// 帧率上限必须仍然生效的那一类源。
 // 口径：上限的判据是"源帧率是否高于上限"，与容器能不能原生播无关（见 src/video-layer.js
 // 的 capNeedsTranscode）。所以夹具必须站在"原生可解 + 高帧率"这一侧。
 const mediaInfo = { width: 3840, height: 2160, codec: 'avc1', fps: 120 };

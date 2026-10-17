@@ -20,7 +20,10 @@
  *   ① fixture 的四组与 runner 现读的四组逐条一致（`chainKey` / 步数 / 顺序 / 每步字段）；
  *   ② 每组硬档条数 ≥ 地板（防"清单削空 ⇒ 判据永真"）；
  *   ③ 清单里每个 `file` 真实存在（防清单漂成死路径）；
- *   ④ `all` 组**恰好**是 `build` + 其余三组的有序拼接（防组合组被悄悄改短）。
+ *   ④ `all` 组**恰好**是 `build` + 其余三组的有序拼接（防组合组被悄悄改短）；
+ *   ⑤ 守卫面上每个文件**要么在链上、要么在 `OFF_CHAIN_WHY` 里有一条非空理由**（R-5：链会短路，
+ *      没挂链的判据永远不在 PR 门禁上跑，而"没跑"与"跑绿"在报告里长得一样 ⇒ 一条新写的强判据
+ *      可以静默脱链）。豁免**过期**（文件已在链上）或**悬空**（不在守卫面）同样判红。
  *
  * 重冻结（**刻意做成显式动作**，不是自动跟随）：
  *
@@ -37,7 +40,9 @@ import { join } from 'node:path';
 import {
   ROOT, GROUPS, CHAIN_KEYS, TIER_FLOOR, readChain, normalize, chainDiff, floorDiff,
   compositionDiff, hardFiles, describe,
+  OFF_CHAIN_WHY, OFF_CHAIN_FLOOR, offChainDiff,
 } from './tools/guard-chain.mjs';
+import { guardSurface } from './tools/guard-targets.mjs';
 
 const FIXTURE = join(ROOT, 'test', 'fixtures', 'verify-chain.json');
 
@@ -118,6 +123,20 @@ check('清单里每个 file 都真实存在（防清单漂成死路径）', dead
 const comp = compositionDiff(live);
 check('`all` = `build` + verify + docs + smoke（有序拼接）', comp.length === 0, comp.join(' | ') || '结构正确');
 
+// ── 判据 ⑤：脱链必须有**代码内**理由（R-5）───────────────────────────────
+// 守卫面（`verify-*` / `*-smoke` / `e2e-*` / `compat-*`）上每个文件要么在链上、要么在
+// `test/tools/guard-chain.mjs` 的 `OFF_CHAIN_WHY` 里有一条非空理由；豁免过期 / 悬空同样判红。
+const surface = guardSurface();
+const chainedFiles = [];
+for (const g of GROUPS) for (const s of live[g].steps) if (s.kind === 'guard' && s.file) chainedFiles.push(s.file);
+const offChain = offChainDiff(surface, chainedFiles);
+const chainedOnSurface = new Set(chainedFiles.map((f) => f.replace(/^test\//, '')).filter((f) => surface.includes(f)));
+check('守卫面上每个文件要么在链上、要么有非空 OFF_CHAIN_WHY（脱链 = 永不进 PR 门禁）',
+  offChain.length === 0, offChain.length ? showDiff(offChain) : `${surface.length} 个文件：链上 `
+    + `${chainedOnSurface.size} 个 · 豁免 ${Object.keys(OFF_CHAIN_WHY).length} 个`);
+check('覆盖面：守卫面解析到足够多的文件（防"面变空 ⇒ 判据永真"）', surface.length >= OFF_CHAIN_FLOOR,
+  `surface=${surface.length} ≥ 地板 ${OFF_CHAIN_FLOOR}`);
+
 // ── 负对照 ────────────────────────────────────────────────────────────────
 // 喂给**同一个**判据函数：一处改动必须被报出来，且报出来的那一条要指对位置。
 {
@@ -164,6 +183,22 @@ check('`all` = `build` + verify + docs + smoke（有序拼接）', comp.length =
   const ghost = { kind: 'guard', npm: null, file: 'test/verify-no-such-guard.mjs', args: [], tier: 'hard', probe: false };
   check('负对照：合成一条不存在的 file 会被判出',
     !existsSync(join(ROOT, ghost.file)) && describe(ghost).includes('verify-no-such-guard'));
+}
+
+// 脱链负对照（R-5）：全部喂给 `offChainDiff` 同一个函数，并且要有**正对照**证明它不恒真
+{
+  const S = ['verify-a.mjs', 'verify-b.mjs'];
+  check('负对照：守卫面上多一个脱链文件且没写 OFF_CHAIN_WHY ⇒ 判红',
+    offChainDiff(S, ['test/verify-a.mjs'], {}).some((x) => x.includes('verify-b.mjs')));
+  check('负对照：OFF_CHAIN_WHY 是空串（等于没写）⇒ 判红',
+    offChainDiff(['verify-b.mjs'], [], { 'verify-b.mjs': '   ' }).length > 0);
+  check('负对照：豁免**过期**（文件其实已在链上）⇒ 判红（否则它会给未来的回归打掩护）',
+    offChainDiff(['verify-a.mjs'], ['test/verify-a.mjs'], { 'verify-a.mjs': '旧理由' }).length > 0);
+  check('负对照：豁免指向不在守卫面（或已不存在）的文件 ⇒ 判红',
+    offChainDiff(['verify-a.mjs'], [], { 'verify-a.mjs': '理由', 'ghost-guard.mjs': '理由' })
+      .some((x) => x.includes('ghost-guard.mjs')));
+  check('正对照：链上 + 合法豁免的输入放行（判据不是恒真）',
+    offChainDiff(S, ['test/verify-a.mjs'], { 'verify-b.mjs': '需要真宿主' }).length === 0);
 }
 
 console.log('');

@@ -7,7 +7,7 @@
  * 规范就是「用 `--dsw-alias-*` 上色」⇒ **任何按规范写的第三方 UI 插件都会自动
  * 继承我们的玻璃** —— 这是全仓最大的隐式耦合面，但今天没有任何一份文件列出
  * 「我们到底改写了哪些 token、在哪个门控下」。手写清单一定会烂，所以本工具从
- * **样式族**（`src/styles-base.js` … `src/styles-ext.js`，2026-10-13 刀3 由单一
+ * **样式族**（`src/styles-base.js` … `src/styles-ext.js`，刀3 由单一
  * `src/styles.js` 按视觉域拆出）的 CSS 模板**现算**出契约，`test/verify-token-contract.mjs`
  * 重算并逐字节比对 `docs/TOKEN-CONTRACT.md`。
  *

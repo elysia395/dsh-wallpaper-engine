@@ -15,6 +15,14 @@
  * ① 管没人 import 的文件，② 管没人调用的声明，本判据管**没人消费的导出**。
  *
  * ── 口径（全部**现算**，不维护手抄名单）───────────────────────────────────────
+ *   · **扫描面来自 `test/tools/repo-face.mjs`**（唯一口径）：以仓库根/`lib`/`src` 为面，但
+ *     ① **嵌套仓库一律不扫**（目录里出现 `.git` = 另一份 worktree/检出）、② **gitignore 的
+ *     本地目录按名单不扫**（`.integration-notes` 等）。并由 `git ls-files` 当独立真源对账
+ *     （`gitViewDiff`；git 不可用时报**具名 SKIP**，不静默当一致）。
+ *     ⚠️ 为什么不能只 `listFiles(ROOT)+SKIP_DIRS`：本仓根下嵌着**另一个完整 worktree**
+ *     （`.integration-notes/scratch/head-wt/**`）⇒ 消费者面本机 1478 个文件、干净检出 263 个，
+ *     每个导出名都能在"另一份副本"里被读到 ⇒ **主判据恒绿（假绿）**，CI 才报得出真问题。
+ *     这是"扫描面写死"家族的**镜像面**：不是面太窄（漏报），而是**面太脏**（假绿）。
  *   · **公开入口集合**：读 `package.json` 的 `exports`，取出所有以 `.js` 结尾的取值
  *     （既覆盖 `"." : "./lib/index.js"` 这种字符串形态，也覆盖 `{ default: … }` 对象形态）。
  *     在集合里的文件**不判**（那是包的对外 API）。
@@ -24,7 +32,7 @@
  *     `export * from` 不算具名导出（前者匿名，后者的名字由被转出模块自己认领）。
  *   · **消费者 = 真标识符引用**：剥注释（`tools/js-text.mjs` 的 `stripComments`）**之后**，
  *     再掩掉**非引用**的语法位置，剩下的代码里出现该名字（词边界）才算一次消费。被掩的
- *     位置与理由（2026-10-13 升级，见 task-14）：
+ *     位置与理由（升级，见 task-14）：
  *       1. **字符串字面量 / 模板串 / 正则字面量整段** —— 字面量里的名字是数据不是引用；
  *          模板串只保留 `${…}` 里的表达式（表达式本身递归按同一口径掩码）。
  *          反例（升级前被算成消费者）：`src.includes('IDLE_STOP_MS')`、
@@ -67,13 +75,13 @@
  *     实测把 `src/client.js` 清空后红名单 119 → 198、**79 个只被 hub 消费的名字当场变红**，
  *     证明 hub 确实在消费者面内（漏掉它会把真消费者判成零消费者）。
  *
- * ── 升级当场抓到什么（2026-10-13 · 62 条 · **0 条真死声明**）──────────────────
+ * ── 升级当场抓到什么（· 62 条 · **0 条真死声明**）──────────────────
  * 新口径重算后红名单 62 条：`lib/**` 6 条 + `src/**` 56 条（升级前这些名字全都被"字符串
  * 字面量 / 构建 markers 数组 / 替身对象的键名"续着命 ⇒ 一条都没报红）。逐条看过，**62/62
  * 的声明本体在各自文件内都还有真自用**（函数被同文件的调用点用、常量被同文件的判断用）
  * ⇒ 没有一条是"真死声明"，它们全是**只把名字写在非引用位置上的空导出面**。
  * 因此清理一律**只删 `export` 关键字或 `export { … }` 里的 specifier，声明本体与文件内
- * 自用一字不动**（`lib/**` 6 条见 `576056b`、补刀 1 条见 `472d8cf`；`src/**` 56 条见 task-17）。
+ * 自用一字不动**（逐条清单与批次属历史，见 [`CHANGELOG.md`](../docs/CHANGELOG.md)）。
  * 唯一例外是 `src/avatar-layer.js::avatarGlyphSvgString`：它被 `test/verify-scene-live.mjs:4766`
  * 的精确集合 golden（5 名集 → 4 名集）钉着，必须与该 golden 同一笔提交落刀（Lead 执行）。
  * 这正是"字面量不是引用"必须写进口径的原因：只有把字面量掩掉，空导出面才会现形。
@@ -84,29 +92,71 @@
  *
  * Usage:  node test/verify-settings-schema-exports.mjs
  */
-import { readFileSync, readdirSync } from 'node:fs';
-import { dirname, join, resolve } from 'node:path';
+import { existsSync, readFileSync, readdirSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { stripComments } from './tools/js-text.mjs';
 import { createCheck } from './tools/assert-harness.mjs';
+// 扫描面的**唯一口径**：嵌套仓库（另一份 worktree/检出）+ gitignore 的本地目录都不许进面；
+// 并用 `git ls-files` 当独立真源对账（`listFace` / `gitViewDiff` / `diffFace`）。
+import { listFace, gitViewDiff, diffFace } from './tools/repo-face.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
+
+/**
+ * 绝对路径 ⇒ 仓库相对路径，**统一 POSIX 分隔符**（本判据面的唯一口径）。
+ * 为什么承重：扫描键必须与 `publicSet`（来自 `package.json`，POSIX）同风格，否则 `publicSet.has(mod)`
+ * 恒 false ⇒ 公开入口被当成内部模块查死导出（2026-10-15 实测：Windows 上 `lib\subpackage-boot.js`
+ * 的 `schemaView` / `subpackageKeys` 被这样误报，而 CI（POSIX）上豁免生效、不出现）。
+ */
+const relOf = (abs) => abs.slice(ROOT.length + 1).split(sep).join('/');
 const { check, stats } = createCheck();
 
-/** 不扫的目录：版本库/依赖/测试缓存/构建产物（产物目录里是同一份代码的副本）。 */
+/**
+ * ⚠️ 旧口径（**只用于负对照**：复现"脏扫描面 ⇒ 假绿"的形态，别在生产路径上用）。
+ * 它是"扫描面太脏"的原型：以仓库根为面 + 一张平凡目录黑名单 ⇒ 仓库里**另一份副本**
+ * （嵌套 worktree、被 gitignore 的本地目录）会一起进消费者面。
+ */
 const SKIP_DIRS = new Set(['.git', 'node_modules', '.test-cache', '.cache', 'dist', 'build', 'coverage', '.dsh']);
 /** "被跟踪的代码文件" = 这些扩展名（`.d.ts` 不在内：它是声明产物，不是消费者）。 */
 const CODE_EXT = ['.js', '.mjs', '.cjs', '.ts', '.tsx', '.jsx'];
 /** 构建产物：`src/**` 内联进它 ⇒ 里面的名字不构成独立消费。 */
 const BUILD_PRODUCT = 'lib/client.js';
 
-/** 递归列出扩展名命中的文件（相对 ROOT、POSIX 分隔符、字典序）。 */
-function listFiles(absDir, exts, out = []) {
+/**
+ * **子包的浏览器半边产物**（BUNDLE-SPLIT §7.1 / ADR-0013 D9「多包后每包一产物」）。
+ * 与 `BUILD_PRODUCT` 同性质：`npm run build` 现场生成、被 `.gitignore` 排除（`packages/<pkg>/lib/client.<pkg>.js`）
+ * ⇒ 干净检出里没有、构建后才有 ⇒ 走出来的面会比 `git ls-files` **多出**它们。
+ * **真源 = 各包 `package.json` 的 `exports['./client']`**（构建脚本 `SUBPACKAGE_BUILDS[].artifact` 与它逐字相同），
+ * 不写死 fx / parallax：多一个声明了浏览器半边的包，这里自动多一条豁免，而**别的**产物名仍按"脏面"判红。
+ */
+function subpackageClientProducts() {
+  let entries;
+  try { entries = readdirSync(join(ROOT, 'packages'), { withFileTypes: true }); } catch { return []; }
+  const names = entries.filter((e) => e.isDirectory()).map((e) => e.name).sort();
+  const out = [];
+  for (const name of names) {
+    let meta;
+    try { meta = JSON.parse(readFileSync(join(ROOT, 'packages', name, 'package.json'), 'utf8')); } catch { continue; }
+    const target = meta.exports && meta.exports['./client'];
+    if (typeof target !== 'string') continue;
+    out.push({
+      rel: 'packages/' + name + '/' + target.replace(/^\.\//, ''),
+      declaresClient: Boolean(meta.dsh && meta.dsh.client),
+    });
+  }
+  return out;
+}
+const SUBPACKAGE_CLIENT_PRODUCTS = subpackageClientProducts();
+const ALLOWED_BUILD_PRODUCTS = [BUILD_PRODUCT, ...SUBPACKAGE_CLIENT_PRODUCTS.map((p) => p.rel)];
+
+/** 递归列出扩展名命中的文件（相对 ROOT、POSIX 分隔符、字典序）。**仅负对照用**（见 SKIP_DIRS 注释）。 */
+function listFilesNaive(absDir, exts, out = []) {
   let entries;
   try { entries = readdirSync(absDir, { withFileTypes: true }); } catch { return out; }
   for (const e of entries) {
     if (e.isDirectory()) {
-      if (!SKIP_DIRS.has(e.name)) listFiles(join(absDir, e.name), exts, out);
+      if (!SKIP_DIRS.has(e.name)) listFilesNaive(join(absDir, e.name), exts, out);
       continue;
     }
     if (exts.some((x) => e.name.endsWith(x))) out.push(join(absDir, e.name));
@@ -214,12 +264,21 @@ function skipRegex(text, i) {
 
 /** `text[i] === '/'` 处该按正则字面量解释吗（看前一个有意义字符/词）。 */
 function regexAllowedAt(out) {
-  const trimmed = out.replace(/\s+$/, '');
-  if (!trimmed) return true;
-  const last = trimmed[trimmed.length - 1];
+  // ⚠️ 只回看**尾部一小段**（task-14 实测的性能坑）：原实现对整个 `out` 做
+  // `out.replace(/\s+$/, '')`，而 `out` 是**累积输出** ⇒ 掩码整体退化成 O(n²)：
+  // 4MB 的构建产物 `lib/client.js` 有 41,045 个 `/`，每次回看 4MB（实测 308ms/次）
+  // ⇒ 单这一个文件就要 ≈3.5 小时（本判据在守卫链 [58/58] 上因此"300 秒无输出"）。
+  // 改法**语义等价**：都是"最后一个有意义字符，以及它所在的词"——
+  // 只是把"对全长做 replace + 正则"换成了"定长回看"，不再随 out 增长而变慢。
+  let end = out.length;
+  while (end > 0 && /\s/.test(out[end - 1])) end--;
+  if (end === 0) return true;
+  const last = out[end - 1];
   if (REGEX_PREV_CHARS.has(last)) return true;
   if (/[\w$]/.test(last)) {
-    const word = /[A-Za-z_$][\w$]*$/.exec(trimmed);
+    let start = end;
+    while (start > 0 && /[\w$]/.test(out[start - 1])) start--;
+    const word = /[A-Za-z_$][\w$]*$/.exec(out.slice(start, end));
     return !!word && REGEX_PREV_WORDS.has(word[0]);
   }
   return false;
@@ -317,17 +376,45 @@ function judge(input) {
 const pkg = JSON.parse(readFileSync(join(ROOT, 'package.json'), 'utf8'));
 const publicSet = publicEntriesOf(pkg.exports);
 
-const moduleFiles = [...listFiles(join(ROOT, 'lib'), ['.js']), ...listFiles(join(ROOT, 'src'), ['.js'])]
-  .map((p) => p.slice(ROOT.length + 1))
+const moduleFiles = [...listFace(join(ROOT, 'lib'), { exts: ['.js'] }), ...listFace(join(ROOT, 'src'), { exts: ['.js'] })]
+  .map((p) => relOf(p))
   .filter((p) => !p.startsWith('lib/types/') && p !== BUILD_PRODUCT)
   .sort();
 const modules = new Map(moduleFiles.map((f) => [f, readFileSync(join(ROOT, f), 'utf8')]));
 
-const consumerFiles = listFiles(ROOT, CODE_EXT)
-  .map((p) => p.slice(ROOT.length + 1))
+const consumerAbs = listFace(ROOT, { exts: CODE_EXT });
+const consumerFiles = consumerAbs
+  .map((p) => relOf(p))
   .filter((p) => !p.startsWith('lib/types/') && !p.startsWith('node_modules/'))
   .sort();
 const consumers = new Map(consumerFiles.map((f) => [f, readFileSync(join(ROOT, f), 'utf8')]));
+
+// ── 自检：扫描面键 == publicSet 键（都 POSIX；否则豁免静默失效）──────────────────
+// 承重性见 relOf() 注释：`listFace()` 给的是绝对路径，切片后必须转 POSIX，才能与 `package.json`
+// 的 exports 取值对上。这一条是"本机红 / CI 绿"那类假红的守门人。
+{
+  const posixKeys = [...modules.keys(), ...consumers.keys()].every((k) => !k.includes('\\'));
+  const publicOnDisk = [...publicSet].filter((p) => p !== BUILD_PRODUCT && existsSync(join(ROOT, p)));
+  const missing = publicOnDisk.filter((p) => !modules.has(p));
+  const buggy = judge({
+    modules: new Map([['lib\\subpackage-boot.js', 'export const DEAD = 1;\n']]),
+    publicSet: new Set(['lib/subpackage-boot.js']),
+    consumers: new Map([['test/clean.mjs', 'const x = 1;\n']]),
+  });
+  check('自检：扫描面键统一 POSIX 分隔符（Windows 上 join 出反斜杠 ⇒ 公开入口豁免静默失效）',
+    posixKeys, `modules=${modules.size} 个键 · consumers=${consumers.size} 个键`);
+  check('自检：package.json exports 的公开入口在面内用同一个键（豁免才对得上）',
+    // 地板随形态收缩：P-F 每出户一格组件行，根 `exports` 就少两条 `.js` 公开入口
+    // （`./<组件>` 与 `./<组件>/package.json`；`./<组件>/locale/*.json` 不是 `.js`，本函数不收）。
+    // 2026-10-16 批 1/批 2 出户 `about-notice` / `mascot-avatar` 后 = 3（`lib/index.js` +
+    // `lib/subpackage-boot.js` + 仍在盘上的 `./media-bridge`）；`media-bridge` 出户后 = 2。
+    // 这条判据的**牙**在 `missing.length === 0`（分隔符一错，publicSet 与面键就对不上）。
+    publicOnDisk.length >= 2 && missing.length === 0,
+    `公开入口（在盘上，除构建产物）${publicOnDisk.length} 个 · 面内按键命中 ${publicOnDisk.length - missing.length} 个 · 缺 ${JSON.stringify(missing)}`);
+  check('负对照：面键带反斜杠而 publicSet 是 POSIX ⇒ 公开入口被误当内部模块、死导出误报（本机旧形态）',
+    buggy.ok === false && buggy.offenders.length === 1 && buggy.offenders[0].name === 'DEAD',
+    buggy.ok ? '未判红（负对照失效）' : buggy.offenders.map((o) => o.mod + '⇒' + o.name).join(' '));
+}
 
 // ── 自检：扫描面非空（空面会让主判据"恒绿"，是最危险的失败形态）──────────────
 check('自检：内部模块面非空（lib/** + src/** 现算）', modules.size >= 40, `${modules.size} 个模块`);
@@ -336,6 +423,45 @@ check('自检：公开入口集合从 package.json 现算到', publicSet.has('li
   [...publicSet].join(' '));
 check('自检：构建产物（lib/client.js）不在内部模块清单里，且作为消费者面被豁免',
   !modules.has(BUILD_PRODUCT) && publicSet.has(BUILD_PRODUCT), `publicSet=${publicSet.has(BUILD_PRODUCT)}`);
+
+// ── 自检：扫描面 == **git 视角**的文件面（独立真源；不许"多出副本"也不许"面变窄"）──
+// 为什么必须有这一条：面太脏时**本机恒绿而 CI 红**（实测消费者面 1483 vs 干净检出 263）。
+// `allowedExtra` 逐条给理由：`lib/client.js` 是 gitignore 的**构建产物**（本地存在、干净检出没有）、
+// 本文件自身在被跟踪之前也短暂地属于"未跟踪"。
+{
+  // 自检（豁免名单的牙）：逐条来自包清单、形状与 `.gitignore` 的产物规则一致、且该包真的声明了 `dsh.client`
+  // （三件齐：`exports['./client']` + `dsh.client` + 产物文件）。名单空了 ⇒ 多包后的产物会当成"脏面"判红，
+  // 所以"一条都没有"本身就是失败（P-A 之后至少 fx / parallax 两个包）。
+  check('自检：子包浏览器半边产物的豁免名单逐条来自包清单（`exports["./client"]` + `dsh.client`）',
+    SUBPACKAGE_CLIENT_PRODUCTS.length >= 1
+      && SUBPACKAGE_CLIENT_PRODUCTS.every((p) => p.declaresClient && /^packages\/[^/]+\/lib\/client\.[^/]+\.js$/.test(p.rel)),
+    SUBPACKAGE_CLIENT_PRODUCTS.map((p) => p.rel + (p.declaresClient ? '' : '（缺 dsh.client）')).join(' ') || '(空)');
+  const diff = gitViewDiff(ROOT, consumerAbs, { exts: CODE_EXT, allowedExtra: ALLOWED_BUILD_PRODUCTS });
+  if (diff.reason) {
+    // git 不可用 / 沙箱禁子进程（EPERM）：报**具名 SKIP**，不许静默当成"一致"。
+    check('自检：扫描面 == git 视角（`git ls-files`）', true,
+      `SKIP：取不到 git 视角（${diff.reason}）—— 本机面 ${consumerFiles.length} 个文件；该对账在 CI / 干净检出里真跑`);
+  } else {
+    check('自检：扫描面 == git 视角（`git ls-files`；多出的副本 / 变窄都点名）',
+      diff.ok,
+      diff.ok
+        ? `走 ${diff.walkedCount} 个 == git 代码面 ${diff.trackedCode} 个 + 可解释 ${BUILD_PRODUCT}`
+        : `多余（未被 git 跟踪）=${JSON.stringify(diff.extra.slice(0, 6))}${diff.extra.length > 6 ? '…+' + (diff.extra.length - 6) : ''}`
+          + ` · 漏扫（git 跟踪但没走到）=${JSON.stringify(diff.missing.slice(0, 6))}`);
+  }
+  // 负对照（纯函数）：合成"多出一个未被跟踪的文件" / "漏掉一个被跟踪的文件" ⇒ 同一条判据判红
+  const T = ['lib/a.js', 'lib/b.js'];
+  check('负对照：走出来的面里多一个**未被 git 跟踪**的文件 ⇒ 同一条 diffFace 判红（"脏面"可见）',
+    diffFace(['lib/a.js', 'lib/b.js', 'zz-dup.js'], T).ok === false
+    && diffFace(['lib/a.js', 'lib/b.js', 'zz-dup.js'], T).extra.join() === 'zz-dup.js'
+    && diffFace(['lib/a.js', 'lib/b.js', BUILD_PRODUCT], T, { allowedExtra: [BUILD_PRODUCT] }).ok === true);
+  check('负对照：同族但**不在豁免名单**里的产物名仍判红（豁免是逐条清单，不是 `packages/*/lib/client*` 通配）',
+    diffFace(['lib/a.js', 'lib/b.js', 'packages/fx/lib/client.nope.js'], T, { allowedExtra: ALLOWED_BUILD_PRODUCTS }).extra.join() === 'packages/fx/lib/client.nope.js'
+      && diffFace(['lib/a.js', 'lib/b.js', ...SUBPACKAGE_CLIENT_PRODUCTS.map((p) => p.rel)], T, { allowedExtra: ALLOWED_BUILD_PRODUCTS }).ok === true);
+  check('负对照：面里**漏掉**一个被跟踪的代码文件 ⇒ 同一条 diffFace 判红（"面变窄"可见）',
+    diffFace(['lib/a.js'], T).ok === false && diffFace(['lib/a.js'], T).missing.join() === 'lib/b.js'
+    && diffFace(['lib/a.js', 'lib/b.js'], T).ok === true);
+}
 
 // ── 主判据：内部模块的每个具名导出都必须有消费者 ──────────────────────────────
 const prod = judge({ modules, publicSet, consumers });
@@ -450,6 +576,58 @@ const syntheticModule = 'const SYNTH_EXPORT = 1;\nexport { SYNTH_EXPORT };\n';
     consumers: new Map([['test/other.mjs', 'import * as ns from "./synth.js";\nns.SYNTH_EXPORT();\n']]),
   });
   check('正控：成员访问 mod.SYNTH_EXPORT ⇒ 不判（命名空间成员读就是消费）', r.ok, r.detail);
+}
+
+// ── 负对照：**脏扫描面**（仓库里"另一份副本"）不许进消费者面 ────────────────────
+// 形态 ⑪：**嵌套 worktree**（目录里带 `.git`）——放在仓库根下、**不在任何忽略名单里**，
+//          所以只有"嵌套仓库一律不扫"这条规则能挡住它。
+// 形态 ⑫：**被 gitignore 的本地目录** `.integration-notes/**`（实测那里嵌着一个 1210 文件的副本）。
+// 两条都同时验证"修好的面不含它"与"未修口径（naive）会把它算进来" ⇒ 证明修法是**承重**的。
+{
+  const probeNested = join(ROOT, 'zz-dirty-face-nested');
+  const probeIgnored = join(ROOT, '.integration-notes', 'scratch', 'dirty-face-nc');
+  const probeFiles = [join(probeNested, 'lib', 'dup.js'), join(probeIgnored, 'lib', 'dup.js')];
+  try {
+    for (const p of probeFiles) {
+      mkdirSync(dirname(p), { recursive: true });
+      writeFileSync(p, 'console.log(SYNTH_EXPORT);\n'); // 与主判据的合成导出同名 ⇒ 能"续命"一个死导出
+    }
+    mkdirSync(join(probeNested, '.git'), { recursive: true }); // 嵌套 worktree 的标记
+    const face = listFace(ROOT, { exts: CODE_EXT }).map(relOf);
+    const naive = listFace(ROOT, { exts: CODE_EXT, skipNestedRepos: false, skip: [] }).map(relOf);
+    const probes = probeFiles.map(relOf);
+    check('负对照 ⑪：**嵌套 worktree**（含 `.git` 的另一份副本）不进扫描面；未修口径会把它算进来（假绿）',
+      probes.every((p) => !face.includes(p)) && probes.every((p) => naive.includes(p)),
+      `修好的面=${face.includes(probes[0]) ? '含' : '不含'} · 未修口径=${naive.includes(probes[0]) ? '含' : '不含'} · ${probes[0]}`);
+    check('负对照 ⑫：**被 gitignore 的本地目录**（`.integration-notes/**`）同样不进扫描面',
+      !face.includes(probes[1]) && naive.includes(probes[1]),
+      `修好的面=${face.includes(probes[1]) ? '含' : '不含'} · 未修口径=${naive.includes(probes[1]) ? '含' : '不含'} · ${probes[1]}`);
+    // 假绿的**具体形态**：那份副本里的一行 `console.log(SYNTH_EXPORT)` 会把一个死导出"续命"
+    const fakeGreen = judge({
+      modules: new Map([['lib/synth.js', syntheticModule]]),
+      publicSet: new Set(),
+      consumers: new Map([[probes[0], readFileSync(probeFiles[0], 'utf8')]]),
+    });
+    const honest = judge({
+      modules: new Map([['lib/synth.js', syntheticModule]]),
+      publicSet: new Set(),
+      consumers: new Map([['test/clean.mjs', 'const x = 1;\n']]),
+    });
+    check('负对照：同一份死导出，喂"把副本算进消费者面"的输入 ⇒ **判绿（假绿复现）**；喂干净面 ⇒ 判红',
+      fakeGreen.ok === true && honest.ok === false,
+      `副本当消费者=${fakeGreen.ok ? '绿（假绿）' : '红'} · 干净面=${honest.ok ? '绿' : '红'}`);
+  } finally {
+    rmSync(probeNested, { recursive: true, force: true });
+    rmSync(probeIgnored, { recursive: true, force: true });
+  }
+}
+
+// ── 负对照：旧口径（`listFilesNaive`）在**当前树**上确实更脏（不是"差不了多少"）───────
+{
+  const naiveNow = listFilesNaive(ROOT, CODE_EXT);
+  check('负对照：旧口径（`listFiles(ROOT)+SKIP_DIRS`）在**当前树**上比修好的面更脏（差值 = 本机副本）',
+    naiveNow.length >= consumers.size,
+    `旧口径 ${naiveNow.length} 个文件 vs 修好的面 ${consumers.size} 个（差 ${naiveNow.length - consumers.size}）`);
 }
 
 console.log('');

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * verify-scene-probe.mjs —— `lib/scene-probe.js` 的聚焦判据。
+ * verify-scene-probe.mjs —— `lib/media/scene-probe.js` 的聚焦判据。
  *
  * 被测对象：`createSceneProbeKit({ atomicWriteFileP, ensureFrameCacheDir })` 返回的两本账 ——
  * 「scene 主文件是否内嵌 MP4」的有界 LRU 探测账 与 「独立音轨抽取」账。
@@ -11,7 +11,7 @@
  *
  * 判据设计（DEV-GUIDE §4.7）：
  *   · 每个正向判据都配**同一段判据代码**喂进去的变异体（负对照）—— 变异体必须被判红，
- *     否则这条判据是恒真的。变异体由 `lib/scene-probe.js` 源码文本现场改写而成，
+ *     否则这条判据是恒真的。变异体由 `lib/media/scene-probe.js` 源码文本现场改写而成，
  *     落在 `.test-cache/` 下（不动 `lib/`）。
  *   · 不依赖仓库 fixture：全部在 `.test-cache/scene-probe/` 里现造。
  *   · 覆盖面地板写在 `if` 之外（G 段），跳过项会被点名。
@@ -19,11 +19,11 @@
 import { mkdirSync, writeFileSync, rmSync, statSync, readFileSync, utimesSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
-import { createSceneProbeKit } from '../lib/scene-probe.js';
+import { createSceneProbeKit } from '../lib/media/scene-probe.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const ISO = join(ROOT, '.test-cache', 'scene-probe-guard');
-const SRC = join(ROOT, 'lib', 'scene-probe.js');
+const SRC = join(ROOT, 'lib', 'media', 'scene-probe.js');
 
 let passed = 0; let failed = 0;
 function check (name, ok, detail) {
@@ -54,7 +54,7 @@ function makeKit (name = 'kit') {
   return { kit, writes };
 }
 
-/** 把 `lib/scene-probe.js` 的源码改写成一个变异体，落到 `.test-cache/` 后 import 回来。
+/** 把 `lib/media/scene-probe.js` 的源码改写成一个变异体，落到 `.test-cache/` 后 import 回来。
  *  相对 import 改写成绝对 file: URL —— 否则 tmp 目录里解析不到 `./scene-manifest.js`。 */
 let mutantSeq = 0;
 async function loadMutant (label, transform) {
@@ -62,8 +62,11 @@ async function loadMutant (label, transform) {
   const out = transform(src);
   if (out === src) throw new Error('变异体没改到源码（判据会失真）: ' + label);
   const patched = out
-    .replace('\'./scene-manifest.js\'', JSON.stringify(pathToFileURL(join(ROOT, 'lib', 'scene-manifest.js')).href))
-    .replace('\'./pkg-read.js\'', JSON.stringify(pathToFileURL(join(ROOT, 'lib', 'pkg-read.js')).href));
+    // ⚠️ 用**正则**替 specifier（不是写死 `'./scene-manifest.js'`）：真源在 lib/media/ 下，
+// 相对路径是 `../scene-manifest.js` —— 写死 `./` 会让改写落空，临时目录里就解析不到该模块。
+    .replace(/['"][^'"]*scene-manifest\.js['"]/, JSON.stringify(pathToFileURL(join(ROOT, 'lib', 'scene-manifest.js')).href))
+    // 同上：specifier 形式容忍（真源可能用 `../pkg-read.js`）。
+    .replace(/['"][^'"]*pkg-read\.js['"]/, JSON.stringify(pathToFileURL(join(ROOT, 'lib', 'pkg-read.js')).href));
   const dir = join(ISO, 'mutants');
   mkdirSync(dir, { recursive: true });
   const file = join(dir, (mutantSeq++) + '-' + label + '.mjs');

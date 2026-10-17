@@ -7,11 +7,13 @@
  * "没有无理由地变化"，**不证明取值正确**。自动重录会把缺陷输出一起录成"期望"（本仓实测过：
  * 三张布尔表的 `{}` 曾被抄成期望，整套 sanitize 判据全绿而功能是死的）。
  *
- * 两侧的地位**不一样**，读输出时别把它们当同一件事：
- *   · host    —— `test/verify-client.mjs` ③ 逐用例比对**值** ⇒ 它的漂移会让 `npm run verify` 红。
- *   · client  —— **没有任何判据比对它的值**（③ 只比 host；④ 只用用例的 `input`；
- *                `test/verify-glass-surfaces.mjs` ⑥ 只用它的**键集**做逐用例自洽）。
- *                它的值属历史快照，漂移只作提示、**不计入退出码**。
+ * 两侧的地位**一样**：都被 `test/verify-client.mjs` ③ 逐用例比对**值** ⇒ 任一漂移都会让
+ * `npm run verify` 红：
+ *   · host    —— 宿主 `lib/index.js` 的 `sanitizeSettings`（落盘形状；整侧 null 用夹具哨兵 `__null__`）。
+ *   · client  —— 浏览器 `src/client.js` 的 `sanitizeSettings`（含 CLIENT_ONLY 键，键集与 host 不同）。
+ *     ⚠️ client 侧**必须有判据比对值**：没有它时，把夹具里 18 个用例的 client 值全部改坏
+ *     仍会 `verify-client` + `verify-glass-surfaces` 双绿 —— 那半数据是死的。
+ *     两侧同权：任一侧漂移都非 0。
  *
  * 用法：
  *   node test/tools/regen-golden.mjs                       # 只报告，不写
@@ -21,7 +23,7 @@
  * 写入前先算一遍：**除声明键外任何漂移 ⇒ 拒绝写入**（exit 1），所以"顺手重录"录不进事故。
  * 脚本**不改** `note`：那段是人写的不变量声明，不由脚本生成（也绝不再往里追加日期流水）。
  *
- * 退出码：0 = 无漂移（或写入成功且除声明外零漂移）/ 1 = host 侧漂移、或拒绝写入 / 2 = 用法错误。
+ * 退出码：0 = 无漂移（或写入成功且除声明外零漂移）/ 1 = 任一侧漂移、或拒绝写入 / 2 = 用法错误。
  */
 import { readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
@@ -100,9 +102,7 @@ console.log('夹具 ' + FIXTURE);
 console.log('用例 ' + cases.length + ' 个 · generatedFrom ' + JSON.stringify(fx.generatedFrom || null));
 for (const side of SIDES) {
   const d = drift[side];
-  const note = side === 'host'
-    ? '（verify-client ③ 逐用例比对值 ⇒ 漂移会让 `npm run verify` 红）'
-    : '（无判据比对值；只有 verify-glass-surfaces ⑥ 用它的键集 ⇒ 漂移仅提示、不计入退出码）';
+  const note = '（verify-client ③ 逐用例比对值 ⇒ 漂移会让 `npm run verify` 红）';
   if (d.size === 0) { console.log(side + ' ' + note + '：无漂移'); continue; }
   console.log(side + ' ' + note + '：' + d.size + ' 个键漂移');
   for (const [k, names] of [...d].sort()) {
@@ -113,11 +113,12 @@ for (const side of SIDES) {
 
 // ── 写入（先校验，再落盘）───────────────────────────────────────────────────────
 if (!write) {
-  const hostDrift = drift.host.size;
-  console.log(hostDrift
-    ? '⇒ 被棘轮住的 host 侧有漂移：判断这次漂移是否有意；有意则 `--write --intend host:<键>` 重录。'
-    : '⇒ 被棘轮住的 host 侧零漂移（client 侧的提示见上，它没有值判据）。');
-  process.exit(hostDrift ? 1 : 0);
+  const anyDrift = SIDES.reduce((n, s) => n + drift[s].size, 0);
+  console.log(anyDrift
+    ? '⇒ 被棘轮住的**任一侧**有漂移（host 或 client）：判断这次漂移是否有意；有意则 '
+      + '`--write --intend <侧>:<键>` 重录。'
+    : '⇒ 被棘轮住的两侧（host / client）都零漂移。');
+  process.exit(anyDrift ? 1 : 0);
 }
 
 const undeclared = [];
