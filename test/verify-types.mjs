@@ -152,6 +152,7 @@ const INVENTORY_REQUIRED = [
   { name: 'cacheDir', why: 'cacheBaseDir() in effect (env → config.json cacheDir → default); the settings UI moves it (buildInventory payload)' },
   { name: 'weAssetsDir', why: 'WE_ASSETS_DIR; the client derives localAssets=1 from it' },
   { name: 'weAssetsAvailable', why: 'weAssetsAvailable() probe gates the official-assets UI' },
+  { name: 'sceneLiveEngine', why: 'live-render engine availability (#218): the panel names a missing runtime dependency instead of reporting a first-frame timeout (assembleInventory payload)' },
   { name: 'sceneMediaBase', why: 'media source origin the live renderer uses as mediaBase for Scenes (buildInventory payload)' },
   { name: 'total', why: 'entry count shown in the picker (buildInventory payload)' },
   { name: 'portableCount', why: 'playable count shown in the picker (buildInventory payload)' },

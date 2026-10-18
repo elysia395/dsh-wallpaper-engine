@@ -249,6 +249,8 @@ const WE_I18N_EN_PANEL = {
   "立即": "Immediately",
   "实时渲染帧率": "Live rendering frame rate",
   "渲染 fps · 越低越省电": "Render fps · lower saves power",
+  "渲染引擎未安装（运行期依赖 webwallgl）→ 在插件目录执行 npm install，装完无需重启宿主": "Rendering engine not installed (runtime dependency webwallgl) → run npm install in the plugin directory; no host restart needed",
+  "实时渲染页缺失（lib/webwallgl/ 不完整）→ 重装插件可解": "Live render page missing (incomplete lib/webwallgl/) → reinstalling the plugin fixes it",
   "出图来源": "Frame source",
   "这张画面从哪来": "Where this picture comes from",
   "场景壁纸「这张画面从哪来」。两档：**实时画面**（有抓帧就用它，没有则留空）与**自定义画面**（手动导入的截图）。点一次切换一次，选择记忆在当前壁纸上。实时渲染生效时本行不显示（那时画面来自实时渲染，切这里不会生效）": "Scene wallpaper “where this picture comes from”. Two options: **Live frame** (used when a captured frame exists, otherwise left empty) and **Custom frame** (a manually imported screenshot). Each click switches once, and the choice is remembered per wallpaper. This row is hidden while live rendering is active (the picture then comes from live rendering, so switching here has no effect)",

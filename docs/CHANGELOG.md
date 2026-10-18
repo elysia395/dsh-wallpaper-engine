@@ -16,6 +16,14 @@
 > 完整逐提交历史见 GitHub Commits / Releases；升级前置条件见 [`UPGRADING.md`](./UPGRADING.md)。
 > `test/verify-scene-live.mjs` 这一类判据条数**只记该条写作当时的实测总数**（如 466 / 465），不是现在的总数 —— 后续条目会往上加（现为 502）；照原文保留，好让它与当次提交对得上。
 
+### v1.3.4（未发布 · #218 修复）
+
+- **实时渲染为什么"只显示静态帧"：引擎目录装载期求值 → 按请求惰性解析（[#218](https://github.com/elysia395/dsh-wallpaper-engine/issues/218)）**：渲染引擎 `webwallgl` 是**运行期依赖**，而 `lib/index.js` 用模块级 IIFE 把它的包目录算成一个常量快照 ⇒ 依赖"刚装好"与"根本没装"对每个请求给出的结果**逐字相同**，装完必须重启宿主才恢复；同一个快照还让 `readWebShim()` 把**空串永久缓存**，于是网页壁纸的 WE API 注入也一直缺到重启。现改为 `resolveWebwallglPkgDir()`：每次请求现取、**只缓存成功**（null 不缓存）⇒ `npm install` 装上后立即生效，无需重启宿主。`lib/routes/scene-serve.js` 的 `engine/` 分支随之每请求现取，404 文案改为自解释（保留首词 `webwallgl-not-installed`，补上"在插件目录执行 `npm install`，然后重载壁纸"）。
+- **缺依赖不再伪装成"渲染失败"**：`/inventory` 新增 `sceneLiveEngine: { available, reason }`（与既有 `weAssetsAvailable` 同口径的**访问器**），设置面板「场景实时渲染」区据此显示一行明确文案（`engine-not-installed` → 提示 `npm install`；`renderer-page-missing` → 提示重装插件）。此前这条环境缺失只能表现为首帧超时，与壁纸真的渲染不出来无从分辨。
+- **首帧超时不再写跨窗口的持久失败记忆**：引擎不可用时 `liveFail('timeout')` 走**会话内软失败**（与 `stall` / `transfer` 同一分支：只记 `liveSessionFailures`、按冷却重试、不 `persistSelection`），不再把该壁纸写进 `selection.sceneLiveFailures` 而在**所有窗口永久降级**。环境修好后无需手动清失败记忆。
+- **`docs/DEV-GUIDE.md` §0 补一条运行期依赖口径**：以 git link 直装、或用裁剪过 `node_modules` 的树起步时，必须补 `npm install` 装 `webwallgl`；**装完不用重启宿主**（本次修复前则需要）。
+- **守卫**：`test/verify-scene-live.mjs` 新增 13 条判据（含负对照）—— 惰性解析器三档行为（抛错→null 且不缓存 / 再抛错仍 null / 成功后立即可用）、源码里不得再有模块级 `WEBWALLGL_PKG_DIR` 常量、`readWebShim` 空串不入缓存、`engine/` 404 自解释且每请求现取、inventory 载荷含 `sceneLiveEngine`、面板披露与失败归因走软失败分支。
+
 ### v1.3.3（2026-10-15 · npm 已发布）
 
 - **公告追加一条 + 版本号升级（本仓迭代，用户口径）**：更新公告在四条 callout 之后新增第五条**加粗**提示 —— **「在设置中启用深色模式 + 「作者自用」预设，为本插件最佳效果之一！」**（沿用 16pt callout 样式，`<strong>` 加粗与❗前缀同其余四条）；`package.json` 版本号 `1.3.2` → `1.3.3`，`NOTICE_VERSION` 哨兵同步 `1.3.3`（看过 1.3.2 公告的机器重弹一次）。英文词表同步新增一条（`src/i18n-copy-ext.js`）。**纯客户端改动 ⇒ 刷新页面即可生效。**

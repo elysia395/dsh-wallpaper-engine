@@ -42,6 +42,15 @@
     );
   }
 
+  /**
+   * 宿主是否明确报告"这台机器现在跑不了实时渲染"（#218）。
+   * 只在 `available === false` 时为真：清单没拉到时该字段缺省可用，不报未知。
+   */
+  function sceneLiveEngineDown(sel) {
+    const st = sel && sel.inventory && sel.inventory.sceneLiveEngine;
+    return Boolean(st && st.available === false);
+  }
+
   function renderEffectsLiveSection(ctx) {
     const { onLiveBootDelay, onSceneLiveFps, onToggleSceneLive, sel } = ctx;
     return React.createElement(React.Fragment, null,
@@ -57,6 +66,16 @@
           ? weT("网页壁纸由 WebWallGL 加载并注入 WE API（音频/属性监听等），严格沙箱隔离（不继承宿主权限）；加载失败或运行失联时自动退回兼容 iframe。重新开启会重试此前失败的壁纸")
           : weT("场景壁纸由 WebWallGL 实时渲染（粒子/脚本/视差/包内音频）；加载失败或运行失联时自动退回内嵌视频 / 实时帧。重新开启会重试此前失败的壁纸"),
       }),
+      // 环境缺件时**先**说清缺什么（#218）：少这一行，缺依赖就只能表现为"运行中断
+      // （20 秒无帧）"，与真正的渲染失败无从分辨，用户会去怪壁纸。
+      (sel.type === "scene" || sel.type === "web") && sceneLiveEngineDown(sel)
+        && React.createElement("div", { className: "we-picker__row", key: "scene-live-engine" },
+        React.createElement("span", { className: "we-picker__hint" },
+          sel.inventory.sceneLiveEngine.reason === "renderer-page-missing"
+            ? weT("实时渲染页缺失（lib/webwallgl/ 不完整）→ 重装插件可解")
+            : weT("渲染引擎未安装（运行期依赖 webwallgl）→ 在插件目录执行 npm install，装完无需重启宿主"),
+        ),
+      ),
       (sel.type === "scene" || sel.type === "web") && sel.sceneLive !== false
         && React.createElement("div", { className: "we-picker__ctl", key: "live-boot-delay" },
         ctlText(weT("启动最长等待时间")),

@@ -49,6 +49,12 @@ npm run verify:static # 静态门禁（棘轮 + 负对照；CI 里是**独立步
 
 **改 `lib/**` 必须重启 DSH**；改 `src/**` 必须 `npm run build`。这两条不对称，是本仓最常见的操作失误。
 
+**运行期依赖（`webwallgl`）与上面两条无关**：以 git link 直装、或用裁剪过 `node_modules`
+的树起步时，插件目录里没有引擎包，实时渲染会退回静态帧 —— 补一条 `npm install` 即可。
+包目录是**按请求惰性解析**的（`resolveWebwallglPkgDir`，只缓存成功），所以**装完不用重启宿主**，
+重载壁纸就生效；设置面板的「场景实时渲染」区会直接写明缺的是这一块（`/inventory` 的
+`sceneLiveEngine`），不必再去猜"20 秒无帧"是什么。
+
 ---
 
 ## 1. 加一条宿主路由

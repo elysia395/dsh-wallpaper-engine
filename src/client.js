@@ -380,7 +380,7 @@ const selection = {
   editingWeAssetsDir: false,
   weAssetsDirDraft: "",
   weAssetsError: "",
-  inventory: { installDir: null, uploadDir: null, cacheDir: null, weAssetsDir: null, weAssetsAvailable: false, sceneMediaBase: "", wallpapers: [], total: 0, portableCount: 0, playlists: [], error: null },
+  inventory: { installDir: null, uploadDir: null, cacheDir: null, weAssetsDir: null, weAssetsAvailable: false, sceneLiveEngine: { available: true, reason: "" }, sceneMediaBase: "", wallpapers: [], total: 0, portableCount: 0, playlists: [], error: null },
   loaded: false,
 };
 
@@ -798,6 +798,21 @@ function hostFailureReason(res) {
   const data = res.data;
   return (data && data.error) || weT("宿主返回 {status}", { status: res.status });
 }
+/**
+ * 宿主报告的"实时渲染引擎可用性"归一化（#218）。
+ *
+ * 三条纪律：
+ *   ① **缺省按可用**：老宿主根本不发这个字段，`undefined` 不能当成"没装"——
+ *      否则升级插件后所有人都会看到一条假的"引擎未安装"。
+ *   ② 只有明确的 `available === false` 才算不可用，`reason` 收敛到两个已知码。
+ *   ③ 调用方（面板那行 / liveFail 归因）都靠这里判空，别各自再写一遍。
+ */
+function normalizeSceneLiveEngine(raw) {
+  if (!raw || typeof raw !== "object") return { available: true, reason: "" };
+  if (raw.available !== false) return { available: true, reason: "" };
+  const reason = raw.reason === "renderer-page-missing" ? "renderer-page-missing" : "engine-not-installed";
+  return { available: false, reason };
+}
 let inventorySeq = 0;
 async function loadInventory() {
   const seq = ++inventorySeq;
@@ -815,6 +830,7 @@ async function loadInventory() {
       cacheDir: data.cacheDir || null,
       weAssetsDir: data.weAssetsDir || null,
       weAssetsAvailable: Boolean(data.weAssetsAvailable),
+      sceneLiveEngine: normalizeSceneLiveEngine(data.sceneLiveEngine),
       // 场景载荷的源（独立壁纸媒体源的 origin；空串 = 回落应用源，见 live-layer 的 liveRenderUrl）。
       sceneMediaBase: typeof data.sceneMediaBase === "string" ? data.sceneMediaBase : "",
       wallpapers: data.wallpapers || [],
@@ -830,6 +846,9 @@ async function loadInventory() {
       cacheDir: null,
       weAssetsDir: null,
       weAssetsAvailable: false,
+      // 拉不到清单时**不**报"引擎没装"：那是"宿主不可达"，由 error 那行单独说。
+      // 未知一律按可用处理 —— 少一条误报比多一条早报重要。
+      sceneLiveEngine: { available: true, reason: "" },
       sceneMediaBase: "",
       wallpapers: [],
       total: 0,

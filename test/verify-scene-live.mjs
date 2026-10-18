@@ -334,6 +334,154 @@ if (liveRoute) {
   check('POST rejected (405)', postRes.__state.status === 405, 'status=' + postRes.__state.status);
 }
 
+// ── Level B2: #218 —— 引擎目录**惰性**解析（运行期依赖可以在宿主启动之后装上）────
+//
+// 病因（issue #218）：`WEBWALLGL_PKG_DIR` 在模块加载期一次性求值。`npm install`
+// 装上依赖之后，进程里那份 null 快照不变 ⇒ 每个请求仍然回答 webwallgl-not-installed，
+// 用户必须重启宿主；而这个形态与"依赖根本没装"逐字相同，面板只能报 20 秒无帧。
+console.log('Level B2 — #218 lazy engine resolution');
+{
+  const hostSrc218 = readFileSync(join(root, 'lib', 'index.js'), 'utf8');
+  check('#218 ① 引擎目录不再是装载期常量（模块求值时一次性定死）',
+    !/^const WEBWALLGL_PKG_DIR\s*=/m.test(hostSrc218)
+      && /^function resolveWebwallglPkgDir\(\)/m.test(hostSrc218),
+    'load-time const ⇒ npm install 后必须重启宿主');
+
+  // 沙箱真跑：函数体只依赖 dirname + 一个可注入的 resolve。
+  // 用 braceBody（配平大括号）而非 fnBody —— 后者在首个 \n} 截断，带 try/catch 的函数会被切掉尾部。
+  const probeBody = braceBody(hostSrc218, 'resolveWebwallglPkgDir');
+  const ENTRY = "dirname(createRequire(import.meta.url).resolve('webwallgl'))";
+  const dirnameStub = (p) => String(p).replace(/[\\/][^\\/]+$/, '');
+  /**
+   * 把函数体注进沙箱（模块级 `let webwallglPkgDirCache;` 由沙箱自己补上）。
+   * 形态变了 ⇒ 返回 null，让判据判红而不是静默跳过。
+   */
+  function buildProbe(body, resolver) {
+    const injectable = body.split(ENTRY).join('dirname(resolver())');
+    if (injectable === body) return null;
+    // 判据沙箱：源码文本即被测对象
+    return new Function('dirname', 'resolver',
+      'let webwallglPkgDirCache;\nfunction resolveWebwallglPkgDir() {' + injectable + '\n}\nreturn resolveWebwallglPkgDir;',
+    )(dirnameStub, resolver);
+  }
+  // 可编程桩：先抛两次（依赖未装），再成功（模拟 npm install 完之后的下一次请求）。
+  let mode = 'fail';
+  let calls = 0;
+  const resolver = () => {
+    calls++;
+    if (mode === 'fail') throw new Error('MODULE_NOT_FOUND');
+    return '/pkg/webwallgl/index.js';
+  };
+  const probe = buildProbe(probeBody, resolver);
+  const a = probe ? probe() : 'NO-SANDBOX';
+  const b = probe ? probe() : 'NO-SANDBOX';
+  const callsWhileFailing = calls;
+  mode = 'ok';
+  const c = probe ? probe() : 'NO-SANDBOX';
+  const d = probe ? probe() : 'NO-SANDBOX';
+  check('#218 ② 失败结果不入缓存：装上依赖后下一次请求立刻拿到包目录，成功后才缓存',
+    Boolean(probe)
+      && a === null && b === null && callsWhileFailing === 2
+      && c === '/pkg/webwallgl' && d === '/pkg/webwallgl'
+      && calls === 3,
+    'a=' + a + ' b=' + b + ' 失败期调用=' + callsWhileFailing + ' c=' + c + ' 总调用=' + calls);
+
+  // 负对照（证明上面那条不是空转）：旧形态是装载期 IIFE 快照 —— 装好之后仍是 null。
+  function legacySnapshot(resolverFn) {
+    return (function () {
+      try {
+        return dirnameStub(resolverFn());
+      } catch {
+        return null;
+      }
+    })();
+  }
+  let legacyMode = 'fail';
+  const legacyFirst = legacySnapshot(() => {
+    if (legacyMode === 'fail') throw new Error('MODULE_NOT_FOUND');
+    return '/pkg/webwallgl/index.js';
+  });
+  legacyMode = 'ok';
+  const legacyAfterInstall = legacySnapshot(() => {
+    if (legacyMode === 'fail') throw new Error('MODULE_NOT_FOUND');
+    return '/pkg/webwallgl/index.js';
+  });
+  check('#218 ② 负对照：装载期快照（旧形态）在装好之后仍拿 null —— 这正是 issue 描述的症状',
+    legacyFirst === null && legacyAfterInstall === '/pkg/webwallgl',
+    '旧=None/' + legacyFirst + ' 新=/pkg/webwallgl ⇒ 形态差异被这条判据区分开');
+
+  // ③ 接线：三处消费方拿的是访问器而不是值。
+  const sceneSrc218 = readFileSync(join(root, 'lib', 'routes', 'scene-serve.js'), 'utf8');
+  check('#218 ③ scene-serve 拿的是访问器，且每请求现取（不是解构后的一次性快照）',
+    /webwallglPkgDir: resolveWebwallglPkgDir/.test(hostSrc218)
+      && /const enginePkgDir = isEngine \? webwallglPkgDir\(\) : null;/.test(sceneSrc218),
+    '传值快照会让"刚装好"与"没装"给出同一个 404');
+
+  // ④ readWebShim 的第二面：空串不得永久缓存（否则装好依赖后 WE API 仍缺到重启）。
+  const shimSrc = braceBody(hostSrc218, 'readWebShim');
+  check('#218 ④ readWebShim 不再把空串永久缓存（包目录为 null 时直接返回、不入缓存）',
+    /if \(webShimCache\) return webShimCache;/.test(shimSrc)
+      && /if \(!pkgDir\) return '';/.test(shimSrc),
+    '空串入缓存 ⇒ 装好依赖后网页壁纸仍没有 WE API，直到重启');
+}
+
+// ── Level B3: #218 —— 缺依赖如何被"说出来"（宿主自解释 + 清单字段 + 客户端归因）──
+console.log('Level B3 — #218 missing-engine surfacing');
+{
+  const sceneSrc = readFileSync(join(root, 'lib', 'routes', 'scene-serve.js'), 'utf8');
+  check('#218 ⑤ 引擎 404 自解释：说清装什么、装完要不要重启；首词保持稳定便于日志归因',
+    /res\.end\('webwallgl-not-installed: the rendering engine is a runtime dependency/.test(sceneSrc)
+      && /run .npm install. in the plugin directory/.test(sceneSrc),
+    '只回五个词的裸码，用户无从知道下一步做什么');
+
+  const inventorySrc = readFileSync(join(root, 'lib', 'inventory.js'), 'utf8');
+  check('#218 ⑥ 引擎可用性进 /inventory（与 weAssetsAvailable 同口径，且是访问器不是值）',
+    /sceneLiveEngine: sceneLiveEngine\(\),/.test(inventorySrc)
+      && /readPlaylistsP, playlistItemId, weAssetsAvailable, sceneLiveEngine,/.test(inventorySrc),
+    '少了它，缺依赖只能表现为 20 秒无帧');
+
+  const dtsSrc = readFileSync(join(root, 'lib', 'types', 'index.d.ts'), 'utf8');
+  check('#218 ⑦ 清单字段在 d.ts 有声明（宿主与客户端同一份契约）',
+    /sceneLiveEngine: \{ available: boolean; reason: string \};/.test(dtsSrc));
+
+  // 客户端：环境缺件必须在心跳里**先于**超时归因，否则证据指向壁纸而不是环境。
+  const watchSrc = liveText();
+  const tickSrc = (() => {
+    const i = watchSrc.indexOf('watch.timer = setInterval(');
+    return i < 0 ? '' : watchSrc.slice(i, i + 1800);
+  })();
+  check('#218 ⑧ 环境缺件在心跳里先于超时归因（engine，而不是等到 20 秒无帧）',
+    /if \(liveEngineDownReason\(\)\) \{ liveFail\("engine"\); return; \}/.test(tickSrc),
+    '缺依赖等到超时才报 ⇒ 归因错到壁纸身上');
+
+  const failSrc = braceBody(watchSrc, 'liveFail');
+  check('#218 ⑨ 环境缺件只进会话内：不写全局失败记忆、不排冷却重试',
+    /const engineDown = reason === "engine";/.test(failSrc)
+      && /if \(!engineDown\) scheduleLiveTransferRetry\(wid, attempts\);/.test(failSrc)
+      && /liveSessionFailures\.set\(wid, softReason\);/.test(failSrc),
+    '落盘 = 一次缺依赖把每张场景壁纸在所有窗口永久降级');
+
+  const liveSrc = liveText();
+  check('#218 ⑩ 失败行有专属文案（引擎未安装 ≠ 这张壁纸渲染不出来），且已进英文词表',
+    /get engine\(\) \{ return weT\("渲染引擎未安装/.test(liveSrc)
+      && /"渲染引擎未安装（运行期依赖 webwallgl 没装）":/.test(
+        readFileSync(join(root, 'src', 'i18n-copy-live.js'), 'utf8')));
+
+  const panelSrc = panelText();
+  check('#218 ⑪ 设置面板披露缺件原因，两条文案按 reason 分流',
+    /sceneLiveEngineDown\(sel\)/.test(panelSrc)
+      && /renderer-page-missing/.test(panelSrc)
+      && /在插件目录执行 npm install/.test(panelSrc));
+
+  // 归一化：老宿主不发这个字段时必须按"可用"处理，不能凭空报缺件。
+  const clientSrc218 = clientText();
+  const normSrc = braceBody(clientSrc218, 'normalizeSceneLiveEngine');
+  check('#218 ⑫ 客户端归一化：字段缺失按可用；只有明确的 available===false 才算缺件',
+    /if \(!raw \|\| typeof raw !== "object"\) return \{ available: true, reason: "" \};/.test(normSrc)
+      && /if \(raw\.available !== false\) return \{ available: true, reason: "" \};/.test(normSrc),
+    '老宿主不发字段 ⇒ 升级插件后人人看到假"引擎未安装"');
+}
+
 // ── Level C: /scene-files via synthetic Steam fixture ────────────────────────
 console.log('Level C — /scene-files route (synthetic Steam library)');
 const fixtureRoot = join(root, '.test-cache', 'scene-live', 'steamlive-fixture');

@@ -116,6 +116,15 @@ export interface Inventory {
   /** Whether `weAssetsDir` currently holds a usable `materials/` tree. */
   weAssetsAvailable: boolean;
   /**
+   * Whether live rendering can run on this machine **right now** (#218). The rendering
+   * engine is a runtime dependency (`webwallgl`), so "not installed" is an environment
+   * fact the panel must state outright instead of letting it surface as a first-frame
+   * timeout. `reason` is `''` when available, otherwise `engine-not-installed`
+   * (run `npm install` in the plugin directory) or `renderer-page-missing`
+   * (the shipped `lib/webwallgl/` page is gone → reinstall the plugin).
+   */
+  sceneLiveEngine: { available: boolean; reason: string };
+  /**
    * Origin (scheme://host:port) of the plugin's own wallpaper media source, for the
    * live renderer's `mediaBase` when rendering a Scene. Empty string means "use the
    * application origin" — native browsers need no second listener, and a failed media
