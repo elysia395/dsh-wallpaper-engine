@@ -49,11 +49,13 @@ The plugin shows a one-time in-app notice per release; missing it is harmless.
 ### What changes after the upgrade (frame cache / live rendering)
 
 - **The frame cache is invalidated once**: cache keys are prefixed with a pipeline version (currently
-  `LIVE_FRAME_KEY_VERSION = 'lf1'`; the published version was `sf33_`), and any change to the capture /
-  live-render logic bumps it — after a bump nothing under `~/.dsh-wallpaper-engine/cache/frames/` hits any
-  more, and each scene wallpaper is captured afresh. **This is expected, not a regression**; old files are
-  not deleted automatically (clear `cache/frames/` by hand to reclaim the space). The same directory also
-  holds the scene's embedded video (`sv1_*.mp4`) and packaged audio (`sa1_*`), each with its own prefix.
+  `LIVE_FRAME_KEY_VERSION = 'lf2'`; the published version was `sf33_`), and any change to the capture /
+  live-render logic bumps it. A change to the **key shape** bumps it too (v1.3.4 replaced the path's
+  base64url with a short hash — see #208): after a bump nothing under
+  `~/.dsh-wallpaper-engine/cache/frames/` hits any more, and each scene wallpaper is captured afresh.
+  **This is expected, not a regression**; old files are not deleted automatically (clear
+  `cache/frames/` by hand to reclaim the space). The same directory also holds the scene's embedded
+  video (`sv1_*.mp4`) and packaged audio (`sa1_*`), each with its own prefix.
 - **Live rendering needs WebGL2**: after upgrading, scene / web wallpapers render live through WebWallGL by
   default (「场景实时渲染」/「网页实时渲染」, on by default). Without WebGL2, or with a broken GPU driver, the
   renderer page times out after a 15 s first frame and **degrades silently** to the

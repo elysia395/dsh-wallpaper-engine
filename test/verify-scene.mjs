@@ -835,7 +835,10 @@ if (token) {
   //    **宿主级**不变量，不是"三个派生点都在主文件里"（本文件头 30–31 行的约定）。
   const hostSrc = readHostHalf();
   /** 共享判据：阳性（宿主半）与阴性对照（宿主半 + 一条合成派生）共用同一计数函数。 */
-  const base64UrlDerivations = (t) => (t.match(/Buffer\.from\(abs, 'utf8'\)\.toString\('base64url'\)/g) || []).length;
+  // ⚠️ 放宽到「参数名 / 引号 / String() 包裹都算」：原写法只认逐字 `Buffer.from(abs, 'utf8')`，
+  //    于是 `Buffer.from(String(abs), "utf8")` 或把形参改名成 `absPath` 的等价派生成 0 命中 ——
+  //    判据就变成了"照抄原文才绿"，既漏真派生也误伤正常重命名。
+  const base64UrlDerivations = (t) => (t.match(/Buffer\s*\.\s*from\s*\(\s*(?:String\s*\(\s*)?[A-Za-z_$][\w$]*\s*\)?\s*,\s*['"]utf8['"]\s*\)\s*\.\s*toString\s*\(\s*['"]base64url['"]\s*\)/g) || []).length;
   const derivations = base64UrlDerivations(hostSrc);
   /**
    * 取一个顶层函数的函数体：起点锚 `function <name>(`，终点锚 `function <nextName>(`。
@@ -856,17 +859,36 @@ if (token) {
     slotBody ? 'len=' + slotBody.length : '锚点缺失（sceneFrameSlot / gpuFrameFileFor 改名了？）');
   check('负对照：终点锚缺失时 fnBody 返回 null（判据有牙，不会静默扫全文）',
     fnBody('function a() {}\n', 'a', 'doesNotExist') === null);
-  // #208：键形态改成短哈希后，宿主半**一处字面量派生都不该剩下** —— 帧 / 场景视频 /
-  // 场景音频三种缓存全部走 lib/cache-keys.js 的 cacheKeyFor()。这条从"数到 3"改成
-  // "数到 0"，含义更强：任何一处再自己拼前缀 + base64url(abs) 都会立刻红。
-  check('P1-6 缓存键字面量派生点已清零（三种缓存全部走 lib/cache-keys.js）',
-    derivations === 0,
-    '派生点 ' + derivations + ' 处');
+  // #208：键形态改成短哈希后，**三个缓存键的派生处**都不许再自己拼 base64url(abs)。
+  // ⚠️ 扫描面必须收窄到「缓存键函数体」，不能数整个宿主半：`lib/index.js` 里还有两处
+  //    base64url 用法**不是缓存键**（`customIdFromAbs` 的自定义画面 id、mediaMap 的
+  //    token），它们各自有测试钉死，把整个文件数进来会造成假红。
+  const hostFilesForKey = {
+    'lib/index.js': readFileSync(resolve(root, 'lib', 'index.js'), 'utf8'),
+    'lib/routes/scene-media.js': readFileSync(resolve(root, 'lib', 'routes', 'scene-media.js'), 'utf8'),
+    'lib/scene-probe.js': readFileSync(resolve(root, 'lib', 'scene-probe.js'), 'utf8'),
+  };
+  const frameKeyBody = fnBody(hostFilesForKey['lib/index.js'], 'sceneFrameCacheKey', 'sceneFrameSlot');
+  check('判据锚点在位：sceneFrameCacheKey 的函数体取到了边界（缺锚即红）',
+    frameKeyBody !== null,
+    frameKeyBody ? 'len=' + frameKeyBody.length : '锚点缺失（sceneFrameCacheKey / sceneFrameSlot 改名了？）');
+  const keyDerivationSites = [
+    ['帧键 sceneFrameCacheKey', frameKeyBody === null ? 1 : base64UrlDerivations(frameKeyBody)],
+    ['场景视频 scene-media.js', base64UrlDerivations(hostFilesForKey['lib/routes/scene-media.js'])],
+    ['场景音频 scene-probe.js', base64UrlDerivations(hostFilesForKey['lib/scene-probe.js'])],
+  ];
+  const dirtySites = keyDerivationSites.filter(([, n]) => n !== 0);
+  check('P1-6 缓存键不再自拼 base64url(abs)：三个命名空间的键派生点都是 0 处',
+    dirtySites.length === 0,
+    dirtySites.length ? dirtySites.map(([n, c]) => n + '=' + c).join(' · ') : '三处全 0');
   check('P1-6 sceneFrameSlot 复用 sceneFrameCacheKey 且不再自带版本前缀',
     slotBody !== null && slotBody.includes('sceneFrameCacheKey(abs, mtime)') && !slotBody.includes('LIVE_FRAME_KEY_VERSION'),
     'reuse=' + (slotBody !== null && slotBody.includes('sceneFrameCacheKey(abs, mtime)')) + ' versionInSlot=' + (slotBody !== null && slotBody.includes('LIVE_FRAME_KEY_VERSION')));
   check('P1-6 negative control: 再写一份字面量派生会被同一计数判据数出来',
     base64UrlDerivations(hostSrc + "\nconst x = Buffer.from(abs, 'utf8').toString('base64url');") === derivations + 1);
+  // 负对照（#208）：键函数体里一旦爬回自拼 base64url，上一条必须判红。
+  check('P1-6 negative control: 键函数体里爬回 base64url 会被判红',
+    base64UrlDerivations("function sceneFrameCacheKey(abs, mtime) {\n  return 'lf2' + Buffer.from(abs, 'utf8').toString('base64url');\n}") === 1);
 
   // ── 槽位只给唯一产物（反向探针：删掉的死字段不许爬回来）─────────────────────
   // `sceneFrameSlot` 曾返回 `pngPath` / `jpgPath` / `gifPath` / `dir` 与一个 `_vN` 档位后缀，
@@ -975,13 +997,39 @@ if (token) {
       Buffer.byteLength(oldKey + '_gpu.png', 'utf8') > 255,
       '旧形态产物名=' + Buffer.byteLength(oldKey + '_gpu.png', 'utf8') + ' 字节 > 255');
     // 三处键构造点都必须走同一个派生函数（防"改一处漏两处"）。
+    // ⚠️ 判据口径：只认「该命名空间真的传进了 cacheKeyFor(」+「这一处的中段不再是 base64url(abs)」。
+    //    原先逐字匹配 `cacheKeyFor(..., abs, mtime)`，把形参重命名（abs → absPath）当成违规 —— 假红。
+    // ⚠️ 计数函数必须在本块内自带：Level E 那份是函数内局部声明，跨块引用会 ReferenceError。
+    // ⚠️ 按「命名空间 → 自己的文件」取窗口：拿整个宿主半搜 `'sv1'` 会被别处的同名字面量串味。
+    const b64Deriv = (t) => (t.match(/Buffer\s*\.\s*from\s*\(\s*(?:String\s*\(\s*)?[A-Za-z_$][\w$]*\s*\)?\s*,\s*['"]utf8['"]\s*\)\s*\.\s*toString\s*\(\s*['"]base64url['"]\s*\)/g) || []).length;
+    const nsFiles = {
+      LIVE_FRAME_KEY_VERSION: readFileSync(join(root, 'lib', 'index.js'), 'utf8'),
+      "'sv1'": readFileSync(join(root, 'lib', 'routes', 'scene-media.js'), 'utf8'),
+      "'sa1'": readFileSync(join(root, 'lib', 'scene-probe.js'), 'utf8'),
+    };
+    const namespaceViaCacheKey = (srcText, ns) => {
+      const call = new RegExp('cacheKeyFor\\(\\s*' + ns.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*,');
+      const idx = srcText.search(call);
+      if (idx === -1) return false;
+      // 取该调用附近 200 字符：不许在这段里还自己拼 base64url(abs)。
+      const near = srcText.slice(Math.max(0, idx - 60), idx + 200);
+      return b64Deriv(near) === 0;
+    };
+    const frameOk = namespaceViaCacheKey(nsFiles.LIVE_FRAME_KEY_VERSION, 'LIVE_FRAME_KEY_VERSION');
+    const videoOk = namespaceViaCacheKey(nsFiles["'sv1'"], "'sv1'");
+    const audioOk = namespaceViaCacheKey(nsFiles["'sa1'"], "'sa1'");
     check('#208 三个命名空间都经 cacheKeyFor 派生（帧 / 场景视频 / 场景音频）',
-      /cacheKeyFor\(LIVE_FRAME_KEY_VERSION, abs, mtime\)/.test(hostSrc208)
-      && /cacheKeyFor\('sv1', abs, mtime\)/.test(hostSrc208)
-      && /cacheKeyFor\('sa1', abs, mtime\)/.test(hostSrc208),
-      'frame=' + /cacheKeyFor\(LIVE_FRAME_KEY_VERSION, abs, mtime\)/.test(hostSrc208)
-        + ' video=' + /cacheKeyFor\('sv1', abs, mtime\)/.test(hostSrc208)
-        + ' audio=' + /cacheKeyFor\('sa1', abs, mtime\)/.test(hostSrc208));
+      frameOk && videoOk && audioOk,
+      'frame=' + frameOk + ' video=' + videoOk + ' audio=' + audioOk);
+    // 负对照：同一窗口里既有 cacheKeyFor 调用、又有自拼 base64url，必须判红。
+    // ⚠️ 用合成串而不是替换真实源码：否则源码里参数名一改（abs → absPath），这条负对照
+    //    自己就失配、进而把「判据没牙」误报成「代码违规」。
+    const syntheticDirty = "function f() { return cacheKeyFor('sv1', abs, mtime); }\nconst x = Buffer.from(abs, 'utf8').toString('base64url');";
+    check('#208 negative control: 调用点附近还有自拼 base64url 会被判红',
+      namespaceViaCacheKey(syntheticDirty, "'sv1'") === false
+      && namespaceViaCacheKey("return cacheKeyFor('sv1', abs, mtime);", "'sv1'") === true);
+    // 命名空间改名/换写法（如把 'sv1' 提成常量）时，本判据会判红 —— 这是**有意的**：
+    // 它钉的是"每个命名空间都显式交给 cacheKeyFor"，写法一换必须回来同步这条判据。
   }
 
 // ── Level F: sceneVideo 文件版探测（issue #136）──────────────────────────────
