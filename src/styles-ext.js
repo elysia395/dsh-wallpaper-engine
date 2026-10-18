@@ -71,16 +71,16 @@ const CSS_EXT = `  /* ── 软件渲染回退（upstream #95，运行时探测
      一层 [data-ds-dark-theme]，与浅色声明同特异度时后写者赢（顺序即优先级）。
      ⚠️ 锚点与主块同口径（含 html[data-windows-titlebar] 那道门）：软件渲染时壁纸层
         往往没走 GPU 合成，这条是那批形态唯一的兜底。 */
-  html[data-windows-titlebar] body[data-we-glass-fallback][data-we-glass-page][data-we-titlebar-glass][data-we-adapter^="desktop-"] div[class*="pI_x6G_frame"]::before {
+  html[data-windows-titlebar] body[data-we-glass-fallback][data-we-glass-page][data-we-titlebar-glass][data-we-adapter^="desktop-"] [data-we-titlebar-anchor]::before {
     background: color-mix(in srgb, var(--we-surface-tint-light, #ffffff) 92%, transparent) !important;
   }
   /* ⚠️ 模糊现在住在 ::after 上（见主块的两条规则）⇒ 软件光栅器下要关的是**它**，
      不是 ::before —— 关错对象就等于没关（不留不会生效的声明）。 */
-  html[data-windows-titlebar] body[data-we-glass-fallback][data-we-glass-page][data-we-titlebar-glass][data-we-adapter^="desktop-"] div[class*="pI_x6G_frame"]::after {
+  html[data-windows-titlebar] body[data-we-glass-fallback][data-we-glass-page][data-we-titlebar-glass][data-we-adapter^="desktop-"] [data-we-titlebar-anchor]::after {
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
   }
-  html[data-windows-titlebar] body[data-ds-dark-theme][data-we-glass-fallback][data-we-glass-page][data-we-titlebar-glass][data-we-adapter^="desktop-"] div[class*="pI_x6G_frame"]::before {
+  html[data-windows-titlebar] body[data-ds-dark-theme][data-we-glass-fallback][data-we-glass-page][data-we-titlebar-glass][data-we-adapter^="desktop-"] [data-we-titlebar-anchor]::before {
     background: color-mix(in srgb, var(--we-surface-tint-dark, #0d1524) 92%, transparent) !important;
   }
   /* 内容面（编辑器/终端）本来就是近不透明底板（--we-content-surface-alpha，默认

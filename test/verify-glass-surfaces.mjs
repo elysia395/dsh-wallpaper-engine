@@ -1301,11 +1301,13 @@ console.log('\n⑨ W5：各面的锚点门控覆盖率（防"关掉后还剩一�
     { id: 'left-sidebar-override', member: /:has\(> \[data-slot="sidebar"\]\)(?!\))/, anchor: /data-we-left-sidebar/, done: true },
     // 标题栏（2026-10-06）：与左栏同族的"乙类"面，门是 body[data-we-titlebar-glass]
     // （开关），另加 html[data-windows-titlebar]（壳层形态锚，只出现在 Windows Electron）。
-    // ⚠️ member 必须是**这一面自己的选择器形态**（顶栏那个 CSS 模块哈希类名的子串
-    //    `div[class*="pI_x6G_frame"]`，见 src/styles.js:1177），**不能**写成门控属性本身 ——
-    //    两者写成同一条正则时，"这条规则丢了门控"会让它同时不再是 member ⇒ ungated 恒空、
-    //    该面的 W5 判据**不可能红**（正是这条要防的失效模式：锚点外新增一条同面规则）。
-    { id: 'titlebar-override', member: /pI_x6G_frame/, anchor: /data-we-titlebar-glass/, done: true },
+    // ⚠️ member 必须是**这一面自己的选择器形态**：现在是本插件运行时探针打上去的
+    //    `[data-we-titlebar-anchor]`（src/effects.js 的 syncTitlebarAnchor）。#235 之前这里
+    //    用的是宿主 CSS-module 构建哈希的子串 `div[class*="pI_x6G_frame"]` —— 哈希跨构建漂移，
+    //    宿主一升级它就恒不匹配 ⇒ 本面的"覆盖面"判据静默空转（正是 #235 暴露的那类盲区）。
+    //    **不能**写成门控属性本身 —— 两者写成同一条正则时，"这条规则丢了门控"会让它同时不再是
+    //    member ⇒ ungated 恒空、该面的 W5 判据**不可能红**（正是这条要防的失效模式：锚点外新增一条同面规则）。
+    { id: 'titlebar-override', member: /\[data-we-titlebar-anchor\]/, anchor: /data-we-titlebar-glass/, done: true },
     // W5 推广（本轮）：对话栏三条主规则已加 `[data-we-glass-chat]` 锚点。
     // ⚠️ 合并 #134：思考玻璃一族在对话面新增了「+」白釉 / 气泡清底等规则，它们的门是
     //    `data-we-thinking-glass`（默认关）—— 与 chat 门同样满足"关 ⇒ 整组不生效"，
@@ -1459,7 +1461,7 @@ const effectsBody = stripExportBlocks(EFFECTS);
 const runtimeErrors = [];
 // ⚠️ "同一沙箱里连着调多次"是判「状态迁移无残留」的前提：§4.26 那类缺陷只在序列里现形
 //    （上一档写下的值，下一档没撤）—— 单次调用的判据永远看不见它。
-const makeSandbox = (body) => {
+const makeSandbox = (body, dom, extra) => {
   const wrote = new Map();
   const attrs = new Map();
   const selection = {};
@@ -1476,7 +1478,7 @@ const makeSandbox = (body) => {
   };
   const stub = {
     selection,
-    document: { body: bodyEl, getElementById: () => null, documentElement: { style } },
+    document: dom || { body: bodyEl, getElementById: () => null, documentElement: { style } },
     getComputedStyle: () => ({ getPropertyValue: () => '' }),
     GLASS_SATURATE: 1.3, SCRIM_ID: 'we-scrim', LAYER_ID: 'we-layer',
     adapterCaps: () => ({ target: 'plain-browser' }),
@@ -1488,6 +1490,7 @@ const makeSandbox = (body) => {
     applyCaretStyles: () => {}, removeCaretStyles: () => {}, syncSceneAudio: () => {},
     resolveWallpaperFadeBg: () => '#000000',
   };
+  if (extra) Object.assign(stub, extra);
   const scope = new Proxy(stub, {
     has: (t, k) => (k in t) || !(k in globalThis),
     get: (t, k) => (k in t ? t[k] : () => undefined),
@@ -2368,6 +2371,95 @@ console.log('\n⑱ 宿主模糊令牌覆盖（#156①：值本身必须真的模
       && maskBlurOk('body{--dsw-mask-blur: blur(var(--we-blur, 16px))}') === false
       && maskBlurOk('body[data-we-glass-page]{color:red}') === false
       && maskBlurOk('body[data-we-glass-page]{--dsw-mask-blur: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01)}') === true);
+}
+
+console.log('\n⑲ 标题栏容器锚点探针（#235：运行时 findTitlebarFrame，不写死宿主构建哈希）');
+{
+  // 真 src/effects.js 进沙箱，DOM 替身按**宿主真实结构**搭（证据：app.asar 里
+  // AppFrame.module.css 同时有 BynINW_frame / BynINW_sidebarCol / BynINW_centerCol，
+  // 即整页 grid 容器 > 侧栏列 + 中列）：
+  //   body > div.BynINW_frame（宽 1200）
+  //            > div.BynINW_sidebarCol[data-slot="sidebar"]
+  // 这一组钉的是"运行时真的能定位到那个容器并把标记打上去"，与 ⑪ 组（CSS 里写了新锚点）
+  // 互补：只测 CSS 会出现"选择器对了但探针永远找不到元素"的假绿。
+  const domHits = (n, sel) => {
+    if (sel === 'div[class]') return n.tagName === 'div' && typeof n.className === 'string' && n.className !== '';
+    if (sel === '[data-we-titlebar-anchor]') return n.hasAttribute('data-we-titlebar-anchor');
+    const m = /^\[data-slot="([^"]+)"\]$/.exec(sel);
+    return m ? n.getAttribute('data-slot') === m[1] : false;
+  };
+  const walkFrom = (root, out) => { for (const c of root.children) { out.push(c); walkFrom(c, out); } return out; };
+  const mkEl = (tag, cls, attrs, w, h) => {
+    const el = {
+      nodeType: 1, tagName: tag, className: cls, children: [], parentElement: null,
+      _attrs: Object.assign({}, attrs), style: { setProperty() {}, removeProperty() {} },
+      setAttribute(k, v) { el._attrs[k] = String(v); },
+      removeAttribute(k) { delete el._attrs[k]; },
+      hasAttribute(k) { return Object.prototype.hasOwnProperty.call(el._attrs, k); },
+      getAttribute(k) { return el.hasAttribute(k) ? el._attrs[k] : null; },
+      append(c) { c.parentElement = el; el.children.push(c); return el; },
+      querySelector(sel) { return walkFrom(el, []).filter((n) => domHits(n, sel))[0] || null; },
+      querySelectorAll(sel) { return walkFrom(el, []).filter((n) => domHits(n, sel)); },
+      getBoundingClientRect: () => ({ width: w || 0, height: h || 0 }),
+    };
+    return el;
+  };
+  const mkDom = (body) => ({
+    body,
+    documentElement: { style: { setProperty() {}, removeProperty() {} } },
+    getElementById: () => null,
+    querySelector: (sel) => walkFrom(body, []).filter((n) => domHits(n, sel))[0] || null,
+    querySelectorAll: (sel) => walkFrom(body, []).filter((n) => domHits(n, sel)),
+  });
+  const runProbe = (body, w) => {
+    const eff = makeSandbox(effectsBody, mkDom(body), { window: { innerWidth: w } });
+    return eff;
+  };
+
+  // ① 座位祖先链：sidebar 在 frame 里 ⇒ 必须给 frame 打标记，且不碰宽度不足的干扰项。
+  {
+    const body = mkEl('body', 'body', {}, 1200, 800);
+    const frame = mkEl('div', 'BynINW_frame', {}, 1200, 800);
+    const side = mkEl('div', 'BynINW_sidebarCol', { 'data-slot': 'sidebar' }, 260, 800);
+    frame.append(side);
+    const other = mkEl('div', 'Other_frame', {}, 200, 100);
+    other.append(mkEl('div', 'BynINW_sidebarCol', { 'data-slot': 'sidebar' }, 200, 100));
+    body.append(frame).append(other);
+    const eff = runProbe(body, 1200);
+    eff.call(Object.assign({}, BASE, { titlebarGlass: true }));
+    const onFrame = frame.hasAttribute('data-we-titlebar-anchor');
+    const onOther = other.hasAttribute('data-we-titlebar-anchor');
+    eff.call({ titlebarGlass: false });
+    check('① 座位祖先链：sidebar 所在的 *_frame 被打上标记，宽度不足的干扰项不碰；关掉时标记摘除',
+      onFrame === true && onOther === false && !frame.hasAttribute('data-we-titlebar-anchor'),
+      'frame=' + onFrame + ' · other=' + onOther + ' · after-off=' + frame.hasAttribute('data-we-titlebar-anchor'));
+  }
+
+  // ② 语义座位全缺席（slot 属性改名 / 侧栏没挂上）：靠 ③ 档"宽度覆盖视口的单类名 *_frame"命中。
+  {
+    const body = mkEl('body', 'body', {}, 1200, 800);
+    const wrapper = mkEl('div', 'BynINW_wrap', {}, 1200, 800);
+    wrapper.append(mkEl('div', 'BynINW_sidebarCol', {}, 260, 800));   // 无 data-slot
+    const frame = mkEl('div', 'BynINW_frame', {}, 1200, 800);
+    body.append(wrapper).append(frame);
+    const eff = runProbe(body, 1200);
+    eff.call(Object.assign({}, BASE, { titlebarGlass: true }));
+    check('② 座位缺席时的最后保险：宽度覆盖视口的单类名 *_frame 仍能被找到（不依赖任何 slot 属性）',
+      frame.hasAttribute('data-we-titlebar-anchor') === true,
+      'frame-anchored=' + frame.hasAttribute('data-we-titlebar-anchor'));
+  }
+
+  // ③ 负对照：同样座位缺席，但"*_frame"宽度只有视口的 25% ⇒ 不许打标记（否则会误伤别的模块）。
+  {
+    const body = mkEl('body', 'body', {}, 1200, 800);
+    const frame = mkEl('div', 'BynINW_frame', {}, 300, 100);
+    body.append(frame);
+    const eff = runProbe(body, 1200);
+    eff.call(Object.assign({}, BASE, { titlebarGlass: true }));
+    check('negative control: 宽度不足的 *_frame（25% 视口）不算标题栏容器',
+      frame.hasAttribute('data-we-titlebar-anchor') === false,
+      'frame-anchored=' + frame.hasAttribute('data-we-titlebar-anchor'));
+  }
 }
 
 console.log('');

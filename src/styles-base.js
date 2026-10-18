@@ -354,7 +354,8 @@ const CSS_BASE = `
        · 只在壁纸在台（data-we-wallpaper）且**原生浏览器形态**（data-we-adapter=browser）
          生效 —— 桌面壳的窗口材质让开由既有规则自理，本组不参与；
        · 无壁纸时不生效：页面保持宿主原色（与"让开只让开、不设色"的口径一致）。
-     宿主类名是 CSS-module 哈希（pI_x6G_frame 等），只能按后缀约定匹配 —— 与
+     宿主类名是「随机哈希 + 固定 local 名」（0.2.0-rc.1 写作 pI_x6G_frame、rc.2 写作
+     BynINW_frame），只能按后缀约定匹配 —— 与
      [class*="_bubble"] / [class*="_card"] 同一套做法。 */
   body[data-we-wallpaper][data-we-adapter="browser"],
   body[data-we-wallpaper][data-we-adapter="browser"] [class*="_frame"],
