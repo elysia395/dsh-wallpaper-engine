@@ -527,6 +527,24 @@ console.log('Level B3 — #218 missing-engine surfacing');
     /sceneLiveEngine:\s*\n?\s*\(selection\.inventory && selection\.inventory\.sceneLiveEngine\) \|\| \{ available: true, reason: "" \}/.test(catchBlock)
       && !/sceneLiveEngine: \{ available: true, reason: "" \},/.test(catchBlock),
     '谎报可用 ⇒ 缺件软失败被误判成已恢复 ⇒ 渲染页仍 404 ⇒ 落 timeout 并持久化');
+
+  // ⑯ 清单侧自愈的**顺序**：先把新清单写进 selection，再 syncLayers()。
+  // 这条来自对抗复核抓到的一处真问题：syncLayers() 自己也有一套自愈兜底（按"当前清单"
+  // 判断引擎是否已可用）。若在 setTransient("inventory", next) 之前调它，那一跳读到的仍是
+  // 旧清单（available: false）⇒ 兜底块恒不成立（等于空转），而且会用旧清单里的
+  // sceneMediaBase / weAssetsAvailable 去算层键 —— 重建出来的层可能仍是错的。
+  // 负对照：把 setTransient 挪到 syncLayers() 之后必须判红。
+  const loadInvOrder = braceBody(clientSrc218, 'loadInventory');
+  // 注意：判据必须从 setTransient 之后切窗再找 syncLayers()。函数体开头就有注释写着
+  // 「先写清单（setTransient）再 syncLayers()」，直接对整段 indexOf 会命中注释里的那次出现，
+  // 判据会反向说谎（这正是本判据第一版踩的坑）。
+  const afterSetInventory = loadInvOrder.slice(
+    loadInvOrder.indexOf('setTransient("inventory", next)'));
+  check('#218 ⑯ 清单侧自愈先写入新清单、再 syncLayers()（否则兜底空转且用旧清单算层键）',
+    loadInvOrder.indexOf('setTransient("inventory", next)') !== -1
+      && /clearLiveEngineSessionFailures\(\) > 0/.test(afterSetInventory)
+      && afterSetInventory.indexOf('syncLayers()') !== -1,
+    '在写清单之前调 syncLayers ⇒ 那一跳仍读到 available:false，兜底永不成立');
 }
 
 // ── Level C: /scene-files via synthetic Steam fixture ────────────────────────

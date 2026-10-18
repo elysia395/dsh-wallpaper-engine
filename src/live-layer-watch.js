@@ -590,11 +590,11 @@ function liveFail(reason) {
   // 冷却 45s 再试一百次也装不上一个 npm 依赖（#218）。
   const engineDown = reason === "engine";
   if (engineDown || cause === "transfer" || reason === "stall") {
-    let attempts = 0;
-    if (!engineDown) {
-      attempts = (liveTransferAttempts.get(wid) || 0) + 1;
-      liveTransferAttempts.set(wid, attempts);
-    }
+    // engineDown 时一律 0 且不写回 Map：缺件不是这张壁纸的失败，不该占用它的重试配额。
+    // 写成 const（而不是 `let attempts = 0` 再条件赋值），是为了不给 ESLint 留
+    // no-useless-assignment 的口子 —— 本仓该规则基线为 0。
+    const attempts = engineDown ? 0 : (liveTransferAttempts.get(wid) || 0) + 1;
+    if (!engineDown) liveTransferAttempts.set(wid, attempts);
     const softReason = engineDown
       ? "engine"
       : (cause === "transfer" ? "transfer" : "stall");

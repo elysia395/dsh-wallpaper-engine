@@ -868,13 +868,21 @@ async function loadInventory() {
   // #218：引擎可用性翻转（明确不可用 → 可用）⇒ 自愈缺件软失败并重建层。
   // 必须在这里做而不是只靠 tick：缺件时 live 层根本没建（liveRenderEnabled 被
   // liveSessionFailures 拦着）⇒ 没有看护、没有 tick，光靠 tick 永远等不到自愈。
+  //
+  // ⚠️ 顺序是判据的一部分：先写清单（setTransient）再 syncLayers()。syncLayers() 里有
+  // 同一套自愈兜底（它按"当前清单"判断引擎是否已可用），若在写清单之前调它，那一跳读到的
+  // 还是旧清单（available: false）⇒ 兜底块恒空转、且会用旧清单里的 sceneMediaBase /
+  // weAssetsAvailable 算层键。写在前面之后两条路径的语义才一致：清单先落地，再按新清单重建。
+  //
+  // 显式清除与 syncLayers 里的兜底并存不是重复：显式清除负责"清单这一跳"（此时可能还没有
+  // 任何 syncLayers 被触发），syncLayers 里的兜底负责"任何其他原因重建层时清单早已翻好"的情况
+  // （例如用户改了别的设置触发重建）。两处都是幂等的：清到 0 条就什么都不做。
   const engineWas = selection.inventory && selection.inventory.sceneLiveEngine;
-  if (engineWas && engineWas.available === false && next.sceneLiveEngine.available !== false) {
-    if (clearLiveEngineSessionFailures() > 0) {
-      syncLayers();
-    }
-  }
+  const engineNow = engineWas && engineWas.available === false && next.sceneLiveEngine.available !== false;
   setTransient("inventory", next);
+  if (engineNow && clearLiveEngineSessionFailures() > 0) {
+    syncLayers();
+  }
   setTransient("loading", false);
   setTransient("loaded", true);
   // Fresh inventory → reset pagination, but ONLY when the wallpaper id set

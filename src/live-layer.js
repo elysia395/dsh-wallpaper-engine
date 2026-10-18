@@ -371,10 +371,12 @@ function syncLayers() {
   // 这条软失败让位给回退链，不先清掉，下面算出的层键就永远是"回退层"。
   //
   // 为什么不能靠心跳：liveFail("engine") 体内调了 stopLiveWatch() ⇒ 缺件期没有看护、没有
-  // tick；而引擎恢复的信号（清单里 sceneLiveEngine 翻成可用）本来也不经过心跳。放在这里还
-  // 有一个好处：loadInventory() 清掉软失败后紧接着就会 syncLayers()，两次判断收敛成一次。
-  if (liveSessionFailures.size
-    && selection.inventory
+  // tick；而引擎恢复的信号（清单里 sceneLiveEngine 翻成可用）本来也不经过心跳。
+  //
+  // 这里是**兜底**，主路径在 loadInventory()：那边先写入新清单、再显式清除并调本函数。
+  // 本块服务的是"清单早已翻好、层却因别的缘由重建"的场合（改设置、切壁纸、轮播…）。
+  // 两处都幂等（清到 0 条即什么都不做），所以不冲突。
+  if (selection.inventory
     && selection.inventory.sceneLiveEngine
     && selection.inventory.sceneLiveEngine.available !== false
     && clearLiveEngineSessionFailures() > 0) {

@@ -23,7 +23,7 @@
 - **首帧超时不再写跨窗口的持久失败记忆**：引擎不可用时 `liveFail('timeout')` 走**会话内软失败**（与 `stall` / `transfer` 同一分支：只记 `liveSessionFailures`、按冷却重试、不 `persistSelection`），不再把该壁纸写进 `selection.sceneLiveFailures` 而在**所有窗口永久降级**。环境修好后无需手动清失败记忆。
 - **`docs/DEV-GUIDE.md` §0 补一条运行期依赖口径**：以 git link 直装、或用裁剪过 `node_modules` 的树起步时，必须补 `npm install` 装 `webwallgl`；**装完不用重启宿主**（本次修复前则需要）。
 - **缺件软失败有出口（自愈）**：`engine` 是唯一没有天然清除点的软失败 —— 缺件期渲染页根本打不开、永远出不了首帧，而首帧正是 `liveSessionFailures` 的常规清除点；`migrateStaleLiveFailures` 又只在 `sceneLiveFailures` 非空时才清（`engine` 故意不写那份持久记忆）。所以在两条路径上补出口：①**层重建入口** `syncLayers()` 在算层键之前先调 `clearLiveEngineSessionFailures()`（心跳里做不成 —— `liveFail()` 体内就 `stopLiveWatch()`，记下缺件的那一刻心跳已停，那条分支永远跑不到）；②`loadInventory()` 发现可用性从"明确不可用"翻成可用 → 同样清 engine 记录并重建层。两者都**只清 engine**，不碰传输类软失败的重试计数与冷却定时器。否则面板说"装完无需重启"，用户装完了画面却仍停降级态，只能手点开关。
-- **守卫**：`test/verify-scene-live.mjs` 新增 16 条判据（含负对照）—— 惰性解析器三档行为（抛错→null 且不缓存 / 再抛错仍 null / 成功后立即可用）、源码里不得再有模块级 `WEBWALLGL_PKG_DIR` 常量、`readWebShim` 空串不入缓存、`engine/` 404 自解释且每请求现取、inventory 载荷含 `sceneLiveEngine`、面板披露与失败归因走软失败分支、`clearLiveEngineSessionFailures` 只清 engine、自愈的两条出口齐备、清单拉取失败时**不得**把已知的「引擎不可用」洗成「可用」（否则谎报恢复 ⇒ 渲染页仍 404 ⇒ 落 `timeout` 并持久化，等于把环境缺件重新伪装成「壁纸渲染不出来」）。
+- **守卫**：`test/verify-scene-live.mjs` 新增 17 条判据（含负对照）—— 惰性解析器三档行为（抛错→null 且不缓存 / 再抛错仍 null / 成功后立即可用）、源码里不得再有模块级 `WEBWALLGL_PKG_DIR` 常量、`readWebShim` 空串不入缓存、`engine/` 404 自解释且每请求现取、inventory 载荷含 `sceneLiveEngine`、面板披露与失败归因走软失败分支、`clearLiveEngineSessionFailures` 只清 engine、自愈的两条出口齐备、清单拉取失败时**不得**把已知的「引擎不可用」洗成「可用」（否则谎报恢复 ⇒ 渲染页仍 404 ⇒ 落 `timeout` 并持久化，等于把环境缺件重新伪装成「壁纸渲染不出来」）、清单侧自愈必须**先写清单再 `syncLayers()`**（否则那一跳仍读到旧清单，兜底恒空转且用旧清单算层键）。
 
 ### v1.3.3（2026-10-15 · npm 已发布）
 
