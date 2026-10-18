@@ -312,7 +312,21 @@ function startLiveWatch(frame, wid) {
     // 环境缺件优先于一切表现（#218）：引擎没装 / 渲染页缺失时，渲染页本身就打不开，
     // 15 秒后必然超时 —— 那条超时是"环境"的证据，不是"这张壁纸渲染不出来"的证据。
     // 立即停看护并如实归因，避免把缺依赖写成每张壁纸的持久失败。
-    if (liveEngineDownReason()) { liveFail("engine"); return; }
+    const engineDown = liveEngineDownReason();
+    if (engineDown) { liveFail("engine"); return; }
+    // 引擎已恢复（用户装好了依赖、宿主清单刷新过）⇒ 把 #218 记下的会话内缺件失败
+    // **自愈**掉。否则它会是唯一没有出口的软失败：缺件期渲染页根本打不开，永远
+    // 出不了首帧，而首帧是 liveSessionFailures 的常规清除点；live-layer-gate 的
+    // migrateStaleLiveFailures 又只在 sceneLiveFailures 非空时才清（engine 故意不
+    // 写那份持久记忆）⇒ 用户不手点开关就永远停在降级态。
+    // 清掉后必须重建层：当前的 live 层就是"缺件时建的那一个"，不重建不会重新起看护。
+    if (liveSessionFailures.get(String(watch.wid)) === "engine") {
+      liveSessionFailures.delete(String(watch.wid));
+      liveLog("live-engine-recovered", "wid=" + watch.wid + " 引擎已可用 → 清掉缺件软失败并重建 live 层", "info");
+      try { syncLayers(); } catch { /* ignore */ }
+      try { emit(); } catch { /* ignore */ }
+      return;
+    }
     // 渲染页明确记录了 iframe 加载错误 → 立即降级，不必等 15 秒超时。
     if (isWeb && wstate && wstate.iframeLoaded === false && wstate.webError) {
       liveFail("load");
@@ -625,6 +639,20 @@ function liveFail(reason) {
  * 而传输类软失败住在**内存**里 —— 少了这一条，"重开开关可重试"这条逃生门对传输类失败
  * 不成立（页面上看不见它，它却仍然拦着 live，用户只能刷新页面）。
  */
+/**
+ * 只清「环境缺件」这一类**会话内**软失败（#218），返回清掉几条。
+ *
+ * 为什么需要**只清 engine** 的入口：传输类软失败带着重试计数与冷却定时器，一并清掉
+ * 会白送一次重试；而引擎恢复与传输无关。库存刷新发现引擎从"明确不可用"翻成可用时
+ * 调它 —— 那时当前层仍被缺件软失败拦着，不主动清就等不到 tick 去自愈。
+ */
+function clearLiveEngineSessionFailures() {
+  let cleared = 0;
+  for (const [k, v] of liveSessionFailures) {
+    if (v === "engine") { liveSessionFailures.delete(k); cleared++; }
+  }
+  return cleared;
+}
 function clearLiveSessionFailures() {
   liveSessionFailures.clear();
   liveTransferAttempts.clear();

@@ -22,7 +22,8 @@
 - **缺依赖不再伪装成"渲染失败"**：`/inventory` 新增 `sceneLiveEngine: { available, reason }`（与既有 `weAssetsAvailable` 同口径的**访问器**），设置面板「场景实时渲染」区据此显示一行明确文案（`engine-not-installed` → 提示 `npm install`；`renderer-page-missing` → 提示重装插件）。此前这条环境缺失只能表现为首帧超时，与壁纸真的渲染不出来无从分辨。
 - **首帧超时不再写跨窗口的持久失败记忆**：引擎不可用时 `liveFail('timeout')` 走**会话内软失败**（与 `stall` / `transfer` 同一分支：只记 `liveSessionFailures`、按冷却重试、不 `persistSelection`），不再把该壁纸写进 `selection.sceneLiveFailures` 而在**所有窗口永久降级**。环境修好后无需手动清失败记忆。
 - **`docs/DEV-GUIDE.md` §0 补一条运行期依赖口径**：以 git link 直装、或用裁剪过 `node_modules` 的树起步时，必须补 `npm install` 装 `webwallgl`；**装完不用重启宿主**（本次修复前则需要）。
-- **守卫**：`test/verify-scene-live.mjs` 新增 13 条判据（含负对照）—— 惰性解析器三档行为（抛错→null 且不缓存 / 再抛错仍 null / 成功后立即可用）、源码里不得再有模块级 `WEBWALLGL_PKG_DIR` 常量、`readWebShim` 空串不入缓存、`engine/` 404 自解释且每请求现取、inventory 载荷含 `sceneLiveEngine`、面板披露与失败归因走软失败分支。
+- **缺件软失败有出口（自愈）**：`engine` 是唯一没有天然清除点的软失败 —— 缺件期渲染页根本打不开、永远出不了首帧，而首帧正是 `liveSessionFailures` 的常规清除点；`migrateStaleLiveFailures` 又只在 `sceneLiveFailures` 非空时才清（`engine` 故意不写那份持久记忆）。所以在两条路径上补出口：①心跳发现引擎不再缺件 → 删掉该 wid 的 `engine` 记录并重建层；②`loadInventory()` 发现可用性从"明确不可用"翻成可用 → 调 `clearLiveEngineSessionFailures()`（**只清 engine**，不碰传输类软失败的重试计数与冷却定时器）。否则面板说"装完无需重启"，用户装完了画面却仍停降级态，只能手点开关。
+- **守卫**：`test/verify-scene-live.mjs` 新增 15 条判据（含负对照）—— 惰性解析器三档行为（抛错→null 且不缓存 / 再抛错仍 null / 成功后立即可用）、源码里不得再有模块级 `WEBWALLGL_PKG_DIR` 常量、`readWebShim` 空串不入缓存、`engine/` 404 自解释且每请求现取、inventory 载荷含 `sceneLiveEngine`、面板披露与失败归因走软失败分支、`clearLiveEngineSessionFailures` 只清 engine、自愈的两条出口齐备。
 
 ### v1.3.3（2026-10-15 · npm 已发布）
 

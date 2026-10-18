@@ -448,10 +448,11 @@ console.log('Level B3 — #218 missing-engine surfacing');
   const watchSrc = liveText();
   const tickSrc = (() => {
     const i = watchSrc.indexOf('watch.timer = setInterval(');
-    return i < 0 ? '' : watchSrc.slice(i, i + 1800);
+    return i < 0 ? '' : watchSrc.slice(i, i + 2600);
   })();
   check('#218 ⑧ 环境缺件在心跳里先于超时归因（engine，而不是等到 20 秒无帧）',
-    /if \(liveEngineDownReason\(\)\) \{ liveFail\("engine"\); return; \}/.test(tickSrc),
+    /const engineDown = liveEngineDownReason\(\);/.test(tickSrc)
+      && /if \(engineDown\) \{ liveFail\("engine"\); return; \}/.test(tickSrc),
     '缺依赖等到超时才报 ⇒ 归因错到壁纸身上');
 
   const failSrc = braceBody(watchSrc, 'liveFail');
@@ -480,6 +481,29 @@ console.log('Level B3 — #218 missing-engine surfacing');
     /if \(!raw \|\| typeof raw !== "object"\) return \{ available: true, reason: "" \};/.test(normSrc)
       && /if \(raw\.available !== false\) return \{ available: true, reason: "" \};/.test(normSrc),
     '老宿主不发字段 ⇒ 升级插件后人人看到假"引擎未安装"');
+
+  // ── ⑬⑭ 自愈：缺件软失败必须**有出口** ──────────────────────────────────
+  //
+  // 这条判据来自一次独立复核：engine 软失败原本是所有软失败里唯一没有自动清除路径的
+  // 一类 —— 缺件期渲染页打不开、永远出不了首帧，而首帧正是 liveSessionFailures 的常规
+  // 清除点；live-layer-gate 的 migrateStaleLiveFailures 又要求 sceneLiveFailures 非空
+  // （engine 故意不写那份持久记忆）。于是用户装好依赖、刷新清单之后，画面仍停在降级态，
+  // 只能手点开关才能恢复 —— 而面板文案说的是"装完无需重启宿主"。判据就是钉住这两条出口。
+  const healSrc = braceBody(watchSrc, 'clearLiveEngineSessionFailures');
+  check('#218 ⑬ 缺件软失败有**只清 engine** 的出口（传输类软失败的重试计数不被误伤）',
+    /v === "engine"/.test(healSrc)
+      && !/liveTransferAttempts\.clear\(\)/.test(healSrc),
+    '一并清掉传输类软失败 = 白送一次 300MB 重试');
+
+  check('#218 ⑭ 缺件软失败在两条路径上自愈：心跳发现引擎恢复 / 清单刷新发现可用',
+    // 心跳侧：引擎不再缺件时，把 wid 上那条 engine 记录删掉并重建层。
+    /liveSessionFailures\.get\(String\(watch\.wid\)\) === "engine"/.test(tickSrc)
+      && /liveSessionFailures\.delete\(String\(watch\.wid\)\);/.test(tickSrc)
+      // 清单侧：可用性从 false 翻成非 false 时清 engine 记录并重建层。
+      && /engineWas\.available === false && next\.sceneLiveEngine\.available !== false/.test(
+        braceBody(clientSrc218, 'loadInventory'))
+      && /clearLiveEngineSessionFailures\(\) > 0/.test(braceBody(clientSrc218, 'loadInventory')),
+    '没有出口 ⇒ 装好依赖后画面仍降级，只能手点开关（面板却说无需重启）');
 }
 
 // ── Level C: /scene-files via synthetic Steam fixture ────────────────────────

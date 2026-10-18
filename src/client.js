@@ -858,6 +858,15 @@ async function loadInventory() {
     };
   }
   if (seq !== inventorySeq) return; // superseded by a newer loadInventory()
+  // #218：引擎可用性翻转（明确不可用 → 可用）⇒ 自愈缺件软失败并重建层。
+  // 必须在这里做而不是只靠 tick：缺件时 live 层根本没建（liveRenderEnabled 被
+  // liveSessionFailures 拦着）⇒ 没有看护、没有 tick，光靠 tick 永远等不到自愈。
+  const engineWas = selection.inventory && selection.inventory.sceneLiveEngine;
+  if (engineWas && engineWas.available === false && next.sceneLiveEngine.available !== false) {
+    if (clearLiveEngineSessionFailures() > 0) {
+      syncLayers();
+    }
+  }
   setTransient("inventory", next);
   setTransient("loading", false);
   setTransient("loaded", true);
