@@ -513,6 +513,20 @@ console.log('Level B3 — #218 missing-engine surfacing');
         braceBody(clientSrc218, 'loadInventory'))
       && /clearLiveEngineSessionFailures\(\) > 0/.test(braceBody(clientSrc218, 'loadInventory')),
     '没有出口 ⇒ 装好依赖后画面仍降级，只能手点开关（面板却说无需重启）');
+
+  // ⑮ 清单拉取失败时**不许**把已知的"不可用"洗成"可用"。这条是自愈引入之后的次生坑：
+  // loadInventory 的失败兜底原本把 sceneLiveEngine 硬写成 { available: true }，于是
+  // "宿主不可达"会被 syncLayers/loadInventory 的两道自愈读成"引擎恢复了" ⇒ 清掉缺件软失败
+  // 并重建 live 层 ⇒ 渲染页仍 404 ⇒ 20 拍后落 timeout（**这条会写持久记忆**），把环境缺件
+  // 重新伪装成"壁纸渲染不出来"，正是本 issue 要消灭的症状。
+  // 判据：兜底必须回落到上一次的判断（`selection.inventory && ...sceneLiveEngine`），
+  // 不能出现写死的可用字面量。负对照：把回落改回字面量必须判红。
+  const loadInvSrc = braceBody(clientSrc218, 'loadInventory');
+  const catchBlock = loadInvSrc.slice(loadInvSrc.indexOf('catch (err)'));
+  check('#218 ⑮ 清单拉取失败时保留已知的引擎可用性（不把不可用洗成可用）',
+    /sceneLiveEngine:\s*\n?\s*\(selection\.inventory && selection\.inventory\.sceneLiveEngine\) \|\| \{ available: true, reason: "" \}/.test(catchBlock)
+      && !/sceneLiveEngine: \{ available: true, reason: "" \},/.test(catchBlock),
+    '谎报可用 ⇒ 缺件软失败被误判成已恢复 ⇒ 渲染页仍 404 ⇒ 落 timeout 并持久化');
 }
 
 // ── Level C: /scene-files via synthetic Steam fixture ────────────────────────

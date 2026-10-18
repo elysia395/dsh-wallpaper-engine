@@ -848,7 +848,14 @@ async function loadInventory() {
       weAssetsAvailable: false,
       // 拉不到清单时**不**报"引擎没装"：那是"宿主不可达"，由 error 那行单独说。
       // 未知一律按可用处理 —— 少一条误报比多一条早报重要。
-      sceneLiveEngine: { available: true, reason: "" },
+      //
+      // 但"未知"**不能**把已知的不可用洗成可用（#218）：清单拉取失败时若保留上一次的
+      // 判断，缺件软失败就不会被误判成"引擎已恢复"。否则会走成：清单失败 → 谎报可用 →
+      // syncLayers 清掉 engine 软失败并重建 live 层 → 渲染页仍 404 → 20 拍后落
+      // timeout（**这条会写持久记忆**），把一个环境缺件重新伪装成"壁纸渲染不出来"，
+      // 正是本 issue 要消灭的症状。
+      sceneLiveEngine:
+        (selection.inventory && selection.inventory.sceneLiveEngine) || { available: true, reason: "" },
       sceneMediaBase: "",
       wallpapers: [],
       total: 0,
