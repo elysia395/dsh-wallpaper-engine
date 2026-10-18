@@ -312,21 +312,11 @@ function startLiveWatch(frame, wid) {
     // 环境缺件优先于一切表现（#218）：引擎没装 / 渲染页缺失时，渲染页本身就打不开，
     // 15 秒后必然超时 —— 那条超时是"环境"的证据，不是"这张壁纸渲染不出来"的证据。
     // 立即停看护并如实归因，避免把缺依赖写成每张壁纸的持久失败。
-    const engineDown = liveEngineDownReason();
-    if (engineDown) { liveFail("engine"); return; }
-    // 引擎已恢复（用户装好了依赖、宿主清单刷新过）⇒ 把 #218 记下的会话内缺件失败
-    // **自愈**掉。否则它会是唯一没有出口的软失败：缺件期渲染页根本打不开，永远
-    // 出不了首帧，而首帧是 liveSessionFailures 的常规清除点；live-layer-gate 的
-    // migrateStaleLiveFailures 又只在 sceneLiveFailures 非空时才清（engine 故意不
-    // 写那份持久记忆）⇒ 用户不手点开关就永远停在降级态。
-    // 清掉后必须重建层：当前的 live 层就是"缺件时建的那一个"，不重建不会重新起看护。
-    if (liveSessionFailures.get(String(watch.wid)) === "engine") {
-      liveSessionFailures.delete(String(watch.wid));
-      liveLog("live-engine-recovered", "wid=" + watch.wid + " 引擎已可用 → 清掉缺件软失败并重建 live 层", "info");
-      try { syncLayers(); } catch { /* ignore */ }
-      try { emit(); } catch { /* ignore */ }
-      return;
-    }
+    if (liveEngineDownReason()) { liveFail("engine"); return; }
+    // ⚠️ 这里**不能**放"引擎恢复了就自愈"的反向分支：liveFail("engine") 自身就调
+    // stopLiveWatch()，记下缺件的那一刻心跳已停、而 liveRenderEnabled() 又因这条软失败
+    // 让位给回退链 ⇒ live 层根本不会被建回来 ⇒ 这条 tick 永远转不到第二次。
+    // 自愈因此挂在 syncLayers() 入口（src/live-layer.js），那里不依赖心跳活着。
     // 渲染页明确记录了 iframe 加载错误 → 立即降级，不必等 15 秒超时。
     if (isWeb && wstate && wstate.iframeLoaded === false && wstate.webError) {
       liveFail("load");

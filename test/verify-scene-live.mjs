@@ -451,8 +451,7 @@ console.log('Level B3 — #218 missing-engine surfacing');
     return i < 0 ? '' : watchSrc.slice(i, i + 2600);
   })();
   check('#218 ⑧ 环境缺件在心跳里先于超时归因（engine，而不是等到 20 秒无帧）',
-    /const engineDown = liveEngineDownReason\(\);/.test(tickSrc)
-      && /if \(engineDown\) \{ liveFail\("engine"\); return; \}/.test(tickSrc),
+    /if \(liveEngineDownReason\(\)\) \{ liveFail\("engine"\); return; \}/.test(tickSrc),
     '缺依赖等到超时才报 ⇒ 归因错到壁纸身上');
 
   const failSrc = braceBody(watchSrc, 'liveFail');
@@ -495,11 +494,21 @@ console.log('Level B3 — #218 missing-engine surfacing');
       && !/liveTransferAttempts\.clear\(\)/.test(healSrc),
     '一并清掉传输类软失败 = 白送一次 300MB 重试');
 
-  check('#218 ⑭ 缺件软失败在两条路径上自愈：心跳发现引擎恢复 / 清单刷新发现可用',
-    // 心跳侧：引擎不再缺件时，把 wid 上那条 engine 记录删掉并重建层。
-    /liveSessionFailures\.get\(String\(watch\.wid\)\) === "engine"/.test(tickSrc)
-      && /liveSessionFailures\.delete\(String\(watch\.wid\)\);/.test(tickSrc)
-      // 清单侧：可用性从 false 翻成非 false 时清 engine 记录并重建层。
+  // ⑭ 的落点是**层重建入口**，不是心跳。这一条曾经写成"心跳里发现引擎恢复就自愈"，
+  // 而那是不可能的路径：liveFail("engine") 体内就调 stopLiveWatch() ⇒ 记下缺件的那一刻
+  // 心跳已停，而 liveRenderEnabled() 又因这条软失败让位给回退链 ⇒ live 层不会再建回来、
+  // 没有看护也没有第二次 tick。判据因此必须同时钉住"tick 里不许有"（防回归到死代码）
+  // 与"syncLayers 入口必须有"（真正的出口）。
+  const syncLayersSrc = braceBody(liveSrc, 'syncLayers');
+  check('#218 ⑭ 缺件软失败自愈挂在层重建入口（tick 里不可能触发），且清单侧同时兜住',
+    // 层重建入口：先清 engine 记录，再算层键 —— 顺序错了这一跳仍是回退层。
+    /clearLiveEngineSessionFailures\(\) > 0/.test(syncLayersSrc)
+      // 顺序：先把 engine 记录清掉，后面的层键才可能算出 live 层
+      && syncLayersSrc.indexOf('clearLiveEngineSessionFailures()')
+        > syncLayersSrc.indexOf('migrateStaleLiveFailures()')
+      // tick 里不许再有自愈块：那是死代码，留着会让判据为跑不到的路径背书。
+      && !/liveSessionFailures\.delete\(String\(watch\.wid\)\)/.test(tickSrc)
+      // 清单侧：可用性从 false 翻成非 false 时同样清 engine 记录。
       && /engineWas\.available === false && next\.sceneLiveEngine\.available !== false/.test(
         braceBody(clientSrc218, 'loadInventory'))
       && /clearLiveEngineSessionFailures\(\) > 0/.test(braceBody(clientSrc218, 'loadInventory')),

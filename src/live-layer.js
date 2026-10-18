@@ -367,6 +367,19 @@ function syncLayers() {
   // 失败记忆的管线核对放在最前：它可能把 `sceneLiveFailures` 清掉，而本函数下面就要用它
   // 算层键（清掉 ⇒ 这一跳直接重建回 live，用户不必手动重开开关）。
   migrateStaleLiveFailures();
+  // #218 缺件软失败的自愈也必须**在同一位置**、同样"先清后算键"：liveRenderEnabled() 会因
+  // 这条软失败让位给回退链，不先清掉，下面算出的层键就永远是"回退层"。
+  //
+  // 为什么不能靠心跳：liveFail("engine") 体内调了 stopLiveWatch() ⇒ 缺件期没有看护、没有
+  // tick；而引擎恢复的信号（清单里 sceneLiveEngine 翻成可用）本来也不经过心跳。放在这里还
+  // 有一个好处：loadInventory() 清掉软失败后紧接着就会 syncLayers()，两次判断收敛成一次。
+  if (liveSessionFailures.size
+    && selection.inventory
+    && selection.inventory.sceneLiveEngine
+    && selection.inventory.sceneLiveEngine.available !== false
+    && clearLiveEngineSessionFailures() > 0) {
+    liveLog("live-engine-recovered", "引擎已可用 → 清掉 #218 缺件软失败，本次重建恢复 live 层", "info");
+  }
 
   // 轮换渐变标记在入口消费：commitRotationSwitch 置位后首个 syncLayers 即
   // applySelection 的 emit；无旧层可淡（首壁纸/已清除）时自然作废，绝不
