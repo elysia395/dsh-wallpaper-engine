@@ -14,7 +14,7 @@
 
 | # | 路径 | 来源 | 形态 | 依赖（闭包状态 / `c` 字段） | 守卫提及 |
 |---|---|---|---|---|---|
-| 1 | `/inventory` | lib/index.js:1231 | async 箭头 | webServer disposers mediaOriginApi buildInventory | 24 |
+| 1 | `/inventory` | lib/index.js:1237 | async 箭头 | webServer disposers mediaOriginApi buildInventory | 24 |
 | 2 | `/media-info` | lib/routes/media-derived.js:57 | 箭头 | disposers base mediaMap log getMediaInfo faststartVariant …(+1) | 10 |
 | 3 | `/transcode-progress` | lib/routes/media-derived.js:100 | 箭头 | disposers base mediaMap transcodeJobs | 2 |
 | 4 | `/transcoded` | lib/routes/media-derived.js:153 | 箭头 | disposers base mediaMap serveFile transcodeToFps registerTranscodeWaiter | 1 |
@@ -42,8 +42,8 @@
 | 26 | `/diag-log` | lib/routes/diag.js:144 | 箭头 | disposers log base | 2 |
 | 27 | `/api/local-assets` | lib/routes/we-assets.js:66 | async 箭头 | disposers serveFile listWeAssetNames weAssetsAvailable WE_ASSETS_SOURCE_ID getWeAssetsDir | 1 |
 | 28 | `/we-assets-dir` | lib/routes/we-assets.js:113 | 箭头 | disposers base CONTROL_JSON_MAX_BYTES normalizeUserDir setWeAssetsDir listWeAssetNames …(+2) | 3 |
-| 29 | `/scene-video` | lib/routes/scene-media.js:51 | 箭头 | disposers base mediaMap serveFile ensureFrameCacheDir sceneVideoProbeKey …(+3) | 3 |
-| 30 | `/scene-audio` | lib/routes/scene-media.js:135 | 箭头 | disposers base mediaMap serveFile ensureSceneAudio | 4 |
+| 29 | `/scene-video` | lib/routes/scene-media.js:52 | 箭头 | disposers base mediaMap serveFile ensureFrameCacheDir sceneVideoProbeKey …(+3) | 3 |
+| 30 | `/scene-audio` | lib/routes/scene-media.js:136 | 箭头 | disposers base mediaMap serveFile ensureSceneAudio | 4 |
 | 31 | `/upload` | lib/routes/upload.js:68 | 箭头 | disposers base tokenFor UPLOAD_EXT UPLOAD_MAX_BYTES ensureUploadDir …(+6) | 5 |
 | 32 | `/remove` | lib/routes/upload.js:218 | 箭头 | disposers base CONTROL_JSON_MAX_BYTES ensureUploadDir removeUploadMeta resolveUploadFile …(+1) | 1 |
 | 33 | `/upload-dir` | lib/routes/upload.js:275 | 箭头 | disposers base CONTROL_JSON_MAX_BYTES setUploadDir normalizeUserDir armBodyIdleTimeout | 2 |

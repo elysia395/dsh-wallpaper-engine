@@ -16,7 +16,7 @@
  *   · 不依赖仓库 fixture：全部在 `.test-cache/scene-probe/` 里现造。
  *   · 覆盖面地板写在 `if` 之外（G 段），跳过项会被点名。
  */
-import { mkdirSync, writeFileSync, rmSync, statSync, readFileSync, utimesSync } from 'node:fs';
+import { mkdirSync, writeFileSync, rmSync, statSync, readFileSync, utimesSync, existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createSceneProbeKit } from '../lib/scene-probe.js';
@@ -61,9 +61,15 @@ async function loadMutant (label, transform) {
   const src = readFileSync(SRC, 'utf8');
   const out = transform(src);
   if (out === src) throw new Error('变异体没改到源码（判据会失真）: ' + label);
-  const patched = out
-    .replace('\'./scene-manifest.js\'', JSON.stringify(pathToFileURL(join(ROOT, 'lib', 'scene-manifest.js')).href))
-    .replace('\'./pkg-read.js\'', JSON.stringify(pathToFileURL(join(ROOT, 'lib', 'pkg-read.js')).href));
+  // 逐个相对 import 改写成绝对 file: URL。⚠️ 这里**不能只列两个**：`lib/scene-probe.js`
+  // 每引入一个新依赖，漏改一条就会让整条守卫以 ERR_MODULE_NOT_FOUND 崩掉（#208 加了
+  // `./cache-keys.js` 时正是这样），而崩掉在输出里看起来像「判据失败」。改为按正则全量改写，
+  // 只认 `lib/` 下真实存在的文件（找不到就地抛错，别变成静默放过）。
+  const patched = out.replace(/(['"])\.\/([A-Za-z0-9._-]+\.js)\1/g, (whole, quote, name) => {
+    const abs = join(ROOT, 'lib', name);
+    if (!existsSync(abs)) throw new Error('变异体依赖不存在（改写了不存在的相对 import）: ./' + name);
+    return JSON.stringify(pathToFileURL(abs).href);
+  });
   const dir = join(ISO, 'mutants');
   mkdirSync(dir, { recursive: true });
   const file = join(dir, (mutantSeq++) + '-' + label + '.mjs');

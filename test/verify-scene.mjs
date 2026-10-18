@@ -21,6 +21,9 @@ import { EventEmitter } from 'node:events';
 import { createHash } from 'node:crypto';
 // 剥注释：共享的字符串感知实现（test/tools/js-text.mjs）。
 import { stripComments } from './tools/js-text.mjs';
+// #208：缓存键的唯一派生点（宿主 lib/cache-keys.js）。测试**必须**用它算当前键 ——
+// 自己再拼一遍前缀 + base64url(abs) 会在键形态一改就静默测到旧文件（假通过）。
+import { cacheKeyFor } from '../lib/cache-keys.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -310,7 +313,11 @@ if (token) {
     // 精确匹配本次运行的 key（含 fixture mtime）—— 目录里可能有历史运行
     // 残留的其它 key 文件，不算失败。版本取自上面从源码读出的 keyVersion，
     // 写死字面量会在宿主升键后静默测到旧文件（第 514 行的注释即此意）。
-    const curKey = keyVersion + '_' + token + '_' + Math.round(statSync(join(fixtureItemDir, 'scene.pkg')).mtimeMs);
+    // ⚠️ #208：键中段是 sha256(abs) 摘要，**不是** URL 里的 token（token 仍是
+    // base64url(abs)，两者在升级后不再相同）⇒ 必须走宿主同一个派生函数算。
+    const curKey = cacheKeyFor(keyVersion,
+      join(fixtureItemDir, 'scene.pkg'),
+      Math.round(statSync(join(fixtureItemDir, 'scene.pkg')).mtimeMs));
     // 主帧产物名：<key>_gpu.png（单槽，面积升级制 —— 只升不降，见 PUT 守卫）。
     const gpuMasterFile = curKey + '_gpu.png';
     const head0 = await runHead('/wallpaper-engine/scene-frame/' + token);
@@ -849,13 +856,16 @@ if (token) {
     slotBody ? 'len=' + slotBody.length : '锚点缺失（sceneFrameSlot / gpuFrameFileFor 改名了？）');
   check('负对照：终点锚缺失时 fnBody 返回 null（判据有牙，不会静默扫全文）',
     fnBody('function a() {}\n', 'a', 'doesNotExist') === null);
-  check('P1-6 每种缓存各只有一个键派生点（当前 3 种：帧 / 场景音频 / 场景视频）',
-    derivations === 3,
+  // #208：键形态改成短哈希后，宿主半**一处字面量派生都不该剩下** —— 帧 / 场景视频 /
+  // 场景音频三种缓存全部走 lib/cache-keys.js 的 cacheKeyFor()。这条从"数到 3"改成
+  // "数到 0"，含义更强：任何一处再自己拼前缀 + base64url(abs) 都会立刻红。
+  check('P1-6 缓存键字面量派生点已清零（三种缓存全部走 lib/cache-keys.js）',
+    derivations === 0,
     '派生点 ' + derivations + ' 处');
   check('P1-6 sceneFrameSlot 复用 sceneFrameCacheKey 且不再自带版本前缀',
     slotBody !== null && slotBody.includes('sceneFrameCacheKey(abs, mtime)') && !slotBody.includes('LIVE_FRAME_KEY_VERSION'),
     'reuse=' + (slotBody !== null && slotBody.includes('sceneFrameCacheKey(abs, mtime)')) + ' versionInSlot=' + (slotBody !== null && slotBody.includes('LIVE_FRAME_KEY_VERSION')));
-  check('P1-6 negative control: 再写一份派生会被同一计数判据数出来',
+  check('P1-6 negative control: 再写一份字面量派生会被同一计数判据数出来',
     base64UrlDerivations(hostSrc + "\nconst x = Buffer.from(abs, 'utf8').toString('base64url');") === derivations + 1);
 
   // ── 槽位只给唯一产物（反向探针：删掉的死字段不许爬回来）─────────────────────
@@ -932,6 +942,47 @@ if (token) {
     /const slot = variant === 4 \? null : sceneFrameSlot\(abs\);/.test(readFileSync(join(root, 'lib', 'routes', 'scene-frame.js'), 'utf8'))
     && /const gpuFile = slot \? gpuFrameFileFor\(slot\) : null;/.test(readFileSync(join(root, 'lib', 'routes', 'scene-frame.js'), 'utf8')));
 }
+
+
+  // ── #208：缓存文件名与 checkout 深度解耦（长度不变量 + 反例）────────────────
+  // 原形态 base64url(abs) 是路径长度的 1.34 倍（issue 实测：abs 258 字节 ⇒ 文件名 258 字节，
+  // 越过 NAME_MAX 255 ⇒ ENAMETOOLONG，表现为一批与代码无关的假红；而用符号链接构造的深路径
+  // 复现不出来，因为 realpath 把它缩短了 —— 这正是"路径长度耦合"的诊断依据）。
+  // 判据不数文档、不数注释，**真跑 lib/cache-keys.js** 算键长。
+  {
+    const hostSrc208 = readHostHalf();
+    const { cacheKeyFor, ABS_HASH_HEX } = await import(pathToFileURL(join(root, 'lib', 'cache-keys.js')).href);
+    // 深路径骨架：与 issue 同量级（深目录 checkout）。
+    const deepAbs = 'C:/' + Array.from({ length: 45 }, (_, i) => 'dir' + i).join('/') + '/scene.pkg';
+    check('覆盖面：夹具路径足够深（≥250 字节才算真的在试 NAME_MAX）', deepAbs.length >= 250,
+      'abs=' + deepAbs.length + ' 字节');
+    const key = cacheKeyFor('lf2', deepAbs, 1717000000000);
+    // 最长产物名：抓帧主帧 <key>_gpu.png，临时名再挂 .tmp<pid><6 位>。
+    const longest = key + '_gpu.png' + '.tmp' + '999999' + '999999';
+    check('#208 键长与 checkout 深度无关（深路径下产物名仍远低于 NAME_MAX）',
+      Buffer.byteLength(longest, 'utf8') <= 64,
+      'key=' + Buffer.byteLength(key, 'utf8') + ' 字节, 最长产物名=' + Buffer.byteLength(longest, 'utf8')
+        + ' 字节 (NAME_MAX=255)');
+    check('#208 键里不含路径编码（只有命名空间 + 固定长度摘要 + mtime）',
+      new RegExp('^lf2_[0-9a-f]{' + ABS_HASH_HEX + '}_\\d+$').test(key) && !key.includes('/') && !key.includes('C:'),
+      'key=' + key);
+    check('#208 不同入口路径在同一 mtime 下不撞键（摘要真的含路径信息）',
+      cacheKeyFor('lf2', deepAbs, 1) !== cacheKeyFor('lf2', deepAbs + 'x', 1)
+      && cacheKeyFor('lf2', deepAbs, 1) === cacheKeyFor('lf2', deepAbs, 1));
+    // 负对照：老形态必须**真的**越界 —— 否则上面那条"远低于 NAME_MAX"可能只是判据没牙。
+    const oldKey = 'lf1_' + Buffer.from(deepAbs, 'utf8').toString('base64url') + '_1717000000000';
+    check('#208 negative control: 旧形态 base64url(abs) 在同一深路径下确实越过 NAME_MAX',
+      Buffer.byteLength(oldKey + '_gpu.png', 'utf8') > 255,
+      '旧形态产物名=' + Buffer.byteLength(oldKey + '_gpu.png', 'utf8') + ' 字节 > 255');
+    // 三处键构造点都必须走同一个派生函数（防"改一处漏两处"）。
+    check('#208 三个命名空间都经 cacheKeyFor 派生（帧 / 场景视频 / 场景音频）',
+      /cacheKeyFor\(LIVE_FRAME_KEY_VERSION, abs, mtime\)/.test(hostSrc208)
+      && /cacheKeyFor\('sv1', abs, mtime\)/.test(hostSrc208)
+      && /cacheKeyFor\('sa1', abs, mtime\)/.test(hostSrc208),
+      'frame=' + /cacheKeyFor\(LIVE_FRAME_KEY_VERSION, abs, mtime\)/.test(hostSrc208)
+        + ' video=' + /cacheKeyFor\('sv1', abs, mtime\)/.test(hostSrc208)
+        + ' audio=' + /cacheKeyFor\('sa1', abs, mtime\)/.test(hostSrc208));
+  }
 
 // ── Level F: sceneVideo 文件版探测（issue #136）──────────────────────────────
 // 启动探测曾对每个 scene.pkg 做 readFile(整包) + 全量 parsePkg（一库实测 15.86 GB
