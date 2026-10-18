@@ -203,9 +203,10 @@ function applyGlass(selection, s) {
     s.setProperty("--we-left-sidebar-alpha", String(Math.max(0.10, 0.25 - pct / 100 * 0.15)));
   }
 
-  // 标题栏液态玻璃：壳层顶栏（AppFrame 那个 grid 容器，锚点是 `div[class*="pI_x6G_frame"]`
-  // 这个**构建哈希子串** —— `.dshDesktopFrameTitlebar` 在当前 app.asar 命中 0 次，
-  // 见 styles.js 的「标题栏液态玻璃」注释）默认只是那条不透明的底色（上面 styles.js 的
+  // 标题栏液态玻璃：壳层顶栏（AppFrame 那个 grid 容器，锚点是**运行时探针**打的
+  // `data-we-titlebar-anchor` —— 宿主类名是 CSS-module 构建哈希，跨构建漂移（0.2.0-rc.1 是
+  // `pI_x6G_frame`、rc.2 是 `BynINW_frame`），写死必然在下次升级静默失效，#235 即此；探针见
+  // effects.js 的 findTitlebarFrame）默认只是那条不透明的底色（上面 styles.js 的
   // 「外壳画布底」把外壳画布清成 transparent 之后，这一层是唯一必须保留底色的面）。
   // 打开后 CSS 把它换成**与其余面板同一张配方表**，且与左侧栏那条**逐条同形**
   // （唯一差别是锚点；**不画**底分割线，理由见 styles.js）。

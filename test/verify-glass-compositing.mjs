@@ -562,6 +562,66 @@ function main() {
       && r.header.includes('::before')
       && /backdrop-filter:\s*none\s*!important/.test(r.body)));
 
+  // ── S2d: 左栏整列抬到标题栏模糊层之上（issue #236）──────────────────────────
+  // 症状前提：左栏玻璃 + 标题栏玻璃**同时**开。 #131 的 z-index:0 让这一列成为层叠
+  // 上下文（把 ::before 的 z-index:-1 圈在列内），代价是钉在列里的两枚宿主 fixed 按钮
+  // （收起/展开侧边栏、收起态新建会话，宿主给 z-index:30）只能在**列内部**排序，整列
+  // 按 z=0 参与外层排序 ⇒ 被 AppFrame 的 ::after（同为 0 级、树序在后）的
+  // backdrop-filter 整片糊掉。修法 = 同一症状前提下把整列抬到 1；宿主「应用/编辑」菜单
+  // 直挂 body，本来就不在这条链上，抬升后两者口径一致。
+  // 判据 = 规则存在 + 只写在症状前提里 + z-index ≥ 1 + 锚点不含任何哈希字面量，配负对照。
+  const liftRule = rules.find((r) => r.header.includes('[data-we-titlebar-glass]')
+    && r.header.includes('div:has(> [data-slot="sidebar"])'));
+  const liftZ = liftRule ? declValue(liftRule.body, 'z-index') : null;
+  const liftsAbove = (z) => Number.isFinite(Number(z)) && Number(String(z).trim()) >= 1;
+  check('S2d 标题栏玻璃 + 左栏玻璃同开时，左栏整列抬到模糊层之上（issue #236）',
+    Boolean(liftRule) && liftsAbove(liftZ)
+      && /data-we-left-sidebar/.test(liftRule.header)
+      && /data-we-glass-page/.test(liftRule.header)
+      && !/[A-Za-z0-9]{5,}_(?:frame|sidebarCol|centerCol)/.test(liftRule.header),
+    'rule=' + (liftRule ? 'present' : 'MISSING') + ' z-index=' + String(liftZ));
+  check('S2d 负对照：z-index:0 / 缺声明必须判红，1 要放行（判据有牙）',
+    liftsAbove('0') === false && liftsAbove(null) === false
+      && liftsAbove(undefined) === false && liftsAbove('1') === true);
+
+  // ── RT: 右侧栏不画外沿描边（issue #237）────────────────────────────────────
+  // 与左栏 S2 同一条政策：这一列已经是一整块玻璃，不再额外画边界线。两个来源分别是
+  // ① 面板上的 inset box-shadow 三明治（顶边 1px 亮线最明显；此前**由本插件**在右栏
+  //    玻璃规则里复刻宿主那套值，所以左栏没有、右栏有，两侧政策不一致）；
+  // ② 左边缘 0.5px 全高竖线（dockkit divider 的 ::before 与第一列 dock tab host 的
+  //    border-left；前者是 background 不是 border，按 border 清不生效）。
+  // 判据 = 玻璃规则里不许出现 inset 描边 + 两处竖线都被显式清掉 + 清除规则门控在
+  // 玻璃开关而不是圆角档（#237 的旧形态正是门控在圆角 ⇒ 默认档恒不生效）。
+  const rightGlassRule = rules.find((r) => r.header.includes('body[data-we-sidebar-glass]')
+    && r.header.includes('[data-sidebar-right-panel]')
+    && r.header.includes('[data-sidebar-right-open]')
+    && /backdrop-filter/.test(r.body));
+  const rightShadow = rightGlassRule ? declValue(rightGlassRule.body, 'box-shadow') : null;
+  const hasInsetShadow = (v) => /inset/.test(String(v || ''));
+  check('RT1 右侧栏玻璃不画 inset 描边三明治（顶边亮线 / 四周 0.5px，issue #237）',
+    Boolean(rightGlassRule) && !hasInsetShadow(rightShadow),
+    'panel rule=' + (rightGlassRule ? 'present' : 'MISSING')
+      + ' box-shadow=' + String(rightShadow === null ? '(absent)' : rightShadow).slice(0, 90));
+  check('RT1 负对照：把三条 inset 种回去必须判红（判据有牙）',
+    hasInsetShadow('inset 0 1px 0 rgba(255,255,255,.32)') === true
+      && hasInsetShadow('none') === false);
+  const dividerClear = rules.find((r) => r.header.includes('[data-dockkit-divider]')
+    && r.header.includes('::before') && r.header.includes('[data-we-sidebar-glass]'));
+  const dockClear = rules.find((r) => r.header.includes('[data-dockkit-host="dock"][data-dockkit-column="0"]')
+    && r.header.includes('[data-we-sidebar-glass]'));
+  const clearsDecl = (body, prop) => new RegExp('(^|[;\\s])' + prop + ':\\s*none').test(String(body));
+  check('RT2 右栏左边缘竖线的两个来源都被显式清掉（divider 的 ::before 背景 + dock 首列 border-left）',
+    Boolean(dividerClear) && clearsDecl(dividerClear.body, 'background')
+      && clearsDecl(dividerClear.body, 'border')
+      && Boolean(dockClear) && clearsDecl(dockClear.body, 'border-left'),
+    'divider=' + (dividerClear ? 'present' : 'MISSING') + ' dock=' + (dockClear ? 'present' : 'MISSING'));
+  check('RT2 负对照：把 border / background 换成"保留描边"的写法必须判红（判据有牙）',
+    clearsDecl('border: 1px solid red; background: red;', 'background') === false
+      && clearsDecl('top: var(--x) !important;', 'border') === false
+      && clearsDecl('background: none !important;', 'background') === true);
+  check('RT2 负对照：同一条清除规则门控在「右侧栏圆角」上（#237 的旧形态）必须判红',
+    Boolean(dividerClear) && !dividerClear.header.includes('data-we-right-sidebar-radius'));
+
   // ── TB: 标题栏玻璃的锚点与两层结构（2026-10-06 回归）──────────────────────────
   // 三条故障的来龙去脉（死类名锚点 / 嵌套 :has() 让逗号列表**整条**失效 / 底色与模糊同层
   // 导致的色差）**只写在 src/styles.js 的标题栏注释块**，此处不复述 —— 判据只钉结论：
@@ -576,7 +636,22 @@ function main() {
     'tb selectors=' + tbSelectors.length + ' dead-anchor hits=' + tbSelectors.filter((s) => s.includes(deadAnchor)).length);
   check('TB1 负对照：死锚点要被判红、正常选择器要放行（判据有牙）',
     hasDeadAnchor(['html[data-windows-titlebar] body[data-we-titlebar-glass] ' + deadAnchor]) === false
-      && hasDeadAnchor(['html[data-windows-titlebar] div[class*="pI_x6G_frame"]']) === true);
+      && hasDeadAnchor(['html[data-windows-titlebar] div[class*="_frame"]']) === true);
+  // TB1b（#235）：锚点**不许再写死宿主构建哈希**。哈希（pI_x6G / BynINW …）随宿主每次构建
+  // 重排，写死一个 ⇒ 宿主一升级整块标题栏玻璃静默失效，而两道硬门都还成立，现象是"开关点了
+  // 没反应"。正确锚点 = 本插件运行时打的 [data-we-titlebar-anchor]（src/effects.js 的
+  // syncTitlebarAnchor）。判据两头都钉：① 顶栏规则里不得出现带哈希前缀的 [class*="…_frame"]
+  // （只有裸后缀 `[class*="_frame"]` 这种稳定约定才算合规）；② 新锚点必须真的挂着 —— 只判①
+  // 的话，把锚点整条删掉也会恒绿。
+  const hashFrameAnchors = tbSelectors
+    .map((s) => /\[class\*="([^"]*_frame)"\]/.exec(s))
+    .filter(Boolean)
+    .map((m) => m[1])
+    .filter((cls) => !cls.startsWith('_'));
+  const anchorMounted = tbSelectors.some((s) => s.includes('[data-we-titlebar-anchor]'));
+  check('TB1b 标题栏玻璃不写死宿主构建哈希（#235）；新锚点必须真的接上（删锚点同样判红）',
+    hashFrameAnchors.length === 0 && anchorMounted,
+    'hash-anchors=' + JSON.stringify(hashFrameAnchors) + ' · runtime-anchor=' + anchorMounted);
   const tbLightRule = tbRules.find((r) => r.header.includes('::before')
     && !r.header.includes('data-ds-dark-theme') && !r.header.includes('glass-fallback')
     && /background-color\s*:/.test(r.body)); // 排除 @supports not 里那两条 background 简写

@@ -78,14 +78,23 @@ DSH 桌面端把整份客户端 + node 宿主打进 `resources/app.asar`（Elect
 |---|---|---|
 | `_bubble` / `_card` / `_panel` / `_editorHeader` | ✅ 存在 | 会话 / 卡片族用得上。**但 `_bubble` 不是"聊天气泡专属后缀"** —— 见下面那条 |
 | `_boundaryError` / `_browserBar` / `_explorerHeader` / `_gitHeader` / `_pane` / `_paneCard` / `_tabBar` / `_terminalWrap` | ❌ 不存在 | 这些是 **dsh-better-sidebar 的类名**（第三方）⇒ 只能随该插件漂移 |
-| `pI_x6G`（写成 `div[class*="pI_x6G_frame"]`） | ✅ **完整哈希子串**（实测命中） | 不是后缀 —— 见下面那条 |
+| `data-we-titlebar-anchor`（**插件自己打的**） | ✅ 插件写 | 标题栏玻璃用：宿主类名是构建哈希、跨构建漂移，改由 `src/effects.js` 的运行时探针按**结构**打标记 —— 见下面那条（#235） |
 
-**⚠️ 还有第三种形态：拿完整哈希名当子串**（`div[class*="pI_x6G_frame"]`，标题栏玻璃用）。它是
+**⚠️ 已退役的第三种形态：拿完整哈希名当子串**（曾用 `div[class*="pI_x6G_frame"]` 做标题栏玻璃）。它是
 `oE-XyW_root` 那种"哈希 + 后缀"里的**整串**（`<hash>_frame`）⇒ 比后缀更窄、更不会误伤，但**每次宿主重建
-哈希都会漂**，最坏结果是"这一块不生效"（锚点失配不会误伤别的元素）。**棘轮有盲区**：
+哈希都会漂**，最坏结果是"这一块不生效"。**#235 就是它翻的车**：宿主 0.2.0-rc.2 把哈希从 `pI_x6G` 换成
+`BynINW`（对 app.asar 做字面扫描：`BynINW_frame` 命中 5 次、`pI_x6G_frame` **0 次**），9 条标题栏玻璃规则
+一条都不再命中 —— 开关能开、变量全对、屏上毫无变化。**棘轮还有盲区**：
 `test/compat-harness-surfaces.mjs` 的抽取正则只收 `[class*="_xxx"]` 这种**下划线开头**的后缀 ⇒
-`class*="pI_x6G_frame"` 抓不到，`test/fixtures/harness-ui-surfaces.json` 里也就没有它；目前只有
-`test/verify-glass-surfaces.mjs` 的 `anchors: ['[data-windows-titlebar]']` 单独兜一层。
+`class*="pI_x6G_frame"` 抓不到，`test/fixtures/harness-ui-surfaces.json` 里也就没有它。
+
+**⇒ 现行做法：运行时探针锚点**（`data-we-titlebar-anchor`）。宿主类名里的哈希是构建期产物、不是契约，
+所以**不写死**：`src/effects.js` 的 `findTitlebarFrame()` 在每次 `applyEffects` 时按**结构**找 AppFrame
+那条整页 grid 容器（① 座位出口 `[data-slot="sidebar"]` 的祖先链里 class 以 `_frame` 收尾的那个；
+② 座位缺席时退到"宽高覆盖视口"的单类名 `*_frame`；③ 都不中就不打属性、整块不生效），CSS 只认
+`[data-we-titlebar-anchor]`。守卫：`verify-glass-compositing` 的 **TB1b**（CSS 里不许再出现完整哈希子串）
++ `verify-glass-surfaces` 的 **⑲ 三判据**（座位链命中 / 座位缺席兜底 / 负对照"宽度不足的 `*_frame` 不是
+标题栏容器"）。
 
 **⚠️ 后缀会撞车：`_bubble` 同时是宿主 Tooltip 的类名**（`dsh-client-ui-primitives` 的
 `Tooltip.module.css`，编译名 `_bubble_<hash>`）。Tooltip 是 `position:fixed` + portal 到 body 的

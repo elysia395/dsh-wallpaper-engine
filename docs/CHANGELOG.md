@@ -16,6 +16,14 @@
 > 完整逐提交历史见 GitHub Commits / Releases；升级前置条件见 [`UPGRADING.md`](./UPGRADING.md)。
 > `test/verify-scene-live.mjs` 这一类判据条数**只记该条写作当时的实测总数**（如 466 / 465），不是现在的总数 —— 后续条目会往上加（现为 502）；照原文保留，好让它与当次提交对得上。
 
+### v1.3.4（未发布 · #235 修复）
+
+- **标题栏液态玻璃的锚点不再写死宿主构建哈希（#235）**：`pI_x6G_frame` 是 0.2.0-rc.1 那版构建的 CSS-module 哈希名，rc.2 宿主里换成了 `BynINW_frame` —— 本插件 9 条标题栏玻璃规则（`src/styles-sidebar.js` 6 条 + `src/styles-ext.js` 3 条）因此**一条都不命中**：开关点开、变量全对、屏上毫无变化。现在锚点改成**运行时探针**：`src/effects.js` 的 `findTitlebarFrame()` 在每次 `applyEffects` 时按**结构**找到 AppFrame 那条整页 grid 容器并打上 `data-we-titlebar-anchor`（三级判据：① 座位出口 `[data-slot="sidebar"]` 的祖先链里 class 以 `_frame` 收尾的那个；② 座位缺席时退到"宽高覆盖视口"的单类名 `*_frame`；③ 都不中就不打属性、整块不生效），CSS 六条主规则与三条 accent 映射全部只认这个属性 ⇒ **宿主下次重建哈希也不再静默失效**。守卫同步补齐：`test/verify-glass-compositing.mjs` 的 **TB1b** 断言"标题栏 CSS 里不许再出现 `class*="<hash>_frame"` 这种完整哈希子串"；`test/verify-glass-surfaces.mjs` 的 GATE 覆盖面改认新锚点，并新增 **⑲ 三判据**（座位祖先链命中 + 座位缺席的最后保险 + 负对照"宽度不足的 `*_frame` 不算标题栏容器"）；`verify-client-sync` 随产物重新对齐。**纯客户端改动 ⇒ 刷新页面即可生效。**
+- **标题栏玻璃 + 左栏玻璃同开时，左上角收起/展开按钮不再被糊住（#236）**：`#131` 给左栏列加了 `position:relative; z-index:0`，把 `::before` 的 `z-index:-1` 圈回列内 —— 代价是**这一列成了层叠上下文**，列内元素只能在列内排序；而宿主那两枚按钮是 fixed 定位、`z-index:30`，整列按 `z-index:0` 参与 AppFrame 的排序，于是被 `#145` 挂在 AppFrame `::after` 上的模糊层盖住。现在**两个开关同时开**时把整列抬到 `z-index:1`（门控：`html[data-windows-titlebar] body[data-we-left-sidebar][data-we-glass-page][data-we-titlebar-glass][data-we-adapter^="desktop-"]`，不含任何宿主哈希），既保住 `#131` 的 `::before` 围栏，又让按钮回到模糊层之上。守卫 `S2d`（抬升命中 + 负对照：少一个开关就不许抬）。**纯客户端改动 ⇒ 刷新页面即可生效。**
+
+- **右侧栏去掉四周 1px 描边与左边缘 0.5px 竖线，且不再依赖「右侧栏圆角」开着（#237）**：描边是**本插件自己画的** —— 右栏玻璃规则里复刻了宿主那套 inset box-shadow 三明治（顶边 `rgba(255,255,255,.32) 0 1px 0 0 inset`、底边 `.08`、四周 `.06`），现在**删掉**，与左栏同策不画外沿；竖线来自宿主 dockkit divider 的 `::before` 背景与第一列 dock tab host 的 `border-left`，现在在 `body[data-we-sidebar-glass]` 门控下用显式清除规则压掉（`box-shadow:none` / `border:none;background:none` / `border-left:none;box-shadow:none`）—— 门控从「右侧栏圆角」搬到玻璃开关上，所以不开圆角也生效（旧形态「门控在圆角上」正是 #237 的成因）。守卫 `RT1`（右栏玻璃规则里不许再有 inset 三明治）+ `RT2`（divider 与 dock 两处显式清除 + 两条负对照）。**纯客户端改动 ⇒ 刷新页面即可生效。**
+
+
 ### v1.3.3（2026-10-15 · npm 已发布）
 
 - **公告追加一条 + 版本号升级（本仓迭代，用户口径）**：更新公告在四条 callout 之后新增第五条**加粗**提示 —— **「在设置中启用深色模式 + 「作者自用」预设，为本插件最佳效果之一！」**（沿用 16pt callout 样式，`<strong>` 加粗与❗前缀同其余四条）；`package.json` 版本号 `1.3.2` → `1.3.3`，`NOTICE_VERSION` 哨兵同步 `1.3.3`（看过 1.3.2 公告的机器重弹一次）。英文词表同步新增一条（`src/i18n-copy-ext.js`）。**纯客户端改动 ⇒ 刷新页面即可生效。**

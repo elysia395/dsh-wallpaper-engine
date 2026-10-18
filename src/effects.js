@@ -344,6 +344,77 @@ function glassColorOf(selection, theme) {
   return typeof other === "string" ? other : "";
 }
 
+// ── 标题栏容器锚点：运行时探针，不写死宿主构建哈希（#235）─────────────────────
+// 宿主 AppFrame 是那条整页 grid 容器的类名（`BynINW_frame` / `pI_x6G_frame` …），前缀是
+// CSS-module 的**构建哈希**：宿主每换一次构建它就可能变一次。把它写进选择器 ⇒ 宿主一升级，
+// 标题栏玻璃（含软件渲染回退两条）就**静默失效**；而两道硬门（[data-windows-titlebar] /
+// [data-we-adapter]）都还成立 ⇒ 现场表现是"开关怎么点都没反应"（issue #235 的实测：
+// 0.2.0 之前是 pI_x6G，之后是 BynINW）。
+// 结论：锚点只能是 ① 宿主自己的稳定属性（已经用了）或 ② **本插件运行时打的标记**（本块）。
+// 探针判据（都不含哈希字面量）：
+//   · 它是左侧栏座位 `[data-slot="sidebar"]` 的**祖先** —— 顶栏容器是整页 grid 的根，侧栏列
+//     一定落在它里面（布局事实，与类名无关）；
+//   · 它的 class 里有一个以 `_frame` 收尾的模块类名（宿主 AppFrame.module.css 的 local 名是
+//     `frame`；哈希只换前缀、不换后缀 —— 与 styles-base.js 的 [class*="_frame"] 同一套约定）。
+// 兜底（座位缺席时）：直接扫，另行要求它含侧栏或对话列，避免误伤别的 `_frame` 模块。
+const WE_TITLEBAR_FRAME_CLASS = /(?:^|\s)[A-Za-z0-9_-]*_frame(?:\s|$)/;
+
+function weIsTitlebarFrame(el) {
+  return !!(el && el.nodeType === 1 && typeof el.className === "string"
+    && WE_TITLEBAR_FRAME_CLASS.test(el.className));
+}
+
+function findTitlebarFrame() {
+  // ① 座位祖先链：`[data-slot="sidebar"]` 的祖先里第一个 `*_frame`（布局事实：顶栏容器是
+  //    整页 grid 的根，侧栏列一定落在它里面 —— 与类名无关，所以这一档不受哈希漂移影响）。
+  const seat = document.querySelector('[data-slot="sidebar"]');
+  for (let el = seat && seat.parentElement; el && el !== document.body; el = el.parentElement) {
+    if (weIsTitlebarFrame(el)) return el;
+  }
+  // ② 座位缺席（侧栏插件没装 / 座位还没挂上）时：扫所有 div，取"含侧栏或对话列"的那个 ——
+  //    仍然只认宿主语义属性（data-slot），不认类名前缀。
+  for (const el of document.querySelectorAll("div[class]")) {
+    if (weIsTitlebarFrame(el) && el.querySelector('[data-slot="sidebar"], [data-slot="conversation"]')) return el;
+  }
+  // ③ 两档语义座位全都缺席时（换了壳层实现 / slot 属性改名）：只认**单类名、`_frame` 收尾**的
+  //    模块类名（CSS-module 的 local 名恒为 frame，前缀才是构建哈希），再要求它宽度覆盖视口
+  //    70% 以上 —— 整页 grid 容器才满足。取面积最大的那个。这一档不依赖任何 slot 属性，是
+  //    "哈希换了、座位形态也变了"时的最后保险；因为要求视口宽度，误伤别的 `*_frame` 模块的概率极低。
+  const viewport = (typeof window !== "undefined" && window && Number(window.innerWidth)) || 0;
+  if (!viewport || !document.body || !document.body.children) return null;
+  let best = null;
+  let bestArea = 0;
+  const consider = (el) => {
+    if (!el || el.nodeType !== 1 || typeof el.className !== "string") return;
+    if (!/^[A-Za-z0-9_-]+_frame$/.test(el.className)) return;
+    const rect = el.getBoundingClientRect ? el.getBoundingClientRect() : null;
+    if (!rect || rect.width < viewport * 0.7) return;
+    const area = rect.width * rect.height;
+    if (area <= bestArea) return;
+    best = el;
+    bestArea = area;
+  };
+  for (const root of document.body.children) {
+    consider(root);
+    for (const child of root.children || []) consider(child);
+  }
+  return best;
+}
+
+/** 幂等：开 ⇒ 只给**当前**顶栏容器打标记（旧节点上的残留标记一并摘掉）；关 ⇒ 全部摘掉。 */
+function syncTitlebarAnchor(on) {
+  if (typeof document === "undefined" || !document
+    || typeof document.querySelector !== "function"
+    || typeof document.querySelectorAll !== "function") return;
+  const frame = on ? findTitlebarFrame() : null;
+  for (const el of document.querySelectorAll("[data-we-titlebar-anchor]")) {
+    if (el !== frame) el.removeAttribute("data-we-titlebar-anchor");
+  }
+  if (frame && !frame.hasAttribute("data-we-titlebar-anchor")) {
+    frame.setAttribute("data-we-titlebar-anchor", "");
+  }
+}
+
 function applyEffects(opts) {
   // `live` = 拖动期的每一格（色板 / 滑块）。那些格子里只有"与本次改动相关的那几个样式"
   // 需要更新，而下面几步与拖动无关却都不便宜 ⇒ 拖动期跳过、抬手那一次（无 opts）照跑：
@@ -568,6 +639,10 @@ function applyEffects(opts) {
   else document.body.removeAttribute("data-we-thinking-native");
   if (selection.thinkingGlass && !selection.thinkingNative && !skinYield) document.body.setAttribute("data-we-thinking-glass", "on");
   else document.body.removeAttribute("data-we-thinking-glass");
+  // 标题栏容器锚点（#235）：顶栏玻璃那一族 CSS 只认 [data-we-titlebar-anchor]，不再写死宿主
+  // 构建哈希 —— 探针判据与理由见本文件 syncTitlebarAnchor 的注释。与上面几个门控同批：
+  // 关掉标题栏玻璃 = 这一面整组不生效，标记也一并摘掉（不在宿主 DOM 上留本插件的属性）。
+  syncTitlebarAnchor(selection.titlebarGlass === true && !skinYield);
   // 文字胶囊一族的雾化（行内代码 / 新会话 / 「加载更早历史」「回到底部」）：
   // #134 落地时是写死的 8px CSS 兜底（--we-inline-code-blur 无生产者 ⇒ 用户实测"调不了"），
   // 现在接成旋钮（capsuleBlur，默认 8 = 原观感）。与上面的门控属性同处声明 ——
@@ -718,6 +793,11 @@ function clearEffects() {
   // 标题栏液态玻璃门（与上面那个同批）：漏撤 ⇒ 插件卸载 / 禁用后，顶栏仍挂着玻璃底与
   // 雾化层，而壳层自己的不透明底色被压住 —— 表现为"插件没了，标题栏还是玻璃的"。
   document.body.removeAttribute("data-we-titlebar-glass");
+  // 标题栏容器的锚点标记（#235，挂在**宿主元素**上而非 body）：同批摘掉 —— 它是本插件打到
+  // 宿主 DOM 上的属性，插件被判用 / HMR 卸载后不能留在页面上。
+  if (document && typeof document.querySelectorAll === "function") {
+    for (const el of document.querySelectorAll("[data-we-titlebar-anchor]")) el.removeAttribute("data-we-titlebar-anchor");
+  }
   // 思考块液态玻璃门（PR #130 引入）：同批的卸载残留口径 —— 漏撤 ⇒ 插件卸载后
   // 宿主思考条的规则组照旧生效。合并 #132 时补上（第 ⑨ 组清理对称判据的要求）。
   // 三挡的另一半（对话区原生挡）同批：漏撤 ⇒ 卸载后对话区令牌仍被钉回原生值。
