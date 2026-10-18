@@ -5266,5 +5266,95 @@ setTimeout(async () => {
   assert.notEqual(toPropClass(crlfNav), crlfNav, '装置自检：CRLF 检出上负对照②的变异也必须落地');
 }
 
+
+// ── #232 / #231 / #230：三条真实缺陷的回归判据 ────────────────────────────────
+{
+  const clientSrc = readFileSync(new URL('../src/client.js', import.meta.url), 'utf8');
+  const avatarSrc = readFileSync(new URL('../src/avatar-layer.js', import.meta.url), 'utf8');
+  const schemaMod = await import(new URL('../lib/settings-schema.js', import.meta.url).href);
+
+  // ① #232：openAvatarCrop 的裁切宽高必须声明在 try **之外**。
+  // 事故：宽高在 try 里用 const 声明，而 setTransient("avatarCropW", w) 在 try 之后 ⇒
+  //      用户一选图片就 ReferenceError: w is not defined（上传头像整条路断掉）。
+  const cropStart = clientSrc.indexOf('async function openAvatarCrop(');
+  assert.ok(cropStart >= 0, '#232：找不到 openAvatarCrop 锚点');
+  const cropEnd = clientSrc.indexOf('function closeAvatarCrop(', cropStart);
+  assert.ok(cropEnd > cropStart, '#232：找不到 closeAvatarCrop 边界');
+  const cropBody = clientSrc.slice(cropStart, cropEnd);
+  const cropOk = (body) => {
+    const dW = body.indexOf('let w = 0;');
+    const dH = body.indexOf('let h = 0;');
+    const t = body.indexOf('try {');
+    return dW >= 0 && dH >= 0 && t > dW && t > dH
+      && !/const w = Number\(src\.width\)/.test(body)
+      && !/const h = Number\(src\.height\)/.test(body);
+  };
+  assert.ok(cropOk(cropBody),
+    '#232：裁切宽高必须让 try 之后的 setTransient 看得到（let 声明在 try 外）');
+  const oldCrop = cropBody
+    .replace('  let w = 0;\n  let h = 0;\n  try {', '  try {')
+    .replace('    w = Number(src.width) || 0;', '    const w = Number(src.width) || 0;')
+    .replace('    h = Number(src.height) || 0;', '    const h = Number(src.height) || 0;');
+  assert.notEqual(oldCrop, cropBody, '#232 负对照：旧形态文本构造成功');
+  assert.ok(!cropOk(oldCrop), '#232 负对照：try 内的 const 必须被同一判据判红');
+
+  // ② #231：非消息行（工具调用 / 思考过程…）必须断开连续性。
+  // 事故：avatarApplyGrouping 只对三种消息行更新 prev，其他行 continue 时不重置 ⇒
+  //       prev 恒为 'ai'，一次工具调用之后每条助手消息都被判"续行"而隐藏（实测 83%）。
+  const mkRow = (kind) => {
+    const cls = new Set(['we-avatar']);
+    const node = {
+      classList: {
+        contains: (c) => cls.has(c),
+        toggle: (c, f) => { if (f) cls.add(c); else cls.delete(c); },
+      },
+    };
+    return {
+      kind,
+      node,
+      cls,
+      getAttribute: (a) => (a === 'data-chat-flow-kind' ? kind : null),
+      firstElementChild: node,
+    };
+  };
+  const runGroup = (src) => {
+    const rows = [mkRow('user'), mkRow('tool-call'), mkRow('assistant-step'),
+      mkRow('tool-call'), mkRow('assistant-step')];
+    const doc = { querySelectorAll: () => rows };
+    const runner = new Function('document',
+      stripExportBlocks(src) + '\navatarActive = true;\navatarApplyGrouping();');
+    runner(doc);
+    return rows.map((r) => r.cls.has('we-avatar--cont'));
+  };
+  const fixed = runGroup(avatarSrc);
+  assert.equal(fixed[2], false, '#231：紧跟在用户消息后的助手消息不该判"续行"（实测 ' + JSON.stringify(fixed) + '）');
+  assert.equal(fixed[4], false, '#231：工具调用之后的助手消息不得判"续行"（实测 ' + JSON.stringify(fixed) + '）');
+  const brokenSrc = avatarSrc.replace(
+    "    if (!side) { prev = ''; continue; } // #231：非消息行要断开连续性，不能只 continue",
+    '    if (!side) continue;');
+  assert.notEqual(brokenSrc, avatarSrc, '#231 负对照：旧形态文本构造成功');
+  const regressed = runGroup(brokenSrc);
+  assert.equal(regressed[4], true, '#231 负对照：旧实现必须被判红（实测 ' + JSON.stringify(regressed) + '）');
+
+  // ③ #230：轮播间隔不能走 schemaRange —— rotationInterval 是 DEFAULTS_ONLY、不在 KINDS，
+  //    于是 schemaRange 返回 [undefined, undefined]，clampNum 对**任何**输入都回落默认值 30。
+  assert.equal((clientSrc.match(/schemaRange\("rotationInterval"\)/g) || []).length, 0,
+    '#230：rotationInterval 不在 KINDS，不能再传给 schemaRange');
+  assert.equal((clientSrc.match(/ROTATION_INTERVAL_MIN, ROTATION_INTERVAL_MAX/g) || []).length, 3,
+    '#230：三处间隔写入（保存 / 编辑 / 主面板）必须共用同一对具名常量');
+  assert.ok(/const ROTATION_INTERVAL_MIN = 1;/.test(clientSrc)
+    && /const ROTATION_INTERVAL_MAX = 1440;/.test(clientSrc),
+    '#230：常量值必须与宿主 readRotationGroups 的 [1, 1440] 同源');
+  // 通用守卫：凡传给 schemaRange 的键都必须在 KINDS 里（防下一处再漏成第二个 #230）。
+  const rangeKeys = [...clientSrc.matchAll(/schemaRange\("([A-Za-z0-9_]+)"\)/g)].map((m) => m[1]);
+  assert.ok(rangeKeys.length >= 8, '#230 覆盖面：schemaRange 调用点数（实测 ' + rangeKeys.length + '）');
+  const missing = [...new Set(rangeKeys)].filter((k) => !(k in schemaMod.KINDS));
+  assert.equal(missing.length, 0, '#230：schemaRange 的键必须都在 KINDS（缺失：' + missing.join(', ') + '）');
+  // 负对照：喂一个不在 KINDS 的键必须被判出。
+  const synth = [...'schemaRange("rotationInterval")'.matchAll(/schemaRange\("([A-Za-z0-9_]+)"\)/g)]
+    .map((m) => m[1]).filter((k) => !(k in schemaMod.KINDS));
+  assert.equal(synth.length, 1, '#230 负对照：不在 KINDS 的键必须被判出');
+}
+
 console.log('\nALL CLIENT CHECKS DONE');
 }, 50);

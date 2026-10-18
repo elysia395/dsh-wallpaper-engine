@@ -16,6 +16,12 @@
 > 完整逐提交历史见 GitHub Commits / Releases；升级前置条件见 [`UPGRADING.md`](./UPGRADING.md)。
 > `test/verify-scene-live.mjs` 这一类判据条数**只记该条写作当时的实测总数**（如 466 / 465），不是现在的总数 —— 后续条目会往上加（现为 502）；照原文保留，好让它与当次提交对得上。
 
+### v1.3.4（未发布 · #232 / #231 / #230 修复）
+
+- **#232 上传头像不再报 `ReferenceError: w is not defined`**：`openAvatarCrop()` 里裁切宽高原本在 `try` 内用 `const` 声明，而 `setTransient("avatarCropW" / "avatarCropH")` 的引用在 `try` **之后** —— 块作用域不可见，一点「选择图片」就抛。改为 `let w = 0; let h = 0;` 提到 `try` 之前、`try` 内赋值。判据 `verify-client` 新增：宽高必须声明在 `try` 外，并用旧形态做负对照。
+- **#231 助手侧头像不再被误判成「续行」而整片隐藏**：`avatarApplyGrouping()` 只对 `user` / `steering` / `assistant-step` 三种消息行更新「上一条是谁」，遇到工具调用 / 思考过程 / turn 尾巴只 `continue` 而**不清 `prev`** —— 一次工具调用之后 `prev` 恒为 `'ai'`，后续每条助手消息都被打上 `we-avatar--cont`（`visibility:hidden`）。改为非消息行同时 `prev = ''`（断开连续性）。判据新增假 DOM 序列（用户 → 工具调用 → 助手 → 工具调用 → 助手）：第二条助手消息不得带续行标记，负对照钉住旧实现。
+- **#230 自动轮转间隔终于可以调整**：`rotationInterval` 是 `DEFAULTS_ONLY` 键（只做默认值、不进 `KINDS`），三处写入却用 `schemaRange("rotationInterval")` 取量程 ⇒ 返回 `[undefined, undefined]` ⇒ `clampNum` 的 `v >= undefined` 恒假 ⇒ **任何输入都被回落成默认值 30 分钟**。改为具名常量 `ROTATION_INTERVAL_MIN = 1` / `ROTATION_INTERVAL_MAX = 1440`（与宿主 `readRotationGroups` 的钳制同源），`schemaRange` 本身不动。判据新增：`rotationInterval` 不得再传给 `schemaRange`、三处写入共用同一对常量、**凡传给 `schemaRange` 的键都必须存在于 `KINDS`**（防下一处再漏成第二个 #230）。
+
 ### v1.3.3（2026-10-15 · npm 已发布）
 
 - **公告追加一条 + 版本号升级（本仓迭代，用户口径）**：更新公告在四条 callout 之后新增第五条**加粗**提示 —— **「在设置中启用深色模式 + 「作者自用」预设，为本插件最佳效果之一！」**（沿用 16pt callout 样式，`<strong>` 加粗与❗前缀同其余四条）；`package.json` 版本号 `1.3.2` → `1.3.3`，`NOTICE_VERSION` 哨兵同步 `1.3.3`（看过 1.3.2 公告的机器重弹一次）。英文词表同步新增一条（`src/i18n-copy-ext.js`）。**纯客户端改动 ⇒ 刷新页面即可生效。**

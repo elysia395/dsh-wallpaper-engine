@@ -229,6 +229,8 @@ function avatarSweep() {
  *
  * 顺序判定：按**文档序**走一遍消息行，记住上一条的 side；同侧且不是第一条 ⇒ 标记为续行。
  * 不同类型之间（助手 → 用户）自然断开。只认三种消息行（`AVATAR_FLOW_SIDES`）。
+ * **非消息行（工具调用 / 思考过程 / turn 尾巴 …）也必须断开连续性**：它们不是"同一方连着说"，
+ * 跳过时必须把 `prev` 清空 —— 否则一次工具调用之后，后续每条助手消息都会被判成"续行"而隐藏（#231）。
  */
 function avatarApplyGrouping() {
   if (!avatarActive || typeof document.querySelectorAll !== 'function') return;
@@ -237,7 +239,7 @@ function avatarApplyGrouping() {
   let prev = '';
   for (const row of rows) {
     const side = AVATAR_FLOW_SIDES[row.getAttribute('data-chat-flow-kind')];
-    if (!side) continue;
+    if (!side) { prev = ''; continue; } // #231：非消息行要断开连续性，不能只 continue
     const node = row.firstElementChild;
     if (node && node.classList && node.classList.contains(AVATAR_NODE_CLASS)) {
       try { node.classList.toggle(AVATAR_CONT_CLASS, side === prev); } catch { /* ignore */ }

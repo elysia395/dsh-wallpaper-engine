@@ -720,6 +720,15 @@ const schemaRange = (key) => {
   return [lo, hi];
 };
 
+// ── 轮播间隔的合法量程（#230）─────────────────────────────────────────────
+// **不能走 `schemaRange`**：`rotationInterval` 是 `DEFAULTS_ONLY` 键（只做默认值、不进 `KINDS`，
+// 见 lib/settings-schema.js 的 `DEFAULTS_ONLY`），而 `schemaRange` 对缺失键返回
+// `[undefined, undefined]` ⇒ `clampNum` 的 `v >= undefined` 恒为 false ⇒ **任何输入都被回落成
+// 默认值 30 分钟**（#230 的全部症状：两个间隔下拉选什么都弹回 30）。
+// 与宿主 `readRotationGroups` 的钳制同源（lib/settings-schema.js: `clampNum(g.interval, 1, 1440, …)`）。
+const ROTATION_INTERVAL_MIN = 1;
+const ROTATION_INTERVAL_MAX = 1440;
+
 // ── 破坏性动作的「面板内确认」（**唯一机制**，五个动作共用）─────────────────────
 // 为什么禁用原生模态（`window.confirm` / `alert`）：本插件跑在**同一个渲染页**里，原生
 // 对话框会把焦点交给它自己的窗口，后果三重的 ——
@@ -1274,7 +1283,7 @@ function saveEditingGroup() {
   const cleaned = {
     id: draft.id,
     name: typeof draft.name === "string" && draft.name.trim() ? draft.name.trim() : weT("轮播列表"),
-    interval: clampNum(draft.interval, ...schemaRange("rotationInterval"), DEFAULTS.rotationInterval),
+    interval: clampNum(draft.interval, ROTATION_INTERVAL_MIN, ROTATION_INTERVAL_MAX, DEFAULTS.rotationInterval),
     order: draft.order === "random" ? "random" : "sequence",
     wallpaperIds: Array.isArray(draft.wallpaperIds)
       ? draft.wallpaperIds.filter((x) => typeof x === "string" && x)
@@ -2235,7 +2244,7 @@ function onEditName(e) {
 }
 function onEditInterval(e) {
   if (!selection.editing) return;
-  selection.editing.interval = clampNum(Number(e.target.value), ...schemaRange("rotationInterval"), DEFAULTS.rotationInterval);
+  selection.editing.interval = clampNum(Number(e.target.value), ROTATION_INTERVAL_MIN, ROTATION_INTERVAL_MAX, DEFAULTS.rotationInterval);
   emit();
 }
 function onEditOrder(e) {
@@ -2772,10 +2781,14 @@ async function openAvatarCrop(side, file) {
     return;
   }
   let url;
+  // #232：裁切宽高必须活在 `try` **外面** —— 下面 `setTransient("avatarCropW", w)` 的引用在
+  // `try` 之后，而 `try` 内的 `const` 出了块就不可见（ReferenceError: w is not defined）。
+  let w = 0;
+  let h = 0;
   try {
     const src = await decodeImageFile(file);
-    const w = Number(src.width) || 0;
-    const h = Number(src.height) || 0;
+    w = Number(src.width) || 0;
+    h = Number(src.height) || 0;
     if (src.close) { try { src.close(); } catch { /* ignore */ } }
     if (!w || !h) throw new Error(weT("读不出图片尺寸"));
     url = URL.createObjectURL(file);
@@ -3760,7 +3773,7 @@ const onEdgeCompatChange = (checked) => {
 const onGroupInterval = (e) => {
   const group = activeRotationGroup();
   if (!group) return;
-  group.interval = clampNum(Number(e.target.value), ...schemaRange("rotationInterval"), DEFAULTS.rotationInterval);
+  group.interval = clampNum(Number(e.target.value), ROTATION_INTERVAL_MIN, ROTATION_INTERVAL_MAX, DEFAULTS.rotationInterval);
   persistSelection();
   syncRotationTimer();
   emit();
