@@ -101,6 +101,7 @@ function makeBuilder() {
     readPlaylistsP: async () => [],
     playlistItemId: () => null,
     weAssetsAvailable: () => false,
+    sceneLiveEngine: () => ({ available: true, reason: '' }),
     sceneVideoProbeKey: (abs, m) => abs + '@' + m,
     sceneVideoProbeGet: () => undefined,
     scheduleSceneVideoProbe: () => {},

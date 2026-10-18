@@ -93,6 +93,9 @@ const LIVE_FAIL_LABELS = {
   // 软失败（**不落盘**）：载荷传输没走完 —— 证据是"这张壁纸渲染不出来"以外的另一种事实
   //（同一份包在别的实例/别的源上 0.6s 就到了），所以它只进会话内记忆 + 自动重试。
   get transfer() { return weT("载荷传输未完成（下载停滞）"); },
+  // 环境缺件（#218）：渲染引擎是运行期依赖，没装时**所有**场景/网页壁纸都跑不起来。
+  // 必须与"这张壁纸渲染不出来"分开说，否则用户会以为是壁纸本身的问题。
+  get engine() { return weT("渲染引擎未安装（运行期依赖 webwallgl 没装）"); },
 };
 // 会话内的**软失败**记忆（wid → 原因）：传输类失败不写共享设置。
 // 为什么必须与 sceneLiveFailures 分开：那份是宿主持久化设置（所有窗口共用），
@@ -364,6 +367,21 @@ function syncLayers() {
   // 失败记忆的管线核对放在最前：它可能把 `sceneLiveFailures` 清掉，而本函数下面就要用它
   // 算层键（清掉 ⇒ 这一跳直接重建回 live，用户不必手动重开开关）。
   migrateStaleLiveFailures();
+  // #218 缺件软失败的自愈也必须**在同一位置**、同样"先清后算键"：liveRenderEnabled() 会因
+  // 这条软失败让位给回退链，不先清掉，下面算出的层键就永远是"回退层"。
+  //
+  // 为什么不能靠心跳：liveFail("engine") 体内调了 stopLiveWatch() ⇒ 缺件期没有看护、没有
+  // tick；而引擎恢复的信号（清单里 sceneLiveEngine 翻成可用）本来也不经过心跳。
+  //
+  // 这里是**兜底**，主路径在 loadInventory()：那边先写入新清单、再显式清除并调本函数。
+  // 本块服务的是"清单早已翻好、层却因别的缘由重建"的场合（改设置、切壁纸、轮播…）。
+  // 两处都幂等（清到 0 条即什么都不做），所以不冲突。
+  if (selection.inventory
+    && selection.inventory.sceneLiveEngine
+    && selection.inventory.sceneLiveEngine.available !== false
+    && clearLiveEngineSessionFailures() > 0) {
+    liveLog("live-engine-recovered", "引擎已可用 → 清掉 #218 缺件软失败，本次重建恢复 live 层", "info");
+  }
 
   // 轮换渐变标记在入口消费：commitRotationSwitch 置位后首个 syncLayers 即
   // applySelection 的 emit；无旧层可淡（首壁纸/已清除）时自然作废，绝不

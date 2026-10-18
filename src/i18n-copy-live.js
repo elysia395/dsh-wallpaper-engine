@@ -12,6 +12,8 @@ const WE_I18N_EN_LIVE = {
   "运行中断（{secs} 秒无帧）": "Stalled ({secs} s without a frame)",
   "壁纸加载失败": "Wallpaper failed to load",
   "载荷传输未完成（下载停滞）": "Payload transfer incomplete (download stalled)",
+  "渲染引擎未安装（运行期依赖 webwallgl 没装）": "Rendering engine not installed (runtime dependency webwallgl is missing)",
+  "，环境缺件，不重试（装好后重开本开关）": ", environment is missing a piece — not retrying (re-enable this switch once installed)",
   "渲染失败": "Rendering failed",
   "，暂停期跳过 {n} tick": ", skipped while paused for {n} tick",
   "，传输中 {n} tick": ", transferring for {n} tick",

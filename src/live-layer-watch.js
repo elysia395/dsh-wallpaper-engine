@@ -309,6 +309,14 @@ function startLiveWatch(frame, wid) {
     const isWeb = selection.type === "web";
     const wstate = isWeb ? liveStateOf(frame) : null;
     const alive = liveHeartbeatAlive(frame, stats, wstate, isWeb);
+    // 环境缺件优先于一切表现（#218）：引擎没装 / 渲染页缺失时，渲染页本身就打不开，
+    // 15 秒后必然超时 —— 那条超时是"环境"的证据，不是"这张壁纸渲染不出来"的证据。
+    // 立即停看护并如实归因，避免把缺依赖写成每张壁纸的持久失败。
+    if (liveEngineDownReason()) { liveFail("engine"); return; }
+    // ⚠️ 这里**不能**放"引擎恢复了就自愈"的反向分支：liveFail("engine") 自身就调
+    // stopLiveWatch()，记下缺件的那一刻心跳已停、而 liveRenderEnabled() 又因这条软失败
+    // 让位给回退链 ⇒ live 层根本不会被建回来 ⇒ 这条 tick 永远转不到第二次。
+    // 自愈因此挂在 syncLayers() 入口（src/live-layer.js），那里不依赖心跳活着。
     // 渲染页明确记录了 iframe 加载错误 → 立即降级，不必等 15 秒超时。
     if (isWeb && wstate && wstate.iframeLoaded === false && wstate.webError) {
       liveFail("load");
@@ -542,6 +550,20 @@ function suspendLivePayload(frame, watch) {
 //     渲染不出来"的证据 —— 落盘就会把本机的其它窗口一起拉黑（issue #129 实测：
 //     focus=0 的窗口 stall 落盘后，正常窗口也变静态）。本会话内软失败 + 冷却重试。
 //   · 其余（首帧超时且确有本窗口的整包完成证据 / 渲染页加载错误）⇒ 维持原语义：落盘记忆。
+/**
+ * 这台机器**现在**缺不缺渲染引擎（宿主 /inventory 的 `sceneLiveEngine`，#218）。
+ *
+ * 只在宿主**明确**说 `available === false` 时才算缺件：清单没拉到（老宿主 / 宿主
+ * 不可达）时该字段缺省为可用，不能把"没问到"当成"没有"。
+ *
+ * 返回空串（可用）或宿主给的原因码（`engine-not-installed` / `renderer-page-missing`）。
+ */
+function liveEngineDownReason() {
+  const inv = selection.inventory;
+  const st = inv && inv.sceneLiveEngine;
+  if (!st || st.available !== false) return "";
+  return String(st.reason || "engine-not-installed");
+}
 function liveFail(reason) {
   const wid = liveWatch ? liveWatch.wid : String(selection.id || "");
   // 失败前抓一份现场：这是「为什么黑/为什么降级」唯一的事后证据（host 侧
@@ -563,16 +585,29 @@ function liveFail(reason) {
     + " 帧率档=" + selection.sceneLiveFps, "warn");
   stopLiveWatch();
   if (!wid) return;
-  if (cause === "transfer" || reason === "stall") {
-    const attempts = (liveTransferAttempts.get(wid) || 0) + 1;
-    liveTransferAttempts.set(wid, attempts);
-    const softReason = cause === "transfer" ? "transfer" : "stall";
+  // 环境缺件（渲染引擎没装 / 渲染页缺失）同样**只进会话内**，理由与传输类失败同源：
+  // 证据说的是"这台机器缺件"，不是"这张壁纸渲染不出来"。而且它**不重试** ——
+  // 冷却 45s 再试一百次也装不上一个 npm 依赖（#218）。
+  const engineDown = reason === "engine";
+  if (engineDown || cause === "transfer" || reason === "stall") {
+    // engineDown 时一律 0 且不写回 Map：缺件不是这张壁纸的失败，不该占用它的重试配额。
+    // 写成 const（而不是 `let attempts = 0` 再条件赋值），是为了不给 ESLint 留
+    // no-useless-assignment 的口子 —— 本仓该规则基线为 0。
+    const attempts = engineDown ? 0 : (liveTransferAttempts.get(wid) || 0) + 1;
+    if (!engineDown) liveTransferAttempts.set(wid, attempts);
+    const softReason = engineDown
+      ? "engine"
+      : (cause === "transfer" ? "transfer" : "stall");
     liveSessionFailures.set(wid, softReason);
-    reportClientDiag("live-fail", cause === "transfer" ? "reason=transfer" : "reason=stall-soft");
+    reportClientDiag("live-fail", engineDown
+      ? "reason=engine-soft"
+      : (cause === "transfer" ? "reason=transfer" : "reason=stall-soft"));
     liveLog("liveFail-soft", "wid=" + wid + " " + (LIVE_FAIL_LABELS[softReason] || softReason)
       + " → 只记会话内、不写全局记忆"
-      + (attempts <= LIVE_TRANSFER_RETRY_LIMIT ? weT("，冷却 {s}s 后自动重试", { s: Math.round(LIVE_TRANSFER_RETRY_DELAY_MS / 1000) }) : weT("，已达重试上限")), "warn");
-    scheduleLiveTransferRetry(wid, attempts);
+      + (engineDown
+        ? weT("，环境缺件，不重试（装好后重开本开关）")
+        : (attempts <= LIVE_TRANSFER_RETRY_LIMIT ? weT("，冷却 {s}s 后自动重试", { s: Math.round(LIVE_TRANSFER_RETRY_DELAY_MS / 1000) }) : weT("，已达重试上限"))), "warn");
+    if (!engineDown) scheduleLiveTransferRetry(wid, attempts);
   } else {
     const map = Object.assign({}, selection.sceneLiveFailures || {});
     // 记原因而不是 true：设置面板会把它显示出来（用户能反馈「为什么黑」）
@@ -594,6 +629,20 @@ function liveFail(reason) {
  * 而传输类软失败住在**内存**里 —— 少了这一条，"重开开关可重试"这条逃生门对传输类失败
  * 不成立（页面上看不见它，它却仍然拦着 live，用户只能刷新页面）。
  */
+/**
+ * 只清「环境缺件」这一类**会话内**软失败（#218），返回清掉几条。
+ *
+ * 为什么需要**只清 engine** 的入口：传输类软失败带着重试计数与冷却定时器，一并清掉
+ * 会白送一次重试；而引擎恢复与传输无关。库存刷新发现引擎从"明确不可用"翻成可用时
+ * 调它 —— 那时当前层仍被缺件软失败拦着，不主动清就等不到 tick 去自愈。
+ */
+function clearLiveEngineSessionFailures() {
+  let cleared = 0;
+  for (const [k, v] of liveSessionFailures) {
+    if (v === "engine") { liveSessionFailures.delete(k); cleared++; }
+  }
+  return cleared;
+}
 function clearLiveSessionFailures() {
   liveSessionFailures.clear();
   liveTransferAttempts.clear();
