@@ -972,7 +972,6 @@ if (token) {
   // 复现不出来，因为 realpath 把它缩短了 —— 这正是"路径长度耦合"的诊断依据）。
   // 判据不数文档、不数注释，**真跑 lib/cache-keys.js** 算键长。
   {
-    const hostSrc208 = readHostHalf();
     const { cacheKeyFor, ABS_HASH_HEX } = await import(pathToFileURL(join(root, 'lib', 'cache-keys.js')).href);
     // 深路径骨架：与 issue 同量级（深目录 checkout）。
     const deepAbs = 'C:/' + Array.from({ length: 45 }, (_, i) => 'dir' + i).join('/') + '/scene.pkg';
@@ -988,9 +987,13 @@ if (token) {
     check('#208 键里不含路径编码（只有命名空间 + 固定长度摘要 + mtime）',
       new RegExp('^lf2_[0-9a-f]{' + ABS_HASH_HEX + '}_\\d+$').test(key) && !key.includes('/') && !key.includes('C:'),
       'key=' + key);
+    // ⚠️ 先落到变量再比：直接写两遍同一个调用表达式会触发 ESLint no-self-compare（基线 0 条）。
+    const sameKeyA = cacheKeyFor('lf2', deepAbs, 1);
+    const sameKeyB = cacheKeyFor('lf2', deepAbs, 1);
+    const otherKey = cacheKeyFor('lf2', deepAbs + 'x', 1);
     check('#208 不同入口路径在同一 mtime 下不撞键（摘要真的含路径信息）',
-      cacheKeyFor('lf2', deepAbs, 1) !== cacheKeyFor('lf2', deepAbs + 'x', 1)
-      && cacheKeyFor('lf2', deepAbs, 1) === cacheKeyFor('lf2', deepAbs, 1));
+      sameKeyA !== otherKey && sameKeyA === sameKeyB,
+      'same=' + sameKeyA + ' other=' + otherKey);
     // 负对照：老形态必须**真的**越界 —— 否则上面那条"远低于 NAME_MAX"可能只是判据没牙。
     const oldKey = 'lf1_' + Buffer.from(deepAbs, 'utf8').toString('base64url') + '_1717000000000';
     check('#208 negative control: 旧形态 base64url(abs) 在同一深路径下确实越过 NAME_MAX',
