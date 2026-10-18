@@ -2783,8 +2783,8 @@ async function openAvatarCrop(side, file) {
   let url;
   // #232：裁切宽高必须活在 `try` **外面** —— 下面 `setTransient("avatarCropW", w)` 的引用在
   // `try` 之后，而 `try` 内的 `const` 出了块就不可见（ReferenceError: w is not defined）。
-  let w = 0;
-  let h = 0;
+  let w;
+  let h;
   try {
     const src = await decodeImageFile(file);
     w = Number(src.width) || 0;

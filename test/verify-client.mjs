@@ -5282,8 +5282,8 @@ setTimeout(async () => {
   assert.ok(cropEnd > cropStart, '#232：找不到 closeAvatarCrop 边界');
   const cropBody = clientSrc.slice(cropStart, cropEnd);
   const cropOk = (body) => {
-    const dW = body.indexOf('let w = 0;');
-    const dH = body.indexOf('let h = 0;');
+    const dW = body.indexOf('let w;');
+    const dH = body.indexOf('let h;');
     const t = body.indexOf('try {');
     return dW >= 0 && dH >= 0 && t > dW && t > dH
       && !/const w = Number\(src\.width\)/.test(body)
@@ -5292,7 +5292,7 @@ setTimeout(async () => {
   assert.ok(cropOk(cropBody),
     '#232：裁切宽高必须让 try 之后的 setTransient 看得到（let 声明在 try 外）');
   const oldCrop = cropBody
-    .replace('  let w = 0;\n  let h = 0;\n  try {', '  try {')
+    .replace('  let w;\n  let h;\n  try {', '  try {')
     .replace('    w = Number(src.width) || 0;', '    const w = Number(src.width) || 0;')
     .replace('    h = Number(src.height) || 0;', '    const h = Number(src.height) || 0;');
   assert.notEqual(oldCrop, cropBody, '#232 负对照：旧形态文本构造成功');
