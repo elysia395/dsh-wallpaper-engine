@@ -43,7 +43,7 @@
   }
 
   function renderEffectsLiveSection(ctx) {
-    const { onLiveBootDelay, onSceneLiveFps, onToggleSceneLive, sel } = ctx;
+    const { onLiveBootDelay, onSceneAutoQuality, onSceneLiveFps, onToggleSceneLive, sel } = ctx;
     return React.createElement(React.Fragment, null,
       // ── 场景实时渲染（WebWallGL）：scene.pkg 壁纸的实时 WebGL 形态，默认
       // 开启。失败（首帧超时/运行失联）按壁纸记忆并自动降级回内嵌 MP4 →
@@ -87,6 +87,17 @@
           ),
         ),
       ),
+      // ── 自动画质（webwallgl autoQuality）：帧率压不住上限时引擎会逐级降后处理 /
+      //    粒子 / AA，弱 GPU 上一路降到 postProcessing=off —— 发光、音频可视化、光晕全没，
+      //    用户感知就是"动态效果没了"。这一行给它一个出口：关掉即保效果（`autoq=0`）。
+      //    只在实时渲染真的会跑（有 live 源、总开关开着）时出现，否则它不起作用。
+      (sel.type === "scene" || sel.type === "web") && sel.sceneLive !== false
+        && (sel.sceneLiveSrc || sel.webLiveSrc)
+        && switchRow(weT("自动画质"), sel.sceneAutoQuality !== false, onSceneAutoQuality, {
+        key: "scene-auto-quality",
+        hint: weT("帧率不足时自动降画质"),
+        tooltip: weT("帧率达不到上限的 85% 时，引擎会逐级降低后处理（发光 / 音频可视化 / 光晕）与粒子、关掉抗锯齿来保帧率 —— 弱 GPU 或高分辨率下可能一路降到「后处理全关」，看起来就像动态效果消失了。关掉本开关则保留全部效果、接受可能掉帧；默认开启"),
+      }),
     );
   }
 

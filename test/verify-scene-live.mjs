@@ -3230,7 +3230,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     // 子 UI 登记表：renderAppearanceGlassSection 按它逐项渲染。替身必须给**与 schema 同源**
     // 的那份（不能手抄），否则夹具渲染的项数与真实面板不同，等于假绿。
     'GLASS_CHILDREN', 'childGlassKey',
-    'onToggleSceneLive', 'onLiveBootDelay', 'onSceneLiveFps',
+    'onToggleSceneLive', 'onLiveBootDelay', 'onSceneLiveFps', 'onSceneAutoQuality',
     'onPlaybackRate', 'onObjectFit', 'onFlip', 'onOpenPicker', 'setPickerOpener',
     // 侧栏壁纸档的「壁纸属性」：开关读数 / 开关动作 / 面板渲染器**都是模块级的**
     //（client.js 里的函数声明），本台把它们当自由变量带传进来 —— 与内联后的真实形态一致。
@@ -3286,7 +3286,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       // 运行期：`fontSet.open` 若被读到就是布尔而不是 undefined 属性错）。
       fontSetCtx: () => ({ open: false, fontSets: [], activeId: '', loading: false, error: '' }),
       officialColorOf: () => '#ffffff',
-      onToggleSceneLive: noop, onLiveBootDelay: noop, onSceneLiveFps: noop,
+      onToggleSceneLive: noop, onLiveBootDelay: noop, onSceneLiveFps: noop, onSceneAutoQuality: noop,
       onPlaybackRate: noop, onObjectFit: noop, onFlip: noop, onOpenPicker: noop, setPickerOpener: noop,
       userPropsPanelOpen: () => SEL.userPropsPanelOpen === true,
       openUserPropsPanel: () => { OPEN_CALLS.push(1); SEL.userPropsPanelOpen = true; },
@@ -6249,12 +6249,12 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       // 实测：13 个标签 —— 比网页档多的两个（`出图来源` / `自定义画面`）正是**场景专属**那两行
       // （网页壁纸没有"出图来源"这一说）。标签锚是**精确序列**判定 ⇒ 两个方向都钉住了。
       wantLabels: ['壁纸模糊', '亮度', '对比度', '饱和度', '水平', '垂直', '缩放', '壁纸透明度', '暗化', '场景实时渲染',
-        '启动最长等待时间', '实时渲染帧率', '出图来源', '自定义画面', '适配', '水平翻转'] },
+        '启动最长等待时间', '实时渲染帧率', '自动画质', '出图来源', '自定义画面', '适配', '水平翻转'] },
     { fn: 'renderEffectsTab', label: '（画面 · 网页壁纸：实时渲染组出现）', surface: 'settings',
       selOver: { type: 'web', webLive: true, webLiveSrc: '/x' },
       want: ['画面'],
       wantLabels: ['壁纸模糊', '亮度', '对比度', '饱和度', '水平', '垂直', '缩放', '壁纸透明度', '暗化', '网页实时渲染',
-        '启动最长等待时间', '实时渲染帧率', '适配', '水平翻转'] },
+        '启动最长等待时间', '实时渲染帧率', '自动画质', '适配', '水平翻转'] },
     // 目标③ 余项 1：「实时帧」那一段（门 = gpuFrameUi.wid === sel.id && pinned —— 这一张壁纸的槽里真有帧）。
     // 它有几行随 w/h/error/recapturing/busy 显隐的分支，全在模块级替身里，故用 globals。
     { fn: 'renderEffectsTab', label: '（画面 · 场景壁纸 + 本壁纸已固定实时帧）', surface: 'settings',
@@ -6263,7 +6263,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       want: ['画面'],
       // 实测 14 个：门打开后多出 `实时帧`（正好夹在 `出图来源` 与 `自定义画面` 之间）。
       wantLabels: ['壁纸模糊', '亮度', '对比度', '饱和度', '水平', '垂直', '缩放', '壁纸透明度', '暗化', '场景实时渲染',
-        '启动最长等待时间', '实时渲染帧率', '出图来源', '实时帧', '自定义画面', '适配', '水平翻转'] },
+        '启动最长等待时间', '实时渲染帧率', '自动画质', '出图来源', '实时帧', '自定义画面', '适配', '水平翻转'] },
     // 目标③ 余项 2：转码进度行的 done 态（另一态由「进行中」覆盖）。
     { fn: 'renderEffectsTab', label: '（画面 · 转码进度 done）', surface: 'settings',
       selOver: { type: 'video', transcodeState: 'working', transcodeProgress: { phase: 'done', percent: 100 } },
