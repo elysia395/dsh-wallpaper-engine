@@ -1563,6 +1563,7 @@ function openUserPropsPanel() {
 /** 收起：只翻开关（定义留着，下次开不必重拉）。 */
 function closeUserPropsPanel() {
   propsPanelOpen = false;
+  cancelUserPropsCommit(); // 面板关了：拖动期剩下的那次提交不再有意义
   emit();
 }
 
@@ -1642,13 +1643,56 @@ function loadUserPropDefs(token, force) {
     });
 }
 
-/** 一次属性改动：本地状态 + 热更新 + 持久化（silent = 拖动中不重渲染）。 */
+/**
+ * 「壁纸属性」拖动期的提交窗口（毫秒）：最后一次 input 之后安静这么久，才算这次拖动结束。
+ *
+ * 为什么需要这个定时器：面板对 color / slider 只能送 silent 的 input（见
+ * src/picker-props-panel.js 的 renderUserPropRow）—— **React 的 onChange 对
+ * `<input type="range">` / `<input type="color">` 是逐格触发的 input 事件**，不是原生
+ * change 的"抬手"。把它当抬手（旧实现）等于拖动中每格 `emit()` 一次：emit 的订阅者里
+ * 有全量 `applyEffects`（重建字体样式表 / 同步场景音频 / 强制同步样式计算）和整棵设置
+ * 面板的重渲染 —— 原生颜色轮盘一次拖动上百格，正是用户报的「拖颜色时异常卡顿缓慢」
+ * （与 commitLiveSetting 注释里那次用户实测同一条口径；场景/网页引擎侧的单次热更新
+ * 实测只有 ~0.1ms，不是这里的量级）。
+ *
+ * 取值：180ms 比持久化写去抖（200ms）略短、又不与它同值 —— 两个窗口各管一件事（一个
+ * 决定面板什么时候回显刷新，一个决定什么时候落盘），同值会让"只测其一"的守卫分不开它们。
+ * 这是"拖动停下到回显跟上"的观感上限；改大没有收益，改小会让慢速拖动（每格间隔大于
+ * 阈值）中途也各提交一次。
+ */
+const USER_PROPS_COMMIT_MS = 180;
+let userPropsCommitTimer = null;
+/** 取消挂起的拖动提交（面板关闭 / 恢复默认 / 卸载）。 */
+function cancelUserPropsCommit() {
+  if (userPropsCommitTimer !== null && typeof clearTimeout === "function") clearTimeout(userPropsCommitTimer);
+  userPropsCommitTimer = null;
+}
+/**
+ * 拖动期的尾部提交：连续 input 只留最后一次的定时器，到点才 `emit()` 一次。
+ * 无定时器设施（验证环境）退化为立即 emit —— 与 persistSelection 同一条退化口径。
+ */
+function scheduleUserPropsCommit() {
+  cancelUserPropsCommit();
+  if (typeof setTimeout !== "function") { emit(); return; }
+  userPropsCommitTimer = setTimeout(() => {
+    userPropsCommitTimer = null;
+    emit();
+  }, USER_PROPS_COMMIT_MS);
+}
+
+/** 一次属性改动：本地状态 + 热更新 + 持久化（silent = 拖动中，不 emit，尾部提交一次）。 */
 function onUserPropInput(def, value, silent) {
+  // 同一格可能被上报两次（React 对 range/color 会同时派发 onInput 与 onChange 两路
+  // 处理器，它们都是 silent 的）：值没变就没有热更新可做，也不该多安排一次提交。
+  // 只对 silent 早退 —— 显式提交（失焦 / 回车 / 组合框）即使值没变也必须走完，否则
+  // "把值选成当前显示值" 这种显式选择不会落进覆盖表（旧行为如此，别改）。
+  if (silent && sameUserPropValue(value, def.value)) return;
   def.value = value;
   def.overridden = !sameUserPropValue(value, def.default);
   applyUserProps({ [def.name]: { value } });
   saveUserProp(propsState.token, def.name, value, !def.overridden);
-  if (!silent) emit();
+  if (silent) scheduleUserPropsCommit();
+  else { cancelUserPropsCommit(); emit(); }
 }
 
 function sameUserPropValue(a, b) {
@@ -1661,6 +1705,7 @@ function sameUserPropValue(a, b) {
 function resetUserProps() {
   const token = propsState.token;
   if (!token) return;
+  cancelUserPropsCommit(); // 拖动期的尾部提交已无意义（下面这次 emit 就是最后一次）
   const wire = {};
   for (const p of propsState.props) {
     p.value = p.default;
@@ -5431,6 +5476,7 @@ function apply(ctx) {
         abortTranscodeUpgrade(); // 含 clearUpgradePoll + AbortController.abort（否则卸载后 500ms 轮询永久泄漏）
         cancelPendingPersist(); // 模块级 persistTimer 不属于 fiber：不取消则 200ms 后仍会写一次
         cancelPendingFontSet(); // 字体集那条通道的 timer 同理（各自一个模块级 timer）
+        cancelUserPropsCommit(); // 「壁纸属性」拖动期的尾部提交也是模块级 timer（同上）
         // media-info 探测的 AbortController 也要断开 (token 可能永远不再变化)
         abortMediaInfoProbe();
         // sceneVideo 时序补拉: 卸载后不该再拉 inventory (也不该钉住本次求值的闭包)
