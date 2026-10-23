@@ -523,7 +523,7 @@
           onLayerPositionX, onLayerPositionY, onLayerScale, onLayerReset,
           // 与设置页同源的那几个播放控制：实时渲染总开关 / 启动等待 / 实时帧率 /
           // 倍速 / 适配 / 翻转（侧栏档真的会画到它们）。
-          onToggleSceneLive, onLiveBootDelay, onSceneLiveFps, onPlaybackRate, onObjectFit, onFlip,
+          onToggleSceneLive, onLiveBootDelay, onSceneLiveFps, onSceneAutoQuality, onPlaybackRate, onObjectFit, onFlip,
           onOpenPicker, setPickerOpener,
           // 侧栏档的空态 CTA：切到本面板的壁纸页（不是设置页的库下钻）。
           onPickWallpaper: () => switchQpTab("wallpaper"),

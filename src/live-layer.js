@@ -176,6 +176,11 @@ function liveRenderUrl(selLike) {
     // 控制经渲染页的 postMessage 通道下发，shim 由宿主注入 HTML 响应。
     + (isWeb ? "&webSandbox=strict" : "")
     + "&fit=" + fit + "&sceneFps=" + fps + "&muted=" + muted
+    // 自动画质（webwallgl 的 autoQuality）：渲染页的关闭开关是 `autoq=0`。默认不传 = 引擎按
+    // 帧率自行降后处理/粒子/AA；**关掉本设置**（sceneAutoQuality=false）才显式关掉，保住发光 /
+    // 音频可视化 / 光晕 —— 弱 GPU 上帧率压不住上限时它会一路降到 postProcessing=off，
+    // 视觉上就是"动态效果全没了"，而用户往往要的是效果，不是那几帧。
+    + (selLike.sceneAutoQuality === false ? "&autoq=0" : "")
     // WE 官方素材（local-assets）：host 报告素材目录可用时才打开渲染页的
     // 本地素材通路（探测 /api/local-assets，按名取官方像素）；否则渲染页
     // 静默走程序化复刻，连探测请求都不发。

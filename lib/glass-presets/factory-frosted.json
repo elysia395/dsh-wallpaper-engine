@@ -22,6 +22,7 @@
     "fpsCap": 0,
     "sceneLive": true,
     "sceneLiveFps": 30,
+    "sceneAutoQuality": true,
     "liveBootDelay": 3,
     "audioSource": "auto",
     "adapterTarget": "auto",
