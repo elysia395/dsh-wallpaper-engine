@@ -2617,6 +2617,32 @@ check('client 透传歌词与 albumArtist（[[秒, 文本]] 原样给渲染页�
 check('client 的 push key 带歌词版本（歌词晚到也要再推一帧）',
   src.includes('const lyrRev =') && src.includes('lyrRev].join('));
 check('音频桥按宿主 running 装卸（装了桥 = 渲染页放弃自带音频源）',  src.includes('function syncAudioBridge(frame, running)') && src.includes('syncAudioBridge(frame, d.running === true)'));
+// 无真实频谱时收起「靠频谱才有内容」的合成层（#167）：没有音频输入时，音频可视化层
+// 退化成一整块**空矩形**，而作者叠在其上的 scroll 照跑 ⇒ 屏幕上是一条匀速横爬的带子，
+// 用户只会当成渲染故障。四条缺一不可：与桥**同拍**调用（否则永不生效）、两条收层判据
+// 各自在场（合成层 / 频谱特效）、以及**可逆**（恢复采集要逐层还原，不能永久改场景）。
+{
+  const fnBody = (text, name) => {
+    const i = text.indexOf('function ' + name + '(');
+    if (i < 0) return '';
+    const j = text.indexOf('\n}', i);
+    return j < 0 ? text.slice(i) : text.slice(i, j);
+  };
+  const COMPOSELAYER = /layer\.image\.indexOf\("composelayer"\)/;
+  const SPECTRUM = /fx\.file\.indexOf\("Simple_Audio_Bars"\)/;
+  const reactiveWiring = (text) => {
+    const body = fnBody(text, 'syncAudioReactiveLayers');
+    return COMPOSELAYER.test(body) && SPECTRUM.test(body)
+      && /const wantHide = !running;/.test(body)
+      && /layer\.visible = true;/.test(body);
+  };
+  check('音频桥同拍收敛音频反应层（合成层 + 频谱特效两条判据都在）',
+    /syncAudioReactiveLayers\(frame, running\)/.test(fnBody(src, 'syncAudioBridge')) && reactiveWiring(src),
+    '#167：没频谱 → 那层只是一块空矩形 + 作者的 scroll 平移');
+  check('negative control: 放宽成「所有合成层」或去掉可逆分支都会被判出',
+    !reactiveWiring(src.replace(/layer\.image\.indexOf\("composelayer"\) < 0/g, 'false'))
+      && !reactiveWiring(src.replace('layer.visible = true;', '')));
+}
 // 媒体控制面（控制反转）：场景壁纸里 Now Playing 组件的按钮由渲染页推断成动作，
 // 打到宿主注入的控制面 → POST /media-control → 中间件真控播放器。判据按**源码形态**
 // 写成谓词（于是负对照能喂合成输入），三条缺一不可：控制面装载（五个动作齐）、
