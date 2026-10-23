@@ -81,8 +81,17 @@
     );
   }
 
-  // ── 按 ptype 出控件；拖动类（slider/color）在 input 时就热更新但**不重渲染**
-  //（拖动中每帧 emit 整个选择器很浪费），change 时才 emit 刷新数值回显。
+  // ── 按 ptype 出控件。拖动类（slider / color）的**所有**处理器都是 silent：拖动中只
+  // 热更新、不重渲染。抬手/输入完成由 onPropInput 一侧判定 —— 颜色与滑块走
+  // `client.js` 的尾部去抖（USER_PROPS_COMMIT_MS），文本走失焦 / 回车。
+  //
+  // ⚠️ 为什么不能在这里拿 React 的 `onChange` 当"抬手"：它监听的是原生 `input` 事件，
+  // 对 `<input type=range|color>` 是**每格都触发**的（原生 `change` 只在原生控件提交时
+  // 发一次，React 不把它映射到 onChange）。旧实现把 onChange 当抬手 ⇒ 拖动中每格
+  // `emit()` 一次：全量 applyEffects（字体样式表 / 场景音频 / 强制同步样式计算）+ 整棵
+  // 面板重渲染。原生色板一次拖动上百格，用户看到的就是"拖颜色异常卡顿缓慢"。
+  // 现在 onChange 只用来保持受控输入（不写它 React 会把控件判成只读）且与 onInput 同
+  // 一份 silent 语义；重复上报由 onUserPropInput 的同值早退吃掉。
   function renderUserPropRow(p, onPropInput) {
     if (p.ptype === "text" || p.ptype === "group") {
       return React.createElement("div", {
@@ -105,7 +114,9 @@
         type: "color", className: "we-picker__props-color",
         value: weColorToHex(p.value),
         onInput: (e) => onPropInput(p, weHexToColor(e.target.value), true),
-        onChange: (e) => onPropInput(p, weHexToColor(e.target.value), false),
+        // 受控输入必须有 onChange（否则 React 把控件判成只读）；它与 onInput 同一格
+        // 重复上报，值相同会在 onUserPropInput 里被早退吃掉。
+        onChange: (e) => onPropInput(p, weHexToColor(e.target.value), true),
       });
     } else if (p.ptype === "slider") {
       const min = typeof p.min === "number" ? p.min : 0;
@@ -119,7 +130,7 @@
           min, max, step,
           value: typeof p.value === "number" ? p.value : min,
           onInput: (e) => onPropInput(p, Number(e.target.value), true),
-          onChange: (e) => onPropInput(p, Number(e.target.value), false),
+          onChange: (e) => onPropInput(p, Number(e.target.value), true),
         }),
         React.createElement("span", { className: "we-picker__props-value" }, shown),
       );
@@ -150,8 +161,13 @@
       control = React.createElement("input", {
         type: "text", className: "we-picker__props-text",
         defaultValue: typeof p.value === "string" ? p.value : "",
-        // 文本类不做逐键热更新（每敲一下都跑一遍壁纸的属性处理太重），失焦/回车生效
-        onChange: (e) => onPropInput(p, e.target.value, false),
+        // 文本类不做逐键热更新（每敲一下都跑一遍壁纸的属性处理太重），也**不能**拿 React
+        // 的 onChange 当"输入完成" —— 它对文本输入同样是逐键触发的 input 事件。明确的
+        // 提交点只有失焦与回车。
+        onBlur: (e) => onPropInput(p, e.target.value, false),
+        onKeyDown: (e) => {
+          if (e.key === "Enter") onPropInput(p, e.target.value, false);
+        },
       });
     }
     return React.createElement("div", { key: p.name, className: "we-picker__props-row" }, label, control);
