@@ -3252,7 +3252,19 @@ function clearLiveFailure(id) {
 function onGroupChange(e) {
   // 换列表 ⇒ 清掉待确认（不变量 3）：否则"删除「A」？"会跟着新选中的 B 一起显示。
   disarmConfirm();
-  selection.rotationGroupId = e.target.value;
+  const nextGroupId = e.target.value;
+  selection.rotationGroupId = nextGroupId;
+  // 选「— 选择轮播列表 —」（空值）= 不轮播：停在当前壁纸、停掉轮转、取消进行中的准备，
+  // **不切图**。原来空值也会走下面的 applySelection(候选第一张)，而空列表时 candidates 退化成
+  // "全部可播放" ⇒ 一选空就被当成"换了一组"，壁纸当场被换掉。
+  if (!nextGroupId) {
+    selection.rotationEnabled = false;
+    cancelRotationPrepare();
+    persistSelection();
+    syncRotationTimer();
+    emit();
+    return;
+  }
   if (selection.rotationEnabled) {
     const first = rotationCandidates()[0];
     if (first) applySelection(first.id);
