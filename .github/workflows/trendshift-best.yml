@@ -1,0 +1,110 @@
+name: trendshift-best-badge
+
+# 采样 Trendshift 日榜/周榜当前名次；只有当名次优于历史最好（数字更小）时，
+# 才用官方 SVG 覆盖 badges 分支上的快照并更新 best.json。
+# README 引用 badges 分支的 raw URL，因此主分支永远不需要为此改动。
+
+on:
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: trendshift-best-badge
+  cancel-in-progress: false
+
+jobs:
+  sample:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: 采样并在出现历史最好名次时更新 badges 分支
+        run: |
+          set -euo pipefail
+          BASE="https://trendshift.io/api/badge/trendshift/repositories/170341"
+          SNAP=/tmp/ts-snap
+          mkdir -p "$SNAP"
+
+          git fetch origin badges --depth=1 2>/dev/null \
+            || echo "badges 分支尚不存在，将首次创建"
+
+          if git show-ref --verify --quiet refs/remotes/origin/badges; then
+            git show origin/badges:best.json > "$SNAP/best.json" 2>/dev/null \
+              || echo '{}' > "$SNAP/best.json"
+          else
+            echo '{}' > "$SNAP/best.json"
+          fi
+
+          improved=""
+          for list in daily weekly; do
+            code=$(curl -s --max-time 20 -w '%{http_code}' \
+              -o "$SNAP/$list.svg" "$BASE/$list?language=JavaScript" || echo 000)
+            if [ "$code" != "200" ] || [ ! -s "$SNAP/$list.svg" ]; then
+              echo "$list: 拉取失败 http=$code，跳过"
+              continue
+            fi
+            # 名次解析：优先根元素 aria-label（"number 15"），
+            # 回退正文 "#15 Rep..."；都不行就跳过。
+            # 不能裸 grep '#[0-9]+'：会命中描边色 #4a0e99 和实体 &#183;
+            rank=$(grep -oE 'aria-label="Trendshift: number [0-9]+' "$SNAP/$list.svg" \
+              | grep -oE '[0-9]+$' | head -1)
+            if [ -z "$rank" ]; then
+              rank=$(sed -E 's/<("[^"]*"|[^">])*>/\n/g' "$SNAP/$list.svg" \
+                | grep -oE '#[0-9]+ Rep' | head -1 | grep -oE '[0-9]+')
+            fi
+            case "$rank" in ''|*[!0-9]*) echo "$list: 名次解析失败，跳过"; continue;; esac
+            if [ -z "$rank" ]; then
+              echo "$list: SVG 内未解析到名次，跳过"
+              continue
+            fi
+            best=$(LIST="$list" SNAP="$SNAP" node -e '
+              const fs = require("fs");
+              const list = process.env.LIST;
+              try {
+                const j = JSON.parse(fs.readFileSync(process.env.SNAP + "/best.json", "utf8"));
+                console.log(j[list] && j[list].rank != null ? j[list].rank : 999999);
+              } catch (e) { console.log(999999); }
+            ' 2>/dev/null || echo 999999)
+            echo "$list: 当前 #$rank / 历史最好 #$best"
+            if [ "$rank" -lt "$best" ]; then
+              LIST="$list" RANK="$rank" SNAP="$SNAP" node -e '
+                const fs = require("fs");
+                const list = process.env.LIST;
+                const path = process.env.SNAP + "/best.json";
+                let j = {};
+                try { j = JSON.parse(fs.readFileSync(path, "utf8")); } catch (e) {}
+                j[list] = { rank: Number(process.env.RANK), updated: new Date().toISOString().slice(0, 10) };
+                fs.writeFileSync(path, JSON.stringify(j, null, 2) + "\n");
+              '
+              cp "$SNAP/$list.svg" "$SNAP/new-$list.svg"
+              improved="$improved $list"
+            fi
+          done
+
+          [ -z "$improved" ] && { echo "没有出现更好的名次，不提交"; exit 0; }
+          echo "出现更好名次:$improved"
+
+          if git show-ref --verify --quiet refs/remotes/origin/badges; then
+            git checkout -B badges origin/badges
+          else
+            git branch -D badges 2>/dev/null || true
+            git checkout -q --orphan badges
+            # -f：孤儿分支的空 HEAD 下，main 检出带来的文件在索引里属"新增"，需强制移除
+            git rm -rqf .
+          fi
+
+          cp "$SNAP/best.json" best.json
+          for list in $improved; do
+            cp "$SNAP/new-$list.svg" "trendshift-$list.svg"
+          done
+
+          git config user.name "trendshift-badge-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add trendshift-daily.svg trendshift-weekly.svg best.json
+          git commit -qm "chore(badges): 最好名次快照更新（$improved）"
+          git push origin badges
+          echo "已更新 badges 分支"
