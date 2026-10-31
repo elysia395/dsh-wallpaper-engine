@@ -114,6 +114,14 @@ export interface WallpaperFolderDescriptor {
   total: number;
   /** Number of entries WE still lists but the inventory could not resolve (uninstalled / unsubscribed). */
   unresolvedCount: number;
+  /**
+   * Resolved ids of this folder **including every subfolder** (deduped). Selecting a parent
+   * folder in the picker filters by this union: Wallpaper Engine's tree is "parent contains
+   * children", so a parent that only holds subfolders must not come out empty.
+   */
+  deepWallpaperIds: string[];
+  /** Unresolved entries of this folder **plus every subfolder**. */
+  deepUnresolvedCount: number;
   /** Nested folders (Wallpaper Engine allows subfolders). */
   subfolders: WallpaperFolderDescriptor[];
 }

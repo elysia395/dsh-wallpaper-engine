@@ -1083,20 +1083,26 @@ function playableInventory() {
  *
  * 为什么摊平：`<details>` 里的候选行是一维的，而层级信息只在树的形状里 —— 摊平后每项
  * 自带 `depth`，既保住"子夹缩进"的观感，也让"当前选中夹子的成员集"只有一个查法
- * （`find`）。`wallpaperIds` 原样带上（宿主已把成员映射成清单 id）。
+ * （`find`）。过滤与计数都用**含后代**的并集（`deepWallpaperIds` / `deepUnresolvedCount`）：
+ * WE 的树是"父夹包含子夹"，选中父夹要连子夹一起看。
  */
 function flattenWallpaperFolders(folders, depth, out) {
   for (const folder of folders || []) {
     if (!folder || typeof folder !== "object" || !folder.id) continue;
+    const deepIds = Array.isArray(folder.deepWallpaperIds)
+      ? folder.deepWallpaperIds
+      : (Array.isArray(folder.wallpaperIds) ? folder.wallpaperIds : []);
     out.push({
       id: folder.id,
       name: typeof folder.name === "string" ? folder.name : "",
       depth,
-      wallpaperIds: Array.isArray(folder.wallpaperIds) ? folder.wallpaperIds : [],
-      // 下拉里显示的是「夹子里有多少张**能落到清单里**的壁纸」；`unresolvedCount` 是
-      // WE 记着、清单里却没有的那部分（卸载残留），>0 时显示「6/11」。
-      count: Array.isArray(folder.wallpaperIds) ? folder.wallpaperIds.length : 0,
-      unresolvedCount: typeof folder.unresolvedCount === "number" ? folder.unresolvedCount : 0,
+      wallpaperIds: deepIds,
+      // 下拉里显示的是「夹子（含子夹）里有多少张**能落到清单里**的壁纸」；`unresolvedCount`
+      // 是 WE 记着、清单里却没有的那部分（卸载残留），>0 时显示「6/11」。
+      count: deepIds.length,
+      unresolvedCount: typeof folder.deepUnresolvedCount === "number"
+        ? folder.deepUnresolvedCount
+        : (typeof folder.unresolvedCount === "number" ? folder.unresolvedCount : 0),
     });
     flattenWallpaperFolders(folder.subfolders, depth + 1, out);
   }
