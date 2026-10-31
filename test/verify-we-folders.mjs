@@ -146,21 +146,38 @@ check('① config.json 不存在 ⇒ 空数组',
       id: 'f1', name: 'Mixed', subfolders: [
         { id: 'f1a', name: 'Inner', items: ['3158822835'], subfolders: [] },
       ],
-      // 三种成员形态：裸工坊 id / 相对安装根的本地项目 / 映射不上的残留 id
-      items: ['1186645315', 'projects\\myprojects\\alpha', '999999'],
+      // 三种成员形态：裸工坊 id / 相对安装根的本地项目 / 映射不上的残留 id。
+      // `3158822835` 在父子夹里**都**出现 —— 并集必须去重。
+      items: ['1186645315', 'projects\\myprojects\\alpha', '3158822835', '999999'],
     },
     { id: 'f2', name: 'AllMissing', items: ['888888', '777777'], subfolders: [] },
   ];
   const mapped = kit.foldersWithIds(raw, byPath, byId);
-  check('② 成员映射：裸 id + 相对路径 + 丢弃残留 ⇒ [1186645315, alpha]',
-    JSON.stringify(mapped.map((f) => f.wallpaperIds)) === JSON.stringify([[ '1186645315', 'alpha' ]]),
+  check('② 成员映射：裸 id + 相对路径 + 丢弃残留 ⇒ [1186645315, alpha, 3158822835]',
+    JSON.stringify(mapped.map((f) => f.wallpaperIds)) === JSON.stringify([[ '1186645315', 'alpha', '3158822835' ]]),
     JSON.stringify(mapped.map((f) => f.wallpaperIds)));
-  check('② 计数与播放列表同口径：total=2 / unresolvedCount=1',
-    mapped[0].total === 2 && mapped[0].unresolvedCount === 1,
+  check('② 计数与播放列表同口径：total=3 / unresolvedCount=1',
+    mapped[0].total === 3 && mapped[0].unresolvedCount === 1,
     'total=' + mapped[0].total + ' unresolved=' + mapped[0].unresolvedCount);
   check('② 嵌套子夹保留（父夹自身成员与子夹各自计数）',
     mapped[0].subfolders.length === 1
     && mapped[0].subfolders[0].wallpaperIds.join(',') === '3158822835');
+  // 选父夹要连子夹一起看（WE 的树是"父夹包含子夹"）；父子重复的 id 只算一次。
+  check('② deepWallpaperIds = 自身 ∪ 子夹，且去重（父子同 id 不重复）',
+    mapped[0].deepWallpaperIds.join(',') === '1186645315,alpha,3158822835',
+    mapped[0].deepWallpaperIds.join(','));
+  check('② deepUnresolvedCount = 自身 + 各子夹的残留数',
+    mapped[0].deepUnresolvedCount === 1 && mapped[0].subfolders[0].deepUnresolvedCount === 0);
+  // 真实缺陷形态：父夹自己 0 成员、只有子夹 ⇒ 只按直接成员过滤会得到 0 张（空网格）。
+  const parentOnly = kit.foldersWithIds([{
+    id: 'p', name: 'Parent', items: [],
+    subfolders: [{ id: 'c', name: 'Child', items: ['3158822835'], subfolders: [] }],
+  }], byPath, byId);
+  check('② 父夹 0 直接成员、只有子夹 ⇒ deepWallpaperIds 仍有 1 张（否则选中父夹是空网格）',
+    parentOnly.length === 1 && parentOnly[0].wallpaperIds.length === 0
+    && parentOnly[0].deepWallpaperIds.join(',') === '3158822835');
+  check('② 负对照：同一条判据对"只读直接成员"的输入判红',
+    parentOnly[0].wallpaperIds.join(',') !== '3158822835');
   check('② 空夹（成员全部映射失败）被丢弃',
     mapped.length === 1 && mapped.every((f) => f.name !== 'AllMissing'));
   check('② 负对照：映射表清空 ⇒ 整棵为空（与"空夹丢弃"共用同一判据）',
