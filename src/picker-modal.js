@@ -254,7 +254,7 @@
   }
 
   function renderPickerNormalBody(ctx, draft, draftIdSet, normalWin) {
-    const { sel, playableList, onToggleBatchMode, armedConfirm, onBatchHide, onDisarmConfirm, cdMode, gridRef, query } = ctx;
+    const { sel, playableList, onToggleBatchMode, armedConfirm, onBatchHide, onDisarmConfirm, cdMode, gridRef, query, folderFilter } = ctx;
     return React.createElement("div", { className: "we-picker__modal-body" },
         draft
           ? React.createElement("div", { className: "we-picker__row" },
@@ -293,7 +293,11 @@
                 React.createElement("span", { className: "we-picker__hint" },
                   query
                     ? weT("没有匹配「{q}」的壁纸 · 试试缩短关键词或清除过滤", { q: sel.search })
-                    : weT("没有可播放的壁纸")),
+                    // 选了文件夹却一张都没有：多半是分级 / 类型把它们挡在门外（成员数 ≠
+                    // 当前过滤下的可用数）。单独说一句，否则用户会以为文件夹是空的。
+                    : folderFilter !== "all"
+                      ? weT("这个文件夹里没有通过当前分级 / 类型过滤的壁纸")
+                      : weT("没有可播放的壁纸")),
               )
             : React.createElement(React.Fragment, null,
                 normalWin.topH > 0 ? renderPickerVSpacer("we-picker-vtop", normalWin.topH) : null,
@@ -371,7 +375,10 @@
   }
 
   function renderPickerFilterRow(ctx) {
-    const { sel, basePlayable, ratingCounts, typeCounts, onSearchInput, onRatingToggle, onTypeToggle } = ctx;
+    const {
+      sel, basePlayable, ratingCounts, typeCounts, onSearchInput, onRatingToggle, onTypeToggle,
+      folderOptions, folderFilter, onFolderFilterChange,
+    } = ctx;
     // 分级是**多档勾选**（用户口径 2026-10-30，像 WE 本身那样自由组合）：勾上的档才允许
     // 出现在列表、轮播与播放里；计数用各档精确张数（不是累加，勾选本身就是自由组合）。
     const ratingsOn = new Set(Array.isArray(sel.contentRatingFilter) ? sel.contentRatingFilter : []);
@@ -404,6 +411,55 @@
         "aria-label": weT("搜索壁纸标题"),
         onInput: onSearchInput,
       }),
+      // 文件夹（#264）：只在**用户真的在 WE 里建过文件夹**时才画这一栏（`folderOptions`
+      // 空 ⇒ 整块不渲染）。单选取值（不是多档）：夹子之间是互斥浏览，组合起来没有意义。
+      // 与内容分级/类型同一套 `<details>` 下拉形态，行样式复用 `we-picker__rating-toggle`，
+      // 所以筛选行观感一致、也不用另写一份候选行 CSS。
+      folderOptions.length
+        ? React.createElement("details", { className: "we-picker__folder-menu" },
+          React.createElement("summary", {
+            className: "we-picker__folder-btn",
+            "aria-label": weT("文件夹"),
+            title: weT("对应 Wallpaper Engine「已安装」里的文件夹（只筛这一张列表，不改轮播）"),
+          },
+          React.createElement("span", { className: "we-picker__folder-text" },
+            folderFilter === "all"
+              ? weT("文件夹")
+              : weT("{name}（{n}）", {
+                name: (folderOptions.find((f) => f.id === folderFilter) || {}).name || "",
+                n: (folderOptions.find((f) => f.id === folderFilter) || {}).count || 0,
+              })),
+          React.createElement("span", { className: "we-picker__folder-caret", "aria-hidden": "true" }, "▾"),
+          ),
+          React.createElement("div", { className: "we-picker__folder-list" },
+            React.createElement("label", {
+              className: "we-picker__rating-toggle" + (folderFilter === "all" ? " we-picker__rating-toggle--on" : ""),
+            },
+            React.createElement("input", {
+              type: "radio", name: "we-folder", className: "we-picker__rating-check",
+              checked: folderFilter === "all",
+              onChange: () => onFolderFilterChange("all"),
+              "aria-label": weT("全部（{n}）", { n: basePlayable.length }),
+            }),
+            React.createElement("span", null, weT("全部（{n}）", { n: basePlayable.length })),
+            ),
+            folderOptions.map((o) => React.createElement("label", {
+              key: o.id,
+              className: "we-picker__rating-toggle" + (folderFilter === o.id ? " we-picker__rating-toggle--on" : ""),
+            },
+            React.createElement("input", {
+              type: "radio", name: "we-folder", className: "we-picker__rating-check",
+              checked: folderFilter === o.id,
+              onChange: () => onFolderFilterChange(o.id),
+              "aria-label": o.name,
+            }),
+            React.createElement("span", null, (o.depth ? "— ".repeat(o.depth) : "") + (o.unresolvedCount > 0
+              ? weT("{name}（{n}/{m}）", { name: o.name, n: o.count, m: o.count + o.unresolvedCount })
+              : weT("{name}（{n}）", { name: o.name, n: o.count }))),
+            )),
+          ),
+          )
+        : null,
       // 内容分级：下拉 + 多档勾选（用户口径 2026-10-30：四枚胶囊铺在筛选行里观感差）。
       // `<details>/<summary>` 给原生开合与键盘可达性；勾选即写数组，任一下拉项都不改列表
       // 语义（分级是内容闸门，勾上的档才允许出现在列表、轮播与播放里）。
