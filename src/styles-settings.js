@@ -333,6 +333,25 @@ const CSS_SETTINGS = `  /* ── 预设方案：两行四列的圆角表格（�
     gap: 12px; min-height: 32px;
   }
   .we-picker__ctl--wrap { flex-wrap: wrap; row-gap: 8px; }
+  /* ── 分段控件在「左说明 / 右控件」行里的取宽口径（#253）────────────────────────
+     说明可以是长句（max-content 会吃满整行），若控件仍用 flex:1（basis 0）就只能分到
+     「剩余宽度」⇒ 三元组被压成几像素宽的窄格、文字互相截断。两条口径：
+       · 普通段（2~5 键：播放速度 / 帧率档 / 圆角）：按内容等分，整组靠右，不被说明挤扁；
+       · chips 段（11 键的「吉祥物 · 指向」）：换行 + 每键取内容宽（见 glass-panel.js 的类名）。
+     ⚠️ 限定在 .we-picker__ctl--wrap 直接子级：非 wrap 的行（开关行等）布局不变。 */
+  .we-picker__ctl--wrap > .we-picker__seg {
+    display: inline-grid; grid-auto-flow: column; grid-auto-columns: 1fr; gap: 6px;
+    flex: 0 1 auto; max-width: 100%; margin-left: auto;
+  }
+  .we-picker__ctl--wrap > .we-picker__seg.we-picker__seg--chips {
+    display: flex; flex-wrap: wrap; justify-content: flex-start; gap: 6px;
+  }
+  .we-picker__ctl--wrap > .we-picker__seg.we-picker__seg--chips > .we-picker__rate {
+    flex: 0 0 auto; max-width: 176px;
+  }
+  /* 色板行独占整行、行内左对齐（#253）：与说明同排时短说明会把色板推到右端、长说明又把它
+     挤到下一行；右侧「自定义」在 564px 内容宽下会顶出面板。 */
+  .we-picker__ctl--wrap > .we-picker__swatches { flex: 1 0 100%; }
   /* 禁用态的一整行（「全局 UI 配色」的「全局配色」行：开了「UI 配色自定义」后不由它说了算）。
      ⚠️ 只做「看得出失效 + 点不动」，**不隐藏** —— 用户口径是"禁用"，且留着这一行才读得懂
      "此刻是谁在决定颜色"。pointer-events:none 同时挡掉色板与取色器；渲染器那边也给了空
@@ -344,8 +363,10 @@ const CSS_SETTINGS = `  /* ── 预设方案：两行四列的圆角表格（�
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .we-picker__ctl-hint {
+    /* 说明**允许换行**（#253）：564px 内容宽下长句原先被 nowrap 直接截成省略号，用户看不到
+       后半句；换行后行高由内容撑开，标签仍单行（控件列宽度因此可预期）。 */
     font-size: 0.7em; color: var(--we-ink-3, rgba(128, 128, 128, 0.65));
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 100%;
+    overflow-wrap: anywhere; max-width: 100%;
   }
   .we-picker__ctl-side { display: flex; align-items: center; gap: 8px; flex: 0 0 auto; }
   .we-picker__swatches { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }

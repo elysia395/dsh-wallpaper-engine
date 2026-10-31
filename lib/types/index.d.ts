@@ -2,7 +2,7 @@
  * dsh-wallpaper-engine — host half type surface.
  *
  * The host plugin contributes no public Cordis services and registers no model
- * tool. It serves 47 same-origin HTTP routes through `ctx.webServer` and unwinds
+ * tool. It serves 48 same-origin HTTP routes through `ctx.webServer` and unwinds
  * them on unload; `docs/ROUTE-INDEX.md` is the generated table of those routes
  * and stays authoritative for their paths and handlers.
  *
@@ -27,11 +27,11 @@ export interface WallpaperDescriptor {
   /** Display title: project.json title, uploads/.meta.json title, or the id as fallback. */
   title: string;
   /** Kind assigned by the enumerator: 'scene' | 'video' | 'web' | 'application',
-   *  plus 'image' for a single-file upload. */
+   *  plus 'image' for a single-file upload or a WE picture / slideshow project. */
   type: string;
   /** Wallpaper Engine content rating from project.json (or uploads/.meta.json), or null. */
   contentrating: string | null;
-  /** Whether the entry has playable media (video/web, or any single-file upload). */
+  /** Whether the entry has playable media (video/web/image, or any single-file upload). */
   playable: boolean;
   /** Served media URL (`/wallpaper-engine/media/<token>`), or null. */
   media: string | null;
@@ -40,6 +40,16 @@ export interface WallpaperDescriptor {
    *  "the browser can play this natively" decision (skip the frame-rate-cap re-encode)
    *  has no other way to know the container. */
   mediaExt: string | null;
+  /** Number of images in a picture project's slideshow (0 for every other kind, and for a
+   *  single-image project). The client only builds the crossfade layer when this is ≥ 2. */
+  slideCount: number;
+  /** Served slideshow manifest URL (`/wallpaper-engine/slides/<token>`, token = the cover
+   *  image's media token), or null when the entry is not a multi-image picture project.
+   *  The response lists every image in the project directory in natural sort order. */
+  slidesUrl: string | null;
+  /** Slideshow interval declared by the project (`project.preset.imageswitchtimes`), in
+   *  milliseconds, or null. The user setting `pictureSlideSeconds` (0 = follow this) wins. */
+  slideIntervalMs: number | null;
   /** Served preview URL (`/wallpaper-engine/preview/<token>`; uploads without a
    *  preview image fall back to `/wallpaper-engine/video-preview/<token>`), or null. */
   preview: string | null;

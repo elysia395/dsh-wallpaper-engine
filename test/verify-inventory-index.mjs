@@ -27,7 +27,9 @@
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { gunzipSync } from 'node:zlib';
 import { createInventoryBuilder } from '../lib/inventory.js';
+import { registerInventoryRoutes } from '../packages/media-bridge/lib/routes/inventory.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const ISO = join(root, '.test-cache', 'inventory-index');
@@ -220,6 +222,96 @@ check('探测记忆里没有已删除条目的键',
 check('扫描原料也只剩存活的条目',
   !!idx6 && idx6.we.length === 3 && !idx6.we.some((w) => w.id === 'alpha'),
   'we=' + (idx6?.we || []).map((w) => w.id).join(','));
+
+// ── ⑦ /inventory 的协商式 gzip（#158 回归）─────────────────────────────────
+section('⑦ 大库 /inventory 按 Accept-Encoding 协商压缩');
+// 拆包回归：1.4.0 时这条路由还在主包、走 sendJson（`0949e625` 补的就是协商压缩），
+// P0.2-D 把处理器逐字搬进 media-bridge 后序列化退化成裸 `JSON.stringify` ⇒ 冷扫 MB 级载荷
+// 恒 identity（实测 1.86 MB）。判据直接挂**真路由**（假 webServer / req / res）：
+// 压缩与否是响应头 + 字节的可见事实，不靠读源码猜。
+const BIG_INVENTORY = { wallpapers: Array.from({ length: 200 }, (_, i) => ({ id: 'w' + i, title: '壁纸 ' + i })) };
+
+function mountInventoryRoute(overrides = {}) {
+  const routes = [];
+  const webServer = { register(route) { routes.push(route); return { dispose() {} }; } };
+  /** @type {any} */
+  const c = {
+    disposers: [],
+    base: '/wallpaper-engine',
+    mediaOriginApi: { observeAdapter() {} },
+    buildInventory: async () => BIG_INVENTORY,
+    componentsProbe: () => null,
+    ...overrides,
+  };
+  registerInventoryRoutes(webServer, c);
+  return { routes, c };
+}
+
+function callInventory(route, { method = 'GET', headers = {} } = {}) {
+  const res = {
+    headers: {},
+    statusCode: 200,
+    body: null,
+    setHeader(key, value) { this.headers[String(key).toLowerCase()] = value; },
+    end(chunk) {
+      this.body = chunk === undefined ? Buffer.alloc(0) : Buffer.isBuffer(chunk) ? chunk : Buffer.from(String(chunk));
+    },
+  };
+  return Promise.resolve(route.handler({ method, url: '/wallpaper-engine/inventory', headers }, res))
+    .then(() => res);
+}
+
+const { routes: inventoryRoutes } = mountInventoryRoute();
+check('G1：路由形状不变（exact · /wallpaper-engine/inventory）',
+  inventoryRoutes.length === 1 && inventoryRoutes[0].kind === 'exact' && inventoryRoutes[0].path === '/wallpaper-engine/inventory',
+  inventoryRoutes.map((r) => r.kind + ' ' + r.path).join(' | '));
+
+const plain = await callInventory(inventoryRoutes[0], { headers: { 'accept-encoding': 'identity' } });
+check('G2：未声明 gzip ⇒ 恒 identity，头逐字保留（charset + no-store）',
+  !plain.headers['content-encoding']
+    && plain.headers['content-type'] === 'application/json; charset=utf-8'
+    && plain.headers['cache-control'] === 'no-store'
+    && plain.body.length > 1024,
+  'enc=' + plain.headers['content-encoding'] + ' type=' + plain.headers['content-type'] + ' bytes=' + plain.body.length);
+
+const zipped = await callInventory(inventoryRoutes[0], { headers: { 'accept-encoding': 'gzip, deflate, br' } });
+check('G3：声明 gzip ⇒ Content-Encoding: gzip + Vary: Accept-Encoding',
+  zipped.headers['content-encoding'] === 'gzip' && zipped.headers['vary'] === 'Accept-Encoding',
+  'enc=' + zipped.headers['content-encoding'] + ' vary=' + zipped.headers['vary']);
+check('G4：解压后与 identity 载荷逐字节相等',
+  !!zipped.headers['content-encoding'] && gunzipSync(zipped.body).equals(plain.body),
+  'gunzip=' + (zipped.headers['content-encoding'] === 'gzip' ? gunzipSync(zipped.body).length : 'n/a'));
+
+const refused = await callInventory(inventoryRoutes[0], { headers: { 'accept-encoding': 'gzip;q=0' } });
+check('G5：gzip;q=0（明确拒绝）⇒ 不压',
+  !refused.headers['content-encoding'], 'enc=' + refused.headers['content-encoding']);
+
+const headResp = await callInventory(inventoryRoutes[0], { method: 'HEAD', headers: { 'accept-encoding': 'gzip' } });
+check('G6：HEAD ⇒ 不压（头可以协商，实体不压）',
+  !headResp.headers['content-encoding'], 'enc=' + headResp.headers['content-encoding']);
+
+const { routes: failingRoutes } = mountInventoryRoute({ buildInventory: async () => { throw new Error('boom'); } });
+const failed500 = await callInventory(failingRoutes[0], { headers: { 'accept-encoding': 'gzip' } });
+check('G7：500 分支仍是 application/json（不带 charset）',
+  failed500.statusCode === 500 && failed500.headers['content-type'] === 'application/json',
+  'status=' + failed500.statusCode + ' type=' + failed500.headers['content-type']);
+
+// 负对照（判据有牙）：把协商分支改成永不成立，从源码文本载入一份**变异体**再走同一请求 ——
+// 若这时 gzip 请求仍被压缩，说明判据测的不是这段代码。
+const ROUTE_SRC = readFileSync(join(root, 'packages/media-bridge/lib/routes/inventory.js'), 'utf8');
+const MUTANT_SRC = ROUTE_SRC.replace("if (body.length >= GZIP_MIN_BYTES && req.method !== 'HEAD') {", 'if (false) {');
+check('G8：负对照准备工作（源码里存在可替换的协商分支）', MUTANT_SRC !== ROUTE_SRC);
+const mutantMod = MUTANT_SRC === ROUTE_SRC
+  ? { registerInventoryRoutes }
+  : await import('data:text/javascript;base64,' + Buffer.from(MUTANT_SRC, 'utf8').toString('base64'));
+const mutantRoutes = [];
+mutantMod.registerInventoryRoutes({ register(route) { mutantRoutes.push(route); return { dispose() {} }; } }, {
+  disposers: [], base: '/wallpaper-engine', mediaOriginApi: { observeAdapter() {} },
+  buildInventory: async () => BIG_INVENTORY, componentsProbe: () => null,
+});
+const mutantResp = await callInventory(mutantRoutes[0], { headers: { 'accept-encoding': 'gzip' } });
+check('G9：负对照 —— 去掉协商分支后 gzip 请求不再被压缩（判据有牙）',
+  !mutantResp.headers['content-encoding'], 'enc=' + mutantResp.headers['content-encoding']);
 
 // ── 收尾 ────────────────────────────────────────────────────────────────────
 rmSync(ISO, { recursive: true, force: true });

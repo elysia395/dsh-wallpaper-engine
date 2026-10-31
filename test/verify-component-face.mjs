@@ -12,10 +12,12 @@
  *   ① **内核分级面机械复算**：`KERNEL_STABLE_FACE`（`lib/kernel/host-kernel.js` 导出的 15 项）
  *      与**实跑内核**的 `Object.keys()` 对账。**合同数字的唯一真源 = 本行**（改一次 =
  *      一次可见的决策：同时把下面这行改掉）：
- *      「合计 104 / 稳定面 15 / 稳定面 ∩ 内核 7 / 内部面 97」
+ *      「合计 105 / 稳定面 15 / 稳定面 ∩ 内核 7 / 内部面 98」
  *      （99/92 → 104/97 是 issue #240 的图片缩略图族：`imageThumbDir` / `imageThumbPath` /
  *        `ensureImagePreview` / `pruneImagePreviewCache` / `IMAGE_PREVIEW_WIDTH` ——
- *        只被清单族与 /preview 路由消费，按分级口径属内部面。）
+ *        只被清单族与 /preview 路由消费，按分级口径属内部面。
+ *        104/97 → 105/98 是 issue #223 的图集清单：`listImages`（`/slides` 路由的数据源，
+ *        只被媒体桥 `slides` 族经键表 `kernel:listImages` 消费，同属内部面）。
  *      —— 判据**从这一行现算**期望值，不再把数字抄进 check 名与负对照（本会话实测：内核从
  *      95 长到 98 后，主判据与它的负对照一起假红 —— 负对照写死了 95/96/89/87）。
  *   ② **M9 → 0**：`lib/components/**` 与 `lib/routes/**` 里**零处**直接消费内核对象

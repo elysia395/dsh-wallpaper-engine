@@ -13,7 +13,7 @@
 > `lib/…`、`src/…`、`test/…` 这类**代码路径**先被遮掉 ⇒ 也不会被 `lib/media/mp4-probe.js`
 > 这类源文件路径误算（提及 ≠ 有断言；零提及 = 没有守卫安全网）。
 
-共 **47** 条路由。
+共 **48** 条路由。
 
 | # | 路径 | 来源 | 形态 | 依赖（闭包状态 / `c` 字段） | 守卫提及 |
 |---|---|---|---|---|---|
@@ -29,7 +29,7 @@
 | 10 | `/star-count` | packages/about-notice/lib/routes/github-stars.js:109 | async 箭头 | disposers base repoSlug log http | 2 |
 | 11 | `/about-qr` | packages/about-notice/lib/routes/about-qr.js:69 | 箭头 | disposers base aboutDir serveFile | 3 |
 | 12 | `/fontsets` | packages/fonts/lib/routes/fontsets.js:255 | async 箭头 | disposers base readFontSetId | 4 |
-| 13 | `/system-fonts` | packages/fonts/lib/routes/system-fonts.js:487 | async 箭头 | disposers base http | 3 |
+| 13 | `/system-fonts` | packages/fonts/lib/routes/system-fonts.js:492 | async 箭头 | disposers base http | 3 |
 | 14 | `/glass-row-state` | packages/glass/lib/routes/glass-row.js:23 | async 箭头 | disposers base http | **0** |
 | 15 | `/mascot` | packages/mascot-avatar/lib/routes/mascot.js:50 | 箭头 | disposers base serveFile http mascotDir mascotPath …(+5) | 4 |
 | 16 | `/avatar` | packages/mascot-avatar/lib/routes/avatar.js:54 | 箭头 | disposers base serveFile http avatarDir avatarPath …(+6) | 5 |
@@ -40,30 +40,31 @@
 | 21 | `/media-control` | packages/media-bridge/lib/routes/now-playing.js:148 | 箭头 | disposers base CONTROL_JSON_MAX_BYTES http | 3 |
 | 22 | `/api/local-assets` | packages/media-bridge/lib/routes/we-assets.js:67 | async 箭头 | disposers serveFile listWeAssetNames weAssetsAvailable WE_ASSETS_SOURCE_ID getWeAssetsDir …(+1) | 2 |
 | 23 | `/we-assets-dir` | packages/media-bridge/lib/routes/we-assets.js:115 | 箭头 | disposers base CONTROL_JSON_MAX_BYTES normalizeUserDir setWeAssetsDir listWeAssetNames …(+3) | 3 |
-| 24 | `/inventory` | packages/media-bridge/lib/routes/inventory.js:90 | async 箭头 | disposers base mediaOriginApi buildInventory componentsProbe | 28 |
-| 25 | `/media-info` | packages/media-bridge/lib/routes/media-derived.js:61 | 箭头 | disposers base mediaMap log getMediaInfo faststartVariant …(+2) | 10 |
-| 26 | `/transcode-progress` | packages/media-bridge/lib/routes/media-derived.js:104 | 箭头 | disposers base mediaMap transcodeJobs clampNum | 2 |
-| 27 | `/transcoded` | packages/media-bridge/lib/routes/media-derived.js:157 | 箭头 | disposers base mediaMap serveFile transcodeToFps registerTranscodeWaiter …(+1) | 1 |
-| 28 | `/video-preview` | packages/media-bridge/lib/routes/media-derived.js:216 | 箭头 | disposers base mediaMap serveFile generateVideoPreview | 2 |
-| 29 | `/media` | packages/media-bridge/lib/routes/media-bytes.js:39 | 箭头 | disposers base serveFile serveLayout mediaMap log …(+2) | 21 |
-| 30 | `/preview` | packages/media-bridge/lib/routes/media-bytes.js:39 | 箭头 | disposers base serveFile serveLayout mediaMap log …(+2) | 12 |
-| 31 | `/scene-frame` | packages/media-bridge/lib/routes/scene-frame.js:81 | 箭头 | disposers base mediaMap trackStream customFramePath customIdFromAbs …(+4) | 14 |
-| 32 | `/scene-frame-cache` | packages/media-bridge/lib/routes/scene-frame.js:167 | 箭头 | disposers base mediaMap GPU_FRAME_AREA_TOL GPU_FRAME_MAX_BYTES GPU_WRITE_INFLIGHT …(+8) | 5 |
-| 33 | `/custom-frame` | packages/media-bridge/lib/routes/scene-frame.js:271 | 箭头 | disposers base serveFile CUSTOM_FRAME_EXT CUSTOM_FRAME_MAX_BYTES armBodyIdleTimeout …(+4) | 3 |
-| 34 | `/scene-live` | packages/media-bridge/lib/routes/scene-serve.js:87 | 箭头 | disposers base WEBWALLGL_DIR webwallglPkgDir appendDiagLine traceRequests …(+3) | 11 |
-| 35 | `/scene-files` | packages/media-bridge/lib/routes/scene-serve.js:156 | 箭头 | disposers base handleSceneFiles | 5 |
-| 36 | `/media-origin` | packages/media-bridge/lib/routes/scene-serve.js:164 | 箭头 | disposers base mediaOriginInfo | 2 |
-| 37 | `/scene-payload-progress` | packages/media-bridge/lib/routes/scene-serve.js:184 | 箭头 | disposers base payloadProgress | 1 |
-| 38 | `/props` | packages/media-bridge/lib/routes/props.js:46 | 箭头 | disposers base mediaMap userPropsFor parseUserPropDefs entryDirPrefix …(+2) | 9 |
-| 39 | `/live-frame` | packages/media-bridge/lib/routes/live-frame.js:44 | 箭头 | disposers base mediaMap serveFile traceRequests liveFrameFile …(+3) | 3 |
-| 40 | `/scene-video` | packages/media-bridge/lib/routes/scene-media.js:57 | 箭头 | disposers base mediaMap serveFile ensureFrameCacheDir sceneVideoProbeKey …(+6) | 3 |
-| 41 | `/scene-audio` | packages/media-bridge/lib/routes/scene-media.js:141 | 箭头 | disposers base mediaMap serveFile ensureSceneAudio | 4 |
-| 42 | `/upload` | packages/media-bridge/lib/routes/upload.js:73 | 箭头 | disposers base tokenFor UPLOAD_EXT UPLOAD_MAX_BYTES ensureUploadDir …(+7) | 6 |
-| 43 | `/remove` | packages/media-bridge/lib/routes/upload.js:223 | 箭头 | disposers base CONTROL_JSON_MAX_BYTES ensureUploadDir removeUploadMeta resolveUploadFile …(+2) | 1 |
-| 44 | `/upload-dir` | packages/media-bridge/lib/routes/upload.js:280 | 箭头 | disposers base CONTROL_JSON_MAX_BYTES setUploadDir normalizeUserDir armBodyIdleTimeout …(+1) | 3 |
-| 45 | `/occlusion` | packages/media-bridge/lib/routes/occlusion.js:52 | async 箭头 | disposers base hub http | 4 |
-| 46 | `/pet-link/official` | packages/pet-link/lib/routes/official-pet.js:49 | async 箭头 | disposers http | 5 |
-| 47 | `/pet-link/official/assets/` | packages/pet-link/lib/routes/official-pet.js:83 | 箭头 | disposers http | **0** |
+| 24 | `/inventory` | packages/media-bridge/lib/routes/inventory.js:104 | async 箭头 | disposers base mediaOriginApi buildInventory componentsProbe | 29 |
+| 25 | `/slides` | packages/media-bridge/lib/routes/slides.js:44 | 箭头 | disposers base mediaMap tokenFor listImages http | 5 |
+| 26 | `/media-info` | packages/media-bridge/lib/routes/media-derived.js:61 | 箭头 | disposers base mediaMap log getMediaInfo faststartVariant …(+2) | 10 |
+| 27 | `/transcode-progress` | packages/media-bridge/lib/routes/media-derived.js:104 | 箭头 | disposers base mediaMap transcodeJobs clampNum | 2 |
+| 28 | `/transcoded` | packages/media-bridge/lib/routes/media-derived.js:157 | 箭头 | disposers base mediaMap serveFile transcodeToFps registerTranscodeWaiter …(+1) | 1 |
+| 29 | `/video-preview` | packages/media-bridge/lib/routes/media-derived.js:216 | 箭头 | disposers base mediaMap serveFile generateVideoPreview | 2 |
+| 30 | `/media` | packages/media-bridge/lib/routes/media-bytes.js:39 | 箭头 | disposers base serveFile serveLayout mediaMap log …(+2) | 23 |
+| 31 | `/preview` | packages/media-bridge/lib/routes/media-bytes.js:39 | 箭头 | disposers base serveFile serveLayout mediaMap log …(+2) | 12 |
+| 32 | `/scene-frame` | packages/media-bridge/lib/routes/scene-frame.js:81 | 箭头 | disposers base mediaMap trackStream customFramePath customIdFromAbs …(+4) | 14 |
+| 33 | `/scene-frame-cache` | packages/media-bridge/lib/routes/scene-frame.js:167 | 箭头 | disposers base mediaMap GPU_FRAME_AREA_TOL GPU_FRAME_MAX_BYTES GPU_WRITE_INFLIGHT …(+8) | 5 |
+| 34 | `/custom-frame` | packages/media-bridge/lib/routes/scene-frame.js:271 | 箭头 | disposers base serveFile CUSTOM_FRAME_EXT CUSTOM_FRAME_MAX_BYTES armBodyIdleTimeout …(+4) | 3 |
+| 35 | `/scene-live` | packages/media-bridge/lib/routes/scene-serve.js:87 | 箭头 | disposers base WEBWALLGL_DIR webwallglPkgDir appendDiagLine traceRequests …(+3) | 11 |
+| 36 | `/scene-files` | packages/media-bridge/lib/routes/scene-serve.js:156 | 箭头 | disposers base handleSceneFiles | 5 |
+| 37 | `/media-origin` | packages/media-bridge/lib/routes/scene-serve.js:164 | 箭头 | disposers base mediaOriginInfo | 2 |
+| 38 | `/scene-payload-progress` | packages/media-bridge/lib/routes/scene-serve.js:184 | 箭头 | disposers base payloadProgress | 1 |
+| 39 | `/props` | packages/media-bridge/lib/routes/props.js:46 | 箭头 | disposers base mediaMap userPropsFor parseUserPropDefs entryDirPrefix …(+2) | 9 |
+| 40 | `/live-frame` | packages/media-bridge/lib/routes/live-frame.js:44 | 箭头 | disposers base mediaMap serveFile traceRequests liveFrameFile …(+3) | 3 |
+| 41 | `/scene-video` | packages/media-bridge/lib/routes/scene-media.js:57 | 箭头 | disposers base mediaMap serveFile ensureFrameCacheDir sceneVideoProbeKey …(+6) | 3 |
+| 42 | `/scene-audio` | packages/media-bridge/lib/routes/scene-media.js:141 | 箭头 | disposers base mediaMap serveFile ensureSceneAudio | 4 |
+| 43 | `/upload` | packages/media-bridge/lib/routes/upload.js:73 | 箭头 | disposers base tokenFor UPLOAD_EXT UPLOAD_MAX_BYTES ensureUploadDir …(+7) | 6 |
+| 44 | `/remove` | packages/media-bridge/lib/routes/upload.js:223 | 箭头 | disposers base CONTROL_JSON_MAX_BYTES ensureUploadDir removeUploadMeta resolveUploadFile …(+2) | 1 |
+| 45 | `/upload-dir` | packages/media-bridge/lib/routes/upload.js:280 | 箭头 | disposers base CONTROL_JSON_MAX_BYTES setUploadDir normalizeUserDir armBodyIdleTimeout …(+1) | 3 |
+| 46 | `/occlusion` | packages/media-bridge/lib/routes/occlusion.js:52 | async 箭头 | disposers base hub http | 4 |
+| 47 | `/pet-link/official` | packages/pet-link/lib/routes/official-pet.js:49 | async 箭头 | disposers http | 5 |
+| 48 | `/pet-link/official/assets/` | packages/pet-link/lib/routes/official-pet.js:83 | 箭头 | disposers http | **0** |
 
 **零提及（暂无守卫覆盖，建议补）**：`/glass-row-state`、`/pet-link/official/assets/`
 
@@ -97,6 +98,7 @@
 | `packages/media-bridge/lib/routes/scene-frame.js` | `registerSceneFrameRoutes(webServer, c)` | 3 | `disposers` `base` `mediaMap` `trackStream` `serveFile` `GPU_FRAME_AREA_TOL` `GPU_FRAME_MAX_BYTES` `GPU_WRITE_INFLIGHT` `CUSTOM_FRAME_EXT` `CUSTOM_FRAME_MAX_BYTES` `armBodyIdleTimeout` `atomicWriteFileP` `customFrameDir` `customFramePath` `customIdFromAbs` `gpuFrameFileFor` `lingerClose` `looksLikePng` `pngDimsOfBuf` `pngSizeOf` `sceneFrameSlot` `http` | — |
 | `packages/media-bridge/lib/routes/scene-media.js` | `registerSceneMediaRoutes(webServer, c)` | 2 | `disposers` `base` `mediaMap` `serveFile` `ensureFrameCacheDir` `sceneVideoProbeKey` `sceneVideoProbeSet` `atomicWriteFileP` `ensureSceneAudio` `SCENE_VIDEO_INFLIGHT` `extractSceneVideoFromDir` `extractSceneVideoFromPkgFile` `cacheKeyFor` | — |
 | `packages/media-bridge/lib/routes/scene-serve.js` | `registerSceneServeRoutes(webServer, c)` | 4 | `disposers` `base` `WEBWALLGL_DIR` `webwallglPkgDir` `appendDiagLine` `traceRequests` `serveFile` `handleSceneFiles` `mediaOriginInfo` `payloadProgress` `log` | — |
+| `packages/media-bridge/lib/routes/slides.js` | `registerSlidesRoutes(webServer, c)` | 1 | `disposers` `base` `mediaMap` `tokenFor` `listImages` `http` | — |
 | `packages/media-bridge/lib/routes/upload.js` | `registerUploadRoutes(webServer, c)` | 3 | `disposers` `base` `tokenFor` `UPLOAD_EXT` `UPLOAD_MAX_BYTES` `CONTROL_JSON_MAX_BYTES` `ensureUploadDir` `readUploadMeta` `metaEntry` `setUploadMeta` `removeUploadMeta` `resolveUploadFile` `setUploadDir` `normalizeUserDir` `armBodyIdleTimeout` `lingerClose` `http` | — |
 | `packages/media-bridge/lib/routes/we-assets.js` | `registerWeAssetsRoutes(webServer, c)` | 2 | `disposers` `base` `serveFile` `CONTROL_JSON_MAX_BYTES` `normalizeUserDir` `setWeAssetsDir` `listWeAssetNames` `weAssetsAvailable` `WE_ASSETS_SOURCE_ID` `getWeAssetsDir` `http` | — |
 | `packages/pet-link/lib/routes/official-pet.js` | `registerOfficialPetRoutes(webServer, c)` | 2 | `disposers` `base` `http` | — |

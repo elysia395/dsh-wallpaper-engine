@@ -287,6 +287,12 @@ const selection = {
   // The media URL is token-shaped (`/media/<base64url>`) with no extension, so the
   // "browser can play this natively" decision (see src/video-layer.js) needs this field.
   mediaExt: null,
+  // Transient: 图片 / 幻灯片壁纸的图集入口（host inventory `slidesUrl`，形如
+  // `/wallpaper-engine/slides/<token>`；只有图集 ≥2 张时才给）。`buildMedia` 据此在底层
+  // 封面图上叠交叉淡化层；`slideIntervalMs` 是 WE 项目里声明的那一档（`imageswitchtimes`），
+  // 用户设置 `pictureSlideSeconds` 非 0 时以用户为准。两者都不落盘 —— 它们随壁纸变。
+  slidesUrl: null,
+  slideIntervalMs: null,
   // Transient: scene wallpaper animation MP4 URL (host /scene-video route).
   // When present the scene plays as a hardware-decoded <video>; on load error
   // it is nulled and the layer rebuilds as a still image (the frame URL:
@@ -893,6 +899,17 @@ async function loadInventory() {
   setTransient("inventory", next);
   setTransient("loading", false);
   setTransient("loaded", true);
+  // 宿主一次不可达 ≠ 库空了（#295）：上面 catch 造的是一份**全空**的 next，只够让面板显示
+  // 「未检测到…」+「重试」。拿它继续跑下面的播种 / 列表校验 / 轮播开关，等于把"这次没读到"
+  // 当成"用户把壁纸全删了"——首载失败会先烧掉 `rotationSeeded` 再播种（下次真加载反而不播种），
+  // 并把 `rotationEnabled` 永久置 false 落盘（重启后仍是关着的）。轮播那一组状态因此整块跳过；
+  // 仍需 `revalidateSelection()` 按这一版库存重算「当前壁纸还在不在」（空库落到未选择态，
+  // 重试成功后会被再校验回填），然后只刷一次 UI，把错误态交给面板。
+  if (next.error) {
+    revalidateSelection();
+    emit();
+    return;
+  }
   // Fresh inventory → reset pagination, but ONLY when the wallpaper id set
   // actually changed: an upload/remove/refresh that keeps the same list must
   // not kick the user back to page 1.
@@ -4080,6 +4097,15 @@ const onGroupTrigger = (e) => {
   }
   emit();
 };
+// 图内过场周期（图片 / 幻灯片壁纸内部多张图之间的切换间隔）。单位是**秒**，0 = 跟随 WE
+// 项目里声明的 `imageswitchtimes`；与 rotationInterval（壁纸之间、分钟）是两件事。
+// 改完原地重装过场层：图片档的层键只有 type+url，改设置不会触发 syncLayers 重建。
+const onPictureSlideSeconds = (e) => {
+  const seconds = clampNum(Number(e.target.value), ...schemaRange("pictureSlideSeconds"), DEFAULTS.pictureSlideSeconds);
+  setSetting("pictureSlideSeconds", seconds);
+  if (selection.type === "image") refreshImageSlideshow(selection);
+  emit();
+};
 // 「删除」按钮**只置令牌**；真正的删除在问句行的「确认」里（不变量 2）。两件事分开的
 // 好处：守卫可以分别断言"第一下不删"与"确认才删"，而不是只验一个 if。
 const onArmDeleteGroup = () => {
@@ -4714,7 +4740,7 @@ function WallpaperPicker() {
     );
     return renderWallpaperTab({
       setSetting, setTransient,
-      INTERVALS, armedConfirm: sel.armedConfirm, cdMode, current, editing, editorPageView, group, groups, isLiveScene, onArmConfirm: armConfirm, onArmDeleteGroup, onCancelEditUploadDir, onCancelEditWeAssetsDir, onClear, onDeleteGroup, onDisarmConfirm: disarmConfirm, onEditInterval, onEditName, onEditOrder, onEditTrigger, onGroupChange, onGroupInterval, onGroupTrigger, onOpenPicker, onOpenPickerDraft, onRefresh, onStartEditUploadDir, onStartEditWeAssetsDir, onSwitchTransition, onSwitchTransitionDir, onSwitchTransitionSpeed, onToggleAudio, onTogglePlay, onTogglePropsPanel, onToggleRotation, onUploadDirDraft, onWeAssetsDirDraft, pagerRow, playableCount, playableList, playbackLive, propsPanelOpen, renderUserPropsPanel, sel, setPickerOpener, uploadedList,
+      INTERVALS, armedConfirm: sel.armedConfirm, cdMode, current, editing, editorPageView, group, groups, isLiveScene, onArmConfirm: armConfirm, onArmDeleteGroup, onCancelEditUploadDir, onCancelEditWeAssetsDir, onClear, onDeleteGroup, onDisarmConfirm: disarmConfirm, onEditInterval, onEditName, onEditOrder, onEditTrigger, onGroupChange, onGroupInterval, onGroupTrigger, onPictureSlideSeconds, onOpenPicker, onOpenPickerDraft, onRefresh, onStartEditUploadDir, onStartEditWeAssetsDir, onSwitchTransition, onSwitchTransitionDir, onSwitchTransitionSpeed, onToggleAudio, onTogglePlay, onTogglePropsPanel, onToggleRotation, onUploadDirDraft, onWeAssetsDirDraft, pagerRow, playableCount, playableList, playbackLive, propsPanelOpen, renderUserPropsPanel, sel, setPickerOpener, uploadedList,
     });
   };
   const tabIdx = Math.max(0, visibleTabs.findIndex((t) => t.id === activeTab));

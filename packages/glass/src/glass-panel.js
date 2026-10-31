@@ -132,12 +132,10 @@ function renderGlassPresetsBlock(gp) {
       ctlText(weT("吉祥物 · 指向"), mascotAvailable
         ? weT("「本机现状」= 把这台的自定义立绘带进预设；选一只出厂自带 = 只存「指向它」（不占体积），套用它的人换回那一只")
         : weT("本机没有自定义立绘 —— 「本机现状」会存成「无」；也可以直接选一只出厂自带，让套用它的人换回那一只")),
-      React.createElement("div", { className: "we-picker__seg", role: "group", "aria-label": weT("吉祥物 · 指向"),
-        // （并入 #180 后形态 3 → 11，「小女仆」除名后为 10）：这一行现在最多 1 + 10 = 11 个键，而 `.we-picker__seg`
-        // 是不换行的 flex 行、每个键 `flex: 1` ⇒ 不换行就会被压成同样窄的一格、标签互相截断。
-        // 用**行内** `flexWrap` 就地解决（不动主包样式表 —— 那份文件的注释行数被打红过
-        // `verify-token-contract`，它按主包 + 玻璃双工件取文，不记行锚点）。
-        style: { flexWrap: "wrap" } },
+      // （并入 #180 后形态 3 → 11，「小女仆」除名后为 10）：最多 1 + 10 = 11 个键。段控件的基样式
+      // 是「等分、不换行」，11 个键在 564px 内容宽下会被压成同样的窄格、标签互相截断 ⇒ 走 chips 变体
+      // （换行 + 每键取内容宽，见 src/styles-settings.js 里 .we-picker__seg--chips 的注释，#253）。
+      React.createElement("div", { className: "we-picker__seg we-picker__seg--chips", role: "group", "aria-label": weT("吉祥物 · 指向") },
         React.createElement("button", {
           key: "own",
           type: "button",

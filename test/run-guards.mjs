@@ -112,6 +112,9 @@ const VERIFY_STEPS = [
   step('test/verify-eol.mjs'),
   step('test/verify-client-sync.mjs'),
   step('test/verify-client.mjs'),
+  // 图片 / 幻灯片壁纸的浏览器半边：叠层 / 交叉淡化 / 失联即停 / 隐藏不推进。与 verify-client 同侧
+  // （只读 src/**，不依赖 build 产物）。硬档依据：过场层摘不干净 ⇒ 换壁纸后旧图集继续解码。
+  step('test/verify-slideshow-client.mjs'),
   // ⚠️ D3 可见面判据必须留在链上：它不在链里时，一次取上游 panel-tabs.js 就能把 D3 gate 丢掉
   // 而长期没人跑到（链的短路特性会让"链外的强判据"变成摆设）。
   // 在链上：只要 gate 落点与声明表对不上，链就在这里断。
@@ -165,6 +168,9 @@ const VERIFY_STEPS = [
   step('test/verify-cache-prune.mjs'),
   step('test/verify-we-install-probe.mjs'),
   step('test/verify-wallpaper-scan.mjs'),
+  // 图集清单路由（`GET ${BASE}/slides/<token>`）：真路由 + 真 listImages，自然序 / 同源 URL /
+  // 四种失败口径 / 越界反解。硬档依据：token 解析到目录外即越界读盘；顺序漂移则过场与 WE 不一致。
+  step('test/verify-slides.mjs'),
   step('test/verify-inventory-index.mjs'),
   step('test/verify-mp4-vfs.mjs'),
   step('test/verify-theme-layer.mjs'),

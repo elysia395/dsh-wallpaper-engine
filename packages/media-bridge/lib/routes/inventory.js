@@ -44,6 +44,8 @@
  * 单一真源：三本账（loaded / started / failed）都在 `lib/host-boot.js`；
  * 本文件只做**派生**（把三本账折叠成上面这张状态表），不持有任何组件状态。
  */
+import { gzipSync } from 'node:zlib';
+
 /** 注入契约（P2-7A / ADR-0013 D12）：本族从 `c` 消费的**必需**键 —— 门面/组件行调用点必须逐键给到（判据 test/verify-inject-contracts.mjs 双向对账）。 */
 export const DEPS = ['disposers', 'base', 'mediaOriginApi', 'buildInventory', 'componentsProbe'];
 
@@ -83,6 +85,18 @@ function rowStatusOf(probe) {
   return out;
 }
 
+/** 压缩阈值与级别：与主包 `lib/json-response.js`（及宿主 webserver 默认值）逐条同口径。 */
+const GZIP_MIN_BYTES = 1024;
+const GZIP_LEVEL = 1;
+
+/** 客户端是否接受 gzip（`gzip;q=0` = 明确不要）。口径与主包 `sendJson` 的协商逐字相同。 */
+function acceptsGzip(req) {
+  const header = req && req.headers ? req.headers['accept-encoding'] : undefined;
+  if (typeof header !== 'string') return false;
+  const m = /(?:^|,)\s*gzip\s*(?:;\s*q=([0-9.]+))?\s*(?=,|$)/i.exec(header);
+  return !!m && (m[1] === undefined || Number(m[1]) > 0);
+}
+
 export function registerInventoryRoutes(webServer, c) {
   const { disposers, base: BASE, mediaOriginApi, buildInventory, componentsProbe } = c;
 
@@ -97,9 +111,27 @@ export function registerInventoryRoutes(webServer, c) {
         // 组件行状态（只读，形状与失效口径见文件头「组件行状态」）：探针不可用时**不写**该字段 ——
         // 消费方据此按"可用"渲染，而不是把"探测失败"渲染成"组件都没了"。
         const components = rowStatusOf(componentsProbe);
+        const body = Buffer.from(JSON.stringify(components ? { ...payload, components } : payload), 'utf8');
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
         res.setHeader('Cache-Control', 'no-store');
-        res.end(JSON.stringify(components ? { ...payload, components } : payload));
+        // ── 协商式 gzip（#158 回归）────────────────────────────────────────────────
+        // 1.4.0 时这条路由还在主包 `lib/index.js` 里、走 `sendJson`，大库 `/inventory`
+        // 是 MB 级载荷、按 Accept-Encoding 协商压缩；`0949e625` 加的就是这条。
+        // P0.2-D 把处理器逐字搬进本包后，序列化改成了裸 `JSON.stringify` + `res.end`
+        // ⇒ **恒 identity**：冷扫 1.86 MB 全量下行（实测 ~2 MB），是「启动/切页卡」的一条硬账。
+        // 本包不能 import 主包的 `sendJson`（跨包纪律：零主包 specifier）⇒ 就地实现同一份口径：
+        //   · 只在客户端声明 gzip、载荷 ≥ 1 KB、且不是 HEAD 时压（与 lib/json-response.js 逐条同源）；
+        //   · 头逐字保留（含 charset；500 分支仍按原样不带 charset）；
+        //   · `Vary` 必须写 —— 同一 URL 对有无 gzip 的请求回不同字节，缓存不能混。
+        if (body.length >= GZIP_MIN_BYTES && req.method !== 'HEAD') {
+          res.setHeader('Vary', 'Accept-Encoding');
+          if (acceptsGzip(req)) {
+            res.setHeader('Content-Encoding', 'gzip');
+            res.end(gzipSync(body, { level: GZIP_LEVEL }));
+            return;
+          }
+        }
+        res.end(body);
       } catch (err) {
         res.statusCode = 500;
         res.setHeader('Content-Type', 'application/json');

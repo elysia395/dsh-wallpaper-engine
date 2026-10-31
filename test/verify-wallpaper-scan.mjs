@@ -20,7 +20,7 @@
  *   · 覆盖面地板写在 `if` 之外（G 段）。
  */
 import { mkdirSync, writeFileSync, readFileSync, existsSync, statSync, utimesSync, rmSync } from 'node:fs';
-import { join } from 'node:path';
+import { join, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createWallpaperScanKit } from '../lib/wallpaper-scan.js';
 import { extOf } from '../lib/fs-paths.js';
@@ -94,6 +94,13 @@ function project (dir, obj, files = {}) {
 }
 /** 目录 mtime 只在新条目进出时变；要确定性就显式推 —— 被测对象正是读它算签名。 */
 function bump (p) { const t = new Date(Date.now() + 2000); utimesSync(p, t, t); }
+/** 深路径写盘（`photos/a.jpg` 这种相对路径；父目录自动建）。 */
+function writeDeep (base, rel, body) {
+  const abs = join(base, rel);
+  mkdirSync(dirname(abs), { recursive: true });
+  writeFileSync(abs, body);
+  return abs;
+}
 
 // ── 变异体加载器（源码文本改写 ⇒ `.test-cache/` 里 import）───────────────────
 // 本模块只 import node: 内置模块（无相对 import）⇒ 变异体可直接落在 tmp 目录里跑。
@@ -348,8 +355,36 @@ await (async () => {
   writeFileSync(join(badJson, 'project.json'), '{ not json');
   check('C2 project.json 不是合法 JSON ⇒ null（不许把半解析结果漏出去）',
     await kit.readProjectP(badJson) === null);
-  check('C3 没有 file 字段 ⇒ null（缺主文件的"项目"不算条目）',
+  check('C3 没有 file 字段且没有 preset ⇒ null（缺主文件的"项目"不算条目）',
     await kit.readProjectP(project(join(env.base, 'c3'), { title: 'x' })) === null);
+  // 图片 / 幻灯片壁纸：WE 的 preset 型项目在这里**没有** `file`，真身是 preset 里的
+  // `customdirectory`（图集目录）或 `image`（单图）。这条链错了的症状同样是"静默少东西"：
+  // 库里没有这张壁纸，且没有任何报错。
+  const slideDir = join(env.base, 'c3b');
+  project(slideDir, {
+    title: 'Slides',
+    preset: { wallpapermode: '2', customdirectory: 'photos', imageswitchtimes: '1' },
+  });
+  writeDeep(slideDir, 'photos/b.jpg', 'b');
+  writeDeep(slideDir, 'photos/a.jpg', 'a');
+  writeDeep(slideDir, 'photos/sub/c.png', 'c');
+  writeDeep(slideDir, 'photos/.hidden.jpg', 'h');
+  writeDeep(slideDir, 'photos/note.txt', 'n');
+  const slides = await kit.readProjectP(slideDir);
+  check('C3b preset 幻灯片（wallpapermode 2 + customdirectory）⇒ image、自然序图集、封面=首图、周期=预设档',
+    slides !== null && slides.type === 'image'
+    && slides.file === 'photos/a.jpg'
+    && slides.slides.join(',') === 'photos/a.jpg,photos/b.jpg,photos/sub/c.png'
+    && slides.slideIntervalMs === 60000,
+    slides ? [slides.type, slides.file, slides.slides.join(','), slides.slideIntervalMs].join(' | ') : 'null');
+  const singleDir = join(env.base, 'c3c');
+  project(singleDir, { title: 'Single', preset: { wallpapermode: '1', image: 'cover.png' } });
+  writeDeep(singleDir, 'cover.png', 'p');
+  const single = await kit.readProjectP(singleDir);
+  check('C3c preset 单图（wallpapermode 1 + image）⇒ image、图集 1 项、没有周期',
+    single !== null && single.type === 'image' && single.file === 'cover.png'
+    && single.slides.length === 1 && single.slideIntervalMs === null,
+    single ? [single.type, single.file, single.slides.length].join(' | ') : 'null');
 
   const bare = project(join(env.base, 'bare-title'), { file: 'scene.pkg' });
   const p1 = await kit.readProjectP(bare);
@@ -357,7 +392,7 @@ await (async () => {
     p1.id === 'bare-title' && p1.title === 'bare-title' && p1.preview === null && p1.contentrating === null);
 
   const typed = await kit.readProjectP(project(join(env.base, 't'), { file: 'a.mp4', type: 'QUAKE' }));
-  check('C5 type 不在白名单（scene/video/web/application）⇒ 落 scene（未知类型不许透传）',
+  check('C5 type 不在白名单（scene/video/web/image/application）⇒ 落 scene（未知类型不许透传）',
     typed.type === 'scene', typed.type);
 
   const scheme = await kit.readProjectP(project(join(env.base, 'scheme'), {
@@ -373,11 +408,14 @@ await (async () => {
   const inferred = {
     video: await kit.readProjectP(project(join(env.base, 'inf-v'), { file: 'a.MP4' })),
     web: await kit.readProjectP(project(join(env.base, 'inf-w'), { file: 'a.html' })),
+    image: await kit.readProjectP(project(join(env.base, 'inf-i'), { file: 'a.JPG' })),
     scene: await kit.readProjectP(project(join(env.base, 'inf-s'), { file: 'a.pkg' })),
   };
-  check('C10 没有 type ⇒ 按扩展名判（mp4 ⇒ video / html ⇒ web / 其它 ⇒ scene）',
-    inferred.video.type === 'video' && inferred.web.type === 'web' && inferred.scene.type === 'scene',
-    [inferred.video.type, inferred.web.type, inferred.scene.type].join('|'));
+  check('C10 没有 type ⇒ 按扩展名判（mp4 ⇒ video / html ⇒ web / 图片 ⇒ image / 其它 ⇒ scene）',
+    inferred.video.type === 'video' && inferred.web.type === 'web'
+    && inferred.image.type === 'image' && inferred.image.slides.join(',') === 'a.JPG'
+    && inferred.scene.type === 'scene',
+    [inferred.video.type, inferred.web.type, inferred.image.type, inferred.scene.type].join('|'));
 
   const rating = await kit.readProjectP(project(join(env.base, 'rating'), { file: 'scene.pkg', contentrating: 'Mature' }));
   check('C8 contentrating 原样透传（浏览器半边的分级筛选用它）', rating.contentrating === 'Mature');
@@ -386,7 +424,8 @@ await (async () => {
   check('C11 contentrating 非字符串 ⇒ null（不许把数字漏给前端的筛选）', badRating.contentrating === null);
 
   const openKinds = await loadMutant('kinds-open', (s) => s.replace(
-    'if (!KINDS.includes(type)) type = \'scene\';', 'if (false && !KINDS.includes(type)) type = \'scene\';'));
+    "declared ? (KINDS.includes(declared) ? declared : 'scene') : inferType(file)",
+    "declared || inferType(file)"));
   const envC = makeEnv('c-neg');
   check('C9 负对照：变异体拆掉类型白名单 ⇒ 同一条判据判红（QUAKE 会原样漏出去）',
     await unknownTypeFallsBack(() => openKinds({ WE_APPID: APPID, ...realDeps() }), envC) === false);

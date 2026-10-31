@@ -78,6 +78,7 @@ Bring local **Wallpaper Engine** Scene, Web and Video wallpapers into DSH, with 
 | **Scene** | Built-in WebWallGL live rendering, with fallback chain | Supported; no WE process required |
 | **Web** | Web page mounting, WE API shim and sandboxing | Supported; depends on the page and browser |
 | **Video** | Browser playback with transcoding, fps cap and pause control | Supported |
+| **Picture** | Reads the image folder of a WE `preset` project and crossfades locally at the interval set in WE | Supported; images are never uploaded |
 | **Custom image / video** | Upload local JPG / PNG / MP4 | Supported; files stay local |
 
 Application wallpapers require launching third-party executables and are **not supported**; they never enter the library or rotation candidates.

@@ -7,10 +7,9 @@
     const { onLayoutChange, sel } = ctx;
     return React.createElement(React.Fragment, null,
     // ── 浏览方式：紧凑 CD 架 vs 常规分页网格 ──
+    // 本节只有一条设置 ⇒ 不再套「节标题 + 一行」两层（#253）：外层 .we-picker__section 留作
+    // 分隔线，行标签「紧凑布局」自己承担标题。
     React.createElement("div", { className: "we-picker__section" },
-      React.createElement("div", { className: "we-picker__section-head" },
-        React.createElement("span", { className: "we-picker__section-label" }, weT("浏览方式")),
-      ),
       // Card style: classic (WE's original aspect-ratio 16/9 cards — the CD-like
       // look) vs the rewritten fixed-height cards that never overlap.
       switchRow(weT("紧凑布局"), sel.pickerLayout === "classic", (e) => onLayoutChange(e.target.checked ? "classic" : "fixed"), {
@@ -25,10 +24,8 @@
     const { onEdgeCompatChange, sel } = ctx;
     return React.createElement(React.Fragment, null,
     // ── 兼容性 ──
+    // 同「浏览方式」：只有一条设置，不重复两层标题（#253）。
     React.createElement("div", { className: "we-picker__section" },
-      React.createElement("div", { className: "we-picker__section-head" },
-        React.createElement("span", { className: "we-picker__section-label" }, weT("兼容性")),
-      ),
       // Edge 兼容渲染开关：仅在 Edge 中生效（canvas 渲染，避免浏览器自带的
       // 「下载 / 投屏」悬浮工具栏）。
       switchRow(weT("Edge 兼容"), sel.edgeCompat !== false, (e) => onEdgeCompatChange(e.target.checked), {
@@ -45,15 +42,12 @@
     // ── 适配（适配器模式）：本页跑在哪种宿主形态里 —— 自动检测 + 可手选 ──
     // 检测事实来源在宿主侧（能力头 / UA，见 lib/index.js 的 3c-0），客户端拿
     // 上报值 + 本地信号兜底；手选优先于检测，是检测不准时的自救。
+    // 本节的「适配」节标题与「适配目标」行说同一件事 ⇒ 删节标题，把原来挂在标题上的长说明
+    // 挪进行标签的 tooltip（#253：不占版面，鼠标停上去仍看得到四件事）。
     React.createElement("div", { className: "we-picker__section" },
-      React.createElement("div", { className: "we-picker__section-head" },
-        React.createElement("span", {
-          className: "we-picker__section-label",
-          title: weT("适配目标决定四件事：网页壁纸载荷走哪个源（有无能力头栅栏）、桌面壳材质规则是否生效、窗口失焦暂停是否适用、面板哪些行可用。默认自动检测，检测不准时可手选覆盖（手选优先）。"),
-        }, weT("适配", null, "adapter")),
-      ),
       React.createElement("div", { className: "we-picker__ctl" },
-        ctlText(weT("适配目标"), weT("自动检测 · 手选可覆盖")),
+        ctlText(weT("适配目标"), weT("自动检测 · 手选可覆盖"),
+          weT("适配目标决定四件事：网页壁纸载荷走哪个源（有无能力头栅栏）、桌面壳材质规则是否生效、窗口失焦暂停是否适用、面板哪些行可用。默认自动检测，检测不准时可手选覆盖（手选优先）。")),
         React.createElement("select", {
           className: "we-picker__select",
           value: ADAPTER_TARGET_VALUES.includes(sel.adapterTarget) ? sel.adapterTarget : "auto",

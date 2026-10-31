@@ -77,7 +77,7 @@ const CLUSTER_MARKER_KEYS = APPLY_TOKEN_KEYS.filter((k) => !['serveFile', 'media
 /** S5c 刀2 搬进包里的 9 族（21 条路由）—— 路径是判据的一部分：搬错包/搬一半都要红。 */
 const TOKEN_FAMILY_FILES = [
   'inventory', 'upload', 'props', 'media-bytes', 'media-derived',
-  'scene-frame', 'scene-serve', 'scene-media', 'live-frame',
+  'scene-frame', 'scene-serve', 'scene-media', 'live-frame', 'slides',
 ].map((n) => 'packages/media-bridge/lib/routes/' + n + '.js');
 /** 不许在包入口调用点被**覆盖**的键（覆盖 = 用组件会话那份 ⇒ 第二张 mediaMap）。 */
 const NO_OVERRIDE_KEYS = ['mediaMap', 'tokenFor', 'serveFile', 'serveLayout', 'handleSceneFiles'];
@@ -287,13 +287,14 @@ check('这 9 族在 `lib/routes/` 里零残留', stillInMain.length === 0, still
   check('门面 applyView 的键集恰好 = 服务面 `apply` 的 15 键，且全部来自同一次会话', v.length === 0, v.join('；'));
 }
 
-// ⑥ 路由账：总条目 47（上游 1.4.0 新增 1 条 + glass 子包状态路由 1 条 + rope-art 1 条），这 9 族贡献 21 条，全部挂在包内
+// ⑥ 路由账：总条目 48（上游 1.4.0 新增 1 条 + glass 子包状态路由 1 条 + rope-art 1 条 + 图集清单 1 条），
+// 这 9 族贡献 22 条（slides 族新增 1 条），全部挂在包内
 {
   const idx = buildIndex();
   const total = idx.routes.length;
   const owned = idx.routes.filter((r) => TOKEN_FAMILY_FILES.includes(r.src));
-  check('路由索引总条目 = 47（上游 1.4.0、glass 状态路由、rope-art 各 1 条后；9 族仍只换模块不换路径集合）', total === 47, '实测 ' + total + ' 条');
-  check('9 族的 21 条路由全部挂在包内（索引 src = packages/…）', owned.length === 21, '实测 ' + owned.length + ' 条');
+  check('路由索引总条目 = 48（上游 1.4.0、glass 状态路由、rope-art、`/slides` 各 1 条后；9 族只换模块不换路径集合）', total === 48, '实测 ' + total + ' 条');
+  check('9 族的 22 条路由全部挂在包内（索引 src = packages/…；`slides` 复用媒体 token 表）', owned.length === 22, '实测 ' + owned.length + ' 条');
 }
 
 // ⑦ 行为臂：键表解析出的实例 = 服务面 apply 上的同一引用（单实例，不是拷贝）
