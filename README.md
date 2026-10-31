@@ -50,10 +50,10 @@
 | 源码入口 | [Fish-under-sea 维护仓库](https://github.com/Fish-under-sea/dsh-wallpaper-engine)，灰测请下载这里的完整源码 |
 | 正式版本与贡献记录 | 以 [正式主仓 Release](https://github.com/elysia395/dsh-wallpaper-engine/releases)、[Contributors](https://github.com/elysia395/dsh-wallpaper-engine/graphs/contributors) 和 npm 页面为准；相同源码版本号不表示代码完全相同 |
 | 部署闭包 | 主包加七个子包，共八包；完整源码安装器登记依赖，更新后不会因临时链接被包管理器清除而丢失子包 |
-| 官方 pet 联动 | 通过 dsh-pet 公开接口接入，不再捆绑 pet、Electron 或第三方文件补丁；官方 pet 自行安装 |
+| 桌宠联动 | 通过 dsh-pet-dshwe（dsh-pet 全量 fork）公开接口接入，不再捆绑 pet、Electron 或第三方文件补丁；运行时可由设置页卡片一键安装或自行安装 |
 | 外观预设与深浅 | 「作者自用」预设携带深色偏好，套用即把界面一并切到深色；全新安装默认套用它。发布版仍是「一次性二选一」弹窗询问，且套用预设不改深浅 |
-| 体积变化 | 本次本地发布集压缩体积实测约 84.88 MiB → 25.12 MiB，减少约 70.4%；不含另装的官方 pet，不是内存或 Git 仓库体积 |
-| 验收边界 | 已验证隔离部署、协议、排播与自有气泡 / 面板，预设与深浅联动已在本机真机实测；官方完整宠物及桌面端四套演出的真机视觉验收仍需补齐 |
+| 体积变化 | 本次本地发布集压缩体积实测约 84.88 MiB → 25.12 MiB，减少约 70.4%；不含另装的桌宠运行时，不是内存或 Git 仓库体积 |
+| 验收边界 | 已验证隔离部署、协议、排播与自有气泡 / 面板 / 安装事务，预设与深浅联动已在本机真机实测；真实宠物四套演出的真机视觉验收仍需补齐 |
 
 源码包、正式发行和旧演示图应分别看待。不要用 npm 线上版本号或主仓热度推断本分支已经发布、已合并或完成所有平台验收。
 
@@ -117,7 +117,7 @@ node scripts/install-source.mjs --profile desktop --dsh-home "<目标 DSH 数据
 | 播放与降载 | 帧率上限、转码缓存、倍速、水平翻转、切换过场、遮挡暂停与可迁移的缓存目录 |
 | 音乐联动 | 系统输出回环频谱、Now Playing 歌曲信息与封面；在线歌词按需启用 |
 | 扩展效果 | 可选的会话头像、点击 / 拖尾特效、壁纸与界面视差；不需要的效果可关闭 |
-| 官方 pet 联动 | 对接独立安装的 dsh-pet，支持侧栏后拉、抓绳、踢腿弹飞和哈气；按 petId 选目标，桥接自行绘制气泡 |
+| 桌宠联动 | 对接可一键安装的 dsh-pet-dshwe（与官方 dsh-pet 可共存），支持侧栏后拉、抓绳、踢腿弹飞和哈气；按 petId 选目标，桥接自行绘制气泡，未装 / 关闭时回落原生吉祥物 |
 | 宿主适配 | Windows / macOS / Linux 使用同一套源码与发布集；界面跟随 DSH 的语言设置 |
 
 场景渲染失败时会逐级降级，首帧准备期间使用可用的预览图。不同壁纸使用的资源与脚本不同，**不能保证每张工坊壁纸都与 Wallpaper Engine 本体完全一致**。渲染与降级规则见 [工作原理](https://github.com/Fish-under-sea/dsh-wallpaper-engine/blob/official-pet-bridge-20261020/docs/HOW-IT-WORKS.md)。
@@ -248,24 +248,25 @@ macOS 没有 Wallpaper Engine 官方客户端。可以上传图片 / 视频，�
 
 <h2 id="可选桌宠联动"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/section-pet-dark.png"><img src="assets/readme/section-pet-light.png" alt="可选桌宠联动" width="1440"></picture></h2>
 
-本源码分支已接入 [dsh-pet](https://github.com/PC2005-cloud/dsh-pet) 的公开控制接口，实现 Wallpaper 与官方 pet 的可选联动：侧栏后拉、跳抓吉祥物、踢侧栏后原生弹飞、哈气开栏。感谢官方作者 [PC2005-cloud](https://github.com/PC2005-cloud) 对 [跨插件控制接口讨论 #122](https://github.com/PC2005-cloud/dsh-pet/issues/122) 的支持与边界说明。这是公开 API 对接，不是把官方 pet 重新打包，也不表示上游已经联合发布该版本。运行时、调参面板、九段联动动画和五张气泡配图集中在 [pet-link 子包](packages/pet-link/README.md)。
+Wallpaper 与桌宠的可选深度联动：把壁纸吉祥物换成可联动的桌宠，点它触发**侧栏后拉、跳抓吉祥物绳子、踢开侧栏原生弹飞、站立哈气开栏**四条演出（默认第 3 次点击改走彩蛋），宠物逐帧贴边走位、被踢飞时走原生物理、头顶气泡自绘跟随。联动对象是 [dsh-pet-dshwe](https://github.com/Fish-under-sea/dsh-pet-dshwe)（上游 [dsh-pet](https://github.com/PC2005-cloud/dsh-pet) 的全量 fork，感谢官方作者 [PC2005-cloud](https://github.com/PC2005-cloud) 对 [跨插件控制接口讨论 #122](https://github.com/PC2005-cloud/dsh-pet/issues/122) 的支持与边界说明）。运行时安装、四条排播、调参面板、九段联动动画和五张气泡配图集中在 [pet-link 子包](packages/pet-link/README.md)。
 
-**不再内置 pet，不自动安装官方 pet，也不修改其文件、配置或动画池。** 请自行安装提供同页 `petApi7340.pose/progress` 和 HTTP 动作、位置、抛掷、占用接口的官方版本；仅凭 `0.3.7` 版本号不能判定接口齐全。未安装、目标隐藏或接口不可用时，只停用联动，壁纸和吉祥物的原生侧栏操作继续可用。
+**双 provider 降级**：联动走页内 `petApiDshwe.link` 正式控制面（14 项方法 + 独占租约）；没装运行时、联动开关关闭、服务缺失、版本过旧（`link.*` 不全或协议 < 4）或目标隐藏时，**立即回落原生吉祥物**并给出可读原因，壁纸与吉祥物的原生侧栏操作一字不差。设置页第一张卡片「桌宠联动」（order:0）提供：联动开关（立即生效不重启）、运行时状态、**下载并安装 dsh-pet-dshwe**（pnpm 优先、Release tgz 兜底，失败逐字节回滚）、打开操控面板、测试一次联动与折叠诊断。
 
 | 你需要知道 | 当前行为 |
 |---|---|
+| 安装 | 卡片一键安装（`/pet-link/pet/{state,install,uninstall}` 三路由，同源校验 + 8 KiB body 上限 + 下载源白名单）；装完重开 DSH 生效 |
 | 目标选择 | `Ctrl+Shift+D` 打开调参面板，按真实 petId 选择网页显示的宠物；目标缺失不偷偷切换其他宠物 |
-| 同时显示 | 同一 pet 在其他网页或桌面上的动作按官方共享状态同步，不承诺实例隔离 |
-| 气泡 | 桥接在发起网页自绘，可在动作释放后继续显示；不占用或清除官方气泡，也不向桌面透明窗注入气泡 |
-| 参数与试跑 | 四条逻辑的参数、重置、停止和 JSON 导出；参数是当前页运行时覆盖，刷新前请导出 |
-| 运动边界 | 只用官方 `position/throw`，不改宠物 DOM、不逐帧发送 HTTP；缓冲时位置与视频不保证逐帧同步 |
-| 验证范围 | 协议、隔离 HTTP 和四条排播回归不能代替真实官方宠物的完整视觉验收 |
+| 与官方 dsh-pet 共存 | 只探测、卡片提示「两者会各显示一只，互不接管」；不阻断、不互斥、不改官方任何文件 |
+| 气泡 | 桥接在发起网页自绘，可在动作释放后继续显示；不占用或清除宠物气泡，也不向桌面透明窗注入气泡 |
+| 参数与持久化 | 约 50 参数分组 + 缓动三选一 + JSON 导入导出；覆盖层持久化在 WE 侧 `localStorage` 命名空间键（换浏览器/清站点数据即丢，跨机用导出 JSON），口径详见 [pet-link README](packages/pet-link/README.md) |
+| 运动边界 | 位置与抛掷全走 `link.adoptPosition/throwNative` 页内调用，不逐帧发送 HTTP；缓冲时位置与视频不保证逐帧同步 |
+| 验证范围 | 协议、隔离 HTTP 和四条排播回归不能代替真实宠物的完整视觉验收 |
 
-旧内置 pet 与外部文件补丁入口已删除。已有安装的旧依赖、旧 bundle 选择和数据不会被自动删除；升级前先停用旧内置行，再按部署说明更新。不要同时启用旧内置 pet 与官方 pet 来驱动同一目标。
+旧内置 pet 与外部文件补丁入口已删除。已有安装的旧依赖、旧 bundle 选择和数据不会被自动删除；升级前先停用旧内置行，再按部署说明更新。不要同时启用旧内置 pet 与桌宠运行时来驱动同一目标。
 
 <h2 id="配置与数据"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/section-config-dark.png"><img src="assets/readme/section-config-light.png" alt="配置与数据" width="1440"></picture></h2>
 
-壁纸与外观等常规设置保存在宿主端 `~/.dsh-wallpaper-engine/config.json`，不依赖浏览器端口。重启、换端口或清浏览器数据不影响这份配置；旧 localStorage 配置可自动迁移。官方 pet 目标选择与调参另有生命周期，运行时参数需导出 JSON 留存，并非全部写入这份配置。
+壁纸与外观等常规设置保存在宿主端 `~/.dsh-wallpaper-engine/config.json`，不依赖浏览器端口。重启、换端口或清浏览器数据不影响这份配置；旧 localStorage 配置可自动迁移。桌宠联动的目标选择与调参覆盖另有生命周期：覆盖层存 WE 侧 `localStorage`（见 [pet-link README](packages/pet-link/README.md) 的持久化口径），跨环境迁移用面板的导出 JSON。
 
 | 数据 | 默认位置 | 调整入口 |
 |---|---|---|
@@ -304,7 +305,7 @@ macOS 没有 Wallpaper Engine 官方客户端。可以上传图片 / 视频，�
 - 桌面壳最小化 / 还原仍可能出现短暂白帧；窗口底板属于宿主能力，插件不能完全消除。
 - `dsh-better-sidebar` 可选；插件为它的侧栏提供独立玻璃参数与字体适配。不支持 `backdrop-filter` 的浏览器回退实色。
 - 与其他皮肤同时启用时，查看 [共存说明](https://github.com/Fish-under-sea/dsh-wallpaper-engine/blob/official-pet-bridge-20261020/docs/COEXISTENCE.md)，避免让多个插件同时接管同一表面。
-- 官方 pet 的同一目标在多端同步动作；自绘联动气泡只属于发起网页，原生位移不承诺与视频缓冲逐帧同步。
+- 联动桌宠的同一目标在多端同步动作；自绘联动气泡只属于发起网页，原生位移不承诺与视频缓冲逐帧同步。
 - 预设携带的深浅偏好只随预设正文走：**导出 / 导入的往返不含该段**，分享出去的预设不会改对方的深浅主题。
 
 ![侧栏玻璃与字体适配](https://github.com/elysia395/dsh-wallpaper-engine/releases/download/media-v1/better-sidebar-font.png)
@@ -346,7 +347,7 @@ macOS 没有 Wallpaper Engine 官方客户端。可以上传图片 / 视频，�
 | 贡献者 | 贡献 |
 |---|---|
 | [elysia395](https://github.com/elysia395) | 项目发起与维护、版本发布、预设策展、公告与社区维护 |
-| [Fish-under-sea](https://github.com/Fish-under-sea) | 当前灰测分支维护与集成；整套预设及资产导入 / 导出、吉祥物 3D 转盘与分节布局；源码部署和发布闭包修复、官方 dsh-pet 桥接、自绘气泡、联动排播与调参，移除内置 pet 并补齐回归和文档（[#173](https://github.com/elysia395/dsh-wallpaper-engine/pull/173)、[#180](https://github.com/elysia395/dsh-wallpaper-engine/pull/180)、[集成 PR #251](https://github.com/elysia395/dsh-wallpaper-engine/pull/251)；部分最新源码尚未提交或发布） |
+| [Fish-under-sea](https://github.com/Fish-under-sea) | 当前灰测分支维护与集成；整套预设及资产导入 / 导出、吉祥物 3D 转盘与分节布局；源码部署和发布闭包修复、桌宠联动（dsh-pet 桥接 → dsh-pet-dshwe 双 provider）、自绘气泡、联动排播与调参、安装事务与设置页卡片，移除内置 pet 并补齐回归和文档（[#173](https://github.com/elysia395/dsh-wallpaper-engine/pull/173)、[#180](https://github.com/elysia395/dsh-wallpaper-engine/pull/180)、[集成 PR #251](https://github.com/elysia395/dsh-wallpaper-engine/pull/251)；部分最新源码尚未提交或发布） |
 | [YV3507](https://github.com/YV3507) | 早期场景渲染与静态帧修复、液态玻璃令牌、实时帧链路、架构重构、文档与回归守卫；整合社区 PR（含 [#181](https://github.com/elysia395/dsh-wallpaper-engine/pull/181)） |
 | [oneincase](https://github.com/oneincase) | [WebWallGL](https://github.com/oneincase/webwallgl) 与 [media-bridge](https://github.com/oneincase/media-bridge) 作者；实时渲染、三平台媒体链路、壁纸属性及合成 / 性能修复（[#103](https://github.com/elysia395/dsh-wallpaper-engine/pull/103)、[#104](https://github.com/elysia395/dsh-wallpaper-engine/pull/104)、[#165](https://github.com/elysia395/dsh-wallpaper-engine/pull/165)） |
 | [yuxilao](https://github.com/yuxilao) | Linux scene-gl 实时渲染探索、性能优化、轮换交接、GPU 帧回填与官方资源路径（[#65](https://github.com/elysia395/dsh-wallpaper-engine/pull/65)、[#108](https://github.com/elysia395/dsh-wallpaper-engine/pull/108)） |
@@ -376,7 +377,7 @@ macOS 没有 Wallpaper Engine 官方客户端。可以上传图片 / 视频，�
 
 ### 跨项目联动与形象创作
 
-- **[PC2005-cloud / dsh-pet](https://github.com/PC2005-cloud/dsh-pet)**：感谢官方桌宠项目提供控制接口、同页位置与播放进度服务，并参与 [联动接口讨论 #122](https://github.com/PC2005-cloud/dsh-pet/issues/122)。本插件通过公开接口完成联动，不分发或修改官方 pet 运行时。
+- **[PC2005-cloud / dsh-pet](https://github.com/PC2005-cloud/dsh-pet)**：感谢官方桌宠项目提供控制接口、同页位置与播放进度服务，并参与 [联动接口讨论 #122](https://github.com/PC2005-cloud/dsh-pet/issues/122)。本插件通过公开接口完成联动；运行时侧使用社区维护的全量 fork [dsh-pet-dshwe](https://github.com/Fish-under-sea/dsh-pet-dshwe)（身份独立、与官方可共存），不分发或修改官方 pet 运行时。
 - **B 站 UP 主 [ZipZipPipe](https://space.bilibili.com/4168597)**：感谢其制作的 **AI 娘二创形象**，为我们的新吉祥物提供形象基础。此处署名是创作致谢，不把角色认定为模型厂商官方形象，也不把素材自动改授为 MIT。
 - **素材与原始角色作者**：感谢项目图标、菲比啾比、联动配图、字体及相关二创链条的创作者。代码许可与角色 / 图像许可分别适用；再分发或商用需核对对应素材授权，不能仅依据本仓代码许可证。
 

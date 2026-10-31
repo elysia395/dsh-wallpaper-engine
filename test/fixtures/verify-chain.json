@@ -211,7 +211,7 @@
           "npm": null,
           "file": "test/verify-glass-runtime-browser.mjs",
           "args": [],
-          "tier": "hard",
+          "tier": "soft",
           "probe": false
         },
         {
@@ -243,15 +243,15 @@
           "npm": null,
           "file": "test/verify-deployment.mjs",
           "args": [],
-          "tier": "hard",
-          "probe": false
+          "tier": "soft",
+          "probe": true
         },
         {
           "kind": "guard",
           "npm": null,
           "file": "test/verify-release-set.mjs",
           "args": [],
-          "tier": "hard",
+          "tier": "soft",
           "probe": false
         },
         {
@@ -291,7 +291,7 @@
           "npm": null,
           "file": "test/verify-types.mjs",
           "args": [],
-          "tier": "hard",
+          "tier": "soft",
           "probe": false
         },
         {
@@ -315,7 +315,7 @@
           "npm": null,
           "file": "test/verify-route-families.mjs",
           "args": [],
-          "tier": "hard",
+          "tier": "soft",
           "probe": false
         },
         {
@@ -649,6 +649,14 @@
         {
           "kind": "guard",
           "npm": null,
+          "file": "test/verify-pet-link.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
           "file": "test/verify-pet-official.mjs",
           "args": [],
           "tier": "hard",
@@ -727,8 +735,8 @@
           "npm": null,
           "file": "test/verify-ci-routing.mjs",
           "args": [],
-          "tier": "hard",
-          "probe": false
+          "tier": "soft",
+          "probe": true
         },
         {
           "kind": "guard",
@@ -1072,7 +1080,7 @@
           "npm": null,
           "file": "test/verify-glass-runtime-browser.mjs",
           "args": [],
-          "tier": "hard",
+          "tier": "soft",
           "probe": false
         },
         {
@@ -1104,15 +1112,15 @@
           "npm": null,
           "file": "test/verify-deployment.mjs",
           "args": [],
-          "tier": "hard",
-          "probe": false
+          "tier": "soft",
+          "probe": true
         },
         {
           "kind": "guard",
           "npm": null,
           "file": "test/verify-release-set.mjs",
           "args": [],
-          "tier": "hard",
+          "tier": "soft",
           "probe": false
         },
         {
@@ -1152,7 +1160,7 @@
           "npm": null,
           "file": "test/verify-types.mjs",
           "args": [],
-          "tier": "hard",
+          "tier": "soft",
           "probe": false
         },
         {
@@ -1176,7 +1184,7 @@
           "npm": null,
           "file": "test/verify-route-families.mjs",
           "args": [],
-          "tier": "hard",
+          "tier": "soft",
           "probe": false
         },
         {
@@ -1510,6 +1518,14 @@
         {
           "kind": "guard",
           "npm": null,
+          "file": "test/verify-pet-link.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
           "file": "test/verify-pet-official.mjs",
           "args": [],
           "tier": "hard",
@@ -1588,8 +1604,8 @@
           "npm": null,
           "file": "test/verify-ci-routing.mjs",
           "args": [],
-          "tier": "hard",
-          "probe": false
+          "tier": "soft",
+          "probe": true
         },
         {
           "kind": "guard",

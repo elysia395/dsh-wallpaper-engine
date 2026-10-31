@@ -1,295 +1,236 @@
-/** 官方原生联动。只读同页服务，所有宠物写操作经宿主协调器，不查询或改写宠物 DOM。 */
-const PET_BASE = '/dsh-pet-7340';
-const PET_ANIM = {
-  walkRight: '通用-右侧螃蟹步-dshwe', walkLeft: '通用-左侧螃蟹步-dshwe',
-  brace: '侧边栏-蓄力准备往后拉-dshwe', pull: '侧边栏-后拉接疲态结束-dshwe',
-  mascotTumble: '吉祥物-跳抓眩晕落地起身-dshwe', eggKick: '彩蛋-侧边栏-半身转向踢腿-dshwe',
-  eggFlung: '彩蛋-侧边栏-被弹飞-dshwe', eggLand: '彩蛋-侧边栏-落地-dshwe', eggHiss: '彩蛋-吉祥物-哈气-dshwe',
-};
-const PET_HOLD = { walkRight: 5167, walkLeft: 5167, brace: 5167, pull: 10125,
-  mascotTumble: 8000, eggKick: 5167, eggFlung: 10125, eggLand: 5167, eggHiss: 5167 };
-const PET_TUNE_DEFAULTS = {
-  sidebarWalkMs: 5167, braceMs: 1000, slowOpenMs: 8125, openDelayMs: 500,
-  bubbleMs: 3000, holdMaxMs: 180000, eggAt: 3, mascotOpenAtMs: 2500,
-  mascotRopeDownPx: 40, mascotReleaseAtMs: 2920, egg1FlingPower: 1,
-  egg1LeadMs: 600, egg1PostLandMs: 600, egg2LeadMs: 600, egg2OpenAtPct: 35,
-};
-const PET_TUNER_LOGICS = ['sidebar', 'mascot', 'egg1', 'egg2'];
-const PET_BUBBLE_SPECS = [
-  { id: 'sidebar', logic: 'sidebar', image: 0, text(weT = value => value) { return weT('累死本鲸了，给我添两碗饭'); } },
-  { id: 'mascot', logic: 'mascot', image: 1, text(weT = value => value) { return weT('可以换壁纸了，不要用××√哦'); } },
-  { id: 'egg1Angry', logic: 'egg1', image: 2, text(weT = value => value) { return weT('偶鲸鲸！！！'); } },
-  { id: 'egg1Land', logic: 'egg1', image: 3, text(weT = value => value) { return weT('哇啊啊啊啊啊！！！'); } },
-  { id: 'egg2', logic: 'egg2', image: 4, text(weT = value => value) { return weT('？！欺负一只肥鱼！？'); } },
-];
-
-function createOfficialPetPerformer(options) {
-  const now = options.now || Date.now;
-  const later = options.setTimeout || setTimeout;
-  const clear = options.clearTimeout || clearTimeout;
+/**
+ * 桌宠联动（浏览器半）装配层 · 双 provider。
+ *
+ * 这一层只做「接线 + 状态机路由」：
+ *   · `petLinkMode()` 判定 linked / native（判定在 `pet-link/mode.js`）；
+ *   · linked → `createLinkedPetProvider`（四条排播直控 `petApiDshwe.link`）；
+ *   · native → `createNativePetProvider`（回落主包原生吉祥物）。
+ *
+ * 对外形状与主包 `src/client.js` 的 `petLink` 门面（mascot.tap / registerGesture /
+ * registerSidebar / performer.onGrab / performer.onPull / warmup / dispose）逐字对齐，
+ * 主包吉祥物代码零改动。运行期依赖全部注入，夹具可脱浏览器单测。
+ *
+ * @param {object} options - 全部可注入的运行时依赖。
+ * @returns 与主包门面对齐的联动服务（另含 tuner 编程面与 detect 诊断面）。
+ */
+function createPetLink(options = {}) {
+  const now = options.now
+    || (() => (typeof performance !== 'undefined' && typeof performance.now === 'function' ? performance.now() : Date.now()));
+  const later = options.setTimeout || ((fn, ms) => setTimeout(fn, ms));
+  const clear = options.clearTimeout || (id => clearTimeout(id));
   const wait = options.wait || (ms => new Promise(resolve => later(resolve, ms)));
-  const view = options.viewport || (() => ({ width: window.innerWidth, height: window.innerHeight }));
-  const doc = options.document || (typeof document === 'undefined' ? null : document);
-  const storage = options.storage === undefined ? (typeof localStorage === 'undefined' ? null : localStorage) : options.storage;
-  const storageKey = 'dsh-we-official-pet-target';
-  let target = 'main';
-  try { target = storage?.getItem(storageKey) || target; } catch { /* 私密模式仍可用。 */ }
-  const state = { available: false, reason: 'official-unavailable', pets: [], epoch: 0, busy: false,
-    phase: 'idle', logic: '', farCount: 0, nearCount: 0, tuning: {}, bubbleTiming: {}, timer: null,
-    client: null, sidebar: null, disposed: false, home: null, activeLogic: 'sidebar' };
-  const tune = (key, logic = state.activeLogic) => state.tuning[logic]?.[key] ?? PET_TUNE_DEFAULTS[key];
-  const service = () => { try { return options.getContext()?.get('petApi7340') || null; } catch { return null; } };
-  const pet = () => state.pets.find(item => item.id === target);
-  const pose = () => { try { return service()?.pose(target) || null; } catch { return null; } };
-  function ensureClient() {
-    if (!state.client) state.client = createOfficialPetClient({ get: () => service() }, {
-      ...options, document: doc, viewport: view, sizeOf: () => pet()?.size,
-    });
-    return state.client;
-  }
-  async function probe() {
-    const epoch = state.epoch;
+  const viewport = options.viewport || (() => ({
+    width: typeof window !== 'undefined' ? window.innerWidth : 1280,
+    height: typeof window !== 'undefined' ? window.innerHeight : 800,
+  }));
+  const doc = options.document || (typeof document !== 'undefined' ? document : null);
+  const translate = options.translate || (value => value);
+  const storage = options.storage === undefined
+    ? (typeof localStorage !== 'undefined' ? localStorage : null)
+    : options.storage;
+  const getApi = options.getApi || (() => null);
+  const fallback = options.fallback || (() => false);
+  const playAnim = options.playAnim || (async () => false);
+  const wake = options.wake || (async () => false);
+  const rope = options.rope || { point: () => null, moveRope() {}, restoreRope() {} };
+  const bubbleUrl = options.bubbleUrl || (index => 'm' + index + '.png');
+
+  const TARGET_KEY = 'dsh-pet-link-target';
+  const initialTarget = (() => {
     try {
-      const result = await options.fetchTargets();
-      if (epoch !== state.epoch || state.disposed) return false;
-      state.pets = result?.ok && Array.isArray(result.pets) ? result.pets : [];
-      const api = service(), chosen = pet();
-      state.reason = !result?.ok ? result?.reason || 'official-unavailable'
-        : !chosen ? 'unknown-pet'
-          : !['web', 'both'].includes(chosen.display) ? 'pet-not-displayed'
-            : !api || typeof api.pose !== 'function' || typeof api.progress !== 'function' || !pose()
-              ? 'client-service-unavailable' : '';
-      state.available = !state.reason;
-    } catch { state.available = false; state.reason = 'official-unavailable'; }
-    return state.available;
-  }
-  const clamp = value => Math.max(0, Math.min(1, value));
-  function point() {
-    const value = pose();
-    if (!value || ![value.x, value.y].every(Number.isFinite)) throw new Error('pose-unavailable');
-    return value;
-  }
-  function sidebarCall(method, ...args) {
-    const fn = state.sidebar?.[method];
-    return typeof fn === 'function' ? fn(...args) : undefined;
-  }
-  function cancel() {
-    state.epoch++; state.busy = false;
-    const oldClient = state.client;
-    state.client = null;
-    oldClient?.dispose();
-    sidebarCall('commit');
-    options.restoreRope?.();
-  }
-  function fallback() {
-    let handled = false;
-    try { handled = options.fallback() === true; } catch { /* 不影响壁纸主界面。 */ }
-    return { logic: 'disabled', phase: 'done', busy: false, fallback: handled, reason: state.reason };
-  }
-  async function run(logic, gesture = false) {
-    if (state.busy) return { logic: 'busy', busy: true };
-    if (!PET_TUNER_LOGICS.includes(logic) && !gesture) return { logic: 'invalid', busy: false };
-    state.busy = true;
-    const epoch = state.epoch;
-    const alive = () => epoch === state.epoch && !state.disposed && Boolean(pose());
-    const check = () => { if (!alive()) throw new Error('run-lost'); };
-    const assertResult = result => { if (!result?.ok) throw new Error(result?.reason || 'official-unavailable'); };
-    let client, released = false, openedSidebar = false;
-    const openSidebar = () => { openedSidebar = true; sidebarCall('open'); };
-    try {
-      if (!await probe() || !alive()) return gesture ? { logic: 'disabled', busy: false } : fallback();
-      client = ensureClient();
-      assertResult(await client.begin(target)); check();
-      state.home = point(); state.logic = logic; state.activeLogic = logic;
-      const hooks = new Set();
-      const shown = new Map();
-      const hide = id => { if (shown.has(id)) { client.hideBubble(); shown.clear(); } };
-      const show = id => {
-        const spec = PET_BUBBLE_SPECS.find(item => item.id === id);
-        if (!spec) return;
-        shown.clear(); shown.set(id, now());
-        client.showBubble({ text: spec.text(options.translate), image: spec.image, duration: Math.max(1, tune('bubbleMs')) });
-      };
-      const node = (action, seconds, duration) => {
-        for (const spec of PET_BUBBLE_SPECS.filter(item => item.logic === logic)) {
-          const config = state.bubbleTiming[spec.id];
-          for (const edge of ['show', 'hide']) {
-            const rule = config?.[edge];
-            if (!rule || rule.action !== action || hooks.has(spec.id + edge)) continue;
-            const at = (rule.edge === 'end' ? duration * 1000 : 0) + rule.offsetMs;
-            if (seconds * 1000 < at) continue;
-            hooks.add(spec.id + edge);
-            if (edge === 'show') show(spec.id); else hide(spec.id);
-          }
-        }
-      };
-      const defaultShow = id => { if (!state.bubbleTiming[id]?.show) show(id); };
-      const defaultHide = id => { if (!state.bubbleTiming[id]?.hide) hide(id); };
-      const clip = async (key, tick, limitMs = null) => {
-        check(); state.phase = key;
-        const current = point();
-        assertResult(await client.play(PET_ANIM[key], current.facing === 'right' ? 'right' : 'left')); check();
-        const deadline = now() + Math.max(30000, PET_HOLD[key] + 20000);
-        let started = false;
-        while (alive() && now() < deadline) {
-          const p = client.progress();
-          if (p && Number.isFinite(p.currentTime) && Number.isFinite(p.duration) && p.duration > 0) {
-            started = true;
-            node(key, p.currentTime, p.duration);
-            if (tick) await tick(p.currentTime * 1000, p.duration * 1000);
-            if (p.currentTime >= p.duration - 0.045 || (limitMs !== null && p.currentTime * 1000 >= limitMs)) return;
-          } else if (started) throw new Error('playback-replaced');
-          await wait(32);
-        }
-        throw new Error('playback-timeout');
-      };
-      const move = async (destination, duration = 600) => {
-        check();
-        assertResult(await client.position(clamp(destination.x), clamp(destination.y), 'line', duration));
-        check();
-      };
-      const walk = async destination => {
-        const current = point();
-        const key = destination.x < current.x ? 'walkLeft' : 'walkRight';
-        let moving = false;
-        await clip(key, async () => { if (!moving) { moving = true; await move(destination, tune('sidebarWalkMs')); } });
-      };
-      const edgePoint = () => {
-        const width = view().width;
-        const edge = sidebarCall('edgeX');
-        return { x: clamp(((Number.isFinite(edge) ? edge : width) - Number(pet()?.size || 180) * 0.15) / width), y: point().y };
-      };
-      if (gesture) {
-        await clip(logic === 'grab' ? 'brace' : 'pull', null, logic === 'grab' ? tune('braceMs') : null);
-      } else if (logic === 'sidebar') {
-        await walk(edgePoint());
-        await clip('brace', null, tune('braceMs'));
-        let opened = false;
-        await clip('pull', async ms => {
-          if (!opened && ms >= tune('openDelayMs')) {
-            opened = true; sidebarCall('beginPull', tune('slowOpenMs')); openSidebar();
-            await move(edgePoint(), tune('slowOpenMs'));
-          }
-        });
-        if (!opened) openSidebar();
-        sidebarCall('commit'); defaultShow('sidebar');
-      } else if (logic === 'mascot') {
-        const rope = options.ropePoint?.() || { x: 0.25, y: point().y };
-        await walk({ x: clamp(rope.x), y: point().y });
-        let opened = false;
-        await clip('mascotTumble', ms => {
-          if (!opened && ms >= tune('mascotOpenAtMs')) { opened = true; openSidebar(); }
-          const pull = ms >= tune('mascotOpenAtMs') && ms < tune('mascotReleaseAtMs');
-          options.moveRope?.(pull ? tune('mascotRopeDownPx') : 0);
-        });
-        if (!opened) openSidebar();
-        options.restoreRope?.(); defaultShow('mascot');
-      } else if (logic === 'egg1') {
-        await walk(edgePoint()); defaultShow('egg1Angry');
-        await wait(tune('egg1LeadMs')); check(); await clip('eggKick'); defaultHide('egg1Angry');
-        let thrown = false;
-        await clip('eggFlung', async () => {
-          if (!thrown) { thrown = true; assertResult(await client.throwPet(155, tune('egg1FlingPower'))); sidebarCall('rebound', true, 240); }
-        });
-        defaultShow('egg1Land'); await clip('eggLand'); defaultHide('egg1Land');
-        openSidebar(); await wait(tune('egg1PostLandMs')); check();
-      } else {
-        defaultShow('egg2'); await wait(tune('egg2LeadMs')); check();
-        let opened = false;
-        await clip('eggHiss', (ms, duration) => {
-          if (!opened && ms >= duration * tune('egg2OpenAtPct') / 100) { opened = true; openSidebar(); }
-        });
-        if (!opened) openSidebar(); defaultHide('egg2');
+      if (typeof options.targetId === 'function') {
+        const value = String(options.targetId() ?? '').trim();
+        if (value) return value;
       }
-      check();
-      assertResult(await client.finish()); released = true;
-      if (!gesture && ['sidebar', 'mascot'].includes(logic)) {
-        state.phase = 'waiting';
-        const deadline = now() + tune('holdMaxMs');
-        while (alive() && sidebarCall('isOpen') === true && now() < deadline) await wait(100);
-      }
-      if (!gesture && alive() && logic !== 'egg2') {
-        // 等待期间已归还官方唯一锁；回程重新申请，不强占用户或其他插件的新锁。
-        assertResult(await client.begin(target)); released = false;
-        await walk(state.home);
-        assertResult(await client.finish()); released = true;
-      }
-      state.phase = 'done';
-      return { logic, phase: 'done', busy: false };
-    } catch (error) {
-      if (epoch === state.epoch) {
-        state.reason = error.message || 'official-unavailable'; state.phase = 'cancelled';
-        if (!gesture && !released && !openedSidebar) { try { options.fallback(); } catch { /* 保留主交互。 */ } }
-      }
-      return { logic, phase: 'cancelled', busy: false, reason: error.message || 'official-unavailable' };
-    } finally {
-      if (client && !released) { client.hideBubble(); await client.finish(); }
-      if (epoch === state.epoch) { state.busy = false; sidebarCall('commit'); options.restoreRope?.(); }
-    }
-  }
-  async function warmup() {
-    state.disposed = false;
-    clear(state.timer); state.timer = null;
-    const result = await probe();
-    return result;
-  }
-  const snapshot = () => ({ available: state.available, reason: state.reason, busy: state.busy,
-    phase: state.phase, logic: state.logic, target, pets: state.pets.map(item => ({ ...item })),
-    farCount: state.farCount, nearCount: state.nearCount, home: state.home });
-  const result = {
-    names: PET_ANIM, warmup,
-    dispose() { state.disposed = true; clear(state.timer); state.timer = null; cancel(); state.client?.dispose(); state.client = null; },
-    mascot: {
-      async tap() {
-        if (state.busy) return { logic: 'busy', busy: true };
-        if (!await probe()) return fallback();
-        const p = point(), rope = options.ropePoint?.() || { x: 0.25, y: p.y };
-        let logic = Math.abs(p.x - rope.x) < Math.abs(p.x - 1) ? 'mascot' : 'sidebar';
-        const key = logic === 'sidebar' ? 'farCount' : 'nearCount';
-        if (++state[key] >= tune('eggAt', logic)) { state[key] = 0; logic = logic === 'sidebar' ? 'egg1' : 'egg2'; }
-        return run(logic);
-      }, snapshot,
-      registerSidebar(api) { if (!api && state.busy) cancel(); state.sidebar = api; },
-      registerGesture(fn) { state.cancelGesture = fn; return () => { if (state.cancelGesture === fn) state.cancelGesture = null; }; },
-      reset() { state.farCount = 0; state.nearCount = 0; },
+      const stored = storage ? storage.getItem(TARGET_KEY) : null;
+      if (stored && String(stored).trim()) return String(stored).trim();
+    } catch { /* 私密模式仍可用 */ }
+    return 'main';
+  })();
+
+  /** 共享状态：两只 provider 与 tuner 都读写这一份。 */
+  const state = {
+    target: initialTarget,
+    busy: false,
+    phase: 'idle',
+    logic: '',
+    home: null,
+    farCount: 0,
+    nearCount: 0,
+    tuning: {},
+    bubbleTiming: {},
+    sidebar: null,
+    cancelGesture: null,
+    epoch: 0,
+    disposed: false,
+    mode: 'native',
+    reason: '',
+    pool: null,
+  };
+
+  const bubble = createPetLinkBubble({
+    document: doc,
+    viewport,
+    bubbleUrl,
+    requestAnimationFrame: options.requestAnimationFrame,
+    cancelAnimationFrame: options.cancelAnimationFrame,
+    setTimeout: later,
+    clearTimeout: clear,
+  });
+
+  const rt = {
+    now,
+    wait,
+    viewport,
+    translate,
+    state,
+    getApi,
+    playAnim,
+    wake,
+    rope,
+    fallback,
+    bubble,
+    getState: () => {
+      try {
+        const api = getApi();
+        return api && typeof api.getState === 'function' ? api.getState() : null;
+      } catch { return null; }
     },
-    performer: {
-      onGrab() { return run('grab', true).then(value => value.phase === 'done'); },
-      onPull(progress) { return Number.isFinite(progress) && progress >= 0.12 ? run('pull', true).then(value => value.phase === 'done') : Promise.resolve(false); },
-      onRelease() { return Promise.resolve(false); }, snapshot,
-    },
-    tuner: {
-      run: logic => run(logic), snapshot: () => ({ ...snapshot(), defaults: { ...PET_TUNE_DEFAULTS }, logicTuning: structuredClone(state.tuning), bubbleTiming: structuredClone(state.bubbleTiming) }),
-      cancel,
-      setTarget(id) {
-        if (typeof id !== 'string' || !id.trim() || id !== id.trim() || id.length > 128 || /[\u0000-\u001f]/.test(id)) return false;
-        cancel(); target = id; state.available = false; state.reason = 'target-changed';
-        try { storage?.setItem(storageKey, id); } catch { /* 当前页选择仍生效。 */ }
-        return true;
-      },
-      setForLogic(logic, key, value) {
-        if (!PET_TUNER_LOGICS.includes(logic) || !(key in PET_TUNE_DEFAULTS) || !Number.isFinite(value) || value < 0 || value > 180000) return false;
-        if (key === 'egg1FlingPower' && (value <= 0 || value > 10)) return false;
-        if (key === 'egg2OpenAtPct' && value > 100) return false;
-        if (key === 'eggAt' && (!Number.isInteger(value) || value < 1)) return false;
-        state.tuning[logic] ??= {}; state.tuning[logic][key] = value; return true;
-      },
-      setBubbleTiming(id, config) {
-        if (!PET_BUBBLE_SPECS.some(item => item.id === id) || !config || typeof config !== 'object') return false;
-        for (const edge of ['show', 'hide']) {
-          const rule = config[edge];
-          if (rule && (!(rule.action in PET_ANIM) || !['start', 'end'].includes(rule.edge) || !Number.isFinite(rule.offsetMs) || Math.abs(rule.offsetMs) > 180000)) return false;
-        }
-        state.bubbleTiming[id] = structuredClone(config); return true;
-      },
-      reset(logic) {
-        if (logic) {
-          delete state.tuning[logic];
-          for (const spec of PET_BUBBLE_SPECS.filter(item => item.logic === logic)) delete state.bubbleTiming[spec.id];
-        } else { state.tuning = {}; state.bubbleTiming = {}; }
-        return result.tuner.snapshot();
-      },
+    /** 让宠物自己说话（`POST /broadcast`）：气泡由运行时渲染，样式与位置才是"原版"。 */
+    say: options.say || (async () => false),
+    /**
+     * 桌面端写位：`surface === 'desktop'` 时，页面内 `adoptPosition` 控不到独立桌面窗口里的那只，
+     * 位置必须走宿主 HTTP `POST /position?surface=desktop`（实现见 packages/pet-link/src/client.js）。
+     */
+    positionDesktop: options.positionDesktop || (() => {}),
+    /** 诊断上报（浏览器 → 宿主日志）：桌面版没有 DevTools，运行期真值必须走这条。 */
+    reportDiag: options.reportDiag || (() => {}),
+    detect: () => {
+      const detected = detectPetLinkProvider({
+        isEnabled: options.isEnabled || (() => true),
+        getApi,
+        targetId: () => state.target,
+      });
+      state.mode = detected.mode;
+      state.reason = detected.reason;
+      return detected;
     },
   };
-  return result;
+
+  const linked = createLinkedPetProvider(rt);
+  const native = createNativePetProvider(rt);
+  /** 按当刻判定路由到 provider；判定本身已在各 provider 内重做（幂等）。 */
+  const active = () => (rt.detect().mode === 'linked' ? linked : native);
+
+  /** 编程调参面（浮层面板属 M6；这一层只给面板/诊断用的读写口）。 */
+  const tuner = {
+    run: logic => active().run(logic),
+    cancel() {
+      state.epoch += 1;
+      state.busy = false;
+      state.phase = 'cancelled';
+      if (typeof linked.cancel === 'function') linked.cancel();
+    },
+    snapshot: () => {
+      const base = active().snapshot();
+      return { ...base, defaults: { ...PETLINK_DEFAULTS }, logicTuning: clone(state.tuning), bubbleTiming: clone(state.bubbleTiming),
+        // 运行时实测的素材可视边界（null = 尚未测到）：面板据此显示"真实数据"。
+        alphaBounds: state.alphaBounds || null };
+    },
+    setTarget(id) {
+      if (typeof id !== 'string' || !id.trim() || id !== id.trim() || id.length > 128 || /[\u0000-\u001f]/.test(id)) return false;
+      if (typeof linked.cancel === 'function') linked.cancel();
+      state.target = id;
+      state.mode = 'native';
+      state.reason = 'target-changed';
+      try { if (storage) storage.setItem(TARGET_KEY, id); } catch { /* 当前页选择仍生效 */ }
+      return true;
+    },
+    setForLogic(logic, key, value) {
+      if (!PETLINK_TUNER_LOGICS.includes(logic) || !(key in PETLINK_DEFAULTS)) return false;
+      // 间距类参数允许负值：`edgeGapPx` 的默认值本来就是 **-15**（把宠物的手往侧栏里压一点），
+      // `egg1EdgeGapPx` 同理。早先统一用 `value < 0` 拒绝，等于这两个键永远改不出负值
+      // （面板里一填就被清空，用户反馈"没办法改负数"）。
+      const allowsNegative = key === 'edgeGapPx' || key === 'egg1EdgeGapPx';
+      const lowerBound = allowsNegative ? -1000 : 0;
+      if (!Number.isFinite(value) || value < lowerBound || value > 180000) return false;
+      if (key === 'egg1FlingPower' && (value <= 0 || value > 10)) return false;
+      if (key === 'egg2OpenAtPct' && value > 100) return false;
+      if (key === 'eggAt' && (!Number.isInteger(value) || value < 1)) return false;
+      state.tuning[logic] = state.tuning[logic] || {};
+      state.tuning[logic][key] = value;
+      return true;
+    },
+    setBubbleTiming(id, config) {
+      if (!PETLINK_BUBBLE_SPECS.some(item => item.id === id) || !config || typeof config !== 'object') return false;
+      for (const edge of ['show', 'hide']) {
+        const rule = config[edge];
+        if (!rule) continue;
+        // 允许的动作：任一素材段键（PETLINK_ANIM）、'default'（保持默认）、'duration'（按显示时长，仅 hide 面板提供）。
+        // 旧校验只认 PETLINK_ANIM 键，会把面板的「按显示时长(duration)」拒之门外 ⇒ 可编辑却存不进。
+        const actionOk = (rule.action in PETLINK_ANIM) || rule.action === 'default' || rule.action === 'duration';
+        // offsetMs 上限与蓝本 PET_TUNE_DEFAULTS 一致（600000）；T12 的 timeOf 已能处理大偏移。
+        if (!actionOk || !['start', 'end'].includes(rule.edge) || !Number.isFinite(rule.offsetMs) || Math.abs(rule.offsetMs) > 600000) return false;
+      }
+      state.bubbleTiming[id] = clone(config);
+      return true;
+    },
+    reset(logic) {
+      if (logic) {
+        delete state.tuning[logic];
+        for (const spec of PETLINK_BUBBLE_SPECS.filter(item => item.logic === logic)) delete state.bubbleTiming[spec.id];
+      } else {
+        state.tuning = {};
+        state.bubbleTiming = {};
+      }
+      return tuner.snapshot();
+    },
+  };
+
+  return {
+    /** 双 provider 状态机：'linked' | 'native'（会刷新 state.mode / state.reason）。 */
+    mode: () => rt.detect().mode,
+    /** 最近一次判定的降级原因（linked 可用时为空串）。 */
+    reason: () => state.reason,
+    /** 诊断面：完整判定结果（含 link / target）。 */
+    detect: () => rt.detect(),
+    warmup: async () => rt.detect().mode === 'linked',
+    tap: () => active().tap(),
+    mascot: {
+      tap: () => active().tap(),
+      registerGesture: fn => linked.registerGesture(fn),
+      registerSidebar: api => {
+        state.sidebar = api || null;
+        linked.registerSidebar(api);
+      },
+      reset: () => { state.farCount = 0; state.nearCount = 0; },
+      snapshot: () => active().snapshot(),
+    },
+    performer: {
+      onGrab: () => linked.performer.onGrab(),
+      onPull: ratio => linked.performer.onPull(ratio),
+      onRelease: () => linked.performer.onRelease(),
+      snapshot: () => active().snapshot(),
+    },
+    tuner,
+    /** 诊断上报出口：面板写值被拒 / 让宠物说话失败等，统一走宿主日志（桌面版无 DevTools）。 */
+    reportDiag: payload => { try { rt.reportDiag?.(payload); } catch { /* 诊断不许影响业务 */ } },
+    snapshot: () => active().snapshot(),
+    getState: () => linked.getState(),
+    dispose() {
+      state.disposed = true;
+      state.epoch += 1;
+      if (typeof linked.cancel === 'function') linked.cancel();
+      if (bubble && typeof bubble.dispose === 'function') bubble.dispose();
+      if (rope && typeof rope.restoreRope === 'function') rope.restoreRope();
+    },
+  };
+}
+
+/** 结构化克隆（避免把内部对象引用漏给调用方）；无 structuredClone 时退回 JSON。 */
+function clone(value) {
+  try {
+    if (typeof structuredClone === 'function') return structuredClone(value);
+    return JSON.parse(JSON.stringify(value));
+  } catch { return {}; }
 }

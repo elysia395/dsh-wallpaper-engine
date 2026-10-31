@@ -325,13 +325,29 @@ export function parseModuleContract(raw, rel) {
   //   两者与原文**等长** ⇒ 偏移可直接互换（行号也一直是对的）。
   const text = neutralize(raw);
   const idText = stripComments(String(raw));
-  const fnM = /export\s+function\s+([A-Za-z_$][\w$]*)\s*\(([^()]*)\)\s*\{/.exec(text);
-  if (!fnM) return { rel, ok: false, reason: '没找到 `export function <名>(…) {`（本守卫只认这一种入口形态）' };
-  const fnName = fnM[1];
-  const registerOpenParen = fnM.index + fnM[0].indexOf('(');
-  const registerEnd = matchBrace(text, fnM.index + fnM[0].length - 1);
+  // 入口函数的选择：**优先认路由族的注册入口形态** `export function register<X>Routes(webServer, …)`，
+  // 而不是"文件里第一个 export function"。
+  // ⚠️ 实测坑（t17）：`routes/pet-install.js` 在注册入口之前还导出了一个 helper `isSameOrigin`，
+  //   按"第一个 export function"会把它当成族入口 ⇒ 消费面算成它读的 `webServer.port/register`、
+  //   声明面 `DEPS=['disposers','base','http']` 全被判成"声明了没消费"（其实是以错函数为准的假红）。
+  //   路由族入口的定义与 `host-route-index` 的 `ROUTE_ENTRY_RE` 同源：`register…Routes(webServer`。
+  //   认不到时退回旧的"第一个 export function"，保证既有单族模块与非路由探针仍可解析。
+  const entryM = /export\s+function\s+(register[A-Za-z_$][\w$]*Routes)\s*\(\s*webServer\b/.exec(text);
+  const fnM = entryM
+    ? /export\s+function\s+([A-Za-z_$][\w$]*)\s*\(([^()]*)\)\s*\{/.exec(text.slice(entryM.index))
+    : null;
+  const fnMatch = fnM
+    ? { name: fnM[1], params: fnM[2], index: entryM.index, openParen: entryM.index + fnM[0].indexOf('('), openBrace: entryM.index + fnM[0].length - 1 }
+    : (() => {
+        const m = /export\s+function\s+([A-Za-z_$][\w$]*)\s*\(([^()]*)\)\s*\{/.exec(text);
+        return m ? { name: m[1], params: m[2], index: m.index, openParen: m.index + m[0].indexOf('('), openBrace: m.index + m[0].length - 1 } : null;
+      })();
+  if (!fnMatch) return { rel, ok: false, reason: '没找到 `export function <名>(…) {`（本守卫只认这一种入口形态）' };
+  const fnName = fnMatch.name;
+  const registerOpenParen = fnMatch.openParen;
+  const registerEnd = matchBrace(text, fnMatch.openBrace);
   if (registerEnd < 0) return { rel, fnName, ok: false, reason: '注册函数的花括号不配对（源码被截断？）' };
-  const params = topLevelSplit(fnM[2], ',').map((p) => p.text.trim()).filter(Boolean);
+  const params = topLevelSplit(fnMatch.params, ',').map((p) => p.text.trim()).filter(Boolean);
   const second = params.length > 1 ? params[1] : '';
   let ctxName = '';
   const signatureKeys = [];
@@ -835,12 +851,17 @@ async function main() {
   const declaredKeys = modules.reduce((n, m) => n + (m.deps ? m.deps.length : 0), 0);
   const withDecl = modules.filter((m) => Array.isArray(m.deps)).length;
   const built = buildIndex();
-  const builtFns = built.modules.map((m) => m.fnName);
+  // 独立索引的 `routeModules()` 目前枚举**每个 export function**（含路由族模块里额外导出的 helper，
+  // 如 `routes/pet-install.js` 的 `isSameOrigin`）；而"路由族"的口径由 `ROUTE_ENTRY_RE` 定义
+  // （`export function register…Routes(webServer`）。逐族对账必须比**族口径**，否则会把 helper
+  // 当成一个没有声明面的族（判据自身制造红）。这里按族名过滤后再比，两向差集仍然照旧有牙。
+  const builtFamilies = built.modules.filter((m) => /^register[A-Za-z_$][\w$]*Routes$/.test(m.fnName));
+  const builtFns = builtFamilies.map((m) => m.fnName);
   const ourFns = [...byFn.keys()];
   check('覆盖面：本守卫解析出的路由模块面 / 函数面 == 独立索引 `buildIndex()` 的面（两个解析器不许互相矛盾）',
-    modules.length > 0 && built.modules.length === modules.length
+    modules.length > 0 && builtFamilies.length === modules.length
     && missingFrom(ourFns, builtFns).length === 0 && missingFrom(builtFns, ourFns).length === 0,
-    '本守卫 ' + modules.length + ' 模块 / ' + ourFns.length + ' 族 · 独立索引 ' + built.modules.length + ' 模块 / ' + builtFns.length + ' 族'
+    '本守卫 ' + modules.length + ' 模块 / ' + ourFns.length + ' 族 · 独立索引(族口径) ' + builtFamilies.length + ' 模块 / ' + builtFns.length + ' 族'
       + (missingFrom(ourFns, builtFns).length ? ' · 本守卫漏了 ' + missingFrom(ourFns, builtFns).join(' ') : '')
       + (missingFrom(builtFns, ourFns).length ? ' · 本守卫多了 ' + missingFrom(builtFns, ourFns).join(' ') : ''));
   check('覆盖面：每个族都有 DEPS 声明面、且每族至少声明 1 个键（空声明面 / 空数组 = 不可对账）',

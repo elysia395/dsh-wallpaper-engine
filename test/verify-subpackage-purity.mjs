@@ -28,6 +28,14 @@
  * dsh.client.inject 声明面）里声明；相对 import 一律不许逃出本包；也不许自引用。
  * 宿主半边 inject 与使用面一致：用了 ctx.<key> 就必须在该文件 export const inject = [...] 里声明；
  * 声明了 inject 的半边必须含 HOST_SERVICE_NAME，子包宿主入口还必须真的从 ctx 取用它。
+ *
+ * ── 可选探测 vs 必需依赖（2026-10-30 修正「判据过严」，见 CORDIS_CONTEXT_API）──────────────
+ * 本判据意图是「防未声明的**必需**服务消费」。但 `ctx.get(name)` 是 Cordis 官方提供的
+ * **不声明 inject 也能读**的入口（reflect.ts: Read a service from the store without the
+ * inject requirement），正是子包「装不装上游插件都能加载」的可选探测手段；
+ * 旧实现把 `ctx.get` 里的方法名 `get` 当成服务名，误判成「未声明依赖」。现在把 Cordis
+ * Context 内建 API 成员排除在「消费的服务名」之外（只排 API，不排业务服务名），
+ * 判据仍能抓住 ctx.webServer / ctx.foo 这类真正的未声明服务（负对照两向都在）。
  * 负对照全部在内存里喂纯函数 purityViolations()。
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
@@ -52,6 +60,29 @@ const relOf = (abs) => relative(ROOT, abs).split(sep).join('/');
 
 /** 工具备份目录名（发行面外）：`lib/pet-link-backups/` 是补丁链的恢复点，不是产品代码。 */
 const SKIP_DIRS = new Set(['node_modules', '.test-cache', 'pet-link-backups']);
+
+/**
+ * Cordis Context 的**内建 API 成员**（不是可注入服务）：读取它们不构成「消费某个服务」，
+ * 因此不要求在 inject 里声明。真源：本机 DSH 实际使用的 @deepseek-ai/cordis@4.0.5
+ * `src/reflect.ts` 的 mixin 表 ——
+ *   reflect: [get, set, provide, accessor, mixin]
+ *   fiber:   [runtime, effect]
+ *   registry:[inject, plugin]
+ *   events:  [on, once, parallel, emit, serial, bail, waterfall]
+ * 外加 context 自带的 logger / root / intercept。
+ *
+ * ⚠️ 只放 Cordis 自己的 API，**任何业务服务名都不在此列**，所以「未声明消费」判据仍然有牙：
+ *   · `ctx.get('petApiDshwe')` 是**可选探测**（reflect.ts：Read a service from the store
+ *     without the inject requirement）⇒ 不要求声明，也不该被误判成「未声明的必需依赖」；
+ *   · `ctx.webServer` / `ctx.foo` 这种真正的服务读法**照旧判红**（见文末负对照）。
+ */
+const CORDIS_CONTEXT_API = new Set([
+  'get', 'set', 'provide', 'accessor', 'mixin',
+  'runtime', 'effect',
+  'inject', 'plugin',
+  'on', 'once', 'parallel', 'emit', 'serial', 'bail', 'waterfall',
+  'logger', 'root', 'intercept',
+]);
 
 function walkFiles(dir, out) {
   out = out || [];
@@ -251,7 +282,12 @@ function purityViolations(inp) {
       const cre = /\bctx\s*(?:\.\s*([A-Za-z_$][\w$]*)|\[\s*['"]([A-Za-z_$][\w$]*)['"]\s*\])/g;
       let m;
       while ((m = cre.exec(body)) !== null) used.add(m[1] || m[2]);
-      for (const k of used) if (listed.indexOf(k) < 0) bad.push(rel + ' 用了 ctx.' + k + ' 但 inject=[' + listed.join(', ') + '] 里没有声明它（inject 使用面与声明面必须一致）');
+      for (const k of used) {
+        // Cordis Context 内建 API（get / effect / plugin …）不是可注入服务：读取它不等于消费某服务，
+        // 不要求写进 inject（真源见 CORDIS_CONTEXT_API）。业务服务名不在此列，仍按下面这条判红。
+        if (CORDIS_CONTEXT_API.has(k)) continue;
+        if (listed.indexOf(k) < 0) bad.push(rel + ' 用了 ctx.' + k + ' 但 inject=[' + listed.join(', ') + '] 里没有声明它（inject 使用面与声明面必须一致）');
+      }
       if (hostService && !clientSide && listed.indexOf(hostService) < 0) {
         bad.push(rel + ' 宿主半边 export const inject=[' + listed.join(', ') + "] 里没有 '" + hostService + "'（§5.1 ①：子包半边唯一跨包面 = 主包服务名，逐字对账 lib/subpackage-boot.js 的 HOST_SERVICE_NAME）");
       }
@@ -377,6 +413,13 @@ negOk('客户端产物里 require("dsh-plugin-wallpaper-engine") 不判红', [{ 
 negOk('dsh.client.inject 声明的裸包在客户端产物里不判红', [{ rel: 'lib/client.fx.js', text: "const r = require('@deepseek-ai/dsh-client-runtime');\n" }], { pkg: (() => { const p = mkPkg(MOD); p.manifest.dsh = { client: { inject: ['@deepseek-ai/dsh-client-runtime'] } }; return p; })() });
 negOk('inject 声明齐全（含服务名 + 真取用）-> 不触发', [{ rel: 'lib/index.js', text: "export const inject = ['webServer', '" + HOST + "'];\nexport function apply(ctx) { const host = ctx." + HOST + "; ctx.webServer.register({}); host.keys('fx', ctx); }\n" }]);
 negOk('服务名以 ctx["<名>"] 括号取用同样认账', [{ rel: 'lib/index.js', text: "export const inject = ['" + HOST + "'];\nexport function apply(ctx) { const host = ctx['" + HOST + "']; host.keys('fx'); }\n" }]);
+// Cordis 内建 API（ctx.get）是可选探测入口，不是「未声明消费」——不写进 inject 也不判红。
+negOk('ctx.get("可选服务") 不要求 inject 声明（Cordis get 是 API 不是服务；可选探测）',
+  [{ rel: 'lib/index.js', text: "export const inject = ['" + HOST + "'];\nexport function apply(ctx) { const h = ctx." + HOST + "; h.keys('fx'); const o = ctx.get && ctx.get('petApiDshwe'); }\n" }]);
+// 但排除 API 名不能把真正的未声明服务放过去：ctx.foo 仍判红。
+neg('可选探测不掩盖真正的未声明服务：ctx.get(...) 旁的 ctx.foo 仍判红',
+  [{ rel: 'lib/index.js', text: "export const inject = ['" + HOST + "'];\nexport function apply(ctx) { const h = ctx." + HOST + "; const a = ctx.get('x'); ctx.foo.bar(); }\n" }],
+  /用了 ctx\.foo|inject 使用面/);
 neg('宿主半边 inject 里缺服务名判红', [{ rel: 'lib/index.js', text: "export const inject = ['webServer'];\nexport function apply(ctx) { const host = ctx." + HOST + "; ctx.webServer.register({}); host.keys('fx'); }\n" }], /里没有 '/);
 neg('宿主入口 inject 了服务名但从不取用判红', [{ rel: 'lib/index.js', text: "export const inject = ['webServer', '" + HOST + "'];\nexport function apply(ctx) { ctx.webServer.register({}); }\n" }], /没有从 ctx 取用/);
 neg('宿主入口完全没有 inject 判红', [{ rel: 'lib/index.js', text: "export function apply(ctx) { const host = ctx." + HOST + "; host.keys('fx'); }\n" }], /宿主入口没有 export const inject/);

@@ -176,6 +176,7 @@
     "pack:release": "node scripts/pack-release.mjs",
     "verify:deployment": "node test/verify-deployment.mjs",
     "verify:pet-link": "node test/verify-pet-link.mjs",
+    "verify:pet-install": "node test/verify-pet-install.mjs",
     "verify:pet-link:integration": "node test/verify-pet-hotplug-integration.mjs",
     "verify:pet-link:browser": "node test/verify-pet-tuner-browser.mjs",
     "verify": "node test/run-guards.mjs verify",

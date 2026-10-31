@@ -30,10 +30,22 @@
  * 归族规则与 `analyze-host-apply.mjs` 的 ② 组**逐字相同**：取路径的第一个非空段
  * （`/a/b` 与 `/a` 同族；`(动态路径)` 归 `(动态)`）。
  *
+ * ── t20 裁决：触发线只管「未模块化」路由（FAMILY_TRIGGER 数值不变，改的是适用范围）──
+ * §7-6 的**固定动作**是：主包 `apply` 里内联注册的路径族越长越难维护 ⇒ 达到 3 条就抽成
+ * `lib/routes/<族>.js`（导出 `register<族>Routes`、共享可变状态只以引用进 `c`）。它针对的是
+ * **尚未模块化**的路由。M4 起 pet-link 的三条安装路由已住在 `packages/pet-link/lib/routes/
+ * pet-install.js`（导出 `registerPetInstallRoutes`、`c` 契约见 ROUTE-INDEX、由
+ * `verify-route-index` / `verify-inject-contracts` 单独把关）—— §7-6 的固定动作**已经完成**。
+ * 把已模块化的路由再计入「该拆族」是**度量错位**（它们已经在族模块里，没有可拆的东西）。
+ * ⇒ 本守卫只对 `src` **不在** `routeModuleFiles()`（`register…Routes` 族模块）里的路由做计数；
+ * 已模块化路由不计入触发线（但仍计入覆盖面地板与上方展示，枚举退化照样会红）。
+ * FAMILY_TRIGGER 仍是 3：数值本身没错，错的是它此前被套用到"已经拆好的模块"上。
+ * 未模块化路由一旦某个路径族长到 3 条，本判据**仍会当场红**（负对照证明它有牙）。
+ *
  * Usage:  node test/verify-route-families.mjs
  */
 
-import { buildIndex } from './tools/host-route-index.mjs';
+import { buildIndex, routeModuleFiles } from './tools/host-route-index.mjs';
 
 /** 触发线：同一族达到这么多条 ⇒ 必须裁决（见文件头）。 */
 const FAMILY_TRIGGER = 3;
@@ -75,6 +87,22 @@ function groupFamilies(routes) {
 }
 
 // ── ② 真实代码：枚举口径 = 路由索引（单一真源）──────────────────────────────
+// t20 裁决（见文件头）：触发线只统计**尚未模块化**的路由 —— `src` 不在 `routeModuleFiles()`
+// （`register…Routes` 族模块）里的那些。已模块化路由不计入（它们已经在族模块里，无可拆）。
+const MODULE_FILES = new Set(routeModuleFiles());
+const isUnsplit = (r) => !MODULE_FILES.has(r.src);
+
+/** 未模块化路由里达到触发线的族（真实数据与负对照走**同一个**函数 ⇒ 排除逻辑与判据都有据）。 */
+function overFamilies(list) {
+  const fam = new Map();
+  for (const r of list.filter(isUnsplit)) {
+    const seg = familyOf(r.path);
+    if (!fam.has(seg)) fam.set(seg, []);
+    fam.get(seg).push(r.path);
+  }
+  return [...fam.entries()].filter(([, v]) => v.length >= FAMILY_TRIGGER);
+}
+
 let routes = [];
 try {
   routes = buildIndex().routes;
@@ -87,12 +115,15 @@ try {
 check('覆盖面：路由枚举非空（buildIndex() 返回了路由表，而非静默空表）', routes.length > 0,
   `实测 ${routes.length} 条`);
 if (routes.length) {
-  const families = groupFamilies(routes);
-  const maxSize = families[0][1].length;
-  const over = families.filter(([, v]) => v.length >= FAMILY_TRIGGER);
+  const families = groupFamilies(routes); // 全量族分布：展示 + 族数地板都用它（枚举退化照样红）
+  const unsplit = routes.filter(isUnsplit);
+  const unsplitFamilies = groupFamilies(unsplit);
+  const maxUnsplit = unsplitFamilies.length ? unsplitFamilies[0][1].length : 0;
 
   console.log(`\n  路由 ${routes.length} 条 / ${families.length} 族（口径 = host-route-index 的 buildIndex）`);
-  console.log('  最大的几族：');
+  console.log(`  已模块化 ${routes.length - unsplit.length} 条（${MODULE_FILES.size} 个 register…Routes 模块）· `
+    + `未模块化 ${unsplit.length} 条（**触发线只盯这部分**）`);
+  console.log('  最大的几族（全量，仅供参考）：');
   for (const [k, v] of families.slice(0, 6)) console.log(`    ${String(v.length).padStart(2)}  ${k}   ${v.join(' ')}`);
   console.log('');
 
@@ -101,13 +132,19 @@ if (routes.length) {
     `实测 ${routes.length}`);
   check('覆盖面：族数 ≥ 20（归族规则未退化成"一族装全部"）', families.length >= 20,
     `实测 ${families.length}`);
-  check('负对照：同一条判据对合成输入能判出越线族',
-    groupFamilies([...routes, { path: '/probe' }, { path: '/probe/x' }, { path: '/probe/y' }])
-      .some(([, v]) => v.length >= FAMILY_TRIGGER));
+  // 负对照：同一 overFamilies 对合成**未模块化** 3 条必须判出；等价**已模块化**路由不得判出
+  //（证明「排除已模块化」这条口径既不是恒真、也没把牙磨掉）。
+  const probeUnsplit = [{ path: '/probe' }, { path: '/probe/x' }, { path: '/probe/y' }];
+  const probeModular = probeUnsplit.map((r) => ({ ...r, src: 'packages/pet-link/lib/routes/pet-install.js' }));
+  check('负对照：同一条判据对合成**未模块化** 3 条能判出越线族，对等量**已模块化**路由不判出',
+    overFamilies(probeUnsplit).some(([k]) => k === 'probe')
+    && overFamilies(probeModular).every(([k]) => k !== 'probe'));
 
-  // ── 触发线本体 ────────────────────────────────────────────────────────────
-  check(`触发条件 6：没有任何族达到 ${FAMILY_TRIGGER} 条`, over.length === 0,
-    over.length ? over.map(([k, v]) => `${k}(${v.length})`).join(' · ') : `最大族 ${maxSize} 条`);
+  // ── 触发线本体（只盯未模块化路由）─────────────────────────────────────────
+  const over = overFamilies(routes);
+  check(`触发条件 6：没有任何**未模块化**路由族达到 ${FAMILY_TRIGGER} 条`, over.length === 0,
+    over.length ? over.map(([k, v]) => `${k}(${v.length})`).join(' · ')
+      : (unsplit.length ? `最大未模块化族 ${maxUnsplit} 条` : '全部路由已模块化（无未拆内联族）'));
 }
 
 console.log('');

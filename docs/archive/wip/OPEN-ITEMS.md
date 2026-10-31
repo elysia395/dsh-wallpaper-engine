@@ -289,6 +289,7 @@
    已随 [ADR-0006](../adr/0006-comment-discipline-as-written-convention.md) 下线（它的代价一节记明了
    "这个监视器失效"）；恢复监视的正确做法是把判据搬进**读代码**的守卫，而不是让账本自证。
    ⚠️ 判定看的是**注册条数**，而"族"的另一种形态是**一个 `prefix` 注册下挂多个端点**（`scene-serve` 3 条注册 = 4 个端点 / `fontsets` 1 条注册 = 7 个端点）⇒ 新族**一律直接写成模块**，别先塞进 `apply` 等它"长到 3 条"。
+   ⚠️ **适用范围（2026-10-30 / t20 裁决，FAMILY_TRIGGER 仍为 3）**：本条只管**尚未模块化**的路由（`apply`/行入口里内联注册的那些）。已经住进 `register<族>Routes` 族模块（`lib/routes/*.js` 或 `packages/*/lib/routes/*.js`）的路由**不计入**触发线 —— 因为本条的固定动作「抽成 `lib/routes/<族>.js`」对它们**已经完成**，没有可拆的东西；再计入是度量错位（M4 的 pet-link 三条安装路由即此情形：已在 `packages/pet-link/lib/routes/pet-install.js`，由 `verify-route-index`/`verify-inject-contracts` 单独把关）。判据实现见 `test/verify-route-families.mjs`：只对 `src` 不在 `routeModuleFiles()` 里的路由按首段归组计数，未模块化族到 3 条仍会**当场红**。
 7. **出现一次跨路由状态的"隔空故障"** ⇒ 说明那批共享可变闭包状态已从"读起来长"变成"真的会坏"，此时 P2-11 升级为**立即做**（条数用 `analyze-host-apply.mjs` 现算）。
    （本线是**事件型**：出现一次才触发，机器判不了；能被机器看守的是第 6 条的"族到 ≥3 条"半边，见其判据入口。）
    ⚠️ 拆 `media` 族前先记住匹配语义（`exact` 与 `prefix` 是两张表，prefix 表**最长前缀胜出**且必须落在路径边界上）⇒ 族内与族间的相对注册顺序都不影响匹配。

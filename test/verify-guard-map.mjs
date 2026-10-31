@@ -107,7 +107,6 @@ const NO_MODULE_TARGET_WHY = {
   'verify-issue-claim-policy.mjs': '验证 GitHub Actions 的事前受理审批、权限豁免与可信工作流接线；目标是 .github 下的仓库治理脚本，不属于 lib/src 运行时模块',
   'verify-deployment.mjs': '验证源码安装器与发布集构建器的行为、持久依赖和显式目标安全边界；目标是 scripts 下的部署流程，不属于本映射枚举的 lib/src 运行时模块',
   'verify-dead-declarations.mjs': '管的是**声明孤儿**（跨全部独立脚本面），不针对某个模块',
-  'verify-route-families.mjs': '管的是**路由族触发线**（枚举口径经 `test/tools/host-route-index.mjs` 的 `buildIndex()` 重算）',
   'compat-harness-live.mjs': '真 harness 安装/启动探活（不读源文件）',
   'compat-harness-pages.mjs': '无头浏览器逐页 DOM 断言（不读源文件）',
   'compat-harness-surfaces.mjs': 'UI 面清单棘轮 + sidebar 源码活判据（读的是已安装的 harness 包）',

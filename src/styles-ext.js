@@ -260,6 +260,164 @@ const CSS_EXT = `  /* ── 软件渲染回退（upstream #95，运行时探测
     font-size: 0.85em; font-weight: 600; color: var(--we-ink, inherit);
   }
 
+  /* ── 「扩展」页签 · 桌宠联动卡片（we-pet-link，包 pet-link/src/pet-link/extension-card.js）──
+     分层口径：标题行 → 状态 → 模式 → 共存提示 → 进度条 → 失败块 → 主按钮 → 次按钮组
+     → 分步进度 → 折叠诊断。容器 .we-ext__module 已给外框与 6px 行距，这里只管
+     卡内各层的间距节奏（8px 主间距）与控件形态：开关贴行尾、主按钮通栏、
+     次按钮并排（窄壳自动换行）。颜色不新造：全部取主题墨色 / 边框 / 面板令牌，
+     进度条填充用按钮主色（accent 由宿主映射），失败块用与本仓既有的警示红。
+     ⚠️ 本段注释不许出现反引号：整套样式文本是模板字符串，一个反引号就拼断 JS。 */
+  /* 卡片容器：竖向排布 + 统一间距（此前根 class 无任何规则，卡内各块会贴在一起） */
+  .we-pet-link__card {
+    display: flex; flex-direction: column; gap: 8px; align-items: stretch;
+  }
+  /* ── 图文安装引导（下载器拆除后替代「下载并安装」按钮）────────────── */
+  .we-pet-link__guide {
+    display: flex; flex-direction: column; gap: 10px;
+    margin-top: 4px; padding: 12px;
+    border: 1px solid var(--we-border, rgba(255,255,255,.12));
+    border-radius: 10px;
+    background: var(--we-surface, rgba(255,255,255,.03));
+  }
+  .we-pet-link__guide-title {
+    font-size: .82em; font-weight: 700; color: var(--we-ink, inherit);
+  }
+  .we-pet-link__guide-step { display: flex; flex-direction: column; gap: 6px; }
+  .we-pet-link__guide-caption {
+    font-size: .8em; font-weight: 600; color: var(--we-ink-dim, rgba(255,255,255,.78));
+  }
+  .we-pet-link__guide-shot {
+    display: block; width: 100%; max-width: 420px; height: auto;
+    border-radius: 8px; border: 1px solid var(--we-border, rgba(255,255,255,.1));
+  }
+  .we-pet-link__guide-shot--pending {
+    display: flex; align-items: center; justify-content: center;
+    min-height: 72px; max-width: 420px;
+    font-size: .76em; color: var(--we-ink-dim, rgba(255,255,255,.5));
+    border-style: dashed;
+  }  .we-pet-link__guide-pkg {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    margin-top: 2px;
+  }
+  .we-pet-link__guide-code {
+    padding: 5px 10px; border-radius: 7px;
+    font: 600 .84em/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: var(--we-accent, #4f8cff);
+    background: rgba(79,140,255,.12);
+    border: 1px solid rgba(79,140,255,.28);
+    user-select: all;
+  }
+  .we-pet-link__guide-copy {
+    padding: 5px 12px; border-radius: 7px; cursor: pointer;
+    font-size: .78em; font-weight: 600;
+    color: var(--we-ink, #fff);
+    background: transparent;
+    border: 1px solid var(--we-border, rgba(255,255,255,.22));
+    transition: background .15s ease, border-color .15s ease;
+  }
+  .we-pet-link__guide-copy:hover {
+    background: rgba(255,255,255,.08);
+    border-color: var(--we-accent, #4f8cff);
+  }
+  .we-pet-link__guide-tip {
+    font-size: .76em; line-height: 1.6;
+    color: var(--we-ink-dim, rgba(255,255,255,.66));
+  }
+  .we-pet-link__guide-link {
+    font-size: .76em; word-break: break-all;
+    color: var(--we-accent, #4f8cff); text-decoration: none;
+  }
+  .we-pet-link__guide-link:hover { text-decoration: underline; }
+
+  .we-pet-link__head {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    font-size: 0.85em; font-weight: 600; color: var(--we-ink, inherit);
+  }
+  .we-pet-link__head input[type="checkbox"] { width: 16px; height: 16px; margin: 0; flex: 0 0 auto; cursor: pointer; }
+  .we-pet-link__status {
+    font-size: 0.78em; line-height: 1.55; color: var(--we-ink-2, rgba(128, 128, 128, 0.9));
+    overflow-wrap: anywhere;
+  }
+  .we-pet-link__mode { font-size: 0.75em; line-height: 1.5; color: var(--dsw-alias-label-tertiary, rgba(128, 128, 128, 0.8)); overflow-wrap: anywhere; }
+  .we-pet-link__coexist {
+    padding: 6px 8px; border-radius: var(--we-ui-radius, 8px);
+    border: 1px dashed var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));
+    font-size: 0.75em; line-height: 1.5; color: var(--we-ink-2, rgba(128, 128, 128, 0.9));
+  }
+  /* 卡片内进度条：只压一层 4px 轨道；done 后视图层整块不渲染（无节点 ⇒ 无空行）。 */
+  .we-pet-link__progress { display: flex; flex-direction: column; gap: 4px; }
+  .we-pet-link__progress-label {
+    display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
+    font-size: 0.72em; color: var(--dsw-alias-label-secondary, inherit);
+    font-variant-numeric: tabular-nums;
+  }
+  .we-pet-link__progress-bar {
+    position: relative; height: 4px; border-radius: 999px; overflow: hidden;
+    background: var(--dsw-alias-bg-layer-3, rgba(128, 128, 128, 0.2));
+  }
+  .we-pet-link__progress-fill {
+    height: 100%; border-radius: 999px;
+    background: var(--dsw-alias-button-primary-fill, var(--we-accent, #4a7dff));
+    transition: width 240ms linear;
+  }
+  /* total 未知（content-length 缺席）：细条往复扫动，等长意义下仍是"进行中"。
+     动效只用 transform（合成器友好），prefers-reduced-motion 下退化为静态半格。 */
+  .we-pet-link__progress-fill--indeterminate { width: 32%; animation: we-pet-link-sweep 1.2s linear infinite; }
+  @keyframes we-pet-link-sweep {
+    from { transform: translateX(-100%); }
+    to { transform: translateX(412%); }
+  }
+  @media (prefers-reduced-motion: reduce) {
+    .we-pet-link__progress-fill--indeterminate { animation: none; transform: none; }
+  }
+  /* 失败块：警示描边 + 可读底衬；官方地址是真正的链接行（可选中整段复制）。 */
+  .we-pet-link__fail {
+    display: flex; flex-direction: column; gap: 4px;
+    padding: 8px; border-radius: var(--we-ui-radius, 8px);
+    border: 1px solid color-mix(in srgb, #e5534b 55%, transparent);
+    background: color-mix(in srgb, #e5534b 8%, transparent);
+    font-size: 0.75em; line-height: 1.55; color: var(--we-ink-2, rgba(128, 128, 128, 0.9));
+  }
+  .we-pet-link__fail-title { font-weight: 600; color: #e5534b; overflow-wrap: anywhere; }
+  .we-pet-link__fail-link {
+    color: var(--dsw-alias-link, inherit); text-decoration: underline;
+    overflow-wrap: anywhere; user-select: text;
+  }
+  /* 主按钮：通栏主色实底（宿主主按钮同族），与次按钮拉开层级。 */
+  .we-pet-link__install {
+    width: 100%; box-sizing: border-box; min-height: 32px; padding: 6px 10px;
+    border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.28));
+    border-radius: var(--we-ui-radius, 8px); cursor: pointer; font: inherit;
+    background: var(--dsw-alias-button-primary-fill, var(--we-accent, #4a7dff));
+    color: var(--dsw-alias-label-primary-foreground, #fff);
+  }
+  .we-pet-link__install:hover { background: var(--dsw-alias-button-primary-hover, var(--we-accent, #4a7dff)); }
+  .we-pet-link__install:disabled { opacity: 0.6; cursor: default; }
+  /* 次按钮组：并排（面板 / 测试一次），窄壳里自动换行。 */
+  .we-pet-link__actions { display: flex; flex-wrap: wrap; gap: 6px; }
+  .we-pet-link__actions button {
+    flex: 1 1 auto; min-width: 0; min-height: 30px; padding: 5px 8px;
+    border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.28));
+    border-radius: var(--we-ui-radius, 8px); cursor: pointer; font: inherit;
+    background: var(--dsw-alias-bg-layer-2, rgba(128, 128, 128, 0.12));
+    color: var(--dsw-alias-label-primary, inherit); white-space: normal;
+  }
+  .we-pet-link__actions button:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(128, 128, 128, 0.18)); }
+  .we-pet-link__actions button:disabled { opacity: 0.6; cursor: default; }
+  .we-pet-link__steps {
+    margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 2px;
+    font-size: 0.72em; line-height: 1.5; color: var(--we-ink-3, rgba(128, 128, 128, 0.65));
+    font-variant-numeric: tabular-nums;
+  }
+  .we-pet-link__steps li[data-ok="false"] { color: #e5534b; }
+  .we-pet-link__diag summary { font-size: 0.75em; cursor: pointer; color: var(--dsw-alias-label-tertiary, rgba(128, 128, 128, 0.8)); }
+  .we-pet-link__diag pre {
+    margin: 4px 0 0; padding: 6px; border-radius: var(--we-ui-radius, 8px);
+    background: var(--dsw-alias-bg-layer-3, rgba(128, 128, 128, 0.12));
+    font-size: 0.68em; line-height: 1.5; overflow: auto; max-height: 180px;
+    color: var(--dsw-alias-label-secondary, inherit);
+  }
+
 
   /* ── 「扩展」页签一号模块：自定义会话头像（装饰层见 src/avatar-layer.js）──
      这一层是**宿主会话 DOM 的补丁**：给三类消息行（data-chat-flow-kind = user / steering /

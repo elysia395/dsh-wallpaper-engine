@@ -5286,6 +5286,27 @@ function RopeDock() {
       }
       return edge;
     },
+    /**
+     * 侧栏**展开后**的左边缘（px）。
+     *
+     * 与 `edgeX()` 的分工：`edgeX` 回答"现在能不能碰到它"（收起时给碰撞起点），
+     * 本函数回答"它展开后会占到哪里"——联动的去程目标要用后者，否则侧栏收起时
+     * 目标会退化成视口右边缘，宠物本来就在右边，看起来就是"原地没动"。
+     *
+     * 用 `offsetWidth`（布局宽）而不是 `getBoundingClientRect().width`：收起态经
+     * transform 移出屏幕，可视宽度可能为 0，但布局宽度仍在。
+     */
+    panelLeft() {
+      const target = officialPull.targets();
+      if (!target || !target.surface) return null;
+      const rect = target.surface.getBoundingClientRect();
+      if (!Number.isFinite(rect.right)) return null;
+      const layoutWidth = Number.isFinite(target.surface.offsetWidth) && target.surface.offsetWidth > 0
+        ? target.surface.offsetWidth
+        : rect.width;
+      if (!Number.isFinite(layoutWidth) || layoutWidth <= 0) return null;
+      return rect.right - layoutWidth;
+    },
   };
   React.useEffect(() => {
     try {
@@ -5303,6 +5324,8 @@ function RopeDock() {
         rebound: (expanded, ms) => { officialPull.begin(Number.isFinite(ms) ? ms : 240, expanded); },
         syncOpen: () => officialPull.syncOpen(),
         edgeX: () => officialPull.edgeX(),
+        // 侧栏展开后的左边缘：去程目标用它，避免侧栏收起时目标退化成视口右边缘（"原地不动"）。
+        panelLeft: () => officialPull.panelLeft(),
         commit: () => { officialPull.restore(); },
       });
       officialPull.trace("ready", officialPull.targets());

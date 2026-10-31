@@ -74,7 +74,16 @@ export function registerOfficialPetRoutes(webServer, c, options = {}) {
         const input = JSON.parse(Buffer.concat(chunks).toString('utf8'));
         if (!enabled()) return send(res, 200, { ok: false, reason: 'bridge-disabled' });
         const methods = { start: coordinator.start, heartbeat: coordinator.heartbeat,
-          command: coordinator.command, finish: coordinator.finish };
+          command: coordinator.command, finish: coordinator.finish,
+          // 浏览器半边 → 宿主日志的诊断通道。
+          // 桌面版没有 DevTools（用户看不到 console），所以把「走位目标算成了什么」
+          // 「气泡配图取图成不成功」这类运行期真值送到宿主日志，由维护者读文件取证。
+          diag: async payload => {
+            try {
+              console.log('[pet-link diag] ' + JSON.stringify(payload?.payload ?? payload));
+            } catch { /* 诊断序列化失败不影响业务 */ }
+            return { ok: true };
+          } };
         if (!Object.hasOwn(methods, input?.op)) return send(res, 400, { ok: false, reason: 'bad-request' });
         return send(res, 200, await methods[input.op](input));
       } catch { return send(res, 400, { ok: false, reason: 'bad-request' }); }
@@ -114,5 +123,58 @@ export function registerOfficialPetRoutes(webServer, c, options = {}) {
         stream.pipe(res);
       } catch { res.statusCode = 404; res.end(); }
      } }));
+  // 引导截图：安装教程用三张图（插件入口 / 添加插件按钮 / 输入包名对话框）。
+  // 与 meme 同款 exact 路由，避免 prefix 命中问题；只从本包 assets/guide/ 出。
+  const guideShots = [
+    { file: fileURLToPath(new URL('../../assets/guide/step1-plugin-entry.png', import.meta.url)), type: 'image/png' },
+    { file: fileURLToPath(new URL('../../assets/guide/step2-add-plugin.png', import.meta.url)), type: 'image/png' },
+    { file: fileURLToPath(new URL('../../assets/guide/step3-dialog.png', import.meta.url)), type: 'image/png' },
+  ];
+  disposers.push(webServer.register({ kind: 'exact', path: `${BASE}/pet-link/official/guide-step`, handler: (req, res) => {
+    try {
+      const step = Number(new URL(req.url || '/', 'http://x').searchParams.get('n'));
+      const shot = Number.isSafeInteger(step) ? guideShots[step - 1] : null;
+      if (!shot) { res.statusCode = 404; res.end(); return; }
+      if (req.method !== 'GET' && req.method !== 'HEAD') { res.statusCode = 405; res.end(); return; }
+      const { size } = statSync(shot.file);
+      res.statusCode = 200;
+      res.setHeader('Content-Type', shot.type);
+      res.setHeader('Content-Length', size);
+      res.setHeader('Cache-Control', 'private, max-age=3600');
+      if (req.method === 'HEAD') { res.end(); return; }
+      const stream = createReadStream(shot.file);
+      streams.add(stream);
+      stream.on('error', () => res.destroy());
+      stream.on('close', () => streams.delete(stream));
+      res.on('close', () => stream.destroy());
+      stream.pipe(res);
+    } catch { res.statusCode = 404; res.end(); }
+  } }));
+  // 气泡配图专用：**exact 路由**按 `?i=<index>` 出一张 PNG。
+  //
+  // 为什么不复用上面的 prefix：`/assets/m<i>.png` 在实测里稳定 404（prefix 路由没命中——
+  // 浏览器侧日志 `{"kind":"meme","ok":false,"reason":"404"}` ×5）。而同一注册器里的 exact
+  // 路由（`/pet-link/official` 的 diag）是通的，所以这里改走 exact，绕开 prefix 的路径解析。
+  // 图仍然只从本包的 `assets/memes/` 出，不复制、不注入。
+  disposers.push(webServer.register({ kind: 'exact', path: `${BASE}/pet-link/official/meme`, handler: (req, res) => {
+    try {
+      const index = Number(new URL(req.url || '/', 'http://x').searchParams.get('i'));
+      const image = Number.isSafeInteger(index) ? images[index] : null;
+      if (!image) { res.statusCode = 404; res.end(); return; }
+      if (req.method !== 'GET' && req.method !== 'HEAD') { res.statusCode = 405; res.end(); return; }
+      const { size } = statSync(image.file);
+      res.statusCode = 200;
+      res.setHeader('Content-Type', image.type);
+      res.setHeader('Content-Length', size);
+      res.setHeader('Cache-Control', 'private, max-age=3600');
+      if (req.method === 'HEAD') { res.end(); return; }
+      const stream = createReadStream(image.file);
+      streams.add(stream);
+      stream.on('error', () => res.destroy());
+      stream.on('close', () => streams.delete(stream));
+      res.on('close', () => stream.destroy());
+      stream.pipe(res);
+    } catch { res.statusCode = 404; res.end(); }
+   } }));
   return coordinator;
 }

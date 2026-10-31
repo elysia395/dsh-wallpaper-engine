@@ -2,41 +2,22 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import { applyImpl } from '../packages/pet-link/lib/index.js';
 import { httpView } from '../lib/subpackage-boot.js';
-import { clientEntryFixture } from './tools/official-performer.mjs';
 
+// 旧官方桥接的**排播引擎**（createOfficialPetPerformer）已迁到 pet-link-performer.js，
+// 与新的双 provider 入口（src/pet-link.js）解耦保留：这里是它自有的离线回归。
 const root = new URL('../', import.meta.url);
-const built = readFileSync(new URL('packages/pet-link/lib/client.pet-link.js', root), 'utf8');
-assert.doesNotMatch(built, /\n\s*exports\.apply = \(\) => undefined;/, '构建不得覆盖官方桥接的 apply');
-const manifest = JSON.parse(readFileSync(new URL('packages/pet-link/package.json', root), 'utf8'));
-assert.deepEqual(manifest.dsh.client.inject, ['@deepseek-ai/dsh-client-runtime'], '包依赖仍由客户端清单声明');
-const { plugin: clientEntry, bridge, listeners } = clientEntryFixture(built);
-assert.deepEqual(clientEntry.inject, [], '包名不是 Cordis 服务；可选官方服务不得阻塞客户端激活');
-const services = new Map(), cleanups = [];
-const page = {
-  get(name) { return services.get(name); },
-  provide(name, value) { services.set(name, value); },
-  effect(setup) { cleanups.push(setup()); },
-};
-clientEntry.apply(page);
-try {
-  assert.equal(await bridge.warmup(), false, '未安装官方 pet 时客户端仍激活并正常降级');
-  page.provide('petApi7340', { pose: () => ({ x: 0.4, y: 0.6, facing: 'left' }), progress: () => null });
-  assert.equal(await bridge.warmup(), true, '激活后仍能读取同页后到的官方服务');
-  assert.equal(listeners.size, 1, '调参入口只安装一次');
-} finally { for (const cleanup of cleanups.reverse()) cleanup(); }
-assert.equal(listeners.size, 0, '卸载后清理客户端监听器');
 const routes = new Map();
 const dispose = applyImpl({ webServer: { port: 7341, register(route) {
   routes.set(route.path, route); return () => routes.delete(route.path);
 } } }, {}, { base: '/wallpaper-engine', http: httpView });
 try {
-  assert.ok(routes.has('/wallpaper-engine/pet-link/official'), '默认联动必须直接注册官方控制，不再留内置或预览开关');
+  assert.ok(routes.has('/wallpaper-engine/pet-link/official'), '宿主半的官方控制路由必须仍在场');
   assert.ok(!routes.has('/wallpaper-engine/pet-link/capability'), '不再签发内置资格');
 } finally { dispose(); }
 assert.equal(routes.size, 0, '正式路由退出后全部归还');
 
 const source = readFileSync(new URL('packages/pet-link/src/official-pet.js', root), 'utf8')
-  + '\n' + readFileSync(new URL('packages/pet-link/src/pet-link.js', root), 'utf8');
+  + '\n' + readFileSync(new URL('packages/pet-link/src/pet-link-performer.js', root), 'utf8');
 const create = new Function(source + ';return createOfficialPetPerformer;')();
 const calls = [];
 let clock = 0, serial = 0, playback = null, serviceOn = true;
@@ -83,4 +64,4 @@ assert.equal(calls.at(-1), 'toggle', '无目标仍能原样操作壁纸侧栏');
 serviceOn = false;
 assert.equal(await api.warmup(), false);
 api.dispose();
-console.log('PASS 正式官方桥接：默认路由、四排播、原生位置/抛掷、目标选择、缺席回退、退出');
+console.log('PASS 官方排播引擎（pet-link-performer）：四排播、原生位置/抛掷、目标选择、缺席回退、退出');

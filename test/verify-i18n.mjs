@@ -62,11 +62,34 @@ const DATA_BLOCKS = [
   { file: 'src/styles-ext.js', kind: 'template', minLength: 10000, why: '样式域 ext 是纯数据；其内的中文只出现在 CSS 注释（不渲染到界面）' },
 ];
 
+/**
+ * 桌宠联动浏览器半的界面文件（panel-params / panel / extension-card）—— 文案经**注入式**
+ * translator（`translate()` / `t()`）在运行时翻译。**不再做文件级豁免**：改为按 pet-link
+ * 自带 EN 词表（`src/pet-link/i18n.js` 的 `PETLINK_I18N_EN`，键=中文原文）做**双向对账**
+ * （零漏译 / 零孤儿 / EN 值无中文）。这是有机判据：漏一条译文就红，而不是整文件闭眼放行。
+ * （t21：补齐词表后删除了 t16 遗留的三条整文件豁免。）
+ */
+const PETLINK_UI_FILES = [
+  'packages/pet-link/src/pet-link/panel-params.js',
+  'packages/pet-link/src/pet-link/panel.js',
+  'packages/pet-link/src/pet-link/extension-card.js',
+];
+/** pet-link 自成词表模块：它的中文就是**键**（同主包 i18n-copy 的口径），在扫描面之外，
+ * 由下方 pet-link 词表对账（零漏译/零孤儿/EN 值无中文）留牙。 */
+const PETLINK_I18N_MODULE = 'packages/pet-link/src/pet-link/i18n.js';
+
 /** 逐条精确值豁免（形如"是数据不是文案"的个别串）。每条都必须写明理由，且必须还在源码里。 */
 const VALUE_ALLOW = [
   ...[
     ...JSON.parse(readFileSync(join(ROOT, 'packages/pet-link/src/pet-link-actions.json'), 'utf8')).animations.events.DSHWE,
   ].map(value => ({ value, why: '桌宠资源池的实际动画名；必须与文件名一致，不能翻译。' })),
+  ...[
+    '累瘫鲸鱼的两碗饭', '蓝发鲸尾女仆拒绝换壁纸', '暴怒鲸尾女仆贴纸', '吓哭了', '？！欺负一只肥鱼！？',
+  ].map(value => ({
+    value,
+    why: '桌宠 `memes` 池的**表情图名**：作为 `/broadcast` 的 `image` 参数与配置键逐字匹配，' +
+      '翻译后就取不到图（宿主回 unknown-image）。属于数据标识，不是 UI 文案。',
+  })),
   {
     value: '设置',
     why: '**宿主的**标签候选（src/sidebar-right.js 的 settingsLabelCandidates）：' +
@@ -235,9 +258,27 @@ const srcHits = [];
 for (const file of srcFiles) {
   const rel = relative(ROOT, file).split(/[\\/]/).join('/');
   if (DICT_MODULES.has(rel)) continue;
+  if (rel === PETLINK_I18N_MODULE) continue; // pet-link 词表：中文即键，由 pet-link 词表对账留牙
+  if (PETLINK_UI_FILES.includes(rel)) continue; // 这三个文件的文案走 pet-link 自成词表对账（见 ① 的 pet-link 段）
   for (const h of scanCjkStrings(readFileSync(file, 'utf8'))) srcHits.push({ file: rel, ...h });
 }
 const dictHits = DICT_FAMILY.flatMap((rel) => scanCjkStrings(readFileSync(join(ROOT, rel), 'utf8')));
+// ── pet-link 自成词表（path B）对账数据：三个 UI 文件的每个中文字面量都要有 EN 译文，且词表键都要被用到。
+const petLinkDict = (() => {
+  try { return new Function(readFileSync(join(ROOT, 'packages/pet-link/src/pet-link/i18n.js'), 'utf8') + ';return PETLINK_I18N_EN;')(); }
+  catch { return {}; }
+})();
+const petLinkUiHits = [];
+for (const plRel of PETLINK_UI_FILES) {
+  const abs = join(ROOT, plRel);
+  if (!existsSync(abs)) continue;
+  for (const h of scanCjkStrings(readFileSync(abs, 'utf8'))) petLinkUiHits.push({ file: plRel, ...h });
+}
+const petLinkValues = new Set(petLinkUiHits.map((h) => h.value));
+const HAS_CJK_RE = /[\u3000-\u303f\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\ufe30-\ufe4f\uff00-\uffef]/;
+const petLinkMissing = (values, dict) => [...values].filter((v) => !Object.prototype.hasOwnProperty.call(dict, v));
+const petLinkOrphan = (values, dict) => Object.keys(dict).filter((k) => !values.has(k));
+const petLinkBadValues = dict => Object.entries(dict).filter(([, v]) => typeof v !== 'string' || !v.trim() || HAS_CJK_RE.test(v));
 // 宿主文案的取值面：`lib/` 下的全部 `.js`（排除**生成物**与 **vendored** —— 它们不是本仓文案）。
 // 路径一律先归一成 `/` 再判（CI 里 Windows 的分隔符会让 `includes('/vendor/')` 静默失效）。
 // 本文件里的 glob 不许写成「斜杠紧跟两个星号」：那三个字符会让**朴素剥注释**的实现
@@ -285,6 +326,25 @@ console.log('① 界面零裸中文（src/ 下，诊断串与纯数据块除外�
   const staleValues = VALUE_ALLOW.filter((v) => !srcHits.some((h) => h.value === v.value));
   check('允许清单不空转（精确值仍出现）', staleValues.length === 0,
     staleValues.length ? staleValues.map((v) => JSON.stringify(v.value).slice(0, 30)).join(' ') : VALUE_ALLOW.length + ' 条精确值在册');
+
+  // pet-link 面板/卡片自成词表（path B）对账：零漏译 / 零孤儿 / EN 值无中文；非空 + 负对照。
+  check('pet-link 词表非空（源码里确有中文字面量、词表确有译文）',
+    petLinkValues.size > 0 && Object.keys(petLinkDict).length > 0,
+    petLinkValues.size + ' 条中文 / ' + Object.keys(petLinkDict).length + ' 条译文');
+  const plMissing = petLinkMissing(petLinkValues, petLinkDict);
+  check('pet-link 面板/卡片中文 EN 词表零漏译（每句都有译文）', plMissing.length === 0,
+    plMissing.length ? plMissing.length + ' 条缺：' + plMissing.slice(0, 6).map((v) => JSON.stringify(v.slice(0, 30))).join(' ') : petLinkValues.size + ' 条对账');
+  const plOrphan = petLinkOrphan(petLinkValues, petLinkDict);
+  check('pet-link 面板/卡片 EN 词表零孤儿键（每条译文都被用到）', plOrphan.length === 0,
+    plOrphan.length ? plOrphan.length + ' 条多：' + plOrphan.slice(0, 6).map((k) => JSON.stringify(k.slice(0, 30))).join(' ') : '词表与源码一一对应');
+  const plBad = petLinkBadValues(petLinkDict);
+  check('pet-link EN 译文值非空 / 无中文残留', plBad.length === 0,
+    plBad.length ? plBad.slice(0, 6).map(([k]) => JSON.stringify(k.slice(0, 30))).join(' ') : Object.keys(petLinkDict).length + ' 条译文合规');
+  // 负对照：同一判据对"未登记中文 / 孤儿键 / 中文译文"分别判红（喂合成输入）。
+  check('negative control: pet-link 词表判据有牙（漏译/孤儿/中文译文各自判红）',
+    petLinkMissing(new Set(['一条没登记的合成中文']), petLinkDict).length === 1
+    && petLinkOrphan(new Set(['另一条']), { '孤儿键': 'Orphan' }).length === 1
+    && petLinkBadValues({ '合成键': '中' }).length === 1);
 
   // 词表模块的排除必须留牙：它里面必须**真的**还是"中文即键"（而不是被排除后空了）。
   check('词表族的排除不空转（' + DICT_MODULE + ' 族里仍有中文键）',
