@@ -4,6 +4,7 @@
   "name": "可读优先",
   "values": {
     "glassSurfacePolicy": {},
+    "floaterSolidBase": true,
     "scrim": 0.25,
     "border": 0.35,
     "blur": 24,
@@ -33,7 +34,12 @@
     "pauseOnBattery": false,
     "flip": false,
     "objectFit": "cover",
-    "contentRatingFilter": ["everyone", "pg13", "mature", "unrated"],
+    "contentRatingFilter": [
+      "everyone",
+      "pg13",
+      "mature",
+      "unrated"
+    ],
     "typeFilter": [
       "video",
       "web",

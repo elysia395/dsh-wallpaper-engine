@@ -1334,6 +1334,13 @@ console.log('\n⑨ W5：各面的锚点门控覆盖率（防"关掉后还剩一�
     // = 基础层豁免判据：无门但 body 只读面板色/宿主令牌（**不读任何玻璃按面变量**）的规则
     // 不算违规——它不是漏门的玻璃规则，是行停用时的原生回退（ADR-0016 D2）。
     { id: 'plugin-floaters', member: /\.we-(update-notice|repo-panel)|\[data-install-registry\]/, anchor: /data-we-glass-floaters|data-we-glass-fallback/, allowBaseLayer: (r) => !/var\(--we-(floaters|blur|saturate|glass|surface-tint|readability|sidebar|content-surface|settings-window|chat)-/.test(r.body) && /--we-panel-color/.test(r.body), done: true },
+    // #277：第三方浮层的实底底板（新面）。门 = data-we-floater-solid（设置键
+    // floaterSolidBase，默认开）。成员 = 带这道门的 ARIA 浮层规则：
+    // role="dialog" / role="alertdialog" 两条。它们**不**按面私有变量、只读全局
+    // 的 --we-readability-base ⇒ tier global，不进 ④ 组接线对账。
+    // ⚠️ 这一面的规则选择器里**不得出现 data-slot 等未登记锚点**（② 组会判红）——
+    //    排除项一律用 :has() 以外的写法（见 glass-css.js 里那段的取舍说明）。
+    { id: 'third-party-floater-solid', member: /data-we-floater-solid/, anchor: /data-we-floater-solid/, done: true },
   ];
 
   const results = GATE.map((g) => {

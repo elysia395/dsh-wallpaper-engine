@@ -393,7 +393,7 @@ function renderAppearanceGlassSection(ctx) {
     onCapsuleBlur, onCapsuleColor,
     onLeftSidebarGlass, onTitlebarGlass, onSidebarAlpha, onSidebarBlur, onSidebarColor,
     onSidebarContentAlpha, onSidebarContentColor, onSidebarGlass,
-    onSidebarFollowGlobal, onSidebarFullClear,
+    onSidebarFollowGlobal, onSidebarFullClear, onFloaterSolidBase,
     onThinkingMode, glassDetailOpen, onToggleGlassDetail, glassUiOpen, onToggleGlassUiSection,
     presetsOpen, onTogglePresetsSection,
   } = ctx;
@@ -798,6 +798,16 @@ function renderAppearanceGlassSection(ctx) {
         key: "sidebar-fullclear",
         hint: weT("壁纸下撤掉侧栏的可读性底与色染"),
         tooltip: weT("打开：壁纸激活时侧栏的可读性下限、色染与釉光整块撤掉，壁纸原样透出（文字直接压在壁纸上）；模糊仍由侧栏模糊/全局雾化旋钮管。关闭（默认）：保留可读性下限，最坏壁纸下正文仍 ≥4.5:1"),
+      }),
+      // #277：第三方插件表面的实底底板（默认开）。玻璃把宿主层令牌改成半透明之后，
+      // 第三方写的弹窗 / 框架层 / 吸顶条（没有本仓认得的锚点）会变成"半透明且无模糊"
+      // ⇒ 背后内容叠上来糊成一团。本开关给这三类面补一层实底；关掉即恢复宿主原生的
+      // 半透明观感。刻意**不放在玻璃总开关后面**：玻璃关着时这组规则本就不生效，
+      // 而用户可能先开玻璃、再回来单独关这一项 —— 门中门只会让人找不到。
+      switchRow(weT("第三方表面不透明底"), sel.floaterSolidBase !== false, onFloaterSolidBase, {
+        key: "floater-solid-base",
+        hint: weT("给第三方插件的弹窗 / 框架层 / 吸顶条补实底"),
+        tooltip: weT("打开（默认）：第三方插件（任务看板等）的弹窗、框架层与吸顶条补一层不透明底，背后的页面内容与兄弟弹窗不再透上来；宿主自己的设置窗、输入卡与菜单不受影响。关闭：恢复宿主原生的半透明观感"),
       }),
       // 跟随全局（sidebarFollowGlobal，默认开，现场口径："我需要侧栏玻璃也跟随全局"）：
       // 开着 ⇒ 侧栏的釉变量直接指向全局三件套（effects 里写 var() 引用），并把下面

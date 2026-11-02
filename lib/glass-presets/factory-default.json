@@ -4,6 +4,7 @@
   "name": "黑客绿(Fish)",
   "values": {
     "glassSurfacePolicy": {},
+    "floaterSolidBase": true,
     "scrim": 0.6,
     "border": 0.9,
     "blur": 9,
@@ -33,7 +34,12 @@
     "pauseOnBattery": false,
     "flip": false,
     "objectFit": "cover",
-    "contentRatingFilter": ["everyone", "pg13", "mature", "unrated"],
+    "contentRatingFilter": [
+      "everyone",
+      "pg13",
+      "mature",
+      "unrated"
+    ],
     "typeFilter": [
       "video",
       "web",
