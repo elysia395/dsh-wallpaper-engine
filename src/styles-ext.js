@@ -204,57 +204,12 @@ const CSS_EXT = `
     border: 1px dashed var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));
     font-size: 0.75em; line-height: 1.5; color: var(--we-ink-2, rgba(128, 128, 128, 0.9));
   }
-  /* 卡片内进度条：只压一层 4px 轨道；done 后视图层整块不渲染（无节点 ⇒ 无空行）。 */
-  .we-pet-link__progress { display: flex; flex-direction: column; gap: 4px; }
-  .we-pet-link__progress-label {
-    display: flex; align-items: baseline; justify-content: space-between; gap: 8px;
-    font-size: 0.72em; color: var(--dsw-alias-label-secondary, inherit);
-    font-variant-numeric: tabular-nums;
-  }
-  .we-pet-link__progress-bar {
-    position: relative; height: 4px; border-radius: 999px; overflow: hidden;
-    background: var(--dsw-alias-bg-layer-3, rgba(128, 128, 128, 0.2));
-  }
-  .we-pet-link__progress-fill {
-    height: 100%; border-radius: 999px;
-    background: var(--dsw-alias-button-primary-fill, var(--we-accent, #4a7dff));
-    transition: width 240ms linear;
-  }
-  /* total 未知（content-length 缺席）：细条往复扫动，等长意义下仍是"进行中"。
-     动效只用 transform（合成器友好），prefers-reduced-motion 下退化为静态半格。 */
-  .we-pet-link__progress-fill--indeterminate { width: 32%; animation: we-pet-link-sweep 1.2s linear infinite; }
-  @keyframes we-pet-link-sweep {
-    from { transform: translateX(-100%); }
-    to { transform: translateX(412%); }
-  }
-  @media (prefers-reduced-motion: reduce) {
-    .we-pet-link__progress-fill--indeterminate { animation: none; transform: none; }
-  }
-  /* 失败块：警示描边 + 可读底衬；官方地址是真正的链接行（可选中整段复制）。 */
-  .we-pet-link__fail {
-    display: flex; flex-direction: column; gap: 4px;
-    padding: 8px; border-radius: var(--we-ui-radius, 8px);
-    border: 1px solid color-mix(in srgb, #e5534b 55%, transparent);
-    background: color-mix(in srgb, #e5534b 8%, transparent);
-    font-size: 0.75em; line-height: 1.55; color: var(--we-ink-2, rgba(128, 128, 128, 0.9));
-  }
-  .we-pet-link__fail-title { font-weight: 600; color: #e5534b; overflow-wrap: anywhere; }
-  .we-pet-link__fail-link {
-    color: var(--dsw-alias-link, inherit); text-decoration: underline;
-    overflow-wrap: anywhere; user-select: text;
-  }
   /* 安装引导按钮：直接复用宿主主按钮款式（.we-picker__btn--primary：0.82em / 30px 行高 /
      实心 accent），这里只加"通栏宽度"这一条布局差异。 */
   .we-pet-link__install { width: 100%; box-sizing: border-box; }
   /* 次按钮组：并排（打开操控面板 / 测试一次），窄壳里自动换行；款式同样用 .we-picker__btn。 */
   .we-pet-link__actions { display: flex; flex-wrap: wrap; gap: 6px; }
   .we-pet-link__actions > .we-picker__btn { flex: 1 1 auto; min-width: 0; white-space: nowrap; }
-  .we-pet-link__steps {
-    margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 2px;
-    font-size: 0.72em; line-height: 1.5; color: var(--we-ink-3, rgba(128, 128, 128, 0.65));
-    font-variant-numeric: tabular-nums;
-  }
-  .we-pet-link__steps li[data-ok="false"] { color: #e5534b; }
   .we-pet-link__diag summary { font-size: 0.75em; cursor: pointer; color: var(--dsw-alias-label-tertiary, rgba(128, 128, 128, 0.8)); }
   .we-pet-link__diag pre {
     margin: 4px 0 0; padding: 6px; border-radius: var(--we-ui-radius, 8px);

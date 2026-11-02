@@ -412,7 +412,11 @@ exports.apply = ctx => {
     petLinkExtensionCard.refresh();
     // 适度轮询运行态（版本/运行中/官方共存），供卡片状态行保持最新；受主包零改动约束无订阅通道。
     if (petLinkCardTimer === null && typeof setInterval === 'function') {
-      petLinkCardTimer = setInterval(() => { if (petLinkExtensionCard) petLinkExtensionCard.refresh(); }, 5000);
+      // 页面不可见时（最小化/切到后台）跳过本轮：state 探测要读盘，没必要在后台空转。
+      petLinkCardTimer = setInterval(() => {
+        if (typeof document !== 'undefined' && document.hidden) return;
+        if (petLinkExtensionCard) petLinkExtensionCard.refresh();
+      }, 5000);
     }
   }
   ctx.effect(() => () => {

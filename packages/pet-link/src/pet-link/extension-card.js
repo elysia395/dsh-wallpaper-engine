@@ -166,11 +166,9 @@ function petLinkCardView(snapshot, card, translate = value => value) {
     });
   }
 
-  // 状态行：安装态 / 版本 / 运行中 / 失败摘要（aria-live 即时播报）
+  // 状态行：安装态 / 版本 / 运行中（aria-live 即时播报）
   let status;
-  if (s.phase === 'installing') status = t('正在下载并安装 dshpet-dshwe…');
-  else if (s.phase === 'failed') status = t('安装 / 更新失败') + ': ' + (s.error || t('未知原因'));
-  else if (s.checking && s.installed !== true) status = t('正在检测运行时…');
+  if (s.checking && s.installed !== true) status = t('正在检测运行时…');
   else if (s.installed === true) status = t('已安装') + ' v' + (s.version || '?') + (s.running ? ' (' + t('运行中') + ')' : '');
   else status = t('未安装');
   children.push({ tag: 'div', attrs: { className: 'we-pet-link__status', role: 'status', 'aria-live': 'polite', 'data-pet-link': 'status' }, children: [status] });
@@ -192,59 +190,10 @@ function petLinkCardView(snapshot, card, translate = value => value) {
     children.push({ tag: 'div', attrs: { className: 'we-pet-link__coexist', role: 'note', 'data-pet-link': 'coexist' }, children: [t('检测到官方 dsh-pet：两者会各显示一只，互不接管。')] });
   }
 
-  // 卡片内进度条：仅安装中且轮询到了有效阶段时渲染；done 后不渲染（不留空行）。
-  const progress = s.progress && typeof s.progress === 'object' ? s.progress : null;
-  if (s.phase === 'installing' && progress && ['downloading', 'verifying', 'installing'].includes(progress.state)) {
-    const stageText = progress.state === 'downloading' ? t('正在下载…')
-      : (progress.state === 'verifying' ? t('正在校验…') : t('正在安装…'));
-    const labelLeft = stageText + (progress.source ? ' · ' + t('下载源') + ': ' + progress.source : '');
-    const pct = typeof progress.percent === 'number' && Number.isFinite(progress.percent) ? Math.max(0, Math.min(100, Math.round(progress.percent))) : null;
-    children.push({
-      tag: 'div',
-      attrs: {
-        className: 'we-pet-link__progress', 'data-pet-link': 'progress',
-        role: 'progressbar', 'aria-label': t('安装进度'), 'aria-valuemin': '0', 'aria-valuemax': '100',
-        ...(pct !== null ? { 'aria-valuenow': String(pct) } : {}),
-      },
-      children: [
-        { tag: 'div', attrs: { className: 'we-pet-link__progress-label' }, children: [
-          { tag: 'span', attrs: {}, children: [labelLeft] },
-          { tag: 'span', attrs: {}, children: [pct !== null ? pct + '%' : ''] },
-        ] },
-        { tag: 'div', attrs: { className: 'we-pet-link__progress-bar' }, children: [
-          { tag: 'div', attrs: { className: 'we-pet-link__progress-fill' + (pct !== null ? '' : ' we-pet-link__progress-fill--indeterminate'), style: pct !== null ? { width: pct + '%' } : undefined }, children: [] },
-        ] },
-      ],
-    });
-  }
-
-  // 失败块：包名 + 已尝试的源（结构化体）+ 官方地址（新开页 + noopener）；无结构化体时给包名与官方地址兜底。
-  if (s.phase === 'failed') {
-    const fail = s.failBlock && typeof s.failBlock === 'object' ? s.failBlock : null;
-    const pkg = (fail && typeof fail.package === 'string' && fail.package) || PET_LINK_CARD_PACKAGE;
-    const officialUrl = (fail && typeof fail.officialUrl === 'string' && fail.officialUrl) || PET_LINK_CARD_OFFICIAL_URL;
-    const failRows = [
-      { tag: 'div', attrs: { className: 'we-pet-link__fail-title' }, children: [t('安装 / 更新失败') + ': ' + (s.error || t('未知原因'))] },
-      { tag: 'div', attrs: {}, children: [t('包名') + ': ' + pkg] },
-    ];
-    if (fail && Array.isArray(fail.sources) && fail.sources.length > 0) {
-      failRows.push({
-        tag: 'div',
-        attrs: {},
-        children: [t('已尝试的下载源') + ': ' + fail.sources.map(src => String((src && src.source) || 'unknown')
-          + (src && src.error ? ' (' + String(src.error) + ')' : '')).join(' · ')],
-      });
-    }
-    if (fail) failRows.push({ tag: 'div', attrs: {}, children: [t('双源均失败，可从官方地址手动安装')] });
-    failRows.push({ tag: 'a', attrs: { className: 'we-pet-link__fail-link', href: officialUrl, target: '_blank', rel: 'noopener noreferrer' }, children: [officialUrl] });
-    children.push({ tag: 'div', attrs: { className: 'we-pet-link__fail', role: 'note', 'data-pet-link': 'fail-block' }, children: failRows });
-  }
-
   // 主按钮 + 图文引导面板。
   // 2026-11-01：本插件**不再自己下载安装**（自研下载器绕过 DSH 依赖管理，会与 link: 布局
   // 冲突，曾造成重复注册 / 误判未安装 / 启动崩溃）。改为引导用户走 DSH 官方入口，
   // 面板里给三步截图 + 包名 + 一键复制。
-  const installing = false; // 下载器已拆：不再有安装中状态
   // 引导面板优先用 **React 组件**：它自带 useState，点击只重画自己。
   // 为什么必须这么做：宿主的 render(ctx) 是内联调用、**不订阅**我们的 notify()，
   // 纯快照驱动的展开/收起要等宿主因别的原因重画才生效（实测「点半天没反应」）。
@@ -302,24 +251,11 @@ function petLinkCardView(snapshot, card, translate = value => value) {
         },
         {
           tag: 'button',
-          attrs: { type: 'button', className: 'we-picker__btn we-pet-link__test', 'data-pet-link': 'test-once', 'aria-label': t('测试一次联动'), disabled: installing },
+          attrs: { type: 'button', className: 'we-picker__btn we-pet-link__test', 'data-pet-link': 'test-once', 'aria-label': t('测试一次联动') },
           children: [t('测试一次联动')],
           on: { onClick: () => card.testOnce() },
         },
       ],
-    });
-  }
-
-  // 分步进度
-  if (Array.isArray(s.steps) && s.steps.length > 0) {
-    children.push({
-      tag: 'ol',
-      attrs: { className: 'we-pet-link__steps', 'data-pet-link': 'steps' },
-      children: s.steps.map((step, index) => ({
-        tag: 'li',
-        attrs: { 'data-step': String(step && step.step ? step.step : index), 'data-ok': String(!(step && step.ok === false)) },
-        children: [String((step && step.step) || ('#' + (index + 1))) + (step && step.ok === false ? ' (' + ((step && step.reason) || t('失败')) + ')' : '')],
-      })),
     });
   }
 
@@ -329,7 +265,7 @@ function petLinkCardView(snapshot, card, translate = value => value) {
     attrs: { className: 'we-pet-link__diag', 'data-pet-link': 'diag' },
     children: [
       { tag: 'summary', attrs: {}, children: [t('诊断')] },
-      { tag: 'pre', attrs: {}, children: [JSON.stringify({ mode: s.mode || null, reason: s.reason || '', installed: s.installed === true, version: s.version || '', path: s.path || '', running: s.running === true, officialPet: s.officialPet === true, phase: s.phase || 'idle', error: s.error || '', steps: s.steps || [] }, null, 2)] },
+      { tag: 'pre', attrs: {}, children: [JSON.stringify({ mode: s.mode || null, reason: s.reason || '', installed: s.installed === true, version: s.version || '', path: s.path || '', running: s.running === true, officialPet: s.officialPet === true, error: s.error || '' }, null, 2)] },
     ],
   });
 
@@ -373,11 +309,7 @@ function createPetLinkExtensionCard(deps = {}) {
     conflict: false,
     mode: 'native',
     reason: '',
-    phase: 'idle',
-    steps: [],
     error: '',
-    progress: null,
-    failBlock: null,
     // 图文安装引导的本地 UI 状态（不持久化、不发请求）
     guideOpen: false,
     copied: false,
@@ -413,9 +345,6 @@ function createPetLinkExtensionCard(deps = {}) {
       } catch { /* 非浏览器环境 */ }
       return state.guideOrigin || '';
     })(),
-    steps: state.steps.map(step => ({ ...step })),
-    progress: state.progress ? { ...state.progress } : null,
-    failBlock: state.failBlock ? JSON.parse(JSON.stringify(state.failBlock)) : null,
   });
 
   const readMode = () => petLinkCardReadMode(state, deps.petLink);
