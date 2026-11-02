@@ -2440,8 +2440,8 @@ const runGuard = (stub) => { new Function('window', guardSource)(stub); return s
   check('元素级围栏：最近一次被拦的调用点留下时间戳与栈头（壁纸帧控制台可自证）',
     g4.elLastBlockedAt > 0 && typeof g4.elLastBlockedStack === 'string' && g4.elLastBlockedStack.length > 0,
     'at=' + g4.elLastBlockedAt + ' stack=' + String(g4.elLastBlockedStack).slice(0, 40));
-  // 手势窗口内：shim 合成的 pointer/mouse 也算（isTrusted === false 也正是那一类）。
-  gestureHandlers.forEach((h) => h.fn({ type: h.t, isTrusted: false }));
+  // 手势窗口内：**可信来源**才放行（#169 §3：isTrusted === true，或 shim 的 __wePushPointer 注入期）。
+  gestureHandlers.forEach((h) => h.fn({ type: h.t, isTrusted: true }));
   input4.focus();
   check('元素级围栏：真实交互后的窗口内放行（用户点壁纸自己的编辑框照常拿焦点）',
     g4.gestureAt > 0 && g4.elCalls === 2 && g4.elAllowed === 1 && g4.elBlocked === 1 && elRaw.length === 1,
@@ -2472,7 +2472,7 @@ const runGuard = (stub) => { new Function('window', guardSource)(stub); return s
   check('元素级围栏：SVGElement.prototype.focus 同样被围栏（无手势吞掉 + 计数 + svgInstalled）',
     g4s.svgInstalled === true && g4s.elCalls === 1 && g4s.elBlocked === 1 && svgRaw.length === 0,
     'svgInstalled=' + g4s.svgInstalled + ' elCalls=' + g4s.elCalls + ' raw=' + svgRaw.length);
-  svgGestures.forEach((h) => h.fn({ type: h.t, isTrusted: false }));
+  svgGestures.forEach((h) => h.fn({ type: h.t, isTrusted: true }));
   svg4.focus();
   check('元素级围栏：手势窗口内 SVG 元素的 focus 照常放行',
     g4s.elAllowed === 1 && g4s.elBlocked === 1 && svgRaw.length === 1,
@@ -2494,6 +2494,65 @@ const runGuard = (stub) => { new Function('window', guardSource)(stub); return s
   check('负对照：窗口判定恒真 ⇒ 元素级围栏失效（无手势不再被吞）',
     gM.elBlocked === 0 && gM.elAllowed === 1 && elRawM.length === 1,
     'elBlocked=' + gM.elBlocked + ' raw=' + elRawM.length);
+  // ⑧' #169 §3：**自派手势不再能打开放行窗口**。壁纸文档里 `dispatchEvent(new PointerEvent(...))`
+  //    造出来的事件 isTrusted === false 且不经过 shim ⇒ 只记 gestureIgnored，窗口不动 ⇒ 随后的
+  //    夺焦仍被吞。负对照：把判定改回"只看事件类型"⇒ 同一条判据必须变红。
+  const forgedRaw = [];
+  const ForgedEl = function () {};
+  ForgedEl.prototype.focus = function () { forgedRaw.push('el'); };
+  const forgedHandlers = [];
+  const winF = { focus () {}, document: {}, HTMLElement: ForgedEl,
+    addEventListener (t, fn) { forgedHandlers.push({ t, fn }); } };
+  runGuard(winF);
+  const gF = winF.__weFocusGuard;
+  forgedHandlers.forEach((h) => h.fn({ type: h.t, isTrusted: false })); // 作者页自派
+  new ForgedEl().focus();
+  check('自派手势不开放行窗口：无手势的 element.focus() 仍被吞，且单独记 gestureIgnored',
+    gF.gestureAt === 0 && gF.gestureIgnored === 4 && gF.elBlocked === 1 && gF.elAllowed === 0
+      && forgedRaw.length === 0,
+    'gestureAt=' + gF.gestureAt + ' gestureIgnored=' + gF.gestureIgnored
+      + ' elBlocked=' + gF.elBlocked + ' raw=' + forgedRaw.length);
+  // 负对照：判定退回"只看事件类型 + capture"（不看 isTrusted / 注入期）⇒ 自派手势就能开窗口，
+  // 上面那条判据（gestureAt === 0）必须变假。
+  const forgedRawM = [];
+  const ForgedElM = function () {};
+  ForgedElM.prototype.focus = function () { forgedRawM.push('el'); };
+  const forgedHandlersM = [];
+  const winFM = { focus () {}, document: {}, HTMLElement: ForgedElM,
+    addEventListener (t, fn) { forgedHandlersM.push({ t, fn }); } };
+  new Function('window', guardSource.replace(
+    'if (guard.injectDepth > 0 || (ev && ev.isTrusted === true)) { guard.gestureAt = Date.now(); return; }',
+    'guard.gestureAt = Date.now(); return;'))(winFM);
+  const gFM = winFM.__weFocusGuard;
+  forgedHandlersM.forEach((h) => h.fn({ type: h.t, isTrusted: false }));
+  new ForgedElM().focus();
+  check('负对照：判定退回只看事件类型 ⇒ 自派手势即可开窗口、夺焦被放行（判据有牙）',
+    gFM.gestureAt > 0 && gFM.elAllowed === 1 && gFM.elBlocked === 0 && forgedRawM.length === 1,
+    'gestureAt=' + gFM.gestureAt + ' elAllowed=' + gFM.elAllowed + ' raw=' + forgedRawM.length);
+  // ⑧'' 可信来源②：shim 的 __wePushPointer 注入期间合成的 isTrusted === false 事件**必须放行**
+  //    （那才是用户真手经 op 通道送进来的那一次）。围栏晚于 shim 注入，所以能包到它。
+  const pushRaw = [];
+  const PushEl = function () {};
+  PushEl.prototype.focus = function () { pushRaw.push('el'); };
+  const pushHandlers = [];
+  let pushCalls = 0;
+  const winP = { focus () {}, document: {}, HTMLElement: PushEl,
+    addEventListener (t, fn) { pushHandlers.push({ t, fn }); },
+    __wePushPointer () { pushCalls += 1; pushHandlers.forEach((h) => h.fn({ type: h.t, isTrusted: false })); } };
+  runGuard(winP);
+  const gP = winP.__weFocusGuard;
+  winP.__wePushPointer(10, 20, 1);
+  new PushEl().focus();
+  check('shim 注入的合成点击算可信手势：窗口内放行（作者页编辑框照常拿焦点）',
+    pushCalls === 1 && gP.injectDepth === 0 && gP.gestureAt > 0 && gP.gestureIgnored === 0
+      && gP.elAllowed === 1 && pushRaw.length === 1,
+    'injectDepth=' + gP.injectDepth + ' gestureAt=' + gP.gestureAt
+      + ' elAllowed=' + gP.elAllowed + ' raw=' + pushRaw.length);
+  check('shim 注入包装是幂等的：重复注入围栏不套第二层（__wePushPointer 只被包一次）',
+    winP.__wePushPointer.__weFocusGuardWrapped === true && (runGuard(winP), winP.__weFocusGuard === gP)
+      && winP.__wePushPointer.__weFocusGuardWrapped === true,
+    'wrapped=' + winP.__wePushPointer.__weFocusGuardWrapped);
+
   // ⑨ 元素级补丁装不上时如实记账，且绝不抛（注入体住在壁纸文档里）。
   const ElFrozen = function () {};
   Object.defineProperty(ElFrozen.prototype, 'focus', { configurable: false, writable: false, value () {} });
