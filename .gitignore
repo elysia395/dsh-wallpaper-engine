@@ -67,3 +67,6 @@ packages/*/lib/client.*.js
 /.migrate-pet-link.mjs
 /.pet-link-integration.patch
 *.rej
+
+# QA 探针/日志（本地验证产物，不入库）
+_t4logs/
