@@ -117,30 +117,39 @@ function petLinkCardView(snapshot, card, translate = value => value) {
 
   // 标题行：与宿主设置行**完全同款** —— 行容器 .we-picker__ctl（两端对齐、gap 12px、32px 行高）、
   // 标签 .we-picker__ctl-label（0.88em、常规字重）、右端胶囊开关 .we-picker__switch。
-  // 输入仍是 input[type=checkbox]（无障碍语义与判据不变），视觉交给宿主的胶囊轨道。
-  const switchInput = {
-    tag: 'input',
-    attrs: { type: 'checkbox', role: 'switch', 'aria-label': t('启用桌宠联动'), 'data-pet-link': 'switch', checked: s.linkEnabled !== false },
-    children: [],
-    on: { onChange: event => card.toggleEnabled(Boolean(event && event.target && event.target.checked)) },
-  };
-  children.push({
-    tag: 'div',
-    attrs: { className: 'we-picker__ctl' },
-    children: [
-      { tag: 'span', attrs: { className: 'we-picker__ctl-label' }, children: [t('启用桌宠联动')] },
-      {
-        tag: 'label',
-        attrs: { className: 'we-picker__switch' },
-        children: [
-          switchInput,
-          { tag: 'span', attrs: { className: 'we-picker__switch-track' }, children: [
-            { tag: 'span', attrs: { className: 'we-picker__switch-thumb' }, children: [] },
-          ] },
-        ],
-      },
-    ],
-  });
+  //
+  // ⚠️ 为什么这里优先用 **React 组件**：宿主的 `render(ctx)` 是一次性内联调用、**不订阅**本卡片的
+  // notify()；纯快照驱动的复选框改了 state 也要等宿主因别的原因重画（切页签再切回来）才可见，
+  // 实测现象就是"按下去没反应"。开关行自带 useState + useEffect 订阅，点下去立刻重画自己；
+  // 无 React 的测试环境走下面的静态回退（判据仍按 data-pet-link 取节点）。
+  const ToggleRowComp = card && typeof card.toggleRow === 'function' ? card.toggleRow : null;
+  if (typeof ToggleRowComp === 'function') {
+    children.push({ tag: ToggleRowComp, attrs: {}, children: [] });
+  } else {
+    const switchInput = {
+      tag: 'input',
+      attrs: { type: 'checkbox', role: 'switch', 'aria-label': t('启用桌宠联动'), 'data-pet-link': 'switch', checked: s.linkEnabled !== false },
+      children: [],
+      on: { onChange: event => card.toggleEnabled(Boolean(event && event.target && event.target.checked)) },
+    };
+    children.push({
+      tag: 'div',
+      attrs: { className: 'we-picker__ctl' },
+      children: [
+        { tag: 'span', attrs: { className: 'we-picker__ctl-label' }, children: [t('启用桌宠联动')] },
+        {
+          tag: 'label',
+          attrs: { className: 'we-picker__switch' },
+          children: [
+            switchInput,
+            { tag: 'span', attrs: { className: 'we-picker__switch-track' }, children: [
+              { tag: 'span', attrs: { className: 'we-picker__switch-thumb' }, children: [] },
+            ] },
+          ],
+        },
+      ],
+    });
+  }
 
   // 状态行：安装态 / 版本 / 运行中 / 失败摘要（aria-live 即时播报）
   let status;
@@ -465,7 +474,60 @@ function createPetLinkExtensionCard(deps = {}) {
     };
   })();
 
-  const api = { snapshot, subscribe, refresh, toggleEnabled, openPanel, testOnce, toggleGuide, copyPackage, guideImageUrl: step => (typeof deps.guideImageUrl === 'function' ? deps.guideImageUrl(step) : ''), guidePanel };
+  /**
+   * 开关行组件：自带 useState，并由 useEffect 订阅本卡片的 notify() —— 点下去立刻重画自己，
+   * 后台 refresh() 也会把开关同步回真值。无 React 的环境返回 null，视图层回退到静态描述树。
+   */
+  const toggleRow = (() => {
+    const R = deps.React;
+    if (!R || typeof R.useState !== 'function' || typeof R.createElement !== 'function') return null;
+    return function PetLinkToggleRow() {
+      const [enabled, setEnabled] = R.useState(() => snapshot().linkEnabled !== false);
+      if (typeof R.useEffect === 'function') {
+        R.useEffect(() => subscribe(() => setEnabled(snapshot().linkEnabled !== false)), []);
+      }
+      const onChange = event => {
+        const next = Boolean(event && event.target && event.target.checked);
+        setEnabled(next);
+        toggleEnabled(next);
+      };
+      return R.createElement('div', { className: 'we-picker__ctl' },
+        R.createElement('span', { className: 'we-picker__ctl-label' }, translate('启用桌宠联动')),
+        R.createElement('label', { className: 'we-picker__switch' },
+          R.createElement('input', {
+            type: 'checkbox', role: 'switch',
+            'aria-label': translate('启用桌宠联动'),
+            'data-pet-link': 'switch',
+            checked: enabled,
+            onChange,
+          }),
+          R.createElement('span', { className: 'we-picker__switch-track' },
+            R.createElement('span', { className: 'we-picker__switch-thumb' }),
+          ),
+        ),
+      );
+    };
+  })();
+
+  const api = { snapshot, subscribe, refresh, toggleEnabled, openPanel, testOnce, toggleGuide, copyPackage, toggleRow, guideImageUrl: step => (typeof deps.guideImageUrl === 'function' ? deps.guideImageUrl(step) : ''), guidePanel };
+
+  /**
+   * 卡片主体组件：宿主 `render(ctx)` 是一次性内联调用、**不订阅**本卡片的 notify()，
+   * 于是「检测结果（未装/已装）、状态行、进度、按钮出现或隐藏」这些快照驱动的部分都要等
+   * 宿主因别的原因重画才更新（实测：切页签再切回来才变）。把整个 body 包成带 useState 的组件
+   * 并订阅 notify() 后，refresh() 每次落状态都会重画；没有 React 的环境走 render() 的静态回退。
+   */
+  const cardBody = (() => {
+    const R = deps.React;
+    if (!R || typeof R.useState !== 'function' || typeof R.createElement !== 'function') return null;
+    return function PetLinkCardBody() {
+      const [, bump] = R.useState(0);
+      if (typeof R.useEffect === 'function') {
+        R.useEffect(() => subscribe(() => bump(n => n + 1)), []);
+      }
+      return petLinkCardToReact(petLinkCardView(snapshot(), api, translate), deps.h);
+    };
+  })();
 
   const descriptor = {
     id: 'pet-link',
@@ -474,6 +536,7 @@ function createPetLinkExtensionCard(deps = {}) {
     get desc() { return translate('把壁纸吉祥物换成可联动的桌宠，或回到原生吉祥物'); },
     render(ctx) {
       // 纯视图：只把「当前快照 + 具名处理器」翻成 React 元素；不发请求、不写设置、不持状态。
+      if (typeof cardBody === 'function') return deps.h(cardBody, null);
       return petLinkCardToReact(petLinkCardView(snapshot(), api, translate), deps.h);
     },
   };

@@ -18,7 +18,7 @@ const i18n = new Function(i18nSrc + ';return { createPetLinkTranslate };')();
 
 const byAttr = (node, name, value, out = []) => {
   if (!node || typeof node !== 'object') return out;
-  const attrs = node.attrs || {};
+  const attrs = node.attrs || node.props || {};
   if (attrs[name] !== undefined && (value === undefined || attrs[name] === value)) out.push(node);
   for (const child of node.children || []) byAttr(child, name, value, out);
   return out;
@@ -99,6 +99,42 @@ const detected = view({ checking: false, installed: true, version: '0.3.8', mode
 assert.ok(byAttr(detected, 'data-pet-link', 'open-panel')[0], '检测到桌宠时出现打开面板按钮');
 assert.ok(byAttr(detected, 'data-pet-link', 'test-once')[0], '检测到桌宠时出现测试一次按钮');
 console.log('PASS 卡片控件：胶囊开关 / 状态 / 安装引导 / 诊断；面板与测试按钮随检测结果出现或隐藏');
+
+// ── 2b) 宿主不订阅 notify 的补偿：render 必须交出"自带订阅"的组件 ─────────────
+//  宿主在 renderExtensionsTab 里是一次性内联调用 mod.render(ctx)，不会订阅本卡片的 notify()；
+//  若 render 直接返回静态树，开关点下去只改内部状态、要等宿主因别的原因重画（切页签再切回）
+//  才看得见（实测「按下去没反应」）。这里钉住：React 在场时 render 返回函数组件，且该组件
+//  内部仍是同一棵描述树（开关节点/anchor 文案都在）。
+{
+  const ReactFake = {
+    Fragment: 'Fragment',
+    useState: init => [typeof init === 'function' ? init() : init, () => {}],
+    useEffect: () => {},
+    createElement: (type, props, ...children) => ({ tag: type, attrs: props || {}, children }),
+  };
+  const cardWithReact = load.createPetLinkExtensionCard({ ...deps, React: ReactFake });
+  const rendered = cardWithReact.descriptor.render({});
+  assert.equal(typeof rendered.tag, 'function',
+    'React 在场时 render 必须返回自带订阅的组件（否则开关/状态要等宿主重画才更新）');
+  const expand = node => {
+    if (!node || typeof node !== 'object') return node;
+    if (Array.isArray(node)) return node.map(expand);
+    if (typeof node.tag === 'function') return expand(node.tag(node.attrs || node.props || {}));
+    return { ...node, children: (node.children || []).map(expand) };
+  };
+  const inner = expand(rendered.tag({}));
+  const toggle = byAttr(inner, 'data-pet-link', 'switch')[0];
+  assert.ok(toggle, '组件内部仍要画出联动开关');
+  assert.ok(text(inner).includes('启用桌宠联动'), '开关行标签仍是「启用桌宠联动」');
+  let notified = 0;
+  const off = cardWithReact.subscribe(() => { notified += 1; });
+  assert.equal(cardWithReact.snapshot().linkEnabled, true, '初始联动开关为开');
+  (toggle.attrs || toggle.props).onChange({ target: { checked: false } });
+  assert.equal(cardWithReact.snapshot().linkEnabled, false, '开关点下去立即生效（不必等宿主重画）');
+  assert.ok(notified >= 1, '开关变化必须 notify 订阅者（组件据此立刻重画）');
+  off();
+  console.log('PASS 开关自订阅：render 交出组件、点按立即改状态并 notify');
+}
 
 // ── 3) 具名处理器：走 M4 路由、开关立即生效、安装成功/失败、面板/测试 ────────
 let mode = 'native';
