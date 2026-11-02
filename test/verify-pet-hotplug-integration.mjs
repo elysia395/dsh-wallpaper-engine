@@ -64,6 +64,20 @@ const ctx = new Context();
 const service = ctx.plugin(WebServer);
 const plugin = { name, inject, apply };
 const path = '/wallpaper-engine/pet-link/official';
+// 宿主半路由面（2026-11-02 重写后）：官方控制 / 资源 prefix / 引导图 / 气泡配图 + pet state。
+// 自研下载器拆除后 install / install-progress / uninstall 三条路由已不存在；
+// 这里按**路径集合**对账（比条数牢：漏一条或多一条都红），也不再随路由改造漂移。
+const EXPECTED_ROUTES = [
+  '/wallpaper-engine/pet-link/official',
+  '/wallpaper-engine/pet-link/official/assets/',
+  '/wallpaper-engine/pet-link/official/guide-step',
+  '/wallpaper-engine/pet-link/official/meme',
+  '/wallpaper-engine/pet-link/pet/state',
+];
+function assertRouteSurface() {
+  assert.deepEqual([...routes.keys()].sort(), [...EXPECTED_ROUTES].sort(),
+    '宿主半路由面应与约定一致（实际：' + [...routes.keys()].join(', ') + '）');
+}
 let fiber;
 async function get(handler = routes.get(path)?.handler, method = 'GET') {
   assert.ok(handler, '正式官方路由必须在场');
@@ -82,8 +96,8 @@ try {
   ctx.provide('wallpaperEngineHost', createSubpackageHost());
   fiber = ctx.plugin(plugin, { linkEnabled: true });
   await fiber.await();
-  // 宿主半路由数 = 3（官方控制 + 资源 prefix + 气泡配图）+ 4（/pet-link/pet/{state,install-progress,install,uninstall}）= 7。
-  assert.equal(routes.size, 7);
+  // 宿主半路由面 = 官方控制 / 资源 prefix / 引导图 / 气泡配图 + pet state（见 EXPECTED_ROUTES）。
+  assertRouteSurface();
   assert.equal((await get(undefined, 'PUT')).reason, 'method-not-allowed');
   const initial = routes.get(path).handler;
   fiber.update({ linkEnabled: false }, true);
@@ -99,7 +113,7 @@ try {
   for (let i = 0; i < 10; i++) {
     fiber = ctx.plugin(plugin, { linkEnabled: false });
     await fiber.await();
-    assert.equal(routes.size, 7);
+    assertRouteSurface();
     assert.equal((await get()).reason, 'bridge-disabled');
     await fiber.dispose(); fiber = null;
     assert.equal(routes.size, 0);
