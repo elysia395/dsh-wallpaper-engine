@@ -420,11 +420,16 @@ function createPetLinkExtensionCard(deps = {}) {
 
   const readMode = () => petLinkCardReadMode(state, deps.petLink);
 
+  // 5s 轮询与用户点按可能并发；用自增序号丢弃过期响应，避免慢请求回包覆盖新状态。
+  let refreshSeq = 0;
   const refresh = async () => {
+    const seq = ++refreshSeq;
     try {
       const res = await deps.apiFetch(deps.apiUrl('/pet-link/pet/state'));
+      if (seq !== refreshSeq) return snapshot();
       petLinkCardApplyState(state, res && res.data ? res.data : null);
     } catch (error) {
+      if (seq !== refreshSeq) return snapshot();
       state.checking = false;
       state.error = String((error && error.message) || error || '');
     }

@@ -86,6 +86,23 @@ console.log('PASS 五种状态：未装 / 已装 / 引导展开 / 官方共存 /
   console.log('PASS EN 抽查：卡片五种状态行在 EN 下无中文残留');
 }
 
+// ── 1c) 并发刷新：慢的旧响应不得覆盖新响应（5s 轮询与点按会并发）──────────
+{
+  const pending = [];
+  const raceCard = load.createPetLinkExtensionCard({
+    ...deps,
+    apiFetch: () => new Promise(resolve => { pending.push(resolve); }),
+  });
+  const first = raceCard.refresh();
+  const second = raceCard.refresh();
+  pending[1]({ ok: true, data: { ok: true, installed: true, version: '9.9.9' } });
+  await second;
+  pending[0]({ ok: true, data: { ok: true, installed: false } });
+  await first;
+  assert.equal(raceCard.snapshot().installed, true, '过期刷新响应不得覆盖最新状态');
+  console.log('PASS 并发刷新：丢弃过期响应，保留最新状态');
+}
+
 // ── 2) 卡片控件：胶囊开关 / 状态 / 安装引导 / 诊断；面板与测试按钮随检测结果出现或隐藏 ──
 const base = view({ checking: false, installed: false, linkEnabled: true, phase: 'idle' });
 const switchNode = byAttr(base, 'data-pet-link', 'switch')[0];
