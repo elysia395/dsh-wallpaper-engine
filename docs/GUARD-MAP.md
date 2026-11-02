@@ -79,7 +79,7 @@
 | `verify-pet-hotplug-client.mjs` | `packages/pet-link/src/official-pet.js` `packages/pet-link/src/pet-link-performer.js` |  |
 | `verify-pet-hotplug-host.mjs` | `lib/subpackage-boot.js` `packages/pet-link/lib/index.js` `packages/pet-link/lib/official-provider.js` `packages/pet-link/lib/routes/official-pet.js` `packages/pet-link/src/official-pet.js` |  |
 | `verify-pet-hotplug-integration.mjs` | `lib/subpackage-boot.js` `packages/pet-link/lib/index.js` |  |
-| `verify-pet-install.mjs` | — |  |
+| `verify-pet-install.mjs` | `packages/pet-link/lib/index.js` |  |
 | `verify-pet-link.mjs` | — |  |
 | `verify-pet-linked.mjs` | `packages/pet-link/src/pet-link.js` `packages/pet-link/src/pet-link/bubble.js` `packages/pet-link/src/pet-link/constants.js` `packages/pet-link/src/pet-link/linked-egg1.js` `packages/pet-link/src/pet-link/linked-egg2.js` `packages/pet-link/src/pet-link/linked-mascot.js` `packages/pet-link/src/pet-link/linked-shared.js` `packages/pet-link/src/pet-link/linked-sidebar.js` `packages/pet-link/src/pet-link/linked.js` `packages/pet-link/src/pet-link/mode.js` `packages/pet-link/src/pet-link/native.js` |  |
 | `verify-pet-mascot.mjs` | `packages/pet-link/src/pet-link.js` `packages/pet-link/src/pet-link/bubble.js` `packages/pet-link/src/pet-link/constants.js` `packages/pet-link/src/pet-link/linked-egg1.js` `packages/pet-link/src/pet-link/linked-egg2.js` `packages/pet-link/src/pet-link/linked-mascot.js` `packages/pet-link/src/pet-link/linked-shared.js` `packages/pet-link/src/pet-link/linked-sidebar.js` `packages/pet-link/src/pet-link/linked.js` `packages/pet-link/src/pet-link/mode.js` `packages/pet-link/src/pet-link/native.js` |  |
@@ -258,7 +258,7 @@
 | `packages/parallax/src/ext-parallax.js` | 1 | `verify-scene-live` |
 | `packages/parallax/src/parallax-layer.js` | 1 | `verify-scene-live` |
 | `packages/pet-link/lib/client.pet-link.js` | 3 | `verify-client-sync` `verify-client` `verify-pet-hotplug-integration` |
-| `packages/pet-link/lib/index.js` | 5 | `verify-pet-hotplug-host` `verify-pet-hotplug-integration` `verify-pet-official` `verify-pet-optional-probe` `verify-pet-package` |
+| `packages/pet-link/lib/index.js` | 6 | `verify-pet-hotplug-host` `verify-pet-hotplug-integration` `verify-pet-install` `verify-pet-official` `verify-pet-optional-probe` `verify-pet-package` |
 | `packages/pet-link/lib/official-provider.js` | 1 | `verify-pet-hotplug-host` |
 | `packages/pet-link/lib/pet-install/state-probe.js` | 0 | **（无）** |
 | `packages/pet-link/lib/prepared.js` | 1 | `verify-pet-tuner-browser` |

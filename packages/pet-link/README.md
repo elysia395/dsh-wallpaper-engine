@@ -45,19 +45,17 @@
 
 ## 运行时安装（设置页卡片 → 宿主半路由）
 
-卡片按钮全部走宿主半三条路由（同源校验 + 8 KiB body 上限；页面**不能**传任意下载 URL，安装源由宿主决定）：
+自研下载器已于 2026-11-01 拆除：下载解包会绕过 DSH 依赖管理、与 `link:` 布局冲突，实测造成重复注册 / 误判未安装 / 启动崩溃。现在安装走 **DSH 官方入口**（插件 → 添加插件，包名 `dshpet-dshwe`），pet-link 只保留只读探测与图文引导。
 
-- `GET  /pet-link/pet/state` → `{ installed, version, path, running, officialPet, officialVersion, conflict, bundleListed }`
-- `POST /pet-link/pet/install` → 分步进度 `preflight → resolve → download → verify → install → bundles → verify-install → credential`
-- `POST /pet-link/pet/uninstall` → `{ keepData }`（默认**保留**数据根；`keepData:false` 连 `~/.dsh/dsh-pet-dshwe/` 一起删）
+宿主半只剩一条只读路由（同源校验：带 Origin 时必须 http + 本机回环 + 同端口，`sec-fetch-site: cross-site` 一律 403；只接受 GET）：
 
-**双路径**：宿主先试 `pnpm add dsh-pet-dshwe@<ver> --config.node-linker=hoisted --ignore-scripts`；pnpm 缺失 / 失败 / 无网时退回 **tgz 兜底**——从 Release manifest（`registry.npmjs.org` / `github.com` / `objects.githubusercontent.com` 三域名白名单，强制 https）取包，按 manifest 的 `artifact.sha256` + 字节数**复算通过才解包**。
+- `GET /pet-link/pet/state` → `{ ok, installed, name, version, path, runtimePresent, running, installUrl, installCommand }`
+  - `installed` / `version` / `path`：每次请求**现扫** profile 的 `node_modules/{dshpet-dshwe,dsh-pet-dshwe}/package.json`（不缓存）；
+  - `runtimePresent`：数据根 `$DSH_HOME/dsh-pet-dshwe/` 是否存在；
+  - `running`：页内 `petApiDshwe` 服务是否已注册（决定联动是否真的可用）；
+  - `installUrl` / `installCommand`：给卡片展示的官方入口与命令，纯展示、不可执行。
 
-事务骨架：备份 `package.json` / `pnpm-lock.yaml` / 目标目录 → 原子写 + 写后校验 → 任一步失败**逐项回滚**（回滚后与安装前逐字节一致）→ 成功后落 `$DSH_HOME/dsh-pet-dshwe/pet-link-install.json` 凭据。解包用 `inflateRawSync` 解 deflate 体 + 纯 JS 逐项校验 gzip 尾部 CRC32/ISIZE 再纯 JS 解 tar——**不用** `zlib.gunzipSync`（Node v24.14 的 gunzip 同步解码对 ~64 MB 大包偶发抛 `incorrect data check` 误报，同一 Buffer 20 次实测约 2 次失败；解压实现问题不代表产物损坏）；解包失败报 `extract-failed` 回滚，绝不静默写 bundles。
-
-> ⚠ `pnpm add` 必须带 `--config.node-linker=hoisted`（= DSH profile 实际 `nodeLinker`）：本机 pnpm 12 默认 isolated linker 装 `dsh-pet-dshwe` 会原生崩溃（tokio stack overflow）。这条写死在安装事务里，是「下载并安装」能否成功的硬约束。
-
-已知并发边界：安装与卸载同时点击时，后到请求会被判 `busy-*` 明确拒绝，先到的事务完整跑完——磁盘终态始终与报告一致（见 `verify-pet-install` 场景 15/16）。
+卡片按钮「如何下载安装联动桌宠」展开的是图文引导（三步 + 仓库链接），点了**不会**替用户装包：安装动作由 DSH 的插件管理完成，装完 `petApiDshwe` 注册上来，卡片在 5s 内自动从 native 翻到 linked。
 
 ## 浮层操控面板（`Ctrl+Shift+D`）
 

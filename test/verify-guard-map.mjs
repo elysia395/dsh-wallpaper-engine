@@ -114,7 +114,6 @@ const ZERO_COVERAGE_WHY = {
  * 允许**第三类**的守卫 —— **可枚举 + 每条有理由**。
  */
 const NO_MODULE_TARGET_WHY = {
-  'verify-pet-install.mjs': '管的是**官方安装引导的离线回归**（真起 http 服务，按 state → install → uninstall 走一遍路由、同源校验与回滚），目标是路由行为而不是某个模块的字面量路径；由 `npm run verify:pet-install` 独立入口执行，不进 verify 链',
   'verify-issue-claim-policy.mjs': '验证 GitHub Actions 的事前受理审批、权限豁免与可信工作流接线；目标是 .github 下的仓库治理脚本，不属于 lib/src 运行时模块',
   'verify-deployment.mjs': '验证源码安装器与发布集构建器的行为、持久依赖和显式目标安全边界；目标是 scripts 下的部署流程，不属于本映射枚举的 lib/src 运行时模块',
   'verify-dead-declarations.mjs': '管的是**声明孤儿**（跨全部独立脚本面），不针对某个模块',
