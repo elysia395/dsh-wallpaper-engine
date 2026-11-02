@@ -32,14 +32,24 @@ function detect(nodeModulesDir) {
 }
 
 /**
+ * 跑一次探测；探测本身抛错时按「没在跑」处理（状态行不该因为探测异常变红）。
+ * @param {() => unknown} fn
+ * @returns {boolean}
+ */
+function safelyProbe(fn) {
+  try { return Boolean(fn()); } catch { return false; }
+}
+
+/**
  * 造一个只读状态提供者，接口与原 installer 的 `state()` 保持兼容
  * （这样路由与 UI 不用改调用方式）。
- * @param {{ profiledNodeModules?: string, runtimeDir?: string }} opts
+ * @param {{ profiledNodeModules?: string, runtimeDir?: string, probeRunning?: () => boolean }} opts
  * @returns {{ state: () => object }}
  */
 export function createStateProbe(opts = {}) {
   const nodeModulesDir = opts.profiledNodeModules || null;
   const runtimeDir = opts.runtimeDir || null;
+  const probeRunning = typeof opts.probeRunning === 'function' ? opts.probeRunning : null;
   return {
     /** 当前安装态：installed / version / name / path / runtimePresent。纯读，无副作用。 */
     state() {
@@ -56,6 +66,8 @@ export function createStateProbe(opts = {}) {
         name: found.name,
         path: found.path,
         runtimePresent,
+        // pet 宿主半边是否已在本页注册服务（可选探测；没有就是 false，不报错）。
+        running: probeRunning ? safelyProbe(probeRunning) : false,
         // UI 需要的官方安装入口（不再由本插件代下载）
         installUrl: 'https://www.npmjs.com/package/dshpet-dshwe',
         installCommand: 'dsh plugin add dshpet-dshwe',

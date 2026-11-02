@@ -1,6 +1,46 @@
+import { join } from 'node:path';
 import { registerOfficialPetRoutes } from './routes/official-pet.js';
 import { registerPetInstallRoutes } from './routes/pet-install.js';
 import { createStateProbe } from './pet-install/state-probe.js';
+
+/**
+ * 解析 DSH 数据根（`$DSH_HOME` 或 `<home>/.dsh`）。
+ *
+ * 与 `lib/subpackage-boot.js:493` 的 `dshHome()` 同口径（那边由
+ * `test/verify-subpackage-boot.mjs` 用合成 `DSH_HOME` 交叉对账）。
+ * @param env - process.env（可注入便于测试）
+ * @returns {string|null} 绝对路径；都取不到时返回 null
+ */
+function resolveDshHomeLocal(env = {}) {
+  const e = env || {};
+  const fromEnv = e.DSH_HOME || '';
+  if (typeof fromEnv === 'string' && fromEnv.trim()) return fromEnv.trim();
+  const home = e.USERPROFILE || e.HOME || '';
+  if (typeof home === 'string' && home.trim()) return join(home.trim(), '.dsh');
+  return null;
+}
+
+/**
+ * profile 下真实装包的地方（`<profileDir>/node_modules`）。
+ *
+ * state-probe 读的是这个目录；此前调用方传了 `profileDir`，两边键名对不上，
+ * 于是 `detect()` 恒判「未安装」——2026-11-02 修。
+ * @param {string|null|undefined} profileDir
+ * @returns {string|null}
+ */
+function resolveProfiledNodeModulesLocal(profileDir) {
+  return profileDir ? join(profileDir, 'node_modules') : null;
+}
+
+/**
+ * dsh-pet-dshwe 的运行期数据根（`<DSH_HOME>/dsh-pet-dshwe`，logs.txt 一类运行痕迹）。
+ * @param env - process.env（可注入便于测试）
+ * @returns {string|null}
+ */
+function resolvePetRuntimeDirLocal(env = {}) {
+  const dshHome = resolveDshHomeLocal(env);
+  return dshHome ? join(dshHome, 'dsh-pet-dshwe') : null;
+}
 
 /**
  * 解析当前 DSH profile 目录（原 transaction.js 的 resolveProfileDir，随下载器一起移除后内联保留）。
@@ -14,9 +54,9 @@ function resolveProfileDirLocal(env = {}) {
   const e = env || {};
   const fromEnv = e.DSH_PROFILE_DIR || e.DSH_PROFILE || '';
   if (typeof fromEnv === 'string' && fromEnv.trim()) return fromEnv.trim();
-  const home = e.USERPROFILE || e.HOME || '';
-  if (typeof home === 'string' && home.trim()) {
-    return home.trim().replace(/[\\/]+$/, '') + '/.dsh/profiles/desktop';
+  const dshHome = resolveDshHomeLocal(e);
+  if (dshHome) {
+    return join(dshHome, 'profiles', 'desktop');
   }
   return null;
 }
@@ -83,12 +123,13 @@ export function applyImpl(ctx, config = {}, c) {
     registerOfficialPetRoutes(webServer, { disposers, base, http }, {
       isLinkEnabled: () => config.linkEnabled !== false,
     });
-    // 运行时安装控制面（M4）：状态 / 安装（pnpm 优先 + tgz 兜底）/ 卸载。
+    // 运行时安装态报告（M4）：只读——下载/安装已改由 DSH 官方入口完成。
     const profileDir = config.profileDir || resolveProfileDirLocal(process.env);
     const installer = createStateProbe({
-      profileDir,
-      // config 显式给 run（含 null=无 pnpm）时用它，否则走默认 pnpm runner（固定 hoisted）。
-      run: Object.prototype.hasOwnProperty.call(config, 'run') ? config.run : null,
+      // 键名必须与 state-probe 的 `opts.profiledNodeModules` / `opts.runtimeDir` 对齐；
+      // 之前传的是 `profileDir`，导致 detect() 永远拿到 null、卡片恒显示「未安装」。
+      profiledNodeModules: config.profiledNodeModules || resolveProfiledNodeModulesLocal(profileDir),
+      runtimeDir: config.runtimeDir || resolvePetRuntimeDirLocal(process.env),
       // 可选探测：本页没有 dsh-pet-dshwe 时返回 false，不影响 pet-link 装载（见 probeOptionalService）。
       probeRunning: () => Boolean(probeOptionalService(ctx, 'petApiDshwe')),
     });
