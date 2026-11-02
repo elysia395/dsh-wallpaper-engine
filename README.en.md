@@ -68,7 +68,7 @@ Bring local **Wallpaper Engine** Scene, Web and Video wallpapers into DSH, with 
 - **Wallpapers**: live Scene / Web rendering, video playback, local image / video uploads and WE project directories.
 - **Appearance**: liquid glass for settings, conversation and sidebar; colors, transparency, blur, borders and fonts.
 - **Glass subpackage**: liquid glass is a standalone subpackage row, `wallpaper-engine-glass`, which can be disabled on its own in the plugin manager; with it disabled the host — except for the wallpaper shown in the content area — returns to its native look, while wallpapers, fonts and mascots keep working.
-- **Extensions**: mascots, conversation avatars, click / pointer-trail effects, 3D parallax and optional official `dsh-pet` integration.
+- **Extensions**: mascots, conversation avatars, click / pointer-trail effects, 3D parallax and optional desktop-pet integration with [dsh-pet-dshwe](https://github.com/Fish-under-sea/dsh-pet-dshwe) (a full fork of dsh-pet), installable in one click from the settings card and falling back to the native mascot when it is missing, disabled or too old.
 - **Library**: filters, hide / restore, rotation lists and whole-configuration preset import / export.
 
 <h2 id="supported-wallpapers">Supported wallpapers</h2>

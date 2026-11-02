@@ -146,11 +146,16 @@ export const OFF_CHAIN_WHY = {
   'verify-bridge-ci.mjs': '`npm run verify:bridge` 的**判词入口**（要下载产物并真跑中间件）⇒ 独立 CI 步骤，不进 verify 链（链上零下载、零外部进程）。',
   'verify-bundle-rows.mjs': '有意脱链：链尾有一条**真 cordis 往返**（按路径拼接动态 `import` 宿主 peer 包 `@deepseek-ai/cordis`，见本文件 `cordisPath` / `pathToFileURL` 那处），而 CI 是 `npm ci --omit=peer` ⇒ 挂链只会让它永久"出声 SKIP"（P5 的字面量扫描看不到路径拼接的说明符，所以挂链并不会被 P5 判红 —— 但"链上恒跳过"比脱链更坏）；故留在链外 + 每次改行/包必须手跑一次（ADR-0014 S8）。',
   'verify-static.mjs': '静态棘轮入口（ESLint / tsc 都是 devDependencies）⇒ CI 独立步骤 `npm run verify:static`；链上零裸依赖容不下它。',
+  'verify-pet-install.mjs': '桌宠下载器拆除验收夹具（6 段：实现已删 / 只读 state-probe 在场 / 只留 state 路由 / 无下载器引用 / state 返回官方入口 / 包名兼容），`npm run verify:pet-install` 独立入口；不进默认 verify 链。',
+  // ↓ 六件 pet-link 离线夹具：由链上的汇总守卫 `test/verify-pet-link.mjs` 逐一子进程执行
+  //   （该步在 VERIFY_STEPS 的 pet 区块、verify-pet-tuner 之后），所以判据在 PR 门禁上真跑，
+  //   只是文件本身不是链上的直接命令 —— 与 verify-pet-sidebar-glass-browser-case.mjs 同一口径。
   'verify-pet-linked.mjs': 'linked provider 四分区排播离线夹具（performer-rebuild）：由链上的 verify-pet-link.mjs 汇总执行，不是独立命令。',
   'verify-pet-mascot.mjs': '抓绳/绳子缓动/脱手下落离线夹具（performer-rebuild T2）：由链上的 verify-pet-link.mjs 汇总执行，不是独立命令。',
   'verify-pet-egg.mjs': 'egg1/egg2 彩蛋排播离线夹具：由链上的 verify-pet-link.mjs 汇总执行，不是独立命令。',
   'verify-pet-panel.mjs': '浮层操控面板离线夹具：由链上的 verify-pet-link.mjs 汇总执行，不是独立命令。',
   'verify-pet-extension-card.mjs': '设置页扩展卡片离线夹具：由链上的 verify-pet-link.mjs 汇总执行，不是独立命令。',
+  'verify-pet-optional-probe.mjs': '可选依赖口径离线夹具（t14）：由链上的 verify-pet-link.mjs 汇总执行，不是独立命令。',
   'verify-pet-tuner-coverage.mjs': '「面板旋钮必须真消费」判据（performer-rebuild T4）：由链上的 verify-pet-link.mjs 汇总执行，不是独立命令。',
 };
 

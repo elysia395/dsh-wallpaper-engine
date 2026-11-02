@@ -68,7 +68,7 @@
 - **壁纸**：Scene / Web 实时渲染，Video 直接播放；支持自定义图片 / 视频上传与 WE 项目目录。
 - **外观**：设置窗、对话区与侧栏液态玻璃；配色、透明度、模糊、边框与字体可调。
 - **玻璃子包**：液态玻璃是独立子包行 `wallpaper-engine-glass`，可在插件管理器单独停用；停用后，除内容区壁纸外界面回到宿中原生外观，壁纸、字体与吉祥物等功能不受影响。
-- **扩展**：吉祥物、会话头像、点击 / 拖尾特效、3D 视差；可选官方 `dsh-pet` 联动。
+- **扩展**：吉祥物、会话头像、点击 / 拖尾特效、3D 视差；可选桌宠联动 [dsh-pet-dshwe](https://github.com/Fish-under-sea/dsh-pet-dshwe)（dsh-pet 全量 fork），设置页卡片可一键安装，未装 / 关闭 / 版本过旧时回落原生吉祥物。
 - **壁纸库**：筛选、隐藏 / 恢复、自动轮播；外观预设整套导入导出。
 
 <h2 id="支持哪些壁纸"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/section-formats-dark.png"><img src="assets/readme/section-formats-light.png" alt="支持哪些壁纸类型" width="1440"></picture></h2>

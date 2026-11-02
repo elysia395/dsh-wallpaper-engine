@@ -99,6 +99,8 @@ const ZERO_COVERAGE_WHY = {
   [M('packages', 'glass', 'src', 'client.js')]: '玻璃子包浏览器半边入口（ADR-0016 第二至四刀出 packages/glass/lib/client.glass.js）：面板节经 registerPanelSection、行为层经 registerLayerHooks("glass") 登记，注入键契约由 verify-subpackage-client-half 隔产物断言，宿主键集与包间纯度由 verify-subpackage-purity 动态扫 packages/*/src 覆盖，行为面由 verify-client / verify-glass-runtime / verify-glass-surfaces / verify-glass-compositing / verify-readability 与 verify-scene-live 的真求值覆盖，本工具只认字面量路径 ⇒ 按口径算零覆盖',
   [M('packages', 'glass', 'lib', 'routes', 'glass-row.js')]: '玻璃行状态路由族（ADR-0016「行开关即时生效」的宿主信号）：运行期注册 / 撤销随宿主 fiber 生命周期，路由表对账由 verify-route-index（真跑 apply 逐条比对）与 verify-inject-contracts（DEPS 冻结表）覆盖，行为面由 verify-glass-* 与 verify-softrender 的玻璃产物求值覆盖；本工具只认字面量路径 ⇒ 按口径算零覆盖',
   // ── 2026-10-30 启动性能：立绘从主产物 base64 内联改为「assets/rope 随包 + 只读路由直出」──
+  // ── 官方安装引导（#305 重写）：只读探测，无守卫直读 ──
+  [M('packages', 'pet-link', 'lib', 'pet-install', 'state-probe.js')]: '官方安装引导的只读探测：只探测 dsh-pet-dshwe 的安装位点与 state 响应形态，被 packages/pet-link/lib/index.js 经 DI（deps.probePetInstall）注入而非常规 import，本工具只认字面量路径 ⇒ 按口径算零覆盖；行为面由 test/verify-pet-install.mjs 与 test/verify-pet-optional-probe.mjs 覆盖',
   [M('lib', 'routes', 'rope-art.js')]: '立绘静态只读路由族（启动性能外置资产）：注册/撤销与路由表对账由 verify-route-index（真跑 apply 逐条比对）与 verify-inject-contracts（DEPS 冻结表）覆盖，发布面（assets/rope 随 npm 包）由 verify-package-files 的 files 覆盖判据兜住，构建期声明↔文件对账由 scripts/build-client.mjs 的 checkRopeArtDeclarations 把关；本工具只认字面量路径 ⇒ 按口径算零覆盖',
 };
 
@@ -112,10 +114,10 @@ const ZERO_COVERAGE_WHY = {
  * 允许**第三类**的守卫 —— **可枚举 + 每条有理由**。
  */
 const NO_MODULE_TARGET_WHY = {
+  'verify-pet-install.mjs': '管的是**官方安装引导的离线回归**（真起 http 服务，按 state → install → uninstall 走一遍路由、同源校验与回滚），目标是路由行为而不是某个模块的字面量路径；由 `npm run verify:pet-install` 独立入口执行，不进 verify 链',
   'verify-issue-claim-policy.mjs': '验证 GitHub Actions 的事前受理审批、权限豁免与可信工作流接线；目标是 .github 下的仓库治理脚本，不属于 lib/src 运行时模块',
   'verify-deployment.mjs': '验证源码安装器与发布集构建器的行为、持久依赖和显式目标安全边界；目标是 scripts 下的部署流程，不属于本映射枚举的 lib/src 运行时模块',
   'verify-dead-declarations.mjs': '管的是**声明孤儿**（跨全部独立脚本面），不针对某个模块',
-  'verify-route-families.mjs': '管的是**路由族触发线**（枚举口径经 `test/tools/host-route-index.mjs` 的 `buildIndex()` 重算）',
   'compat-harness-live.mjs': '真 harness 安装/启动探活（不读源文件）',
   'compat-harness-pages.mjs': '无头浏览器逐页 DOM 断言（不读源文件）',
   'compat-harness-surfaces.mjs': 'UI 面清单棘轮 + sidebar 源码活判据（读的是已安装的 harness 包）',
