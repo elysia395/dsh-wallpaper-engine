@@ -97,6 +97,19 @@ async function prefetchPetLinkGuideShots() {
   }
 }
 
+/** 卸载时释放预取得到的 objectURL（blob 常驻内存，不 revoke 会随热重载累积）。 */
+function revokePetLinkObjectUrls() {
+  const revoke = url => {
+    try {
+      if (typeof URL !== 'undefined' && typeof URL.revokeObjectURL === 'function') URL.revokeObjectURL(url);
+    } catch { /* 释放失败不影响卸载 */ }
+  };
+  for (const url of petLinkMemeUrls.values()) revoke(url);
+  petLinkMemeUrls.clear();
+  for (const url of petLinkGuideUrls.values()) revoke(url);
+  petLinkGuideUrls.clear();
+}
+
 const petLinkOrigin = () => (typeof location !== 'undefined' && location.origin ? location.origin : '');
 
 /**
@@ -220,7 +233,7 @@ const petLinkDesktopPosition = (() => {
       );
     } catch { /* 诊断/网络失败不影响排播 */ }
   };
-  return (petId, x, y) => {
+  const send = (petId, x, y) => {
     if (!Number.isFinite(x) || !Number.isFinite(y)) return;
     latest = { petId, x, y };
     const now = Date.now();
@@ -229,6 +242,13 @@ const petLinkDesktopPosition = (() => {
       timer = setTimeout(flush, waitMs);
     }
   };
+  /** 卸载时清掉末尾补发的 pending 定时器，避免页面销毁后仍触发一次写位请求。 */
+  send.cancel = () => {
+    if (timer !== null && typeof clearTimeout === 'function') clearTimeout(timer);
+    timer = null;
+    latest = null;
+  };
+  return send;
 })();
 
 const petLink = createPetLink({
@@ -398,6 +418,9 @@ exports.apply = ctx => {
   ctx.effect(() => () => {
     if (petLinkContext === ctx) {
       if (petLinkCardTimer !== null && typeof clearInterval === 'function') { clearInterval(petLinkCardTimer); petLinkCardTimer = null; }
+      petLinkDesktopPosition.cancel();
+      if (petLinkExtensionCard && typeof petLinkExtensionCard.dispose === 'function') petLinkExtensionCard.dispose();
+      revokePetLinkObjectUrls();
       petLinkPanel.dispose();
       petLink.dispose();
       petLinkContext = null;

@@ -143,7 +143,14 @@ console.log('PASS 口径提示：常驻路标 + 引导内完整说明（开关�
   assert.equal(cardWithReact.snapshot().linkEnabled, false, '开关点下去立即生效（不必等宿主重画）');
   assert.ok(notified >= 1, '开关变化必须 notify 订阅者（组件据此立刻重画）');
   off();
-  console.log('PASS 开关自订阅：render 交出组件、点按立即改状态并 notify');
+  // 2b.1) 卸载：dispose() 摘订阅并停发通知（热重载后旧卡片不得继续驱动渲染/定时器）
+  let afterDispose = 0;
+  cardWithReact.subscribe(() => { afterDispose += 1; });
+  assert.equal(typeof cardWithReact.dispose, 'function', '卡片必须提供 dispose（卸载时清定时器与订阅）');
+  cardWithReact.dispose();
+  cardWithReact.toggleEnabled(false);
+  assert.equal(afterDispose, 0, 'dispose 之后不得再 notify 订阅者（订阅已清、disposed 置位）');
+  console.log('PASS 开关自订阅：render 交出组件、点按立即改状态并 notify；dispose 后静默');
 }
 
 // ── 3) 具名处理器：走 M4 路由、开关立即生效、安装成功/失败、面板/测试 ────────

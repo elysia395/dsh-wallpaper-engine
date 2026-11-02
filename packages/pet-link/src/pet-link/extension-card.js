@@ -381,12 +381,29 @@ function createPetLinkExtensionCard(deps = {}) {
     // 图文安装引导的本地 UI 状态（不持久化、不发请求）
     guideOpen: false,
     copied: false,
+    // 宿主卸载本卡片（热重载/停用）后不再对外发渲染通知
+    disposed: false,
     // 拼引导图 URL 用：来自宿主端口，空串时图会 404（可接受，不阻塞卡片）
     guideOrigin: '',
   };
   const listeners = new Set();
-  const notify = () => { for (const listener of [...listeners]) { try { listener(); } catch { /* 渲染监听失败不影响流程 */ } } };
+  /** 引导图到位后的「补一次重渲染」定时器：展开/收起/卸载都要清，否则卡片卸载后仍会 notify。 */
+  const guideTimers = new Set();
+  const notify = () => {
+    if (state.disposed) return;
+    for (const listener of [...listeners]) { try { listener(); } catch { /* 渲染监听失败不影响流程 */ } }
+  };
   const subscribe = fn => { if (typeof fn !== 'function') return () => {}; listeners.add(fn); return () => listeners.delete(fn); };
+  const clearGuideTimers = () => {
+    for (const timer of guideTimers) { try { if (typeof clearTimeout === 'function') clearTimeout(timer); } catch { /* ignore */ } }
+    guideTimers.clear();
+  };
+  /** 卡片被宿主卸载时调用：停掉定时器、摘掉订阅，避免热重载后旧卡片继续驱动渲染。 */
+  const dispose = () => {
+    state.disposed = true;
+    clearGuideTimers();
+    listeners.clear();
+  };
   const snapshot = () => ({
     ...state,
     // 引导图 URL 前缀：优先用页面 origin（同源路由），取不到就留空
@@ -445,12 +462,17 @@ function createPetLinkExtensionCard(deps = {}) {
   const toggleGuide = () => {
     state.guideOpen = !state.guideOpen;
     state.copied = false;
+    clearGuideTimers();
     notify();
     if (state.guideOpen) {
       // 展开时才拉图（首次点击立刻返回，不等网络）；图到位后补一次重渲染。
       try { deps.ensureGuideShots?.(); } catch { /* 预取失败只影响图片 */ }
       for (const delay of [400, 1200, 2600]) {
-        setTimeout(() => { if (state.guideOpen) notify(); }, delay);
+        const timer = setTimeout(() => {
+          guideTimers.delete(timer);
+          if (state.guideOpen) notify();
+        }, delay);
+        guideTimers.add(timer);
       }
     }
     return state.guideOpen;
@@ -545,7 +567,7 @@ function createPetLinkExtensionCard(deps = {}) {
     };
   })();
 
-  const api = { snapshot, subscribe, refresh, toggleEnabled, openPanel, testOnce, toggleGuide, copyPackage, toggleRow, guideImageUrl: step => (typeof deps.guideImageUrl === 'function' ? deps.guideImageUrl(step) : ''), guidePanel };
+  const api = { snapshot, subscribe, refresh, toggleEnabled, openPanel, testOnce, toggleGuide, copyPackage, toggleRow, dispose, guideImageUrl: step => (typeof deps.guideImageUrl === 'function' ? deps.guideImageUrl(step) : ''), guidePanel };
 
   /**
    * 卡片主体组件：宿主 `render(ctx)` 是一次性内联调用、**不订阅**本卡片的 notify()，
@@ -587,6 +609,7 @@ function createPetLinkExtensionCard(deps = {}) {
     testOnce,
     toggleGuide,
     copyPackage,
+    dispose,
     _state: state,
   };
 }
