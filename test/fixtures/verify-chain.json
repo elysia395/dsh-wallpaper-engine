@@ -729,6 +729,14 @@
         {
           "kind": "guard",
           "npm": null,
+          "file": "test/verify-pet-link.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
           "file": "test/verify-pet-official.mjs",
           "args": [],
           "tier": "hard",
@@ -1663,6 +1671,14 @@
           "kind": "guard",
           "npm": null,
           "file": "test/verify-pet-tuner.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-pet-link.mjs",
           "args": [],
           "tier": "hard",
           "probe": false

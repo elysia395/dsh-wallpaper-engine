@@ -5,7 +5,7 @@
 > 口径：只统计守卫**代码**里真正碰到的模块（先剥注释），并区分"直接读源文件"与"隔着产物 `lib/client.js`"。
 > 写法：字面量路径 / `join(...)` 拼接 / 唯一 basename / 产物配方 / **前缀族读法** `scopeFiles|scopeText(<前缀>)` / **经共享族助手读**（`import { panelText } from './tools/src-scope.mjs'` + 真调用；族口径封在那个库里，见 DEV-GUIDE §4.6「同时是守卫的库」）/ **真源定位读**（`locate('符号')` / `locateFile('文件名')`，`test/tools/source-locator.mjs`：符号唯一声明在哪就是读了哪个模块）。
 
-模块面 186 个 · 守卫 121 个
+模块面 201 个 · 守卫 127 个
 
 ## 守卫 → 模块
 
@@ -56,7 +56,7 @@
 | `verify-host-diag.mjs` | `lib/diag-trace.js` |  |
 | `verify-host-paint-scope.mjs` | — | ✅ |
 | `verify-host-teardown.mjs` | `lib/index.js` `lib/media-origin.js` `packages/media-bridge/lib/legacy.js` `packages/media-bridge/lib/occlusion/index.js` `packages/media-bridge/lib/supervisor.js` `packages/pet-link/lib/routes/official-pet.js` |  |
-| `verify-i18n.mjs` | `packages/glass/src/glass-css.js` `src/client.js` `src/i18n-copy.js` `src/i18n.js` `src/nav-icon.js` `src/quick-panel.js` `src/sidebar-right.js` `src/styles-base.js` `src/styles-chrome.js` `src/styles-ext.js` `src/styles-panel.js` `src/styles-quick.js` `src/styles-settings.js` `src/styles-shell.js` `src/styles.js` | ✅ |
+| `verify-i18n.mjs` | `packages/glass/src/glass-css.js` `packages/pet-link/src/pet-link/extension-card.js` `packages/pet-link/src/pet-link/i18n.js` `packages/pet-link/src/pet-link/panel-params.js` `packages/pet-link/src/pet-link/panel.js` `src/client.js` `src/i18n-copy.js` `src/i18n.js` `src/nav-icon.js` `src/quick-panel.js` `src/sidebar-right.js` `src/styles-base.js` `src/styles-chrome.js` `src/styles-ext.js` `src/styles-panel.js` `src/styles-quick.js` `src/styles-settings.js` `src/styles-shell.js` `src/styles.js` | ✅ |
 | `verify-inject-contracts.mjs` | `lib/subpackage-boot.js` |  |
 | `verify-inventory-index.mjs` | `lib/inventory.js` `packages/media-bridge/lib/routes/inventory.js` |  |
 | `verify-issue-claim-policy.mjs` | — |  |
@@ -74,19 +74,25 @@
 | `verify-occlusion-hub.mjs` | `lib/index.js` `lib/json-response.js` `lib/occlusion/rects.js` `lib/occlusion/x11.js` `packages/media-bridge/lib/occlusion/index.js` `packages/media-bridge/lib/routes/occlusion.js` |  |
 | `verify-package-files.mjs` | `lib/http-body.js` `lib/index.js` `lib/pkg-read.js` `src/client.js` | ✅ |
 | `verify-package-publish.mjs` | `lib/index.js` `lib/pkg-read.js` `src/client.js` | ✅ |
-| `verify-pet-hotplug-client.mjs` | `packages/pet-link/src/official-pet.js` `packages/pet-link/src/pet-link.js` |  |
+| `verify-pet-egg.mjs` | `packages/pet-link/src/pet-link.js` `packages/pet-link/src/pet-link/bubble.js` `packages/pet-link/src/pet-link/constants.js` `packages/pet-link/src/pet-link/linked-egg1.js` `packages/pet-link/src/pet-link/linked-egg2.js` `packages/pet-link/src/pet-link/linked-mascot.js` `packages/pet-link/src/pet-link/linked-shared.js` `packages/pet-link/src/pet-link/linked-sidebar.js` `packages/pet-link/src/pet-link/linked.js` `packages/pet-link/src/pet-link/mode.js` `packages/pet-link/src/pet-link/native.js` |  |
+| `verify-pet-extension-card.mjs` | `packages/pet-link/src/pet-link/extension-card.js` `packages/pet-link/src/pet-link/i18n.js` `src/extension-registry.js` |  |
+| `verify-pet-hotplug-client.mjs` | `packages/pet-link/src/official-pet.js` `packages/pet-link/src/pet-link-performer.js` |  |
 | `verify-pet-hotplug-host.mjs` | `lib/subpackage-boot.js` `packages/pet-link/lib/index.js` `packages/pet-link/lib/official-provider.js` `packages/pet-link/lib/routes/official-pet.js` `packages/pet-link/src/official-pet.js` |  |
 | `verify-pet-hotplug-integration.mjs` | `lib/subpackage-boot.js` `packages/pet-link/lib/index.js` |  |
 | `verify-pet-link.mjs` | — |  |
-| `verify-pet-official.mjs` | `lib/subpackage-boot.js` `packages/pet-link/lib/index.js` `packages/pet-link/src/official-pet.js` `packages/pet-link/src/pet-link.js` |  |
+| `verify-pet-linked.mjs` | `packages/pet-link/src/pet-link.js` `packages/pet-link/src/pet-link/bubble.js` `packages/pet-link/src/pet-link/constants.js` `packages/pet-link/src/pet-link/linked-egg1.js` `packages/pet-link/src/pet-link/linked-egg2.js` `packages/pet-link/src/pet-link/linked-mascot.js` `packages/pet-link/src/pet-link/linked-shared.js` `packages/pet-link/src/pet-link/linked-sidebar.js` `packages/pet-link/src/pet-link/linked.js` `packages/pet-link/src/pet-link/mode.js` `packages/pet-link/src/pet-link/native.js` |  |
+| `verify-pet-mascot.mjs` | `packages/pet-link/src/pet-link.js` `packages/pet-link/src/pet-link/bubble.js` `packages/pet-link/src/pet-link/constants.js` `packages/pet-link/src/pet-link/linked-egg1.js` `packages/pet-link/src/pet-link/linked-egg2.js` `packages/pet-link/src/pet-link/linked-mascot.js` `packages/pet-link/src/pet-link/linked-shared.js` `packages/pet-link/src/pet-link/linked-sidebar.js` `packages/pet-link/src/pet-link/linked.js` `packages/pet-link/src/pet-link/mode.js` `packages/pet-link/src/pet-link/native.js` |  |
+| `verify-pet-official.mjs` | `lib/subpackage-boot.js` `packages/pet-link/lib/index.js` `packages/pet-link/src/official-pet.js` `packages/pet-link/src/pet-link-performer.js` |  |
 | `verify-pet-package.mjs` | `lib/index.js` `lib/subpackage-boot.js` `packages/pet-link/lib/index.js` `src/sidebar-right.js` |  |
+| `verify-pet-panel.mjs` | `packages/pet-link/src/pet-link.js` `packages/pet-link/src/pet-link/bubble.js` `packages/pet-link/src/pet-link/constants.js` `packages/pet-link/src/pet-link/linked-egg1.js` `packages/pet-link/src/pet-link/linked-egg2.js` `packages/pet-link/src/pet-link/linked-mascot.js` `packages/pet-link/src/pet-link/linked-shared.js` `packages/pet-link/src/pet-link/linked-sidebar.js` `packages/pet-link/src/pet-link/linked.js` `packages/pet-link/src/pet-link/mode.js` `packages/pet-link/src/pet-link/native.js` `packages/pet-link/src/pet-link/panel-params.js` `packages/pet-link/src/pet-link/panel.js` |  |
 | `verify-pet-rope-entry.mjs` | `src/client.js` |  |
 | `verify-pet-sidebar-diag.mjs` | `src/client.js` |  |
 | `verify-pet-sidebar-glass-browser-case.mjs` | — |  |
 | `verify-pet-sidebar-glass.mjs` | `packages/glass/src/glass-surfaces.js` |  |
 | `verify-pet-sidebar-rebound.mjs` | `src/client.js` `src/sidebar-right.js` |  |
-| `verify-pet-tuner-browser.mjs` | `packages/pet-link/lib/prepared.js` `packages/pet-link/src/pet-link-tuner.js` `packages/pet-link/src/pet-link.js` |  |
-| `verify-pet-tuner.mjs` | `packages/pet-link/src/pet-link-tuner.js` `packages/pet-link/src/pet-link.js` |  |
+| `verify-pet-tuner-browser.mjs` | `packages/pet-link/lib/prepared.js` `packages/pet-link/src/pet-link-performer.js` `packages/pet-link/src/pet-link-tuner.js` |  |
+| `verify-pet-tuner-coverage.mjs` | `packages/pet-link/src/pet-link/panel-params.js` `packages/pet-link/src/pet-link/panel.js` |  |
+| `verify-pet-tuner.mjs` | `packages/pet-link/src/pet-link-performer.js` `packages/pet-link/src/pet-link-tuner.js` |  |
 | `verify-picker-model.mjs` | `lib/settings-schema.js` `src/client.js` `src/picker-modal.js` `src/picker-model.js` | ✅ |
 | `verify-picker-props.mjs` | — | ✅ |
 | `verify-picker-upload.mjs` | — | ✅ |
@@ -249,15 +255,30 @@
 | `packages/parallax/src/client.js` | 0 | **（无）** |
 | `packages/parallax/src/ext-parallax.js` | 1 | `verify-scene-live` |
 | `packages/parallax/src/parallax-layer.js` | 1 | `verify-scene-live` |
-| `packages/pet-link/lib/client.pet-link.js` | 4 | `verify-client-sync` `verify-client` `verify-pet-hotplug-integration` `verify-pet-official` |
+| `packages/pet-link/lib/client.pet-link.js` | 3 | `verify-client-sync` `verify-client` `verify-pet-hotplug-integration` |
 | `packages/pet-link/lib/index.js` | 4 | `verify-pet-hotplug-host` `verify-pet-hotplug-integration` `verify-pet-official` `verify-pet-package` |
 | `packages/pet-link/lib/official-provider.js` | 1 | `verify-pet-hotplug-host` |
 | `packages/pet-link/lib/prepared.js` | 1 | `verify-pet-tuner-browser` |
 | `packages/pet-link/lib/routes/official-pet.js` | 2 | `verify-host-teardown` `verify-pet-hotplug-host` |
 | `packages/pet-link/src/client.js` | 0 | **（无）** |
 | `packages/pet-link/src/official-pet.js` | 3 | `verify-pet-hotplug-client` `verify-pet-hotplug-host` `verify-pet-official` |
+| `packages/pet-link/src/pet-link-performer.js` | 4 | `verify-pet-hotplug-client` `verify-pet-official` `verify-pet-tuner-browser` `verify-pet-tuner` |
 | `packages/pet-link/src/pet-link-tuner.js` | 2 | `verify-pet-tuner-browser` `verify-pet-tuner` |
-| `packages/pet-link/src/pet-link.js` | 4 | `verify-pet-hotplug-client` `verify-pet-official` `verify-pet-tuner-browser` `verify-pet-tuner` |
+| `packages/pet-link/src/pet-link.js` | 4 | `verify-pet-egg` `verify-pet-linked` `verify-pet-mascot` `verify-pet-panel` |
+| `packages/pet-link/src/pet-link/bubble.js` | 4 | `verify-pet-egg` `verify-pet-linked` `verify-pet-mascot` `verify-pet-panel` |
+| `packages/pet-link/src/pet-link/constants.js` | 4 | `verify-pet-egg` `verify-pet-linked` `verify-pet-mascot` `verify-pet-panel` |
+| `packages/pet-link/src/pet-link/extension-card.js` | 2 | `verify-i18n` `verify-pet-extension-card` |
+| `packages/pet-link/src/pet-link/i18n.js` | 2 | `verify-i18n` `verify-pet-extension-card` |
+| `packages/pet-link/src/pet-link/linked-egg1.js` | 4 | `verify-pet-egg` `verify-pet-linked` `verify-pet-mascot` `verify-pet-panel` |
+| `packages/pet-link/src/pet-link/linked-egg2.js` | 4 | `verify-pet-egg` `verify-pet-linked` `verify-pet-mascot` `verify-pet-panel` |
+| `packages/pet-link/src/pet-link/linked-mascot.js` | 4 | `verify-pet-egg` `verify-pet-linked` `verify-pet-mascot` `verify-pet-panel` |
+| `packages/pet-link/src/pet-link/linked-shared.js` | 4 | `verify-pet-egg` `verify-pet-linked` `verify-pet-mascot` `verify-pet-panel` |
+| `packages/pet-link/src/pet-link/linked-sidebar.js` | 4 | `verify-pet-egg` `verify-pet-linked` `verify-pet-mascot` `verify-pet-panel` |
+| `packages/pet-link/src/pet-link/linked.js` | 4 | `verify-pet-egg` `verify-pet-linked` `verify-pet-mascot` `verify-pet-panel` |
+| `packages/pet-link/src/pet-link/mode.js` | 4 | `verify-pet-egg` `verify-pet-linked` `verify-pet-mascot` `verify-pet-panel` |
+| `packages/pet-link/src/pet-link/native.js` | 4 | `verify-pet-egg` `verify-pet-linked` `verify-pet-mascot` `verify-pet-panel` |
+| `packages/pet-link/src/pet-link/panel-params.js` | 3 | `verify-i18n` `verify-pet-panel` `verify-pet-tuner-coverage` |
+| `packages/pet-link/src/pet-link/panel.js` | 3 | `verify-i18n` `verify-pet-panel` `verify-pet-tuner-coverage` |
 | `src/about-assets.js` | 1 | `verify-about` |
 | `src/adapter.js` | 1 | `verify-adapter` |
 | `src/api-client.js` | 3 | `verify-api-client` `verify-contracts` `verify-occlusion-client` |
@@ -269,7 +290,7 @@
 | `src/client.js` | 32 | `verify-about` `verify-adapter` `verify-api-client` `verify-avatar-interval-and-rotation` `verify-client` `verify-component-fonts` `verify-contracts` `verify-extra-glass` `verify-fontset` `verify-glass-surfaces` `verify-i18n` `verify-layer-ownership` `verify-module-layout` `verify-notice-routing` `verify-occlusion-debounce` `verify-package-files` `verify-package-publish` `verify-pet-rope-entry` `verify-pet-sidebar-diag` `verify-pet-sidebar-rebound` `verify-picker-model` `verify-presets` `verify-scene-live` `verify-slideshow-client` `verify-subpackage-client-half` `verify-subpackage-purity` `verify-subpackage-toggle-roundtrip` `verify-system-fonts` `verify-theme-follow` `verify-theme-layer` `verify-transcode-state` `verify-types` |
 | `src/effects.js` | 7 | `verify-adapter` `verify-client` `verify-component-fonts` `verify-glass-surfaces` `verify-scene-live` `verify-theme-layer` `verify-titlebar-anchor` |
 | `src/ext-avatar.js` | 2 | `verify-avatar-interval-and-rotation` `verify-scene-live` |
-| `src/extension-registry.js` | 3 | `verify-fontset` `verify-scene-live` `verify-subpackage-toggle-roundtrip` |
+| `src/extension-registry.js` | 4 | `verify-fontset` `verify-pet-extension-card` `verify-scene-live` `verify-subpackage-toggle-roundtrip` |
 | `src/focus-handback.js` | 1 | `verify-client` |
 | `src/font/apply.js` | 4 | `verify-client` `verify-component-fonts` `verify-fontset` `verify-theme-layer` |
 | `src/font/color-roles.js` | 3 | `verify-fontset` `verify-scene-live` `verify-theme-layer` |

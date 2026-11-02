@@ -3,19 +3,79 @@
   "artifact": "lib/client.pet-link.js",
   "inline": [
     {
-      "file": "src/official-pet.js",
-      "why": "官方 pet 同页只读实况与独立气泡客户端",
-      "markers": ["function createOfficialPetClient(ctx, options)"]
+      "file": "src/pet-link/constants.js",
+      "why": "能力层：动作名 / 时长 / 默认参数 / 气泡规格 / link 能力门（旧 138KB 单文件的常量表分层迁出）",
+      "markers": ["const PETLINK_ANIM = {", "const PETLINK_LINK_METHODS = ["]
     },
     {
-      "file": "src/pet-link-tuner.js",
-      "why": "页内调参面板（Ctrl+Shift+D；调试工具，非产品功能；自 packages/pet-link/src/pet-link-tuner.js 原样迁出内联通路）",
-      "markers": ["function createOfficialPetTuner(link, options = {})"]
+      "file": "src/pet-link/i18n.js",
+      "why": "面板/卡片自成词表（path B）：中文原文→英文 + 注入式 translator（先查本地表再回落主包 weT）",
+      "markers": ["const PETLINK_I18N_EN = {", "function createPetLinkTranslate("]
+    },
+    {
+      "file": "src/pet-link/panel-params.js",
+      "why": "调参面板参数清单（唯一真源）：分组 / 步长 / 缓动选项（约 50 参数）",
+      "markers": ["const PETLINK_PANEL_FIELDS = [", "function petLinkPanelFieldsFor("]
+    },
+    {
+      "file": "src/pet-link/mode.js",
+      "why": "双 provider 状态机：petLinkMode 判据与可读降级原因（含 runtime-too-old）",
+      "markers": ["function detectPetLinkProvider(", "function petLinkDecideLogic("]
+    },
+    {
+      "file": "src/pet-link/bubble.js",
+      "why": "自绘气泡层：跟随宠物根节点的独立气泡覆盖层（逐帧 DOM 测量，零请求）",
+      "markers": ["function createPetLinkBubble("]
+    },
+    {
+      "file": "src/pet-link/linked-shared.js",
+      "why": "linked 共享层：tune 统一取值 / 租约 / playSegment 段推进 / walkTo / moveTo(adoptPosition) / sidebarCall / followEdge 逐帧贴边 / 抛掷 / 气泡",
+      "markers": ["function createLinkedKit(", "function petLinkSleepLeaf("]
+    },
+    {
+      "file": "src/pet-link/linked-sidebar.js",
+      "why": "逻辑一 · 侧栏拉动：14 键真消费（走位 / 准备 / 后拉 / 展开 / 贴边 / 跟随 / 回位）",
+      "markers": ["function createLinkedSidebarLogic("]
+    },
+    {
+      "file": "src/pet-link/linked-mascot.js",
+      "why": "逻辑二 · 抓绳互动：抓绳时刻 / 绳子下拉与回弹缓动 / 脱手下落",
+      "markers": ["function createLinkedMascotLogic("]
+    },
+    {
+      "file": "src/pet-link/linked-egg1.js",
+      "why": "彩蛋一 · 踢开并弹飞：弹飞参考位移与发力时间 / 落地停留",
+      "markers": ["function createLinkedEgg1Logic("]
+    },
+    {
+      "file": "src/pet-link/linked-egg2.js",
+      "why": "彩蛋二 · 站立哈气：哈气抖动（振幅 / 频率）/ 展开进度与缓动",
+      "markers": ["function createLinkedEgg2Logic("]
+    },
+    {
+      "file": "src/pet-link/linked.js",
+      "why": "linked provider：用 petApiDshwe.link 直控复刻旧版四条排播 + 彩蛋计数 + 返回原位 + sleep/wake 竞争处理",
+      "markers": ["function createLinkedPetProvider(", "createLinkedKit(rt)"]
+    },
+    {
+      "file": "src/pet-link/native.js",
+      "why": "native provider：不接管，回落主包原生吉祥物",
+      "markers": ["function createNativePetProvider("]
     },
     {
       "file": "src/pet-link.js",
-      "why": "桌宠联动的排播 / 吉祥物触摸面 / 能力探测（自 packages/pet-link/src/pet-link.js 原样迁出内联通路）",
-      "markers": ["const PET_BASE = ", "const PET_ANIM = {", "function createOfficialPetPerformer(options)"]
+      "why": "装配层：createPetLink 按双 provider 状态机路由，对外对齐主包 petLink 门面",
+      "markers": ["function createPetLink(", "function clone("]
+    },
+    {
+      "file": "src/pet-link/panel.js",
+      "why": "浮层操控面板：可拖动 / Ctrl+Shift+D / 约 50 参数分组 + 缓动 / 持久化 + 导入导出 / a11y",
+      "markers": ["function createPetLinkPanelSettings(", "function createPetLinkPanel("]
+    },
+    {
+      "file": "src/pet-link/extension-card.js",
+      "why": "设置页扩展模块卡片（order:0）：联动开关 + 运行时状态 + 下载安装 + 打开面板 + 测试一次 + 折叠诊断；纯视图 + 具名处理器",
+      "markers": ["function petLinkCardView(", "function createPetLinkExtensionCard("]
     }
   ]
 }

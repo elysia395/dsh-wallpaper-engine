@@ -17,9 +17,36 @@ const page = new Context();
 const client = page.plugin({ name: 'official-pet-client-regression', ...entry.plugin });
 try {
   await client.await();
-  assert.equal(await entry.bridge.warmup(), false, '官方服务缺席时仍能激活并降级');
-  page.provide('petApi7340', { pose: () => ({ x: 0.4, y: 0.6, facing: 'left' }), progress: () => null });
-  assert.equal(await entry.bridge.warmup(), true, '真实同页上下文可读取后到的官方服务');
+  assert.equal(await entry.bridge.warmup(), false, '运行时服务缺席时仍能激活并降级 native');
+  // M5 起桥接探测的是自家 fork 的 petApiDshwe.link（不再认官方 petApi7340）。
+  // 给完整 link 面（version=4 + 12 方法）且目标根节点可见 ⇒ linked 可用、warmup=true。
+  const petRoot = {
+    isConnected: true,
+    getBoundingClientRect: () => ({ left: 10, top: 10, width: 180, height: 180, x: 100, y: 100 }),
+    getAttribute: () => null,
+  };
+  page.provide('petApiDshwe', {
+    getState: () => ({ pets: {} }),
+    menuEvents: () => ({ ok: false }),
+    pose: () => ({ x: 0.4, y: 0.6, facing: 'left' }),
+    progress: () => null,
+    link: {
+      version: 4,
+      getRoot: id => (id === 'main' ? petRoot : null),
+      adoptPosition: () => true,
+      pollState: () => true,
+      getPlayback: () => ({ playbackId: null, anim: '', currentTime: 0, duration: 0, paused: true, buffering: false }),
+      throwNative: () => 1,
+      stopNativeThrow: () => true,
+      getNativeThrow: () => ({ id: 1, active: false, cancelled: false, state: null }),
+      allowBubble: () => true,
+      hideBubble: () => true,
+      setBubbleDuration: () => true,
+      lock: () => true,
+      unlock: () => true,
+    },
+  });
+  assert.equal(await entry.bridge.warmup(), true, '真实同页上下文可读取后到的 petApiDshwe（linked 可用）');
   assert.equal(entry.listeners.size, 1, '客户端只安装一次监听');
 } finally { await client.dispose(); }
 assert.equal(entry.listeners.size, 0, '真实 Cordis 卸载归还客户端监听');
@@ -55,7 +82,8 @@ try {
   ctx.provide('wallpaperEngineHost', createSubpackageHost());
   fiber = ctx.plugin(plugin, { linkEnabled: true });
   await fiber.await();
-  assert.equal(routes.size, 2);
+  // 宿主半路由数 = 3（官方控制 + 资源 prefix + 气泡配图）+ 4（/pet-link/pet/{state,install-progress,install,uninstall}）= 7。
+  assert.equal(routes.size, 7);
   assert.equal((await get(undefined, 'PUT')).reason, 'method-not-allowed');
   const initial = routes.get(path).handler;
   fiber.update({ linkEnabled: false }, true);
@@ -71,7 +99,7 @@ try {
   for (let i = 0; i < 10; i++) {
     fiber = ctx.plugin(plugin, { linkEnabled: false });
     await fiber.await();
-    assert.equal(routes.size, 2);
+    assert.equal(routes.size, 7);
     assert.equal((await get()).reason, 'bridge-disabled');
     await fiber.dispose(); fiber = null;
     assert.equal(routes.size, 0);

@@ -343,7 +343,7 @@ section('⑦ 安装期不得跑任何仓库脚本（无构建钩子 + 不引用�
     'build', 'verify', 'verify:docs', 'verify:all', 'verify:bridge', 'verify:e2e', 'smoke',
     // 本分支追加的桥闸门（严格模式）：命令指向 test/ 下的用例，同样只在仓库里跑 ⇒ 开发期脚本。
     'verify:bridge:strict',
-    'verify:pet-link', 'verify:pet-link:integration', 'verify:pet-link:browser',
+    'verify:pet-link', 'verify:pet-link:integration', 'verify:pet-link:browser', 'verify:pet-install',
     // Explicit checkout commands, not npm lifecycle hooks; release staging removes scripts.
     'install:source', 'install:release', 'pack:release', 'verify:deployment',
     // 静态门禁（ESLint / tsc 棘轮）：只在仓库里跑，工具与基线夹具都不随包发布。

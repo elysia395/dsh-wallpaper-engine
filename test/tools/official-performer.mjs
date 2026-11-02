@@ -23,7 +23,7 @@ export function clientEntryFixture(built) {
 }
 
 const source = readFileSync(new URL('../../packages/pet-link/src/official-pet.js', import.meta.url), 'utf8')
-  + '\n' + readFileSync(new URL('../../packages/pet-link/src/pet-link.js', import.meta.url), 'utf8');
+  + '\n' + readFileSync(new URL('../../packages/pet-link/src/pet-link-performer.js', import.meta.url), 'utf8');
 const create = new Function(source + ';return createOfficialPetPerformer;')();
 
 export function performerFixture(options = {}) {
