@@ -149,8 +149,8 @@ console.log('PASS 口径提示：常驻路标 + 引导内完整说明（开关�
 // ── 3) 具名处理器：走 M4 路由、开关立即生效、安装成功/失败、面板/测试 ────────
 let mode = 'native';
 let reason = 'runtime-not-installed';
-let stateResp = { installed: false, version: '', running: false, officialPet: false };
-let installResp = { ok: true, method: 'pnpm', version: '0.3.8', steps: [{ step: 'preflight', ok: true }, { step: 'install', ok: true }], state: { installed: true, version: '0.3.8', running: false } };
+const stateResp = { installed: false, version: '', running: false, officialPet: false };
+const installResp = { ok: true, method: 'pnpm', version: '0.3.8', steps: [{ step: 'preflight', ok: true }, { step: 'install', ok: true }], state: { installed: true, version: '0.3.8', running: false } };
 const calls = [];
 let panelToggled = 0; let tapCalled = 0;
 const controller = load.createPetLinkExtensionCard({
@@ -220,4 +220,39 @@ assert.ok(!/(^|[^A-Za-z])fetch\(/.test(stripped), '不得使用全局 fetch');
 assert.ok(cardSource.includes('petLinkCardToReact(petLinkCardView(snapshot(), api, translate), deps.h)'), 'render 只做纯视图转换');
 console.log('PASS 无契约违规：纯视图 + 副作用只在具名处理器 + 只打 state 路由 + 不写主包设置/不通知/局部态仅经 deps.React');
 
-console.log('PASS M7 设置页扩展模块卡片：第一位 / 五种态 / 具名处理器 / 无契约违规');
+// ── 开关持久化：真值归宿主，卡片只镜像 ───────────────────────────────────
+{
+  const cardDeps = {
+    h: (tag, props, ...children) => ({ tag, props, children }),
+    petLink: { mode: () => 'native', reason: () => '' },
+    panel: { toggle: () => true },
+    apiFetch: async () => ({ ok: true, data: { installed: false } }),
+    apiUrl: path => path,
+    translate: value => value,
+  };
+  const fresh = load.createPetLinkExtensionCard(cardDeps);
+  assert.equal(fresh.snapshot().linkEnabled, true, '宿主未提供 isLinkEnabled 时默认开');
+
+  // 2026-11-02：此前初值硬编码 true，用户关掉后刷新即回 ON。
+  const offCard = load.createPetLinkExtensionCard({ ...cardDeps, isLinkEnabled: () => false });
+  assert.equal(offCard.snapshot().linkEnabled, false, '开关初值必须回读宿主持久化的值');
+
+  let stored = true;
+  const written = [];
+  const toggleCard = load.createPetLinkExtensionCard({
+    ...cardDeps,
+    isLinkEnabled: () => stored,
+    setLinkEnabled: value => { written.push(value); stored = value; },
+  });
+  assert.equal(toggleCard.toggleEnabled(false), false, 'toggleEnabled 应返回新值');
+  assert.deepEqual(written, [false], 'toggleEnabled 必须把值交给宿主持久化层');
+  assert.equal(toggleCard.snapshot().linkEnabled, false, '点按后快照应立即为新值');
+
+  // 另一个页签/重开页面改了真值：下一次 refresh 必须对齐，而不是继续显示旧值。
+  stored = true;
+  await toggleCard.refresh();
+  assert.equal(toggleCard.snapshot().linkEnabled, true, 'refresh 应把开关对齐到宿主真值');
+  console.log('PASS 开关持久化：初值回读 / 点按写回 / 刷新对齐');
+}
+
+console.log('PASS M7 设置页扩展模块卡片：第一位 / 五种态 / 具名处理器 / 无契约违规 / 开关持久化');

@@ -349,13 +349,21 @@ function petLinkCardToReact(node, h) {
 
 /**
  * 造卡片控制器 + 描述符。
- * @param deps - { h, petLink, panel, apiFetch, apiUrl, translate, setLinkEnabled? }
+ * @param deps - { h, petLink, panel, apiFetch, apiUrl, translate, setLinkEnabled?, isLinkEnabled? }
  * @returns {{ descriptor, snapshot, subscribe, refresh, install, toggleEnabled, openPanel, testOnce, _state }}
  */
 function createPetLinkExtensionCard(deps = {}) {
   const translate = deps.translate || (value => value);
+  /**
+   * 回读开关真值：宿主（packages/pet-link/src/client.js）持有并持久化这个值，
+   * 卡片只镜像它——这样刷新页面/重开设置页后开关仍停在用户上次的选择上。
+   */
+  const readEnabled = () => {
+    if (typeof deps.isLinkEnabled !== 'function') return true;
+    try { return deps.isLinkEnabled() !== false; } catch { return true; }
+  };
   const state = {
-    linkEnabled: true,
+    linkEnabled: readEnabled(),
     checking: true,
     installed: null,
     version: '',
@@ -404,6 +412,8 @@ function createPetLinkExtensionCard(deps = {}) {
       state.error = String((error && error.message) || error || '');
     }
     readMode();
+    // 开关真值只有宿主那边持久化了一份；每次刷新顺手对齐，避免多页签/重开后显示与真值不一致。
+    state.linkEnabled = readEnabled();
     notify();
     return snapshot();
   };

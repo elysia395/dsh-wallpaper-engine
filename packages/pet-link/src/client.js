@@ -116,8 +116,29 @@ function reportPetLinkDiag(payload) {
 }
 
 let petLinkContext = null;
-/** 联动开关（M7）：开=linked 优先，关=强制 native；内存态，切换立即生效不重启。 */
-let linkEnabledFlag = true;
+/**
+ * 联动开关（M7）：开=linked 优先，关=强制 native。
+ *
+ * 2026-11-02：从「纯内存态」改成 localStorage 持久化（键 `dsh-we-pet-link-enabled-v1`，
+ * 值 `1` / `0`）。此前关掉后刷新页面或重开设置页会变回开——内存里没人记住用户的决定。
+ * 仍然遵守主包零改动：不写主包设置，只写 pet-link 自己的键；存储不可用（隐私模式/配额）
+ * 时退化为内存态，本次会话仍然生效。
+ */
+const PET_LINK_ENABLED_KEY = 'dsh-we-pet-link-enabled-v1';
+function readPersistedLinkEnabled() {
+  try {
+    if (typeof localStorage === 'undefined') return true;
+    const raw = localStorage.getItem(PET_LINK_ENABLED_KEY);
+    return raw === null ? true : raw !== '0';
+  } catch { return true; }
+}
+function persistLinkEnabled(on) {
+  try {
+    if (typeof localStorage !== 'undefined') localStorage.setItem(PET_LINK_ENABLED_KEY, on ? '1' : '0');
+  } catch { /* 存储不可用：只丢记忆，不影响本次会话 */ }
+}
+let linkEnabledFlag = readPersistedLinkEnabled();
+const setLinkEnabled = on => { linkEnabledFlag = on === true; persistLinkEnabled(linkEnabledFlag); };
 
 /** 当前语言 id：优先宿主 locale 服务快照，其次 `?we-lang` 逃生舱，回落 zh。 */
 const petLinkLang = () => {
@@ -345,7 +366,9 @@ if (typeof hostRegisterExtensionModule === 'function' && ReactRef && typeof Reac
       apiFetch,
       apiUrl,
       translate: petLinkTranslate,
-      setLinkEnabled: on => { linkEnabledFlag = on === true; },
+      // 开关值由 client 持有并持久化；卡片只负责显示与点按（刷新后回读同一个值）。
+      setLinkEnabled,
+      isLinkEnabled: () => linkEnabledFlag,
       // 引导截图 URL（blob objectURL）；未就绪时返回空串，卡片不渲染 img（避免破图）
       guideImageUrl: step => petLinkGuideUrls.get(step) || '',
       ensureGuideShots: () => { void prefetchPetLinkGuideShots(); },
