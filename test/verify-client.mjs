@@ -1108,8 +1108,10 @@ setTimeout(async () => {
       setTab('extensions');
       const extTree = renderPicker();
       const extText = JSON.stringify(extTree);
-      // 容器 + 四个模块的标题与总开关都得在（桌宠联动卡片另有安装/面板/测试入口）。
-      for (const anchorText of ['扩展模块', '桌宠联动', '打开操控面板', '测试一次联动',
+      // 容器 + 四个模块的标题与总开关都得在。桌宠联动的「打开操控面板 / 测试一次联动」是
+      // **按运行时检测结果出现**的入口（检测不到 dsh-pet 时整组隐藏），不列进这份常驻锚点；
+      // 它两个方向的形态由 test/verify-pet-extension-card.mjs 分别钉住。
+      for (const anchorText of ['扩展模块', '桌宠联动', '启用桌宠联动',
         '自定义会话头像', '启用自定义会话头像',
         '点击效果与拖尾效果', '启用点击与拖尾效果', '3D 效果', '启用 3D 效果']) {
         assert.ok(extText.includes(anchorText), '「扩展」页签必须包含「' + anchorText + '」');

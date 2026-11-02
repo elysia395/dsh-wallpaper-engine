@@ -177,11 +177,8 @@ const CSS_EXT = `
   }
   .we-pet-link__guide-link:hover { text-decoration: underline; }
 
-  .we-pet-link__head {
-    display: flex; align-items: center; justify-content: space-between; gap: 8px;
-    font-size: 0.85em; font-weight: 600; color: var(--we-ink, inherit);
-  }
-  .we-pet-link__head input[type="checkbox"] { width: 16px; height: 16px; margin: 0; flex: 0 0 auto; cursor: pointer; }
+  /* 标题行与胶囊开关均直接用宿主款（.we-picker__ctl / .we-picker__ctl-label / .we-picker__switch），
+     本文件不再自造同族样式 —— 字号/字重/轨道尺寸只留一处真源，避免"看起来像但不一样"。 */
   .we-pet-link__status {
     font-size: 0.78em; line-height: 1.55; color: var(--we-ink-2, rgba(128, 128, 128, 0.9));
     overflow-wrap: anywhere;
@@ -231,27 +228,12 @@ const CSS_EXT = `
     color: var(--dsw-alias-link, inherit); text-decoration: underline;
     overflow-wrap: anywhere; user-select: text;
   }
-  /* 主按钮：通栏主色实底（宿主主按钮同族），与次按钮拉开层级。 */
-  .we-pet-link__install {
-    width: 100%; box-sizing: border-box; min-height: 32px; padding: 6px 10px;
-    border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.28));
-    border-radius: var(--we-ui-radius, 8px); cursor: pointer; font: inherit;
-    background: var(--dsw-alias-button-primary-fill, var(--we-accent, #4a7dff));
-    color: var(--dsw-alias-label-primary-foreground, #fff);
-  }
-  .we-pet-link__install:hover { background: var(--dsw-alias-button-primary-hover, var(--we-accent, #4a7dff)); }
-  .we-pet-link__install:disabled { opacity: 0.6; cursor: default; }
-  /* 次按钮组：并排（面板 / 测试一次），窄壳里自动换行。 */
+  /* 安装引导按钮：直接复用宿主主按钮款式（.we-picker__btn--primary：0.82em / 30px 行高 /
+     实心 accent），这里只加"通栏宽度"这一条布局差异。 */
+  .we-pet-link__install { width: 100%; box-sizing: border-box; }
+  /* 次按钮组：并排（打开操控面板 / 测试一次），窄壳里自动换行；款式同样用 .we-picker__btn。 */
   .we-pet-link__actions { display: flex; flex-wrap: wrap; gap: 6px; }
-  .we-pet-link__actions button {
-    flex: 1 1 auto; min-width: 0; min-height: 30px; padding: 5px 8px;
-    border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.28));
-    border-radius: var(--we-ui-radius, 8px); cursor: pointer; font: inherit;
-    background: var(--dsw-alias-bg-layer-2, rgba(128, 128, 128, 0.12));
-    color: var(--dsw-alias-label-primary, inherit); white-space: normal;
-  }
-  .we-pet-link__actions button:hover { background: var(--dsw-alias-interactive-bg-hover, rgba(128, 128, 128, 0.18)); }
-  .we-pet-link__actions button:disabled { opacity: 0.6; cursor: default; }
+  .we-pet-link__actions > .we-picker__btn { flex: 1 1 auto; min-width: 0; white-space: nowrap; }
   .we-pet-link__steps {
     margin: 0; padding-left: 18px; display: flex; flex-direction: column; gap: 2px;
     font-size: 0.72em; line-height: 1.5; color: var(--we-ink-3, rgba(128, 128, 128, 0.65));

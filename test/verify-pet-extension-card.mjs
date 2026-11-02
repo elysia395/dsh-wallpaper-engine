@@ -85,16 +85,20 @@ console.log('PASS 五种状态：未装 / 已装 / 引导展开 / 官方共存 /
   console.log('PASS EN 抽查：卡片五种状态行在 EN 下无中文残留');
 }
 
-// ── 2) 卡片控件齐备：开关 / 安装 / 打开面板 / 测试 / 诊断 ──────────────────
+// ── 2) 卡片控件：胶囊开关 / 状态 / 安装引导 / 诊断；面板与测试按钮随检测结果出现或隐藏 ──
 const base = view({ checking: false, installed: false, linkEnabled: true, phase: 'idle' });
 const switchNode = byAttr(base, 'data-pet-link', 'switch')[0];
 assert.ok(switchNode && switchNode.attrs.type === 'checkbox' && switchNode.attrs.role === 'switch', '联动开关输入');
+assert.ok(text(base).includes('启用桌宠联动'), '开关标签为「启用桌宠联动」');
+assert.equal(byAttr(base, 'data-pet-link', 'open-panel').length, 0, '未检测到桌宠时不出现打开面板按钮');
+assert.equal(byAttr(base, 'data-pet-link', 'test-once').length, 0, '未检测到桌宠时不出现测试一次按钮');
 assert.ok(byAttr(base, 'data-pet-link', 'status')[0], '状态行');
 assert.ok(byAttr(base, 'data-pet-link', 'install-guide')[0], '安装引导按钮');
-assert.ok(byAttr(base, 'data-pet-link', 'open-panel')[0], '打开面板按钮');
-assert.ok(byAttr(base, 'data-pet-link', 'test-once')[0], '测试一次按钮');
 assert.ok(byAttr(base, 'data-pet-link', 'diag')[0], '折叠诊断 details');
-console.log('PASS 卡片控件：开关 / 状态 / 安装引导 / 打开面板 / 测试一次 / 折叠诊断');
+const detected = view({ checking: false, installed: true, version: '0.3.8', mode: 'linked', phase: 'idle' });
+assert.ok(byAttr(detected, 'data-pet-link', 'open-panel')[0], '检测到桌宠时出现打开面板按钮');
+assert.ok(byAttr(detected, 'data-pet-link', 'test-once')[0], '检测到桌宠时出现测试一次按钮');
+console.log('PASS 卡片控件：胶囊开关 / 状态 / 安装引导 / 诊断；面板与测试按钮随检测结果出现或隐藏');
 
 // ── 3) 具名处理器：走 M4 路由、开关立即生效、安装成功/失败、面板/测试 ────────
 let mode = 'native';

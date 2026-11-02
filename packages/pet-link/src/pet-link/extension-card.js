@@ -115,7 +115,9 @@ function petLinkCardView(snapshot, card, translate = value => value) {
   const s = snapshot || {};
   const children = [];
 
-  // 标题行：联动名 + 开关（开关推到行尾）
+  // 标题行：与宿主设置行**完全同款** —— 行容器 .we-picker__ctl（两端对齐、gap 12px、32px 行高）、
+  // 标签 .we-picker__ctl-label（0.88em、常规字重）、右端胶囊开关 .we-picker__switch。
+  // 输入仍是 input[type=checkbox]（无障碍语义与判据不变），视觉交给宿主的胶囊轨道。
   const switchInput = {
     tag: 'input',
     attrs: { type: 'checkbox', role: 'switch', 'aria-label': t('启用桌宠联动'), 'data-pet-link': 'switch', checked: s.linkEnabled !== false },
@@ -123,9 +125,21 @@ function petLinkCardView(snapshot, card, translate = value => value) {
     on: { onChange: event => card.toggleEnabled(Boolean(event && event.target && event.target.checked)) },
   };
   children.push({
-    tag: 'label',
-    attrs: { className: 'we-pet-link__head' },
-    children: [{ tag: 'span', attrs: {}, children: [t('桌宠联动')] }, switchInput],
+    tag: 'div',
+    attrs: { className: 'we-picker__ctl' },
+    children: [
+      { tag: 'span', attrs: { className: 'we-picker__ctl-label' }, children: [t('启用桌宠联动')] },
+      {
+        tag: 'label',
+        attrs: { className: 'we-picker__switch' },
+        children: [
+          switchInput,
+          { tag: 'span', attrs: { className: 'we-picker__switch-track' }, children: [
+            { tag: 'span', attrs: { className: 'we-picker__switch-thumb' }, children: [] },
+          ] },
+        ],
+      },
+    ],
   });
 
   // 状态行：安装态 / 版本 / 运行中 / 失败摘要（aria-live 即时播报）
@@ -218,7 +232,8 @@ function petLinkCardView(snapshot, card, translate = value => value) {
       tag: 'button',
       attrs: {
         type: 'button',
-        className: 'we-pet-link__install',
+        // 款式直接复用宿主主按钮（与「确认并导入」「应用」等同款同字号），只加通栏宽度。
+        className: 'we-picker__btn we-picker__btn--primary we-pet-link__install',
         'data-pet-link': 'install-guide',
         'aria-label': installLabel,
         'aria-expanded': guideOpen ? 'true' : 'false',
@@ -235,25 +250,30 @@ function petLinkCardView(snapshot, card, translate = value => value) {
     }
   }
 
-  // 次按钮组：打开操控面板 + 测试一次（并排）
-  children.push({
-    tag: 'div',
-    attrs: { className: 'we-pet-link__actions' },
-    children: [
-      {
-        tag: 'button',
-        attrs: { type: 'button', className: 'we-pet-link__panel', 'data-pet-link': 'open-panel', 'aria-label': t('打开操控面板') },
-        children: [t('打开操控面板（Ctrl+Shift+D）')],
-        on: { onClick: () => card.openPanel() },
-      },
-      {
-        tag: 'button',
-        attrs: { type: 'button', className: 'we-pet-link__test', 'data-pet-link': 'test-once', 'aria-label': t('测试一次联动'), disabled: installing },
-        children: [t('测试一次联动')],
-        on: { onClick: () => card.testOnce() },
-      },
-    ],
-  });
+  // 次按钮组：打开操控面板 + 测试一次（并排）。
+  // 检测到不存在 dsh-pet（dshpet-dshwe）时这两个入口没有意义 —— 没有运行时就无处
+  // 打开面板、也没有可测试的联动对象，隐藏而不是留一堆点了没反应的按钮。
+  // 检测中（installed === null）同样隐藏，避免"先出现再消失"的闪动。
+  if (s.installed === true) {
+    children.push({
+      tag: 'div',
+      attrs: { className: 'we-pet-link__actions' },
+      children: [
+        {
+          tag: 'button',
+          attrs: { type: 'button', className: 'we-picker__btn we-pet-link__panel', 'data-pet-link': 'open-panel', 'aria-label': t('打开操控面板') },
+          children: [t('打开操控面板（Ctrl+Shift+D）')],
+          on: { onClick: () => card.openPanel() },
+        },
+        {
+          tag: 'button',
+          attrs: { type: 'button', className: 'we-picker__btn we-pet-link__test', 'data-pet-link': 'test-once', 'aria-label': t('测试一次联动'), disabled: installing },
+          children: [t('测试一次联动')],
+          on: { onClick: () => card.testOnce() },
+        },
+      ],
+    });
+  }
 
   // 分步进度
   if (Array.isArray(s.steps) && s.steps.length > 0) {
@@ -431,7 +451,7 @@ function createPetLinkExtensionCard(deps = {}) {
       };
       const head = R.createElement('button', {
         type: 'button',
-        className: 'we-pet-link__install',
+        className: 'we-picker__btn we-picker__btn--primary we-pet-link__install',
         'data-pet-link': 'install-guide',
         'aria-label': translate(open ? '收起安装说明' : '如何下载安装联动桌宠'),
         'aria-expanded': open ? 'true' : 'false',
