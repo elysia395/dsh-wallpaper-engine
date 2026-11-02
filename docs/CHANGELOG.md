@@ -18,6 +18,8 @@
 
 ### 未发布（玻璃子包；版本号由主线统筹）
 
+- **修：夺焦围栏的 §3 三处残留（#169）**：① `SVGElement.prototype.focus` 此前未守 —— HTMLOrSVGElement mixin 分别挂在 `HTMLElement` 与 `SVGElement` 两套原型上，只包前者会漏掉 SVG 元素；现在两族共用同一条围栏逻辑（同一套 `elCalls / elAllowed / elBlocked` 计数），装没装上分别如实记在 `elInstalled` / `svgInstalled` 上（realm 里没有 `SVGElement` 时后者为 `false`，不谎报已装）。② `src/focus-handback.js` 的 `focusout` 那拍此前每次新挂一个**不记名**的 0ms 定时器，`dispose` 只清 `retryTimer` ⇒ 拆完仍有一个会醒来的空定时器；现在全部句柄入账（`Set` 逐条 `clearTimeout`），拆除后队列里一个都不剩。③ 自派手势打开放行窗口（`isTrusted` / shim 注入标记）仍记为已知取舍，未改判定。判据：`test/verify-scene-live.mjs` 新增 SVG 围栏正 / 负对照（无手势吞掉、窗口内放行、realm 无 `SVGElement` 时 `svgInstalled=false`），`test/verify-client.mjs` 新增「拆除清掉全部在途 0ms 交还任务 + 拆后不许再交还」。
+
 - **版本号维持 `1.4.0`，发布号由主线统筹（玻璃子包 + 仅壁纸态）**：九个包（主包 + 八个子包，ADR-0016 新增 glass）同号锁步，`package-lock` 同批重算；发布集九件套自检通过（`pack:release` 九个 tarball，`publishOrder` 八个子包先行、主包殿后）。
 - **玻璃行开关「即时生效」（无需重启宿主）**：玻璃宿主半边新增 `glass-row` 状态路由族（`GET /wallpaper-engine/glass-row-state`）——**路由的存在性 = 本行启用**（行停用 ⇒ 宿主 prune fiber ⇒ 路由 404，与 about-notice「停行 ⇒ 路由 404」同一条宿主语义）。玻璃浏览器半边每 3 秒探测一次（页面隐藏时暂停、恢复可见立即探测、单次失败保持现状防抖动）：探测到停用 ⇒ 撤玻璃样式表 + 跑行为层 dispose（门控属性与 `--we-*` 变量整族摘除）+ 设置节停渲染 + 状态投影清空；重新启用 ⇒ 原样恢复。配套：玻璃清单收口为「自带路由族」形态（webserver peer、键表 base/runComponent/handOffTeardown，pet-link 同款）。实测（测试 profile 双态）：启用态路由 200 `{enabled:true}`、停用态 404 且页面剪除 glass bundle。
 - **修：插件 / 玻璃行关闭时左右侧栏主体保持透明**：侧栏填充的壁纸让位不再要求玻璃行开启（原先只在 `data-we-glass-page` 下清透 `--dsw-specific-sidebar-fill`，导致停插件后侧栏被宿主实色填满）。现在壁纸在场即清透侧栏填充；左栏玻璃开关仍只管「透明 ⇄ 玻璃」，关着是透明洞、打开才换玻璃配方。

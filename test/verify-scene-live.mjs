@@ -2456,6 +2456,32 @@ const runGuard = (stub) => { new Function('window', guardSource)(stub); return s
   g4.allow = true;
   input4.focus();
   check('元素级围栏：allow 逃生门同时放开元素级那一半', g4.elAllowed === 2 && elRaw.length === 2);
+  // ⑦' #169 §3：`SVGElement.prototype.focus` 是**独立的一处**（HTMLOrSVGElement mixin 分别挂在
+  //    两套原型上），只包 HTMLElement 会漏掉 SVG 元素 —— 负对照：把 SVGElement 从 realm 里拿掉，
+  //    `svgInstalled` 必须如实为 false，而不是靠"看着有围栏"恒真。
+  const svgRaw = [];
+  const FakeSVGElement = function () {};
+  FakeSVGElement.prototype.focus = function () { svgRaw.push('svg'); };
+  const svgGestures = [];
+  const win4s = { focus () {}, document: {}, HTMLElement: FakeHTMLElement, SVGElement: FakeSVGElement,
+    addEventListener (t, fn) { svgGestures.push({ t, fn }); } };
+  runGuard(win4s);
+  const g4s = win4s.__weFocusGuard;
+  const svg4 = new FakeSVGElement();
+  svg4.focus();
+  check('元素级围栏：SVGElement.prototype.focus 同样被围栏（无手势吞掉 + 计数 + svgInstalled）',
+    g4s.svgInstalled === true && g4s.elCalls === 1 && g4s.elBlocked === 1 && svgRaw.length === 0,
+    'svgInstalled=' + g4s.svgInstalled + ' elCalls=' + g4s.elCalls + ' raw=' + svgRaw.length);
+  svgGestures.forEach((h) => h.fn({ type: h.t, isTrusted: false }));
+  svg4.focus();
+  check('元素级围栏：手势窗口内 SVG 元素的 focus 照常放行',
+    g4s.elAllowed === 1 && g4s.elBlocked === 1 && svgRaw.length === 1,
+    'elAllowed=' + g4s.elAllowed + ' raw=' + svgRaw.length);
+  const winNoSvg = { focus () {}, document: {}, HTMLElement: FakeHTMLElement, addEventListener () {} };
+  runGuard(winNoSvg);
+  check('负对照：realm 没有 SVGElement 时 svgInstalled=false（不谎报已装）',
+    winNoSvg.__weFocusGuard.svgInstalled === false && winNoSvg.__weFocusGuard.elInstalled === true,
+    'svgInstalled=' + winNoSvg.__weFocusGuard.svgInstalled + ' elInstalled=' + winNoSvg.__weFocusGuard.elInstalled);
   // ⑧ 负对照：把"窗口判定"改成恒真 ⇒ "窗口过期后重新拦住"必须变假（判据真的在判手势）。
   const elRawM = [];
   const ElM = function () {};
