@@ -64,9 +64,10 @@ const cases = [
   // 2026-11-01：不再自研下载。主按钮恒为「如何下载安装联动桌宠」（展开后变「收起安装说明」）。
   { name: '未装', snap: { checking: false, installed: false, linkEnabled: true, mode: 'native', reason: 'runtime-not-installed', phase: 'idle' }, need: ['未安装', '如何下载安装联动桌宠'] },
   { name: '已装', snap: { checking: false, installed: true, version: '0.3.8', running: false, mode: 'linked', reason: '', phase: 'idle' }, need: ['已安装 v0.3.8', '如何下载安装联动桌宠'] },
-  { name: '引导展开', snap: { checking: false, installed: false, guideOpen: true, mode: 'native', reason: '', phase: 'idle' }, need: ['收起安装说明', '三步装好联动桌宠', '复制包名', 'dshpet-dshwe'] },
+  { name: '引导展开', snap: { checking: false, installed: false, guideOpen: true, mode: 'native', reason: '', phase: 'idle' }, need: ['收起安装说明', '三步装好联动桌宠', '复制包名', 'dshpet-dshwe', '不承诺跟随上游更新', 'github.com/Fish-under-sea/dshpet-dshwe'] },
   { name: '官方共存', snap: { checking: false, installed: true, version: '0.3.8', running: true, officialPet: true, mode: 'linked', reason: '', phase: 'idle' }, need: ['已安装 v0.3.8', '检测到官方 dsh-pet'] },
-  { name: '版本过旧', snap: { checking: false, installed: true, version: '0.3.8', mode: 'native', reason: 'runtime-too-old', phase: 'idle' }, need: ['运行时版本过旧'] },
+  { name: '版本过旧', snap: { checking: false, installed: true, version: '0.3.8', mode: 'native', reason: 'runtime-too-old', phase: 'idle' }, need: ['运行时版本过旧', '落后于本插件'] },
+  { name: '服务未就绪', snap: { checking: false, installed: true, version: '0.3.8', mode: 'native', reason: 'runtime-not-installed', phase: 'idle' }, need: ['联动服务未就绪'] },
 ];
 for (const item of cases) {
   const rendered = text(view(item.snap));
@@ -98,7 +99,16 @@ assert.ok(byAttr(base, 'data-pet-link', 'diag')[0], '折叠诊断 details');
 const detected = view({ checking: false, installed: true, version: '0.3.8', mode: 'linked', phase: 'idle' });
 assert.ok(byAttr(detected, 'data-pet-link', 'open-panel')[0], '检测到桌宠时出现打开面板按钮');
 assert.ok(byAttr(detected, 'data-pet-link', 'test-once')[0], '检测到桌宠时出现测试一次按钮');
+// 口径提示（2026-11-02）：常驻路标在安装按钮下方（不在开关行）；完整说明只在展开的安装引导里。
+assert.equal(byAttr(base, 'data-pet-link', 'adapted-hint').length, 1, '常驻「改编版」路标只出现一次');
+assert.ok(text(base).includes('独立改编版'), '常驻路标文案');
+assert.equal(byAttr(base, 'data-pet-link', 'adapted-note').length, 0, '引导未展开时不渲染完整说明');
+const guideOpen = view({ checking: false, installed: false, guideOpen: true, phase: 'idle' });
+const noteNode = byAttr(guideOpen, 'data-pet-link', 'adapted-note')[0];
+assert.ok(noteNode, '引导展开时出现「关于联动包」说明');
+assert.ok(text(noteNode).includes('不承诺跟随上游更新'), '说明里写明不跟随上游');
 console.log('PASS 卡片控件：胶囊开关 / 状态 / 安装引导 / 诊断；面板与测试按钮随检测结果出现或隐藏');
+console.log('PASS 口径提示：常驻路标 + 引导内完整说明（开关行不塞小字）');
 
 // ── 2b) 宿主不订阅 notify 的补偿：render 必须交出"自带订阅"的组件 ─────────────
 //  宿主在 renderExtensionsTab 里是一次性内联调用 mod.render(ctx)，不会订阅本卡片的 notify()；

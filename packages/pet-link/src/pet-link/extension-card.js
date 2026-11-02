@@ -44,6 +44,8 @@ function petLinkCardReadMode(state, petLink) {
 /** 失败兜底常量：与宿主侧 installer 的 RUNTIME_NAME / OFFICIAL_PACKAGE_URL 同源（t1）。 */
 const PET_LINK_CARD_PACKAGE = 'dshpet-dshwe';
 const PET_LINK_CARD_OFFICIAL_URL = 'https://www.npmjs.com/package/dshpet-dshwe';
+/** 联动包仓库（上游 dsh-pet 的下游改编版，独立维护、不跟随上游发布节奏）。 */
+const PET_LINK_CARD_REPO_URL = 'https://github.com/Fish-under-sea/dshpet-dshwe';
 
 /**
  * 图文安装引导的内容行（纯函数，组件与回退路径共用）。
@@ -99,6 +101,19 @@ function petLinkGuideRows(t, card, copied) {
     tag: 'a',
     attrs: { className: 'we-pet-link__guide-link', href: PET_LINK_CARD_OFFICIAL_URL, target: '_blank', rel: 'noopener noreferrer' },
     children: [PET_LINK_CARD_OFFICIAL_URL],
+  });
+  // 口径说明（2026-11-02）：联动包是"基于上游快照的改编版"，不跟随上游发布节奏。这条信息
+  // 回答的是「我装的是什么」，所以放在**安装引导里**而不是「启用桌宠联动」开关行下方 ——
+  // 开关行要与宿主设置行保持同款单行，且常驻小字会被误读成"开关本身有风险"。
+  rows.push({
+    tag: 'div',
+    attrs: { className: 'we-pet-link__guide-note', 'data-pet-link': 'adapted-note' },
+    children: [t('关于 dshpet-dshwe：它基于上游 dsh-pet 的一次快照改编，由社区单独维护，不承诺跟随上游更新。本插件按 link 协议版本适配；该包过旧或未同步时会回落为原生吉祥物，升级 dshpet-dshwe 即可恢复。')],
+  });
+  rows.push({
+    tag: 'a',
+    attrs: { className: 'we-pet-link__guide-link', href: PET_LINK_CARD_REPO_URL, target: '_blank', rel: 'noopener noreferrer' },
+    children: [PET_LINK_CARD_REPO_URL],
   });
   return rows;
 }
@@ -163,8 +178,11 @@ function petLinkCardView(snapshot, card, translate = value => value) {
   // 联动模式 / 版本过旧
   if (s.installed === true || s.mode) {
     let modeText;
-    if (s.reason === 'runtime-too-old') modeText = t('运行时版本过旧（需升级 dshpet-dshwe）');
+    // 口径提示（2026-11-02）：联动包是上游快照的改编版，版本过旧 / 服务未注册时把「为什么回落」
+    // 连同「看哪里」一起给出，避免用户把降级误判成插件 bug。
+    if (s.reason === 'runtime-too-old') modeText = t('运行时版本过旧（需升级 dshpet-dshwe）') + ' · ' + t('该联动包可能落后于本插件，详见安装说明');
     else if (s.mode === 'linked') modeText = t('联动已就绪（linked）');
+    else if (s.installed === true && s.reason === 'runtime-not-installed') modeText = t('当前回落原生吉祥物（native）') + ' · ' + t('联动服务未就绪，详见安装说明');
     else modeText = t('当前回落原生吉祥物（native）') + (s.reason ? ' · ' + t(s.reason) : '');
     children.push({ tag: 'div', attrs: { className: 'we-pet-link__mode', 'data-pet-link': 'mode' }, children: [modeText] });
   }
@@ -258,6 +276,14 @@ function petLinkCardView(snapshot, card, translate = value => value) {
       });
     }
   }
+
+  // 口径提示（常驻，一行）：联动包是社区维护的上游快照改编版，不跟随本插件发版。
+  // 只做「路标」—— 完整说明在安装引导面板里（adapted-note），开关行保持与宿主设置行同款不塞小字。
+  children.push({
+    tag: 'div',
+    attrs: { className: 'we-pet-link__note', 'data-pet-link': 'adapted-hint' },
+    children: [t('独立改编版 · 不跟随上游更新（点开安装说明查看）')],
+  });
 
   // 次按钮组：打开操控面板 + 测试一次（并排）。
   // 检测到不存在 dsh-pet（dshpet-dshwe）时这两个入口没有意义 —— 没有运行时就无处

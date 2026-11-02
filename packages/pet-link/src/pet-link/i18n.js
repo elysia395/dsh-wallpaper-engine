@@ -148,6 +148,10 @@ const PETLINK_I18N_EN = {
   '已复制': 'Copied',
   '安装时请复制上面的包名粘贴进去；也可在 npm 页面手动下载。': 'Copy the package name and paste it in; you can also download manually from npm.',
   '截图加载中…': 'Loading screenshot…',
+  '独立改编版 · 不跟随上游更新（点开安装说明查看）': 'Independent adapted build · no upstream tracking (open the install guide)',
+  '关于 dshpet-dshwe：它基于上游 dsh-pet 的一次快照改编，由社区单独维护，不承诺跟随上游更新。本插件按 link 协议版本适配；该包过旧或未同步时会回落为原生吉祥物，升级 dshpet-dshwe 即可恢复。': 'About dshpet-dshwe: it is an adapted build based on a snapshot of upstream dsh-pet, maintained separately by the community, with no promise of tracking upstream. This plugin adapts to its link protocol version; if the package is too old or out of sync, the link falls back to the native mascot — upgrading dshpet-dshwe restores it.',
+  '该联动包可能落后于本插件，详见安装说明': 'This pet package may lag behind this plugin; see the install guide',
+  '联动服务未就绪，详见安装说明': 'Link service not ready yet; see the install guide',
 };
 
 /** `{name}` 占位符插值（与主包 weT 同口径的子集）。 */

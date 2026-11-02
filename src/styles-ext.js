@@ -176,6 +176,21 @@ const CSS_EXT = `
     color: var(--we-accent, #4f8cff); text-decoration: none;
   }
   .we-pet-link__guide-link:hover { text-decoration: underline; }
+  /* 口径说明（2026-11-02）：联动包是"基于上游快照的改编版"，不跟随上游发布节奏。
+     常驻提示只做一行路标（.we-pet-link__note），完整说明放在安装引导面板内（.we-pet-link__guide-note），
+     开关行保持与宿主设置行同款单行、不塞常驻小字。 */
+  .we-pet-link__note {
+    font-size: .74em; line-height: 1.5;
+    color: var(--we-ink-dim, rgba(255,255,255,.55));
+    overflow-wrap: anywhere;
+  }
+  .we-pet-link__guide-note {
+    margin-top: 2px; padding-top: 7px;
+    border-top: 1px dashed var(--we-border, rgba(255,255,255,.14));
+    font-size: .76em; line-height: 1.65;
+    color: var(--we-ink-dim, rgba(255,255,255,.66));
+    overflow-wrap: anywhere;
+  }
 
   /* 标题行与胶囊开关均直接用宿主款（.we-picker__ctl / .we-picker__ctl-label / .we-picker__switch），
      本文件不再自造同族样式 —— 字号/字重/轨道尺寸只留一处真源，避免"看起来像但不一样"。 */
