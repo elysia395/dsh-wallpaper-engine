@@ -1816,23 +1816,27 @@ const CSS_GLASS = `
      ⚠️ 底色取 --we-readability-base（本包按主题钳制过的染色地板）⇒ 跟着主题与
         用户选的玻璃色走，不是硬编码另一种灰。
      ⚠️ 只写 background-color 与不会生效的 backdrop-filter，不碰 border / 圆角 / 阴影。
-     ⚠️ **必须显式排除本插件已认领的面**（选择器里的 :not([data-we-surface-runtime])）：
+     ⚠️ **必须显式排除宿主自己的对话框**（两个 :not，各管一个档位）：
         设置窗在真实 DOM 里**就是** role="dialog" —— 它的玻璃画在 ::before（z-index:-1）上、
         本体透明。本组规则若命中本体，会给它涂一层不透明底把玻璃整个盖掉
         （实测：门开 ⇒ 设置窗完全不透，与"壁纸该透出来"直接冲突）。
-        :where() 压特异性**救不了**这条：本组带 !important，而同权声明里"后写者赢"——
-        设置窗那条 ::before 规则画的是伪元素、根本不在同一场竞争里。
-        ⇒ 用运行时面标记排除：本插件认领过的面（设置窗 / 侧栏 / 内容面 / 自定义面）
-          都带 data-we-surface-runtime，它们各有自己的底板规则，这里一个都不许碰。
+        :where() 压特异性**救不了**这条：本组带 !important，而玻璃在伪元素上，
+        两者根本不在同一场声明竞争里。
+        · :not([data-we-surface-runtime]) —— 本插件认领过的面（玻璃开着时都带这个标记），
+          它们各有自己的底板规则，这里一个都不许碰。
+        · :not([data-we-host-dialog]) —— 覆盖「保留原生」档：那一档 glass-surfaces.js
+          会把 data-we-surface-runtime **摘掉**，只用上面那一个 :not 挡不住
+          （实测：宿主面板色 rgb(30,31,38) 被改成 --we-readability-base）。
+          这个标记由同一个运行时在识别设置窗时无条件打上，与玻璃开不开无关。
         ⚠️ 不写 :has([data-slot="settings.section"]) 之类的宿主锚点排除：会被 ② 组判成
-          "未登记的玻璃面"（实测踩过）。data-we-surface-runtime 是本插件自己的标记，
-          anchorsOf() 按 data-we- 前缀跳过，不参与枚举。 */
-  body[data-we-glass-page][data-we-floater-solid] :where([role="dialog"]):not([data-we-surface-runtime]) {
+          "未登记的玻璃面"，且会让本组规则被算进 settings-window 面而使 W5 判红（都实测踩过）。
+          两个 data-we-* 都是本插件自己的标记，anchorsOf() 按前缀跳过，不参与枚举。 */
+  body[data-we-glass-page][data-we-floater-solid] :where([role="dialog"]):not([data-we-surface-runtime]):not([data-we-host-dialog]) {
     background-color: var(--we-readability-base, #ffffff) !important;
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
   }
-  body[data-we-glass-page][data-we-floater-solid] :where([role="alertdialog"]):not([data-we-surface-runtime]) {
+  body[data-we-glass-page][data-we-floater-solid] :where([role="alertdialog"]):not([data-we-surface-runtime]):not([data-we-host-dialog]) {
     background-color: var(--we-readability-base, #ffffff) !important;
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
