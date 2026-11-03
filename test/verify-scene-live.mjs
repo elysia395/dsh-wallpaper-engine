@@ -2440,8 +2440,8 @@ const runGuard = (stub) => { new Function('window', guardSource)(stub); return s
   check('元素级围栏：最近一次被拦的调用点留下时间戳与栈头（壁纸帧控制台可自证）',
     g4.elLastBlockedAt > 0 && typeof g4.elLastBlockedStack === 'string' && g4.elLastBlockedStack.length > 0,
     'at=' + g4.elLastBlockedAt + ' stack=' + String(g4.elLastBlockedStack).slice(0, 40));
-  // 手势窗口内：shim 合成的 pointer/mouse 也算（isTrusted === false 也正是那一类）。
-  gestureHandlers.forEach((h) => h.fn({ type: h.t, isTrusted: false }));
+  // 手势窗口内：**可信来源**才放行（#169 §3：isTrusted === true，或 shim 的 __wePushPointer 注入期）。
+  gestureHandlers.forEach((h) => h.fn({ type: h.t, isTrusted: true }));
   input4.focus();
   check('元素级围栏：真实交互后的窗口内放行（用户点壁纸自己的编辑框照常拿焦点）',
     g4.gestureAt > 0 && g4.elCalls === 2 && g4.elAllowed === 1 && g4.elBlocked === 1 && elRaw.length === 1,
@@ -2456,6 +2456,32 @@ const runGuard = (stub) => { new Function('window', guardSource)(stub); return s
   g4.allow = true;
   input4.focus();
   check('元素级围栏：allow 逃生门同时放开元素级那一半', g4.elAllowed === 2 && elRaw.length === 2);
+  // ⑦' #169 §3：`SVGElement.prototype.focus` 是**独立的一处**（HTMLOrSVGElement mixin 分别挂在
+  //    两套原型上），只包 HTMLElement 会漏掉 SVG 元素 —— 负对照：把 SVGElement 从 realm 里拿掉，
+  //    `svgInstalled` 必须如实为 false，而不是靠"看着有围栏"恒真。
+  const svgRaw = [];
+  const FakeSVGElement = function () {};
+  FakeSVGElement.prototype.focus = function () { svgRaw.push('svg'); };
+  const svgGestures = [];
+  const win4s = { focus () {}, document: {}, HTMLElement: FakeHTMLElement, SVGElement: FakeSVGElement,
+    addEventListener (t, fn) { svgGestures.push({ t, fn }); } };
+  runGuard(win4s);
+  const g4s = win4s.__weFocusGuard;
+  const svg4 = new FakeSVGElement();
+  svg4.focus();
+  check('元素级围栏：SVGElement.prototype.focus 同样被围栏（无手势吞掉 + 计数 + svgInstalled）',
+    g4s.svgInstalled === true && g4s.elCalls === 1 && g4s.elBlocked === 1 && svgRaw.length === 0,
+    'svgInstalled=' + g4s.svgInstalled + ' elCalls=' + g4s.elCalls + ' raw=' + svgRaw.length);
+  svgGestures.forEach((h) => h.fn({ type: h.t, isTrusted: true }));
+  svg4.focus();
+  check('元素级围栏：手势窗口内 SVG 元素的 focus 照常放行',
+    g4s.elAllowed === 1 && g4s.elBlocked === 1 && svgRaw.length === 1,
+    'elAllowed=' + g4s.elAllowed + ' raw=' + svgRaw.length);
+  const winNoSvg = { focus () {}, document: {}, HTMLElement: FakeHTMLElement, addEventListener () {} };
+  runGuard(winNoSvg);
+  check('负对照：realm 没有 SVGElement 时 svgInstalled=false（不谎报已装）',
+    winNoSvg.__weFocusGuard.svgInstalled === false && winNoSvg.__weFocusGuard.elInstalled === true,
+    'svgInstalled=' + winNoSvg.__weFocusGuard.svgInstalled + ' elInstalled=' + winNoSvg.__weFocusGuard.elInstalled);
   // ⑧ 负对照：把"窗口判定"改成恒真 ⇒ "窗口过期后重新拦住"必须变假（判据真的在判手势）。
   const elRawM = [];
   const ElM = function () {};
@@ -2468,6 +2494,65 @@ const runGuard = (stub) => { new Function('window', guardSource)(stub); return s
   check('负对照：窗口判定恒真 ⇒ 元素级围栏失效（无手势不再被吞）',
     gM.elBlocked === 0 && gM.elAllowed === 1 && elRawM.length === 1,
     'elBlocked=' + gM.elBlocked + ' raw=' + elRawM.length);
+  // ⑧' #169 §3：**自派手势不再能打开放行窗口**。壁纸文档里 `dispatchEvent(new PointerEvent(...))`
+  //    造出来的事件 isTrusted === false 且不经过 shim ⇒ 只记 gestureIgnored，窗口不动 ⇒ 随后的
+  //    夺焦仍被吞。负对照：把判定改回"只看事件类型"⇒ 同一条判据必须变红。
+  const forgedRaw = [];
+  const ForgedEl = function () {};
+  ForgedEl.prototype.focus = function () { forgedRaw.push('el'); };
+  const forgedHandlers = [];
+  const winF = { focus () {}, document: {}, HTMLElement: ForgedEl,
+    addEventListener (t, fn) { forgedHandlers.push({ t, fn }); } };
+  runGuard(winF);
+  const gF = winF.__weFocusGuard;
+  forgedHandlers.forEach((h) => h.fn({ type: h.t, isTrusted: false })); // 作者页自派
+  new ForgedEl().focus();
+  check('自派手势不开放行窗口：无手势的 element.focus() 仍被吞，且单独记 gestureIgnored',
+    gF.gestureAt === 0 && gF.gestureIgnored === 4 && gF.elBlocked === 1 && gF.elAllowed === 0
+      && forgedRaw.length === 0,
+    'gestureAt=' + gF.gestureAt + ' gestureIgnored=' + gF.gestureIgnored
+      + ' elBlocked=' + gF.elBlocked + ' raw=' + forgedRaw.length);
+  // 负对照：判定退回"只看事件类型 + capture"（不看 isTrusted / 注入期）⇒ 自派手势就能开窗口，
+  // 上面那条判据（gestureAt === 0）必须变假。
+  const forgedRawM = [];
+  const ForgedElM = function () {};
+  ForgedElM.prototype.focus = function () { forgedRawM.push('el'); };
+  const forgedHandlersM = [];
+  const winFM = { focus () {}, document: {}, HTMLElement: ForgedElM,
+    addEventListener (t, fn) { forgedHandlersM.push({ t, fn }); } };
+  new Function('window', guardSource.replace(
+    'if (guard.injectDepth > 0 || (ev && ev.isTrusted === true)) { guard.gestureAt = Date.now(); return; }',
+    'guard.gestureAt = Date.now(); return;'))(winFM);
+  const gFM = winFM.__weFocusGuard;
+  forgedHandlersM.forEach((h) => h.fn({ type: h.t, isTrusted: false }));
+  new ForgedElM().focus();
+  check('负对照：判定退回只看事件类型 ⇒ 自派手势即可开窗口、夺焦被放行（判据有牙）',
+    gFM.gestureAt > 0 && gFM.elAllowed === 1 && gFM.elBlocked === 0 && forgedRawM.length === 1,
+    'gestureAt=' + gFM.gestureAt + ' elAllowed=' + gFM.elAllowed + ' raw=' + forgedRawM.length);
+  // ⑧'' 可信来源②：shim 的 __wePushPointer 注入期间合成的 isTrusted === false 事件**必须放行**
+  //    （那才是用户真手经 op 通道送进来的那一次）。围栏晚于 shim 注入，所以能包到它。
+  const pushRaw = [];
+  const PushEl = function () {};
+  PushEl.prototype.focus = function () { pushRaw.push('el'); };
+  const pushHandlers = [];
+  let pushCalls = 0;
+  const winP = { focus () {}, document: {}, HTMLElement: PushEl,
+    addEventListener (t, fn) { pushHandlers.push({ t, fn }); },
+    __wePushPointer () { pushCalls += 1; pushHandlers.forEach((h) => h.fn({ type: h.t, isTrusted: false })); } };
+  runGuard(winP);
+  const gP = winP.__weFocusGuard;
+  winP.__wePushPointer(10, 20, 1);
+  new PushEl().focus();
+  check('shim 注入的合成点击算可信手势：窗口内放行（作者页编辑框照常拿焦点）',
+    pushCalls === 1 && gP.injectDepth === 0 && gP.gestureAt > 0 && gP.gestureIgnored === 0
+      && gP.elAllowed === 1 && pushRaw.length === 1,
+    'injectDepth=' + gP.injectDepth + ' gestureAt=' + gP.gestureAt
+      + ' elAllowed=' + gP.elAllowed + ' raw=' + pushRaw.length);
+  check('shim 注入包装是幂等的：重复注入围栏不套第二层（__wePushPointer 只被包一次）',
+    winP.__wePushPointer.__weFocusGuardWrapped === true && (runGuard(winP), winP.__weFocusGuard === gP)
+      && winP.__wePushPointer.__weFocusGuardWrapped === true,
+    'wrapped=' + winP.__wePushPointer.__weFocusGuardWrapped);
+
   // ⑨ 元素级补丁装不上时如实记账，且绝不抛（注入体住在壁纸文档里）。
   const ElFrozen = function () {};
   Object.defineProperty(ElFrozen.prototype, 'focus', { configurable: false, writable: false, value () {} });
@@ -3595,6 +3680,10 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     // 设置页专属的（如 onFpsCap —— 帧率上限那行带 `!sidebarSurface` 门）才进占位器名单。
     'onLeftSidebarGlass', 'onTitlebarGlass', 'onSidebarGlass',
     'onSidebarAllCorners', 'onSidebarCornerRadius', 'onSidebarCornerSquare', 'onSidebarFullClear',
+    // #277：第三方表面实底底板（默认开）。侧栏「外观」档也画到这一行 ⇒ 它是 quick-panel
+    // 的自由变量 ⇒ 必须在这里当形参给（漏一个就是 vm 求值 ReferenceError —— 这条判据
+    // 在 #277 第一次交付时就抓到了这次遗漏）。
+    'onFloaterSolidBase',
     // （ADR-0008 D4 二次修订）：字体节与玻璃高级行**迁入侧栏**（折叠块）⇒ 它们
     // 从 QP_CTX_SETTINGS_ONLY 占位器名单移出、由 quick-panel 真值接线 ⇒ 这些名字现在是
     // **quick-panel 源码里的裸标识符** ⇒ 必须在这里当形参给（漏一个就是 vm 求值 ReferenceError）。
@@ -7014,7 +7103,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       // ⚠️ 本档打开 `thinkingGlass`（上游 #134 的「思考块液态玻璃」，默认关）：原属本档的
       //    「胶囊雾化」与「思考触发条玻璃·独立配置」都迁进侧栏折叠块了（本档不再画它们 ——
       //    这正是"真迁移"的字面含义；侧栏展开档在下面钉它们）。
-      wantLabels: ['主题随壁纸', '边框', '预设方案', '深色单独设置', '玻璃透明度', '雾化', '额外补雾化的选择器', '玻璃保真度', '思考块液态玻璃', '左侧栏液态玻璃', '标题栏液态玻璃', '侧栏液态玻璃', '侧栏全透明', '侧栏玻璃跟随全局', '内容面玻璃·独立配置', '左侧栏 · 统一圆角', '左侧栏 · 四角单独', '右侧栏 · 统一圆角', '右侧栏 · 四角单独'] },
+      wantLabels: ['主题随壁纸', '边框', '预设方案', '深色单独设置', '玻璃透明度', '雾化', '额外补雾化的选择器', '玻璃保真度', '思考块液态玻璃', '左侧栏液态玻璃', '标题栏液态玻璃', '侧栏液态玻璃', '侧栏全透明', '第三方弹窗不透明底', '侧栏玻璃跟随全局', '内容面玻璃·独立配置', '左侧栏 · 统一圆角', '左侧栏 · 四角单独', '右侧栏 · 统一圆角', '右侧栏 · 四角单独'] },
     // 设置页 · 主题预设**收起**档：不给 `presetsOpen`（ctxFrom 填 noop ⇒ 被当成收起）。
     // 节头必须仍在（它是重新展开的唯一入口），预设网格一行都不画 —— 判据形状与「全局 UI 配色」
     // 收起档同款（verify-client 里那条"存 0 ⇒ 色板不进树、节头仍在"的渲染侧镜像）。
@@ -7022,7 +7111,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       selOver: { sidebarPresent: true, sidebarGlass: true, thinkingGlass: true },
       ctxOver: { glassPresets: { presets: [] }, detailOpen: true, glassUiOpen: true, cornersOpen: true },
       want: ['主题', '细节', '主题预设', '玻璃 UI', '侧边栏圆角', '全局 UI 配色', '全局字体'],
-      wantLabels: ['主题随壁纸', '边框', '深色单独设置', '玻璃透明度', '雾化', '额外补雾化的选择器', '玻璃保真度', '思考块液态玻璃', '左侧栏液态玻璃', '标题栏液态玻璃', '侧栏液态玻璃', '侧栏全透明', '侧栏玻璃跟随全局', '内容面玻璃·独立配置', '左侧栏 · 统一圆角', '左侧栏 · 四角单独', '右侧栏 · 统一圆角', '右侧栏 · 四角单独'] },
+      wantLabels: ['主题随壁纸', '边框', '深色单独设置', '玻璃透明度', '雾化', '额外补雾化的选择器', '玻璃保真度', '思考块液态玻璃', '左侧栏液态玻璃', '标题栏液态玻璃', '侧栏液态玻璃', '侧栏全透明', '第三方弹窗不透明底', '侧栏玻璃跟随全局', '内容面玻璃·独立配置', '左侧栏 · 统一圆角', '左侧栏 · 四角单独', '右侧栏 · 统一圆角', '右侧栏 · 四角单独'] },
     // 侧栏档（默认收起）：**简化配置 + 两块折叠块的头**（ADR-0008 D4）——
     // 「详细玻璃调节」开关在（收起 ⇒ 它后面的独立配置层一行都不画）；「全局字体」节头在
     // （收起 ⇒ 字体内容不画）。`selOver` 与设置页用例同位 ⇒ 侧栏家族开关同样画得出来。
@@ -7041,13 +7130,13 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       selOver: { sidebarPresent: false, sidebarGlass: true },
       ctxOver: { glassPresets: { presets: [] }, presetsOpen: true, detailOpen: true, glassUiOpen: true, cornersOpen: true },
       want: ['主题', '细节', '主题预设', '玻璃 UI', '侧边栏圆角', '全局 UI 配色', '全局字体'],
-      wantLabels: ['主题随壁纸', '边框', '预设方案', '深色单独设置', '玻璃透明度', '雾化', '额外补雾化的选择器', '玻璃保真度', '思考块液态玻璃', '左侧栏液态玻璃', '标题栏液态玻璃', '内容面玻璃·独立配置', '左侧栏 · 统一圆角', '左侧栏 · 四角单独', '右侧栏 · 统一圆角', '右侧栏 · 四角单独'] },
+      wantLabels: ['主题随壁纸', '边框', '预设方案', '深色单独设置', '玻璃透明度', '雾化', '额外补雾化的选择器', '玻璃保真度', '思考块液态玻璃', '左侧栏液态玻璃', '标题栏液态玻璃', '第三方弹窗不透明底', '内容面玻璃·独立配置', '左侧栏 · 统一圆角', '左侧栏 · 四角单独', '右侧栏 · 统一圆角', '右侧栏 · 四角单独'] },
     // 同一条的另一半：`sidebarGlass` 关掉（侧栏玻璃总开关）⇒ 内容面那组也收（它的 CSS 门同源）。
     { fn: 'renderAppearanceTab', label: '（设置页 · 侧栏玻璃总开关关：内容面那组跟着收）', surface: 'settings',
       selOver: { sidebarPresent: false, sidebarGlass: false },
       ctxOver: { glassPresets: { presets: [] }, presetsOpen: true, detailOpen: true, glassUiOpen: true, cornersOpen: true },
       want: ['主题', '细节', '主题预设', '玻璃 UI', '侧边栏圆角', '全局 UI 配色', '全局字体'],
-      wantLabels: ['主题随壁纸', '边框', '预设方案', '深色单独设置', '玻璃透明度', '雾化', '额外补雾化的选择器', '玻璃保真度', '思考块液态玻璃', '左侧栏液态玻璃', '标题栏液态玻璃', '左侧栏 · 统一圆角', '左侧栏 · 四角单独', '右侧栏 · 统一圆角', '右侧栏 · 四角单独'] },
+      wantLabels: ['主题随壁纸', '边框', '预设方案', '深色单独设置', '玻璃透明度', '雾化', '额外补雾化的选择器', '玻璃保真度', '思考块液态玻璃', '左侧栏液态玻璃', '标题栏液态玻璃', '第三方弹窗不透明底', '左侧栏 · 统一圆角', '左侧栏 · 四角单独', '右侧栏 · 统一圆角', '右侧栏 · 四角单独'] },
     // 侧栏档 · 三节**默认收敛**（一个门都不给 = 全收起）：这是用户口径要的新行为 ——
     // 侧栏外观页打开时只剩六行节头，一屏放得下（此前「细节 + 玻璃 UI + 侧边栏圆角」要滚好几屏）。
     { fn: 'renderAppearanceTab', label: '（侧栏档 · 三节默认收敛：只画节头）', surface: 'sidebar',
@@ -7065,7 +7154,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       selOver: { sidebarPresent: true, sidebarGlass: true },
       ctxOver: { detailOpen: true, glassUiOpen: true, cornersOpen: true },
       want: ['主题', '细节', '玻璃 UI', '侧边栏圆角', '全局 UI 配色', '全局字体'],
-      wantLabels: ['主题随壁纸', '边框', '玻璃透明度', '雾化', '额外补雾化的选择器', '玻璃保真度', '思考块液态玻璃', '左侧栏液态玻璃', '标题栏液态玻璃', '侧栏液态玻璃', '侧栏全透明', '侧栏玻璃跟随全局', '详细玻璃调节', '内容面玻璃·独立配置', '左侧栏 · 统一圆角', '左侧栏 · 四角单独', '右侧栏 · 统一圆角', '右侧栏 · 四角单独'] },
+      wantLabels: ['主题随壁纸', '边框', '玻璃透明度', '雾化', '额外补雾化的选择器', '玻璃保真度', '思考块液态玻璃', '左侧栏液态玻璃', '标题栏液态玻璃', '侧栏液态玻璃', '侧栏全透明', '第三方弹窗不透明底', '侧栏玻璃跟随全局', '详细玻璃调节', '内容面玻璃·独立配置', '左侧栏 · 统一圆角', '左侧栏 · 四角单独', '右侧栏 · 统一圆角', '右侧栏 · 四角单独'] },
     // 侧栏档 · 「详细玻璃调节」展开（ctxOver.glassDetailOpen）：高级行全部回来 ——
     // 胶囊细调（thinkingGlass 开 ⇒ 同门）、内容面与登记表各面的「独立配置」。
     // `sidebarFollowGlobal` 默认开 ⇒ 「侧栏玻璃·独立配置」被跟随门收起（画出来又不生效的
@@ -7074,7 +7163,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       selOver: { sidebarPresent: true, sidebarGlass: true, thinkingGlass: true },
       ctxOver: { glassDetailOpen: true, detailOpen: true, glassUiOpen: true, cornersOpen: true },
       want: ['主题', '细节', '玻璃 UI', '侧边栏圆角', '全局 UI 配色', '全局字体'],
-      wantLabels: ['主题随壁纸', '边框', '玻璃透明度', '雾化', '额外补雾化的选择器', '玻璃保真度', '思考块液态玻璃', '左侧栏液态玻璃', '标题栏液态玻璃', '侧栏液态玻璃', '侧栏全透明', '侧栏玻璃跟随全局', '详细玻璃调节', '胶囊雾化', '设置窗口玻璃·独立配置', '对话框玻璃·独立配置', '思考触发条玻璃·独立配置', '浮层玻璃·独立配置', '内容面玻璃·独立配置', '左侧栏 · 统一圆角', '左侧栏 · 四角单独', '右侧栏 · 统一圆角', '右侧栏 · 四角单独'] },
+      wantLabels: ['主题随壁纸', '边框', '玻璃透明度', '雾化', '额外补雾化的选择器', '玻璃保真度', '思考块液态玻璃', '左侧栏液态玻璃', '标题栏液态玻璃', '侧栏液态玻璃', '侧栏全透明', '第三方弹窗不透明底', '侧栏玻璃跟随全局', '详细玻璃调节', '胶囊雾化', '设置窗口玻璃·独立配置', '对话框玻璃·独立配置', '思考触发条玻璃·独立配置', '浮层玻璃·独立配置', '内容面玻璃·独立配置', '左侧栏 · 统一圆角', '左侧栏 · 四角单独', '右侧栏 · 统一圆角', '右侧栏 · 四角单独'] },
     // ⚠️ 这一条是**覆盖缺口**补上的：字体那一节的细节（颜色角色 / 排版角色 / 字体族 / 组件字体 /
     // 字体集预设，~180 行）被 `sel.fontCustom` 挡着，而它的默认值是关 ⇒ **任何用例都没渲染过它**。
     // 打开它才能让那些行第一次进入判据的视野（这本身是找缺陷，不只是补锚）。
@@ -7083,7 +7172,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       selOver: { fontCustom: true, sidebarPresent: true, sidebarGlass: true },
       ctxOver: { fontOpen: true, detailOpen: true, glassUiOpen: true, cornersOpen: true, fontSet: FONTSET_STUB },
       want: ['主题', '细节', '玻璃 UI', '侧边栏圆角', '全局 UI 配色', '全局字体'],
-      wantLabels: ['主题随壁纸', '边框', '玻璃透明度', '雾化', '额外补雾化的选择器', '玻璃保真度', '思考块液态玻璃', '左侧栏液态玻璃', '标题栏液态玻璃', '侧栏液态玻璃', '侧栏全透明', '侧栏玻璃跟随全局', '详细玻璃调节', '内容面玻璃·独立配置',
+      wantLabels: ['主题随壁纸', '边框', '玻璃透明度', '雾化', '额外补雾化的选择器', '玻璃保真度', '思考块液态玻璃', '左侧栏液态玻璃', '标题栏液态玻璃', '侧栏液态玻璃', '侧栏全透明', '第三方弹窗不透明底', '侧栏玻璃跟随全局', '详细玻璃调节', '内容面玻璃·独立配置',
         '左侧栏 · 统一圆角', '左侧栏 · 四角单独', '右侧栏 · 统一圆角', '右侧栏 · 四角单独',
         '字体自定义', '默认字体', '终端字体', '文字颜色角色', '深色单独设置', '正文', '次要文字', '弱化说明', '极小说明', '禁用 / 更弱',
         '排版角色', '只看改过的', '高级字体设置', '字体集预设'] },
@@ -7101,7 +7190,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       // ⚠️ 这条序列 = 上面设置档（收起）那 17 项玻璃标签 + 侧栏字体展开那 14 项字体标签，
       //    **按序拼接** —— 两个来源各自都被别的用例钉住了，这里是它们的交叉验证：拼接后
       //    逐字相等 ⇒ 设置页的字体节渲染的就是侧栏那一份同一渲染器的产物（无 surface 分支残留）。
-      wantLabels: ['主题随壁纸', '边框', '预设方案', '深色单独设置', '玻璃透明度', '雾化', '额外补雾化的选择器', '玻璃保真度', '思考块液态玻璃', '左侧栏液态玻璃', '标题栏液态玻璃', '侧栏液态玻璃', '侧栏全透明', '侧栏玻璃跟随全局',
+      wantLabels: ['主题随壁纸', '边框', '预设方案', '深色单独设置', '玻璃透明度', '雾化', '额外补雾化的选择器', '玻璃保真度', '思考块液态玻璃', '左侧栏液态玻璃', '标题栏液态玻璃', '侧栏液态玻璃', '侧栏全透明', '第三方弹窗不透明底', '侧栏玻璃跟随全局',
         '内容面玻璃·独立配置',
         '左侧栏 · 统一圆角', '左侧栏 · 四角单独', '右侧栏 · 统一圆角', '右侧栏 · 四角单独',
         '字体自定义', '默认字体', '终端字体', '文字颜色角色', '深色单独设置', '正文', '次要文字', '弱化说明', '极小说明', '禁用 / 更弱',

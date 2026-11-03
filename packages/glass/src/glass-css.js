@@ -1780,6 +1780,68 @@ const CSS_GLASS = `
     background-image: none !important;
   }
 
+  /* ── 第三方插件表面的实底底板（issue #277）──────────────────────────────────
+     症状：装了带弹窗 / 自带框架页的第三方插件后，那些面是**半透明**的 ——
+     背后的页面内容、兄弟弹窗一起透上来，叠成一团看不清。
+
+     根因（真 Chromium 实测）：本插件把宿主的层令牌
+     --dsw-alias-bg-layer-1/2/3、--dsw-alias-bg-base、--dsw-alias-bg-overlay
+     **重映射成玻璃配方**（半透明 + 染色地板），而宿主自己的面各有专门规则把底补回来
+     （设置窗 :has([data-slot])、插件管理器 [data-install-registry]、输入卡、气泡…）。
+     第三方写的容器**一个都不匹配**这些锚点 ⇒ 它们读到的就是玻璃配方 ⇒
+     「半透明且没有 backdrop-filter」= 后面的东西直接透出。
+
+     实测（深色档，本包的 CSS_GLASS + 宿主令牌替身）：
+       宿主设置窗                      α = 1.000（有专门规则）
+       role="dialog" 第三方弹窗         α = 0.656、backdrop-filter: none
+       tooltip / listbox               α = 0.675 / 0.662
+       无 role 的 body 直系框架层        α = 0.656
+       无 role 的 _header 吸顶条         α = 0.649
+       宿主自己的确认框 / 审批卡 / 问答卡  α = 0.656~0.662（同一个洞的受害者）
+       宿主设置窗**本体**                α = 0（玻璃画在 ::before 上，见下面的排除项）
+
+     为什么只做 ARIA 这一层（#277 评论里的意见我采纳了一半，另一半**明确不做**）：
+       评论指出「吸顶条 / 整页框架层不带 role，只认 ARIA 覆盖不到」—— 这是对的，
+       真机实测也确认了（α≈0.65 仍透）。但那类面**没有稳定锚点**：宿主不给它们
+       data-* 属性，第三方插件的类名又是哈希，唯一可用的识别方式是「body 直系」
+       或「类名含 sticky/header」这类**结构猜测**。
+       本仓纪律明确禁止猜哈希；而 structure-guess 会误伤宿主自己的框架层（那是壁纸
+       该透出来的地方）。所以本 PR **只落地可被稳定识别的 ARIA 浮层**，
+       并在 PR 正文里把「无 role 面」作为**已知边界**交给维护者裁决（要么宿主加锚点，
+       要么明确接受这些面半透明）。
+       这样做的好处：射程可验证、零误伤、不与 W5 的锚点门控纪律冲突。
+
+     ⚠️ 门控 = data-we-floater-solid（设置项 floaterSolidBase，默认开）。
+        摘掉属性整组失效 ⇒ W5「关 ⇒ 回退干净」成立。
+     ⚠️ 底色取 --we-readability-base（本包按主题钳制过的染色地板）⇒ 跟着主题与
+        用户选的玻璃色走，不是硬编码另一种灰。
+     ⚠️ 只写 background-color 与不会生效的 backdrop-filter，不碰 border / 圆角 / 阴影。
+     ⚠️ **必须显式排除宿主自己的对话框**（两个 :not，各管一个档位）：
+        设置窗在真实 DOM 里**就是** role="dialog" —— 它的玻璃画在 ::before（z-index:-1）上、
+        本体透明。本组规则若命中本体，会给它涂一层不透明底把玻璃整个盖掉
+        （实测：门开 ⇒ 设置窗完全不透，与"壁纸该透出来"直接冲突）。
+        :where() 压特异性**救不了**这条：本组带 !important，而玻璃在伪元素上，
+        两者根本不在同一场声明竞争里。
+        · :not([data-we-surface-runtime]) —— 本插件认领过的面（玻璃开着时都带这个标记），
+          它们各有自己的底板规则，这里一个都不许碰。
+        · :not([data-we-host-dialog]) —— 覆盖「保留原生」档：那一档 glass-surfaces.js
+          会把 data-we-surface-runtime **摘掉**，只用上面那一个 :not 挡不住
+          （实测：宿主面板色 rgb(30,31,38) 被改成 --we-readability-base）。
+          这个标记由同一个运行时在识别设置窗时无条件打上，与玻璃开不开无关。
+        ⚠️ 不写 :has([data-slot="settings.section"]) 之类的宿主锚点排除：会被 ② 组判成
+          "未登记的玻璃面"，且会让本组规则被算进 settings-window 面而使 W5 判红（都实测踩过）。
+          两个 data-we-* 都是本插件自己的标记，anchorsOf() 按前缀跳过，不参与枚举。 */
+  body[data-we-glass-page][data-we-floater-solid] :where([role="dialog"]):not([data-we-surface-runtime]):not([data-we-host-dialog]) {
+    background-color: var(--we-readability-base, #ffffff) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+  body[data-we-glass-page][data-we-floater-solid] :where([role="alertdialog"]):not([data-we-surface-runtime]):not([data-we-host-dialog]) {
+    background-color: var(--we-readability-base, #ffffff) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+
 `;
 
 export { CSS_GLASS };
