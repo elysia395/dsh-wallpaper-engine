@@ -5281,6 +5281,25 @@ setTimeout(async () => {
   assert.equal(R.win.__weFocusHandback.handbacks, 1,
     'A3-F2：拆除后补交不许再发生（实测补交又在拆除后发生了）');
 
+  // ④'''' #169 §3：focusout 排的 0ms 交还任务也要存句柄 —— 拆除只清 retryTimer 不够。
+  //    观测点 = 虚拟定时器队列：`handBack` 首行的 `!active` 会挡住交还，只看 handbacks 抓不到
+  //    "拆完还剩一个醒着的空定时器"；句柄没存时，dispose 清不掉它，队列里会留下 1 个。
+  const H = buildFh(fhSrc);
+  const disposeH = H.mod.installFocusHandback();
+  H.fire('focusin', H.hostInput);
+  H.doc.activeElement = H.frame;
+  H.fire('focusout', H.hostInput);
+  assert.equal(H.pendingTimers(), 1, '#169 §3 前提：focusout 必须真的排了一个在途的 0ms 交还任务');
+  H.fire('focusout', H.hostInput);
+  assert.equal(H.pendingTimers(), 2,
+    '#169 §3：每次 focusout 都排一个 0ms 任务（既有语义：每次跳过都记账）⇒ 两个句柄都要入账');
+  disposeH();
+  assert.equal(H.pendingTimers(), 0,
+    '#169 §3：拆除必须清掉 focusout 排的全部 0ms 交还任务（只清 retryTimer = 拆完它们仍会醒来）');
+  H.advance(0);
+  assert.equal(H.win.__weFocusHandback.handbacks, 0,
+    '负对照：拆除后这些任务不许再交还（handbacks 必须保持 0）');
+
   // ④''' §11 A3-F2（issue #210）：手势窗口**未到点**时一次都不许补交。补交定时器若不等窗口就动手
   //    （或跳过时当场补交），用户在窗口里刚点的壁纸会被抢回焦点 —— 与"照他点的来"直接矛盾。虚拟时钟
   //    让这条判据钉在精确的边界上：999ms 一定未到点，再走 101ms 一定到点（墙钟版本只能碰运气）。

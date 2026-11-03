@@ -9,7 +9,7 @@
 > **`### v1.3.2（未发布）`** 一节收拢的是 **1.3.1 之后**的全部内容；**`### v1.3.0（2026-10-06）`**
 > 一节收拢的是 **1.2.0 之后至 1.3.0** 的全部内容；`### v1.3.0-r2` 与 `### v1.3.1`（都标「未发布」）记的是 **v1.3.0 之后**的增量；**`### v1.2.0`** 一节收拢的是 **1.1.0 之后至 1.2.0**
 > 的全部内容（侧栏工作台：外观 / 播放进侧栏与「壁纸属性」；玻璃染色地板与「左侧栏覆盖」；前置基线切换到官方桌面端 ≥ 0.2.0-rc.1）；
-> **`### v1.1.0`** 一节收拢的是 **1.0.1 之后至 1.1.0** 的全部内容。
+> **`### v1.1.0`** 一节收拢的是 **1.0.1 之后至 1.1.0** 的全部内容https://github.com/elysia395/dsh-wallpaper-engine/pull/306/conflict?name=docs%252Fen%252FCHANGELOG.md&ancestor_oid=6a8fb5f159bfcf879dddf871456978eccb369ea6&base_oid=1e71ca48c94592e41c3a8e8a9a68bc95c6ef3e7f&head_oid=f230cff1f2f054ae2048f02257664234a06169b7。
 >
 > **归档说明**：本仓库从 **v0.6.8** 起才有 git tag，更早的版本没有独立标签。早于 v0.6.8 的条目
 > 按**原 README 原文的版本标注**归档；原文未标注小版本的条目放进区间桶，不臆造版本号。
@@ -17,6 +17,8 @@
 > `test/verify-scene-live.mjs` 这一类判据条数**只记该条写作当时的实测总数**（如 466 / 465），不是现在的总数 —— 后续条目会往上加（现为 502）；照原文保留，好让它与当次提交对得上。
 
 ### 未发布（玻璃子包；版本号由主线统筹）
+
+- **修：夺焦围栏的 §3 三处残留（#169）**：① `SVGElement.prototype.focus` 此前未守 —— HTMLOrSVGElement mixin 分别挂在 `HTMLElement` 与 `SVGElement` 两套原型上，只包前者会漏掉 SVG 元素；现在两族共用同一条围栏逻辑（同一套 `elCalls / elAllowed / elBlocked` 计数），装没装上分别如实记在 `elInstalled` / `svgInstalled` 上（realm 里没有 `SVGElement` 时后者为 `false`，不谎报已装）。② `src/focus-handback.js` 的 `focusout` 那拍此前每次新挂一个**不记名**的 0ms 定时器，`dispose` 只清 `retryTimer` ⇒ 拆完仍有一个会醒来的空定时器；现在全部句柄入账（`Set` 逐条 `clearTimeout`），拆除后队列里一个都不剩。③ 自派手势不再能打开放行窗口：此前手势窗口只看「事件类型 + capture 相」，壁纸文档里一次 `dispatchEvent(new PointerEvent('pointerdown'))` 就能开 1000 ms 窗口放行随后的夺焦，并污染自证读数（`elBlocked` 不涨、`elAllowed` 涨）。现在只认两种可信来源 —— `isTrusted === true` 的原生事件，或 shim 的 `__wePushPointer` 注入期间（围栏晚于 shim 注入，故把它包起来置 `injectDepth`）；自派事件只记 `gestureIgnored`、窗口不动。判据：`test/verify-scene-live.mjs` 新增 SVG 围栏正 / 负对照、自派手势被拒 + 负对照（判定退回只看事件类型必须判红）、shim 注入放行、包装幂等；`test/verify-client.mjs` 新增「拆除清掉全部在途 0ms 交还任务 + 拆后不许再交还」。
 
 - **新增：图片 / 幻灯片壁纸（WE `preset` 型项目，issue #223 的重写）**：扫描族认 `preset` 项目——`wallpapermode` 1/2 + `customdirectory` 目录（递归 ≤3 层、上限 2000 张，自然序）或 `image` 单图 ⇒ `type: 'image'`、`file` = 首图、`slides` 为图集清单、`imageswitchtimes`（1/5/10/30/60 分钟）⇒ `slideIntervalMs`；`customdirectory` 与其它项目字段同样过目录包含校验（外部可控字段，口径同 #252）。新增同源路由 **`GET /wallpaper-engine/slides/<token>`**（token = 首图媒体 token，复用同一张 `mediaMap`；只回 `/media/<token>` 形式的 URL、不新开寻址；未知 token / 空目录 404、非 GET 405）⇒ 清单条目多三个字段 `slideCount` / `slidesUrl`（图集 >1 张才有）/ `slideIntervalMs`。设置新增 **`pictureSlideSeconds`**（0 = 跟随 WE 预设，与「壁纸之间」的 `rotationInterval` 是两件事）与播放节里的「图片轮播」下拉；浏览器半边在底层首图之上叠两张过场图做交叉淡化（不改底层 `src`、页面隐藏不推进、脱离文档即停表摘图、每张图集只拉一次）。客户端改动**刷新页面即可**；新增宿主路由**需重启 dsh**。守卫：`test/verify-slides.mjs`（路由形状 / 自然序 / token 不越出目录 / 404·405 / 变异负对照）与 `test/verify-slideshow-client.mjs`（`node:vm` 跑真 `media-prep`：叠层、预载、周期、失联停表、隐藏不推进、变异负对照）。
 - **版本号维持 `1.4.0`，发布号由主线统筹（玻璃子包 + 仅壁纸态）**：九个包（主包 + 八个子包，ADR-0016 新增 glass）同号锁步，`package-lock` 同批重算；发布集九件套自检通过（`pack:release` 九个 tarball，`publishOrder` 八个子包先行、主包殿后）。

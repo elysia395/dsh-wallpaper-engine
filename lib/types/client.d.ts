@@ -94,6 +94,14 @@ declare global {
       gestureWindowMs: number;
       elLastBlockedAt: number;
       elLastBlockedStack: string;
+      /** #169 §3: `SVGElement.prototype` fence installed separately from the HTML one. */
+      svgInstalled: boolean;
+      /** #169 §3: self-dispatched gesture events rejected (they must not open the release window). */
+      gestureIgnored: number;
+      /** #169 §3: >0 while the shim's `__wePushPointer` is injecting, i.e. a trusted synthetic gesture. */
+      injectDepth: number;
     };
+    /** #169 §3: wrapped by the focus guard to mark shim-injected synthetic pointer events as trusted. */
+    __wePushPointer: ((...args: any[]) => any) & { __weFocusGuardWrapped?: boolean };
   }
 }
