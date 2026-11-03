@@ -34,12 +34,7 @@
     "pauseOnBattery": false,
     "flip": false,
     "objectFit": "cover",
-    "contentRatingFilter": [
-      "everyone",
-      "pg13",
-      "mature",
-      "unrated"
-    ],
+    "contentRatingFilter": ["everyone", "pg13", "mature", "unrated"],
     "typeFilter": [
       "video",
       "web",

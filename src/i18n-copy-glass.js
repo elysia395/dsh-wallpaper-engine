@@ -58,10 +58,10 @@ const WE_I18N_EN_GLASS = {
   "浮层玻璃·玻璃透明度": "Popover glass · glass opacity",
   "浮层玻璃·雾化": "Popover glass · blur",
   "浮层玻璃·玻璃保真度": "Popover glass · glass fidelity",
-  // ── #277：第三方插件表面的实底底板 ──
-  "第三方表面不透明底": "Opaque base for third-party surfaces",
-  "给第三方插件的弹窗 / 框架层 / 吸顶条补实底": "Give third-party plugin dialogs, frames and sticky bars a solid base",
-  "打开（默认）：第三方插件（任务看板等）的弹窗、框架层与吸顶条补一层不透明底，背后的页面内容与兄弟弹窗不再透上来；宿主自己的设置窗、输入卡与菜单不受影响。关闭：恢复宿主原生的半透明观感": "On (default): dialogs, frames and sticky bars from third-party plugins (task boards and the like) get an opaque base, so the page behind them and sibling dialogs no longer bleed through; the host's own settings window, composer and menus are untouched. Off: restore the host's native translucent look",
+  // ── #277：第三方插件浮层的实底底板（射程只到 ARIA 浮层）──
+  "第三方弹窗不透明底": "Opaque base for third-party dialogs",
+  "给第三方插件的弹窗补实底": "Give third-party plugin dialogs a solid base",
+  "打开（默认）：第三方插件（任务看板等）的弹窗与确认框补一层不透明底，背后的页面内容与兄弟弹窗不再透上来；宿主自己的设置窗、输入卡与菜单不受影响。关闭：恢复宿主原生的半透明观感": "On (default): dialogs and confirm boxes from third-party plugins (task boards and the like) get an opaque base, so the page behind them and sibling dialogs no longer bleed through; the host's own settings window, composer and menus are untouched. Off: restore the host's native translucent look",
   "思考触发条玻璃·独立配置": "Thinking trigger glass · independent config",
   "思考触发条玻璃·玻璃透明度": "Thinking trigger glass · glass opacity",
   "思考触发条玻璃·雾化": "Thinking trigger glass · blur",

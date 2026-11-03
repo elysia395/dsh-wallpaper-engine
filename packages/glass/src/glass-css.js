@@ -1798,6 +1798,7 @@ const CSS_GLASS = `
        无 role 的 body 直系框架层        α = 0.656
        无 role 的 _header 吸顶条         α = 0.649
        宿主自己的确认框 / 审批卡 / 问答卡  α = 0.656~0.662（同一个洞的受害者）
+       宿主设置窗**本体**                α = 0（玻璃画在 ::before 上，见下面的排除项）
 
      为什么只做 ARIA 这一层（#277 评论里的意见我采纳了一半，另一半**明确不做**）：
        评论指出「吸顶条 / 整页框架层不带 role，只认 ARIA 覆盖不到」—— 这是对的，
@@ -1815,20 +1816,23 @@ const CSS_GLASS = `
      ⚠️ 底色取 --we-readability-base（本包按主题钳制过的染色地板）⇒ 跟着主题与
         用户选的玻璃色走，不是硬编码另一种灰。
      ⚠️ 只写 background-color 与不会生效的 backdrop-filter，不碰 border / 圆角 / 阴影。
-     ⚠️ 排除项：本仓已登记的宿主面在真实 DOM 里**不是** role=dialog / alertdialog
-        （设置窗有 data-slot 但 role 是 dialog —— 见下），所以这里不用 :has() 去排除：
-        往选择器里写 data-slot / data-composer-card 会被 ② 组判成"未登记的玻璃面"，
-        而写 :has([data-composer-card]) 又会让本组规则被算进 glass-child-conversation 面
-        （那条面的 W5 判据要求带 chat 门）—— 两条都实测踩过。
-        改用 :where() 把本组规则的特异性压到最低，让**后面任何一条同权规则**都能覆盖它：
-        设置窗 / 输入卡 / 插件管理器都有自己的实底规则，特异性天然高于 :where()。
-        ⇒ 既不改它们的观感，也不污染守卫的锚点枚举。 */
-  body[data-we-glass-page][data-we-floater-solid] :where([role="dialog"]) {
+     ⚠️ **必须显式排除本插件已认领的面**（选择器里的 :not([data-we-surface-runtime])）：
+        设置窗在真实 DOM 里**就是** role="dialog" —— 它的玻璃画在 ::before（z-index:-1）上、
+        本体透明。本组规则若命中本体，会给它涂一层不透明底把玻璃整个盖掉
+        （实测：门开 ⇒ 设置窗完全不透，与"壁纸该透出来"直接冲突）。
+        :where() 压特异性**救不了**这条：本组带 !important，而同权声明里"后写者赢"——
+        设置窗那条 ::before 规则画的是伪元素、根本不在同一场竞争里。
+        ⇒ 用运行时面标记排除：本插件认领过的面（设置窗 / 侧栏 / 内容面 / 自定义面）
+          都带 data-we-surface-runtime，它们各有自己的底板规则，这里一个都不许碰。
+        ⚠️ 不写 :has([data-slot="settings.section"]) 之类的宿主锚点排除：会被 ② 组判成
+          "未登记的玻璃面"（实测踩过）。data-we-surface-runtime 是本插件自己的标记，
+          anchorsOf() 按 data-we- 前缀跳过，不参与枚举。 */
+  body[data-we-glass-page][data-we-floater-solid] :where([role="dialog"]):not([data-we-surface-runtime]) {
     background-color: var(--we-readability-base, #ffffff) !important;
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
   }
-  body[data-we-glass-page][data-we-floater-solid] :where([role="alertdialog"]) {
+  body[data-we-glass-page][data-we-floater-solid] :where([role="alertdialog"]):not([data-we-surface-runtime]) {
     background-color: var(--we-readability-base, #ffffff) !important;
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
