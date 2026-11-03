@@ -291,8 +291,9 @@ function applyGlass(selection, s) {
   // ── #277：第三方插件表面的实底底板（设置键 floaterSolidBase，默认开）────────────
   // 与上一行同形：值与门正交的属性；配对的卸载撤除在 disposeGlassLayer（漏撤 ⇒
   // 插件卸载后第三方弹窗仍被拍成实底，宿主原生观感回不去）。
-  // 规则本体在 glass-css.js 的「第三方插件表面的实底底板」段（三层：ARIA 浮层 /
-  // body 直系框架层 / 吸顶条），三层都挂在这个门上 ⇒ W5「关 ⇒ 回退干净」成立。
+  // 规则本体在 glass-css.js 的「第三方插件表面的实底底板」段，只做 ARIA 这一层
+  // （role=dialog / role=alertdialog）；无 role 的框架层、吸顶条没有稳定锚点，暂不覆盖。
+  // 整组都挂在这个门上 ⇒ W5「关 ⇒ 回退干净」成立。
   if (selection.floaterSolidBase !== false) document.body.setAttribute("data-we-floater-solid", "on");
   else document.body.removeAttribute("data-we-floater-solid");
 

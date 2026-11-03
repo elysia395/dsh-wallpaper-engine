@@ -809,7 +809,7 @@ function renderAppearanceGlassSection(ctx) {
       switchRow(weT("第三方弹窗不透明底"), sel.floaterSolidBase !== false, onFloaterSolidBase, {
         key: "floater-solid-base",
         hint: weT("给第三方插件的弹窗补实底"),
-        tooltip: weT("打开（默认）：第三方插件（任务看板等）的弹窗与确认框补一层不透明底，背后的页面内容与兄弟弹窗不再透上来；宿主自己的设置窗、输入卡与菜单不受影响。关闭：恢复宿主原生的半透明观感"),
+        tooltip: weT("打开（默认）：第三方插件（任务看板等）的弹窗与确认框补一层不透明底，背后的页面内容与兄弟弹窗不再透上来；宿主自己的设置窗、输入卡与菜单保持原样，宿主的确认 / 审批卡会一并变实底（它们此前同样在漏）。关闭：恢复宿主原生的半透明观感"),
       }),
       // 跟随全局（sidebarFollowGlobal，默认开，现场口径："我需要侧栏玻璃也跟随全局"）：
       // 开着 ⇒ 侧栏的釉变量直接指向全局三件套（effects 里写 var() 引用），并把下面
