@@ -4,6 +4,7 @@
   "name": "重磨砂",
   "values": {
     "glassSurfacePolicy": {},
+    "floaterSolidBase": true,
     "scrim": 0.25,
     "border": 0.35,
     "blur": 36,

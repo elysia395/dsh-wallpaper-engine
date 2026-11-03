@@ -391,7 +391,7 @@ function renderAppearanceGlassSection(ctx) {
     onCapsuleBlur, onCapsuleColor,
     onLeftSidebarGlass, onTitlebarGlass, onSidebarAlpha, onSidebarBlur, onSidebarColor,
     onSidebarContentAlpha, onSidebarContentColor, onSidebarGlass,
-    onSidebarFollowGlobal, onSidebarFullClear,
+    onSidebarFollowGlobal, onSidebarFullClear, onFloaterSolidBase,
     onThinkingMode, glassDetailOpen, onToggleGlassDetail, glassUiOpen, onToggleGlassUiSection,
     presetsOpen, onTogglePresetsSection,
   } = ctx;
@@ -796,6 +796,18 @@ function renderAppearanceGlassSection(ctx) {
         key: "sidebar-fullclear",
         hint: weT("壁纸下撤掉侧栏的可读性底与色染"),
         tooltip: weT("打开：壁纸激活时侧栏的可读性下限、色染与釉光整块撤掉，壁纸原样透出（文字直接压在壁纸上）；模糊仍由侧栏模糊/全局雾化旋钮管。关闭（默认）：保留可读性下限，最坏壁纸下正文仍 ≥4.5:1"),
+      }),
+      // #277：第三方插件浮层的实底底板（默认开）。玻璃把宿主层令牌改成半透明之后，
+      // 第三方写的弹窗（role=dialog / alertdialog，没有本仓认得的锚点）会变成
+      // "半透明且无模糊" ⇒ 背后内容叠上来糊成一团。本开关给这类面补一层实底；
+      // 关掉即恢复宿主原生的半透明观感。刻意**不放在玻璃总开关后面**：玻璃关着时
+      // 这组规则本就不生效，而用户可能先开玻璃、再回来单独关这一项 —— 门中门只会让人找不到。
+      // ⚠️ 射程只到 ARIA 浮层：无 role 的框架层 / 吸顶条**没有稳定锚点**，本开关管不到
+      //    （见 glass-css.js 那段说明）—— 文案不许许诺这两类，否则是画了不生效的旋钮。
+      switchRow(weT("第三方弹窗不透明底"), sel.floaterSolidBase !== false, onFloaterSolidBase, {
+        key: "floater-solid-base",
+        hint: weT("给第三方插件的弹窗补实底"),
+        tooltip: weT("打开（默认）：第三方插件（任务看板等）的弹窗与确认框补一层不透明底，背后的页面内容与兄弟弹窗不再透上来；宿主自己的设置窗、输入卡与菜单保持原样，宿主的确认 / 审批卡会一并变实底（它们此前同样在漏）。关闭：恢复宿主原生的半透明观感"),
       }),
       // 跟随全局（sidebarFollowGlobal，默认开，现场口径："我需要侧栏玻璃也跟随全局"）：
       // 开着 ⇒ 侧栏的釉变量直接指向全局三件套（effects 里写 var() 引用），并把下面

@@ -30,6 +30,13 @@ function weResolveSurface(id, selection, facts) {
 
 let weSurfaceRuntime = null;
 const WE_SURFACE_MARKER = "data-we-surface-runtime";
+// #277：浮层实底底板**不得命中**的宿主面标记。与 WE_SURFACE_MARKER 分开是为了覆盖
+// 「保留原生」档 —— 那一档 weSurfaceUnmark 会把 data-we-surface-runtime 摘掉，
+// 于是仅靠 :not([data-we-surface-runtime]) 挡不住设置窗（实测：底色被从宿主面板色
+// rgb(30,31,38) 改成插件的 --we-readability-base）。本标记只在**本插件认领的宿主面
+// 是 ARIA 浮层**时打上，且不随 native 摘除 —— 它表达的是"这是宿主自己的对话框，
+// 不是第三方浮层"，与玻璃开不开无关。
+const WE_HOST_FLOATER_MARKER = "data-we-host-dialog";
 // 不随模块实例重置的页面级登记：HMR / 行重挂后的新实例靠它找到并拆掉旧实例
 // 的观察者与装饰根，避免同一 target 被多份 backdrop-filter 同时认领。
 const WE_SURFACE_RUNTIME_KEY = "__dshWallpaperGlassSurfaceRuntime";
@@ -173,8 +180,13 @@ function weSurfaceCandidates(state) {
     const sole = rightOpen.length === 1 && rightOpen[0] === target;
     add(target, "right-sidebar", sole && state.selection.sidebarGlass === true);
   }
-  for (const target of doc.querySelectorAll('[role="dialog"]:has([data-slot="settings.section"])'))
+  for (const target of doc.querySelectorAll('[role="dialog"]:has([data-slot="settings.section"])')) {
     add(target, "settings-window", doc.body.hasAttribute("data-we-glass-window"));
+    // #277：这是**宿主自己的**对话框，不是第三方浮层 ⇒ 浮层实底底板规则必须让路。
+    // 用独立标记而不是 data-we-surface-runtime：后者在「保留原生」档会被摘掉
+    // （见 WE_HOST_FLOATER_MARKER 处的说明），而这条排除在全部档位下都要成立。
+    target.setAttribute(WE_HOST_FLOATER_MARKER, "settings-window");
+  }
   for (const target of doc.querySelectorAll('[data-we-surface="v1"]')) add(target, "declared", true);
   // ⚠️ 阅读文件页（`[data-document-preview]`，宿主 dsh-client-ui-sidebar-documentpreview 的
   // TextPreview 根节点）也是**内容面**：它此前不在这一组里 ⇒ 「内容面透明度 / 内容面底色」
@@ -388,6 +400,7 @@ function syncGlassSurfaces(selection) {
     // 否则新一轮会叠出第二层 backdrop-filter 底板（右栏最明显，刷新才恢复）。
     for (const node of document.querySelectorAll('[data-we-surface-root]')) node.remove();
     for (const node of document.querySelectorAll('[data-we-surface-runtime]')) node.removeAttribute('data-we-surface-runtime');
+    for (const node of document.querySelectorAll('[data-we-host-dialog]')) node.removeAttribute('data-we-host-dialog');
     for (const node of document.querySelectorAll('[data-we-layout-runtime]')) node.removeAttribute('data-we-layout-runtime');
     state = { doc: document, win, selection, selectors: [], records: new Map(), observed: new Set(), root: null, frame: null, moving: false, followFrames: 0, listeners: [] };
     weSurfaceRuntime = state;
@@ -452,6 +465,7 @@ function disposeGlassSurfaces() {
   if (typeof document !== "undefined" && document.body) {
     for (const node of document.querySelectorAll("[data-we-surface-root]")) node.remove();
     for (const node of document.querySelectorAll(`[${WE_SURFACE_MARKER}]`)) node.removeAttribute(WE_SURFACE_MARKER);
+    for (const node of document.querySelectorAll(`[${WE_HOST_FLOATER_MARKER}]`)) node.removeAttribute(WE_HOST_FLOATER_MARKER);
     for (const node of document.querySelectorAll("[data-we-layout-runtime]")) node.removeAttribute("data-we-layout-runtime");
     try { delete document[WE_SURFACE_RUNTIME_KEY]; } catch { /* ignore */ }
   }

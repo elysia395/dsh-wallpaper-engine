@@ -1334,6 +1334,13 @@ console.log('\n⑨ W5：各面的锚点门控覆盖率（防"关掉后还剩一�
     // = 基础层豁免判据：无门但 body 只读面板色/宿主令牌（**不读任何玻璃按面变量**）的规则
     // 不算违规——它不是漏门的玻璃规则，是行停用时的原生回退（ADR-0016 D2）。
     { id: 'plugin-floaters', member: /\.we-(update-notice|repo-panel)|\[data-install-registry\]/, anchor: /data-we-glass-floaters|data-we-glass-fallback/, allowBaseLayer: (r) => !/var\(--we-(floaters|blur|saturate|glass|surface-tint|readability|sidebar|content-surface|settings-window|chat)-/.test(r.body) && /--we-panel-color/.test(r.body), done: true },
+    // #277：第三方浮层的实底底板（新面）。门 = data-we-floater-solid（设置键
+    // floaterSolidBase，默认开）。成员 = 带这道门的 ARIA 浮层规则：
+    // role="dialog" / role="alertdialog" 两条。它们**不**按面私有变量、只读全局
+    // 的 --we-readability-base ⇒ tier global，不进 ④ 组接线对账。
+    // ⚠️ 这一面的规则选择器里**不得出现 data-slot 等未登记锚点**（② 组会判红）——
+    //    排除项一律用 :has() 以外的写法（见 glass-css.js 里那段的取舍说明）。
+    { id: 'third-party-floater-solid', member: /data-we-floater-solid/, anchor: /data-we-floater-solid/, done: true },
   ];
 
   const results = GATE.map((g) => {
@@ -2513,14 +2520,31 @@ console.log('\n⑲ 标记值跟走 resolver（t9-001 运行级断言：真跑 we
       querySelector: () => null, querySelectorAll: () => [],
       getBoundingClientRect: () => ({ left: 0, top: 0, right: 0, bottom: 0, width: 0, height: 0, x: 0, y: 0, toJSON() { return this; } }),
     };
+    // #277：造一个"宿主设置窗"节点，用来验证运行时**真的**给 ARIA 对话框打
+    // data-we-host-dialog（否则浮层底板规则里的那个 :not 是永不匹配的死条件）。
+    const dialogAttrs = new Map();
+    const dialog = {
+      nodeType: 1, isConnected: true, scrollTop: 0, scrollLeft: 0,
+      ownerDocument: null, parentElement: null, style: elStyle(),
+      getAttribute: (k) => (dialogAttrs.has(k) ? dialogAttrs.get(k) : null),
+      setAttribute: (k, v) => { dialogAttrs.set(k, String(v)); },
+      removeAttribute: (k) => { dialogAttrs.delete(k); },
+      hasAttribute: (k) => dialogAttrs.has(k),
+      closest: () => null, matches: () => true,
+      querySelector: () => null, querySelectorAll: () => [],
+      getBoundingClientRect: mkRect,
+      getAnimations: () => [],
+    };
+    const SETTINGS_SEL = '[role="dialog"]:has([data-slot="settings.section"])';
     const doc = {
       hidden: false, defaultView: win, body,
       documentElement: { nodeType: 1, closest: () => null },
-      querySelector: (sel) => (sel === '#plugin-card' ? el : null),
-      querySelectorAll: (sel) => (sel === '#plugin-card' ? [el] : []),
+      querySelector: (sel) => (sel === '#plugin-card' ? el : sel === SETTINGS_SEL ? dialog : null),
+      querySelectorAll: (sel) => (sel === '#plugin-card' ? [el] : sel === SETTINGS_SEL ? [dialog] : []),
       addEventListener: () => {}, removeEventListener: () => {},
     };
     el.ownerDocument = doc;
+    dialog.ownerDocument = doc;
     const scope = new Proxy({
       document: doc,
       sanitizeExtraGlassSelectors: (v) => (typeof v === 'string' ? v : ''),
@@ -2533,7 +2557,7 @@ console.log('\n⑲ 标记值跟走 resolver（t9-001 运行级断言：真跑 we
       + '\nreturn { syncGlassSurfaces, disposeGlassSurfaces, weGlassSurfaceStatus }; }')(scope);
     const selection = {};
     return {
-      el, body, status: mod.weGlassSurfaceStatus,
+      el, body, dialog, status: mod.weGlassSurfaceStatus,
       sync: (patch) => { Object.assign(selection, patch); mod.syncGlassSurfaces(selection); },
       dispose: mod.disposeGlassSurfaces,
     };
@@ -2548,8 +2572,11 @@ console.log('\n⑲ 标记值跟走 resolver（t9-001 运行级断言：真跑 we
   check('② 软渲档标记跟走为 "extra-fallback"（t9-001 运行级先红点）',
     app.el.getAttribute('data-we-surface-runtime') === 'extra-fallback',
     '实际: ' + String(app.el.getAttribute('data-we-surface-runtime')));
+  // ⚠️ 按 id 找，不能取 [0]：桩里现在多了一个"宿主设置窗"节点（⑳ 用），它的枚举位置
+  //    可能排在 extra 之前 ⇒ 写死下标会读错面（实测：这条曾因此假红）。
+  const statusOf = (list, id) => (list || []).find((x) => x && x.id === id) || {};
   check('②b status() 观测量同步反映 extra-fallback',
-    (app.status()[0] || {}).mode === 'extra-fallback');
+    statusOf(app.status(), 'extra').mode === 'extra-fallback');
   app.body.removeAttribute('data-we-glass-fallback');
   app.sync({ extraGlassSelectors: '#plugin-card' });
   check('③ 软渲解除后标记切回 "extra"',
@@ -2569,6 +2596,42 @@ console.log('\n⑲ 标记值跟走 resolver（t9-001 运行级断言：真跑 we
   legacy.sync({ extraGlassSelectors: '#plugin-card' });
   check('negative control: 旧形态（标记只写 entry.id）在软渲档停留 "extra" 被②判出',
     legacy.el.getAttribute('data-we-surface-runtime') === 'extra');
+
+  // ── ⑳ #277 浮层实底底板：不得命中宿主自己的对话框 ──────────────────────────────
+  // 这一条是为**一次真实漏检**补的：第一版给 role=dialog 涂不透明底的规则把宿主设置窗
+  // 也盖成了实心（设置窗本身就是 role="dialog"，玻璃画在 ::before 上），而当时所有守卫
+  // 全绿、CI 也全绿 —— 说明缺的就是这条判据。
+  // 判据分两半，缺一不可：
+  //   a/b 两个排除条件都在选择器里（否则「保留原生」档会被命中，因为那一档运行时会把
+  //       data-we-surface-runtime 摘掉，只用它挡不住）；
+  //   c   运行时确实会打上 data-we-host-dialog（否则排除条件是个永不匹配的死条件，
+  //       上面那半条会退化成"字面上有就算过"的空转）。
+  console.log('\n⑳ #277 第三方浮层实底底板：两个排除条件 + 运行时真的打上标记');
+  const floaterRules = rulesOf(CSS).filter((r) => /data-we-floater-solid/.test(r.header)
+    && /background-color\s*:/.test(r.body));
+  const roleRules = floaterRules.filter((r) => /\[role="(dialog|alertdialog)"\]/.test(r.header));
+
+  check('⑳a 浮层底板规则存在（两条 ARIA 面）', roleRules.length === 2,
+    floaterRules.length + ' 条带门规则，其中 ARIA ' + roleRules.length + ' 条');
+  check('⑳b 每条都排除运行时标记（玻璃开着时的已认领面）',
+    roleRules.length === 2 && roleRules.every((r) => r.header.includes(':not([data-we-surface-runtime])')));
+  check('⑳c 每条都排除宿主对话框标记（保留原生档的兜底；只用 b 挡不住）',
+    roleRules.length === 2 && roleRules.every((r) => r.header.includes(':not([data-we-host-dialog])')));
+
+  // 运行时那一半：同一份 SURF_SRC 造出设置窗节点，确认标记真的打上。
+  const markedRun = runSurfaces(SURF_SRC);
+  markedRun.body.setAttribute('data-we-glass-window', '');
+  markedRun.sync({});
+  check('⑳d 运行时给宿主设置窗打上 data-we-host-dialog（排除条件不是死条件）',
+    markedRun.dialog.getAttribute('data-we-host-dialog') === 'settings-window',
+    '实际=' + String(markedRun.dialog.getAttribute('data-we-host-dialog')));
+
+  // 负对照：把排除条件从选择器里摘掉，b/c 的判据必须判红（证明它们有牙）。
+  const strippedRules = roleRules.map((r) => r.header.replace(/:not\(\[data-we-(?:surface-runtime|host-dialog)\]\)/g, ''));
+  check('negative control: 摘掉排除条件后 ⑳b/⑳c 会判红（判据不是恒真）',
+    strippedRules.length === 2
+      && !strippedRules.every((h) => h.includes(':not([data-we-surface-runtime])'))
+      && !strippedRules.every((h) => h.includes(':not([data-we-host-dialog])')));
 }
 
 console.log('');

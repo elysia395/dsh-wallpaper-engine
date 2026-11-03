@@ -339,6 +339,9 @@ function disposeGlassLayer() {
   s.removeProperty("--we-sidebar-tint");
   document.body.removeAttribute("data-we-sidebar-glass");
   document.body.removeAttribute("data-we-sidebar-fullclear");
+  // #277：第三方表面实底底板门（与 glass.js 的 applyGlass 成对；漏撤 ⇒ 插件卸载后
+  // 第三方插件的弹窗 / 框架层 / 吸顶条仍被拍成实底，宿主原生观感回不去）。
+  document.body.removeAttribute("data-we-floater-solid");
   document.body.removeAttribute("data-we-glass-fallback"); // #95 软件渲染回退钩子随层注销
   s.removeProperty("--we-content-surface-alpha");
   s.removeProperty("--we-content-surface-color");

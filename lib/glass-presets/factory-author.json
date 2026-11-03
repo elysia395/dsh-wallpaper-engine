@@ -4,6 +4,7 @@
   "name": "作者自用",
   "values": {
     "glassSurfacePolicy": {},
+    "floaterSolidBase": true,
     "scrim": 0.5,
     "border": 0.35,
     "blur": 9,

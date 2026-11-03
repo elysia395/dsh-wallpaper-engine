@@ -4,6 +4,7 @@
   "name": "原色直出",
   "values": {
     "glassSurfacePolicy": {},
+    "floaterSolidBase": true,
     "scrim": 0.25,
     "border": 0.35,
     "blur": 18,

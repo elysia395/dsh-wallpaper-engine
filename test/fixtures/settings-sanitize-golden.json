@@ -164,6 +164,7 @@
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
         "sceneAutoQuality": true,
+        "floaterSolidBase": true,
         "pictureSlideSeconds": 0
       },
       "host": {
@@ -320,6 +321,7 @@
         "uiColorDeepDiving": "",
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
+        "floaterSolidBase": true,
         "pictureSlideSeconds": 0
       }
     },
@@ -494,6 +496,7 @@
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
         "sceneAutoQuality": true,
+        "floaterSolidBase": true,
         "pictureSlideSeconds": 0
       },
       "host": "__null__"
@@ -669,6 +672,7 @@
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
         "sceneAutoQuality": true,
+        "floaterSolidBase": true,
         "pictureSlideSeconds": 0
       },
       "host": "__null__"
@@ -844,6 +848,7 @@
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
         "sceneAutoQuality": true,
+        "floaterSolidBase": true,
         "pictureSlideSeconds": 0
       },
       "host": "__null__"
@@ -1011,6 +1016,7 @@
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
         "sceneAutoQuality": true,
+        "floaterSolidBase": true,
         "pictureSlideSeconds": 0
       },
       "host": {
@@ -1167,6 +1173,7 @@
         "uiColorDeepDiving": "",
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
+        "floaterSolidBase": true,
         "pictureSlideSeconds": 0
       }
     },
@@ -1390,6 +1397,7 @@
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
         "sceneAutoQuality": true,
+        "floaterSolidBase": true,
         "pictureSlideSeconds": 0
       },
       "host": {
@@ -1546,6 +1554,7 @@
         "uiColorDeepDiving": "",
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
+        "floaterSolidBase": true,
         "pictureSlideSeconds": 0
       }
     },
@@ -1814,6 +1823,7 @@
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
         "sceneAutoQuality": true,
+        "floaterSolidBase": true,
         "pictureSlideSeconds": 0
       },
       "host": {
@@ -1970,6 +1980,7 @@
         "uiColorDeepDiving": "",
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
+        "floaterSolidBase": true,
         "pictureSlideSeconds": 0
       }
     },
@@ -2137,6 +2148,7 @@
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
         "sceneAutoQuality": true,
+        "floaterSolidBase": true,
         "pictureSlideSeconds": 0
       },
       "host": {
@@ -2293,6 +2305,7 @@
         "uiColorDeepDiving": "",
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
+        "floaterSolidBase": true,
         "pictureSlideSeconds": 0
       }
     },
@@ -2474,6 +2487,7 @@
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
         "sceneAutoQuality": true,
+        "floaterSolidBase": true,
         "pictureSlideSeconds": 0
       },
       "host": {
@@ -2630,6 +2644,7 @@
         "uiColorDeepDiving": "",
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
+        "floaterSolidBase": true,
         "pictureSlideSeconds": 0
       }
     },
@@ -2811,6 +2826,7 @@
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
         "sceneAutoQuality": true,
+        "floaterSolidBase": true,
         "pictureSlideSeconds": 0
       },
       "host": {
@@ -2967,6 +2983,7 @@
         "uiColorDeepDiving": "",
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
+        "floaterSolidBase": true,
         "pictureSlideSeconds": 0
       }
     },
@@ -3135,6 +3152,7 @@
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
         "sceneAutoQuality": true,
+        "floaterSolidBase": true,
         "pictureSlideSeconds": 0
       },
       "host": {
@@ -3291,6 +3309,7 @@
         "uiColorDeepDiving": "",
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
+        "floaterSolidBase": true,
         "pictureSlideSeconds": 0
       }
     },
@@ -3464,6 +3483,7 @@
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
         "sceneAutoQuality": true,
+        "floaterSolidBase": true,
         "pictureSlideSeconds": 0
       },
       "host": {
@@ -3620,6 +3640,7 @@
         "uiColorDeepDiving": "",
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
+        "floaterSolidBase": true,
         "pictureSlideSeconds": 0
       }
     },
@@ -3790,6 +3811,7 @@
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
         "sceneAutoQuality": true,
+        "floaterSolidBase": true,
         "pictureSlideSeconds": 0
       },
       "host": {
@@ -3946,6 +3968,7 @@
         "uiColorDeepDiving": "",
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
+        "floaterSolidBase": true,
         "pictureSlideSeconds": 0
       }
     },
@@ -4123,6 +4146,7 @@
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
         "sceneAutoQuality": true,
+        "floaterSolidBase": true,
         "pictureSlideSeconds": 0
       },
       "host": {
@@ -4279,6 +4303,7 @@
         "uiColorDeepDiving": "",
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
+        "floaterSolidBase": true,
         "pictureSlideSeconds": 0
       }
     },
@@ -4521,6 +4546,7 @@
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
         "sceneAutoQuality": true,
+        "floaterSolidBase": true,
         "pictureSlideSeconds": 0
       },
       "host": {
@@ -4702,6 +4728,7 @@
         "uiColorDeepDiving": "",
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
+        "floaterSolidBase": true,
         "pictureSlideSeconds": 0
       }
     },
@@ -4868,6 +4895,7 @@
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
         "sceneAutoQuality": true,
+        "floaterSolidBase": true,
         "pictureSlideSeconds": 0
       },
       "host": {
@@ -5024,6 +5052,7 @@
         "uiColorDeepDiving": "",
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
+        "floaterSolidBase": true,
         "pictureSlideSeconds": 0
       }
     },
@@ -5190,6 +5219,7 @@
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
         "sceneAutoQuality": true,
+        "floaterSolidBase": true,
         "pictureSlideSeconds": 0
       },
       "host": {
@@ -5346,6 +5376,7 @@
         "uiColorDeepDiving": "",
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
+        "floaterSolidBase": true,
         "pictureSlideSeconds": 0
       }
     },
@@ -5513,6 +5544,7 @@
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
         "sceneAutoQuality": true,
+        "floaterSolidBase": true,
         "pictureSlideSeconds": 0
       },
       "host": {
@@ -5669,6 +5701,7 @@
         "uiColorDeepDiving": "",
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
+        "floaterSolidBase": true,
         "pictureSlideSeconds": 0
       }
     }
