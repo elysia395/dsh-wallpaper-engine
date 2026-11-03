@@ -77,7 +77,7 @@ const SYSTEM_FONTS_TTL_MS = 7 * 24 * 60 * 60 * 1000;
  * 没有版本号时，用户升级插件后最长一周里拿到的还是**老口径**的结果 —— 表现就是"改了没生效"，
  * 而且看不出是缓存。**改动枚举口径（来源、过滤、解码）时必须 +1。**
  */
-const SYSTEM_FONTS_CACHE_VERSION = 2;
+const SYSTEM_FONTS_CACHE_VERSION = 3;
 /** 单个子进程的超时：macOS 实测 ~10s，25s 给慢机器留余量；超时即 kill 并降级。 */
 const FONT_SCAN_TIMEOUT_MS = 25000;
 /** 子进程输出上限（macOS 的 JSON 实测 ~2MB）：够用，又不让一次异常输出吃光内存。 */
@@ -128,7 +128,12 @@ function authoritativeSources(platform) {
       source: 'powershell-fonts',
       cmd: 'powershell.exe',
       args: ['-NoProfile', '-NonInteractive', '-Command',
-        'Add-Type -AssemblyName System.Drawing; '
+        // 钉死写往 **stdout 的编码**（#300）：PS 5.1 在 stdout 被重定向成管道时按**控制台输出编码**
+        // 写（中文系统是 OEM CP936），本侧却按 UTF-8 解码 ⇒ 每个中文字体名都成 U+FFFD。
+        // `[Console]::OutputEncoding` 必须在任何输出之前设；`$OutputEncoding` 只影响"喂给别的程序"的输入，
+        // 不解决这条。UTF8Encoding 不带 BOM，首行不会多出 U+FEFF（即便有，normalizeFamilies 的 trim 也会吃掉）。
+        '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; '
+        + 'Add-Type -AssemblyName System.Drawing; '
         + '(New-Object System.Drawing.Text.InstalledFontCollection).Families | ForEach-Object { $_.Name }'],
       parse: parseLineFamilies,
     }];

@@ -267,6 +267,22 @@ const macRun = async (cmd) => (cmd === 'osascript'
     && authoritativeSources('darwin').some((s) => s.source === 'system_profiler'));
   check('负对照：Windows / Linux 各只有一条权威来源（多跑一条只会白等）',
     authoritativeSources('win32').length === 1 && authoritativeSources('linux').length === 1);
+
+  // Windows 权威腿必须在**任何输出之前**把 stdout 编码钉成 UTF-8（#300）：PS 5.1 在 stdout 是
+  // 管道时按**控制台输出编码**写（中文系统 = OEM CP936），本侧却按 UTF-8 解码 ⇒ 每个中文字体名
+  // 都成 U+FFFD。`[Console]::OutputEncoding` 必须在 `Add-Type` / `ForEach-Object` 之前设。
+  const pinsUtf8BeforeOutput = (cmd) => typeof cmd === 'string'
+    && cmd.includes('[Console]::OutputEncoding = [System.Text.Encoding]::UTF8')
+    && cmd.indexOf('[Console]::OutputEncoding') < cmd.indexOf('Add-Type');
+  const winParen = authoritativeSources('win32')[0];
+  const winCmd = winParen && Array.isArray(winParen.args) ? winParen.args[winParen.args.length - 1] : '';
+  check('Windows 权威腿：先钉 [Console]::OutputEncoding = UTF8，再让任何东西输出（#300）',
+    pinsUtf8BeforeOutput(winCmd), String(winCmd).slice(0, 120));
+  // 负对照两条：删掉钉死、或把它挪到输出之后 —— 同一条判据都必须判假（判据有牙）。
+  check('负对照：删掉编码钉死 / 把钉死挪到输出之后 ⇒ 判据判假',
+    !pinsUtf8BeforeOutput(String(winCmd).replace('[Console]::OutputEncoding = [System.Text.Encoding]::UTF8; ', ''))
+    && !pinsUtf8BeforeOutput('Add-Type -AssemblyName System.Drawing; '
+      + '[Console]::OutputEncoding = [System.Text.Encoding]::UTF8'));
 }
 
 // ── ④ 路由：状态码 / 缓存 / 重扫 / 清理句柄（mock webServer）──────────────────

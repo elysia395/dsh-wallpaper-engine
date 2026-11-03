@@ -163,7 +163,8 @@
         "uiColorDeepDiving": "",
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
-        "sceneAutoQuality": true
+        "sceneAutoQuality": true,
+        "pictureSlideSeconds": 0
       },
       "host": {
         "id": "",
@@ -318,7 +319,8 @@
         "uiColorTab": "",
         "uiColorDeepDiving": "",
         "extraGlassSelectors": "",
-        "glassSurfacePolicy": {}
+        "glassSurfacePolicy": {},
+        "pictureSlideSeconds": 0
       }
     },
     {
@@ -491,7 +493,8 @@
         "uiColorDeepDiving": "",
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
-        "sceneAutoQuality": true
+        "sceneAutoQuality": true,
+        "pictureSlideSeconds": 0
       },
       "host": "__null__"
     },
@@ -665,7 +668,8 @@
         "uiColorDeepDiving": "",
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
-        "sceneAutoQuality": true
+        "sceneAutoQuality": true,
+        "pictureSlideSeconds": 0
       },
       "host": "__null__"
     },
@@ -839,7 +843,8 @@
         "uiColorDeepDiving": "",
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
-        "sceneAutoQuality": true
+        "sceneAutoQuality": true,
+        "pictureSlideSeconds": 0
       },
       "host": "__null__"
     },
@@ -1005,7 +1010,8 @@
         "uiColorDeepDiving": "",
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
-        "sceneAutoQuality": true
+        "sceneAutoQuality": true,
+        "pictureSlideSeconds": 0
       },
       "host": {
         "id": "",
@@ -1160,7 +1166,8 @@
         "uiColorTab": "",
         "uiColorDeepDiving": "",
         "extraGlassSelectors": "",
-        "glassSurfacePolicy": {}
+        "glassSurfacePolicy": {},
+        "pictureSlideSeconds": 0
       }
     },
     {
@@ -1382,7 +1389,8 @@
         "uiColorDeepDiving": "",
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
-        "sceneAutoQuality": true
+        "sceneAutoQuality": true,
+        "pictureSlideSeconds": 0
       },
       "host": {
         "id": "",
@@ -1537,7 +1545,8 @@
         "uiColorTab": "",
         "uiColorDeepDiving": "",
         "extraGlassSelectors": "",
-        "glassSurfacePolicy": {}
+        "glassSurfacePolicy": {},
+        "pictureSlideSeconds": 0
       }
     },
     {
@@ -1804,7 +1813,8 @@
         "uiColorDeepDiving": "",
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
-        "sceneAutoQuality": true
+        "sceneAutoQuality": true,
+        "pictureSlideSeconds": 0
       },
       "host": {
         "id": "",
@@ -1959,7 +1969,8 @@
         "uiColorTab": "",
         "uiColorDeepDiving": "",
         "extraGlassSelectors": "",
-        "glassSurfacePolicy": {}
+        "glassSurfacePolicy": {},
+        "pictureSlideSeconds": 0
       }
     },
     {
@@ -2125,7 +2136,8 @@
         "uiColorDeepDiving": "",
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
-        "sceneAutoQuality": true
+        "sceneAutoQuality": true,
+        "pictureSlideSeconds": 0
       },
       "host": {
         "id": "",
@@ -2280,7 +2292,8 @@
         "uiColorTab": "",
         "uiColorDeepDiving": "",
         "extraGlassSelectors": "",
-        "glassSurfacePolicy": {}
+        "glassSurfacePolicy": {},
+        "pictureSlideSeconds": 0
       }
     },
     {
@@ -2460,7 +2473,8 @@
         "uiColorDeepDiving": "",
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
-        "sceneAutoQuality": true
+        "sceneAutoQuality": true,
+        "pictureSlideSeconds": 0
       },
       "host": {
         "id": "",
@@ -2615,7 +2629,8 @@
         "uiColorTab": "",
         "uiColorDeepDiving": "",
         "extraGlassSelectors": "",
-        "glassSurfacePolicy": {}
+        "glassSurfacePolicy": {},
+        "pictureSlideSeconds": 0
       }
     },
     {
@@ -2795,7 +2810,8 @@
         "uiColorDeepDiving": "",
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
-        "sceneAutoQuality": true
+        "sceneAutoQuality": true,
+        "pictureSlideSeconds": 0
       },
       "host": {
         "id": "",
@@ -2950,7 +2966,8 @@
         "uiColorTab": "",
         "uiColorDeepDiving": "",
         "extraGlassSelectors": "",
-        "glassSurfacePolicy": {}
+        "glassSurfacePolicy": {},
+        "pictureSlideSeconds": 0
       }
     },
     {
@@ -3117,7 +3134,8 @@
         "uiColorDeepDiving": "",
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
-        "sceneAutoQuality": true
+        "sceneAutoQuality": true,
+        "pictureSlideSeconds": 0
       },
       "host": {
         "id": "",
@@ -3272,7 +3290,8 @@
         "uiColorTab": "",
         "uiColorDeepDiving": "",
         "extraGlassSelectors": "",
-        "glassSurfacePolicy": {}
+        "glassSurfacePolicy": {},
+        "pictureSlideSeconds": 0
       }
     },
     {
@@ -3444,7 +3463,8 @@
         "uiColorDeepDiving": "",
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
-        "sceneAutoQuality": true
+        "sceneAutoQuality": true,
+        "pictureSlideSeconds": 0
       },
       "host": {
         "id": "",
@@ -3599,7 +3619,8 @@
         "uiColorTab": "",
         "uiColorDeepDiving": "",
         "extraGlassSelectors": "",
-        "glassSurfacePolicy": {}
+        "glassSurfacePolicy": {},
+        "pictureSlideSeconds": 0
       }
     },
     {
@@ -3768,7 +3789,8 @@
         "uiColorDeepDiving": "",
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
-        "sceneAutoQuality": true
+        "sceneAutoQuality": true,
+        "pictureSlideSeconds": 0
       },
       "host": {
         "id": "",
@@ -3923,7 +3945,8 @@
         "uiColorTab": "",
         "uiColorDeepDiving": "",
         "extraGlassSelectors": "",
-        "glassSurfacePolicy": {}
+        "glassSurfacePolicy": {},
+        "pictureSlideSeconds": 0
       }
     },
     {
@@ -4099,7 +4122,8 @@
         "uiColorDeepDiving": "",
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
-        "sceneAutoQuality": true
+        "sceneAutoQuality": true,
+        "pictureSlideSeconds": 0
       },
       "host": {
         "id": "",
@@ -4254,7 +4278,8 @@
         "uiColorTab": "",
         "uiColorDeepDiving": "",
         "extraGlassSelectors": "",
-        "glassSurfacePolicy": {}
+        "glassSurfacePolicy": {},
+        "pictureSlideSeconds": 0
       }
     },
     {
@@ -4495,7 +4520,8 @@
         "uiColorDeepDiving": "",
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
-        "sceneAutoQuality": true
+        "sceneAutoQuality": true,
+        "pictureSlideSeconds": 0
       },
       "host": {
         "id": "",
@@ -4675,7 +4701,8 @@
         "uiColorTab": "",
         "uiColorDeepDiving": "",
         "extraGlassSelectors": "",
-        "glassSurfacePolicy": {}
+        "glassSurfacePolicy": {},
+        "pictureSlideSeconds": 0
       }
     },
     {
@@ -4840,7 +4867,8 @@
         "uiColorDeepDiving": "",
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
-        "sceneAutoQuality": true
+        "sceneAutoQuality": true,
+        "pictureSlideSeconds": 0
       },
       "host": {
         "id": "",
@@ -4995,7 +5023,8 @@
         "uiColorTab": "",
         "uiColorDeepDiving": "",
         "extraGlassSelectors": "",
-        "glassSurfacePolicy": {}
+        "glassSurfacePolicy": {},
+        "pictureSlideSeconds": 0
       }
     },
     {
@@ -5160,7 +5189,8 @@
         "uiColorDeepDiving": "",
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
-        "sceneAutoQuality": true
+        "sceneAutoQuality": true,
+        "pictureSlideSeconds": 0
       },
       "host": {
         "id": "wallpaper-42",
@@ -5315,7 +5345,8 @@
         "uiColorTab": "",
         "uiColorDeepDiving": "",
         "extraGlassSelectors": "",
-        "glassSurfacePolicy": {}
+        "glassSurfacePolicy": {},
+        "pictureSlideSeconds": 0
       }
     },
     {
@@ -5481,7 +5512,8 @@
         "uiColorDeepDiving": "",
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
-        "sceneAutoQuality": true
+        "sceneAutoQuality": true,
+        "pictureSlideSeconds": 0
       },
       "host": {
         "id": "",
@@ -5636,7 +5668,8 @@
         "uiColorTab": "",
         "uiColorDeepDiving": "",
         "extraGlassSelectors": "",
-        "glassSurfacePolicy": {}
+        "glassSurfacePolicy": {},
+        "pictureSlideSeconds": 0
       }
     }
   ]

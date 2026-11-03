@@ -443,6 +443,8 @@ function applySelection(id, opts) {
     selection.type = null;
     selection.previewUrl = null;
     selection.mediaExt = null;
+    selection.slidesUrl = null;
+    selection.slideIntervalMs = null;
     selection.liveFrame = null;
     selection.sceneVideo = null;
     selection.sceneLiveSrc = null;
@@ -474,6 +476,8 @@ function applySelection(id, opts) {
     selection.type = null;
     selection.previewUrl = null;
     selection.mediaExt = null;
+    selection.slidesUrl = null;
+    selection.slideIntervalMs = null;
     selection.liveFrame = null;
     selection.sceneVideo = null;
     selection.sceneLiveSrc = null;
@@ -504,6 +508,11 @@ function applySelection(id, opts) {
   // 真实容器后缀（宿主 inventory 的 mediaExt）：媒体 URL 是 token 形态、没有扩展名，
   // 「浏览器原生可解」那条判据（见 src/video-layer.js 的 isNativelyPlayableSource）必须靠它。
   selection.mediaExt = w.mediaExt || null;
+  // 图片 / 幻灯片壁纸的图集入口（宿主 inventory 的 slidesUrl = `/slides/<token>`；只有
+  // 图集 ≥2 张时才给）。它只是「这张图之上还有几张可以淡入淡出」的附加层，底层首图仍走
+  // url/mediaExt 那条原链 —— 接不到就退化成单图，与图片壁纸在 1.4.0 的行为一致。
+  selection.slidesUrl = w.type === "image" && w.slidesUrl ? w.slidesUrl : null;
+  selection.slideIntervalMs = w.type === "image" && typeof w.slideIntervalMs === "number" ? w.slideIntervalMs : null;
   selection.blockedNote = "";
   // 静态帧 URL (frameUrl, 立即上屏)：供页面刷新 / 档位切换时重挂。
   selection.sceneFrameUrl = w.type === "scene" ? (w.frameUrl || null) : null;
@@ -583,6 +592,10 @@ function applySelection(id, opts) {
   themeFollowOnWallpaper(selection, { fromSkinRestore: !!(opts && opts.fromSkinRestore) });
 }
 function buildMedia(sel) {
+  // 换壁纸会重造这一层的媒体节点，但过场图挂在**层**上、不在媒体节点里：
+  // 不先摘掉上一档的过场层，新媒体插回原位后旧图集仍压在上面（最多等一个周期才被
+  // tick 的失联判定收走）。摘了等于回到「只有底层首图」，这一拍的交叉过渡也照旧。
+  if (activeImageSlideshow) activeImageSlideshow.stop();
   // 壁纸播放形态优先级:
   //   1. live — WebWallGL 实时 iframe（scene.pkg 走场景管线；web 壁纸走它的
   //      web 挂载 + 宿主注入的 WE shim，严格沙箱隔离）。心跳判定失败后自动
@@ -650,6 +663,9 @@ function buildMedia(sel) {
     media.alt = "";
     media.draggable = false;
     media.className = "we-media" + fitClass;
+    // 图片 / 幻灯片壁纸：底层首张封面已经在上面挂好，图集（2 张以上）交给过场层。
+    // 这一步只挂「附加层」，失败/空图集一律静默保持单图，绝不阻断建层。
+    if (sel.type === "image" && sel.slidesUrl) scheduleImageSlideshow(media, sel);
     // Scene frames are no longer generated (the host serves an existing frame: the live-backfilled
     // GPU frame, or the user-imported custom frame). 代码事实：该帧**加载失败**（img onerror）且该壁纸
     // 有工程预览图时，退到 previewUrl 垫底 —— 那是作者随包发布的图，不是本插件合成的"猜图"。
@@ -675,6 +691,127 @@ function buildMedia(sel) {
   return media;
 }
 
+// ── 图片 / 幻灯片壁纸的图内切换 ──────────────────────────────────────────────
+// 契约：**只管附加层，不管底层**。底层 `<img>`（封面首图）的 src / 内联 opacity 一律不碰 ——
+// 换壁画面的仍是 syncLayers 那一套；这里只是在它上面叠两张绝对定位的过场图做交叉淡化，
+// 所以「回原生」（清壁纸 / 关功能 / 切到别的壁纸）只需要停表 + 摘节点，没有需要回滚的样式。
+//
+// 数据来自宿主 `/wallpaper-engine/slides/<token>`（token = 封面首图的媒体 token），回包里
+// 是同一目录下自然序排好的全部图片 URL。图集 ≤1 张时**不装**：那种「幻灯片」与单图无差别，
+// 多挂两张透明 img 只是白占内存。
+const SLIDE_FADE_MS = 600;
+const IMAGE_SLIDES_CACHE = new Map(); // `${id}@${intervalMs}` → { images, intervalMs }
+// 当前挂着过场层的那一次安装（周期改了要能原地重装，不必重建整层：图片档的层键
+// 只含 type+url，不会因为 `pictureSlideSeconds` 变化而重建）。
+let activeImageSlideshow = null;
+
+/** 图内过场的实际周期（毫秒）。用户显式设了秒数就听用户的，否则用 WE 项目里的 imageswitchtimes。 */
+function pictureSlideIntervalMs(sel) {
+  const preferredSec = clampNum(sel && sel.pictureSlideSeconds, 0, 3600, 0);
+  if (preferredSec > 0) return preferredSec * 1000;
+  // WE 没声明档位（老项目 / 手改过的 project.json）⇒ 30 秒兜底；声明了就钳进 5 秒..1 小时。
+  const weMs = sel && typeof sel.slideIntervalMs === "number" ? sel.slideIntervalMs : 30000;
+  return clampNum(weMs, 5000, 3600000, 30000);
+}
+
+/** 取图集并按需安装过场层（异步；同一 `id@周期` 只取一次）。 */
+function scheduleImageSlideshow(media, sel) {
+  if (!media || !sel || typeof sel.slidesUrl !== "string" || sel.slidesUrl === "") return;
+  if (typeof apiJson !== "function") return;
+  const intervalMs = pictureSlideIntervalMs(sel);
+  const cacheKey = String(sel.id || "") + "@" + intervalMs;
+  const cached = IMAGE_SLIDES_CACHE.get(cacheKey);
+  if (cached) {
+    if (media.isConnected) installImageSlideshow(media, cached);
+    return;
+  }
+  Promise.resolve(apiJson(sel.slidesUrl)).then((res) => {
+    const payload = res && res.ok ? res.data : null;
+    if (!payload || payload.ok !== true || !Array.isArray(payload.images)) return;
+    const images = payload.images
+      .map((it) => (it && typeof it.url === "string" ? it.url : null))
+      .filter(Boolean);
+    if (images.length < 2) return;
+    const entry = { images, intervalMs };
+    IMAGE_SLIDES_CACHE.set(cacheKey, entry);
+    if (media.isConnected) installImageSlideshow(media, entry);
+  }).catch(() => { /* 图集不可用 ⇒ 保持单图（封面） */ });
+}
+
+/** 在 `media` 之上叠两张过场图，按周期轮转。返回的 stop 由 tick 内的失联判断自己调。 */
+function installImageSlideshow(media, entry) {
+  if (typeof document === "undefined" || typeof window === "undefined") return;
+  const parent = media && media.parentNode;
+  if (!parent) return;
+  const order = entry.images;
+  const layers = [];
+  for (let i = 0; i < 2; i += 1) {
+    const img = document.createElement("img");
+    img.className = "we-media we-media--fit we-slide";
+    img.alt = "";
+    img.draggable = false;
+    img.style.opacity = "0";
+    parent.appendChild(img);
+    layers.push(img);
+  }
+  let top = 0;
+  let index = 0;
+  const timer = window.setInterval(tick, entry.intervalMs);
+  const installed = { intervalMs: entry.intervalMs };
+  function stop() {
+    window.clearInterval(timer);
+    for (const img of layers) if (img.parentNode) img.parentNode.removeChild(img);
+    if (activeImageSlideshow === installed) activeImageSlideshow = null;
+  }
+  installed.stop = stop;
+  installed.media = media;
+  installed.entry = entry;
+  installed.order = order;
+  activeImageSlideshow = installed;
+  function tick() {
+    // 脱离文档 ⇒ 立刻停表摘图（换壁纸 / 清壁纸 / 切层都走这条路）。
+    if (!media.isConnected || !parent.isConnected) { stop(); return; }
+    // 页面隐藏时不推进：后台标签页里连续解码大图只会白烧 CPU，回来再继续。
+    if (document.hidden) return;
+    index = (index + 1) % order.length;
+    const incoming = layers[1 - top];
+    const outgoing = layers[top];
+    incoming.src = order[index];
+    let settled = false;
+    const commit = () => {
+      if (settled) return;
+      settled = true;
+      incoming.style.transition = "opacity " + SLIDE_FADE_MS + "ms ease";
+      outgoing.style.transition = "opacity " + SLIDE_FADE_MS + "ms ease";
+      incoming.style.opacity = "1";
+      outgoing.style.opacity = "0";
+      top = 1 - top;
+    };
+    // 已解码就直接交接；否则等这一张真到位（load 或 error 都算「这一拍该结束了」），
+    // 避免慢图把一整拍拖成空白。
+    if (incoming.complete && incoming.naturalWidth > 0) commit();
+    else {
+      incoming.addEventListener("load", commit, { once: true });
+      incoming.addEventListener("error", commit, { once: true });
+    }
+  }
+  // 预载第二张：第一拍切过去之前就把它拉下来，首拍才不会空。
+  layers[1].src = order[1 % order.length];
+}
+
+/**
+ * 图内周期改了（设置项 `pictureSlideSeconds`）：把当前这张图上的过场层原地重装。
+ * 图片档的层键只有 type+url，改设置不会触发 syncLayers 重建，所以这里显式收尾再装一次
+ *（`scheduleImageSlideshow` 的缓存按 `id@周期` 分桶，新周期必然是冷取）。
+ */
+function refreshImageSlideshow(sel) {
+  if (!sel || sel.type !== "image" || typeof sel.slidesUrl !== "string" || sel.slidesUrl === "") return;
+  const current = activeImageSlideshow;
+  if (!current) return;
+  current.stop();
+  if (current.media && current.media.isConnected) scheduleImageSlideshow(current.media, sel);
+}
+
 // ── Occlusion pause (遮挡暂停, WE-style) ────────────────────────────────────
 // Desktop Wallpaper Engine pauses rendering whenever the wallpaper is covered
 // — the main reason its GPU load is ~0 most of the time. Browsers cannot
@@ -687,5 +824,5 @@ function buildMedia(sel) {
 // are only throttled by the browser while the page is hidden.
 export {
   applySelection, buildMedia, beginRotationPrepare, prepareLiveTimeouts,
-  clearPrepareLiveTimeout,
+  clearPrepareLiveTimeout, refreshImageSlideshow,
 };

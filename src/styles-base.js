@@ -93,6 +93,10 @@ const CSS_BASE = `
   /* The 适配 row sets the fit mode for the CURRENT wallpaper (any type);
      only .we-media--fit reads the variable (iframes have no object-fit). */
   .we-layer .we-media--fit { object-fit: var(--we-object-fit, cover); }
+  /* Picture wallpaper slideshow: the two crossfade layers stack over the base
+     cover image inside .we-layer. Without this they would flow as block-level
+     siblings and push each other down the page. */
+  .we-layer .we-slide { position: absolute; inset: 0; }
 
   /* Scene live render (WebWallGL): static frame underlay + renderer iframe.
      Both stack absolutely inside .we-layer; the iframe starts transparent and
