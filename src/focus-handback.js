@@ -68,6 +68,7 @@ function installFocusHandback() {
   // 负对照都变成假绿；`retrying` 则让"拆除是否真的清掉了定时器"可以被观测（见判据 A3-F1/F5）。
   const state = { lastEl: null, lastAt: 0, gestureAt: 0, handbacks: 0, skipped: 0, lastHandBackAt: 0, active: true, retrying: false, bodyLandings: 0, lastBodyAt: 0 };
   let retryTimer = null;
+  const handbackTimers = new Set();
 
   const onFocusIn = (e) => {
     const el = e.target;
@@ -131,7 +132,10 @@ function installFocusHandback() {
     // ① 只有"焦点从我们记住的那个元素离开"才管 —— 否则任何一次 blur 都会触发一轮判断。
     if (!state.lastEl || e.target !== state.lastEl) return;
     // `document.activeElement` 在 focusout 之后才更新，所以挪到下一拍再判。
-    setTimeout(handBack, 0);
+    // 每个 focusout 排一个 0ms 任务（既有语义：每次跳过都要记账），但**句柄全部入账**：
+    // 拆除时必须能清掉它们（#169 §3；此前不记名，dispose 只清 retryTimer ⇒ 拆完仍会醒来）。
+    const timer = setTimeout(() => { handbackTimers.delete(timer); handBack(); }, 0);
+    handbackTimers.add(timer);
   };
 
   document.addEventListener("focusin", onFocusIn, true);
@@ -149,9 +153,12 @@ function installFocusHandback() {
 
   focusHandbackDispose = () => {
     state.active = false;
-    // 补交定时器也要摘掉：否则拆除之后它仍会醒来（handBack 里的 active 检查兜住交还，
-    // 但留一个活着的定时器是泄漏，也会让台架"拆完还有异步动静"）。
+    // 两个定时器族都要摘掉：补交定时器（retryTimer）与 focusout 排的下一拍交还（handbackTimers）。
+    // 留着任何一个，拆除之后它仍会醒来（handBack 里的 active 检查兜住交还，但留一个活着的定时器
+    // 是泄漏，也会让台架"拆完还有异步动静"）。
     if (retryTimer !== null) { clearTimeout(retryTimer); retryTimer = null; state.retrying = false; }
+    for (const timer of handbackTimers) clearTimeout(timer);
+    handbackTimers.clear();
     document.removeEventListener("focusin", onFocusIn, true);
     document.removeEventListener("focusout", onFocusOut, true);
     document.removeEventListener("keydown", onUse, true);

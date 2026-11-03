@@ -3831,7 +3831,7 @@ setTimeout(async () => {
           why: '**整批应用**：`applySelection` 一族写一批字段后一次 `persistSelection()` / 一次 emit，逐个注入入口是仪式',
           fields: ['liveFrame', 'mediaExt', 'mediaInfo', 'previewUrl', 'propsUrl', 'sceneAudioUrl',
             'sceneFrameUrl', 'sceneHasAudio', 'sceneLiveActive', 'sceneLiveSrc', 'sceneVideo',
-            'schemeColor', 'transcodeState', 'type', 'webLiveSrc'],
+            'schemeColor', 'slideIntervalMs', 'slidesUrl', 'transcodeState', 'type', 'webLiveSrc'],
         },
         'src/persistence.js': {
           why: '启动加载期的一次性赋值（宿主→本地合并的结果），随后由调用方 emit',
@@ -4348,6 +4348,42 @@ setTimeout(async () => {
     assert.equal(animProbeSrcs.length, 0,
       'CPU 动画渲染已删除：全流程不得出现任何 /scene-anim 请求');
     console.log('CPU 动画渲染路线已删除（源码钉死 + 行为级零请求）: ok');
+
+    // ── #295：库存失败态必须早退 ──────────────────────────────────────────────
+    // 一次「宿主不可达」不等于「库空了」：失败分支造的是全空 next，只够让面板显示错误态。
+    // 若继续往下跑播种 / 轮播校验，就会烧掉 rotationSeeded 并把 rotationEnabled 置 false 落盘
+    // （用户看到的是"自动轮播莫名其妙关了，重启也还关着"）。断在被测产物（code）上 ⇒
+    // DSH_MUT_LIB 变异也能验到；负对照用同一个函数对变异文本判假。
+    const hasInventoryFailureEarlyReturn = (src) => {
+      const at = src.indexOf('if (next.error) {');
+      const seed = src.indexOf('selection.rotationSeeded = true;');
+      const disable = src.indexOf('selection.rotationEnabled = false;');
+      if (at < 0 || seed < 0 || disable < 0) return false;
+      if (!(at < seed && at < disable)) return false;
+      return /emit\(\);\s*return;/.test(src.slice(at, seed));
+    };
+    assert.ok(hasInventoryFailureEarlyReturn(code),
+      '#295：库存加载失败必须早退（emit 一次 + return），不许拿全空 next 继续跑播种 / 轮播校验');
+    assert.ok(!hasInventoryFailureEarlyReturn(code.replace('if (next.error) {', 'if (false) {')),
+      '负对照：去掉早退条件后同一条判据必须判假（判据有牙）');
+    console.log('#295 库存失败早退: ok');
+
+    // ── #253：设置面板三条布局口径 ─────────────────────────────────────────────
+    // 作者的复现是「左说明 + 右控件」行在 564px 内容宽下的取宽问题：
+    //   ① 分段控件用 flex:1（basis 0）⇒ 长说明吃满整行后只剩几十像素，按钮被压成窄格；
+    //   ② 「吉祥物 · 指向」那行 11 个键在同一行里互相截断（basis 0 的项不参与换行计算）；
+    //   ③ 色板行与说明同排 ⇒ 短说明的行把色板推到右端、长说明的行把它挤下一行，右侧「自定义」顶出面板。
+    // 修法全在 CSS 口径 + 一处类名，断在产物 code 上任一回归都能看住。
+    const hasCtlWrapSegLayout = (src) => /\.we-picker__ctl--wrap > \.we-picker__seg \{[^}]*grid-auto-flow: column[^}]*grid-auto-columns: 1fr/.test(src)
+      && /\.we-picker__ctl--wrap > \.we-picker__seg\.we-picker__seg--chips \{[^}]*flex-wrap: wrap/.test(src)
+      && /\.we-picker__ctl--wrap > \.we-picker__swatches \{ flex: 1 0 100%; \}/.test(src);
+    assert.ok(hasCtlWrapSegLayout(code), '#253：分段控件与色板行必须落三条取宽口径（不许再被长说明压扁）');
+    // 那行 11 键的「吉祥物 · 指向」住在玻璃包产物里（ADR-0016 第四刀后壁纸节按包出户）⇒ 扫 writeFace。
+    assert.ok(/we-picker__seg we-picker__seg--chips/.test(writeFace),
+      '#253：「吉祥物 · 指向」那行必须挂 chips 段类名（11 键换行 + 每键取内容宽）');
+    assert.ok(!hasCtlWrapSegLayout(code.replace('  .we-picker__ctl--wrap > .we-picker__swatches { flex: 1 0 100%; }', '')),
+      '负对照：删掉「色板独占整行」那条口径后同一条判据必须判假（判据有牙）');
+    console.log('#253 设置面板取宽口径: ok');
 
     // ── sceneVideo 诚实化的时序补拉 ────────────────────────────────────────
     // 宿主对 sceneVideo 是「按 pkg 真探测」：未命中缓存时先给 null（不猜）并把探测
@@ -5244,6 +5280,25 @@ setTimeout(async () => {
   R.advance(1150);
   assert.equal(R.win.__weFocusHandback.handbacks, 1,
     'A3-F2：拆除后补交不许再发生（实测补交又在拆除后发生了）');
+
+  // ④'''' #169 §3：focusout 排的 0ms 交还任务也要存句柄 —— 拆除只清 retryTimer 不够。
+  //    观测点 = 虚拟定时器队列：`handBack` 首行的 `!active` 会挡住交还，只看 handbacks 抓不到
+  //    "拆完还剩一个醒着的空定时器"；句柄没存时，dispose 清不掉它，队列里会留下 1 个。
+  const H = buildFh(fhSrc);
+  const disposeH = H.mod.installFocusHandback();
+  H.fire('focusin', H.hostInput);
+  H.doc.activeElement = H.frame;
+  H.fire('focusout', H.hostInput);
+  assert.equal(H.pendingTimers(), 1, '#169 §3 前提：focusout 必须真的排了一个在途的 0ms 交还任务');
+  H.fire('focusout', H.hostInput);
+  assert.equal(H.pendingTimers(), 2,
+    '#169 §3：每次 focusout 都排一个 0ms 任务（既有语义：每次跳过都记账）⇒ 两个句柄都要入账');
+  disposeH();
+  assert.equal(H.pendingTimers(), 0,
+    '#169 §3：拆除必须清掉 focusout 排的全部 0ms 交还任务（只清 retryTimer = 拆完它们仍会醒来）');
+  H.advance(0);
+  assert.equal(H.win.__weFocusHandback.handbacks, 0,
+    '负对照：拆除后这些任务不许再交还（handbacks 必须保持 0）');
 
   // ④''' §11 A3-F2（issue #210）：手势窗口**未到点**时一次都不许补交。补交定时器若不等窗口就动手
   //    （或跳过时当场补交），用户在窗口里刚点的壁纸会被抢回焦点 —— 与"照他点的来"直接矛盾。虚拟时钟

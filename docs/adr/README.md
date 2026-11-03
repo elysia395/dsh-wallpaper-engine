@@ -70,3 +70,4 @@ ADR 里**不写会随代码漂移的具体数值**（条数、行数、体积、
 | [0015](./0015-glass-surface-ownership.md) | 统一背景所有权、安全装饰叶节点、未知面原生回退与外部模态让路；修订全局背景令牌泛化接管 | Accepted |
 | [0016](./0016-glass-subpackage.md) | **玻璃子包**：液态玻璃抽离为独立子包行（`wallpaper-engine-glass`），设置面板 / 运行时 / CSS 逐刀出户；停用该行 ⇒ 宿主回到原生外观（ADR-0010 D2 的 wallpaper-only 态转正） | Accepted |
 | [0017](./0017-code-is-truth-docs-reference-source.md) | **代码即真相**：文档只引用源码位置/复算命令，不复制源码与清单；取消文档类门禁与"文档同步"审阅约束（取代 ADR-0006）。**原编号 0016**（与 glass 子包撞号 ⇒ 让位顺延） | Accepted |
+| [0018](./0018-focus-fence-trusted-gesture-window.md) | **焦点围栏按「可信手势窗口」放行**：帧级一刀切；元素级只在可信来源（原生事件 / shim 注入期）打开的窗口内放行，壁纸自派事件不再能开窗口；HTML 与 SVG 两族原型都守；不经过 `focus()` 的路径由宿主半交还兜底，宿主侧「焦点被腾到 body」先只记账 | Accepted |
