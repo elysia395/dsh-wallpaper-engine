@@ -116,6 +116,27 @@ ensureGlassCss();
 // 探测失败（宿主重启中 / 网络抖动）⇒ 保持现状等下一轮，不许抖动。页面隐藏时暂停轮询。
 let glassRowDisabled = false;
 let glassRowProbeBusy = false;
+let glassRowMisses = 0; // 连续 404 计数（首启窗口：bundle 求值可早于行路由注册）
+
+/**
+ * 启用态的**现场哨兵**：玻璃样式表 + 四枚恒挂门控（applyGlass 无条件写出的那四枚）。
+ * 任何一枚缺席 = 玻璃被本状态机以外的途径摘过 ⇒ 调和路径要补。
+ *
+ * 与下面 nudge / resync 那批（上游 9ea0d4e6）互补而非重叠：那批修的是「开关切换这次
+ * 动作没走完」（提前提交状态 ⇒ 后续探测早退、永不重试）；这里修的是「**没有任何动作**，
+ * 现场却被外部改掉」（宿主侧文档重建 / 别的 <style> 清理 / 行图重装窗口里的半次拆卸）——
+ * 那种情况下 applyGlassRowState 根本不会被调用，状态位一直是 false、探测一直返回 200。
+ * 实测：带外摘掉 sheet 后连续 45 轮 200 探测无一恢复，右栏与内容面整页裸壁纸，
+ * 只有刷新页面才好（2026-10-30 PR #289 首启报障现场）。
+ */
+function glassRowSceneIntact() {
+  if (typeof document === 'undefined' || !document.body) return true; // 无文档无从谈起：按完好，探测外层自会守
+  return !!document.querySelector('style[data-plugin-css="dsh-wallpaper-engine/glass"]')
+    && document.body.hasAttribute('data-we-glass-page')
+    && document.body.hasAttribute('data-we-glass-chat')
+    && document.body.hasAttribute('data-we-glass-window')
+    && document.body.hasAttribute('data-we-glass-floaters');
+}
 
 /**
  * 行开关不会重载页面：右栏的模糊由 `[data-we-surface-plate]` 的 backdrop-filter 承载，
@@ -266,7 +287,24 @@ function resyncGlassSurfacesAfterRowToggle() {
 }
 
 function applyGlassRowState(disabled) {
-  if (disabled === glassRowDisabled) return;
+  if (disabled === glassRowDisabled) {
+    if (disabled) return; // 已是停用态：不重复撤（dispose 幂等，但没必要跑）
+    // ── 启用态的调和（reconcile）─────────────────────────────────────────────
+    // 状态位是 false ≠ 现场完好：样式表 / 门控可能被**本状态机以外**的途径摘走
+    // （宿主侧文档重建 / 行图重装窗口里的半次拆卸 / 任何未知来源的 <style> 清理）。
+    // PR #289 前玻璃 CSS 住主包 sheet（每次重挂 ensurePluginCss 都会重注 + 代际清理）
+    // ⇒ 出户后本状态机是玻璃在页面里**唯一的管家**，只认"状态位没变"会把任何一次
+    // 带外残缺变成**本页面余生的永久破损**（真机取证见 glassRowSceneIntact 的注释）。
+    // 200 = 行活着的权威信号 ⇒ 就地核实、缺哪补哪；健康态这条路径**零写入**
+    // （一个 querySelector + 四个 hasAttribute）。
+    if (glassRowSceneIntact()) return;
+    try {
+      ensureGlassCss();
+      applyGlassLayer();
+      if (typeof syncGlassSurfaces === 'function') syncGlassSurfaces(selection);
+    } catch { /* 调和失败不外抛：下一轮探测再对时。 */ }
+    return;
+  }
   // ⚠️ 不要提前写状态：一旦 apply/dispose 中途抛错（宿主右栏正在重排、表面管理器
   // 拿不到几何等），下面的 catch 会把错误吞掉；提前写状态会让后续 3s 探测直接
   // early-return、永不重试 —— 表现就是“开关后右栏一层坏滤镜，刷新才恢复”。
@@ -318,6 +356,7 @@ async function probeGlassRowState() {
     if (res.status === 200) {
       let enabled = true;
       try { enabled = (await res.json()).enabled === true; } catch { /* 应答体异常按启用处理 */ }
+      glassRowMisses = 0;
       applyGlassRowState(!enabled);
       // 行开关不重载页面：若右栏是在停用期间才打开的，表面管理器可能还没收到
       // 对应 mutation（或首个几何不成立）。每轮探测对“可见但未认领”的右栏补一次
@@ -335,7 +374,11 @@ async function probeGlassRowState() {
         } catch { /* 下一轮探测重试 */ }
       }
     } else if (res.status === 404) {
-      applyGlassRowState(true); // 路由消失 = 行停用（宿主 prune 了本行 fiber）
+      // 首启竞态（PR #289 报障的另一条腿）：bundle 求值可能早于宿主行路由注册 ——
+      // 路由要等行 fiber 激活才存在，而页面/求值不等它。单次 404 不判停用，
+      // 连续两轮（≥3s）仍 404 才认停用 ⇒ 行真被 prune 时停用语义照常到达，
+      // 注册晚一拍的启动窗口不再造成"先撤光玻璃、3 秒后又整页弹回"的闪烁。
+      if (++glassRowMisses >= 2) applyGlassRowState(true);
     }
     // 其它状态码（宿主重启中 5xx 等）⇒ 保持现状，等下一轮。
   } catch { /* 探测失败保持现状：不许因为一次网络抖动翻转观感。 */ }
@@ -395,7 +438,10 @@ registerPanelSection('appearance', 'glass', {
 // （同工厂作用域，裸名可达）。sync 幂等：全量按当前 selection 重写，迟到注册由主包
 // attacher 立刻补接 + emit 一次（见 src/client.js 的 weSetLayerAttacher）。
 registerLayerHooks('glass', {
-  sync: () => { if (!glassRowDisabled) applyGlassLayer(); }, // 行停用期间空操作（状态机已 dispose）
+  // 行停用期间空操作（状态机已 dispose）。启用态每次 emit 先核一遍样式表：sheet 被
+  // 带外摘走时，用户下一次任何设置变动都立刻补回，不必等行状态轮询的 3 秒节拍
+  // （ensureGlassCss 幂等：同 id 且同内容 ⇒ 零写入）。
+  sync: () => { if (!glassRowDisabled) { ensureGlassCss(); applyGlassLayer(); } },
   dispose: disposeGlassLayer,
 });
 
