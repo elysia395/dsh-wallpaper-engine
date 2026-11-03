@@ -38,7 +38,6 @@ const REAL_DEFAULTS = Object.fromEntries(MASCOT_KEYS.map(key => [key, D[key]]));
 
 // 蓝本手位锚点（夹具自算期望，用于区分「蓝本比例」与「误用 handRightRatio」）。
 const HAND_X = 312 / 640;
-const HAND_Y = 36 / 360;
 
 function makeElement() {
   return {

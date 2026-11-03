@@ -112,7 +112,7 @@ function harness(cfg = {}) {
     canBubble() { return true; },
     hideBubble() { return true; },
     setBubbleDuration() { return true; },
-    lock(name, ttl, preserveBubble, petId) { calls.lock += 1; locked = true; return true; },
+    lock() { calls.lock += 1; locked = true; return true; },
     unlock() { calls.unlock += 1; locked = false; return true; },
     isLocked() { return locked; },
   };
@@ -173,7 +173,7 @@ function harness(cfg = {}) {
       playback = { anim: name, playbackId: 'p' + ++serial, at: clock, duration: 0.4 };
       return true;
     },
-    wake: async petId => { calls.wake += 1; sleepState = { sleeping: false }; return true; },
+    wake: async () => { calls.wake += 1; sleepState = { sleeping: false }; return true; },
     rope: {
       point: () => ({ x: 0.25, y: 0.5 }),
       moveRope(px) { calls.rope.push({ move: px }); },

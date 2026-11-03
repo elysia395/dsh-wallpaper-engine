@@ -118,7 +118,6 @@ assert.equal(one(root, 'data-pl', 'status').getAttribute('aria-live'), 'polite',
 const tabs = byAttr(root, 'data-pl', 'tab');
 assert.equal(tabs.length, 4, '四个逻辑页签');
 assert.ok(tabs.every(tab => tab.getAttribute('role') === 'tab' && tab.getAttribute('aria-selected') !== null), '页签 role/aria-selected');
-const panels = byAttr(root, 'data-pl-panel', undefined);
 // 页签切到 mascot 验证 aria-selected 切换
 tabs.find(tab => tab.getAttribute('data-pl-tab-logic') === 'mascot').fire('click');
 assert.equal(panel.currentLogic(), 'mascot', '点页签切换当前逻辑');
