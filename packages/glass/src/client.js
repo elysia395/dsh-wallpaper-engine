@@ -131,6 +131,10 @@ let glassRowMisses = 0; // 连续 404 计数（首启窗口：bundle 求值可�
  */
 function glassRowSceneIntact() {
   if (typeof document === 'undefined' || !document.body) return true; // 无文档无从谈起：按完好，探测外层自会守
+  // 让路态（skin yield）不是残缺：glass 为了让皮肤上台，会**主动**摘掉下面四枚门控
+  // （packages/glass/src/glass.js 的 skinYieldActive 分支）。此时若照常判“缺门控 ⇒ 要补”，
+  // 3s 调和会反复把门控写回去、和皮肤互相拆台；按“完好”返回，让让路态安静到退场。
+  if (typeof skinYieldActive === 'function' && skinYieldActive()) return true;
   return !!document.querySelector('style[data-plugin-css="dsh-wallpaper-engine/glass"]')
     && document.body.hasAttribute('data-we-glass-page')
     && document.body.hasAttribute('data-we-glass-chat')
@@ -379,9 +383,12 @@ async function probeGlassRowState() {
       // 连续两轮（≥3s）仍 404 才认停用 ⇒ 行真被 prune 时停用语义照常到达，
       // 注册晚一拍的启动窗口不再造成"先撤光玻璃、3 秒后又整页弹回"的闪烁。
       if (++glassRowMisses >= 2) applyGlassRowState(true);
+    } else {
+      // 非 404 的应答（5xx = 宿主重启中 / 其它异常）必须打断“连续”语义：
+      // 404 → 5xx → 404 不是连续两次 404，不能据此判停用（#312 评审②）。
+      glassRowMisses = 0;
     }
-    // 其它状态码（宿主重启中 5xx 等）⇒ 保持现状，等下一轮。
-  } catch { /* 探测失败保持现状：不许因为一次网络抖动翻转观感。 */ }
+  } catch { glassRowMisses = 0; /* 本轮拿不到应答，同样不算连续 404；观感保持现状。 */ }
   finally { glassRowProbeBusy = false; }
 }
 /**
