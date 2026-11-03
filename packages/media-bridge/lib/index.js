@@ -51,6 +51,7 @@ import { registerWeAssetsRoutes } from './routes/we-assets.js';
 // `applyImpl` 里；c 面 = 键表（`...keys`：`kernel:` / `apply:` / `schema:` / `log:` 四种源型）
 // ＋ 本组件会话自己的 `disposers` ＋ `http` 面（`sendJson`/`bodyReader`）。
 import { registerInventoryRoutes } from './routes/inventory.js';
+import { registerSlidesRoutes } from './routes/slides.js';
 import { registerUploadRoutes } from './routes/upload.js';
 import { registerPropsRoutes } from './routes/props.js';
 import { registerMediaBytesRoutes } from './routes/media-bytes.js';
@@ -170,6 +171,13 @@ export function applyImpl(root, _rawConfig, c) {
     // 1. 壁纸清单 JSON（`/inventory`）→ 本包 `lib/routes/inventory.js`。
     registerInventoryRoutes(webServer, {
       ...keys, disposers,
+    });
+
+    // 1b. 图片 / 幻灯片壁纸的图集清单（`/slides/<token>`）→ 本包 `lib/routes/slides.js`。
+    //     `listImages` 走键表 `kernel:listImages`（内核扫描族），`mediaMap` / `tokenFor`
+    //     仍是 `...keys` 的 `apply:` 面（与 `/media` 同一张 token 表）。
+    registerSlidesRoutes(webServer, {
+      ...keys, disposers, http: keys.http,
     });
 
     // 2/3a. 派生媒体族（源元信息 / 抽帧转码 + 进度 / 视频缩略图）→ 本包 `lib/routes/media-derived.js`。

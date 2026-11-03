@@ -31,6 +31,14 @@
         {
           "kind": "guard",
           "npm": null,
+          "file": "test/verify-slideshow-client.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
           "file": "test/verify-component-visibility.mjs",
           "args": [],
           "tier": "hard",
@@ -362,6 +370,14 @@
           "kind": "guard",
           "npm": null,
           "file": "test/verify-wallpaper-scan.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-slides.mjs",
           "args": [],
           "tier": "hard",
           "probe": false
@@ -956,6 +972,14 @@
         {
           "kind": "guard",
           "npm": null,
+          "file": "test/verify-slideshow-client.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
           "file": "test/verify-component-visibility.mjs",
           "args": [],
           "tier": "hard",
@@ -1287,6 +1311,14 @@
           "kind": "guard",
           "npm": null,
           "file": "test/verify-wallpaper-scan.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-slides.mjs",
           "args": [],
           "tier": "hard",
           "probe": false

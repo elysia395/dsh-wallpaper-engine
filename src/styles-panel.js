@@ -773,7 +773,9 @@ const CSS_PANEL = `  /* ── 吉祥物形态**3D 圆环转盘**（四次返工
      frame-rate-cap tier row in the 效果 tab both wrap their buttons in .we-picker__seg. */
   .we-picker__seg { display: flex; gap: 4px; flex: 1; min-width: 0; }
   .we-picker__rate {
-    flex: 1; height: var(--we-ui-h, 30px); padding: 0; text-align: center; font-size: 0.78em;
+    /* basis 用 auto 而不是 0（#253）：flex-basis:0 的项在换行计算里按 0 宽参与，11 个键
+       会全挤在同一行、各自压到几像素。auto 让换行先看见每键的内容宽，再由父级分配剩余。 */
+    flex: 1 1 auto; min-width: 56px; height: var(--we-ui-h, 30px); padding: 0; text-align: center; font-size: 0.78em;
     border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));
     border-radius: var(--we-ui-radius, 8px); background: transparent; cursor: pointer;
     color: var(--we-ink-2, rgba(128, 128, 128, 0.9));

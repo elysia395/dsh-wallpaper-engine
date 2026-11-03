@@ -10,12 +10,21 @@
  * 默认轮播间隔经**窄键** `rotationIntervalDefault` 从 host 取（同一格默认值的显式绑定；
  * 真源仍是主包 `DEFAULTS.rotationInterval`，同源判据见 `test/verify-client.mjs`）。
  *
- * ctx 键（INTERVALS / armedConfirm / editing / group / groups / 十个 on* 回调 /
- * playableCount / sel）照旧由主包 renderWallpaperTab 构造 ⇒ 本函数与搬前逐字同行为。
+ * ctx 键（INTERVALS / armedConfirm / editing / group / groups / 十一个 on* 回调 /
+ * playableCount / sel）照旧由主包 renderWallpaperTab 构造 ⇒ 本函数与搬前逐字同行为
+ *（唯一新增：`onPictureSlideSeconds` = 图内过场周期，「图片轮播」那一行用）。
  */
 
   function renderWallpaperRotationSection(ctx) {
-    const { INTERVALS, armedConfirm, editing, group, groups, onArmDeleteGroup, onDeleteGroup, onDisarmConfirm, onEditInterval, onEditName, onEditOrder, onEditTrigger, onGroupChange, onGroupInterval, onGroupTrigger, onOpenPickerDraft, onToggleRotation, playableCount, sel } = ctx;
+    const { INTERVALS, armedConfirm, editing, group, groups, onArmDeleteGroup, onDeleteGroup, onDisarmConfirm, onEditInterval, onEditName, onEditOrder, onEditTrigger, onGroupChange, onGroupInterval, onGroupTrigger, onOpenPickerDraft, onPictureSlideSeconds, onToggleRotation, playableCount, sel } = ctx;
+    // 图内过场的可选项（秒）。与主包 KINDS.pictureSlideSeconds 的 0..3600 上界一致：
+    // 这里只是**常用档**；用户在别处写入的秒数若不在档上，补一条同值 option 回显
+    //（否则 select 会因找不到匹配值显示空白，看起来像"设置丢了"）。
+    const PICTURE_SLIDE_INTERVALS = [0, 5, 10, 15, 30, 60, 180, 300];
+    const rawPictureSlideSeconds = Math.max(0, Math.min(3600, Math.round(Number(sel.pictureSlideSeconds) || 0)));
+    const pictureSlideOptions = PICTURE_SLIDE_INTERVALS.includes(rawPictureSlideSeconds)
+      ? PICTURE_SLIDE_INTERVALS
+      : PICTURE_SLIDE_INTERVALS.concat([rawPictureSlideSeconds]).sort((a, b) => a - b);
     const groupToken = group ? "group:" + group.id : "";
     return React.createElement(React.Fragment, null,
     // ── 自动轮播: user-defined carousel lists, each with its own
@@ -142,6 +151,29 @@
           className: "we-picker__btn", type: "button",
           onClick: cancelEditGroup,
         }, weT("取消")),
+      ),
+    ),
+    // 图内过场：图片 / 幻灯片壁纸**内部**多张图之间的切换间隔。与上面「自动轮转」
+    //（壁纸与壁纸之间、分钟）是两件事 —— 这一项单位是秒，0 = 跟随 WE 项目里
+    // `imageswitchtimes` 声明的那一档。只有当前这张真是「图集 ≥2 张」的图片项目才可用，
+    // 其余档置灰并说明原因（常驻不隐藏：位置稳定，切到图片项目时不跳）。
+    React.createElement("div", { className: "we-picker__ctl" },
+      ctlText(weT("图片轮播"),
+        (sel.type === "image" && sel.slidesUrl)
+          ? weT("幻灯片壁纸内部多张图之间的切换间隔；「跟随壁纸」= 用 WE 里设的周期")
+          : weT("当前壁纸不是多图图片项目，此项暂不生效")),
+      React.createElement("div", { className: "we-picker__ctl-side" },
+        React.createElement("select", {
+          className: "we-picker__picture-slide-interval",
+          value: String(sel.pictureSlideSeconds || 0),
+          onChange: onPictureSlideSeconds,
+          disabled: !(sel.type === "image" && sel.slidesUrl),
+          "aria-label": weT("图片轮播间隔"),
+        },
+        ...pictureSlideOptions.map((sec) =>
+          React.createElement("option", { key: sec, value: String(sec) },
+            sec === 0 ? weT("跟随壁纸") : (sec < 60 ? weT("{n} 秒", { n: sec }) : weT("{n} 分钟", { n: sec / 60 }))),
+        )),
       ),
     ),
     // #255②：「自动轮转」是**列表的**开关 —— 没选列表 / 列表编辑器展开时整行不渲染。

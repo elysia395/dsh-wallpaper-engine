@@ -16,6 +16,7 @@
     "switchTransitionDir": "left",
     "switchTransitionSpeed": "normal",
     "rotationEnabled": false,
+    "pictureSlideSeconds": 0,
     "playbackRate": 1,
     "videoVolume": 0,
     "videoAudioEnabled": true,
@@ -33,7 +34,12 @@
     "pauseOnBattery": false,
     "flip": false,
     "objectFit": "cover",
-    "contentRatingFilter": ["everyone", "pg13", "mature", "unrated"],
+    "contentRatingFilter": [
+      "everyone",
+      "pg13",
+      "mature",
+      "unrated"
+    ],
     "typeFilter": [
       "video",
       "web",
