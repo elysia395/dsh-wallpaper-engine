@@ -313,13 +313,19 @@ assert.ok(code.includes('body[data-we-wallpaper] {') && code.includes('body[data
 const clearGated = (suffix) => 'body[data-we-wallpaper][data-we-adapter="browser"]' + suffix;
 const hostFrame = ' > #root > [class*="_frame"]:not([data-we-surface-preserve])';
 const hostRoot = hostFrame + ' > [class*="_root"]:not([data-we-surface-preserve])';
+// 宿主 0.30.1 在 #root 与 _frame 之间插入 [data-slot="root"]（display:contents）；
+// 只匹配直挂路径会把 frame 漏成 sidebar-fill 实色（#310）。
+const hostFrameSlot = ' > #root > [data-slot="root"] > [class*="_frame"]:not([data-we-surface-preserve])';
+const hostRootSlot = hostFrameSlot + ' > [class*="_root"]:not([data-we-surface-preserve])';
 assert.ok(code.includes(clearGated(',')),
   'the page canvas fallback must remain wallpaper+browser gated');
 assert.ok(code.includes(clearGated(hostFrame)) && code.includes(clearGated(hostRoot)),
   'the container fallback must be limited to the outer host frame/root');
+assert.ok(code.includes(clearGated(hostFrameSlot)) && code.includes(clearGated(hostRootSlot)),
+  'the container fallback must also cover hosts that wrap the frame in [data-slot="root"]');
 assert.ok(!code.includes(clearGated(' [class*="_frame"]')) && !code.includes(clearGated(' [class*="_root"]')),
   'the container fallback must not clear arbitrary third-party roots');
-assert.ok((blockBodyOf(clearGated(hostRoot + ' {')) || '').includes('background: transparent !important'),
+assert.ok((blockBodyOf(clearGated(hostRootSlot + ' {')) || '').includes('background: transparent !important'),
   'the known host canvas still needs an effective transparent fallback');
 // AppFrame 本体锚点：宿主自己的 CSS 也用它上底（`[data-shell-overlay]` 是 layout 包写在
 // AppFrame 直接子节点上的稳定锚点）。这条不依赖 adapter、也不依赖 AppFrame 是不是 #root
@@ -336,10 +342,14 @@ assert.ok(!/(?:^|\n)\s*:has\(> \[data-shell-overlay\]\)\s*\{/.test(code),
 const desktopClear = (suffix) => 'body[data-we-adapter^="desktop-"][data-we-wallpaper]' + suffix;
 assert.ok(code.includes(desktopClear(' > #root')) && code.includes(desktopClear(hostFrame)) && code.includes(desktopClear(hostRoot)),
   'desktop shell AppFrame canvas must stay transparent under wallpaper, independent of the glass row (Windows titlebar paints frame with sidebar-fill)');
+assert.ok(code.includes(desktopClear(hostFrameSlot)) && code.includes(desktopClear(hostRootSlot)),
+  'desktop fallback must cover the [data-slot="root"] wrapper (host 0.30.1 inserts it between #root and _frame)');
 assert.ok(!code.includes(desktopClear(' [class*="_frame"]')),
   'desktop fallback must not clear arbitrary nested frames');
-assert.ok((blockBodyOf(desktopClear(hostRoot + ' {')) || '').includes('background: transparent !important'),
+assert.ok((blockBodyOf(desktopClear(hostRootSlot + ' {')) || '').includes('background: transparent !important'),
   'the desktop host canvas fallback must actually clear the frame background');
+assert.ok((blockBodyOf(desktopClear(hostRootSlot + ' {')) || '').includes('background: transparent !important'),
+  'the desktop wrapper path must actually clear the frame background');
 console.log('sidebar glass selectors are wallpaper-independent: true · page glass is anchored on data-we-glass-page: true · desktop shell frame stays clear under wallpaper');
 // #255⑤：滑杆右侧数值**默认可输入**（不再 opt-in）；拖动期只改 input.value，不写父级 textContent。
 {
