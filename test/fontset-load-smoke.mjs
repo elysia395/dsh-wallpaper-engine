@@ -410,7 +410,7 @@ const waitBoot = () => new Promise((r) => { setTimeout(r, 50); });
    *
    * ⚠️ `fileInput` **不许**用 `find(第一个 accept 含 .json 的 input)` —— 那是个会漂的假设：
    *    预设块（「玻璃 UI」节，排在「全局字体」节**之前**）也有一枚 `accept` **完全相同**
-   *    的导入 input（packages/glass/packages/glass/src/glass-panel.js 的 gp-import-input），于是"第一个"拿到的是预设
+   *    的导入 input（packages/glass/src/glass-panel.js 的 gp-import-input），于是"第一个"拿到的是预设
    *    那一枚 ⇒ 喂给它的文件走进预设导入、`/fontsets/import` 永远收不到 POST，而这类失败
    *    看起来像"导入功能坏了"而不是"台架取错了对象"。
    *    ⇒ 先把树**按容器分组**，取含「导入字体集…」按钮的那一支，再在这一支里取 input：

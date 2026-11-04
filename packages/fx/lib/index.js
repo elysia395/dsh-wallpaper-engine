@@ -16,7 +16,7 @@
  *      宿主半边零副作用 ⇒ dispose 是空操作，但形状与 lib/components/<组件>/index.js 同形。
  *
  * 纪律：不再注册额外 ctx.effect（不留残留，ADR-0014 S6.2）、不读 config、不 acquireKernelLease、
- * 模块顶层只有 import/声明（无求值期副作用、无定时器、无 window/DOM）。产物（lib/client.fx.js）
+ * 模块顶层只有 import/声明（无求值期副作用、无定时器、无 window/DOM）。产物（packages/fx/lib/client.fx.js）
  * 落盘前不要声明 dsh.client / exports["./client"]：声明了却没有产物，客户端会按 id 去取那个
  * lazy factory 然后抛错（ADR-0014 S3.4）。
  */

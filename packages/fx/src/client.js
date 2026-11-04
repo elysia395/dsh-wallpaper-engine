@@ -3,7 +3,7 @@
  *
  * 构建期形状（与主 bundle 同一套，见 `scripts/build-client.mjs` 的 `stripHeader` 与包配方校验）：
  *   · 本文件 = 入口（对应主 bundle 的 src/client.js）。构建期只取**首个块注释之后**的正文；
- *   · 包内 INLINE_MODULES（src/fx-layer.js、src/ext-fx.js）被内联到正文**之前**，与正文同一个
+ *   · 包内 INLINE_MODULES（packages/fx/src/fx-layer.js、packages/fx/src/ext-fx.js）被内联到正文**之前**，与正文同一个
  *     factory 作用域 ⇒ 那两份里的裸名（selection / weT / React …）由本文件的 prelude 与构建期
  *     那一行 host 绑定共同提供，兄弟文件之间**不 import**；
  *   · 产物 = packages/fx/lib/client.fx.js，id = 子包真实包名 dsh-plugin-wallpaper-engine-fx

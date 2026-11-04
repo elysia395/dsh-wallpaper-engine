@@ -162,7 +162,7 @@ function renderFontSetEditor(ctx) {
       ctlText(weT("字体集"), weT("一份集 = 整套字体外观（颜色角色 / 排版 / 字重 / 字族 / 组件）。改动只落到当前这一份、随时可以恢复原样；导入导出按整份文件走。")),
     ),
     loading ? React.createElement("div", { className: "we-picker__hint" }, weT("正在读取字体集…")) : null,
-    // ⚠️ reason 必须再过一次 weT：它来自宿主回包（lib/routes/fontsets.js 里那批中文 error），
+    // ⚠️ reason 必须再过一次 weT：它来自宿主回包（packages/fonts/lib/routes/fontsets.js 里那批中文 error），
     //    原样塞进去会让英文界面露出中文，并让 i18n-copy.js 里为这些串备好的词条永远成为死词条。
     error ? React.createElement("div", { className: "we-picker__hint" }, weT("字体集不可用：{reason}", { reason: weT(error) })) : null,
     rows.length === 0 && !loading

@@ -4,7 +4,7 @@
  * ══ 它是什么 ══════════════════════════════════════════════════════════════════
  * 一个**模块描述符**（形状 `{ id, title, desc?, render? }`，契约写在 src/panel-tabs.js 的
  * `extensionModules()` 上方）：panel-tabs 只负责把它排在「扩展」页签里，具体的控件与文案
- * 全在本文件。视差本体在 `src/parallax-layer.js`（只有变量与事件、不建 DOM），设置项的
+ * 全在本文件。视差本体在 `packages/parallax/src/parallax-layer.js`（只有变量与事件、不建 DOM），设置项的
  * 真源在 `lib/settings-schema.js` 的 11 个 `parallax*` 键。
  *
  * 契约：
@@ -21,7 +21,7 @@
  *   · 参数的可调范围与默认值**不在这里写死**：`SliderRow` 的 min/max/step 与设置白名单的
  *     KINDS 一致（改范围要同时看 lib/settings-schema.js —— 那份是唯一真源）。**例外是插件槽位
  *     那一档**：它不在 KINDS 里（`parallaxPluginDepths` 是 map 档，宿主不校验值）⇒ 那一档的
- *     缺省值直接读 `src/parallax-layer.js` 的 `PARALLAX_PLUGIN_DEFAULT`，回显的钳制范围也读层
+ *     缺省值直接读 `packages/parallax/src/parallax-layer.js` 的 `PARALLAX_PLUGIN_DEFAULT`，回显的钳制范围也读层
  *     同一对常量 `PARALLAX_GROUP_DEPTH_MIN` / `PARALLAX_GROUP_DEPTH_MAX`，不另外抄数（层与面板
  *     必须对"没这一行时算多少 / 越界值算多少"给出同一个答案；单独 import 本文件的测试要给这
  *     三枚符号补替身，见 test/verify-scene-live.mjs 的岛那一段）。
@@ -39,7 +39,7 @@
  *     m02697-③）。存档与面板从此同一个单位，不再有"面板说百分比、存档说倍率"的换算。
  *   · **方向不是设置项**：壁纸与吉祥物的口径是"关于屏幕中心对称"（光标在右上 ⇒ 整块往左下）、
  *     界面整块与壁纸**同向**（用户口径 m01371："希望输入框和背景同向运动" ⇒ 像镜头横移，近处
- *     多走一点），要换向改 src/parallax-layer.js 的 `PARALLAX_DIRECTION` / `PARALLAX_UI_SIGN`。
+ *     多走一点），要换向改 packages/parallax/src/parallax-layer.js 的 `PARALLAX_DIRECTION` / `PARALLAX_UI_SIGN`。
  *   · 界面那一组的距离**各自独立**（用户口径 m01915-①：「各个区域的缓动距离支持单独调节」的
  *     升级版）：总倍率 `parallaxUiDepth` 已退役（用户口径 m02697-①③），四个区域键就是四组各自
  *     的绝对距离。它动的是真实界面，所以默认关。
@@ -86,7 +86,7 @@ function renderParallaxIsland(ctx) {
     // ── 背景：壁纸那一层与挂在它上面的吉祥物 ──────────────────────────────
     on && parallaxSection(weT("背景"), "parallax-sec-bg", [
       // 距离的单位是**最长对角线的百分比**：光标贴到屏幕角上时，这一层最多挪 pct% 个对角线
-      // （壁纸额外放大 1 + pct/50 补边，见 src/parallax-layer.js 文件头）。
+      // （壁纸额外放大 1 + pct/50 补边，见 packages/parallax/src/parallax-layer.js 文件头）。
       SliderRow(weT("背景缓动距离"), 0, 10, 0.1, sel.parallaxBg, onParallaxBg, "%", "parallax-bg",
         { tooltip: weT("光标贴到屏幕角时，壁纸挪动的距离占屏幕最长对角线的百分比（壁纸会同时放大同样多，免得边上露出底色）") }),
       switchRow(weT("吉祥物跟随"), sel.parallaxMascot !== false, onParallaxMascot,

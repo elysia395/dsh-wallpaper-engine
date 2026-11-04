@@ -3574,7 +3574,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
         && !bag.QP_CTX_SETTINGS_ONLY.includes('onGlassChildParam'),
       called.slice(0, 48));
     // 预设块那道门也有牙：`glassPresets` 是高级配置的 ctx 字段（ADR-0008 D4），侧栏档指向替身 ⇒
-    // 谁把 packages/glass/packages/glass/src/glass-panel.js 里那道 `!sidebarSurface` 门拆掉，渲染器**解构它的第一下就炸**
+    // 谁把 packages/glass/src/glass-panel.js 里那道 `!sidebarSurface` 门拆掉，渲染器**解构它的第一下就炸**
     // （不是静默把预设块画进侧栏 —— 那是"整快照覆盖且不可撤销"的动作，不该随手可达）。
     const presetTeeth = (() => { try { return String(ctx.glassPresets.presets); } catch (e) { return String(e.message); } })();
     check('侧栏 ctx 的 `glassPresets` 也是占位器（拆掉预设块的门 ⇒ 解构即抛错）',
@@ -3657,7 +3657,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
   // panelGlassPair 的家从 glass-panel 本地副本归位 settings-schema（#159② 显示口径：缺省回空串
   // 不猜色，与 readGlassColors 互补）—— 玻璃节渲染要用，同上面两个给**真源**。
   globalThis.panelGlassPair = schema.panelGlassPair;
-  // ⚠️ 「玻璃 UI」节的渲染器住 packages/glass/packages/glass/src/glass-panel.js（ADR-0016 第二刀出户）：**打包后**它与
+  // ⚠️ 「玻璃 UI」节的渲染器住 packages/glass/src/glass-panel.js（ADR-0016 第二刀出户）：**打包后**它与
   //    `panel-tabs.js` 同作用域，所以后者能按名字直接调；但这里是**按文件 import** 的替身，
   //    两个模块各有自己的作用域 ⇒ 必须自己把它挂成全局（与上面那批模块级助手同一条口径）。
   globalThis.renderAppearanceGlassSection =

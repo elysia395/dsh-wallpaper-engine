@@ -145,7 +145,7 @@ export function applyImpl(root, _rawConfig, c) {
   // 原错照抛（装载失败必须仍然是红的）。
   try {
     // 3c-5. 媒体状态族路由（媒体后端懒启动 + /media-status、/audio-spectrum、/now-playing、
-    //       /now-playing/artwork、/media-control）→ 本包 `lib/routes/now-playing.js`。
+    //       /now-playing/artwork、/media-control）→ 本包 `./routes/now-playing.js`。
     //       后端实例、启动决策与五条注册都在那个文件里；这里只声明它的依赖（与门面调用点逐键相同）。
     registerNowPlayingRoutes(webServer, {
       ...keys, disposers, base, appendDiagLine, configPath, cacheBaseDir, readConfig, serveFile,
@@ -173,49 +173,49 @@ export function applyImpl(root, _rawConfig, c) {
       ...keys, disposers,
     });
 
-    // 1b. 图片 / 幻灯片壁纸的图集清单（`/slides/<token>`）→ 本包 `lib/routes/slides.js`。
+    // 1b. 图片 / 幻灯片壁纸的图集清单（`/slides/<token>`）→ 本包 `./routes/slides.js`。
     //     `listImages` 走键表 `kernel:listImages`（内核扫描族），`mediaMap` / `tokenFor`
     //     仍是 `...keys` 的 `apply:` 面（与 `/media` 同一张 token 表）。
     registerSlidesRoutes(webServer, {
       ...keys, disposers, http: keys.http,
     });
 
-    // 2/3a. 派生媒体族（源元信息 / 抽帧转码 + 进度 / 视频缩略图）→ 本包 `lib/routes/media-derived.js`。
+    // 2/3a. 派生媒体族（源元信息 / 抽帧转码 + 进度 / 视频缩略图）→ 本包 `./routes/media-derived.js`。
     registerMediaDerivedRoutes(webServer, {
       ...keys, disposers,
     });
 
-    // 2/3. 媒体 + 预览原始字节（`/media`、`/preview`）→ 本包 `lib/routes/media-bytes.js`。
+    // 2/3. 媒体 + 预览原始字节（`/media`、`/preview`）→ 本包 `./routes/media-bytes.js`。
     registerMediaBytesRoutes(webServer, {
       ...keys, disposers,
     });
 
-    // 3c-3b/3c-5. 场景帧服务族（实时抓帧缓存 / 自定义画面）→ 本包 `lib/routes/scene-frame.js`。
+    // 3c-3b/3c-5. 场景帧服务族（实时抓帧缓存 / 自定义画面）→ 本包 `./routes/scene-frame.js`。
     registerSceneFrameRoutes(webServer, {
       ...keys, disposers, http: keys.http,
     });
 
-    // 3c-2/3c-3. 场景载荷服务族（live 渲染页 / 场景文件 / 媒体源诊断）→ 本包 `lib/routes/scene-serve.js`。
+    // 3c-2/3c-3. 场景载荷服务族（live 渲染页 / 场景文件 / 媒体源诊断）→ 本包 `./routes/scene-serve.js`。
     registerSceneServeRoutes(webServer, {
       ...keys, disposers,
     });
 
-    // 3c-3c. 壁纸属性（WE 用户属性）→ 本包 `lib/routes/props.js`。
+    // 3c-3c. 壁纸属性（WE 用户属性）→ 本包 `./routes/props.js`。
     registerPropsRoutes(webServer, {
       ...keys, disposers, http: keys.http,
     });
 
-    // 3c-4. 网页壁纸首帧缓存（`__wp.capture` 回填的 JPEG）→ 本包 `lib/routes/live-frame.js`。
+    // 3c-4. 网页壁纸首帧缓存（`__wp.capture` 回填的 JPEG）→ 本包 `./routes/live-frame.js`。
     registerLiveFrameRoutes(webServer, {
       ...keys, disposers, http: keys.http,
     });
 
-    // 3e. 场景内嵌媒资（动画 MP4 + 独立音频）→ 本包 `lib/routes/scene-media.js`。
+    // 3e. 场景内嵌媒资（动画 MP4 + 独立音频）→ 本包 `./routes/scene-media.js`。
     registerSceneMediaRoutes(webServer, {
       ...keys, disposers,
     });
 
-    // 4/5/6. 上传资产族（导入 / 删除 / 切换上传目录）→ 本包 `lib/routes/upload.js`。
+    // 4/5/6. 上传资产族（导入 / 删除 / 切换上传目录）→ 本包 `./routes/upload.js`。
     registerUploadRoutes(webServer, {
       ...keys, disposers, http: keys.http,
     });

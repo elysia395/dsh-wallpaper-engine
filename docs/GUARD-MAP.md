@@ -50,7 +50,7 @@
 | `verify-glass-compat.mjs` | `lib/settings-schema.js` `packages/glass/src/glass-panel.js` |  |
 | `verify-glass-compositing.mjs` | — | ✅ |
 | `verify-glass-runtime-browser.mjs` | — | ✅ |
-| `verify-glass-runtime.mjs` | `packages/glass/src/glass-surfaces.js` | ✅ |
+| `verify-glass-runtime.mjs` | `packages/glass/src/client.js` `packages/glass/src/glass-surfaces.js` | ✅ |
 | `verify-glass-surfaces.mjs` | `lib/settings-schema.js` `packages/glass/src/glass-css.js` `packages/glass/src/glass-layer.js` `packages/glass/src/glass-panel.js` `packages/glass/src/glass-surfaces.js` `packages/glass/src/glass.js` `src/client.js` `src/effects.js` `src/live-layer-diag.js` `src/live-layer-gate.js` `src/live-layer-pointer.js` `src/live-layer-underlay.js` `src/live-layer-watch.js` `src/live-layer.js` `src/panel-tabs-advanced.js` `src/panel-tabs-appearance.js` `src/panel-tabs-effects.js` `src/panel-tabs-mascot.js` `src/panel-tabs.js` `src/styles-base.js` `src/styles-chrome.js` `src/styles-ext.js` `src/styles-panel.js` `src/styles-quick.js` `src/styles-settings.js` `src/styles-shell.js` `src/styles.js` | ✅ |
 | `verify-guard-chain.mjs` | — |  |
 | `verify-host-diag.mjs` | `lib/diag-trace.js` |  |
@@ -207,7 +207,7 @@
 | `packages/glass/lib/client.glass.js` | 11 | `e2e-web-media-origin` `verify-client-sync` `verify-client` `verify-glass-compositing` `verify-glass-runtime-browser` `verify-glass-runtime` `verify-glass-surfaces` `verify-host-paint-scope` `verify-readability` `verify-softrender` `verify-windows-caption` |
 | `packages/glass/lib/index.js` | 0 | **（无）** |
 | `packages/glass/lib/routes/glass-row.js` | 0 | **（无）** |
-| `packages/glass/src/client.js` | 0 | **（无）** |
+| `packages/glass/src/client.js` | 1 | `verify-glass-runtime` |
 | `packages/glass/src/glass-css.js` | 5 | `verify-adapter` `verify-glass-surfaces` `verify-i18n` `verify-readability` `verify-titlebar-anchor` |
 | `packages/glass/src/glass-extra.js` | 1 | `verify-extra-glass` |
 | `packages/glass/src/glass-layer.js` | 4 | `verify-client` `verify-extra-glass` `verify-glass-surfaces` `verify-titlebar-anchor` |

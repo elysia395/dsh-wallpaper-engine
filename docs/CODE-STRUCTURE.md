@@ -106,8 +106,7 @@ graph TB
 - **宿主内核** `lib/kernel/*` —— 门面在**模块加载期**一次建成的各套件实例（`host-kernel.js`）、
   一次 apply 的会话段（`host-session.js`）、组件行消费的组件视图与迷你会话（`component-session.js`）、
   配置与数据目录（`config.js` / `data-dir.js`）。
-- **路由族**（一文件一族）：`lib/routes/<族>.js` 是**主包自己**的族（
-  `settings` / `presets` / `diag` / `cache-dir`）；壁纸域（场景 / 媒体 / 上传 / 遮挡 / 现在播放 / `we-assets` /
+- **路由族**（一文件一族）：`lib/routes/<族>.js` 是**主包自己**的族（按该目录枚举即得，本文不列清单）；壁纸域（场景 / 媒体 / 上传 / 遮挡 / 现在播放 / `we-assets` /
   token 簇）住 `packages/media-bridge/lib/routes/<族>.js`，其余组件行的私有族各自在
   `packages/<组件>/lib/routes/`。无论住哪，各族都拿一个显式 context 对象、各自注册自己的路由。族的成员是
   **派生量**，本文不列：路由枚举的真源是 `test/tools/host-route-index.mjs` 的 `buildIndex()`（它按调用点把每个族
@@ -146,7 +145,7 @@ graph LR
     IDX["lib/index.js<br/>（门面：apply 编排 + 共享闭包）"]
     BOOT["lib/host-boot.js<br/>BASE / 内核单例 / 组件记账"]
     KN["lib/kernel/*<br/>套件实例 · 会话 · 组件视图"]
-    IDX --> R["lib/routes/*.js<br/>主包自己的路由族（settings / presets / diag / cache-dir）"]
+    IDX --> R["lib/routes/*.js<br/>主包自己的路由族（按该目录枚举即得）"]
     IDX --> SP["lib/subpackage-boot.js<br/>跨包服务面：wallpaperEngineHost（冻结七键）"]
     IDX --> C["packages/&lt;组件&gt;/lib/<br/>组件入口 + 自有路由族"]
     C -.->|inject：只读消费| SP

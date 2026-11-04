@@ -1067,7 +1067,7 @@ section('⑧ 面板渲染回归（配色区在总开关打开时必须渲染得�
     // 面板会调 `renderFontSetEditor(...)`（在 bundle 里是同作用域的内联模块；独立 import 时
     // 得把它映成全局，否则 ⑧ 会以 "is not defined" 的形式假红）。
     await import(pathToFileURL(join(root, 'packages', 'fonts', 'src', 'fontset-editor.js')).href),
-    // 同理：「玻璃 UI」节的渲染器住 packages/glass/packages/glass/src/glass-panel.js（ADR-0016 第二刀），
+    // 同理：「玻璃 UI」节的渲染器住 packages/glass/src/glass-panel.js（ADR-0016 第二刀），
     // `panel-tabs.js` 里对它的调用只在**打包后**同作用域 ⇒ 这里也要映成全局。
     await import(pathToFileURL(join(root, 'packages', 'glass', 'src', 'glass-panel.js')).href),
     // 同理：节头构件抽到了 `src/section-head.js`（三节在侧边栏默认收敛那一刀）。

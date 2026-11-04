@@ -1634,7 +1634,7 @@ section('④b 行为判据：删除令牌链 + broken 行禁用与可删 + 勾�
     swatchRow: (label) => ({ type: 'swatch', label }),
     // ⚠️ glass-panel.js 在主 bundle 里曾与 src/client.js（`ROPE_FORMS` 定义在 `src/client.js`）和
     //   lib/settings-schema.js（`ROPE_FORM_VALUES` 定义在 `lib/settings-schema.js`）**同处一个
-    //   作用域**（build 把各 src 文件顺序拼成一个 lib/client.js）。ADR-0016 第二刀出户后它住 packages/glass/packages/glass/src/glass-panel.js，
+    //   作用域**（build 把各 src 文件顺序拼成一个 lib/client.js）。ADR-0016 第二刀出户后它住 packages/glass/src/glass-panel.js，
     //   `ROPE_FORMS[k].label` 是同一形态的既有用法；单独 eval 时这两个模块作用域符号必须由
     //   台架按**真实形状**补上，否则渲染第一步就 ReferenceError —— 判据根本跑不到（本仓最忌的
     //   "台架自己造字段"：这里只补作用域，不替代任何被判定为真的字段）。
