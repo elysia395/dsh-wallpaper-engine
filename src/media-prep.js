@@ -561,7 +561,13 @@ function applySelection(id, opts) {
     }).catch(() => { /* 无音频/探测失败：按钮保持隐藏 */ });
   }
   // Keep the preview around so a failed static frame can fall back to it.
-  selection.previewUrl = w.preview || null;
+  // ⚠️ 这里是**全屏**口径：previewUrl 的三个消费点都把同一张图铺满整个窗口 ——
+  // 垫底图候选（src/live-layer-pointer.js 的 buildLivePoster）、静态帧 `<img>` 的
+  // onerror 兜底（本文件下方）、视频的 poster（src/video-layer.js）。宿主的
+  // `/preview/<token>` 默认发的是给 92px 卡片用的 320px / `-q:v 5` 缩略图（#240），
+  // 铺满 1600 CSS px 时要放大 5 倍 ⇒「背景图变糊」。带 `full=1` 要源图（见 we-base.js
+  // 的 weFullPreviewUrl）；卡片的 `w.preview` 一个字节没动。
+  selection.previewUrl = weFullPreviewUrl(w.preview) || null;
   // 网页壁纸的实时抓帧缓存（宿主 inventory 的 liveFrame = /live-frame/<token>）。web 支把它当
   // 垫底图的**第 1 级候选**，并在 live 首帧稳定后向它回填抽帧；不落这条字段，那一整支
   //（候选、抽帧定时器、"真实渲染帧"那条取色腿）在客户端就没有入口。与 previewUrl 同址。

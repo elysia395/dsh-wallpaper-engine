@@ -412,7 +412,9 @@ async function main() {
     // 再：verify 99→100 / all 112→113 —— 新增 `test/verify-titlebar-anchor.mjs`（#235 标题栏运行时锚点探针）。
     // 再：verify 100→102 / all 113→115 —— 新增 `test/verify-slides.mjs` 与
     //     `test/verify-slideshow-client.mjs`（#223 图集清单路由与客户端过场层两条硬档）。
-    const CHAIN_FLOOR = { verify: 102, docs: 6, smoke: 6, all: 115 };
+    // 再：verify 102→103 / all 115→116 —— 新增 `test/verify-live-stand-in.mjs`
+    //     （实时渲染垫底画面「糊 / 黑」：`/preview` 的 `?full=1`、渲染页底色、拒绝腿的兜底页）。
+    const CHAIN_FLOOR = { verify: 103, docs: 6, smoke: 6, all: 116 };
     /** 地板表与 GROUPS 的对齐体检：键名必须与**组名**逐一对齐（纯函数 ⇒ 负对照可直接喂）。 */
     const floorGaps = (groups, floors) => groups.map(([, g]) => g).filter((g) => !Number.isInteger(floors[g]));
     const problems = floorGaps(GROUPS, CHAIN_FLOOR).map((g) => '地板表缺组 ' + g

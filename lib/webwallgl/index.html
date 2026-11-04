@@ -19,7 +19,15 @@
         width: 100%;
         height: 100%;
         overflow: hidden;
-        background: #000;
+        /*
+         * 透明，不是黑（本页只作为 .we-layer 里的 iframe 存在）：
+         * 画布由引擎在装配时才建（`ensureSceneCanvas` 会删旧建新），而装配要先拉完
+         * scene.pkg（大包数秒）—— 这段空窗里**没有画布**，页面底色就是屏上那一层。
+         * 宿主在下层垫着真实画面（.we-live-poster：实时抓帧 → 作者预览图 → 主题色），
+         * 一旦这里铺不透明 #000，它会整块盖掉垫底图 ⇒ 用户看到的是"整个黑屏"。
+         * 透明之后空窗透出的正是垫底图，首帧一到再被画布接管。
+         */
+        background: transparent;
         overscroll-behavior: none;
         -webkit-user-select: none;
         user-select: none;

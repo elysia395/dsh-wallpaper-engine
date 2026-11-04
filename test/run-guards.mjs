@@ -194,6 +194,12 @@ const VERIFY_STEPS = [
   step('test/verify-host-diag.mjs'),
   step('test/verify-upload-store.mjs'),
   step('test/verify-video-preview.mjs'),
+  // 实时渲染**垫底/降级期间屏上那张图**：不糊、不黑。本机实测：作者预览源图 1019×1019 /
+  // 215 KB，`/preview` 默认发 320×320 / 5.5 KB 的卡片缩略图，铺满 1603×1028 设备像素要
+  // 放大 5 倍 ⇒「背景图变糊」；渲染页 `html/body` 的不透明 #000 在装配空窗里盖掉下层垫底图
+  // ⇒「整个黑屏」。判据含路由行为与其顺序负对照、纯工具语义、客户端接线、卡片侧未被连带、
+  // 渲染页底色、`load()` 拒绝腿的兜底页，以及"垫底图只在 we-live-on 时收"这条耦合前提。
+  step('test/verify-live-stand-in.mjs'),
   step('test/verify-asset-paths.mjs'),
   step('test/verify-settings-schema-exports.mjs'),
   // ADR-0014 S3/S5 的四条新判据（P2-5b）。全部 hard：

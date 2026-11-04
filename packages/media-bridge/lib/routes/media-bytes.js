@@ -70,6 +70,20 @@ export function registerMediaBytesRoutes(webServer, c) {
           serveFile(abs, req, res, method === 'HEAD', { revalidate: true });
           return;
         }
+        // ── `?full=1`：这条路由有两个**尺度差三个数量级**的消费者 ────────────────────
+        // ① 壁纸库卡片（约 92 CSS px 高）—— #240 为此把源图缩到 320px / `-q:v 5`；
+        // ② **全屏垫底图**——场景实时渲染未出帧时的占位、以及实时渲染不可用时的静态帧
+        //    （见 src/live-layer-pointer.js 的 buildLivePoster 与 src/media-prep.js 的
+        //    scene 兜底）。那里这条 URL 铺满整个窗口：1600 CSS px 宽时 320px 要放大 5 倍，
+        //    `-q:v 5` 的再编码损耗再叠一层 ⇒ 用户看到的就是"背景图变糊"。
+        // 缩略图对全屏没有意义（放大不恢复细节），再做第二档尺寸也只是换一个损失点：
+        // 带 `full=1` 就**直出作者随包发布的源图字节** —— 不 spawn ffmpeg、不落缩略图缓存。
+        // 这与本路由既有的回落语义同源（`ensureImagePreview` 失败时本来就发原图），
+        // 且不改变默认（无参）请求：卡片那条链逐字节不变。
+        if (new URL(req.url || '/', 'http://x').searchParams.get('full') === '1') {
+          serveFile(abs, req, res, method === 'HEAD', { revalidate: true });
+          return;
+        }
         // 新清单始终用源图 token，经下面 ensureImagePreview 选择或重建缩略图。
         // 兼容旧清单已发出的缩略图 token：只直出，避免二次缩略；旧 token 没有源图映射，
         // 缓存一旦淘汰便无法恢复，不能继续把它当作公开的稳定地址。

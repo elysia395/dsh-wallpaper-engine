@@ -23,6 +23,7 @@ import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import { createTranscodeKit } from '../lib/media/transcode.js';
+import { weFullPreviewUrl } from '../src/we-base.js';
 import { stripComments } from './tools/js-text.mjs';
 
 const results = [];
@@ -550,6 +551,10 @@ function stateMachineHarness(parts) {
     consumePreparedMedia: () => { const el = prepared; prepared = null; return el; },
     consumeWarmVideo: () => { const el = warmed; warmed = null; return el; },
     liveLog() {}, isEffectivelyPlaying: () => true, layerStillPending: () => false, weDrawFrame() {},
+    // `applySelection` 落地 `previewUrl` 时经 `src/we-base.js` 的这枚纯工具改写（全屏垫底要
+    // 源图，不要 320px 卡片缩略图）。构建期它与 media-prep 同作用域，单文件抽取后是裸标识符
+    // ⇒ 这里注入真实现（不是替身），顺带让本守卫吃到那条改写本身的行为。
+    weFullPreviewUrl,
     setInterval(fn) { const timer = { fn }; timers.add(timer); return timer; },
     clearInterval(timer) { timers.delete(timer); },
   });

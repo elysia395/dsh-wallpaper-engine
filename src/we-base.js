@@ -15,7 +15,8 @@
  *
  * 契约：
  *   需要的外界：`window` / `document`（都按"没有就静默"的口径探测），别无其他。
- *   对外提供：`weClampTo(v, lo, hi, fallback)` · `weNow()` · `weBody()`。
+ *   对外提供：`weClampTo(v, lo, hi, fallback)` · `weNow()` · `weBody()` ·
+ *            `weFullPreviewUrl(url)`（全屏垫底图要源图，不要 320px 卡片缩略图）。
  *
  * 不变量：
  *   · **零依赖**：不读 `selection`、不碰任何兄弟模块的符号 —— 它是地基，必须能排在内联
@@ -43,4 +44,23 @@ function weBody() {
   return document.body;
 }
 
-export { weClampTo, weNow, weBody };
+/**
+ * 把 `/preview/<token>` 改写成**全屏口径**的同一份载荷（宿主侧 `?full=1` ⇒ 直出作者源图，
+ * 见 `packages/media-bridge/lib/routes/media-bytes.js`）。
+ *
+ * 为什么需要：同一条 URL 有两个尺度差三个数量级的消费者 —— 壁纸库卡片（92 CSS px 高，
+ * #240 为它把源图缩到 320px / `-q:v 5`）与**全屏垫底图**（场景实时渲染未出帧时的占位、
+ * 以及实时渲染不可用时的静态帧）。拿缩略图铺满窗口 = 放大 5 倍 + 再编码损耗 ⇒ 用户看到
+ * 的"背景图变糊"。全屏侧因此显式要源图；卡片侧的 `preview` 一律不带这个参数。
+ *
+ * 契约：幂等（已带 `full=1` 不叠加）、非字符串/空串原样返回（`null` 语义由调用方保留）、
+ * 保留既有的 `?` 查询串。**不**判断 URL 是不是 `/preview/` —— 那会让这条纯工具依赖宿主
+ * 路由形态，而路由本来就只是"忽略未知查询参数"。
+ */
+function weFullPreviewUrl(url) {
+  if (typeof url !== 'string' || !url) return url;
+  if (/(?:[?&])full=1(?:&|$)/.test(url)) return url;
+  return url + (url.indexOf('?') === -1 ? '?' : '&') + 'full=1';
+}
+
+export { weClampTo, weNow, weBody, weFullPreviewUrl };
