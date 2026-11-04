@@ -209,6 +209,130 @@ function reportLiveFps(watch, frame, stats, wstate) {
     + ` win=${secs}s playing=${isEffectivelyPlaying() ? 1 : 0}`);
 }
 
+// ── UI 受压时给实时渲染页降帧（#248）──────────────────────────────────────────
+// 现场（#248）：大 dsh-context 页 + Scene 60fps + 液态玻璃 ⇒ 每次切页整窗卡 ~10s；
+// 流式输出期间主线程出现 1.2s+ 停顿，宿主心跳告警「页面主线程可能卡死」，换视频壁纸即消失。
+// 机制：scene 渲染页与 DSH UI 同源、跑在**同一个渲染主线程**（web 壁纸才是跨源沙箱的
+// 独立进程），UI 的重活（大 DOM 挂载、流式渲染）会直接挤占壁纸的帧循环，反之亦然。
+// 能立刻卸掉的负载就是壁纸帧率：检测到主线程停顿就把 `__wp.setSceneFps(15)` 压 30s，
+// 安静期满自动回到用户选定的档位；期间再次停顿则续期。只压帧、不 pause、不重建层
+// （`selection.sceneLiveFps` 不动 ⇒ 层键不变 ⇒ 不触发 iframe 重载）。
+// 这是「下一次」的护栏，救不了已经发生的那一次冻结 —— 别把它说成根治。
+// 逃生舱：`?we-live-guard=0`（与 we-ext-swap 同风格，只解析一次）。
+const LIVE_GUARD_FPS = 15;
+const LIVE_GUARD_HOLD_MS = 30000;
+const LIVE_GUARD_TICK_MS = 1500;      // 1s 心跳迟到 0.5s 以上 ⇒ 主线程被占
+const LIVE_GUARD_LONG_TASK_MS = 1200; // PerformanceObserver longtask 门槛
+let liveGuardUntil = 0;
+let liveGuardApplied = 0;             // 0 = 本帧还没下发过；否则最近下发的 fps
+let liveGuardObserver = null;
+let liveGuardDisabled;                // undefined = 未解析
+
+function liveGuardIsDisabled() {
+  if (liveGuardDisabled !== undefined) return liveGuardDisabled;
+  liveGuardDisabled = false;
+  try {
+    if (typeof location !== "undefined" && location && typeof location.search === "string") {
+      let raw = "";
+      if (typeof URLSearchParams === "function") raw = new URLSearchParams(location.search).get("we-live-guard") || "";
+      else { const m = /[?&]we-live-guard=([^&]*)/.exec(location.search); raw = m ? decodeURIComponent(m[1]) : ""; }
+      liveGuardDisabled = String(raw).toLowerCase() === "0";
+    }
+  } catch { /* 解析异常：保持启用 */ }
+  return liveGuardDisabled;
+}
+
+// 只在「玻璃真在算值」时降帧：#248 的整页代价来自 backdrop-filter 每帧重采样壁纸；
+// 玻璃行关闭 / 皮肤让路态（glass.js 会摘掉门控属性）时没有这笔账，别误伤纯壁纸用户。
+function liveGuardGlassOn() {
+  try { return !!(document.body && document.body.hasAttribute("data-we-glass-page")); } catch { return false; }
+}
+
+// 纯决策（便于单测）：给定上一次的截止时刻、当前时刻、这一拍是否停顿。
+// 返回 { until, start, stop }：start = 本次新进入降帧；stop = 本次退出降帧。
+function liveGuardStep(prevUntil, now, stalled) {
+  if (stalled) return { until: now + LIVE_GUARD_HOLD_MS, start: prevUntil <= now, stop: false };
+  if (prevUntil > now) return { until: prevUntil, start: false, stop: false };
+  return { until: 0, start: false, stop: prevUntil > 0 };
+}
+
+function liveGuardTargetFps() {
+  const configured = Number(selection.sceneLiveFps) || 30;
+  return Math.min(LIVE_GUARD_FPS, configured);
+}
+
+// 把当前应有的帧率下发给渲染页；值不变则不发（渲染页 setFps 会重置帧计量器）。
+function applyLiveGuardFps(frame, until, now) {
+  if (!frame) return;
+  // 玻璃中途关掉 / 壁纸被暂停：这笔账不存在了，立刻回用户档位，不等窗口到期。
+  const degraded = until > now && liveGuardGlassOn() && isEffectivelyPlaying();
+  // 从未降过帧就不必为「恢复」写一次（每次重建都白调一次 setFps 会重置渲染页计量器）。
+  if (!degraded && !liveGuardApplied) return;
+  const want = degraded ? liveGuardTargetFps() : (Number(selection.sceneLiveFps) || 30);
+  if (!want || want === liveGuardApplied) return;
+  let wp;
+  try { wp = frame.contentWindow && frame.contentWindow.__wp; } catch { return; }
+  if (!wp || typeof wp.setSceneFps !== "function") return;
+  try {
+    wp.setSceneFps(want);
+    liveGuardApplied = want;
+    reportClientDiag("live-guard", degraded
+      ? "fps=" + want + " hold=" + Math.ceil((until - now) / 1000) + "s reason=ui-stall"
+      : "fps=" + want + " restore");
+  } catch { /* 渲染页内部异常：下一拍再试 */ }
+}
+
+// 记录一次主线程停顿：进入/续期降帧窗口。只在**新进入**时写一行诊断，续期不刷屏。
+function noteLiveStall(ms, frame) {
+  if (liveGuardIsDisabled() || !liveGuardGlassOn() || !isEffectivelyPlaying()) return;
+  if (typeof document !== "undefined" && document.hidden) return;
+  const now = Date.now();
+  const step = liveGuardStep(liveGuardUntil, now, true);
+  liveGuardUntil = step.until;
+  if (step.start) {
+    reportClientDiag("live-guard",
+      "stall=" + Math.round(ms) + "ms glass=on → fps=" + liveGuardTargetFps() + " hold=" + (LIVE_GUARD_HOLD_MS / 1000) + "s");
+  }
+  applyLiveGuardFps(frame, step.until, now);
+}
+
+// 每拍调用：窗口未到期就续着，到期则恢复用户档位。
+function liveGuardTick(frame) {
+  if (liveGuardIsDisabled() || !liveGuardUntil) return;
+  const now = Date.now();
+  if (now < liveGuardUntil) { applyLiveGuardFps(frame, liveGuardUntil, now); return; }
+  liveGuardUntil = 0;
+  applyLiveGuardFps(frame, 0, now);
+}
+
+// longtask 补一条更早的信号：只靠 1s 心跳，短暂停顿要等下一拍才知道；能拿到
+// PerformanceObserver 时把 ≥1.2s 的任务也记上（拿不到就静默退化，不影响主路径）。
+function armLiveGuardLongTasks() {
+  if (liveGuardObserver || liveGuardIsDisabled() || typeof PerformanceObserver !== "function") return;
+  try {
+    liveGuardObserver = new PerformanceObserver((list) => {
+      for (const entry of list.getEntries()) {
+        if (entry && entry.duration >= LIVE_GUARD_LONG_TASK_MS) {
+          noteLiveStall(entry.duration, liveWatch && liveWatch.frame);
+        }
+      }
+    });
+    liveGuardObserver.observe({ entryTypes: ["longtask"] });
+  } catch {
+    try { if (liveGuardObserver) liveGuardObserver.disconnect(); } catch { /* ignore */ }
+    liveGuardObserver = null;
+  }
+}
+
+function disarmLiveGuard() {
+  if (liveGuardObserver) {
+    try { liveGuardObserver.disconnect(); } catch { /* ignore */ }
+    liveGuardObserver = null;
+  }
+  liveGuardUntil = 0;
+  liveGuardApplied = 0;
+}
+
 // 宿主窗口模式（页面 URL 的 dsh-desktop-mode 参数；兼容模式为缺省值）。
 function desktopWindowMode() {
   try {
@@ -300,12 +424,24 @@ function startLiveWatch(frame, wid) {
     firstFrame: false, stall: 0, resumed: false, heldPaused: 0, rearmed: false,
   };
   liveLog("watch-start", "wid=" + watch.wid + " 预算=" + watch.budget + "ms " + liveStateBrief());
+  armLiveGuardLongTasks();
+  watch.lastTick = Date.now();
+  // 切回标签页时 setInterval 可能被节流了几分钟：这一跳算「刚醒」而不是「卡死」，
+  // 否则回前台会白降 30s 帧率（回调执行时 document.hidden 已经是 false，拦不住）。
+  watch.onVisible = () => { if (!document.hidden) watch.lastTick = Date.now(); };
+  try { document.addEventListener("visibilitychange", watch.onVisible); } catch { watch.onVisible = null; }
   watch.timer = setInterval(() => {
     if (!frame.isConnected) { liveLog("watch-stop", "iframe 已从文档移除", "info", true); stopLiveWatch(); return; }
+    // 心跳迟到 = 主线程被占（#248）：这一拍本身就是「UI 受压」的证据。
+    const tickAt = Date.now();
+    const tickGap = tickAt - (watch.lastTick || tickAt);
+    watch.lastTick = tickAt;
+    if (tickGap >= LIVE_GUARD_TICK_MS) noteLiveStall(tickGap, frame);
     // 先读统计、后下发控制：虽然 applyLiveControls 已去重（只在变化时
     // resume/pause），保持这个顺序让读数不受任何控制调用的副作用影响。
     const stats = liveStats(frame);
     applyLiveControls(frame);
+    liveGuardTick(frame);
     const isWeb = selection.type === "web";
     const wstate = isWeb ? liveStateOf(frame) : null;
     const alive = liveHeartbeatAlive(frame, stats, wstate, isWeb);
@@ -466,7 +602,12 @@ function startLiveWatch(frame, wid) {
 function stopLiveWatch() {
   if (!liveWatch) return;
   try { clearInterval(liveWatch.timer); } catch { /* ignore */ }
+  try { if (liveWatch.onVisible) document.removeEventListener("visibilitychange", liveWatch.onVisible); } catch { /* ignore */ }
   stopUiFpsProbe();
+  // 被领养的帧可能带着上一轮的降帧值继续播（stop 只停心跳、iframe 保活）：
+  // 先按用户档位写回，再清状态；teardown 路径上写一次也无害。
+  applyLiveGuardFps(liveWatch.frame, 0, Date.now());
+  disarmLiveGuard();
   stopMediaSync(liveWatch.frame);
   stopOcclusionPolling(); // 看护停 ⇒ 轮询停（1Hz 心跳断了渲染器会自清遮挡，别留孤儿定时器）
   liveWatch = null;

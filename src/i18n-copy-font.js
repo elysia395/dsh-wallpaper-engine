@@ -37,7 +37,7 @@ const WE_I18N_EN_FONT = {
   "界面小字": "UI small text",
   "界面极小字": "UI extra-small text",
 
-  // ── src/fontset-editor.js ──
+  // ── packages/fonts/src/fontset-editor.js ──
   "恢复原样": "Restore original",
   "删除": "Delete",
   "下载这个字体集（可分享 / 可再导入）": "Download this font set (shareable / re-importable)",

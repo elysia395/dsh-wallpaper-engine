@@ -4,7 +4,7 @@
  * ══ 它是什么 ══════════════════════════════════════════════════════════════════
  * 一个**模块描述符**（形状 `{ id, title, desc?, render? }`，契约写在 src/panel-tabs.js 的
  * `extensionModules()` 上方）：panel-tabs 只负责把它排在「扩展」页签里，具体的控件与文案
- * 全在本文件。光效本体在 `src/fx-layer.js`（画布层），设置项的真源在
+ * 全在本文件。光效本体在 `packages/fx/src/fx-layer.js`（画布层），设置项的真源在
  * `lib/settings-schema.js` 的 14 个 `fx*` 键。
  *
  * 契约：

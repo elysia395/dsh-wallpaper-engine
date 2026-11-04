@@ -125,7 +125,7 @@ export function registerWeAssetsRoutes(webServer, c) {
         return;
       }
       if (method !== 'POST') { res.statusCode = 405; res.end('method not allowed'); return; }
-      // 收 body 的两条不变量（权威表述见 lib/routes/upload.js 文件头）：
+      // 收 body 的两条不变量（权威表述见 packages/media-bridge/lib/routes/upload.js 文件头）：
       //   ① **必须有上限** —— 逐块累加而不比较长度，异常大的请求会把宿主堆无界撑大；
       //   ② **必须一次性解码** —— 逐块 `body += chunk` 会把跨 TCP 分片的多字节码点切成 U+FFFD。
       // 这两件事的**唯一实现**在主包 `lib/http-body.js`（出户后经 `http.bodyReader` 取）。

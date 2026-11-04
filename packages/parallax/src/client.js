@@ -2,10 +2,10 @@
  * packages/parallax/src/client.js —— 「3D 效果」子包的**浏览器半边入口**（拆包草案，task-3）。
  *
  * 构建期形状与 packages/fx/src/client.js 完全同形（见那份文件头的长注释）：本文件 = 入口，
- * 构建期只取**首个块注释之后**的正文；包内 INLINE_MODULES（src/parallax-layer.js、
- * src/ext-parallax.js）被内联到正文之前，与正文同一个 factory 作用域 ⇒ 那两份里的裸名由本文件的
+ * 构建期只取**首个块注释之后**的正文；包内 INLINE_MODULES（packages/parallax/src/parallax-layer.js、
+ * packages/parallax/src/ext-parallax.js）被内联到正文之前，与正文同一个 factory 作用域 ⇒ 那两份里的裸名由本文件的
  * prelude + 构建期那一行 host 绑定共同提供，兄弟文件之间**不 import**（零改动迁移）。
- * 注：src/ext-parallax.js 的样式归主包 src/styles.js 管，所以本包只注入"行为层 + 描述符"两份。
+ * 注：packages/parallax/src/ext-parallax.js 的样式归主包 src/styles.js 管，所以本包只注入"行为层 + 描述符"两份。
  *
  * ⚠️ 本文件同样**不许**出现 require/import（test/verify-subpackage-purity.mjs 的产物面判据
  *    只放行客户端产物里的 require('dsh-plugin-wallpaper-engine')）⇒ 那行绑定由构建
@@ -16,7 +16,7 @@
  *   packages/parallax/src/parallax-layer.js : selection · weClampTo · weNow · weBody
  *   packages/parallax/src/ext-parallax.js   : weT · React · SliderRow · switchRow
  *   ⚠️ PARALLAX_PLUGIN_DEFAULT / PARALLAX_GROUP_DEPTH_MIN / PARALLAX_GROUP_DEPTH_MAX
- *   三枚由**同包** src/parallax-layer.js 声明 ⇒ 走包内内联，**不进**宿主键集（这是本包与 fx 包
+ *   三枚由**同包** packages/parallax/src/parallax-layer.js 声明 ⇒ 走包内内联，**不进**宿主键集（这是本包与 fx 包
  *   在接缝上唯一的差别）。
  */
 

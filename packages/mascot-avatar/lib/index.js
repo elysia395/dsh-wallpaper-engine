@@ -2,7 +2,7 @@
  * `mascot-avatar` 子包宿主入口（P-F 第二格：`lib/components/mascot-avatar/` → `packages/mascot-avatar/`）。
  *
  * 为什么这两族合成**一格**出户：它们是同一套形态的两条腿（POST 导入 raw body + MIME 白名单 /
- * GET·HEAD 查看 / DELETE 清除，见本包 `lib/routes/avatar.js` 与 `lib/routes/mascot.js` 的文件头），
+ * GET·HEAD 查看 / DELETE 清除，见本包 `./routes/avatar.js` 与 `packages/mascot-avatar/lib/routes/mascot.js` 的文件头），
  * 共用同一批内核服务层符号（目录 / 上限 / 原子落盘 / 请求收尾）与同一条用户资产语义。拆成两行
  * 只会让"头像两个 side + 立绘只有一张"这套不变量散在两处。
  *
@@ -120,7 +120,7 @@ export function applyImpl(root, _rawConfig, c) {
   // （`runComponent()` 只在 impl 正常返回时拿到它）⇒ 残留路由让下一次启用撞
   // `webserver: duplicate … route`。teardown 自己吞异常，原错照抛（装载失败必须仍然是红的）。
   try {
-    // 6f. 「系统」页签的自定义吉祥物立绘 → lib/routes/mascot.js。POST 导入（raw body + MIME 白名单）/
+    // 6f. 「系统」页签的自定义吉祥物立绘 → packages/mascot-avatar/lib/routes/mascot.js。POST 导入（raw body + MIME 白名单）/
     //     GET·HEAD 查看 / DELETE 清除，只认一张：导入前先清同族旧文件（"下一次导入覆盖上一次"）。
     registerMascotRoutes(webServer, {
       ...keys, disposers, base, serveFile, http: keys.http,
@@ -128,7 +128,7 @@ export function applyImpl(root, _rawConfig, c) {
       atomicWriteFileP, armBodyIdleTimeout, lingerClose,
     });
 
-    // 6e. 「扩展」页签第一个模块（自定义会话头像）的两张图 → lib/routes/avatar.js。一条 prefix 注册
+    // 6e. 「扩展」页签第一个模块（自定义会话头像）的两张图 → packages/mascot-avatar/lib/routes/avatar.js。一条 prefix 注册
     //     覆盖三个端点；图落在插件数据目录的 `avatars/` 下（不进 overrides，也不进 uploads）。
     registerAvatarRoutes(webServer, {
       ...keys, disposers, base, serveFile, http: keys.http,

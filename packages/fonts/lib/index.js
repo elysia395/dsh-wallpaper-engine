@@ -5,8 +5,8 @@
  *   · 搬进来的：字体系统的**两条宿主路由族** —— `fontsets`（字体集 /fontsets）与
  *     `system-fonts`（本机字体清单 /system-fonts），见 ./routes/*.js。
  *   · P-C之后**浏览器半边也随包走**：入口 `src/client.js` + 外观页签第六节
- *     「全局字体」渲染器 `src/appearance-font-section.js` + 字体集编辑器 `src/fontset-editor.js`，
- *     产物 `lib/client.fonts.js` ⇒ 本包**声明** `dsh.client` 且清单里有 `exports['./client']`
+ *     「全局字体」渲染器 `packages/fonts/src/appearance-font-section.js` + 字体集编辑器 `packages/fonts/src/fontset-editor.js`，
+ *     产物 `packages/fonts/lib/client.fonts.js` ⇒ 本包**声明** `dsh.client` 且清单里有 `exports['./client']`
  *     （ADR-0014 S3.4 的两向判据）。
  *   · **仍然不搬**：`src/fontset-store.js`、`src/system-fonts.js`、`src/font/apply.js`、
  *     `src/font/typography.js`、`src/font/color-roles.js`、`src/font/components.js`

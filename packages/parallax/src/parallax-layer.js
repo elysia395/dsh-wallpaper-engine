@@ -74,7 +74,7 @@
  *     （见 src/styles.js 的视差段）。
  *   · **各层各自的百分比**：壁纸走 `parallaxBg`；吉祥物跟着壁纸（`parallaxMascot` 可关）；界面四组
  *     与插件组见 ④ / ⑤（滑杆域 0..10% / 分度 0.1%；缺值兜底见 PARALLAX_GROUP_*）。
- *   · **点击与拖尾效果（`src/fx-layer.js` 那一层）刻意不参与**（用户口径第 3 条）：那层画的是"屏上的笔迹"，
+ *   · **点击与拖尾效果（`packages/fx/src/fx-layer.js` 那一层）刻意不参与**（用户口径第 3 条）：那层画的是"屏上的笔迹"，
  *     跟着挪会让落点与光效错位。
  *   · **自检开关**：`localStorage.weParallaxDebug = '1'` ⇒ 记每帧的回调耗时、写入次数与帧间隔，
  *     一次手势收工（或停用）时打一行 p50 / p95 / max + 长帧（≥ 8ms）计数，再附一份**界面组清点**
@@ -531,7 +531,7 @@ function parallaxPluginEffectiveGroups() {
  *  与屏上表现同源（同一个挑选）⇒ "会动的组一定有开关，有开关的组一定在动"。唯一的例外是
  *  **组里有 `position: fixed` 后代**那一条（`parallaxGroupBlocked`：那种组层的写法是整组不动，
  *  因为 `translate` 会让它变成那些后代的包含块）—— 那要遍历子树、只在帧外做，面板这边不筛，
- *  改成把这条写进每一行的 tooltip（`src/ext-parallax.js` 的插件槽位那一行）。
+ *  改成把这条写进每一行的 tooltip（`packages/parallax/src/ext-parallax.js` 的插件槽位那一行）。
  *  纯读 DOM、零副作用；没有 DOM 的环境返回空数组（面板那边退回一句说明）。 */
 function parallaxDiscoveredGroups() {
   const groups = parallaxPluginEffectiveGroups();
@@ -1293,7 +1293,7 @@ export {
   syncParallaxLayer,
   disposeParallaxLayer,
   parallaxDiscoveredGroups,
-  // 插件槽位那一档的缺省距离：面板（src/ext-parallax.js）画行时要显示"缺键时算多少"，
+  // 插件槽位那一档的缺省距离：面板（packages/parallax/src/ext-parallax.js）画行时要显示"缺键时算多少"，
   // 单一真源在这里 ⇒ 连这个数一起导出，面板直接读（不许自己再抄一个）。
   PARALLAX_PLUGIN_DEFAULT,
 };

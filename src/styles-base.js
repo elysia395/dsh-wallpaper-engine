@@ -210,7 +210,9 @@ const CSS_BASE = `
   /* 壁纸仅清宿主挂载点的外壳；不得按类名子串清任意插件子树。 */
   body[data-we-wallpaper][data-we-adapter="browser"],
   body[data-we-wallpaper][data-we-adapter="browser"] > #root > [class*="_frame"]:not([data-we-surface-preserve]),
-  body[data-we-wallpaper][data-we-adapter="browser"] > #root > [class*="_frame"]:not([data-we-surface-preserve]) > [class*="_root"]:not([data-we-surface-preserve]) {
+  body[data-we-wallpaper][data-we-adapter="browser"] > #root > [data-slot="root"] > [class*="_frame"]:not([data-we-surface-preserve]),
+  body[data-we-wallpaper][data-we-adapter="browser"] > #root > [class*="_frame"]:not([data-we-surface-preserve]) > [class*="_root"]:not([data-we-surface-preserve]),
+  body[data-we-wallpaper][data-we-adapter="browser"] > #root > [data-slot="root"] > [class*="_frame"]:not([data-we-surface-preserve]) > [class*="_root"]:not([data-we-surface-preserve]) {
     background: transparent !important;
   }
 
@@ -238,10 +240,14 @@ const CSS_BASE = `
      整片消失、音乐不受影响；重开玻璃行即恢复）。
      这里只清 desktop 形态的壳容器、不改 --dsw-specific-sidebar-fill token ——
      壁纸态下左栏 / 顶栏是透明洞（透出壁纸），文字 / 边框 / 其余原生样式仍按宿主主题；
-     玻璃行开启时叠加不变。 */
+     玻璃行开启时叠加不变。
+    宿主 0.30.1 在 #root 与 _frame 之间插入 [data-slot="root"]（display:contents）包装层，
+    _frame 不再是 #root 直系子节点 ⇒ 同时匹配直挂与经包装层两条路径。 */
   body[data-we-adapter^="desktop-"][data-we-wallpaper] > #root,
   body[data-we-adapter^="desktop-"][data-we-wallpaper] > #root > [class*="_frame"]:not([data-we-surface-preserve]),
-  body[data-we-adapter^="desktop-"][data-we-wallpaper] > #root > [class*="_frame"]:not([data-we-surface-preserve]) > [class*="_root"]:not([data-we-surface-preserve]) {
+  body[data-we-adapter^="desktop-"][data-we-wallpaper] > #root > [data-slot="root"] > [class*="_frame"]:not([data-we-surface-preserve]),
+  body[data-we-adapter^="desktop-"][data-we-wallpaper] > #root > [class*="_frame"]:not([data-we-surface-preserve]) > [class*="_root"]:not([data-we-surface-preserve]),
+  body[data-we-adapter^="desktop-"][data-we-wallpaper] > #root > [data-slot="root"] > [class*="_frame"]:not([data-we-surface-preserve]) > [class*="_root"]:not([data-we-surface-preserve]) {
     background: transparent !important;
   }
 

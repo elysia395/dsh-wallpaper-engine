@@ -23,7 +23,7 @@ const WE_I18N_EN_GLASS = {
   "各面独立配置、胶囊细调等进阶旋钮（默认收起）": "Advanced knobs: per-surface independent config, capsule fine-tuning, etc. (collapsed by default)",
   "展开后出现每个面自己的「独立配置」与细调行（胶囊雾化 / 胶囊颜色、侧栏族参数等）——调完立刻能看到实时效果；收起只留本节的简化配置": "Expanding reveals each surface’s own “independent config” and fine-tuning rows (capsule frost / capsule color, sidebar-family parameters, etc.) — you see the live result right away; collapsed keeps only this section’s simplified config",
   "玻璃面板（对话栏卡片、左侧栏、设置窗口、插件浮层）的模糊半径 —— 越大越像磨砂玻璃；色彩饱和度不随本滑块变化。侧栏有自己的「侧栏模糊」，不受本项影响": "Blur radius of the glass panels (conversation cards, left sidebar, settings window, plugin popovers) — higher looks more frosted; color saturation does not change with this slider. The sidebar has its own “sidebar blur” control and is not affected by this one.",
-  // ── 额外补雾化的选择器（上游 #200；控件在 packages/glass/packages/glass/src/glass-panel.js 外观·玻璃节）──
+  // ── 额外补雾化的选择器（上游 #200；控件在 packages/glass/src/glass-panel.js 外观·玻璃节）──
   "额外补雾化的选择器": "Extra frost targets",
   "给第三方插件自己的面板补上毛玻璃（它们自身没有模糊，全局「雾化」对它们无效）": "Give third-party plugin panels their own frost — they have no blur of their own, so the global Frost slider never reaches them",
   "写这些面板的 CSS 选择器，逗号或换行分隔，最多 8 条、每条最多 120 字；超长的单条或超出 8 条的整条丢弃（不是截断，存活下来的前 8 条全量生效）。目标需已有定位和非 auto 层级，且 ::before 空闲；无法安全接管时保留原生。留空 = 关。": "CSS selectors for those panels, separated by commas or newlines — up to 8 entries, each at most 120 characters; an over-long entry or anything beyond the 8th is dropped whole (never truncated, and everything that survives applies). Targets need existing positioning, a non-auto z-index and an unused ::before. Unsafe targets keep their native appearance. Empty = off.",
@@ -91,7 +91,7 @@ const WE_I18N_EN_GLASS = {
   "没读到本机字体清单": "No installed fonts were read",
   "宿主里没有本机字体路由：重启 DSH 后再试（改过宿主代码要重挂，刷新页面不够）": "The host has no installed-fonts route: restart DSH and try again (host-side changes need a remount; refreshing the page is not enough)",
 
-  // ── 玻璃预设（src/preset-store.js / packages/glass/packages/glass/src/glass-panel.js）────────────────────
+  // ── 玻璃预设（src/preset-store.js / packages/glass/src/glass-panel.js）────────────────────
   "宿主里没有玻璃预设路由：重启 DSH 后再试（改过宿主代码要重挂，刷新页面不够）": "No glass-preset routes in the host: restart DSH and try again (changed host code needs a remount — refreshing the page is not enough)",
   "这份出厂预设已被删除 —— 刷新清单后会从列表里消失": "This built-in preset was deleted — refresh the list and it will drop out of it",
   "这份预设不存在了 —— 可能已被删掉，刷新清单后再选一份": "This preset no longer exists — it may have been deleted; refresh the list and pick another",

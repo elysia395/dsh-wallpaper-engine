@@ -264,7 +264,7 @@ function functionBodyOf(src, header) {
  */
 function stripExportBlocks(text) {
   // ⚠️ `g` 是必需的：一个文本里可能有**多个**模块拼在一起（玻璃重构 R3b 起，
-  // `verify-glass-surfaces` 要把 `packages/glass/packages/glass/src/glass.js` + 主包 `src/effects.js` 拼成一个沙箱源码）。
+  // `verify-glass-surfaces` 要把 `packages/glass/src/glass.js` + 主包 `src/effects.js` 拼成一个沙箱源码）。
   // 少了 `g` 只剥第一个块，剩下的那个会退化成一个裸的 `{ a, b, };` ⇒ `new Function` 报
   // `Unexpected token '}'`（实测踩过，报错位置还落在拼接后的第 735 行，很难一眼看出根因）。
   return String(text).replace(/^\s*export\s*\{[\s\S]*?\};?\s*$/gm, '').replace(/^\s*export\s+/gm, '');
