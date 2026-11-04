@@ -139,6 +139,7 @@ export const OFF_CHAIN_WHY = {
   'verify-pet-link.mjs': '快捷汇总入口 npm run verify:pet-link；其离线用例已逐项接入默认 verify 链，不重复运行汇总器。',
   'verify-pet-hotplug-integration.mjs': '真实 Cordis 正式桥接生命周期入口；需要宿主 peer 模块，独立运行，不下载或修改官方 pet。',
   'verify-pet-sidebar-glass-browser-case.mjs': '用例模块由链上的 verify-glass-runtime-browser.mjs 导入并执行，使用其 CDP 会话，不是独立命令。',
+  'verify-composer-fixed-browser-case.mjs': '输入卡 fixed 浮层用例由链上的 verify-glass-runtime-browser.mjs 导入并执行，复用其 CDP 会话和构建产物，不是独立命令。',
   'verify-pet-tuner-browser.mjs': '真实面板几何和动效验收，需要独立 Edge；默认链保留无外部依赖的面板 DOM 回归。',
   'compat-harness-live.mjs': '真跑**活** harness 页面（需要宿主实际启动）：本地/CI 都按需手动跑，由 .github/workflows/harness-compat.yml 单独触发；verify 链要求零外部环境依赖。',
   'compat-harness-pages.mjs': '同族：活 harness 的页面面普查，断言依赖真实宿主实例，不进链。',

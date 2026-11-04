@@ -248,7 +248,11 @@ asar 里带着宿主自己的插件编写文档：`@deepseek-ai/dsh-agent-preset
   （同一类事故见 `docs/CHANGELOG.md` 的 #131；本插件给这一列画玻璃走的是 `::before`，
   见 `src/styles.js` 里那段注释）。
   ⇒ 要动左栏只能走**相对定位**（`position: relative` + `left` / `top`）：它**不**建立包含块，就不会换掉任何
-  fixed 后代的锚点。本插件「3D 效果」的界面跟随正是这么做的（`parallaxGroupOffsets()` 里左栏是唯一的相对偏移档）。
+  fixed 后代的锚点。本插件「3D 效果」的界面跟随正是这么做的（`parallaxGroupOffsets()`）。
+  **输入卡片也走同一条相对偏移路径**（#257）：它可能在视差已落位后才挂载 fixed 浮层，
+  或因子树超过扫描上限而跳过 fixed 后代检查。相对偏移不依赖扫描时机，保留输入卡的跟随距离，
+  同时避免浮层改锚后增加滚动溢出。`::before` 上的玻璃模糊保持不变。
+  浏览器判据见 `test/verify-composer-fixed-browser-case.mjs`（由玻璃运行时守卫调用，含旧分支负对照）。
 
 ### 3.6 想"自动认到别的插件注册的前端元素组"，只能扫 DOM，不能靠槽注册表（同一次核查的第三批补算）
 

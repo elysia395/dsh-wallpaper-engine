@@ -33,11 +33,13 @@
  *     ② 位移归零时**把 `translate` 摘掉**。只要它存在（哪怕 0px），这个元素就成了 `position:
  *     fixed` 后代的**包含块** —— 那是本仓 #89 的坑（卡片里挂着第三方插件的座位，包含块一换
  *     就跑到卡片角上）；组里真有 fixed 后代时整组不动，见 parallaxGroupBlocked()。
- *     **左栏是例外**：那一列里长着宿主自己的 fixed 标题栏按钮（Windows 标题栏模式下的
+ *     **左栏与输入卡片是例外**：左栏里长着宿主自己的 fixed 标题栏按钮（Windows 标题栏模式下的
  *     「收起 / 展开侧边栏」钉在标题栏左上角，见 docs/DSH-UI-INTERFACES.md），加 `translate`
  *     会把按钮整体推下去一个标题栏高度（用户口径 m01915-③，与本仓 #131 同一类事故）⇒
- *     左栏改用 `position: relative` + `left`/`top`：相对定位**不是** fixed 后代的包含块，
- *     按钮照旧钉在视口上（见 parallaxTargetOffset()）。代价是那一列每帧多一次布局；
+ *     两者改用 `position: relative` + `left`/`top`：相对定位**不是** fixed 后代的包含块，
+ *     按钮照旧钉在视口上（见 parallaxTargetOffset()）。输入卡片也会动态挂载 fixed 浮层：
+ *     扫描之后才挂载或子树超过扫描上限时，检查后代不能保证安全（#257）。复用相对偏移，
+ *     不靠重扫时机保护其锚点；代价是这两组每帧多一次布局；
  *     ③ **槽出口自己没有盒子，位移要落到有盒子的那一层上**：宿主给每个槽出口写死
  *     `display: contents`（asar 里的 `ANCHOR_STYLE`，见 docs/DSH-UI-INTERFACES.md），`translate`
  *     写在出口身上屏上一点都不会动（"只有输入框在动"就是这个缘故）⇒ 见 parallaxGroupBox()：
@@ -85,8 +87,8 @@
  *   需要的外界：`selection`（设置 store，只读）、`document.body`（写 1 个"壁纸补边系数"与一个
  *   开关属性）、还有**那几层元素自己**（`.we-layer` / `.we-rope`：写 `translate` 与
  *   临时的合成层提示）+ **接口那几个容器**（输入卡片 / 会话文本区 / 左栏 / 用户气泡行；槽出口
- *   没盒子 ⇒ 位移落回有盒子的那一层：只写位移属性，绝不加类、不加 `will-change`；左栏写的是
- *   `position: relative` + `left`/`top`，其余三组写 `translate`）。
+ *   没盒子 ⇒ 位移落回有盒子的那一层：只写位移属性，绝不加类、不加 `will-change`；左栏与输入卡写的是
+ *   `position: relative` + `left`/`top`，其余两组写 `translate`）。
  *   对外提供：`syncParallaxLayer()`（设置变了就调一次）、`disposeParallaxLayer()`（卸载清理）、
  *   `parallaxDiscoveredGroups()`（**只读**：当前认到的"别的插件前端元素组"的槽键，面板画行用）。
  *   设置项（`parallax*`，真源 lib/settings-schema.js）：总开关 / 背景距离 /
@@ -189,7 +191,7 @@ const PARALLAX_PLUGIN_DEFAULT = 1;
  *  （它们是图像层，本来就量化反而一顿一顿的）。 */
 const PARALLAX_GROUP_DEAD_PX = 0.25;
 const PARALLAX_GROUP_STICK_PX = 0.75;
-/** 左栏走的那对偏移属性 + 它需要的定位前缀（相对定位**不是** fixed 后代的包含块，
+/** 左栏与输入卡走的那对偏移属性 + 它们需要的定位前缀（相对定位**不是** fixed 后代的包含块，
  *  所以宿主的标题栏按钮不会被改锚；见文件头 ② 与 parallaxTargetOffset()）。 */
 const PARALLAX_OFFSET_LEFT = 'left';
 const PARALLAX_OFFSET_TOP = 'top';
@@ -204,7 +206,7 @@ const PARALLAX_GROUP_BUBBLE_MAX = 24;
 const PARALLAX_UI_SIGN = 1;
 /** 每个界面组最多扫这么多节点去找 `position: fixed` 后代：超过就认作"没验完"（照动）。
  *  一个几千节点的会话流上每 250ms 全量 getComputedStyle 是不行的。
- *  ⚠️ 左栏不走这道判定（它写的是相对偏移、不是 transform，见文件头 ②）—— 这一条正是
+ *  ⚠️ 左栏与输入卡不走这道判定（它们写的是相对偏移、不是 transform，见文件头 ②）—— 这一条正是
  *  m01915-③ 的来路：侧栏展开时子树超过这个上限 ⇒ 判定放行 ⇒ `translate` 落上那一列 ⇒
  *  宿主的 fixed 标题栏按钮被改锚、整块下移。 */
 const PARALLAX_GROUP_SCAN_MAX = 400;
@@ -598,7 +600,7 @@ function parallaxSnapAxis(v, prev) {
   return sign * next;
 }
 
-/** 左栏那一列要不要本层替它补一个 `position: relative`：计算值本来就是定位元素（插件自己的液态
+/** 相对偏移组要不要本层替它补一个 `position: relative`：计算值本来就是定位元素（插件自己的液态
  *  玻璃那一段已经给这一列写过 `position: relative`）时什么都不用补；是 `static` 时相对偏移不
  *  生效，得补一个。**只在重扫路径上读**（帧里绝不碰 getComputedStyle）；读不到就当作要补。 */
 function parallaxGroupNeedsRelative(el) {
@@ -609,7 +611,7 @@ function parallaxGroupNeedsRelative(el) {
   return cs.position === 'static' || !cs.position;
 }
 
-/** 左栏的位移落点（其余三组走 `translate`）：需要时补 `position: relative` + `left`/`top` ——
+/** 左栏与输入卡的位移落点（其余两组走 `translate`）：需要时补 `position: relative` + `left`/`top` ——
  *  相对定位**不建立** fixed 后代的包含块，所以宿主钉在标题栏上的按钮不会被改锚（文件头 ②）。
  *  属性不摘：`position` 在"动 ↔ 不动"之间反复摘挂等于把列里绝对定位后代的锚点来回换，
  *  而它本身在屏上没有任何痕迹（值与插件玻璃那一段写下的逐字相同）。 */
@@ -663,10 +665,9 @@ function parallaxGroupNodes(el) {
  * parallaxGroupNodes 的缓存（超限的组合在 1s 内**连数都不数**）；要验的那些组直接
  * 拿它数出来的那张表来遍历，不再为 `length` 白枚举第二遍。
  * ⚠️ 超限放行的代价不只是"白跑"：这一组里若嵌着 `position: fixed` 后代，也会跟着**照旧被改锚**
- * （也就是下面那个 return true 根本没机会跑到）。可接受的理由：会话文本区一棵子树本来就常超 400，
- * 而"输入卡片 / 侧栏"这类真会带固定定位后代的盒子都很小 ⇒ 实际触发面窄。
- * ⚠️ 左栏不由这条判定管：它写的是相对偏移、不是 transform，本来就不建立包含块
- * （调用方 parallaxTargetAdd 对 `sidebar` 直接按"没被挡下"算）。
+ * （也就是下面那个 return true 根本没机会跑到）。此限制仍适用于会话文本区、气泡和插件组。
+ * ⚠️ 左栏与输入卡不由这条判定管：它们写的是相对偏移、不是 transform，本来就不建立包含块
+ * （调用方 parallaxTargetAdd 对 `sidebar` / `composer` 直接按"没被挡下"算）。
  * 取不到 `getComputedStyle`（无头 / 测试挂载台）时按"没有"算。
  */
 function parallaxGroupBlocked(el) {
@@ -727,21 +728,21 @@ function parallaxTargetClear(rec) {
   rec.dy = 0;
 }
 
-/** 这一档界面组是不是走"相对偏移"那条腿（只有左栏）：它不建立 fixed 后代的包含块，
+/** 这一档界面组是不是走"相对偏移"那条腿（左栏与输入卡）：它不建立 fixed 后代的包含块，
  *  所以"组里有 fixed 后代就整组不动"那条判定对它不适用 —— 真按那条判，展开的侧栏子树
  *  超过扫描上限就会被放行，位移落上那一列，宿主的标题栏按钮整体下移（m01915-③）。 */
 function parallaxGroupOffsets(kind) {
-  return kind === 'sidebar';
+  return kind === 'sidebar' || kind === 'composer';
 }
 
-/** 这条记录是不是走"相对偏移"那条腿（左栏）：只有它不写 `translate`。 */
+/** 这条记录是不是走"相对偏移"那条腿（左栏与输入卡）：这两组不写 `translate`。 */
 function parallaxTargetIsOffset(rec) {
   return !!(rec && rec.group === true && parallaxGroupOffsets(rec.kind));
 }
 
 /** 把位移从元素上收掉（界面组归零时走这条）。界面组静止时**一点 `translate` 都不能留**：
  *  属性在、值哪怕是 `0px 0px`，包含块也照样成立（见文件头 ②）。
- *  左栏那条腿收的是 `left`/`top`（`position` 留着，摘了等于把那列里绝对定位后代的锚点换回去）。
+ *  相对偏移组收的是 `left`/`top`（`position` 留着，摘了等于把那列里绝对定位后代的锚点换回去）。
  *  `key` 为空表示这个元素身上本来就没有本层写的位移 ⇒ 一次样式写入都不做（光标停住之后这里
  *  彻底安静）。 */
 function parallaxTargetUnset(rec) {
@@ -775,7 +776,7 @@ function parallaxTargetsClear() {
  * `parallaxGroupBox()` 找到的那一层，属性都在出口身上 —— 到这儿就认不出来了。
  * 界面组的"有没有 fixed 后代"这一项**只在帧外算**；帧里新冒出来的组先认作 blocked
  * （宁可不跟手，也别让一个还没验过的组去当别人的包含块），下一次帧外重扫再放行。
- * 左栏（`sidebar`）走相对偏移、不是 transform ⇒ 那道判定对它一律按"没被挡下"算，
+ * 左栏与输入卡（`sidebar` / `composer`）走相对偏移、不是 transform ⇒ 那道判定对它一律按"没被挡下"算，
  * 改成问"要不要补一个 `position: relative`"（见 parallaxGroupOffsets / 文件头 ②）。
  * 插件组额外带 `slot`（槽键）：只用来查 `parallaxPluginDepths` 那张距离表（见 parallaxTargetRatio）。
  */
@@ -792,7 +793,9 @@ function parallaxTargetAdd(next, prev, el, group, inFrame, kind, slot) {
     if (group && !inFrame) {
       if (parallaxGroupOffsets(rec.kind)) {
         rec.blocked = false;
-        rec.rel = parallaxGroupNeedsRelative(el);
+        // rel 也记录本层补写 position 的所有权；重扫读到自己的 relative 不能把它清掉，
+        // 否则停用时 position 会残留。宿主原有 relative 的记录仍保持 false。
+        rec.rel = rec.rel === true || parallaxGroupNeedsRelative(el);
       } else {
         rec.blocked = parallaxGroupBlocked(el);
       }
@@ -933,7 +936,7 @@ function parallaxRatioClear() {
  * 把这一帧的位移写下去（每帧一次，**只写要动的那几层自己**）：两位小数够用 —— 再细也看不出来，
  * 而"值没变就不写"这一条让静止的那些帧一次样式写入都没有。
  * 界面组走另一条腿：量化到整设备像素（带迟滞，见 parallaxSnapAxis）、归零就摘属性、
- * 组里有 fixed 后代时不动它；左栏那一条走 `position: relative` + `left`/`top`（见文件头 ②）。
+ * 组里有 fixed 后代时不动它；左栏与输入卡走 `position: relative` + `left`/`top`（见文件头 ②）。
  * 返回写了几次；顺带记下"有节点掉出文档"（壁纸换节点），由调用方决定何时重扫。
  */
 function parallaxApply(st) {
@@ -1029,17 +1032,17 @@ function parallaxDebugFrame(t0, now, writes) {
 }
 
 /** 清点当前认到的界面组（自检用）：四档 + 插件组各几个、几个被 fixed 后代挡下、几个走相对偏移
- *  （左栏）。纯读数，不碰 DOM —— 记录本来就在手边（自检那条路上一帧都不该多花）。 */
+ *  （左栏与输入卡）。纯读数，不碰 DOM —— 记录本来就在手边（自检那条路上一帧都不该多花）。 */
 function parallaxGroupCounts() {
   const counts = { chat: 0, composer: 0, sidebar: 0, bubble: 0, plugin: 0, offset: 0, blocked: 0 };
   for (let i = 0; i < parallaxTargets.length; i += 1) {
     const rec = parallaxTargets[i];
     if (!rec.group) continue;
     if (rec.blocked === true) counts.blocked += 1;
+    if (parallaxTargetIsOffset(rec)) counts.offset += 1;
     if (rec.kind === 'composer') counts.composer += 1;
     else if (rec.kind === 'sidebar') {
       counts.sidebar += 1;
-      if (parallaxTargetIsOffset(rec)) counts.offset += 1;
     } else if (rec.kind === 'bubble') counts.bubble += 1;
     else if (rec.kind === 'plugin') counts.plugin += 1;
     else counts.chat += 1;
@@ -1085,7 +1088,7 @@ function parallaxDebugReport(groupCounts) {
         + ' · 界面组 会话/输入/侧栏/气泡 ' + g.chat + '/' + g.composer + '/' + g.sidebar
         + '/' + g.bubble + ' · 插件前端 ' + g.plugin
         + ' · 被 fixed 挡下 ' + g.blocked
-        + ' · 侧栏走相对偏移 ' + g.offset);
+        + ' · 侧栏/输入卡走相对偏移 ' + g.offset);
     }
   } catch (e) { /* 没有控制台 */ }
 }

@@ -7,6 +7,7 @@ import { cssBodyOf } from './tools/src-scope.mjs';
 import { readabilityFloors } from './tools/readability-floors.mjs';
 import { createHash } from 'node:crypto';
 import { verifyPetSidebarGlassBrowser } from './verify-pet-sidebar-glass-browser-case.mjs';
+import { verifyComposerFixedBrowser } from './verify-composer-fixed-browser-case.mjs';
 
 const bundle = readFileSync(resolve('lib/client.js'), 'utf8');
 // ADR-0016 第三刀：玻璃运行时（glass-surfaces / glass-extra）随玻璃包出产物 ⇒
@@ -635,6 +636,7 @@ try {
     check(tag+' 第二阶段卸载清理',await evaluate('document.querySelectorAll("[data-we-surface-runtime],[data-we-layout-runtime],[data-we-modal-blocked]").length===0'));
   }
   await verifyPetSidebarGlassBrowser({ send, evaluate, until, check, screenshot, css, runtime, bundle });
+  const composerFixed = await verifyComposerFixedBrowser({ send, evaluate, until, check, screenshot, css, bundle });
   // computed/身份证据：bundle 与内联模块字节的 sha256 —— 截图与 computed 矩阵对应
   // 的就是这批字节（同一进程内读出，不与盘上其他时点混淆）。
   const sha = (text) => createHash('sha256').update(text).digest('hex');
@@ -644,6 +646,7 @@ try {
     runtimeModuleSha256: sha(runtime),
     extraModuleSha256: sha(extra),
     cssSha256: sha(css),
+    composerFixed,
     report, failures,
   }, null, 2));
   assert.equal(failures.length, 0, failures.join('\n'));
