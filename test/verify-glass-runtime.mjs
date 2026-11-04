@@ -76,4 +76,64 @@ assert.equal(clipContract(geometry(unusedTolerance)), false, '负对照：只声
 const excessiveTolerance = geometryBody.replace('const CLIP_EPSILON = 0.5;', 'const CLIP_EPSILON = 3;');
 assert.equal(clipContract(geometry(excessiveTolerance)), false, '负对照：真实裁剪被放行必须被拒绝');
 
-console.log('PASS | 真实构建无侧栏祖先围栏，解析器遵守策略、保留、可见性与安全回退');
+// ── 行状态机（#312 评审①②）：让路态不误判、非 404 不累计 ─────────────────────
+// 行为级验证：从真实源码抽出哨兵 / 探测两段，喂 fake document / fetch / timers。
+// 只钉语义，不复制实现 —— 函数改名或搬文件时这里应当一起红，逼人回来重读契约。
+const glassSource = readFileSync(resolve(root, 'packages/glass/src/client.js'), 'utf8');
+const sentinelBody = braceBody(glassSource, 'glassRowSceneIntact');
+assert.ok(sentinelBody, '必须读取真实哨兵函数');
+const makeSentinel = new Function('document', 'skinYieldActive',
+  'return function(){' + sentinelBody + '}');
+const glassAttrs = ['data-we-glass-page', 'data-we-glass-chat', 'data-we-glass-window', 'data-we-glass-floaters'];
+function fakeDoc(attrs, sheet) {
+  return {
+    body: { hasAttribute: (a) => attrs.includes(a) },
+    querySelector: (sel) => (sheet && sel.includes('dsh-wallpaper-engine/glass') ? {} : null),
+  };
+}
+assert.equal(makeSentinel(fakeDoc(glassAttrs, true), () => false)(), true, '健康现场判完好');
+assert.equal(makeSentinel(fakeDoc(['data-we-glass-page'], true), () => false)(), false, '缺门控必须判残缺');
+assert.equal(makeSentinel(fakeDoc([], false), () => false)(), false, '缺样式表必须判残缺');
+assert.equal(makeSentinel(fakeDoc([], false), () => true)(), true,
+  '#312①：让路态是主动摘门控，不得判残缺（否则 3s 调和与皮肤互相拆台）');
+
+const probeBody = braceBody(glassSource, 'probeGlassRowState');
+assert.ok(probeBody, '必须读取真实探测函数');
+function probeHarness(responses) {
+  const applied = [];
+  const doc = { visibilityState: 'visible', querySelector: () => null };
+  const fetchImpl = async () => {
+    const spec = responses.shift();
+    if (spec === 'throw') throw new Error('network');
+    return { status: spec, json: async () => ({ enabled: true }) };
+  };
+  const factory = new Function('document', 'fetch', 'AbortSignal', 'apiUrl', 'applyGlassRowState',
+    'pruneGlassSurfaces', 'syncGlassSurfaces', 'nudgePendingRightPanel', 'selection',
+    'let glassRowProbeBusy = false, glassRowDisabled = false, glassRowMisses = 0;'
+    + 'async function probeGlassRowState(){' + probeBody + '}'
+    + 'return { probe: probeGlassRowState, misses: () => glassRowMisses };');
+  const h = factory(doc, fetchImpl, { timeout: () => ({}) }, (p) => p,
+    (d) => { if (d) applied.push(d); }, () => {}, () => {}, () => {}, {});
+  return { h, applied };
+}
+{
+  const { h, applied } = probeHarness([404, 500, 404, 404]);
+  await h.probe(); assert.equal(h.misses(), 1);
+  await h.probe(); assert.equal(h.misses(), 0, '#312②：5xx 必须打断连续 404');
+  await h.probe(); assert.equal(h.misses(), 1);
+  assert.deepEqual(applied, [], '#312②：404→5xx→404 不得判停用');
+  await h.probe(); assert.equal(h.misses(), 2);
+  assert.deepEqual(applied, [true], '连续两轮 404 才判停用');
+}
+{
+  const { h, applied } = probeHarness([404, 'throw', 404]);
+  await h.probe(); await h.probe(); await h.probe();
+  assert.equal(h.misses(), 1); assert.deepEqual(applied, [], '网络错误同样打断连续 404');
+}
+{
+  const { h, applied } = probeHarness([404, 200, 404]);
+  await h.probe(); await h.probe(); await h.probe();
+  assert.equal(h.misses(), 1); assert.deepEqual(applied, [], '200 重置连续计数');
+}
+
+console.log('PASS | 真实构建无侧栏祖先围栏，解析器遵守策略、保留、可见性与安全回退；行状态机让路态与连续 404 语义成立');
