@@ -13,7 +13,7 @@
 > `lib/…`、`src/…`、`test/…` 这类**代码路径**先被遮掉 ⇒ 也不会被 `lib/media/mp4-probe.js`
 > 这类源文件路径误算（提及 ≠ 有断言；零提及 = 没有守卫安全网）。
 
-共 **48** 条路由。
+共 **51** 条路由。
 
 | # | 路径 | 来源 | 形态 | 依赖（闭包状态 / `c` 字段） | 守卫提及 |
 |---|---|---|---|---|---|
@@ -63,10 +63,13 @@
 | 44 | `/remove` | packages/media-bridge/lib/routes/upload.js:223 | 箭头 | disposers base CONTROL_JSON_MAX_BYTES ensureUploadDir removeUploadMeta resolveUploadFile …(+2) | 1 |
 | 45 | `/upload-dir` | packages/media-bridge/lib/routes/upload.js:280 | 箭头 | disposers base CONTROL_JSON_MAX_BYTES setUploadDir normalizeUserDir armBodyIdleTimeout …(+1) | 3 |
 | 46 | `/occlusion` | packages/media-bridge/lib/routes/occlusion.js:52 | async 箭头 | disposers base hub http | 4 |
-| 47 | `/pet-link/official` | packages/pet-link/lib/routes/official-pet.js:49 | async 箭头 | disposers http | 5 |
-| 48 | `/pet-link/official/assets/` | packages/pet-link/lib/routes/official-pet.js:83 | 箭头 | disposers http | **0** |
+| 47 | `/pet-link/official` | packages/pet-link/lib/routes/official-pet.js:49 | async 箭头 | disposers http | 6 |
+| 48 | `/pet-link/official/assets/` | packages/pet-link/lib/routes/official-pet.js:92 | 箭头 | disposers http | 2 |
+| 49 | `/pet-link/official/guide-step` | packages/pet-link/lib/routes/official-pet.js:133 | 箭头 | disposers http | 2 |
+| 50 | `/pet-link/official/meme` | packages/pet-link/lib/routes/official-pet.js:159 | 箭头 | disposers http | 2 |
+| 51 | `/pet-link/pet/state` | packages/pet-link/lib/routes/pet-install.js:52 | 箭头 | disposers | 4 |
 
-**零提及（暂无守卫覆盖，建议补）**：`/glass-row-state`、`/pet-link/official/assets/`
+**零提及（暂无守卫覆盖，建议补）**：`/glass-row-state`
 
 **被最多路由引用的闭包状态（context 字段优先级，仅 `lib/index.js` 内的路由）**：
 
@@ -101,5 +104,6 @@
 | `packages/media-bridge/lib/routes/slides.js` | `registerSlidesRoutes(webServer, c)` | 1 | `disposers` `base` `mediaMap` `tokenFor` `listImages` `http` | — |
 | `packages/media-bridge/lib/routes/upload.js` | `registerUploadRoutes(webServer, c)` | 3 | `disposers` `base` `tokenFor` `UPLOAD_EXT` `UPLOAD_MAX_BYTES` `CONTROL_JSON_MAX_BYTES` `ensureUploadDir` `readUploadMeta` `metaEntry` `setUploadMeta` `removeUploadMeta` `resolveUploadFile` `setUploadDir` `normalizeUserDir` `armBodyIdleTimeout` `lingerClose` `http` | — |
 | `packages/media-bridge/lib/routes/we-assets.js` | `registerWeAssetsRoutes(webServer, c)` | 2 | `disposers` `base` `serveFile` `CONTROL_JSON_MAX_BYTES` `normalizeUserDir` `setWeAssetsDir` `listWeAssetNames` `weAssetsAvailable` `WE_ASSETS_SOURCE_ID` `getWeAssetsDir` `http` | — |
-| `packages/pet-link/lib/routes/official-pet.js` | `registerOfficialPetRoutes(webServer, c)` | 2 | `disposers` `base` `http` | — |
+| `packages/pet-link/lib/routes/official-pet.js` | `registerOfficialPetRoutes(webServer, c)` | 4 | `disposers` `base` `http` | — |
+| `packages/pet-link/lib/routes/pet-install.js` | `registerPetInstallRoutes(webServer, c)` | 1 | `disposers` `base` `http` | — |
 

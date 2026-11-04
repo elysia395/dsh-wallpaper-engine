@@ -1,0 +1,549 @@
+/**
+ * 桌宠联动 · 设置页「扩展模块」卡片（M7）。
+ *
+ * 由 pet-link 浏览器半注册进主包注册表（`weRegisterExtensionModule`，order:0 → 排在
+ * avatar=1 / fx=2 / parallax=3 之前），主包**枚举逻辑零改动**。
+ *
+ * 分工（守住 extension-registry 契约）：
+ *  - `petLinkCardView(snapshot, card, translate)` 是**纯视图**：只知道「当前快照 + 具名处理器」，
+ *    返回一个可序列化的描述树（tag/attrs/children/on）。它**不发请求、不写设置、不持状态**，
+ *    也不碰主包 store；事件回调只是转调 `card.*` 这些具名处理器。
+ *  - `createPetLinkExtensionCard(deps)` 是**具名处理器**：`refresh / install / toggleEnabled /
+ *    openPanel / testOnce` 全部走宿主半 HTTP 路由（/pet-link/pet/state；install 系列已随下载器移除）
+ *    或已注册的 panel/petLink 服务；不写主包设置、不发通知、不碰主包 store。
+ *
+ * 状态（安装态 / 版本 / 运行中 / 官方共存 / 安装进度 / 失败块）由控制器（本模块单例的 `state`）
+ * 持有，卡片只是它的只读快照的渲染；这既让「五种态」可复现，也把副作用挡在视图之外。
+ *
+ * 视觉分层（自上而下，间距由样式表统一，见 src/styles-ext.js 的 we-pet-link 段）：
+ *   标题行（联动 + 开关）→ 状态行 → 联动模式 → 共存提示 → **卡片内进度条** → **失败块**
+ *   → 主按钮 → 次按钮组（面板 / 测试）→ 分步进度 → 折叠诊断。
+ *
+ * 进度条（下载进度可视化）：POST /install 在途期间，控制器轮询只读端点
+ * done 后进度条**不渲染**（不留空行）；error 时改渲染失败块（包名 / 已尝试的源 / 官方地址）。
+ */
+
+/** 从 installer.state() 的形状合并进控制器状态（容错：字段缺失不抛）。 */
+function petLinkCardApplyState(state, data) {
+  if (!data || typeof data !== 'object') return;
+  if (data.installed !== undefined) state.installed = data.installed === true;
+  if (typeof data.version === 'string') state.version = data.version;
+  if (typeof data.path === 'string') state.path = data.path;
+  if (data.running !== undefined) state.running = data.running === true;
+  if (data.officialPet !== undefined) state.officialPet = data.officialPet === true;
+  if (data.conflict !== undefined) state.conflict = data.conflict === true;
+  state.checking = false;
+}
+
+/** 从 petLink 服务读联动模式与降级原因。 */
+function petLinkCardReadMode(state, petLink) {
+  try { state.mode = petLink.mode ? petLink.mode() : 'native'; } catch { state.mode = 'native'; }
+  try { state.reason = petLink.reason ? petLink.reason() : ''; } catch { state.reason = ''; }
+}
+
+/** 失败兜底常量：与宿主侧 installer 的 RUNTIME_NAME / OFFICIAL_PACKAGE_URL 同源（t1）。 */
+const PET_LINK_CARD_PACKAGE = 'dshpet-dshwe';
+const PET_LINK_CARD_OFFICIAL_URL = 'https://www.npmjs.com/package/dshpet-dshwe';
+/** 联动包仓库（上游 dsh-pet 的下游改编版，独立维护、不跟随上游发布节奏）。 */
+const PET_LINK_CARD_REPO_URL = 'https://github.com/Fish-under-sea/dshpet-dshwe';
+
+/**
+ * 图文安装引导的内容行（纯函数，组件与回退路径共用）。
+ * @param t - 词表
+ * @param card - 具名处理器（用 guideImageUrl / copyPackage）
+ * @param copied - 是否刚复制过（决定按钮文案）
+ * @returns {Array} 描述树子节点
+ */
+function petLinkGuideRows(t, card, copied) {
+  const rows = [];
+  const steps = [
+    t('① 左侧栏点「插件」'),
+    t('② 右上角点「+ 添加插件」'),
+    t('③ 输入包名后点「安装」'),
+  ];
+  rows.push({ tag: 'div', attrs: { className: 'we-pet-link__guide-title' }, children: [t('三步装好联动桌宠')] });
+  for (let i = 0; i < steps.length; i += 1) {
+    const src = card && typeof card.guideImageUrl === 'function' ? card.guideImageUrl(i + 1) : '';
+    rows.push({
+      tag: 'div',
+      attrs: { className: 'we-pet-link__guide-step' },
+      children: [
+        { tag: 'div', attrs: { className: 'we-pet-link__guide-caption' }, children: [steps[i]] },
+        src
+          ? { tag: 'img', attrs: { className: 'we-pet-link__guide-shot', src, alt: steps[i], loading: 'lazy' } }
+          : {
+              tag: 'div',
+              attrs: { className: 'we-pet-link__guide-shot we-pet-link__guide-shot--pending', 'data-pet-link': 'guide-pending' },
+              children: [t('截图加载中…')],
+            },
+      ],
+    });
+  }
+  rows.push({
+    tag: 'div',
+    attrs: { className: 'we-pet-link__guide-pkg' },
+    children: [
+      { tag: 'code', attrs: { className: 'we-pet-link__guide-code' }, children: [PET_LINK_CARD_PACKAGE] },
+      {
+        tag: 'button',
+        attrs: { type: 'button', className: 'we-pet-link__guide-copy', 'data-pet-link': 'copy-package', 'aria-label': t('复制包名') },
+        children: [copied ? t('已复制') : t('复制包名')],
+        on: { onClick: () => card.copyPackage() },
+      },
+    ],
+  });
+  rows.push({
+    tag: 'div',
+    attrs: { className: 'we-pet-link__guide-tip' },
+    children: [t('安装时请复制上面的包名粘贴进去；也可在 npm 页面手动下载。')],
+  });
+  rows.push({
+    tag: 'a',
+    attrs: { className: 'we-pet-link__guide-link', href: PET_LINK_CARD_OFFICIAL_URL, target: '_blank', rel: 'noopener noreferrer' },
+    children: [PET_LINK_CARD_OFFICIAL_URL],
+  });
+  // 口径说明（2026-11-02）：联动包是"基于上游快照的改编版"，不跟随上游发布节奏。这条信息
+  // 回答的是「我装的是什么」，所以放在**安装引导里**而不是「启用桌宠联动」开关行下方 ——
+  // 开关行要与宿主设置行保持同款单行，且常驻小字会被误读成"开关本身有风险"。
+  rows.push({
+    tag: 'div',
+    attrs: { className: 'we-pet-link__guide-note', 'data-pet-link': 'adapted-note' },
+    children: [t('关于 dshpet-dshwe：它基于上游 dsh-pet 的一次快照改编，由社区单独维护，不承诺跟随上游更新。本插件按 link 协议版本适配；该包过旧或未同步时会回落为原生吉祥物，升级 dshpet-dshwe 即可恢复。')],
+  });
+  rows.push({
+    tag: 'a',
+    attrs: { className: 'we-pet-link__guide-link', href: PET_LINK_CARD_REPO_URL, target: '_blank', rel: 'noopener noreferrer' },
+    children: [PET_LINK_CARD_REPO_URL],
+  });
+  return rows;
+}
+
+/**
+ * 造一张卡片描述树（纯视图）。
+ * @param {object} snapshot - 控制器状态快照。
+ * @param {object} card - 具名处理器集合。
+ * @param {Function} translate - 词表。
+ * @returns {{tag:string, attrs:object, children:Array}} 描述树。
+ */
+function petLinkCardView(snapshot, card, translate = value => value) {
+  const t = translate;
+  const s = snapshot || {};
+  const children = [];
+
+  // 标题行：与宿主设置行**完全同款** —— 行容器 .we-picker__ctl（两端对齐、gap 12px、32px 行高）、
+  // 标签 .we-picker__ctl-label（0.88em、常规字重）、右端胶囊开关 .we-picker__switch。
+  //
+  // ⚠️ 为什么这里优先用 **React 组件**：宿主的 `render(ctx)` 是一次性内联调用、**不订阅**本卡片的
+  // notify()；纯快照驱动的复选框改了 state 也要等宿主因别的原因重画（切页签再切回来）才可见，
+  // 实测现象就是"按下去没反应"。开关行自带 useState + useEffect 订阅，点下去立刻重画自己；
+  // 无 React 的测试环境走下面的静态回退（判据仍按 data-pet-link 取节点）。
+  const ToggleRowComp = card && typeof card.toggleRow === 'function' ? card.toggleRow : null;
+  if (typeof ToggleRowComp === 'function') {
+    children.push({ tag: ToggleRowComp, attrs: {}, children: [] });
+  } else {
+    const switchInput = {
+      tag: 'input',
+      attrs: { type: 'checkbox', role: 'switch', 'aria-label': t('启用桌宠联动'), 'data-pet-link': 'switch', checked: s.linkEnabled !== false },
+      children: [],
+      on: { onChange: event => card.toggleEnabled(Boolean(event && event.target && event.target.checked)) },
+    };
+    children.push({
+      tag: 'div',
+      attrs: { className: 'we-picker__ctl' },
+      children: [
+        { tag: 'span', attrs: { className: 'we-picker__ctl-label' }, children: [t('启用桌宠联动')] },
+        {
+          tag: 'label',
+          attrs: { className: 'we-picker__switch' },
+          children: [
+            switchInput,
+            { tag: 'span', attrs: { className: 'we-picker__switch-track' }, children: [
+              { tag: 'span', attrs: { className: 'we-picker__switch-thumb' }, children: [] },
+            ] },
+          ],
+        },
+      ],
+    });
+  }
+
+  // 状态行：安装态 / 版本 / 运行中（aria-live 即时播报）
+  let status;
+  if (s.checking && s.installed !== true) status = t('正在检测运行时…');
+  else if (s.installed === true) status = t('已安装') + ' v' + (s.version || '?') + (s.running ? ' (' + t('运行中') + ')' : '');
+  else status = t('未安装');
+  children.push({ tag: 'div', attrs: { className: 'we-pet-link__status', role: 'status', 'aria-live': 'polite', 'data-pet-link': 'status' }, children: [status] });
+
+  // 联动模式 / 版本过旧
+  if (s.installed === true || s.mode) {
+    let modeText;
+    // 口径提示（2026-11-02）：联动包是上游快照的改编版，版本过旧 / 服务未注册时把「为什么回落」
+    // 连同「看哪里」一起给出，避免用户把降级误判成插件 bug。
+    if (s.reason === 'runtime-too-old') modeText = t('运行时版本过旧（需升级 dshpet-dshwe）') + ' · ' + t('该联动包可能落后于本插件，详见安装说明');
+    else if (s.mode === 'linked') modeText = t('联动已就绪（linked）');
+    else if (s.installed === true && s.reason === 'runtime-not-installed') modeText = t('当前回落原生吉祥物（native）') + ' · ' + t('联动服务未就绪，详见安装说明');
+    else modeText = t('当前回落原生吉祥物（native）') + (s.reason ? ' · ' + t(s.reason) : '');
+    children.push({ tag: 'div', attrs: { className: 'we-pet-link__mode', 'data-pet-link': 'mode' }, children: [modeText] });
+  }
+
+  // 官方 dsh-pet 共存提示
+  if (s.officialPet === true) {
+    children.push({ tag: 'div', attrs: { className: 'we-pet-link__coexist', role: 'note', 'data-pet-link': 'coexist' }, children: [t('检测到官方 dsh-pet：两者会各显示一只，互不接管。')] });
+  }
+
+  // 主按钮 + 图文引导面板。
+  // 2026-11-01：本插件**不再自己下载安装**（自研下载器绕过 DSH 依赖管理，会与 link: 布局
+  // 冲突，曾造成重复注册 / 误判未安装 / 启动崩溃）。改为引导用户走 DSH 官方入口，
+  // 面板里给三步截图 + 包名 + 一键复制。
+  // 引导面板优先用 **React 组件**：它自带 useState，点击只重画自己。
+  // 为什么必须这么做：宿主的 render(ctx) 是内联调用、**不订阅**我们的 notify()，
+  // 纯快照驱动的展开/收起要等宿主因别的原因重画才生效（实测「点半天没反应」）。
+  const GuidePanelComp = card && typeof card.guidePanel === 'function' ? card.guidePanel : null;
+  if (typeof GuidePanelComp === 'function') {
+    children.push({ tag: GuidePanelComp, attrs: {}, children: [] });
+  } else {
+    // 回退路径（无 React 的测试环境）：仍按快照里的 guideOpen 渲染静态结构。
+    const guideOpen = Boolean(s.guideOpen);
+    const installLabel = guideOpen ? t('收起安装说明') : t('如何下载安装联动桌宠');
+    children.push({
+      tag: 'button',
+      attrs: {
+        type: 'button',
+        // 款式直接复用宿主主按钮（与「确认并导入」「应用」等同款同字号），只加通栏宽度。
+        className: 'we-picker__btn we-picker__btn--primary we-pet-link__install',
+        'data-pet-link': 'install-guide',
+        'aria-label': installLabel,
+        'aria-expanded': guideOpen ? 'true' : 'false',
+      },
+      children: [installLabel],
+      on: { onClick: () => card.toggleGuide() },
+    });
+    if (guideOpen) {
+      children.push({
+        tag: 'div',
+        attrs: { className: 'we-pet-link__guide', 'data-pet-link': 'install-guide-panel' },
+        children: petLinkGuideRows(t, card, s.copied === true),
+      });
+    }
+  }
+
+  // 口径提示（常驻，一行）：联动包是社区维护的上游快照改编版，不跟随本插件发版。
+  // 只做「路标」—— 完整说明在安装引导面板里（adapted-note），开关行保持与宿主设置行同款不塞小字。
+  children.push({
+    tag: 'div',
+    attrs: { className: 'we-pet-link__note', 'data-pet-link': 'adapted-hint' },
+    children: [t('独立改编版 · 不跟随上游更新（点开安装说明查看）')],
+  });
+
+  // 次按钮组：打开操控面板 + 测试一次（并排）。
+  // 检测到不存在 dsh-pet（dshpet-dshwe）时这两个入口没有意义 —— 没有运行时就无处
+  // 打开面板、也没有可测试的联动对象，隐藏而不是留一堆点了没反应的按钮。
+  // 检测中（installed === null）同样隐藏，避免"先出现再消失"的闪动。
+  if (s.installed === true) {
+    children.push({
+      tag: 'div',
+      attrs: { className: 'we-pet-link__actions' },
+      children: [
+        {
+          tag: 'button',
+          attrs: { type: 'button', className: 'we-picker__btn we-pet-link__panel', 'data-pet-link': 'open-panel', 'aria-label': t('打开操控面板') },
+          children: [t('打开操控面板（Ctrl+Shift+D）')],
+          on: { onClick: () => card.openPanel() },
+        },
+        {
+          tag: 'button',
+          attrs: { type: 'button', className: 'we-picker__btn we-pet-link__test', 'data-pet-link': 'test-once', 'aria-label': t('测试一次联动') },
+          children: [t('测试一次联动')],
+          on: { onClick: () => card.testOnce() },
+        },
+      ],
+    });
+  }
+
+  // 折叠诊断
+  children.push({
+    tag: 'details',
+    attrs: { className: 'we-pet-link__diag', 'data-pet-link': 'diag' },
+    children: [
+      { tag: 'summary', attrs: {}, children: [t('诊断')] },
+      { tag: 'pre', attrs: {}, children: [JSON.stringify({ mode: s.mode || null, reason: s.reason || '', installed: s.installed === true, version: s.version || '', path: s.path || '', running: s.running === true, officialPet: s.officialPet === true, error: s.error || '' }, null, 2)] },
+    ],
+  });
+
+  return { tag: 'div', attrs: { className: 'we-pet-link__card', 'data-pet-link': 'card' }, children };
+}
+
+/** 描述树 → React 元素（只用注入的 h，不直接碰 React）。 */
+function petLinkCardToReact(node, h) {
+  if (node === null || node === undefined || node === false) return null;
+  if (typeof node === 'string' || typeof node === 'number') return node;
+  if (Array.isArray(node)) return node.map(child => petLinkCardToReact(child, h));
+  const props = { ...(node.attrs || {}) };
+  if (node.on) for (const key of Object.keys(node.on)) props[key] = node.on[key];
+  const children = (node.children || []).map(child => petLinkCardToReact(child, h));
+  return h(node.tag, props, ...children);
+}
+
+/**
+ * 造卡片控制器 + 描述符。
+ * @param deps - { h, petLink, panel, apiFetch, apiUrl, translate, setLinkEnabled?, isLinkEnabled? }
+ * @returns {{ descriptor, snapshot, subscribe, refresh, install, toggleEnabled, openPanel, testOnce, _state }}
+ */
+function createPetLinkExtensionCard(deps = {}) {
+  const translate = deps.translate || (value => value);
+  /**
+   * 回读开关真值：宿主（packages/pet-link/src/client.js）持有并持久化这个值，
+   * 卡片只镜像它——这样刷新页面/重开设置页后开关仍停在用户上次的选择上。
+   */
+  const readEnabled = () => {
+    if (typeof deps.isLinkEnabled !== 'function') return true;
+    try { return deps.isLinkEnabled() !== false; } catch { return true; }
+  };
+  const state = {
+    linkEnabled: readEnabled(),
+    checking: true,
+    installed: null,
+    version: '',
+    path: '',
+    running: false,
+    officialPet: false,
+    conflict: false,
+    mode: 'native',
+    reason: '',
+    error: '',
+    // 图文安装引导的本地 UI 状态（不持久化、不发请求）
+    guideOpen: false,
+    copied: false,
+    // 宿主卸载本卡片（热重载/停用）后不再对外发渲染通知
+    disposed: false,
+    // 拼引导图 URL 用：来自宿主端口，空串时图会 404（可接受，不阻塞卡片）
+    guideOrigin: '',
+  };
+  const listeners = new Set();
+  /** 引导图到位后的「补一次重渲染」定时器：展开/收起/卸载都要清，否则卡片卸载后仍会 notify。 */
+  const guideTimers = new Set();
+  const notify = () => {
+    if (state.disposed) return;
+    for (const listener of [...listeners]) { try { listener(); } catch { /* 渲染监听失败不影响流程 */ } }
+  };
+  const subscribe = fn => { if (typeof fn !== 'function') return () => {}; listeners.add(fn); return () => listeners.delete(fn); };
+  const clearGuideTimers = () => {
+    for (const timer of guideTimers) { try { if (typeof clearTimeout === 'function') clearTimeout(timer); } catch { /* ignore */ } }
+    guideTimers.clear();
+  };
+  /** 卡片被宿主卸载时调用：停掉定时器、摘掉订阅，避免热重载后旧卡片继续驱动渲染。 */
+  const dispose = () => {
+    state.disposed = true;
+    clearGuideTimers();
+    listeners.clear();
+  };
+  const snapshot = () => ({
+    ...state,
+    // 引导图 URL 前缀：优先用页面 origin（同源路由），取不到就留空
+    guideOrigin: (() => {
+      try {
+        if (typeof location !== 'undefined' && typeof location.origin === 'string') return location.origin;
+      } catch { /* 非浏览器环境 */ }
+      return state.guideOrigin || '';
+    })(),
+  });
+
+  const readMode = () => petLinkCardReadMode(state, deps.petLink);
+
+  // 5s 轮询与用户点按可能并发；用自增序号丢弃过期响应，避免慢请求回包覆盖新状态。
+  let refreshSeq = 0;
+  const refresh = async () => {
+    const seq = ++refreshSeq;
+    try {
+      const res = await deps.apiFetch(deps.apiUrl('/pet-link/pet/state'));
+      if (seq !== refreshSeq) return snapshot();
+      petLinkCardApplyState(state, res && res.data ? res.data : null);
+    } catch (error) {
+      if (seq !== refreshSeq) return snapshot();
+      state.checking = false;
+      state.error = String((error && error.message) || error || '');
+    }
+    readMode();
+    // 开关真值只有宿主那边持久化了一份；每次刷新顺手对齐，避免多页签/重开后显示与真值不一致。
+    state.linkEnabled = readEnabled();
+    notify();
+    return snapshot();
+  };
+
+  const toggleEnabled = on => {
+    state.linkEnabled = on === true;
+    if (typeof deps.setLinkEnabled === 'function') { try { deps.setLinkEnabled(state.linkEnabled); } catch { /* ignore */ } }
+    readMode();
+    notify();
+    return state.linkEnabled;
+  };
+
+  const openPanel = () => {
+    if (deps.panel && typeof deps.panel.toggle === 'function') return deps.panel.toggle();
+    return false;
+  };
+
+  const testOnce = async () => {
+    let result = null;
+    try {
+      if (deps.petLink && deps.petLink.mascot && typeof deps.petLink.mascot.tap === 'function') result = await deps.petLink.mascot.tap();
+    } catch { result = null; }
+    readMode();
+    notify();
+    return result;
+  };
+
+  /** 展开/收起图文安装说明（纯本地 UI 状态，不发请求）。 */
+  const toggleGuide = () => {
+    state.guideOpen = !state.guideOpen;
+    state.copied = false;
+    clearGuideTimers();
+    notify();
+    if (state.guideOpen) {
+      // 展开时才拉图（首次点击立刻返回，不等网络）；图到位后补一次重渲染。
+      try { deps.ensureGuideShots?.(); } catch { /* 预取失败只影响图片 */ }
+      for (const delay of [400, 1200, 2600]) {
+        const timer = setTimeout(() => {
+          guideTimers.delete(timer);
+          if (state.guideOpen) notify();
+        }, delay);
+        guideTimers.add(timer);
+      }
+    }
+    return state.guideOpen;
+  };
+
+  /** 复制包名到剪贴板；失败时退回「手动复制」提示（不抛错）。 */
+  const copyPackage = async () => {
+    let ok = false;
+    try {
+      if (typeof navigator !== 'undefined' && navigator.clipboard && typeof navigator.clipboard.writeText === 'function') {
+        await navigator.clipboard.writeText('dshpet-dshwe');
+        ok = true;
+      }
+    } catch { ok = false; }
+    state.copied = ok;
+    notify();
+    return ok;
+  };
+
+  /**
+   * 引导面板组件：自带 useState，点击立刻重画自己（不依赖宿主重渲染）。
+   * 返回 null 表示当前环境没有 React（测试里的 new Function 加载）⇒ 走纯视图回退。
+   */
+  const guidePanel = (() => {
+    const R = deps.React;
+    if (!R || typeof R.useState !== 'function' || typeof R.createElement !== 'function') return null;
+    return function PetLinkGuidePanel() {
+      const [open, setOpen] = R.useState(false);
+      const [copied, setCopied] = R.useState(false);
+      const onToggle = () => {
+        const next = !open;
+        setOpen(next);
+        setCopied(false);
+        if (next) { try { deps.ensureGuideShots?.(); } catch { /* 预取失败只影响图片 */ } }
+      };
+      const onCopy = async () => {
+        const ok = await copyPackage();
+        setCopied(ok);
+      };
+      const api2 = {
+        guideImageUrl: step => (typeof deps.guideImageUrl === 'function' ? deps.guideImageUrl(step) : ''),
+        copyPackage: onCopy,
+      };
+      const head = R.createElement('button', {
+        type: 'button',
+        className: 'we-picker__btn we-picker__btn--primary we-pet-link__install',
+        'data-pet-link': 'install-guide',
+        'aria-label': translate(open ? '收起安装说明' : '如何下载安装联动桌宠'),
+        'aria-expanded': open ? 'true' : 'false',
+        onClick: onToggle,
+      }, translate(open ? '收起安装说明' : '如何下载安装联动桌宠'));
+      const panel = open
+        ? R.createElement('div', { className: 'we-pet-link__guide', 'data-pet-link': 'install-guide-panel' },
+            ...petLinkGuideRows(translate, api2, copied).map((node, i) => petLinkCardToReact(node, deps.h, i)))
+        : null;
+      return R.createElement(R.Fragment || 'div', null, head, panel);
+    };
+  })();
+
+  /**
+   * 开关行组件：自带 useState，并由 useEffect 订阅本卡片的 notify() —— 点下去立刻重画自己，
+   * 后台 refresh() 也会把开关同步回真值。无 React 的环境返回 null，视图层回退到静态描述树。
+   */
+  const toggleRow = (() => {
+    const R = deps.React;
+    if (!R || typeof R.useState !== 'function' || typeof R.createElement !== 'function') return null;
+    return function PetLinkToggleRow() {
+      const [enabled, setEnabled] = R.useState(() => snapshot().linkEnabled !== false);
+      if (typeof R.useEffect === 'function') {
+        R.useEffect(() => subscribe(() => setEnabled(snapshot().linkEnabled !== false)), []);
+      }
+      const onChange = event => {
+        const next = Boolean(event && event.target && event.target.checked);
+        setEnabled(next);
+        toggleEnabled(next);
+      };
+      return R.createElement('div', { className: 'we-picker__ctl' },
+        R.createElement('span', { className: 'we-picker__ctl-label' }, translate('启用桌宠联动')),
+        R.createElement('label', { className: 'we-picker__switch' },
+          R.createElement('input', {
+            type: 'checkbox', role: 'switch',
+            'aria-label': translate('启用桌宠联动'),
+            'data-pet-link': 'switch',
+            checked: enabled,
+            onChange,
+          }),
+          R.createElement('span', { className: 'we-picker__switch-track' },
+            R.createElement('span', { className: 'we-picker__switch-thumb' }),
+          ),
+        ),
+      );
+    };
+  })();
+
+  const api = { snapshot, subscribe, refresh, toggleEnabled, openPanel, testOnce, toggleGuide, copyPackage, toggleRow, dispose, guideImageUrl: step => (typeof deps.guideImageUrl === 'function' ? deps.guideImageUrl(step) : ''), guidePanel };
+
+  /**
+   * 卡片主体组件：宿主 `render(ctx)` 是一次性内联调用、**不订阅**本卡片的 notify()，
+   * 于是「检测结果（未装/已装）、状态行、进度、按钮出现或隐藏」这些快照驱动的部分都要等
+   * 宿主因别的原因重画才更新（实测：切页签再切回来才变）。把整个 body 包成带 useState 的组件
+   * 并订阅 notify() 后，refresh() 每次落状态都会重画；没有 React 的环境走 render() 的静态回退。
+   */
+  const cardBody = (() => {
+    const R = deps.React;
+    if (!R || typeof R.useState !== 'function' || typeof R.createElement !== 'function') return null;
+    return function PetLinkCardBody() {
+      const [, bump] = R.useState(0);
+      if (typeof R.useEffect === 'function') {
+        R.useEffect(() => subscribe(() => bump(n => n + 1)), []);
+      }
+      return petLinkCardToReact(petLinkCardView(snapshot(), api, translate), deps.h);
+    };
+  })();
+
+  const descriptor = {
+    id: 'pet-link',
+    order: 0,
+    get title() { return translate('桌宠联动'); },
+    get desc() { return translate('把壁纸吉祥物换成可联动的桌宠，或回到原生吉祥物'); },
+    render(ctx) {
+      // 纯视图：只把「当前快照 + 具名处理器」翻成 React 元素；不发请求、不写设置、不持状态。
+      if (typeof cardBody === 'function') return deps.h(cardBody, null);
+      return petLinkCardToReact(petLinkCardView(snapshot(), api, translate), deps.h);
+    },
+  };
+
+  return {
+    descriptor,
+    snapshot,
+    subscribe,
+    refresh,
+    toggleEnabled,
+    openPanel,
+    testOnce,
+    toggleGuide,
+    copyPackage,
+    dispose,
+    _state: state,
+  };
+}

@@ -9,7 +9,7 @@ import { MEME_NAMES } from '../packages/pet-link/lib/prepared.js';
 
 const out = resolve('.artifacts/official-pet');
 mkdirSync(out, { recursive: true });
-const source = ['official-pet.js', 'pet-link.js', 'pet-link-tuner.js']
+const source = ['official-pet.js', 'pet-link-performer.js', 'pet-link-tuner.js']
   .map(file => readFileSync(new URL('../packages/pet-link/src/' + file, import.meta.url), 'utf8')).join('\n');
 const images = MEME_NAMES.map(name => pathToFileURL(resolve('packages/pet-link/assets/memes', name + '.png')).href);
 const html = `<!doctype html><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">

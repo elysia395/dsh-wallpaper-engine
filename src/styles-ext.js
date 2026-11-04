@@ -108,6 +108,116 @@ const CSS_EXT = `
     font-size: 0.85em; font-weight: 600; color: var(--we-ink, inherit);
   }
 
+  /* ── 「扩展」页签 · 桌宠联动卡片（we-pet-link，包 pet-link/src/pet-link/extension-card.js）──
+     分层口径：标题行 → 状态 → 模式 → 共存提示 → 进度条 → 失败块 → 主按钮 → 次按钮组
+     → 分步进度 → 折叠诊断。容器 .we-ext__module 已给外框与 6px 行距，这里只管
+     卡内各层的间距节奏（8px 主间距）与控件形态：开关贴行尾、主按钮通栏、
+     次按钮并排（窄壳自动换行）。颜色不新造：全部取主题墨色 / 边框 / 面板令牌，
+     进度条填充用按钮主色（accent 由宿主映射），失败块用与本仓既有的警示红。
+     ⚠️ 本段注释不许出现反引号：整套样式文本是模板字符串，一个反引号就拼断 JS。 */
+  /* 卡片容器：竖向排布 + 统一间距（此前根 class 无任何规则，卡内各块会贴在一起） */
+  .we-pet-link__card {
+    display: flex; flex-direction: column; gap: 8px; align-items: stretch;
+  }
+  /* ── 图文安装引导（下载器拆除后替代「下载并安装」按钮）────────────── */
+  .we-pet-link__guide {
+    display: flex; flex-direction: column; gap: 10px;
+    margin-top: 4px; padding: 12px;
+    border: 1px solid var(--we-border, rgba(255,255,255,.12));
+    border-radius: 10px;
+    background: var(--we-surface, rgba(255,255,255,.03));
+  }
+  .we-pet-link__guide-title {
+    font-size: .82em; font-weight: 700; color: var(--we-ink, inherit);
+  }
+  .we-pet-link__guide-step { display: flex; flex-direction: column; gap: 6px; }
+  .we-pet-link__guide-caption {
+    font-size: .8em; font-weight: 600; color: var(--we-ink-dim, rgba(255,255,255,.78));
+  }
+  .we-pet-link__guide-shot {
+    display: block; width: 100%; max-width: 420px; height: auto;
+    border-radius: 8px; border: 1px solid var(--we-border, rgba(255,255,255,.1));
+  }
+  .we-pet-link__guide-shot--pending {
+    display: flex; align-items: center; justify-content: center;
+    min-height: 72px; max-width: 420px;
+    font-size: .76em; color: var(--we-ink-dim, rgba(255,255,255,.5));
+    border-style: dashed;
+  }  .we-pet-link__guide-pkg {
+    display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+    margin-top: 2px;
+  }
+  .we-pet-link__guide-code {
+    padding: 5px 10px; border-radius: 7px;
+    font: 600 .84em/1.4 ui-monospace, SFMono-Regular, Menlo, monospace;
+    color: var(--we-accent, #4f8cff);
+    background: rgba(79,140,255,.12);
+    border: 1px solid rgba(79,140,255,.28);
+    user-select: all;
+  }
+  .we-pet-link__guide-copy {
+    padding: 5px 12px; border-radius: 7px; cursor: pointer;
+    font-size: .78em; font-weight: 600;
+    color: var(--we-ink, #fff);
+    background: transparent;
+    border: 1px solid var(--we-border, rgba(255,255,255,.22));
+    transition: background .15s ease, border-color .15s ease;
+  }
+  .we-pet-link__guide-copy:hover {
+    background: rgba(255,255,255,.08);
+    border-color: var(--we-accent, #4f8cff);
+  }
+  .we-pet-link__guide-tip {
+    font-size: .76em; line-height: 1.6;
+    color: var(--we-ink-dim, rgba(255,255,255,.66));
+  }
+  .we-pet-link__guide-link {
+    font-size: .76em; word-break: break-all;
+    color: var(--we-accent, #4f8cff); text-decoration: none;
+  }
+  .we-pet-link__guide-link:hover { text-decoration: underline; }
+  /* 口径说明（2026-11-02）：联动包是"基于上游快照的改编版"，不跟随上游发布节奏。
+     常驻提示只做一行路标（.we-pet-link__note），完整说明放在安装引导面板内（.we-pet-link__guide-note），
+     开关行保持与宿主设置行同款单行、不塞常驻小字。 */
+  .we-pet-link__note {
+    font-size: .74em; line-height: 1.5;
+    color: var(--we-ink-dim, rgba(255,255,255,.55));
+    overflow-wrap: anywhere;
+  }
+  .we-pet-link__guide-note {
+    margin-top: 2px; padding-top: 7px;
+    border-top: 1px dashed var(--we-border, rgba(255,255,255,.14));
+    font-size: .76em; line-height: 1.65;
+    color: var(--we-ink-dim, rgba(255,255,255,.66));
+    overflow-wrap: anywhere;
+  }
+
+  /* 标题行与胶囊开关均直接用宿主款（.we-picker__ctl / .we-picker__ctl-label / .we-picker__switch），
+     本文件不再自造同族样式 —— 字号/字重/轨道尺寸只留一处真源，避免"看起来像但不一样"。 */
+  .we-pet-link__status {
+    font-size: 0.78em; line-height: 1.55; color: var(--we-ink-2, rgba(128, 128, 128, 0.9));
+    overflow-wrap: anywhere;
+  }
+  .we-pet-link__mode { font-size: 0.75em; line-height: 1.5; color: var(--dsw-alias-label-tertiary, rgba(128, 128, 128, 0.8)); overflow-wrap: anywhere; }
+  .we-pet-link__coexist {
+    padding: 6px 8px; border-radius: var(--we-ui-radius, 8px);
+    border: 1px dashed var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));
+    font-size: 0.75em; line-height: 1.5; color: var(--we-ink-2, rgba(128, 128, 128, 0.9));
+  }
+  /* 安装引导按钮：直接复用宿主主按钮款式（.we-picker__btn--primary：0.82em / 30px 行高 /
+     实心 accent），这里只加"通栏宽度"这一条布局差异。 */
+  .we-pet-link__install { width: 100%; box-sizing: border-box; }
+  /* 次按钮组：并排（打开操控面板 / 测试一次），窄壳里自动换行；款式同样用 .we-picker__btn。 */
+  .we-pet-link__actions { display: flex; flex-wrap: wrap; gap: 6px; }
+  .we-pet-link__actions > .we-picker__btn { flex: 1 1 auto; min-width: 0; white-space: nowrap; }
+  .we-pet-link__diag summary { font-size: 0.75em; cursor: pointer; color: var(--dsw-alias-label-tertiary, rgba(128, 128, 128, 0.8)); }
+  .we-pet-link__diag pre {
+    margin: 4px 0 0; padding: 6px; border-radius: var(--we-ui-radius, 8px);
+    background: var(--dsw-alias-bg-layer-3, rgba(128, 128, 128, 0.12));
+    font-size: 0.68em; line-height: 1.5; overflow: auto; max-height: 180px;
+    color: var(--dsw-alias-label-secondary, inherit);
+  }
+
 
   /* ── 「扩展」页签一号模块：自定义会话头像（装饰层见 src/avatar-layer.js）──
      这一层是**宿主会话 DOM 的补丁**：给三类消息行（data-chat-flow-kind = user / steering /

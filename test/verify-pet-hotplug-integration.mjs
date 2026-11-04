@@ -17,9 +17,36 @@ const page = new Context();
 const client = page.plugin({ name: 'official-pet-client-regression', ...entry.plugin });
 try {
   await client.await();
-  assert.equal(await entry.bridge.warmup(), false, '官方服务缺席时仍能激活并降级');
-  page.provide('petApi7340', { pose: () => ({ x: 0.4, y: 0.6, facing: 'left' }), progress: () => null });
-  assert.equal(await entry.bridge.warmup(), true, '真实同页上下文可读取后到的官方服务');
+  assert.equal(await entry.bridge.warmup(), false, '运行时服务缺席时仍能激活并降级 native');
+  // M5 起桥接探测的是自家 fork 的 petApiDshwe.link（不再认官方 petApi7340）。
+  // 给完整 link 面（version=4 + 12 方法）且目标根节点可见 ⇒ linked 可用、warmup=true。
+  const petRoot = {
+    isConnected: true,
+    getBoundingClientRect: () => ({ left: 10, top: 10, width: 180, height: 180, x: 100, y: 100 }),
+    getAttribute: () => null,
+  };
+  page.provide('petApiDshwe', {
+    getState: () => ({ pets: {} }),
+    menuEvents: () => ({ ok: false }),
+    pose: () => ({ x: 0.4, y: 0.6, facing: 'left' }),
+    progress: () => null,
+    link: {
+      version: 4,
+      getRoot: id => (id === 'main' ? petRoot : null),
+      adoptPosition: () => true,
+      pollState: () => true,
+      getPlayback: () => ({ playbackId: null, anim: '', currentTime: 0, duration: 0, paused: true, buffering: false }),
+      throwNative: () => 1,
+      stopNativeThrow: () => true,
+      getNativeThrow: () => ({ id: 1, active: false, cancelled: false, state: null }),
+      allowBubble: () => true,
+      hideBubble: () => true,
+      setBubbleDuration: () => true,
+      lock: () => true,
+      unlock: () => true,
+    },
+  });
+  assert.equal(await entry.bridge.warmup(), true, '真实同页上下文可读取后到的 petApiDshwe（linked 可用）');
   assert.equal(entry.listeners.size, 1, '客户端只安装一次监听');
 } finally { await client.dispose(); }
 assert.equal(entry.listeners.size, 0, '真实 Cordis 卸载归还客户端监听');
@@ -37,6 +64,20 @@ const ctx = new Context();
 const service = ctx.plugin(WebServer);
 const plugin = { name, inject, apply };
 const path = '/wallpaper-engine/pet-link/official';
+// 宿主半路由面（2026-11-02 重写后）：官方控制 / 资源 prefix / 引导图 / 气泡配图 + pet state。
+// 自研下载器拆除后 install / install-progress / uninstall 三条路由已不存在；
+// 这里按**路径集合**对账（比条数牢：漏一条或多一条都红），也不再随路由改造漂移。
+const EXPECTED_ROUTES = [
+  '/wallpaper-engine/pet-link/official',
+  '/wallpaper-engine/pet-link/official/assets/',
+  '/wallpaper-engine/pet-link/official/guide-step',
+  '/wallpaper-engine/pet-link/official/meme',
+  '/wallpaper-engine/pet-link/pet/state',
+];
+function assertRouteSurface() {
+  assert.deepEqual([...routes.keys()].sort(), [...EXPECTED_ROUTES].sort(),
+    '宿主半路由面应与约定一致（实际：' + [...routes.keys()].join(', ') + '）');
+}
 let fiber;
 async function get(handler = routes.get(path)?.handler, method = 'GET') {
   assert.ok(handler, '正式官方路由必须在场');
@@ -55,7 +96,8 @@ try {
   ctx.provide('wallpaperEngineHost', createSubpackageHost());
   fiber = ctx.plugin(plugin, { linkEnabled: true });
   await fiber.await();
-  assert.equal(routes.size, 2);
+  // 宿主半路由面 = 官方控制 / 资源 prefix / 引导图 / 气泡配图 + pet state（见 EXPECTED_ROUTES）。
+  assertRouteSurface();
   assert.equal((await get(undefined, 'PUT')).reason, 'method-not-allowed');
   const initial = routes.get(path).handler;
   fiber.update({ linkEnabled: false }, true);
@@ -71,7 +113,7 @@ try {
   for (let i = 0; i < 10; i++) {
     fiber = ctx.plugin(plugin, { linkEnabled: false });
     await fiber.await();
-    assert.equal(routes.size, 2);
+    assertRouteSurface();
     assert.equal((await get()).reason, 'bridge-disabled');
     await fiber.dispose(); fiber = null;
     assert.equal(routes.size, 0);
