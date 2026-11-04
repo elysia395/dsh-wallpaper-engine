@@ -5,7 +5,7 @@
 > 口径：只统计守卫**代码**里真正碰到的模块（先剥注释），并区分"直接读源文件"与"隔着产物 `lib/client.js`"。
 > 写法：字面量路径 / `join(...)` 拼接 / 唯一 basename / 产物配方 / **前缀族读法** `scopeFiles|scopeText(<前缀>)` / **经共享族助手读**（`import { panelText } from './tools/src-scope.mjs'` + 真调用；族口径封在那个库里，见 DEV-GUIDE §4.6「同时是守卫的库」）/ **真源定位读**（`locate('符号')` / `locateFile('文件名')`，`test/tools/source-locator.mjs`：符号唯一声明在哪就是读了哪个模块）。
 
-模块面 186 个 · 守卫 121 个
+模块面 186 个 · 守卫 122 个
 
 ## 守卫 → 模块
 
@@ -40,6 +40,7 @@
 | `verify-component-face.mjs` | `lib/host-boot.js` `lib/kernel/component-session.js` `lib/kernel/host-kernel.js` |  |
 | `verify-component-fonts.mjs` | `lib/settings-schema.js` `src/client.js` `src/effects.js` `src/font/apply.js` `src/font/components.js` | ✅ |
 | `verify-component-visibility.mjs` | `lib/component-visibility.js` `lib/kernel/component-session.js` `packages/media-bridge/lib/routes/inventory.js` `src/panel-tabs.js` |  |
+| `verify-composer-fixed-browser-case.mjs` | `src/we-base.js` |  |
 | `verify-config-store.mjs` | `lib/kernel/config.js` `lib/media/transcode.js` |  |
 | `verify-contracts.mjs` | `lib/host-boot.js` `lib/index.js` `lib/kernel/host-kernel.js` `lib/media/media-dirs.js` `lib/settings-schema.js` `packages/fonts/lib/routes/fontsets.js` `packages/fonts/src/fontset-editor.js` `packages/mascot-avatar/lib/routes/avatar.js` `packages/mascot-avatar/lib/routes/mascot.js` `packages/media-bridge/lib/backend.js` `packages/media-bridge/lib/index.js` `packages/media-bridge/lib/legacy.js` `packages/media-bridge/lib/supervisor.js` `src/api-client.js` `src/client.js` `src/fontset-store.js` `src/panel-tabs-advanced.js` `src/panel-tabs-appearance.js` `src/panel-tabs-effects.js` `src/panel-tabs-mascot.js` `src/panel-tabs.js` |  |
 | `verify-dead-declarations.mjs` | — |  |
@@ -50,7 +51,7 @@
 | `verify-glass-compat.mjs` | `lib/settings-schema.js` `packages/glass/src/glass-panel.js` |  |
 | `verify-glass-compositing.mjs` | — | ✅ |
 | `verify-glass-runtime-browser.mjs` | — | ✅ |
-| `verify-glass-runtime.mjs` | `packages/glass/src/glass-surfaces.js` | ✅ |
+| `verify-glass-runtime.mjs` | `packages/glass/src/client.js` `packages/glass/src/glass-surfaces.js` | ✅ |
 | `verify-glass-surfaces.mjs` | `lib/settings-schema.js` `packages/glass/src/glass-css.js` `packages/glass/src/glass-layer.js` `packages/glass/src/glass-panel.js` `packages/glass/src/glass-surfaces.js` `packages/glass/src/glass.js` `src/client.js` `src/effects.js` `src/live-layer-diag.js` `src/live-layer-gate.js` `src/live-layer-pointer.js` `src/live-layer-underlay.js` `src/live-layer-watch.js` `src/live-layer.js` `src/panel-tabs-advanced.js` `src/panel-tabs-appearance.js` `src/panel-tabs-effects.js` `src/panel-tabs-mascot.js` `src/panel-tabs.js` `src/styles-base.js` `src/styles-chrome.js` `src/styles-ext.js` `src/styles-panel.js` `src/styles-quick.js` `src/styles-settings.js` `src/styles-shell.js` `src/styles.js` | ✅ |
 | `verify-guard-chain.mjs` | — |  |
 | `verify-host-diag.mjs` | `lib/diag-trace.js` |  |
@@ -207,7 +208,7 @@
 | `packages/glass/lib/client.glass.js` | 11 | `e2e-web-media-origin` `verify-client-sync` `verify-client` `verify-glass-compositing` `verify-glass-runtime-browser` `verify-glass-runtime` `verify-glass-surfaces` `verify-host-paint-scope` `verify-readability` `verify-softrender` `verify-windows-caption` |
 | `packages/glass/lib/index.js` | 0 | **（无）** |
 | `packages/glass/lib/routes/glass-row.js` | 0 | **（无）** |
-| `packages/glass/src/client.js` | 0 | **（无）** |
+| `packages/glass/src/client.js` | 1 | `verify-glass-runtime` |
 | `packages/glass/src/glass-css.js` | 5 | `verify-adapter` `verify-glass-surfaces` `verify-i18n` `verify-readability` `verify-titlebar-anchor` |
 | `packages/glass/src/glass-extra.js` | 1 | `verify-extra-glass` |
 | `packages/glass/src/glass-layer.js` | 4 | `verify-client` `verify-extra-glass` `verify-glass-surfaces` `verify-titlebar-anchor` |
@@ -244,7 +245,7 @@
 | `packages/media-bridge/src/wallpaper-rotation-section.js` | 4 | `verify-avatar-interval-and-rotation` `verify-client` `verify-scene-live` `verify-slideshow-client` |
 | `packages/media-bridge/src/wallpaper-transition-section.js` | 2 | `verify-client` `verify-scene-live` |
 | `packages/media-bridge/src/wallpaper-uploads-section.js` | 2 | `verify-client` `verify-scene-live` |
-| `packages/parallax/lib/client.parallax.js` | 3 | `verify-client-sync` `verify-client` `verify-scene-live` |
+| `packages/parallax/lib/client.parallax.js` | 4 | `verify-client-sync` `verify-client` `verify-composer-fixed-browser-case` `verify-scene-live` |
 | `packages/parallax/lib/index.js` | 0 | **（无）** |
 | `packages/parallax/src/client.js` | 0 | **（无）** |
 | `packages/parallax/src/ext-parallax.js` | 1 | `verify-scene-live` |
@@ -321,5 +322,5 @@
 | `src/system-fonts.js` | 4 | `verify-client` `verify-fontset` `verify-scene-live` `verify-system-fonts` |
 | `src/theme-follow.js` | 2 | `verify-client` `verify-theme-follow` |
 | `src/video-layer.js` | 5 | `verify-avatar-interval-and-rotation` `verify-client` `verify-layer-ownership` `verify-scene-live` `verify-transcode-state` |
-| `src/we-base.js` | 1 | `verify-scene-live` |
+| `src/we-base.js` | 2 | `verify-composer-fixed-browser-case` `verify-scene-live` |
 | `src/we-cond.js` | 3 | `verify-client` `verify-fontset` `verify-scene-live` |
