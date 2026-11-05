@@ -265,6 +265,7 @@ assert.ok(!glassCode.includes(wallpaperGatedSidebarSelector), 'legacy wallpaper-
 const blockBodyOf = (needle, face) => naiveBlockBody(face || code, needle);
 const pageGlassBlock = blockBodyOf('body[data-we-glass-page] {', glassCode); // 页玻璃锚点在玻璃包产物里
 const wallpaperBlock = blockBodyOf('body[data-we-wallpaper] {');
+const conversationBlock = blockBodyOf('body[data-we-wallpaper] [data-slot="main.conversation"] {');
 assert.ok(pageGlassBlock && pageGlassBlock.includes('--dsw-alias-bg-layer-1')
   && pageGlassBlock.includes('--dsw-alias-markdown-code-block'),
   'page-glass token mapping must sit on body[data-we-glass-page] (glass works without a wallpaper)');
@@ -279,36 +280,42 @@ assert.ok(!narrowsPageGlassToChatFlow(glassCode),
 // 负对照自证（牙）：同一个谓词喂一处合成字符串必须判红 —— 否则"没扫到"与"不存在"分不清。
 assert.ok(narrowsPageGlassToChatFlow('body[data-we-glass-page] :where([data-chat-flow]) { --dsw-alias-bg-layer-1: red; }'),
   'negative control: the narrowing predicate must see the exact regression shape');
-assert.ok(wallpaperBlock && wallpaperBlock.includes('--dsw-alias-bg-base: transparent')
-  && !wallpaperBlock.includes('--dsw-alias-bg-layer-1'),
-  'the page-let-the-wallpaper-through block stays wallpaper-only (no glass mapping inside)');
-// ── 跨插件内联令牌：让页面让开的四块规则（门拆分后各管一枚令牌）必须带 !important ─────────
+// ── 跨插件内联令牌：让页面让开的规则（门拆分后各管一枚令牌）必须带 !important ─────────
 // 全界面插件（如 DS Bot 的 Bot 模式）用 DSH 的 ctx.theme.overrideTokens 给宿主上色，
 // 宿主把合成后的令牌以**内联样式**写在 <body> 上。普通作者声明输给内联声明 ⇒ 页面基色 /
 // 侧栏填充保持不透明，壁纸层被盖死（现场：DS Bot 模式下壁纸完全不可见）。作者
 // !important 声明按层叠规则压过内联普通声明 ⇒ 壁纸在场期间这些令牌归本插件。
-// 侧栏填充只挂壁纸门（产品口径 2026-10-29 修订：插件/玻璃行关闭时侧栏主体透明），
-// 浅深两块各写一次；!important 仍必须保留以压过宿主的内联主题令牌。
+// 中栏基色只挂壁纸门（对话区透壁纸与玻璃行无关）；侧栏填充**额外挂玻璃门**
+// （产品口径 2026-11-05 修订，取代 10-29 的「与玻璃行无关」：玻璃行关掉后回到
+// ADR-0010 D2「除内容区壁纸外全部原生」，左右栏不再透壁纸）。
+// !important 仍必须保留以压过宿主的内联主题令牌。
 const bgLetThrough = (block) => /--dsw-alias-bg-base:\s*transparent\s*!important/.test(block || '');
 const fillLetThrough = (block) => /--dsw-specific-sidebar-fill:\s*transparent\s*!important/.test(block || '');
-const darkWallpaperBlock = blockBodyOf('body[data-ds-dark-theme][data-we-wallpaper] {');
-assert.ok(bgLetThrough(wallpaperBlock) && bgLetThrough(darkWallpaperBlock),
-  'both wallpaper let-through blocks must beat inline token overrides (DS Bot Bot mode writes theme tokens inline on <body>)');
-assert.ok(fillLetThrough(wallpaperBlock) && fillLetThrough(darkWallpaperBlock),
-  'sidebar-fill must be let through by the wallpaper gate alone (works with the glass row off)');
-assert.ok(!code.includes('body[data-we-wallpaper][data-we-glass-page] {'),
-  'sidebar-fill must not be re-gated on the glass row (plugin off must stay transparent)');
-assert.ok(!bgLetThrough(wallpaperBlock.replaceAll('!important', ''))
-  && !fillLetThrough(wallpaperBlock.replaceAll('!important', '')),
-  'negative control: the inline-override assertion must fail when !important is stripped');
+const glassPageLight = blockBodyOf('body[data-we-wallpaper][data-we-glass-page] {');
+const glassPageDark = blockBodyOf('body[data-ds-dark-theme][data-we-wallpaper][data-we-glass-page] {');
+// bg-base 是**继承**的：必须挂在 body（壁纸门，玻璃无关）才能让中栏整条链路透壁纸。
+assert.ok(bgLetThrough(wallpaperBlock),
+  'bg-base must be let through on <body> under the wallpaper gate — it inherits, so clearing it on the conversation slot alone leaves opaque ancestors covering the wallpaper');
+// sidebar-fill 额外挂玻璃门：玻璃行关掉后左右栏 / 顶栏回宿主原生（ADR-0010 D2）。
+assert.ok(fillLetThrough(glassPageLight) && fillLetThrough(glassPageDark),
+  'sidebar-fill must be let through by wallpaper AND glass gates (glass row off ⇒ sidebars go native per ADR-0010 D2)');
+assert.ok(!fillLetThrough(wallpaperBlock),
+  'sidebar-fill must NOT be let through by the wallpaper gate alone — that would keep sidebars translucent with the glass row off');
+// D2 的另一半：右栏没有自己的实底，玻璃行关掉时要补一块（否则跟着继承的 bg-base 一起透）。
+assert.ok(code.includes('[data-we-wallpaper]:not([data-we-glass-page]) [data-sidebar-right-panel][data-sidebar-right-open]'),
+  'the right sidebar needs an opaque base with the glass row off — and only while OPEN (an unconditional base covers the collapse button when the panel is closed)');
+// 负对照（牙）：同一条 bg-base 判据对"去掉 !important 的同一块"必须判假 ——
+// 否则"没扫到"与"写了但没带 !important"分不清（后者会被宿主的 <body> 内联令牌压掉）。
+assert.ok(!bgLetThrough((wallpaperBlock || '').replaceAll('!important', '')),
+  'negative control: the token let-through assertion must fail when !important is stripped');
 assert.ok(/setAttribute\("data-we-glass-page", "on"\)/.test(writeFace)
   && /removeAttribute\("data-we-glass-page"\)/.test(writeFace),
   'the page-glass anchor must be mounted by glass.js and removed on dispose (paired; both halves in the glass bundle)');
 assert.ok(glassCode.includes('body[data-we-sidebar-glass] :where([data-we-surface-runtime="content"])'),
   'sidebar content surfaces must follow both the sidebar switch and runtime ownership',
 );
-assert.ok(code.includes('body[data-we-wallpaper] {') && code.includes('body[data-we-wallpaper][data-we-glass-page]:not([data-ds-dark-theme])'),
-  'wallpaper-only effects (base let-through) stay wallpaper-gated; the light-scheme text boost follows the glass row too (ADR-0016: glass off = native labels)');
+assert.ok(wallpaperBlock && code.includes('body[data-we-wallpaper][data-we-glass-page]:not([data-ds-dark-theme])'),
+  'the wallpaper-only let-through lives on <body> under the wallpaper gate; the light-scheme text boost follows the glass row (ADR-0016: glass off = native labels)');
 // 宿主清底保留双门控，但只匹配挂载点外壳；未知插件的同名类不得被命中。
 const clearGated = (suffix) => 'body[data-we-wallpaper][data-we-adapter="browser"]' + suffix;
 const hostFrame = ' > #root > [class*="_frame"]:not([data-we-surface-preserve])';

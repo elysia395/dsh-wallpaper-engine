@@ -148,12 +148,12 @@ const decls = declarationsOf(SRC);
 const byId = (id) => decls.filter((d) => d.id === id);
 const declLayer = byId('LAYER_ID');
 const declScrim = byId('SCRIM_ID');
-check('P1.1 LAYER_ID 声明恰 1 处且钉在 src/client.js:63',
-  declLayer.length === 1 && declLayer[0].rel === 'src/client.js' && declLayer[0].line === 63
+check('P1.1 LAYER_ID 声明恰 1 处且钉在 src/client.js:123',
+  declLayer.length === 1 && declLayer[0].rel === 'src/client.js' && declLayer[0].line === 123
     && declLayer[0].literal === LAYER_LITERALS.LAYER_ID,
   JSON.stringify(declLayer));
-check('P1.2 SCRIM_ID 声明恰 1 处且钉在 src/client.js:64',
-  declScrim.length === 1 && declScrim[0].rel === 'src/client.js' && declScrim[0].line === 64
+check('P1.2 SCRIM_ID 声明恰 1 处且钉在 src/client.js:124',
+  declScrim.length === 1 && declScrim[0].rel === 'src/client.js' && declScrim[0].line === 124
     && declScrim[0].literal === LAYER_LITERALS.SCRIM_ID,
   JSON.stringify(declScrim));
 
@@ -161,8 +161,8 @@ const litSites = literalIdSites(SRC);
 const litLayer = litSites.filter((s) => s.literal === LAYER_LITERALS.LAYER_ID);
 const litScrim = litSites.filter((s) => s.literal === LAYER_LITERALS.SCRIM_ID);
 check('P1.3 层 id 字面量只在声明行出现（其它地方一律引用 LAYER_ID / SCRIM_ID）',
-  litLayer.length === 1 && litLayer[0].rel === 'src/client.js' && litLayer[0].line === 63
-    && litScrim.length === 1 && litScrim[0].rel === 'src/client.js' && litScrim[0].line === 64,
+  litLayer.length === 1 && litLayer[0].rel === 'src/client.js' && litLayer[0].line === 123
+    && litScrim.length === 1 && litScrim[0].rel === 'src/client.js' && litScrim[0].line === 124,
   'layer=' + JSON.stringify(litLayer) + ' scrim=' + JSON.stringify(litScrim));
 
 const assignSites = idAssignmentSites(SRC);

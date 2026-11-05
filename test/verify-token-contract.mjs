@@ -199,8 +199,11 @@ console.log('\n②b 独立锚点表（A1：口径不能自己证明自己）');
 console.log('\n③ `--dsw-alias-bg-base` 归壁纸半边（审计 §三.3 的关键前提）');
 {
   const bg = decls.filter((d) => d.token === '--dsw-alias-bg-base');
-  check('bg-base 声明存在且全部挂壁纸门控',
-    bg.length > 0 && bg.every((d) => bucketOf(d.chain) === 'wallpaper'),
+  // 口径（2026-11-05 修订）：bg-base 只许出现在**壁纸门或玻璃门**下 —— 绝不许无门控
+  // （无门控会把整站基色清掉）。两张门都要：玻璃门覆盖「玻璃行开着」的全页让位，
+  // 中栏那条壁纸门覆盖「玻璃行关掉后只有对话区透壁纸」的 D2 例外。
+  check('bg-base 声明存在且只挂壁纸门 / 玻璃门（不许无门控）',
+    bg.length > 0 && bg.every((d) => ['wallpaper', 'glass'].includes(bucketOf(d.chain))),
     bg.map((d) => d.file + ':' + d.line).join(' + ') + ' → ' +
     bg.map((d) => bucketOf(d.chain)).join(' + '));
   // 负对照：bg-base 若出现在无门控下，必须被判红

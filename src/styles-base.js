@@ -196,15 +196,41 @@ const CSS_BASE = `
      （现场症状：DS Bot 模式下壁纸完全不可见）。作者 !important 声明按层叠规则压过
      内联普通声明，因此壁纸在场期间页面背景令牌归本插件；壁纸退场后这些块不匹配，
      内联值原样生效 —— 单向接管，不读不写对方任何状态。
-     ⚠️ 基色与侧栏填充都只挂壁纸门（浅深各一）；侧栏填充不再要求玻璃行开启。
+     ⚠️ --dsw-alias-bg-base 是**继承**的：它只有在**共同祖先**（body）上清透，
+     中栏整条链路（hero / 对话流 / 输入卡 / 各级容器）才会一起透。挂在
+     [data-slot="main.conversation"] 上只影响该元素自身的声明，它的祖先仍是不透明
+     ⇒ 壁纸被祖先盖死（实测：中栏整块变灰）。所以基色必须留在 body 上，且**只挂壁纸门**
+     （中栏透壁纸与玻璃行无关）。
+     侧栏填充则**额外挂玻璃门**（产品口径 2026-11-05 修订，取代 10-29 的
+     「壁纸在场即让位、与玻璃行无关」）：玻璃行关掉后左右栏 / 顶栏回宿主原生态。
+     [data-we-glass-page] 由玻璃包在 applyGlass 里恒挂、disposeGlassLayer 里摘除，
+     是"玻璃行是否活着"最可靠的 DOM 信号（bundle 不加载 ⇒ 属性无人写 ⇒ 天然不匹配）。
      !important 必须都写：只补基色 ⇒ 侧栏填充仍输给内联值。 */
   body[data-we-wallpaper] {
     --dsw-alias-bg-base: transparent !important;
-    --dsw-specific-sidebar-fill: transparent !important;
   }
   body[data-ds-dark-theme][data-we-wallpaper] {
     --dsw-alias-bg-base: transparent !important;
+  }
+  body[data-we-wallpaper][data-we-glass-page] {
     --dsw-specific-sidebar-fill: transparent !important;
+  }
+  body[data-ds-dark-theme][data-we-wallpaper][data-we-glass-page] {
+    --dsw-specific-sidebar-fill: transparent !important;
+  }
+  /* 玻璃行**关掉**时右栏回宿主原生底（ADR-0010 D2）。
+     为什么需要这条：--dsw-alias-bg-base 必须在 body 上清透才能让中栏整条链路透壁纸
+     （它继承；挂在中栏上会被不透明的祖先盖死，实测整块变灰）——但那样右栏的文档 /
+     文件面板也会跟着透。右栏没有自己的实底，它读的就是继承下来的 bg-base。
+     锚点 [data-sidebar-right-panel] 是宿主 sidebar-right 包自己写在面板容器上的
+     （不是类名子串），只在**玻璃行关掉**时补底：玻璃行开着时面板由玻璃配方接管。
+     底色用宿主的面板令牌，跟随主题与用户配色。
+     ⚠️ 必须**同时要求面板展开**（[data-sidebar-right-open]，宿主写在同一个元素上）：
+     收起时容器仍占 absolute right:0 的位置，只是内部 dock 走 visibility:hidden ——
+     无条件给容器刷底会在收起态露出一整块不透明色，把面板边缘的收回按钮一起盖掉
+     （实测：右侧只剩一大片纯色、收不回去）。 */
+  body[data-we-wallpaper]:not([data-we-glass-page]) [data-sidebar-right-panel][data-sidebar-right-open] {
+    background-color: var(--dsw-alias-bg-layer-1, #232324) !important;
   }
 
   /* 壁纸仅清宿主挂载点的外壳；不得按类名子串清任意插件子树。 */

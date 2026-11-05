@@ -176,19 +176,19 @@ const WE_I18N_EN_EXT = {
   // 本区段是**纯公告文案词条**：CI 的 `notice` 快通道只在这一段内放行"只改字符串内容"
   // 的提交（判据见 test/tools/ci-routing.mjs 的 judgeNoticeEdit：区块外逐字节一致 +
   // 区块内代码骨架一致）。增删键 = 改结构 ⇒ 骨架变 ⇒ 回落全量验证链。
-  "🎉 更新：拆成八包可自选 · 头像与轮播修复 · 玻璃优化": "🎉 Update: eight togglable packages · avatar & rotation fixes · glass polish",
+  "🎉 更新：图片幻灯片壁纸 · 桌宠联动重写 · 玻璃更稳": "🎉 Update: picture & slideshow wallpapers · pet-link rewrite · steadier glass",
   "关掉也能再看": "You can always read it again",
   "：本公告点「知道了」后不再自动弹出，想回顾就到「设置 → 壁纸引擎 → 关于」点「重新查看本版更新公告」。": ": after you dismiss this notice it won't pop up again — to read it later, open Settings → Wallpaper Engine → About and click “Show this version's update notice again”.",
-  "插件拆成八个包了": "Now eight packages",
-  "：主包 + 七个功能包，插件管理器里各占一行，可只留你要的；关掉的行连界面一起退出，重启生效。": ": one main package plus seven feature packages, each its own row in the plugin manager — keep only what you want; a disabled row takes its UI with it. Restart to apply.",
-  "头像修复": "Avatar fixes",
-  "：助手头像不再成片消失，新增「助手头像间隔」滑块（1–30，默认 6）；裁切框不再空白、不用点第二次。": ": assistant avatars no longer vanish in bulk — a new “Assistant avatar spacing” slider (1–30, default 6); the crop box is no longer blank and no longer needs a second click.",
-  "轮播终于能调了": "Rotation is adjustable again",
-  "：此前无论怎么设都锁死 30 分钟，现已恢复 1–1440 分钟；新增「视频播完就换」档。": ": it used to be locked at 30 minutes no matter what you set; 1–1440 minutes now works, plus a new “switch when the video ends” mode.",
-  "玻璃优化": "Glass polish",
-  "：分数缩放下右栏不再丢失；开合动画中两侧不再同时消失；第二个会话不再抢走右栏。": ": the right sidebar no longer loses its glass under fractional scaling; both sides no longer vanish together mid-animation; a second session no longer steals it.",
+  "图片 / 幻灯片壁纸": "Picture / slideshow wallpapers",
+  "：WE preset 型图片项目直接可用；多图项目自动成图集，播放页新增「图片轮播」节奏下拉（跟随壁纸 / 5 秒–5 分钟）。": ": WE preset picture projects now work as-is; multi-image projects become slideshows, with a new “Picture slideshow” pacing dropdown on the Playback tab (follow the project, 5 s – 5 min).",
+  "玻璃更稳": "Steadier glass",
+  "：首启与行开关不再闪黑或残留坏滤镜；第三方弹窗在玻璃下不再半透明透字。": ": no more first-boot flicker or broken-filter leftovers around the glass row toggle; third-party dialogs no longer turn translucent and bleed through under glass.",
+  "桌宠联动重写": "Pet-link rewrite",
+  "：接入官方安装引导，设置页开关点按立即生效，重开页面不再回弹。": ": rebuilt around the official installer onboarding — panel switches apply instantly and no longer snap back when you reopen settings.",
+  "头像排版修复": "Avatar layout fixed",
+  "：消息行改两列布局，第三方表情包不再抢占行首、不再冒出「两张头像并排」；表情收进横排容器排在正文之后。": ": message rows now use a two-column layout — third-party sticker plugins no longer steal the row start (no more “two avatars side by side”), and stickers collect into an inline strip after the body text.",
   "另修一批": "Also fixed",
-  "：大图上传不再卡死壁纸库；阅读页底色找得回；设置快速改回原值不再漏存。": ": large uploads no longer freeze the wallpaper library; the document-reading background setting is findable again; quickly reverting a setting no longer drops the save.",
+  "：设置面板分段控件与色板行不再被长说明挤扁，中文字体名正常显示；库存加载失败不再误关自动轮播；大清单恢复压缩提速；UI 受压自动降帧防冻结；非默认玻璃配色不再遮挡壁纸。": ": segmented controls and swatch rows in settings no longer get squeezed by long hints, and Chinese font names render correctly; a failed library load no longer kills auto-rotation; the large inventory payload is compressed again; the scene renderer sheds frames under UI pressure to avoid freezes; non-default glass colors no longer cover the wallpaper.",
   "本版已发布到 npm，可直接按包名安装。": "This version is published to npm — install it by package name.",
   // ══ UPDATE NOTICE COPY（end）════════════════════════════════════════════════
   // 配图 caption 与提示行不随公告换血（配图与"知道了"是稳定面），住在区块外。

@@ -53,6 +53,66 @@ function weComponentVisible(components, name) {
   return components[name] === "started";
 }
 
+/* ── 玻璃行停用后的残留回收（主包侧）────────────────────────────────────────
+ * 为什么必须由主包做：清理玻璃的函数 `disposeGlassLayer` 住在 `packages/glass`，
+ * 而行被停用后**那个 bundle 根本不求值** —— 「清理者」与「需要被清理的残留」恰好
+ * 在同一侧，谁也够不着谁。实测症状：关掉 `wallpaper-engine-glass` 行后**左侧栏
+ * 仍是玻璃**（`data-we-glass-page` 与 `--we-*` 变量留在 body 上，主包样式里挂在
+ * 那个门下的规则照旧命中），只有刷新页面才好。
+ *
+ * 主包永远加载 ⇒ 由它当回收站。判据源复用 `/inventory` 已透传的 `components`
+ * （与 weComponentVisible 同一份、同一口径），不新开路由、不引第二个真源。
+ * ⚠️ 只撤**玻璃专属**的门控/变量：`data-we-wallpaper`、`data-we-ui-color` 等主包
+ * 自有门控与玻璃行正交，各有各的状态机，不在此列。
+ * 幂等：行活着时一次 `components.glass !== "started"` 判定就返回，零 DOM 走访。 */
+const GLASS_RESIDUE_ATTRS = [
+  "data-we-glass-page", "data-we-glass-chat", "data-we-glass-window", "data-we-glass-floaters",
+  "data-we-left-sidebar", "data-we-left-sidebar-radius", "data-we-right-sidebar-radius",
+  "data-we-left-sidebar-square", "data-we-right-sidebar-square",
+  "data-we-titlebar-glass", "data-we-thinking-glass", "data-we-thinking-native",
+  "data-we-sidebar-follow", "data-we-sidebar-glass", "data-we-sidebar-fullclear",
+  "data-we-floater-solid", "data-we-glass-fallback",
+];
+const GLASS_RESIDUE_VARS = [
+  "--we-blur", "--we-saturate", "--we-glass-brightness", "--we-glass-alpha", "--we-glass-color",
+  "--we-surface-tint-light", "--we-surface-tint-dark",
+  "--we-surface-tint-rgb-light", "--we-surface-tint-rgb-dark",
+  "--we-left-sidebar-radius", "--we-right-sidebar-radius",
+  "--we-sidebar-blur", "--we-sidebar-saturate", "--we-sidebar-sheen",
+  "--we-sidebar-color", "--we-sidebar-tint",
+  "--we-content-surface-alpha", "--we-content-surface-color",
+  "--we-settings-window-blur", "--we-settings-window-alpha",
+  "--we-left-sidebar-blur", "--we-left-sidebar-alpha",
+  "--we-titlebar-blur", "--we-titlebar-alpha",
+  "--we-floaters-blur", "--we-floaters-alpha",
+  "--we-chat-glass-fidelity", "--we-chat-surface-tint-light", "--we-chat-surface-tint-dark",
+  "--we-chat-surface-tint-rgb-light", "--we-chat-surface-tint-rgb-dark",
+];
+
+/**
+ * 玻璃行停用 ⇒ 撤玻璃门控与变量（幂等；健康态零 DOM 走访）。
+ * @param {unknown} components `/inventory` 的 components 表
+ * @returns {boolean} 本轮是否真的清了东西
+ */
+function reclaimGlassResidue(components) {
+  try {
+    if (typeof document === "undefined" || !document.body) return false;
+    // 缺 `glass` 键 = 探针没给结论（老宿主 / 探针没起）⇒ 按可用处理，与 weComponentVisible 同口径
+    if (!components || typeof components !== "object" || !("glass" in components)) return false;
+    if (components.glass === "started") return false;   // 行活着，玻璃归它自己管
+    const body = document.body;
+    const hasAttr = GLASS_RESIDUE_ATTRS.some((a) => body.hasAttribute(a));
+    const hasVar = GLASS_RESIDUE_VARS.some((v) => body.style.getPropertyValue(v) !== "");
+    const glassSheet = document.querySelector('style[data-plugin-css="dsh-wallpaper-engine/glass"]');
+    if (!hasAttr && !hasVar && !glassSheet) return false; // 已经干净：不写任何东西
+    for (const a of GLASS_RESIDUE_ATTRS) body.removeAttribute(a);
+    for (const v of GLASS_RESIDUE_VARS) body.style.removeProperty(v);
+    if (glassSheet) glassSheet.remove();
+    for (const el of document.querySelectorAll("[data-we-titlebar-anchor]")) el.removeAttribute("data-we-titlebar-anchor");
+    return true;
+  } catch { return false; } // 回收失败不外抛：下一次 inventory 加载再对时
+}
+
 // 把可见面判据**注入全局**：可单独 import / 可独立求值的模块（avatar-layer、panel-tabs 的页签函数）
 // 通过 `globalThis.__weComponentVisible` 取用它，而不裸引用本作用域里的符号（那些模块单独求值时会 ReferenceError）。
 // 契约与 `selection` / `apiUrl` 一致：模块输入一律走 globalThis。
@@ -880,6 +940,10 @@ async function loadInventory() {
       components: data.components,
       error: null,
     };
+    // 玻璃行停用时回收残留（新开面板 / 手动刷新 / 上传完成都会走到这里）。
+    // 放在"拿到新 components"之后、写 store 之前：门控与变量必须先撤干净，
+    // 随后这次 render 才不会在"行已停用但玻璃还在"的中间态上画一帧。
+    reclaimGlassResidue(data.components);
   } catch (err) {
     next = {
       installDir: null,
@@ -5600,7 +5664,7 @@ function RopeDock() {
 // ⚠️ 公告正文与配图是**随版本换血**的：改内容就要升哨兵（否则看过旧版的用户永远看不到
 // 新说明，改了等于没改 ⇒ 重弹一次是设计意图）。配图下方那行是**求星跳转** —— 与正文四条
 // 各管一件事，同守 `art === "ready"` 的门控。
-const NOTICE_VERSION = "1.4.0";
+const NOTICE_VERSION = "1.4.1";
 // 配图就绪探针的节奏：HEAD 轮询到新白名单在场（= 后端已重启）才弹；旧后端一直
 // 不在场超过 WAIT 则降级为**无图**弹出（文案信息完整；求星入口另有「关于」页那枚常驻按钮
 // 与它的重看按钮，不靠弹窗这一条命）。探针打在 /about-qr 上是自清洁的：404 响应 no-store、200
@@ -5737,7 +5801,7 @@ function UpdateNotice() {
   // ⚠️ 不要在这里写注释以外的逻辑：注释会被骨架判据剥掉（所以写注释是安全的），
   //    任何可执行 token 的增删都会让骨架判据判红。
   return React.createElement("div", { className: "we-update-notice", role: "alert" },
-    React.createElement("div", { className: "we-update-notice__title" }, weT("🎉 更新：拆成八包可自选 · 头像与轮播修复 · 玻璃优化")),
+    React.createElement("div", { className: "we-update-notice__title" }, weT("🎉 更新：图片幻灯片壁纸 · 桌宠联动重写 · 玻璃更稳")),
     // 只有 ready 才渲染配图与说明行（timeout 降级态无图弹出，正文信息自足）。
     // 图下那行是**求星入口**（见下面的说明），所以它随配图同一条门控：无图降级态没有它，
     // 但求星入口另有「关于」页那枚常驻按钮兜住，不是唯一命脉。
@@ -5774,20 +5838,20 @@ function UpdateNotice() {
         "① ", noticeEx(2), React.createElement("strong", null, weT("关掉也能再看")),
         weT("：本公告点「知道了」后不再自动弹出，想回顾就到「设置 → 壁纸引擎 → 关于」点「重新查看本版更新公告」。")),
       React.createElement("p", { className: "we-update-notice__callout" },
-        "② ", noticeEx(2), React.createElement("strong", null, weT("插件拆成八个包了")),
-        weT("：主包 + 七个功能包，插件管理器里各占一行，可只留你要的；关掉的行连界面一起退出，重启生效。")),
+        "② ", noticeEx(2), React.createElement("strong", null, weT("图片 / 幻灯片壁纸")),
+        weT("：WE preset 型图片项目直接可用；多图项目自动成图集，播放页新增「图片轮播」节奏下拉（跟随壁纸 / 5 秒–5 分钟）。")),
       React.createElement("p", { className: "we-update-notice__callout" },
-        "③ ", noticeEx(2), React.createElement("strong", null, weT("头像修复")),
-        weT("：助手头像不再成片消失，新增「助手头像间隔」滑块（1–30，默认 6）；裁切框不再空白、不用点第二次。")),
+        "③ ", noticeEx(2), React.createElement("strong", null, weT("玻璃更稳")),
+        weT("：首启与行开关不再闪黑或残留坏滤镜；第三方弹窗在玻璃下不再半透明透字。")),
       React.createElement("p", { className: "we-update-notice__callout" },
-        "④ ", noticeEx(2), React.createElement("strong", null, weT("轮播终于能调了")),
-        weT("：此前无论怎么设都锁死 30 分钟，现已恢复 1–1440 分钟；新增「视频播完就换」档。")),
+        "④ ", noticeEx(2), React.createElement("strong", null, weT("桌宠联动重写")),
+        weT("：接入官方安装引导，设置页开关点按立即生效，重开页面不再回弹。")),
       React.createElement("p", { className: "we-update-notice__callout" },
-        "⑤ ", noticeEx(2), React.createElement("strong", null, weT("玻璃优化")),
-        weT("：分数缩放下右栏不再丢失；开合动画中两侧不再同时消失；第二个会话不再抢走右栏。")),
+        "⑤ ", noticeEx(2), React.createElement("strong", null, weT("头像排版修复")),
+        weT("：消息行改两列布局，第三方表情包不再抢占行首、不再冒出「两张头像并排」；表情收进横排容器排在正文之后。")),
       React.createElement("p", { className: "we-update-notice__callout" },
         "⑥ ", noticeEx(2), React.createElement("strong", null, weT("另修一批")),
-        weT("：大图上传不再卡死壁纸库；阅读页底色找得回；设置快速改回原值不再漏存。")),
+        weT("：设置面板分段控件与色板行不再被长说明挤扁，中文字体名正常显示；库存加载失败不再误关自动轮播；大清单恢复压缩提速；UI 受压自动降帧防冻结；非默认玻璃配色不再遮挡壁纸。")),
       React.createElement("p", { className: "we-update-notice__hint" },
         weT("升级后建议重启一次 DSH，改动才完整生效；本提示每个新版本只出现一次，点下方按钮关闭后不再弹出。"),
         weT("本版已发布到 npm，可直接按包名安装。")),
@@ -5957,6 +6021,23 @@ function apply(ctx) {
     prefetchInventoryOnce();
     prefetchFontSetList();
   } catch { /* 预取失败走原路径（启动链各步自己会发请求） */ }
+
+  // 0c. 玻璃行停用时的残留回收（见 reclaimGlassResidue 的注释：清理函数住在玻璃子包，
+  //     行停用后那个 bundle 不求值 ⇒ 只能由永远加载的主包来收）。
+  //     ⚠️ 必须走 ctx.effect 挂定时器：模块作用域注册定时器会被
+  //     verify-scene-live 的 "no src module registers timers at module scope" 判红，
+  //     且 bundle 多次求值时会泄漏。首拍留 2.5s，让宿主行注册与首轮 CSS 注入先跑完。
+  // 守卫沙箱（vm / 无 DOM 的宿主替身）不提供 setTimeout ⇒ 明确跳过，不用 try 掩盖。
+  if (ctx.effect && typeof setTimeout === "function") ctx.effect(() => {
+    const timer = setTimeout(() => {
+      try {
+        Promise.resolve(apiJson(INVENTORY_URL)).then((res) => {
+          if (res && res.ok && res.data) reclaimGlassResidue(res.data.components);
+        }).catch(() => { /* 宿主没就绪：不重试，loadInventory 那条腿会兜住 */ });
+      } catch { /* ignore */ }
+    }, 2500);
+    return () => { try { clearTimeout(timer); } catch { /* ignore */ } };
+  });
 
   // 1. Mount the behind-body wallpaper + scrim layers and keep them in sync
   //    with the selection store. ctx.effect gives fiber-lifetime cleanup.
