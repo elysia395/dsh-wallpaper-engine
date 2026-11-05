@@ -194,8 +194,9 @@ $env:DSH_WE_NOTICE = "1"   # set before launching DSH; "0" silences it permanent
 
 ## Known behaviour boundaries (**not bugs**, but very easy to report as bugs)
 
-All three are the unavoidable price of one trade-off: **keep the old picture rather than show the base
-colour.** They are listed here so that a "looks stuck / flashed for a moment" symptom has an explanation.
+All of these are the unavoidable price of one trade-off: **keep the old picture rather than show the base
+colour** (plus how far the glass solid base reaches). They are listed here so that a "looks stuck / flashed
+for a moment / why is this not see-through" symptom has an explanation.
 The criteria are below; readings are in the matching `docs/CHANGELOG.md` entries.
 
 ### After switching to a wallpaper: "nothing happened" and the old wallpaper stays
@@ -229,4 +230,29 @@ The gate recognises `iframe.we-live-iframe` via `we-live-on`; a bare `iframe.we-
 **Current state (not done)**: this one **can be covered** — the iframe element's own `load` / `error` fire
 even cross-origin (the same code already uses them in `prepareWebProbe`); all that is missing is wiring those
 two signals into the gate's signal table.
+
+### Under glass, third-party overlays are still translucent: the ones without `role` are out of scope
+
+"Opaque base for third-party dialogs" (`floaterSolidBase`, on by default) only covers ARIA overlays
+(`role="dialog"` / `role="alertdialog"`). The surfaces below have **no stable anchor** and keep the
+"translucent and frost-free" look (measured in real Chromium in #315: base alpha ≈ 0.65, `backdrop-filter:
+none`), so whatever is behind them shows straight through:
+
+- framework-layer containers parented directly to `body` (overlays / drawers / custom menus drawn by
+  third-party plugins);
+- sticky headers and floating toolbars — persistent overlays with no dialog semantics;
+- third-party containers that carry neither a `role` nor one of the existing solid-base rules.
+
+**Why we do not guess class names**: matching on class names bakes third-party internals into this plugin —
+it silently stops working the day they rename a class, and it hits unrelated panels that happen to share the
+name. Solid bases for these surfaces need an anchor from the plugin side (`data-dsw-floater` /
+`data-dsw-overlay`, or `--dsw-menu-surface-*` as documented in the interface docs); the glass side only
+trusts anchors, and the host does not provide one yet.
+
+**Current state (not done; tracked in #315)**: keep as is + this document. Only two workarounds:
+
+- turn off "Give third-party plugin dialogs a solid base" ⇒ every overlay (ARIA dialogs included) goes back
+  to the host's native translucent look;
+- if an overlay merely "has no frost" rather than "too see-through to read", add its selector to
+  "Extra frost targets" — that adds the blur channel, **not** a solid base.
 
