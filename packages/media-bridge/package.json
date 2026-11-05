@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-wallpaper-engine-media-bridge",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "System media bridge host half (now-playing / spectrum / artwork / media control) plus the P-D phase 1 wallpaper domain: the wallpaper host route families and the browser half of the wallpaper library / playback tabs. Package name stays media-bridge (already published by upstream 1.4.0; see docs/adr/0014-subpackage-contract.md §S4.3).",
   "icon": "./icon.png",
   "type": "module",

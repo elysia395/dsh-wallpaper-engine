@@ -35,6 +35,12 @@ function createLinkedPetProvider(rt) {
     state.mode = det.mode;
     state.reason = det.reason;
     if (det.mode !== 'linked') {
+      // 手势段（grab / pull）是**拖动过程中的逐帧通知**，不是一次交互的提交点：
+      // 主包那条原生拖动路径自己在抬手时 commit 开/关（src/client.js 的 finishDrag）。
+      // 这里若也回落 fallback（生产端 = wallSidebarToggle），一次拖动就会按 pointermove
+      // 的次数反复开关右侧栏 —— 1.4.1 线上的「拖吉祥物 ⇒ 右侧栏高频弹出又收回」正是它。
+      // 非手势（tap 选路进来的 run）仍保留回落：那是真正的一次「点击」。
+      if (gesture) return { logic: 'disabled', phase: 'done', busy: false, fallback: false, reason: det.reason };
       let handled = false;
       try { handled = rt.fallback() === true; } catch { handled = false; }
       return { logic: 'disabled', phase: 'done', busy: false, fallback: handled, reason: det.reason };

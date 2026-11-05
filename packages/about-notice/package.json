@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-wallpaper-engine-about-notice",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "About tab host half: repo star count (/star-count) and the two contact QR images (/about-qr).",
   "icon": "./icon.png",
   "type": "module",

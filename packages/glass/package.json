@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-wallpaper-engine-glass",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "Liquid glass surfaces for the DSH wallpaper engine: per-surface glaze variables, the surface manager runtime, and the Glass section of the Appearance tab. Disabling this row returns the host to its native theme.",
   "icon": "./icon.png",
   "type": "module",

@@ -9,9 +9,18 @@
 > **Version numbers, issue numbers and performance figures live here**, not on the front page
 > (`README.md` / `README.en.md` keep only version-independent highlights).
 >
-> **Current released version: `v1.4.1`** (npm and GitHub Release published).
+> **Current released version: `v1.4.2`** (1.4.1 shipped; 1.4.2 is the emergency fix).
 >
 > Counts such as `test/verify-scene-live.mjs` `(466)` record the **total at the moment that entry was written**, not the current total (later entries push it up — it is 502 now); they are kept verbatim so each entry still matches its own commit.
+
+### v1.4.2 (2026-11-06 · emergency fix)
+
+- **Fix: dragging the mascot made the right sidebar pop open and closed every frame** (a 1.4.1 regression). Two layers stacked into it: ① the main package's `src/client.js` official-mode drag path fires `petLink.performer.onPull()` on **every `pointermove`** (deliberately — the drawer's follow-the-finger preview depends on it), and ② the `performer` facade in `packages/pet-link/src/pet-link.js` **always dispatched to the linked provider** regardless of the current mode; linked's `run()` then took its `det.mode !== 'linked'` branch (no `dsh-pet-dshwe` runtime installed / link switch off — the common case for nearly everyone) which calls `rt.fallback()`, wired in production straight to `wallSidebarToggle()`. So "drag = one mascot click per frame": a 40-frame drag reproduced **30** sidebar open/close toggles on a real machine — the right sidebar visibly flickered. Fixed at two layers (deliberate defence in depth; either one alone can be re-ignited by the next change):
+  — **the facade routes by provider**: `performer.onGrab / onPull / onRelease / snapshot` now go through `active()`, and the native performer is already a quiet no-op (`Promise.resolve(false)`), leaving the main package's native drag path completely untouched;
+  — **gesture segments never fall back**: in the degraded branch of `run(logic, gesture)`, `gesture === true` returns `fallback: false` outright. This one covers the TOCTOU window — the facade probes as linked, then by the time the provider re-probes the target is gone (mascot hidden mid-drag / runtime dropped), and that degraded branch used to toggle the sidebar once in the middle of the drag. Non-gesture fallback semantics (a tap routing into `run`) are unchanged.
+  After the fix, an end-to-end repro (real `src/client.js` drag segment + the real pet-link assembly) shows `toggles=0` for the whole drag and exactly one open/close commit on release, identically in linked and native modes.
+  Guards: `test/verify-pet-linked.mjs` gains 3b (native-mode gestures never fall back; taps still do), 3c (the facade routes by current provider, discriminated by **return value** — native always `false` / linked resolves `true`, with a linked control case so "always false" can't pass), and 3d (the mid-drag probe-flip TOCTOU window); `test/verify-pet-rope-entry.mjs` gains "official-mode drag forwards gestures per frame but synthesizes no sidebar toggle" — pinning the "one onPull per frame" shape that **must** stay, while pinning "at most one open/close commit per drag". Each guard was negative-controlled (facade only / gesture-only / both reverted) and turned red as expected.
+- **Version `1.4.2` (nine packages locked in step)**: all nine versions and `package-lock` recomputed in the same batch; the nine-tarball release set self-checks (names / versions / the main package's eight exact same-version subpackage deps / `webwallgl` `^3.0.0` / client artifacts present / `publishOrder` = eight subpackages first, main last) all pass.
 
 ### v1.4.1 (2026-11-05 · published to npm)
 

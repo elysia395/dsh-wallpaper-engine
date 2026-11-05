@@ -215,6 +215,89 @@ console.log('PASS 彩蛋计数与踢开弹飞（throwNative）');
 }
 console.log('PASS 未装 / 关闭 / 探测失败（含 runtime-too-old）均回落 native 且原因可读');
 
+// ── 3b) 手势（grab / pull）绝不回落 fallback ─────────────────────────────────
+// 1.4.1 线上事故：拖动吉祥物 ⇒ 右侧栏按 pointermove 的次数反复开合。
+// 主包 `src/client.js` 的原生拖动路径对**每一次** pointermove 都发 `performer.onPull`，
+// 而 provider 的降级分支以前一律 `rt.fallback()`（生产端 = wallSidebarToggle）
+// ⇒ 一次拖动 = 几十次侧栏开/关。手势是拖动途中的逐帧通知，不能当点击提交点。
+{
+  // native（未装运行时）：手势必须完全安静 —— 不碰侧栏开关。
+  const h = harness({ installed: false });
+  assert.equal(h.petLink.mode(), 'native', '未装运行时应为 native');
+  const before = h.calls.sidebar.length;
+  for (let i = 0; i < 40; i += 1) await h.petLink.performer.onPull(i / 96);
+  await h.petLink.performer.onGrab();
+  await h.petLink.performer.onRelease();
+  assert.equal(h.calls.sidebar.length, before,
+    'native 期手势不得回落 fallback（否则一次拖动把右侧栏按帧开合几十次）');
+  assert.equal(h.calls.playAnim.length, 0, 'native 期手势不得下发动作');
+  // 但同一时刻的**点击**仍必须回落（那是真正的一次交互提交点）。
+  const tapped = await h.petLink.mascot.tap();
+  assert.equal(tapped.fallback, true, 'native 期点击仍必须回落主包吉祥物');
+  assert.equal(h.calls.sidebar.filter(call => call.method === 'fallback').length, 1,
+    'native 期只有点击回落一次，手势一次都不许');
+}
+console.log('PASS 手势不回落：native 期拖动零侧栏开关，点击仍回落');
+
+// ── 3c) performer 门面必须按**当刻 provider** 路由 ────────────────────────
+// 光有 provider 内部的「手势不回落」还不够：装配层的 `performer.*` 以前恒发 linked，
+// 于是 native 期每一帧都要进一次 linked 的降级分支。门面这一层必须自己先选对 provider
+// （native 的 performer 是安静 no-op），否则以后任何一次降级分支改动都可能把它重新点燃。
+{
+  const h = harness({ installed: false });
+  assert.equal(h.petLink.mode(), 'native');
+  const before = h.calls.sidebar.length;
+  for (let i = 0; i < 30; i += 1) await h.petLink.performer.onPull((i + 1) / 40);
+  await h.petLink.performer.onGrab();
+  await h.petLink.performer.onRelease();
+  assert.equal(h.calls.sidebar.length, before, 'performer 门面在 native 期不得冒泡到 linked/fallback');
+  // 判别量用**返回值**（两种 provider 的形状是刻意对齐的，只能靠语义区分）：
+  //   · native.performer.onPull/onGrab → 恒 `Promise.resolve(false)`（安静 no-op）；
+  //   · linked.performer.onPull/onGrab → 段跑通后 `.then(v => v.phase === 'done')` ⇒ true。
+  // 拿 true 就说明门面把请求发给了 linked —— 这正是 1.4.1 的缺陷形状。
+  assert.equal(await h.petLink.performer.onPull(0.5), false,
+    'native 期 performer.onPull 必须落到 native（恒 false）而不是 linked（跑通 ⇒ true）');
+  assert.equal(await h.petLink.performer.onGrab(), false,
+    'native 期 performer.onGrab 必须落到 native（恒 false）而不是 linked（跑通 ⇒ true）');
+}
+// 对照：linked 期同一对调用必须为 true（证明上面的 false 不是"永远 false"的假绿）。
+{
+  const h = harness();
+  assert.equal(h.petLink.mode(), 'linked');
+  assert.equal(await h.petLink.performer.onGrab(), true, 'linked 期 performer.onGrab 必须真的跑通');
+  assert.equal(await h.petLink.performer.onPull(0.5), true, 'linked 期 performer.onPull 必须真的跑通');
+}
+console.log('PASS performer 门面按当刻 provider 路由（native 期安静 no-op）');
+
+// ── 3d) 拖动中途探测翻转（TOCTOU）：手势仍不得回落 fallback ─────────────────
+// 门面按 `active()` 选 provider 之后，provider 内部**还会再探一次**（`run()` 里的 `rt.detect()`）。
+// 这两次探测之间用户可能刚好让目标不合适（拖动中宠物被隐藏 / 运行时掉线），于是：
+//   facade 探到 linked → 进 linked.performer.onPull → run() 探到 native → 降级分支。
+// 没有这一层守卫的话，那个降级分支在**手势**里也会回落 `wallSidebarToggle`
+// —— 也就是拖动途中莫名其妙地把右侧栏开/关一次。手势就该是安静 no-op。
+{
+  const h = harness();
+  assert.equal(h.petLink.mode(), 'linked', '前置：初始应为 linked');
+  // 让 getRoot 在第一次调用后开始返回 null：模拟"门面探测那一刻还在、进 provider 后就没了"。
+  const realGetRoot = h.api.link.getRoot;
+  let rootReads = 0;
+  h.api.link.getRoot = id => { rootReads += 1; return rootReads === 1 ? realGetRoot(id) : null; };
+  const before = h.calls.sidebar.length;
+  const beforePlays = h.calls.playAnim.length;
+  await h.petLink.performer.onGrab();
+  await h.petLink.performer.onPull(0.5);
+  assert.ok(rootReads > 1, '前置：provider 内部必须重新探测（否则这条用例没覆盖到翻转窗口）');
+  assert.equal(h.calls.sidebar.length, before,
+    '手势段内的降级分支不得回落 fallback —— 拖动途中会突然把右侧栏开/关一次');
+  assert.equal(h.calls.playAnim.length, beforePlays, '探测翻转后不得再下发动作');
+  // 恢复探测：非手势的降级仍必须回落（点击语义没被误伤）。
+  h.api.link.getRoot = realGetRoot;
+  assert.equal(h.petLink.mode(), 'linked', '恢复后应回到 linked');
+  const tapped = await h.petLink.mascot.tap();
+  assert.equal(tapped.phase, 'done', '恢复后点击必须正常跑通');
+}
+console.log('PASS 拖动中途探测翻转：手势降级仍不碰侧栏开关');
+
 // ── 4) sleep/wake 竞争：先唤醒再下发点播 ────────────────────────────────────
 {
   const h = harness({ sleeping: true });

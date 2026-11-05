@@ -207,9 +207,13 @@ function createPetLink(options = {}) {
       snapshot: () => active().snapshot(),
     },
     performer: {
-      onGrab: () => linked.performer.onGrab(),
-      onPull: ratio => linked.performer.onPull(ratio),
-      onRelease: () => linked.performer.onRelease(),
+      // 手势必须按**当刻 provider** 路由：以前这里恒发 linked，native 期（没装运行时 /
+      // 联动关掉 —— 绝大多数用户）每个 pointermove 都会落进 linked.run 的降级分支，
+      // 回落到 `wallSidebarToggle` ⇒ 拖动一次吉祥物就把右侧栏按帧开合几十次。
+      // native 的 performer 是安静 no-op（见 native.js），主包那条原生拖动路径不受影响。
+      onGrab: () => active().performer.onGrab(),
+      onPull: ratio => active().performer.onPull(ratio),
+      onRelease: () => active().performer.onRelease(),
       snapshot: () => active().snapshot(),
     },
     tuner,

@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-wallpaper-engine-fx",
-  "version": "1.4.1",
+  "version": "1.4.2",
   "description": "Click & trail effects for the DSH wallpaper engine: a canvas layer that draws pointer clicks and trails above the wallpaper, plus its Extension-tab settings island.",
   "icon": "./icon.png",
   "type": "module",

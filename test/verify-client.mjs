@@ -265,7 +265,6 @@ assert.ok(!glassCode.includes(wallpaperGatedSidebarSelector), 'legacy wallpaper-
 const blockBodyOf = (needle, face) => naiveBlockBody(face || code, needle);
 const pageGlassBlock = blockBodyOf('body[data-we-glass-page] {', glassCode); // 页玻璃锚点在玻璃包产物里
 const wallpaperBlock = blockBodyOf('body[data-we-wallpaper] {');
-const conversationBlock = blockBodyOf('body[data-we-wallpaper] [data-slot="main.conversation"] {');
 assert.ok(pageGlassBlock && pageGlassBlock.includes('--dsw-alias-bg-layer-1')
   && pageGlassBlock.includes('--dsw-alias-markdown-code-block'),
   'page-glass token mapping must sit on body[data-we-glass-page] (glass works without a wallpaper)');
