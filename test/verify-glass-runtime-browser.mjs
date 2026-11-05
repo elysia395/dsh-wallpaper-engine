@@ -34,51 +34,71 @@ const browsers = process.platform === 'win32'
     : ['/usr/bin/google-chrome', '/usr/bin/chromium', '/usr/bin/chromium-browser'];
 const browser = process.env.WE_TEST_BROWSER || browsers.find(existsSync);
 assert.ok(browser && existsSync(browser), '缺少 Chromium 浏览器；请用 WE_TEST_BROWSER 指定可执行文件，浏览器回归不会跳过。');
-const profile = mkdtempSync(join(out, 'profile-'));
-const browserLogPath = join(profile, 'browser-stderr.log');
-const browserLog = openSync(browserLogPath, 'w');
 // 用 `--remote-debugging-pipe` 而不是 `--remote-debugging-port=0`：就绪信号是管道收到第一条
 // CDP 回复，不是轮询 `DevToolsActivePort` 文件。2026-11-04 的 ubuntu 腿实测过另一种形态：
 // 浏览器进程活着、20 秒内却没写端口文件，一步就把整条链判红（`[27/103]` 短路）。
 // 管道模式下"没起来"= fd 4 立刻 EOF，不必等满一个超时；没有 TCP 端口也就没有端口冲突一类故障。
-let child;
-try {
-  child = spawn(browser, [
-    '--headless=new', '--no-first-run', '--remote-debugging-pipe', '--user-data-dir=' + profile,
-    ...(process.env.WE_TEST_BROWSER_LOG ? ['--enable-logging=stderr', '--log-level=0'] : []), 'about:blank',
-  ], { stdio: ['ignore', 'ignore', process.env.WE_TEST_BROWSER_LOG ? 2 : browserLog, 'pipe', 'pipe'] });
-} catch (error) {
-  // 路径存在但不是可执行文件（spawn 在 Windows 上同步抛 EFTYPE/ENOEXEC）——按"没起来"报，不崩栈。
-  assert.fail('浏览器无法启动（' + browser + '）：' + error.message);
-}
-closeSync(browserLog);
-const launchDetails = () => JSON.stringify({ browser, exitCode: child.exitCode, signal: child.signalCode,
-  stderr: readFileSync(browserLogPath, 'utf8').slice(-16384) });
-let launchError, counter = 0, sessionId = null, pipeClosed = false;
-const pending = new Map(), failures = [], report = [];
-const toBrowser = child.stdio[3], fromBrowser = child.stdio[4];
+const BROWSER_ARGS = [
+  '--headless=new', '--no-first-run', '--remote-debugging-pipe',
+  // CI 的 /dev/shm 常常只有 64MB：共享内存不足时 Chrome 会卡在很早期（进程活着、CDP 一句话不说）。
+  '--disable-dev-shm-usage',
+  // headless 没有真 GPU，让它在受限容器里探测显卡驱动只会拖长启动。
+  '--disable-gpu',
+  // 启动卡住时 stderr 是唯一能说明"卡在哪一步"的证据 ⇒ 始终开日志（默认写进 profile，不进控制台）。
+  '--enable-logging=stderr', '--log-level=0',
+];
+let child, toBrowser, fromBrowser, launchDetails, launchError;
+let counter = 0, sessionId = null, pipeClosed = false, pending = new Map();
+const failures = [], report = [];
 // 管道先关时写会 EPIPE —— 由 pending 的 reject 表达失败，不额外抛。
-toBrowser.on('error', () => {});
-child.on('error', error => { launchError = error; });
 function failPending(error) {
   for (const [id, item] of pending) { clearTimeout(item.timer); pending.delete(id); item.reject(error); }
 }
-let buffer = '';
-fromBrowser.on('data', chunk => {
-  buffer += chunk.toString('utf8');
-  let at;
-  while ((at = buffer.indexOf('\0')) >= 0) {
-    const text = buffer.slice(0, at);
-    buffer = buffer.slice(at + 1);
-    if (!text) continue;
-    const event = JSON.parse(text), item = pending.get(event.id);
-    if (!item) continue;
-    clearTimeout(item.timer); pending.delete(event.id);
-    if (event.error) item.reject(Error(JSON.stringify(event.error))); else item.resolve(event.result);
+// 起一个浏览器进程并把管道接好。重试时会再调一次，所以连接状态全部就地重置。
+function attachBrowser() {
+  const profile = mkdtempSync(join(out, 'profile-'));
+  const browserLogPath = join(profile, 'browser-stderr.log');
+  const browserLog = openSync(browserLogPath, 'w');
+  pending = new Map(); counter = 0; sessionId = null; pipeClosed = false; launchError = null;
+  try {
+    child = spawn(browser, [...BROWSER_ARGS, '--user-data-dir=' + profile, 'about:blank'],
+      { stdio: ['ignore', 'ignore', process.env.WE_TEST_BROWSER_LOG ? 2 : browserLog, 'pipe', 'pipe'] });
+  } catch (error) {
+    // 路径存在但不是可执行文件（spawn 在 Windows 上同步抛 EFTYPE/ENOEXEC）——按"没起来"报，不崩栈。
+    closeSync(browserLog);
+    assert.fail('浏览器无法启动（' + browser + '）：' + error.message);
   }
-});
-fromBrowser.on('end', () => { pipeClosed = true; failPending(Error('浏览器管道已关闭：' + launchDetails())); });
-child.on('exit', () => failPending(Error('浏览器进程已退出：' + launchDetails())));
+  closeSync(browserLog);
+  launchDetails = () => JSON.stringify({ browser, exitCode: child.exitCode, signal: child.signalCode,
+    stderr: readFileSync(browserLogPath, 'utf8').slice(-16384) });
+  toBrowser = child.stdio[3]; fromBrowser = child.stdio[4];
+  toBrowser.on('error', () => {});
+  child.on('error', error => { launchError = error; });
+  let buffer = '';
+  fromBrowser.on('data', chunk => {
+    buffer += chunk.toString('utf8');
+    let at;
+    while ((at = buffer.indexOf('\0')) >= 0) {
+      const text = buffer.slice(0, at);
+      buffer = buffer.slice(at + 1);
+      if (!text) continue;
+      const event = JSON.parse(text), item = pending.get(event.id);
+      if (!item) continue;
+      clearTimeout(item.timer); pending.delete(event.id);
+      if (event.error) item.reject(Error(JSON.stringify(event.error))); else item.resolve(event.result);
+    }
+  });
+  fromBrowser.on('end', () => { pipeClosed = true; failPending(Error('浏览器管道已关闭：' + launchDetails())); });
+  child.on('exit', () => failPending(Error('浏览器进程已退出：' + launchDetails())));
+}
+// 重试前必须先把上一次的监听器摘掉：旧进程晚到的 exit/end 不能去 reject 新连接的 pending。
+function discardBrowser() {
+  if (!child) return;
+  child.removeAllListeners('exit'); child.removeAllListeners('error');
+  if (fromBrowser) { fromBrowser.removeAllListeners('end'); fromBrowser.removeAllListeners('data'); }
+  pipeClosed = true;
+  try { child.kill(); } catch { /* 已经退出 */ }
+}
 function send(method, params = {}, timeoutMs = 15000) {
   if (launchError) return Promise.reject(launchError);
   if (pipeClosed) return Promise.reject(Error('浏览器管道已关闭：' + launchDetails()));
@@ -123,21 +143,37 @@ try {
   // "没起来"的**快**信号是 fd 4 先 EOF（管道关、进程退），不是这个墙钟上限：CI 冷机上
   // 首条回复实测会超过 3 秒（2026-11-05 ubuntu 腿 3 秒整超时、同一提交另一条腿 0.3 秒），
   // 所以墙钟只兜"进程活着但永不说话"，放宽到 12 秒，可用 env 覆盖。
+  // 但 12 秒也不是保险：2026-11-05 #321 的合并提交（`78fd3958`）在 ubuntu 腿又碰到一次
+  // 整 12 秒无回复、stderr 为空，而同一内容的下一提交同一步骤 0.3 秒就起来了 —— 冷机偶发。
+  // 所以起一次不成就杀掉换新 profile 重起一次；两次都失败才按"浏览器没连上"判红。
   const STARTUP_BUDGET = Number(process.env.WE_TEST_BROWSER_STARTUP_MS || 12000);
-  // 启动阶段的两条命令失败一律转成 AssertionError：它们是"浏览器没连上"，不是判据结论。
-  const startup = async (method, params) => {
-    try { return await send(method, params, STARTUP_BUDGET); }
-    catch (error) {
-      assert.fail('浏览器未在 ' + STARTUP_BUDGET + 'ms 内建立 CDP 管道（' + method + '）：' + error.message);
+  const STARTUP_ATTEMPTS = Math.max(1, Number(process.env.WE_TEST_BROWSER_ATTEMPTS || 2));
+  let startupError = null;
+  for (let attempt = 1; attempt <= STARTUP_ATTEMPTS; attempt++) {
+    attachBrowser();
+    try {
+      const { targetInfos } = await send('Target.getTargets', {}, STARTUP_BUDGET);
+      const target = targetInfos.find(item => item.type === 'page');
+      assert.ok(target, '浏览器没有 page target：' + launchDetails());
+      ({ sessionId } = await send('Target.attachToTarget', { targetId: target.targetId, flatten: true }, STARTUP_BUDGET));
+      assert.ok(sessionId, '浏览器未返回会话：' + launchDetails());
+      await send('Page.enable'); await send('Runtime.enable');
+      await send('Emulation.setFocusEmulationEnabled', { enabled: true });
+      startupError = null;
+      break;
+    } catch (error) {
+      startupError = error;
+      discardBrowser();
+      if (attempt < STARTUP_ATTEMPTS) {
+        console.log('… 浏览器第 ' + attempt + ' 次启动未就绪，换新 profile 重起一次：' + String(error.message).split('\n')[0]);
+        await delay(250);
+      }
     }
-  };
-  const { targetInfos } = await startup('Target.getTargets');
-  const target = targetInfos.find(item => item.type === 'page');
-  assert.ok(target, '浏览器没有 page target：' + launchDetails());
-  ({ sessionId } = await startup('Target.attachToTarget', { targetId: target.targetId, flatten: true }));
-  assert.ok(sessionId, '浏览器未返回会话：' + launchDetails());
-  await send('Page.enable'); await send('Runtime.enable');
-  await send('Emulation.setFocusEmulationEnabled', { enabled: true });
+  }
+  // 启动阶段失败一律转成 AssertionError：它们是"浏览器没连上"，不是判据结论。
+  if (startupError) {
+    assert.fail('浏览器在 ' + STARTUP_ATTEMPTS + ' 次启动内都没建立 CDP 管道（每次预算 ' + STARTUP_BUDGET + 'ms）：' + startupError.message);
+  }
   for (const width of [320, 375, 414, 768, 1280]) for (const dark of [false, true]) {
     await send('Emulation.setDeviceMetricsOverride', { width, height: 820, deviceScaleFactor: 1, mobile: false });
     await send('Page.navigate', { url: 'about:blank' });
@@ -687,10 +723,11 @@ try {
   for (const item of pending.values()) { clearTimeout(item.timer); item.reject(Error('browser closing')); }
   pending.clear();
   // Browser.close 是浏览器级命令，不带 sessionId；管道已关时不必再写。
-  if (!pipeClosed && child.exitCode === null) {
+  // `child` 可能在 spawn 就失败（attachBrowser 抛 AssertionError）时不存在。
+  if (child && !pipeClosed && toBrowser && child.exitCode === null) {
     try { toBrowser.write(JSON.stringify({ id: ++counter, method: 'Browser.close' }) + '\0'); } catch { /* 关闭管道亦视为结束 */ }
   }
-  if (child.exitCode===null) {
+  if (child && child.exitCode === null) {
     const exit = new Promise(resolve=>{ child.once('exit',resolve); });
     child.kill(); await exit;
   }
