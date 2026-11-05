@@ -1706,6 +1706,21 @@ console.log('\n⑫ 语义表（执行型 · 扰动自证：跟随全局 / 独立
     inheritBad.length === 0,
     inheritBad.length ? inheritBad.map((r) => r.row.label).join(', ') : rows.length + ' 行全部成立');
 
+  // 独立档 + **本面键没设过值**（#324）：`conversationColor` 这类键在 schema 里没有默认值，
+  // 用户只翻「独立配置」开关、没点色板时它是 undefined。旧管道直接把它交给
+  // weClampSurfaceColor，颜色一缺就掉到主题常量（深色 #0d1524 / 浅色 #ffffff）——
+  // 面板看着"跟随全局"、画面却是另一块板（用户实测：关掉独立配置立刻恢复）。
+  // 判据：own 取 undefined、custom 档下扰动全局键，有效取值必须**跟着动**。
+  // 负对照：旧写法（`glassModeOn ? profileValue : globalValue`）下它是主题常量 ⇒ 判红。
+  const emptyBad = rows.filter((r) => {
+    const emptyBase = run(effectsBody, Object.assign({}, mode(true), { [r.row.own[0]]: undefined, [r.row.glob[0]]: r.row.glob[1] }));
+    const emptyPert = run(effectsBody, Object.assign({}, mode(true), { [r.row.own[0]]: undefined, [r.row.glob[0]]: r.row.glob[2] }));
+    return eff(emptyBase, r.row.v) === eff(emptyPert, r.row.v);
+  });
+  check('独立档但本面键未设值：必须回落全局（改全局键要推动有效取值，不能掉到主题常量）',
+    emptyBad.length === 0,
+    emptyBad.length ? emptyBad.map((r) => r.row.label).join(', ') : rows.length + ' 行全部回落全局');
+
   // 默认档：全新会话（glassMode 用 schema 消毒出来的**真默认值**）下应当全部跟随全局。
   // ⚠️ 已知偏差走**登记表**（不空转：登记了却不再偏差的必须删掉那条）—— 这样"现状偏差"
   //    既不会把树判红，也不会被遗忘；R3 把默认改成 inherit 时，这条登记会自动要求删除。
