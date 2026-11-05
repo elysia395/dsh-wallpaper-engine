@@ -636,7 +636,8 @@ try {
     check(tag+' 第二阶段卸载清理',await evaluate('document.querySelectorAll("[data-we-surface-runtime],[data-we-layout-runtime],[data-we-modal-blocked]").length===0'));
   }
   await verifyPetSidebarGlassBrowser({ send, evaluate, until, check, screenshot, css, runtime, bundle });
-  const composerFixed = await verifyComposerFixedBrowser({ send, evaluate, until, check, screenshot, css, bundle });
+  const composerFixed = await verifyComposerFixedBrowser({ send, evaluate, until, check, screenshot, css, bundle,
+    benchmark: process.argv.includes('--composer-benchmark') });
   // computed/身份证据：bundle 与内联模块字节的 sha256 —— 截图与 computed 矩阵对应
   // 的就是这批字节（同一进程内读出，不与盘上其他时点混淆）。
   const sha = (text) => createHash('sha256').update(text).digest('hex');

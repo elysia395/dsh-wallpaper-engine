@@ -40,6 +40,8 @@
  *     按钮照旧钉在视口上（见 parallaxTargetOffset()）。输入卡片也会动态挂载 fixed 浮层：
  *     扫描之后才挂载或子树超过扫描上限时，检查后代不能保证安全（#257）。复用相对偏移，
  *     不靠重扫时机保护其锚点；代价是这两组每帧多一次布局；
+ *     正向 left/top 仍可能扩张卡片自身的滚动边界，不承诺零溢出。给原本 static 的卡片
+ *     补 relative 也会建立 absolute 后代的包含块；宿主新增此类装饰时须核对其预期锚点。
  *     ③ **槽出口自己没有盒子，位移要落到有盒子的那一层上**：宿主给每个槽出口写死
  *     `display: contents`（asar 里的 `ANCHOR_STYLE`，见 docs/DSH-UI-INTERFACES.md），`translate`
  *     写在出口身上屏上一点都不会动（"只有输入框在动"就是这个缘故）⇒ 见 parallaxGroupBox()：
