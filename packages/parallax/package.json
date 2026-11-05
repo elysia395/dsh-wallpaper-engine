@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-wallpaper-engine-parallax",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "3D parallax for the DSH wallpaper engine: cursor-driven depth offsets for the wallpaper layers, the mascot, plugin-registered element groups and the UI block.",
   "icon": "./icon.png",
   "type": "module",

@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-wallpaper-engine-mascot-avatar",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "Mascot & avatar host half: the custom mascot image (/mascot) and the two session avatars (/avatar/<side>).",
   "icon": "./icon.png",
   "type": "module",

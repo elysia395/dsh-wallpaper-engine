@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-wallpaper-engine-pet-link",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "Optional official dsh-pet bridge: public API control, four interaction sequences and independent page bubbles; no bundled pet or patching.",
   "icon": "./icon.png",
   "type": "module",

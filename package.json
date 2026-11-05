@@ -1,6 +1,6 @@
 {
   "name": "dsh-plugin-wallpaper-engine",
-  "version": "1.4.0",
+  "version": "1.4.1",
   "description": "Wallpaper Engine backgrounds for the DSH web GUI: render your local Wallpaper Engine wallpapers behind the chat — Scene and Web in real time through the bundled WebWallGL engine, Video played directly — with iOS-style liquid glass, adjustable blur/scrim/border/opacity, custom typography and caret, and a liquid-glass makeover of the whole settings window. Prerequisite: DeepSeek Harness 0.2 kernel (including 0.2.0-rc.1/rc.2) and Node.js >=22.12.0. No version restriction on dsh-better-sidebar.",
   "type": "module",
   "engines": {
