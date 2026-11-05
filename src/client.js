@@ -117,6 +117,9 @@ function reclaimGlassResidue(components) {
 // 通过 `globalThis.__weComponentVisible` 取用它，而不裸引用本作用域里的符号（那些模块单独求值时会 ReferenceError）。
 // 契约与 `selection` / `apiUrl` 一致：模块输入一律走 globalThis。
 globalThis.__weComponentVisible = weComponentVisible;
+// 玻璃残留回收同理注入全局：`src/effects.js`（applyEffects 每次设置变动都会跑）要用它，
+// 但它单独求值时看不到本作用域 ⇒ 经 globalThis 桥接，缺席时那边静默跳过。
+globalThis.__weReclaimGlassResidue = reclaimGlassResidue;
 // Body attribute set while a wallpaper is active; CSS uses it to make the frame
 // background transparent so the behind-body layer shows through.
 const ACTIVE_ATTR = "data-we-wallpaper";
@@ -6024,20 +6027,12 @@ function apply(ctx) {
 
   // 0c. 玻璃行停用时的残留回收（见 reclaimGlassResidue 的注释：清理函数住在玻璃子包，
   //     行停用后那个 bundle 不求值 ⇒ 只能由永远加载的主包来收）。
-  //     ⚠️ 必须走 ctx.effect 挂定时器：模块作用域注册定时器会被
-  //     verify-scene-live 的 "no src module registers timers at module scope" 判红，
-  //     且 bundle 多次求值时会泄漏。首拍留 2.5s，让宿主行注册与首轮 CSS 注入先跑完。
-  // 守卫沙箱（vm / 无 DOM 的宿主替身）不提供 setTimeout ⇒ 明确跳过，不用 try 掩盖。
-  if (ctx.effect && typeof setTimeout === "function") ctx.effect(() => {
-    const timer = setTimeout(() => {
-      try {
-        Promise.resolve(apiJson(INVENTORY_URL)).then((res) => {
-          if (res && res.ok && res.data) reclaimGlassResidue(res.data.components);
-        }).catch(() => { /* 宿主没就绪：不重试，loadInventory 那条腿会兜住 */ });
-      } catch { /* ignore */ }
-    }, 2500);
-    return () => { try { clearTimeout(timer); } catch { /* ignore */ } };
-  });
+  //     ⚠️ **不发额外请求**：早先版本在这里 `setTimeout` + `apiJson(INVENTORY_URL)` 自探一次，
+  //     结果在 vm 沙箱（live-frame-backfill-smoke）里与夹具的 fetch 桩抢时序，把
+  //     "有画面 + 体积达标 ⇒ PUT 回填" 那一档整个压掉（实测 11 条判据连锁红）。
+  //     结论：回收只挂在**本来就有的数据流**上 —— `loadInventory` 拿到新 components 时
+  //     即时回收（见那里），再加上本函数在每次 `emit` 里对**已缓存的** components 复核一次。
+  //     页面刷新后什么都不点的情况由 `loadInventory` 的启动链覆盖（它本来就会跑一次）。
 
   // 1. Mount the behind-body wallpaper + scrim layers and keep them in sync
   //    with the selection store. ctx.effect gives fiber-lifetime cleanup.

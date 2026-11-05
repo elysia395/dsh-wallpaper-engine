@@ -148,12 +148,16 @@ const decls = declarationsOf(SRC);
 const byId = (id) => decls.filter((d) => d.id === id);
 const declLayer = byId('LAYER_ID');
 const declScrim = byId('SCRIM_ID');
-check('P1.1 LAYER_ID 声明恰 1 处且钉在 src/client.js:123',
-  declLayer.length === 1 && declLayer[0].rel === 'src/client.js' && declLayer[0].line === 123
+// ⚠️ 这两条原本把行号钉死（`:63` / `:64`，后来 `:123` / `:124`）—— 每次在常量上方
+// 增删一行代码就要来改锚点，是**纯维护噪音**，且改晚了链直接红（本项目已发生过三次）。
+// 现在改钉"**唯一且落在 src/client.js**"这一不变式：位置无关，语义不减
+// （真正要防的是"第二个声明点"和"字面量散落"，不是它排第几行）。
+check('P1.1 LAYER_ID 声明恰 1 处（src/client.js）',
+  declLayer.length === 1 && declLayer[0].rel === 'src/client.js'
     && declLayer[0].literal === LAYER_LITERALS.LAYER_ID,
   JSON.stringify(declLayer));
-check('P1.2 SCRIM_ID 声明恰 1 处且钉在 src/client.js:124',
-  declScrim.length === 1 && declScrim[0].rel === 'src/client.js' && declScrim[0].line === 124
+check('P1.2 SCRIM_ID 声明恰 1 处（src/client.js）',
+  declScrim.length === 1 && declScrim[0].rel === 'src/client.js'
     && declScrim[0].literal === LAYER_LITERALS.SCRIM_ID,
   JSON.stringify(declScrim));
 
@@ -161,8 +165,8 @@ const litSites = literalIdSites(SRC);
 const litLayer = litSites.filter((s) => s.literal === LAYER_LITERALS.LAYER_ID);
 const litScrim = litSites.filter((s) => s.literal === LAYER_LITERALS.SCRIM_ID);
 check('P1.3 层 id 字面量只在声明行出现（其它地方一律引用 LAYER_ID / SCRIM_ID）',
-  litLayer.length === 1 && litLayer[0].rel === 'src/client.js' && litLayer[0].line === 123
-    && litScrim.length === 1 && litScrim[0].rel === 'src/client.js' && litScrim[0].line === 124,
+  litLayer.length === 1 && litLayer[0].rel === 'src/client.js'
+    && litScrim.length === 1 && litScrim[0].rel === 'src/client.js',
   'layer=' + JSON.stringify(litLayer) + ' scrim=' + JSON.stringify(litScrim));
 
 const assignSites = idAssignmentSites(SRC);

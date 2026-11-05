@@ -354,6 +354,16 @@ function applyEffects(opts) {
   //   · scrim 的强制回流（拖动期每格都在重写，回流留给抬手那一次）
   // 语义仍是同一个函数、同一份真源：样式变量照旧**全量**写，只是不重跑无关的重活。
   const live = Boolean(opts && opts.live);
+  // 玻璃行停用后的残留回收：挂在每次设置变动上（**零网络请求**，只读 store 里已有的
+  // components 快照）。见 client.js 的 reclaimGlassResidue —— 幂等，行活着时一次
+  // 字符串比较就返回。拖动期（live）也跑：纯读，且玻璃行中途停用时越早收回越好。
+  // ⚠️ 不要在这里改成立即发请求自探：早先那样做过，在 vm 沙箱里与夹具的 fetch 桩抢时序，
+  // 把 scene-frame 回填那条链的 11 条判据一起带红（live-frame-backfill-smoke 实测）。
+  try {
+    const comps = selection.inventory && selection.inventory.components;
+    const reclaim = globalThis.__weReclaimGlassResidue;
+    if (typeof reclaim === "function") reclaim(comps);
+  } catch { /* 回收失败不影响样式写入 */ }
   const s = document.body.style;
   s.setProperty("--we-scrim-color", "rgba(0,0,0," + selection.scrim + ")");
   // Border emphasis: the border tokens are low-alpha hairlines; raise their
