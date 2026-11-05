@@ -37,22 +37,60 @@ assert.ok(browser && existsSync(browser), '缺少 Chromium 浏览器；请用 WE
 const profile = mkdtempSync(join(out, 'profile-'));
 const browserLogPath = join(profile, 'browser-stderr.log');
 const browserLog = openSync(browserLogPath, 'w');
-const child = spawn(browser, [
-  '--headless=new', '--no-first-run', '--remote-debugging-port=0', '--user-data-dir=' + profile,
-  ...(process.env.WE_TEST_BROWSER_LOG ? ['--enable-logging=stderr', '--log-level=0'] : []), 'about:blank',
-], { stdio: process.env.WE_TEST_BROWSER_LOG ? 'inherit' : ['ignore', 'ignore', browserLog] });
+// 用 `--remote-debugging-pipe` 而不是 `--remote-debugging-port=0`：就绪信号是管道收到第一条
+// CDP 回复，不是轮询 `DevToolsActivePort` 文件。2026-11-04 的 ubuntu 腿实测过另一种形态：
+// 浏览器进程活着、20 秒内却没写端口文件，一步就把整条链判红（`[27/103]` 短路）。
+// 管道模式下"没起来"= fd 4 立刻 EOF，不必等满一个超时；没有 TCP 端口也就没有端口冲突一类故障。
+let child;
+try {
+  child = spawn(browser, [
+    '--headless=new', '--no-first-run', '--remote-debugging-pipe', '--user-data-dir=' + profile,
+    ...(process.env.WE_TEST_BROWSER_LOG ? ['--enable-logging=stderr', '--log-level=0'] : []), 'about:blank',
+  ], { stdio: ['ignore', 'ignore', process.env.WE_TEST_BROWSER_LOG ? 2 : browserLog, 'pipe', 'pipe'] });
+} catch (error) {
+  // 路径存在但不是可执行文件（spawn 在 Windows 上同步抛 EFTYPE/ENOEXEC）——按"没起来"报，不崩栈。
+  assert.fail('浏览器无法启动（' + browser + '）：' + error.message);
+}
 closeSync(browserLog);
 const launchDetails = () => JSON.stringify({ browser, exitCode: child.exitCode, signal: child.signalCode,
   stderr: readFileSync(browserLogPath, 'utf8').slice(-16384) });
-let socket, launchError, counter = 0;
+let launchError, counter = 0, sessionId = null, pipeClosed = false;
 const pending = new Map(), failures = [], report = [];
+const toBrowser = child.stdio[3], fromBrowser = child.stdio[4];
+// 管道先关时写会 EPIPE —— 由 pending 的 reject 表达失败，不额外抛。
+toBrowser.on('error', () => {});
 child.on('error', error => { launchError = error; });
+function failPending(error) {
+  for (const [id, item] of pending) { clearTimeout(item.timer); pending.delete(id); item.reject(error); }
+}
+let buffer = '';
+fromBrowser.on('data', chunk => {
+  buffer += chunk.toString('utf8');
+  let at;
+  while ((at = buffer.indexOf('\0')) >= 0) {
+    const text = buffer.slice(0, at);
+    buffer = buffer.slice(at + 1);
+    if (!text) continue;
+    const event = JSON.parse(text), item = pending.get(event.id);
+    if (!item) continue;
+    clearTimeout(item.timer); pending.delete(event.id);
+    if (event.error) item.reject(Error(JSON.stringify(event.error))); else item.resolve(event.result);
+  }
+});
+fromBrowser.on('end', () => { pipeClosed = true; failPending(Error('浏览器管道已关闭：' + launchDetails())); });
+child.on('exit', () => failPending(Error('浏览器进程已退出：' + launchDetails())));
 function send(method, params = {}, timeoutMs = 15000) {
+  if (launchError) return Promise.reject(launchError);
+  if (pipeClosed) return Promise.reject(Error('浏览器管道已关闭：' + launchDetails()));
   return new Promise((resolve, reject) => {
     const id = ++counter;
-    const timer = setTimeout(() => { pending.delete(id); reject(Error('CDP timeout: ' + method)); }, timeoutMs);
+    const timer = setTimeout(() => {
+      pending.delete(id);
+      reject(Error('CDP timeout: ' + method + (sessionId ? '' : '（启动预算 ' + timeoutMs + 'ms 内无回复：' + launchDetails() + '）')));
+    }, timeoutMs);
     pending.set(id, { resolve, reject, timer });
-    socket.send(JSON.stringify({ id, method, params }));
+    // 管道消息以 \0 分隔；attach 之后每条命令都带 sessionId（flat 会话）。
+    toBrowser.write(JSON.stringify(sessionId ? { id, method, params, sessionId } : { id, method, params }) + '\0');
   });
 }
 async function evaluate(expression) {
@@ -81,25 +119,23 @@ async function screenshot(name) {
   return data;
 }
 try {
-  let port;
-  const deadline = Date.now() + 20000;
-  while (!port && Date.now() < deadline) {
-    if (launchError) throw launchError;
-    assert.ok(child.exitCode === null && child.signalCode === null, '浏览器在调试端口就绪前退出：' + launchDetails());
-    try { port = Number(readFileSync(join(profile, 'DevToolsActivePort'), 'utf8').split('\n')[0]); }
-    catch (error) { if (!['ENOENT', 'EBUSY'].includes(error.code)) throw error; }
-    if (!port) await delay(100);
-  }
-  assert.ok(port, '浏览器调试端口未就绪：' + launchDetails());
-  const pages = await (await fetch('http://127.0.0.1:' + port + '/json/list')).json();
-  socket = new WebSocket(pages.find(page => page.type === 'page').webSocketDebuggerUrl);
-  await new Promise((resolve, reject) => { socket.onopen = resolve; socket.onerror = reject; });
-  socket.onmessage = ({ data }) => {
-    const event = JSON.parse(data), item = pending.get(event.id);
-    if (!item) return;
-    clearTimeout(item.timer); pending.delete(event.id);
-    if (event.error) item.reject(Error(JSON.stringify(event.error))); else item.resolve(event.result);
+  // 启动只认"浏览器自己回了第一条协议消息"这个事件，不回 = 没起来（不是判据失败）。
+  // "没起来"的**快**信号是 fd 4 先 EOF（管道关、进程退），不是这个墙钟上限：CI 冷机上
+  // 首条回复实测会超过 3 秒（2026-11-05 ubuntu 腿 3 秒整超时、同一提交另一条腿 0.3 秒），
+  // 所以墙钟只兜"进程活着但永不说话"，放宽到 12 秒，可用 env 覆盖。
+  const STARTUP_BUDGET = Number(process.env.WE_TEST_BROWSER_STARTUP_MS || 12000);
+  // 启动阶段的两条命令失败一律转成 AssertionError：它们是"浏览器没连上"，不是判据结论。
+  const startup = async (method, params) => {
+    try { return await send(method, params, STARTUP_BUDGET); }
+    catch (error) {
+      assert.fail('浏览器未在 ' + STARTUP_BUDGET + 'ms 内建立 CDP 管道（' + method + '）：' + error.message);
+    }
   };
+  const { targetInfos } = await startup('Target.getTargets');
+  const target = targetInfos.find(item => item.type === 'page');
+  assert.ok(target, '浏览器没有 page target：' + launchDetails());
+  ({ sessionId } = await startup('Target.attachToTarget', { targetId: target.targetId, flatten: true }));
+  assert.ok(sessionId, '浏览器未返回会话：' + launchDetails());
   await send('Page.enable'); await send('Runtime.enable');
   await send('Emulation.setFocusEmulationEnabled', { enabled: true });
   for (const width of [320, 375, 414, 768, 1280]) for (const dark of [false, true]) {
@@ -650,8 +686,10 @@ try {
 } finally {
   for (const item of pending.values()) { clearTimeout(item.timer); item.reject(Error('browser closing')); }
   pending.clear();
-  if (socket?.readyState===WebSocket.OPEN) { try { await send('Browser.close'); } catch { /* 关闭连接亦视为结束 */ } }
-  socket?.close();
+  // Browser.close 是浏览器级命令，不带 sessionId；管道已关时不必再写。
+  if (!pipeClosed && child.exitCode === null) {
+    try { toBrowser.write(JSON.stringify({ id: ++counter, method: 'Browser.close' }) + '\0'); } catch { /* 关闭管道亦视为结束 */ }
+  }
   if (child.exitCode===null) {
     const exit = new Promise(resolve=>{ child.once('exit',resolve); });
     child.kill(); await exit;
