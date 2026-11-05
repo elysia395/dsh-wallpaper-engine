@@ -85,13 +85,16 @@ function mountRoute (register = registerSlidesRoutes) {
   return { routes, disposers, mediaMap, tokenFor, route: routes[0] };
 }
 
-/** 跑一次 handler：`listImages` 是 Promise ⇒ 等它落地（不依赖定时器的"碰巧"）。 */
+// 回包是 `listImages()` 落地后才写的（真 readdir），所以只能等**时限**、不能数微任务：
+// 200 次 setImmediate 在 CI 冷机上会在 readdir 回来前就转完（2026-11-05 ubuntu 腿
+// run 42051584836 的 C2「空目录 ⇒ 404 no-images」就这样拿到 null，一步判红）。
+const ROUTE_WAIT_MS = 5000;
+/** 跑一次 handler：等回包落地，超时直接返回（判据自己会据 `body === null` 报红）。 */
 async function callRoute (route, url, method = 'GET') {
   const res = { statusCode: 0, body: null };
   route.handler({ method, url }, res);
-  if (!res.body) {
-    for (let i = 0; i < 200 && !res.body; i++) await new Promise((resolve) => { setImmediate(resolve); });
-  }
+  const deadline = Date.now() + ROUTE_WAIT_MS;
+  while (!res.body && Date.now() < deadline) await new Promise((resolve) => { setTimeout(resolve, 1); });
   return res;
 }
 
