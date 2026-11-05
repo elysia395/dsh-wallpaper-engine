@@ -250,6 +250,11 @@ const VERIFY_STEPS = [
   step('test/verify-pet-hotplug-client.mjs'),
   step('test/verify-pet-rope-entry.mjs'),
   step('test/verify-pet-tuner.mjs'),
+  // 「面板旋钮必须真消费」判据（performer-rebuild T4 收口）：M6 面板 48 个旋钮每个都必须
+  // 在排播源码里被 `tune('<key>')` 读一次。它属于发布面：链会短路，脱链时「死旋钮回归」
+  // 不会让任何东西变红，故挂 hard。同批把 verify-pet-linked / panel / extension-card /
+  // optional-probe 四条离线条目收进本汇总入口（含验收图路由冒烟与四件离线夹具）。
+  step('test/verify-pet-link.mjs'),
   step('test/verify-pet-official.mjs'),
   step('test/verify-pet-sidebar-rebound.mjs'),
   step('test/verify-pet-sidebar-diag.mjs'),

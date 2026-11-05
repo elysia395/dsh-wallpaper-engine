@@ -1490,6 +1490,55 @@ const clientChecks = [
     && /if \(desktopWindowMode\(\) === "extended" && !liveFrameRebuildTimer && useExtendedFrameSwap\(\)\) \{/.test(liveSrc)],
 ];
 for (const [name, ok] of clientChecks) check(name, ok);
+
+// ── #248：UI 受压时给实时渲染页降帧 ─────────────────────────────────────────────
+// 现场是「Scene 60fps + 液态玻璃 + 大页面」时整窗卡 10s、流式输出期间 1.2s+ 主线程停顿；
+// scene 渲染页与 DSH UI 同源同渲染主线程，玻璃的 backdrop-filter 每帧重采样壁纸。
+// 修法是「检测到心跳迟到 / longtask → setSceneFps(15) 压 30s，安静后回到用户档位」。
+// 这里钉两层：① start/stop 真的接上了线；② 决策函数的状态机在边界上不抖。
+{
+  const guardBody = braceBody(liveSrc, 'startLiveWatch');
+  const stopBody = braceBody(liveSrc, 'stopLiveWatch');
+  const applyBody = braceBody(liveSrc, 'applyLiveGuardFps');
+  check('#248 guard: 心跳迟到与 longtask 两条信号都接进看护循环',
+    /armLiveGuardLongTasks\(\);/.test(guardBody)
+    && /if \(tickGap >= LIVE_GUARD_TICK_MS\) noteLiveStall\(tickGap, frame\);/.test(guardBody)
+    && /liveGuardTick\(frame\);/.test(guardBody)
+    && /new PerformanceObserver/.test(liveSrc)
+    && /entryTypes: \["longtask"\]/.test(liveSrc));
+  check('#248 guard: 看护停时摘掉观察者并清状态（不留孤儿）',
+    /disarmLiveGuard\(\);/.test(stopBody)
+    && /liveGuardObserver\.disconnect\(\)/.test(liveSrc)
+    && /liveGuardUntil = 0;/.test(liveSrc));
+  check('#248 guard: 标签页切回时不把节流误判成卡死',
+    /visibilitychange/.test(guardBody)
+    && /watch\.lastTick = Date\.now\(\)/.test(guardBody)
+    && /removeEventListener\("visibilitychange"/.test(stopBody));
+  check('#248 guard: 降帧走 __wp 热切（不重建 iframe），且只在玻璃在算值时压',
+    /wp\.setSceneFps\(want\)/.test(applyBody)
+    && /hasAttribute\("data-we-glass-page"\)/.test(liveSrc));
+  check('#248 guard: 有 URL 逃生舱 ?we-live-guard=0',
+    /we-live-guard/.test(liveSrc) && /liveGuardIsDisabled\(\)/.test(liveSrc));
+  // 决策状态机的行为级判据（不是源码字样）：新停顿开始 → 30s 内续期 → 到期停 → 再次停顿续期。
+  const hold = Number((/const LIVE_GUARD_HOLD_MS = (\d+);/.exec(liveSrc) || [])[1]);
+  const step = new Function('LIVE_GUARD_HOLD_MS', 'prevUntil', 'now', 'stalled',
+    braceBody(liveSrc, 'liveGuardStep'));
+  const s1 = step(hold, 0, 1000, true);
+  const s2 = step(hold, s1.until, 2000, false);
+  const s3 = step(hold, s1.until, s1.until + 1, false);
+  const s4 = step(hold, s1.until, 5000, true);
+  check('#248 guard: 停顿开窗 → 续期 → 到期恢复 → 再停顿续期（hold=' + hold + 'ms）',
+    hold >= 10000 && s1.start && s1.until === 1000 + hold
+    && !s2.start && !s2.stop && s2.until === s1.until
+    && s3.stop && s3.until === 0
+    && !s4.start && s4.until === 5000 + hold,
+    JSON.stringify({ s1, s2, s3, s4 }));
+  const target = new Function('LIVE_GUARD_FPS', 'selection',
+    braceBody(liveSrc, 'liveGuardTargetFps'));
+  check('#248 guard: 目标帧率取用户档位与 15 的较小值（用户选 15 时不反向拉高）',
+    target(15, { sceneLiveFps: 60 }) === 15 && target(15, { sceneLiveFps: 30 }) === 15
+    && target(15, { sceneLiveFps: 15 }) === 15 && target(15, {}) === 15);
+}
 // 负对照：**没有开关的**换元调用点（旧写法）喂给同一判据必须被判不合格 —— 否则这条断言
 // 只要文件里出现 `we-ext-swap` 字样就会通过，等于没有牙。
 {
@@ -3525,7 +3574,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
         && !bag.QP_CTX_SETTINGS_ONLY.includes('onGlassChildParam'),
       called.slice(0, 48));
     // 预设块那道门也有牙：`glassPresets` 是高级配置的 ctx 字段（ADR-0008 D4），侧栏档指向替身 ⇒
-    // 谁把 packages/glass/packages/glass/src/glass-panel.js 里那道 `!sidebarSurface` 门拆掉，渲染器**解构它的第一下就炸**
+    // 谁把 packages/glass/src/glass-panel.js 里那道 `!sidebarSurface` 门拆掉，渲染器**解构它的第一下就炸**
     // （不是静默把预设块画进侧栏 —— 那是"整快照覆盖且不可撤销"的动作，不该随手可达）。
     const presetTeeth = (() => { try { return String(ctx.glassPresets.presets); } catch (e) { return String(e.message); } })();
     check('侧栏 ctx 的 `glassPresets` 也是占位器（拆掉预设块的门 ⇒ 解构即抛错）',
@@ -3608,7 +3657,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
   // panelGlassPair 的家从 glass-panel 本地副本归位 settings-schema（#159② 显示口径：缺省回空串
   // 不猜色，与 readGlassColors 互补）—— 玻璃节渲染要用，同上面两个给**真源**。
   globalThis.panelGlassPair = schema.panelGlassPair;
-  // ⚠️ 「玻璃 UI」节的渲染器住 packages/glass/packages/glass/src/glass-panel.js（ADR-0016 第二刀出户）：**打包后**它与
+  // ⚠️ 「玻璃 UI」节的渲染器住 packages/glass/src/glass-panel.js（ADR-0016 第二刀出户）：**打包后**它与
   //    `panel-tabs.js` 同作用域，所以后者能按名字直接调；但这里是**按文件 import** 的替身，
   //    两个模块各有自己的作用域 ⇒ 必须自己把它挂成全局（与上面那批模块级助手同一条口径）。
   globalThis.renderAppearanceGlassSection =

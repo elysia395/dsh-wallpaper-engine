@@ -313,13 +313,19 @@ assert.ok(code.includes('body[data-we-wallpaper] {') && code.includes('body[data
 const clearGated = (suffix) => 'body[data-we-wallpaper][data-we-adapter="browser"]' + suffix;
 const hostFrame = ' > #root > [class*="_frame"]:not([data-we-surface-preserve])';
 const hostRoot = hostFrame + ' > [class*="_root"]:not([data-we-surface-preserve])';
+// 宿主 0.30.1 在 #root 与 _frame 之间插入 [data-slot="root"]（display:contents）；
+// 只匹配直挂路径会把 frame 漏成 sidebar-fill 实色（#310）。
+const hostFrameSlot = ' > #root > [data-slot="root"] > [class*="_frame"]:not([data-we-surface-preserve])';
+const hostRootSlot = hostFrameSlot + ' > [class*="_root"]:not([data-we-surface-preserve])';
 assert.ok(code.includes(clearGated(',')),
   'the page canvas fallback must remain wallpaper+browser gated');
 assert.ok(code.includes(clearGated(hostFrame)) && code.includes(clearGated(hostRoot)),
   'the container fallback must be limited to the outer host frame/root');
+assert.ok(code.includes(clearGated(hostFrameSlot)) && code.includes(clearGated(hostRootSlot)),
+  'the container fallback must also cover hosts that wrap the frame in [data-slot="root"]');
 assert.ok(!code.includes(clearGated(' [class*="_frame"]')) && !code.includes(clearGated(' [class*="_root"]')),
   'the container fallback must not clear arbitrary third-party roots');
-assert.ok((blockBodyOf(clearGated(hostRoot + ' {')) || '').includes('background: transparent !important'),
+assert.ok((blockBodyOf(clearGated(hostRootSlot + ' {')) || '').includes('background: transparent !important'),
   'the known host canvas still needs an effective transparent fallback');
 // AppFrame 本体锚点：宿主自己的 CSS 也用它上底（`[data-shell-overlay]` 是 layout 包写在
 // AppFrame 直接子节点上的稳定锚点）。这条不依赖 adapter、也不依赖 AppFrame 是不是 #root
@@ -336,10 +342,14 @@ assert.ok(!/(?:^|\n)\s*:has\(> \[data-shell-overlay\]\)\s*\{/.test(code),
 const desktopClear = (suffix) => 'body[data-we-adapter^="desktop-"][data-we-wallpaper]' + suffix;
 assert.ok(code.includes(desktopClear(' > #root')) && code.includes(desktopClear(hostFrame)) && code.includes(desktopClear(hostRoot)),
   'desktop shell AppFrame canvas must stay transparent under wallpaper, independent of the glass row (Windows titlebar paints frame with sidebar-fill)');
+assert.ok(code.includes(desktopClear(hostFrameSlot)) && code.includes(desktopClear(hostRootSlot)),
+  'desktop fallback must cover the [data-slot="root"] wrapper (host 0.30.1 inserts it between #root and _frame)');
 assert.ok(!code.includes(desktopClear(' [class*="_frame"]')),
   'desktop fallback must not clear arbitrary nested frames');
-assert.ok((blockBodyOf(desktopClear(hostRoot + ' {')) || '').includes('background: transparent !important'),
+assert.ok((blockBodyOf(desktopClear(hostRootSlot + ' {')) || '').includes('background: transparent !important'),
   'the desktop host canvas fallback must actually clear the frame background');
+assert.ok((blockBodyOf(desktopClear(hostRootSlot + ' {')) || '').includes('background: transparent !important'),
+  'the desktop wrapper path must actually clear the frame background');
 console.log('sidebar glass selectors are wallpaper-independent: true · page glass is anchored on data-we-glass-page: true · desktop shell frame stays clear under wallpaper');
 // #255⑤：滑杆右侧数值**默认可输入**（不再 opt-in）；拖动期只改 input.value，不写父级 textContent。
 {
@@ -1102,14 +1112,17 @@ setTimeout(async () => {
     // ── 「扩展」页签（第六个）：一个**模块容器** —— 表里没模块时只画空态 ──
     //    它的价值在"容器还在、模块真的按注册表上架、且没跟别的页签串内容"：后续功能都只往
     //    src/panel-tabs.js 的 extensionModules() 里加一项，页签本身不该再改。
-    //    现有三项：一号 = 自定义会话头像，二号 = 点击效果与拖尾效果，
-    //    三号 = 3D 效果（三张卡共用本块）。
+    //    现有四项（P-A 起由注册表按 order 排）：零号 = 桌宠联动（pet-link 子包，order:0 排第一）、
+    //    一号 = 自定义会话头像，二号 = 点击效果与拖尾效果，三号 = 3D 效果（四张卡共用本块）。
     {
       setTab('extensions');
       const extTree = renderPicker();
       const extText = JSON.stringify(extTree);
-      // 容器 + 三个模块的标题与总开关都得在。
-      for (const anchorText of ['扩展模块', '自定义会话头像', '启用自定义会话头像',
+      // 容器 + 四个模块的标题与总开关都得在。桌宠联动的「打开操控面板 / 测试一次联动」是
+      // **按运行时检测结果出现**的入口（检测不到 dsh-pet 时整组隐藏），不列进这份常驻锚点；
+      // 它两个方向的形态由 test/verify-pet-extension-card.mjs 分别钉住。
+      for (const anchorText of ['扩展模块', '桌宠联动', '启用桌宠联动',
+        '自定义会话头像', '启用自定义会话头像',
         '点击效果与拖尾效果', '启用点击与拖尾效果', '3D 效果', '启用 3D 效果']) {
         assert.ok(extText.includes(anchorText), '「扩展」页签必须包含「' + anchorText + '」');
       }
@@ -1118,16 +1131,17 @@ setTimeout(async () => {
         '「扩展」页签必须画出模块容器 we-ext 与模块卡 we-ext__module');
       // 注册表**非空** ⇒ 空态不该再画（两者是互斥形态，留着会让用户以为没装上）。
       assert.ok(!extText.includes('还没有可用的扩展模块'), '注册表非空时不得再画空态');
-      // 三条注册表项 ⇒ 恰好三张模块卡（漏一个模块、或把别的东西当模块画进去都会现形）。
-      assert.equal((extText.match(/"we-ext__module"/g) || []).length, 3,
-        '注册表里三项 ⇒ 「扩展」页签必须画出三张模块卡');
-      // **顺序即屏上顺序**（用户口径：会话头像那一项排在**第一**）：卡标题在渲染树里的首次
-      // 出现下标必须按注册表顺序递增 —— 只判"都在"会让"新模块被排到末尾"这类回归悄悄通过。
+      // 四条注册表项 ⇒ 恰好四张模块卡（漏一个模块、或把别的东西当模块画进去都会现形）。
+      assert.equal((extText.match(/"we-ext__module"/g) || []).length, 4,
+        '注册表里四项 ⇒ 「扩展」页签必须画出四张模块卡');
+      // **顺序即屏上顺序**（P-A 起由 descriptor.order 决定）：零号 pet-link（order:0）排第一，
+      // 之后 avatar=1 / fx=2 / parallax=3。卡标题在渲染树里的首次出现下标必须严格递增 ——
+      // 只判"都在"会让"新模块被排到末尾 / order 写丢"这类回归悄悄通过。
       {
-        const order = ['自定义会话头像', '点击效果与拖尾效果', '3D 效果']
+        const order = ['桌宠联动', '自定义会话头像', '点击效果与拖尾效果', '3D 效果']
           .map((t) => extText.indexOf('"' + t + '"'));
         assert.ok(order.every((i) => i >= 0) && order.every((i, k) => k === 0 || i > order[k - 1]),
-          '三张模块卡必须按注册表顺序排列（头像第一）：' + JSON.stringify(order));
+          '四张模块卡必须按 order 排列（pet-link 第一、头像第二）：' + JSON.stringify(order));
       }
       //  用户口径：扩展模块的出厂开关**全部默认关、按需开启** ⇒ 三个模块的
       // 参数控件默认一律不画，否则会给人"关着也生效"的错觉；三条同时钉住默认值没被误改成 true。

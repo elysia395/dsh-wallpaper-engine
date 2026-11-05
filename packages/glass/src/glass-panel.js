@@ -62,7 +62,7 @@
  * glassPresetCtx）。
  */
 /**
- * 导入用的隐藏 file input 的**模块级 ref**（与 src/fontset-editor.js 同形：模块级变量 +
+ * 导入用的隐藏 file input 的**模块级 ref**（与 packages/fonts/src/fontset-editor.js 同形：模块级变量 +
  * 按钮去 `.click()`；⚠️ 名字不能撞 —— fontset-editor 已占 `importInput`，平铺进 bundle
  * 后是同一作用域，撞名 = SyntaxError，构建期会红）。只做"选文件"，读文件与三道
  * 本地预检在 `importGlassPreset`（src/preset-store.js）。
@@ -721,7 +721,7 @@ function renderAppearanceGlassSection(ctx) {
       // 六个面；第三方插件自己的面板读的是被改写过的共享令牌、**自身没有 backdrop-filter**
       // ⇒ 全局「雾化」对它们本来无效（实测 dsh-mobile / dsh-codearts-auth 整包 0 处命中）。
       // 这一行给用户一条**点名**通道：写谁的选择器，就给谁补上毛玻璃载体（::before 形态，
-      // 见 packages/glass/packages/glass/src/glass-extra.js）。空 = 关（一条规则都不生成 ⇒ 与未接本功能时逐字节一致）。
+      // 见 packages/glass/src/glass-extra.js）。空 = 关（一条规则都不生成 ⇒ 与未接本功能时逐字节一致）。
       React.createElement("div", { className: "we-picker__ctl we-picker__ctl--wrap", key: "extra-glass-selectors" },
         ctlText(weT("额外补雾化的选择器"),
           weT("给第三方插件自己的面板补上毛玻璃（它们自身没有模糊，全局「雾化」对它们无效）"),

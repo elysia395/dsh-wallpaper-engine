@@ -54,7 +54,7 @@ function aboutQrFile(name, aboutDir) {
   // **实测（CI windows-latest）**：前缀写法在 Windows 上必然判 null ——
   // `resolve()` 产出的是反斜杠路径，而前缀拼的是正斜杠 ⇒ 连白名单命中的图都 404
   // （本机 macOS 全绿、CI 红，症状就是这个）。
-  // 这条判据与 lib/routes/fontsets.js 的 `insideDir`、lib/upload-store.js 的 `resolveUploadFile`
+  // 这条判据与 packages/fonts/lib/routes/fontsets.js 的 `insideDir`、lib/upload-store.js 的 `resolveUploadFile`
   // **逐字同一条**。
   const rel = relative(dir, abs);
   return rel && !rel.startsWith('..') && !isAbsolute(rel) ? abs : null;

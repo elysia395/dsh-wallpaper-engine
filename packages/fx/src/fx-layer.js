@@ -175,7 +175,7 @@ function fxAccentColor() {
  * 设置快照（每帧现读 ⇒ 拖滑块不需要 emit 就能看到反馈）。
  * 档位取值刻意**只做字面量比较**、不引 lib/settings-schema.js 的值表：本文件要能被单独
  * import（test/verify-scene-live.mjs 就是这么测的）—— 引那份常量会在单文件环境里 ReferenceError。
- * 面板那侧相反：它读的就是 schema 的值表（唯一真源，见 src/ext-fx.js）。
+ * 面板那侧相反：它读的就是 schema 的值表（唯一真源，见 packages/fx/src/ext-fx.js）。
  */
 function fxSettings() {
   const on = selection.fxEnabled === true;

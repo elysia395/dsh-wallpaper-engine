@@ -70,7 +70,7 @@ function requirePair(args) {
 /**
  * 跑一条命令并取回 stdout：**经临时文件**，不用管道。
  * 为什么绕这一下：受限环境（本机沙箱、部分受限容器）里子进程管道会直接 EPERM，而这条路径
- * 必须能在本机手动跑（[`docs/DEV-GUIDE.md`](../../docs/DEV-GUIDE.md) 的 compat 层约定）。
+ * 必须能在本机手动跑（[`docs/DEV-GUIDE.md`](../docs/DEV-GUIDE.md) 的 compat 层约定）。
  * stdout 走文件描述符不受该限制影响。失败返回 null，调用方走安全回退。
  */
 function runCapture(cwd, cmd, argv) {

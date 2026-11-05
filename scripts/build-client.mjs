@@ -273,7 +273,7 @@ const INLINE_MODULES = [
   },
   // ── ADR-0016 第二刀：「主题预设」+「玻璃 UI」节渲染器（现 packages/glass/src/glass-panel.js）
   //    **已迁出主 bundle**，住 packages/glass，由该包自己的 client.build.json 出产物
-  //    lib/client.glass.js；主包只留 panel-tabs 里那枚按 id 取渲染器的**注册表占位桩**
+  //    packages/glass/lib/client.glass.js；主包只留 panel-tabs 里那枚按 id 取渲染器的**注册表占位桩**
   //    （屏上位置不变：主题 → 细节 → 玻璃 UI → 侧栏圆角 → 全局 UI 配色 → 全局字体）。
   //    迁出的等价性证据与 fx/parallax 同款：逐字节相同（`git diff --no-index` 可复核），
   //    差量只有 outline 的 host 绑定与空 apply/inject。

@@ -5,7 +5,7 @@
  * 契约：
  *   · 纯渲染 + 意图回调，零状态、零副作用 ⇒ 与其余"只读 ctx"的渲染器同一条口径。
  *   · 抽成独立模块的**理由与 `src/section-head.js` 完全相同**：调用方横跨两个模块 ——
- *     `src/panel-tabs.js`（外观各节 + 扩展模块头）与 glass-panel（玻璃 UI，现 packages/glass/packages/glass/src/glass-panel.js）。
+ *     `src/panel-tabs.js`（外观各节 + 扩展模块头）与 glass-panel（玻璃 UI，现 packages/glass/src/glass-panel.js）。
  *     打包后两者同作用域、按名字直接调；而 `test/verify-scene-live.mjs` 是**按文件 import**
  *     的替身（每个模块各有自己的作用域）⇒ 它必须能 import 到**真实现**才不会把判据架在替身上。
  *   · 依赖：`React`（外层 client 作用域）+ 调用方传入的两样东西：

@@ -605,7 +605,7 @@ try {
     await screenshot(tag+'-settings');
     // extra 端值 × 双主题（t9-003，真实参数合同取证）。真实范围（源码实测，非虚构滑杆）：
     // --we-settings-window-alpha ∈ [0.10, 0.25]（packages/glass/src/glass.js Math.max(0.10, 0.25-pct/100*0.15)，
-    // 不是自有设置窗 5..42/5..50）；--we-blur ∈ [0,60]px（packages/glass/packages/glass/src/glass-panel.js SliderRow(cn.blur,0,60,1)）。
+    // 不是自有设置窗 5..42/5..50）；--we-blur ∈ [0,60]px（packages/glass/src/glass-panel.js SliderRow(cn.blur,0,60,1)）。
     // extra normal 霜读 --we-blur（packages/glass/src/glass-extra.js），底色两段 color-mix 消费
     // --we-settings-window-alpha×0.9 + readability-floor 地板（packages/glass/src/glass-extra.js）；
     // own-current 走同一配方表（src/styles-panel.js）⇒ 同一断言面。phase-two 此处

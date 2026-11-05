@@ -643,7 +643,7 @@ function installSkinInterop() {
 applyTerminalHostVar();
 
 // ── 出图来源：场景壁纸「这张画面从哪来」（beta 渲染不参与）───────────────
-// 值域的**真源**在宿主侧 `lib/routes/scene-frame.js`（它把非法值 clamp 掉）——本表要与它一致，
+// 值域的**真源**在宿主侧 `packages/media-bridge/lib/routes/scene-frame.js`（它把非法值 clamp 掉）——本表要与它一致，
 // 只剩两档：
 //   0 = 自动（求链头：实时抓帧 → 自定义画面 → 空态）
 //   4 = 强制自定义画面（用户导入的截屏）
@@ -2589,7 +2589,7 @@ function onSidebarAllCorners(side, square) {
   emit();
 }
 // 标题栏液态玻璃（titlebarGlass）：与左侧栏同一形状的**乙类**总开关 —— 门控属性挂在
-// 玻璃后端（现 packages/glass/packages/glass/src/glass.js，ADR-0016 第三刀出户；本文件只翻存储键，切换不重建任何东西）。
+// 玻璃后端（现 packages/glass/src/glass.js，ADR-0016 第三刀出户；本文件只翻存储键，切换不重建任何东西）。
 function onTitlebarGlass(e) { setSetting("titlebarGlass", e.target.checked); emit(); }
 // 「思考块液态玻璃」三挡分段（关 / 液态玻璃 / 原生）：一次写两键 —— 原生挡赢过玻璃挡的
 // 互斥由 glass-layer.js 的门控属性保证（thinkingNative ⇒ 不挂 data-we-thinking-glass），
@@ -6580,7 +6580,7 @@ const HOST_BRIDGE_BINDINGS = {
   FPS_CAP_VALUES: () => FPS_CAP_VALUES,
   codecLabel: () => codecLabel,
   // ── 玻璃半边（packages/glass，ADR-0016 第二刀）的显式键集 ───────────────────────────
-  // 来源 = packages/glass/packages/glass/src/glass-panel.js 的**自由标识符**逐个点名（键集真源 = 本表；
+  // 来源 = packages/glass/src/glass-panel.js 的**自由标识符**逐个点名（键集真源 = 本表；
   // 子包侧 *_HOST_REQUIRED 由 verify-subpackage-client-half 双向对账）。
   // React / weT / switchRow / SliderRow / swatchRow / ctlText / sectionHead / renderConfirmRow
   // 是 fx / fonts / media-bridge 已登记过的键，glass 复用、**不重复登记**。新增七键如下（另有 `apiUrl` 已在通用键段登记，玻璃行状态轮询依赖它）；

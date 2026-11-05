@@ -229,7 +229,7 @@ export function registerFontsetsRoutes(webServer, c) {
       c.lingerClose(req, res);
     };
     c.armBodyIdleTimeout(req, () => fail(408, { error: 'request timeout' }));
-    // 字节计上限 + 收完**一次性**解码（不变量见 lib/routes/upload.js 文件头）：
+    // 字节计上限 + 收完**一次性**解码（不变量见 packages/media-bridge/lib/routes/upload.js 文件头）：
     // 逐块 `body += chunk` 会把跨 TCP 分片的多字节码点切成 U+FFFD，而字体集名 / 字体族
     // 正是会被这样静默写坏的用户可见字符串。
     const reader = c.http.bodyReader(req, {
