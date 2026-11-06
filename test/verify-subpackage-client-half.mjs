@@ -266,9 +266,11 @@ check('必被覆盖清单里的包不出现在"有浏览器半边但停在主 bu
 
 // ── D-7（P-D S3a）：子包申报键 ⊆ 主 bundle 提供键（机械反向对账）──────────────────
 // 每个声明 dsh.client 的子包在 src/client.js 里有一张 *_HOST_REQUIRED 申报表（缺键当场抛）。
-// 判据：把**全部** packages/*/src/client.js 的申报表并集拿出来，断言 ⊆ 主 bundle
-// src/client.js 的 HOST_BRIDGE_BINDINGS 键集。只堵"子包申报了、主包没给"这一向；
-// "主包多给了没人用的键"由 verify-client.mjs 的显式键集/死键口径管。
+// 判据：把**全部** packages/*/src/client.js 的申报表并集拿出来，断言 ⊆ 主 bundle 的键集。
+// 键集真源 = `src/host-bridge.js`（P3-lite 第一刀：契约表从 6,696 行的 src/client.js 正文里
+// 独立出来，构建期仍内联进同一工厂作用域 ⇒ 产物与键面逐字不变）。
+// 只堵"子包申报了、主包没给"这一向；"主包多给了没人用的键"由 verify-client.mjs 的
+// 显式键集/死键口径管。
 const declaredKeyViolations = ({ declarations, hostKeys }) => {
   const bad = [];
   const hosts = new Set(hostKeys);
@@ -281,10 +283,11 @@ const declaredKeyViolations = ({ declarations, hostKeys }) => {
   }
   return bad;
 };
+const HOST_BRIDGE_SRC = 'src/host-bridge.js';
 const hostBridgeKeysOf = () => {
-  const src = stripComments(read('src/client.js'));
+  const src = stripComments(read(HOST_BRIDGE_SRC));
   const at = src.indexOf('const HOST_BRIDGE_BINDINGS = {');
-  if (at < 0) throw new Error('主包 src/client.js 里找不到 `const HOST_BRIDGE_BINDINGS = {`');
+  if (at < 0) throw new Error('主包 ' + HOST_BRIDGE_SRC + ' 里找不到 `const HOST_BRIDGE_BINDINGS = {`');
   const end = src.indexOf('\n};', at);
   if (end < 0) throw new Error('HOST_BRIDGE_BINDINGS 没有收尾 `\\n};`');
   const keys = [...src.slice(at, end).matchAll(/^ {2}([A-Za-z_$][\w$]*):\s*\(\)\s*=>/gm)].map((m) => m[1]);
@@ -309,6 +312,11 @@ const hostDeclarationsOf = () => {
 };
 const hostKeys = hostBridgeKeysOf();
 const declarations = hostDeclarationsOf();
+// 单一真源钉子：键表只许住 src/host-bridge.js。两边各留一份 = 改一处、另一处静默过期
+// （且产物里后声明者静默胜出），所以"正文里还有一张表"必须当场红。
+check('D-7 单一真源：HOST_BRIDGE_BINDINGS 表只在 ' + HOST_BRIDGE_SRC + '，src/client.js 不再复制一份',
+  !stripComments(read('src/client.js')).includes('const HOST_BRIDGE_BINDINGS = {'),
+  'src/client.js 里又出现了第二份 HOST_BRIDGE_BINDINGS 定义');
 check('D-7：至少解析出一张子包申报表（0 张 = 判据空转）',
   declarations.length >= 1,
   declarations.map((d) => d.dir + '（' + d.constName + '）').join(' / '));

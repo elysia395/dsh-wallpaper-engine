@@ -5,7 +5,7 @@
 > 口径：只统计守卫**代码**里真正碰到的模块（先剥注释），并区分"直接读源文件"与"隔着产物 `lib/client.js`"。
 > 写法：字面量路径 / `join(...)` 拼接 / 唯一 basename / 产物配方 / **前缀族读法** `scopeFiles|scopeText(<前缀>)` / **经共享族助手读**（`import { panelText } from './tools/src-scope.mjs'` + 真调用；族口径封在那个库里，见 DEV-GUIDE §4.6「同时是守卫的库」）/ **真源定位读**（`locate('符号')` / `locateFile('文件名')`，`test/tools/source-locator.mjs`：符号唯一声明在哪就是读了哪个模块）。
 
-模块面 203 个 · 守卫 129 个
+模块面 204 个 · 守卫 129 个
 
 ## 守卫 → 模块
 
@@ -121,7 +121,7 @@
 | `verify-static.mjs` | — |  |
 | `verify-steam-discovery.mjs` | `lib/kernel/host-kernel.js` `lib/steam-discovery.js` |  |
 | `verify-subpackage-boot.mjs` | `lib/index.js` `lib/subpackage-boot.js` |  |
-| `verify-subpackage-client-half.mjs` | `src/client.js` | ✅ |
+| `verify-subpackage-client-half.mjs` | `src/client.js` `src/host-bridge.js` | ✅ |
 | `verify-subpackage-manifests.mjs` | `lib/kernel/component-session.js` `lib/subpackage-boot.js` |  |
 | `verify-subpackage-purity.mjs` | `lib/host-boot.js` `lib/index.js` `lib/subpackage-boot.js` `packages/fonts/src/client.js` `src/client.js` `src/fontset-store.js` |  |
 | `verify-subpackage-toggle-roundtrip.mjs` | `lib/index.js` `lib/subpackage-boot.js` `packages/fonts/src/client.js` `src/client.js` `src/extension-registry.js` `src/panel-tabs-appearance.js` `src/panel-tabs.js` | ✅ |
@@ -301,6 +301,7 @@
 | `src/font/components.js` | 2 | `verify-component-fonts` `verify-fontset` |
 | `src/font/typography.js` | 4 | `verify-fontset` `verify-scene-live` `verify-system-fonts` `verify-theme-layer` |
 | `src/fontset-store.js` | 4 | `verify-client` `verify-contracts` `verify-fontset` `verify-subpackage-purity` |
+| `src/host-bridge.js` | 1 | `verify-subpackage-client-half` |
 | `src/i18n-copy-core.js` | 2 | `verify-about` `verify-presets` |
 | `src/i18n-copy-ext.js` | 2 | `verify-about` `verify-presets` |
 | `src/i18n-copy-font.js` | 2 | `verify-about` `verify-presets` |

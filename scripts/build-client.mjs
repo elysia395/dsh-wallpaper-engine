@@ -480,6 +480,18 @@ const INLINE_MODULES = [
     markers: ['function weApplyAudio(video) {', 'let rotationAudioGate = null;',
       'const LAYER_KEY_FIELDS = ["type", "url", "edge", "sceneVideo", "audio", "live"];'],
   },
+  {
+    // 跨包浏览器半边的**显式键集契约表**（ADR-0014 S5.1 / S5.4）：71 个 getter 挂到 module.exports。
+    // 必须排在内联清单**末尾**：表顶层读 `DEFAULTS`（lib/settings-schema.js 的内联件）⇒ 要排在它之后；
+    // 正文里的函数声明在工厂体内提升、getter 又是惰性求值 ⇒ 与正文的先后无关。
+    // （原先住 src/client.js 正文底部，搬出来只为让"改一个键要同时对账 8 张 *_HOST_REQUIRED"
+    // 的契约表有个能一眼找到的家；产物行为逐字不变 —— verify 链与 golden 快照会兜住这一点。）
+    file: 'src/host-bridge.js',
+    why: '跨包浏览器半边契约表：子包经 require(主包名) 取到的显式键集 + 冻结的 exports.hostBridgeKeys；改一个键要同时对账 8 张 *_HOST_REQUIRED（test/verify-subpackage-client-half.mjs D-7）',
+    markers: ['const HOST_BRIDGE_BINDINGS = {',
+      'const HOST_BRIDGE_KEYS = Object.keys(HOST_BRIDGE_BINDINGS);',
+      'exports.hostBridgeKeys = Object.freeze(HOST_BRIDGE_KEYS.slice());'],
+  },
 ];
 
 /**
