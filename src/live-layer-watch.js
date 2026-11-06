@@ -143,9 +143,23 @@ function liveFailCauseOf(watch) {
   if (p.active > 0) return "transfer";
   const s = watch.payloadStart;
   if (s) {
-    if (p.completed - s.completed <= 0) {
-      const size = p.size > 0 ? p.size : 0;
-      if (!(size > 0 && p.served - s.served >= size)) return "transfer";
+    const grew = p.completed - s.completed > 0;
+    const size = p.size > 0 ? p.size : 0;
+    const servedEnough = size > 0 && p.served - s.served >= size;
+    if (!grew && !servedEnough) {
+      // 窗口内既没有整包完成、也没有涨够一个整包。此时**不能**直接判传输侧：
+      // 「窗口开始前就已传完」与「本窗口确实没传完」在账本上都是"无增长"，靠本函数
+      // 现有的量分不开（见上面注释最后一条）。两者的处置相反 ——
+      //   · 前者：渲染侧，照旧落盘（本机媒体源上整包 0.6s 就到齐，多半落在第一次
+      //     采样之前；错判成传输侧会让真正坏掉的渲染永远得不到持久降级）；
+      //   · 后者：传输侧，只记会话内 + 冷却重试。
+      // 判据取"窗口第一次采样时是否**已经**有完成的整包"（`completed > 0`）：
+      // 有 ⇒ 视为窗口前就传完（渲染侧）；没有 ⇒ 本窗口从零开始且一分钱没进展（传输侧）。
+      // ⚠️ 与注释原文的差别只说一处：`completed > 0` 也可能是别的窗口很久以前传的，
+      // 但那种情形下本次失败**同样**不该落盘拉黑本机 —— 所以这里宁可偏向"渲染侧"
+      // 保留原有落盘语义（issue #129 已由 `payloadUnseen` 那条分支兜住远程取包）。
+      if (s.completed > 0) return "";
+      return "transfer";
     }
   }
   return "";
