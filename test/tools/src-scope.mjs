@@ -13,13 +13,13 @@
  *   · parseInlineModules()      → [{ file, markers }]，顺序 = 构建顺序
  *   · scopeFiles(prefix)        → 路径数组（工作区相对、正斜杠），顺序 = 构建顺序
  *   · scopeText(prefix, sep?)   → 各文件全文按序拼接（默认 '\n;\n'，保持语句边界）
- *   · styleSources()            → 样式族（src/styles*）路径，顺序 = 构建顺序
+ *   · styleSources()            → 样式族（src/styles 前缀：组装点 + src/styles/ 域模块）路径，顺序 = 构建顺序
  *   · styleText(sep?)           → 样式族全文按序拼接
- *   · panelSources()            → 页签族（src/panel-tabs*）路径，顺序 = 构建顺序
+ *   · panelSources()            → 页签族（src/panel-tabs 前缀：组装点 + src/panel-tabs/ 域模块）路径，顺序 = 构建顺序
  *   · panelText(sep?)           → 页签族全文按序拼接（组装点在**末尾**）
- *   · liveSources()             → 实时族（src/live-layer*）路径，顺序 = 构建顺序
+ *   · liveSources()             → 实时族（src/live-layer 前缀：组装点 + src/live-layer/ 域模块）路径，顺序 = 构建顺序
  *   · liveText(sep?)            → 实时族全文按序拼接（组装点在**末尾**）
- *   · clientSources()           → 客户端正文族（`src/client.js` 正文 + `src/client-*.js` 助手模块）
+ *   · clientSources()           → 客户端正文族（`src/client.js` 正文 + `src/client/*.js` 助手模块）
  *   · clientText(sep?)          → 客户端正文族全文按序拼接（正文在前、助手模块按构建序在后）
  *   · cssPartsOf(text)          → 文本里全部样式域模板体（源码/产物同形；取不到返回 []）
  *   · cssBodyOf(text)           → 同上拼成一份 CSS；**取不到即抛错**（防"空串 ⇒ 判据恒真"）
@@ -67,7 +67,7 @@ export function scopeText(prefix, sep = '\n;\n') {
 }
 
 /**
- * 样式族（主包 `src/styles*`：7 个域模块 + 组装点 `src/styles.js`；玻璃 CSS 在 `packages/glass/src/glass-css.js`），顺序 = 构建期内联顺序。
+ * 样式族（主包 `src/styles` 前缀：7 个域模块 + 组装点 `src/styles.js`；玻璃 CSS 在 `packages/glass/src/glass-css.js`），顺序 = 构建期内联顺序。
  *
  * 为什么需要它：整份样式表原先是**一个** `const CSS = \`…\`` 模板；按视觉域切成 8 个域模块后，
  * "样式表文本"不再是单一文件。守卫要判的仍然是**运行时真实作用域的并集**，于是取文口径从
@@ -102,7 +102,7 @@ export function panelText(sep = '\n;\n') {
   return scopeText('src/panel-tabs', sep);
 }
 
-/** 实时渲染管线族（src/live-layer*）：按 INLINE_MODULES 顺序，组装点在末尾。 */
+/** 实时渲染管线族（src/live-layer 前缀）：按 INLINE_MODULES 顺序，组装点在末尾（组装点即 `src/live-layer.js`）。 */
 export function liveSources() { return scopeFiles('src/live-layer'); }
 
 /** 实时渲染管线族源码文本（供只看源码形态的判据使用）。 */

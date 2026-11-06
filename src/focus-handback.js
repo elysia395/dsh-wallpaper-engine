@@ -38,7 +38,7 @@
  */
 let focusHandbackDispose = null;
 
-/** 壁纸帧的判据：`iframe.we-iframe`（live 帧与 compat 帧都带这个类，见 src/live-layer-pointer.js
+/** 壁纸帧的判据：`iframe.we-iframe`（live 帧与 compat 帧都带这个类，见 src/live-layer/pointer.js
  *  与 src/media-prep.js）。用类名而不是某个 data-* 锚点：它随元素本身走，不依赖宿主 DOM。 */
 function weIsWallpaperFrame(el) {
   if (!el || el.tagName !== "IFRAME") return false;

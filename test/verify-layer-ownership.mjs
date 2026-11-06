@@ -199,7 +199,7 @@ check('P1.6 子包源码面零引用 LAYER_ID / SCRIM_ID（层引用不外流）
 const BODY_MOUNT_WHITELIST = Object.freeze({
   'src/live-layer.js': { count: 2, owner: 'layer+scrim' },
   'src/media-prep.js': { count: 2, owner: 'rotation-staging' },
-  'src/client-audio-playback.js': { count: 1, owner: 'scene-audio' },
+  'src/client/audio-playback.js': { count: 1, owner: 'scene-audio' },
   'src/client.js': { count: 3, owner: 'transient-input|download-anchor|rope-dock' },
   'packages/fx/src/fx-layer.js': { count: 1, owner: 'pkg-own-host(fx overlay)' },
 });
@@ -524,8 +524,8 @@ if (cleanup) {
 
 // ══ P4 iframe 父链 ═══════════════════════════════════════════════════════════
 const IFRAME_CREATORS = [
-  ['src/live-layer-pointer.js', 'function createLiveFrame(sel)'],
-  ['src/live-layer-watch.js', 'function rebuildLiveFrame(frame, watch)'],
+  ['src/live-layer/pointer.js', 'function createLiveFrame(sel)'],
+  ['src/live-layer/watch.js', 'function rebuildLiveFrame(frame, watch)'],
   ['src/media-prep.js', 'function prepareWebProbe(w, prep, onReady)'],
   ['src/media-prep.js', 'function prepareSceneLiveStage(w, prep, onReady, onFail)'],
   ['src/media-prep.js', 'function buildMedia(sel)'],
@@ -548,7 +548,7 @@ function iframeViolations(files) {
   const sites = iframeCreateSites(files);
   const counts = {};
   for (const s of sites) counts[s.rel] = (counts[s.rel] || 0) + 1;
-  const expected = { 'src/live-layer-pointer.js': 1, 'src/live-layer-watch.js': 1, 'src/media-prep.js': 3 };
+  const expected = { 'src/live-layer/pointer.js': 1, 'src/live-layer/watch.js': 1, 'src/media-prep.js': 3 };
   if (JSON.stringify(counts) !== JSON.stringify(expected)) {
     problems.push('iframe 创建点分布漂移：实测 ' + JSON.stringify(counts) + '，契约 ' + JSON.stringify(expected));
   }

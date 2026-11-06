@@ -30,7 +30,7 @@ with the document.
   renderer decides from `project.json`'s `file` suffix, so the host only has to answer "is this a scene".
   **The first-frame timeout is not a fixed wall clock**: the first
   frame **cannot exist before the whole package has arrived**, so the budget is computed from the
-  **package size** by `liveFirstFrameBudget()` (`src/live-layer-watch.js`) and carries a ceiling; and the host
+  **package size** by `liveFirstFrameBudget()` (`src/live-layer/watch.js`) and carries a ceiling; and the host
   keeps a **payload ledger**
   (`GET /wallpaper-engine/scene-payload-progress?token=…`, see [`ROUTE-INDEX.md`](../ROUTE-INDEX.md))
   that resets the clock every tick while bytes are still arriving — "still downloading" is no longer
@@ -41,7 +41,7 @@ with the document.
   **When there really is no first frame, the cause decides the bookkeeping**: the ledger saying
   "transferred but never completed" ⇒ only a **session-local** soft failure (never the shared failure
   memory every window reads), with an automatic retry after a cooldown and a bounded number of attempts
-  (both are constants in `src/live-layer-watch.js`: `LIVE_TRANSFER_RETRY_DELAY_MS` / `LIVE_TRANSFER_RETRY_LIMIT`); only a
+  (both are constants in `src/live-layer/watch.js`: `LIVE_TRANSFER_RETRY_DELAY_MS` / `LIVE_TRANSFER_RETRY_LIMIT`); only a
   renderer that genuinely never produces a frame, or loses its heartbeat, is persisted.
 - **Out-figure sources (the one authoritative order; code in `packages/media-bridge/lib/routes/scene-frame.js`)**:
   ① live-render iframe → ② the author-embedded MP4 (`sceneVideo`) → ③ **live-captured frame**
@@ -336,7 +336,7 @@ A byte-size threshold is unreliable (measured black PNGs from a headless run: 96
 downsampled to `LIVE_FRAME_SAMPLE` and its brightness distribution inspected: near-black or almost no
 contrast means "nothing has been rendered yet" and the capture is abandoned (the CPU frame stays), plus a
 resolution-scaled size floor.
-**The sampling edge and every threshold are constants in `src/live-layer-watch.js`**
+**The sampling edge and every threshold are constants in `src/live-layer/watch.js`**
 (`LIVE_FRAME_SAMPLE` · `LIVE_FRAME_LIT_RATIO` · `LIVE_FRAME_MIN_VARIANCE` · `LIVE_FRAME_BYTES_PER_PX`);
 this document does not copy their values — they are **tunable parameters**, and a copy here would drift
 away from the implementation. When a capture is unsatisfactory there are entries under

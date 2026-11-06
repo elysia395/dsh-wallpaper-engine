@@ -1352,7 +1352,7 @@ function wipeInset(dir) {
  * 点数恒定（4N+1），polygon() 才能平滑插值。
  */
 // ── 轮换 / 媒体生命周期助手已按族搬出（构建期内联在正文之前，同一扁平作用域）────────────
-// 声明在 src/client-rotation.js：过场几何（barsPolygon / switchFrames）、探测元素的领养与释放、
+// 声明在 src/client/rotation.js：过场几何（barsPolygon / switchFrames）、探测元素的领养与释放、
 // 隐藏期轮换推迟与可见时补做。LIVE_FIRST_FADE_MS 与两个隐藏态标记随声明一起搬走（初始化式不读模块状态）。
 
 // ── 媒体准备（预准备 / 构建 / 选中项落地）────────────────────────────────────
@@ -1699,7 +1699,7 @@ async function changeWeAssetsDir(dir) {
 const IS_EDGE = typeof navigator !== "undefined" && /Edg\//.test(navigator.userAgent);
 
 // ── 画布/媒体/GPU 帧助手已按族搬出（构建期内联在正文之前，同一扁平作用域）──────────────
-// 助手声明在 src/client-media-frame.js：它们自带的模块级变量（媒体计时器、GPU 帧 pin、画布 ctx 句柄…）
+// 助手声明在 src/client/media-frame.js：它们自带的模块级变量（媒体计时器、GPU 帧 pin、画布 ctx 句柄…）
 // 与各自的赋值点同处一文件；本文件保留「壁纸属性」的开关与快照状态（propsPanelOpen / propsState），
 // 因为改这两个状态的处理器（openUserPropsPanel / closeUserPropsPanel）仍在本文件。
 // ── 壁纸属性（WE 用户属性）──────────────────────────────────────────────────
@@ -2056,7 +2056,7 @@ function weAudioVolume() {
   } catch { return 0; }
 }
 // ── 音频 / 播放桥已按族搬出（构建期内联在正文之前，同一扁平作用域）────────────────
-// 声明在 src/client-audio-playback.js：期望音量与元素音量写入、轮换音频闸、层内媒体元素枚举、
+// 声明在 src/client/audio-playback.js：期望音量与元素音量写入、轮换音频闸、层内媒体元素枚举、
 // live iframe 音量与场景包 BGM 的起停、播放状态应用；三个顶层状态随声明一起搬走。
 
 

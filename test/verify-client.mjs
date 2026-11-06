@@ -3843,7 +3843,7 @@ setTimeout(async () => {
           why: '实时看护的会话内标志：组装点（syncLayers 收尾那一跳）也会直写它，故与看护域两处分别登记（登记表按「哪个文件真的写了」记账）',
           fields: ['sceneLiveActive'],
         },
-        'src/live-layer-watch.js': {
+        'src/live-layer/watch.js': {
           why: '实时看护的会话内标志；该字段的直写随实时管线的看护域搬进本模块（入口仍是 `startLiveWatch` / `stopLiveWatch`）',
           fields: ['sceneLiveActive'],
         },

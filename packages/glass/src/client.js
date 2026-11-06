@@ -398,7 +398,7 @@ async function probeGlassRowState() {
  * 抛错，而多出来的 3s 探测与 visibilitychange 监听已经装上了 ⇒ 每重求值一次就多一路轮询。
  * 先登记后安装：抛错发生在安装之前，页面按原样保留本实例，定时器/监听不重复；
  * globalThis 哨兵再兜一层（万一两次求值都走完登记，也只保留一路）。
- * 哨兵与既有惯例一致：挂在 globalThis 上、带 try/catch（见 src/live-layer-pointer.js 的
+ * 哨兵与既有惯例一致：挂在 globalThis 上、带 try/catch（见 src/live-layer/pointer.js 的
  * __weFrameBytes、src/client.js 的 __weComponentVisible）。
  */
 function startGlassRowPolling() {

@@ -24,7 +24,7 @@ HTML 里注入 WE API shim（运行期从 `webwallgl` 包的 `webwallgl.mjs` 中
   站点根两种形态一致，形态判定交给渲染器（`project.json` 的 `file` 后缀）；host 只认"是不是场景"。
   重新打开开关会清空失败记忆（显式重试入口）。
   **首帧超时不是一个固定墙钟**：首帧**必须等整包到齐**，所以预算由
-  `liveFirstFrameBudget()`（`src/live-layer-watch.js`）按**包大小**现算，并有上限；
+  `liveFirstFrameBudget()`（`src/live-layer/watch.js`）按**包大小**现算，并有上限；
   而且宿主侧有一本**载荷账本**（客户端轮询
   `GET /wallpaper-engine/scene-payload-progress?token=…`，见 [`ROUTE-INDEX.md`](./ROUTE-INDEX.md)），
   字节还在涨就每拍重置计时 ——
@@ -32,7 +32,7 @@ HTML 里注入 WE API shim（运行期从 `webwallgl` 包的 `webwallgl.mjs` 中
   切到后台时把 `src` 摘成 `about:blank` 中止在飞请求），因为这种实例既出不了帧（Chromium 冻结隐藏页
   的 rAF），又会和**看得见**的那个实例抢带宽与解码器。
   **首帧确实没出来时还要分因**：账本说"传过但没传完"⇒ 只记**会话内**软失败（不写所有窗口共用的
-  失败记忆），冷却后自动重试且次数有上限（两个值都是 `src/live-layer-watch.js` 的常量
+  失败记忆），冷却后自动重试且次数有上限（两个值都是 `src/live-layer/watch.js` 的常量
   `LIVE_TRANSFER_RETRY_DELAY_MS` / `LIVE_TRANSFER_RETRY_LIMIT`）；只有渲染页真的不出帧 / 运行期失联才落盘记忆。
 - **出图来源（唯一权威顺序，代码在 `packages/media-bridge/lib/routes/scene-frame.js`）**：
   ① 实时渲染 iframe → ② 场景**作者内嵌 MP4**（`sceneVideo`，硬件解码 `<video>`）→ ③ **实时抓帧**
@@ -171,7 +171,7 @@ Windows PowerShell 的 `InstalledFontCollection` / Linux `fc-list`）；都拿�
 体积阈值不可靠（headless 实测全黑 PNG：960×540≈12KB、1080p≈44KB、4K≈165KB，都远超固定字节闸），
 因此抓帧前会把 canvas 降采样到 `LIVE_FRAME_SAMPLE` 见方看亮度分布 —— 近全黑或几乎无对比度判为
 「还没渲染出画面」，直接放弃回填（保留 CPU 帧），另加分辨率相关的体积地板。
-**采样边长与全部阈值都由 `src/live-layer-watch.js` 的常量给出**（`LIVE_FRAME_SAMPLE` · `LIVE_FRAME_LIT_RATIO` ·
+**采样边长与全部阈值都由 `src/live-layer/watch.js` 的常量给出**（`LIVE_FRAME_SAMPLE` · `LIVE_FRAME_LIT_RATIO` ·
 `LIVE_FRAME_MIN_VARIANCE` · `LIVE_FRAME_BYTES_PER_PX`），本文不抄它们的数值 —— 它们是**可调参数**，
 抄进来就会与实现脱钩。抓到不满意的一帧时，在
 **设置 → 效果 → 画面 → 「实时帧」**里有这些入口：**微缩预览**（就是切换途中 / live 首帧前显示的那张静帧，
