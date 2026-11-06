@@ -91,6 +91,15 @@ function findStaleWhitelistEntries(registeredFiles, whitelist) {
 const SRC_DIR_MIN_MEMBERS = 3;
 
 /**
+ * 规则 ⑥ 的棘轮：`src/` 顶层 `.js` 数量上限（**只许缩小**）。
+ *
+ * 为什么需要：目录在浏览器半边**不承载机器含义**（§4 第 1 条），所以"拍平"永远是零成本的
+ * 合法选择 —— 没人拦时，`src/styles/base.js` 很容易被某个 PR 顺手搬回顶层，几轮之后族又散开。
+ * 这个数字不是目标值，是**当前事实**：新增顶层模块要么进已有族目录，要么先论证并显式改这里。
+ */
+const SRC_TOP_LEVEL_MAX = 33;
+
+/**
  * 规则 ⑤ 的判据 (a)：成员数不足 `SRC_DIR_MIN_MEMBERS` 的 `src/` 子目录。
  * 入参形如 `{ font: 4 }`（目录名 → 该目录下 `.js` 计数）。
  */
@@ -572,7 +581,7 @@ console.log('');
 //    它守的是"某份文档的标题怎么写、放在哪里"，而且**一份空壳文档（标题对、正文空）照样
 //    通过** ⇒ 守的是形式而非实质。"建 `src/` 子目录时同时建一份以它为标题的常青文档"
 //    改由约定承担（与 `docs/README.md` §写作纪律 3「能写在代码旁的规则不单写文档」同源）。
-console.log('⑥ `src/` 子目录成员数 ≥3');
+console.log('⑥ `src/` 子目录成员数 ≥3 + 顶层文件数棘轮');
 {
   const srcDirs = readdirSync(join(ROOT, 'src'), { withFileTypes: true })
     .filter((e) => e.isDirectory()).map((e) => e.name).sort();
@@ -589,6 +598,11 @@ console.log('⑥ `src/` 子目录成员数 ≥3');
       : srcDirs.map((d) => d + '(' + counts[d] + ')').join(' '));
 
   // 负对照：把合成输入喂给**同一个**判据函数，断言它给出"坏"的裁决。
+  const topLevel = readdirSync(join(ROOT, 'src'), { withFileTypes: true })
+    .filter((e) => e.isFile() && e.name.endsWith('.js')).map((e) => e.name);
+  check('`src/` 顶层 .js 数量不超过棘轮（上限 ' + SRC_TOP_LEVEL_MAX + '，只许缩小；新增模块先进族目录）',
+    topLevel.length <= SRC_TOP_LEVEL_MAX, topLevel.length + ' 个（上限 ' + SRC_TOP_LEVEL_MAX + '）');
+
   check('负对照：成员 2 个的合成目录会被判出',
     thinSrcDirs({ 'src/two': 2, 'src/three': 3 }).join() === 'src/two',
     '报出=[' + thinSrcDirs({ 'src/two': 2, 'src/three': 3 }).join(',') + ']');
