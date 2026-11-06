@@ -1720,19 +1720,38 @@ for (const [name, ok] of clientChecks) check(name, ok);
       && (code.match(/!liveFrameDeferred\(/g) || []).length >= 4);
   // ⑥ 失败分因（issue #129 收紧后）：归"渲染侧"（落盘）必须先有**本看护窗口内**的整包
   //    完成证据 —— 账本跨实例累积，completed>0 可能只是别的窗口很久以前传完的；
-  //    没有窗口内证据（含账本明确 unseen）一律按传输侧软失败。stall 同级：失焦/被遮挡
-  //    窗口的"无帧"不是"渲染不出来"的证据，同样只进会话内。
+  //    没有窗口内证据、且窗口第一次采样时也**没有**已完成的整包（`payloadStart.completed === 0`）
+  //    ⇒ 传输侧软失败。stall 同级：失焦/被遮挡/隐藏窗口的"无帧"不是"渲染不出来"的证据。
+  //    ⚠️ `payloadStart.completed > 0` 而窗口内无增长 ⇒ **维持渲染侧**（见 liveFailCauseOf 注释
+  //    最后一条）：本机媒体源上整包 0.6s 就到齐，多半落在第一次采样之前；把它判成传输侧会让
+  //    真正坏掉的渲染永远得不到持久降级。这条与源码注释必须同向，别再让两处各自表述。
   check('失败分因：落盘要有窗口内整包证据；unseen/stall 都走会话内软失败',
     /function liveFailCauseOf\(watch\)/.test(code)
       && /if \(!p\) return watch && watch\.payloadUnseen \? "transfer" : "";/.test(code)
       && /if \(p\.active > 0\) return "transfer";/.test(code)
-      && /if \(p\.completed - s\.completed <= 0\) \{/.test(code)
+      // 窗口内增长的两个判据（completed 涨过 / served 涨够一个整包）都必须显式算出来。
+      && /p\.completed - s\.completed > 0/.test(code)
+      && /p\.served - s\.served >= size/.test(code)
+      // 窗口前已传完 ⇒ 渲染侧（`payloadStart.completed > 0` 时不再返回 transfer）。
+      && /if \(s\.completed > 0\) return "";/.test(code)
       && /watch\.payloadStart = \{ served, completed: watch\.payload\.completed \};/.test(code)
       && /cause === "transfer" \|\| reason === "stall"/.test(code)
       && /liveSessionFailures\.set\(wid, softReason\)/.test(code)
       && /function scheduleLiveTransferRetry\(wid, attempts\)/.test(code)
       && /LIVE_TRANSFER_RETRY_LIMIT/.test(code)
       && /LIVE_TRANSFER_RETRY_DELAY_MS/.test(code));
+  // ⑥b 隐藏窗口不得被判成"这张壁纸渲染不出来"：`isEffectivelyPlaying()` 必须把
+  //     `document.hidden` 算进来，否则 Chromium 冻结隐藏页 rAF ⇒ 首帧预算判 timeout
+  //     ⇒ 归渲染侧落盘 ⇒ 此后每次启动都直接降级（实测事故 2026-10-27，锁死 6 天）。
+  //     stall 分支与首帧预算分支共用这一判据 ⇒ 一处修复两条路径同时受保护。
+  //     ⚠️ 定义在 `src/client.js`（`src`），两个调用点在 `src/live-layer-watch.js`（`code`）——
+  //     判据必须分别从两个文件取，只看 `code` 会永远 MISS。
+  check('隐藏窗口不算"应播"：isEffectivelyPlaying 计入 document.hidden（首帧预算与 stall 同时受保护）',
+    /function isEffectivelyPlaying\(\)/.test(src)
+      && /if \(typeof document !== "undefined" && document\.hidden\) return false;/.test(src)
+      // 首帧预算的"暂停/隐藏"分支与 stall 分支都以它为判据（两处都要在）。
+      && /} else if \(!isEffectivelyPlaying\(\)\) \{/.test(code)
+      && /if \(!isEffectivelyPlaying\(\)\) \{ watch\.stall = 0; watch\.resumed = false; return; \}/.test(code));
   check('软失败自动重试认一切会话内软失败（stall 也走重试，不只 transfer）',
     /if \(!liveSessionFailures\.has\(String\(wid\)\)\) return;/.test(code));
   check('出首帧即清软失败与重试计数（否则一次抖动会永久压着这张壁纸）',
