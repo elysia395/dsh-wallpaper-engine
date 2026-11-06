@@ -21,14 +21,10 @@
  */
 
 /** 缺键**大声失败**，不许静默 undefined（ADR-0014 S5.1 / S5.4 服务面显式键集 + ADR-0013 D3③「宁可显示、不可静默消失」）。理由同 packages/fx/src/client.js。 */
-const PARALLAX_HOST_REQUIRED = [
-  // 内核（只读面）
-  'selection', 'weNow', 'weClampTo', 'weBody',
-  // 渲染助手（主 bundle 的共享零件表）
-  'React', 'weT', 'switchRow', 'SliderRow',
-  // 贡献面（主 bundle 的收件箱：值 + 回调，写权留主包）
-  'registerExtensionModule', 'registerLayerHooks',
-];
+/** 由构建期填充：scripts/build-client.mjs 从下方 `} = host;` 的解构逐键派生本表
+ * （源码留空表只为 eslint/typecheck 可读；产物里是一份生成好的键数组）。
+ * 手工加键的正确顺序：① src/host-bridge.js 的 HOST_BRIDGE_BINDINGS ② 本文件的解构名单。 */
+const PARALLAX_HOST_REQUIRED = [];
 for (const key of PARALLAX_HOST_REQUIRED) {
   if (!(key in host)) {
     throw new Error('[wallpaper-engine-parallax] 主 bundle 键集缺少 "' + key

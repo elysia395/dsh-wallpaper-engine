@@ -484,10 +484,10 @@ const INLINE_MODULES = [
     // 跨包浏览器半边的**显式键集契约表**（ADR-0014 S5.1 / S5.4）：71 个 getter 挂到 module.exports。
     // 必须排在内联清单**末尾**：表顶层读 `DEFAULTS`（lib/settings-schema.js 的内联件）⇒ 要排在它之后；
     // 正文里的函数声明在工厂体内提升、getter 又是惰性求值 ⇒ 与正文的先后无关。
-    // （原先住 src/client.js 正文底部，搬出来只为让"改一个键要同时对账 8 张 *_HOST_REQUIRED"
+    // （原先住 src/client.js 正文底部，搬出来只为让"改一个键要同时对账 6 处解构名单"
     // 的契约表有个能一眼找到的家；产物行为逐字不变 —— verify 链与 golden 快照会兜住这一点。）
     file: 'src/host-bridge.js',
-    why: '跨包浏览器半边契约表：子包经 require(主包名) 取到的显式键集 + 冻结的 exports.hostBridgeKeys；改一个键要同时对账 8 张 *_HOST_REQUIRED（test/verify-subpackage-client-half.mjs D-7）',
+    why: '跨包浏览器半边契约表：子包经 require(主包名) 取到的显式键集 + 冻结的 exports.hostBridgeKeys；改一个键要同时对账 6 处解构名单（产物里的 *_HOST_REQUIRED 由本构建器从解构派生，test/verify-subpackage-client-half.mjs D-7 对账）',
     markers: ['const HOST_BRIDGE_BINDINGS = {',
       'const HOST_BRIDGE_KEYS = Object.keys(HOST_BRIDGE_BINDINGS);',
       'exports.hostBridgeKeys = Object.freeze(HOST_BRIDGE_KEYS.slice());'],
@@ -939,6 +939,96 @@ function stripHeader(srcText) {
 }
 
 /**
+ * 子包 `*_HOST_REQUIRED` 申报表 = **构建期从解构派生**（P3-lite 第二刀）。
+ *
+ * 为什么：申报表与紧随其后的 `const { … } = host;` 解构是同一份事实写了两遍（六个包 102 个键），
+ * 而「改一个键要同时对账 N 张申报表」正是跨包键面维护成本的主要来源。现在源码只留空表：
+ *
+ *     const GLASS_HOST_REQUIRED = [];          // 源码面：空表，只为 eslint/typecheck 可读
+ *     for (const key of GLASS_HOST_REQUIRED) …  // 运行期防版本错配的响亮检查（保留）
+ *     const { React, weT, … } = host;           // 唯一真源：本文件解了哪些键，产物就申报哪些键
+ *
+ * 构建期在这里把 `[]` 换成从解构名单派生的字面量数组，并**当场断言**每个名字都在
+ * `src/host-bridge.js` 的 HOST_BRIDGE_BINDINGS 里 —— 少给键的报错从「用户机器上运行期抛」
+ * 提前到「构建红」，且报错文案直接点名该补哪张表。
+ *
+ * 保留运行期检查的理由（不因构建期断言而删）：九包各自独立发版，用户机器上可能出现
+ * 主包/子包版本错配（主包旧、子包新）⇒ 构建期断言管不到，只有产物里的键数组能当场响亮失败。
+ */
+/** 缓存挂在函数对象上（本文件在此函数定义之前就会跑子包构建循环 ⇒ 模块级 let 会踩 TDZ）。 */
+function hostBridgeKeys() {
+  if (hostBridgeKeys.cache) return hostBridgeKeys.cache;
+  const src = readNormalized(resolve(root, 'src', 'host-bridge.js'));
+  const at = src.indexOf('const HOST_BRIDGE_BINDINGS = {');
+  if (at < 0) {
+    console.error('[build-client] src/host-bridge.js 里找不到 `const HOST_BRIDGE_BINDINGS = {`：'
+      + '子包申报表无法派生，产物会带一张空键表（运行期缺键检查全部空转）。');
+    process.exit(1);
+  }
+  const end = src.indexOf('\n};', at);
+  if (end < 0) {
+    console.error('[build-client] src/host-bridge.js 的 HOST_BRIDGE_BINDINGS 没有收尾 `\\n};`（形状变了？）。');
+    process.exit(1);
+  }
+  const keys = [...src.slice(at, end).matchAll(/^ {2}([A-Za-z_$][\w$]*):/gm)].map((m) => m[1]);
+  if (keys.length === 0) {
+    console.error('[build-client] HOST_BRIDGE_BINDINGS 解析出 0 个键（形状变了？）。');
+    process.exit(1);
+  }
+  hostBridgeKeys.cache = keys;
+  return keys;
+}
+
+/** 把入口正文里的空申报表换成从 `} = host;` 解构派生的字面量数组；无申报表的子包原样返回。 */
+function deriveHostRequiredTable(bodySrc, entryLabel) {
+  const m = bodySrc.match(/const\s+([A-Z][A-Z0-9_]*_HOST_REQUIRED)\s*=\s*\[\s*\]\s*;/);
+  if (!m) {
+    // 解构了 host 却没有申报表 ⇒ 缺键会静默 undefined（ADR-0014 S5.1 禁止）。宁可构建红。
+    if (/const\s*\{[\s\S]*?\}\s*=\s*host\s*;/.test(bodySrc)) {
+      console.error(`[build-client] ${entryLabel} 从 host 解构了键，却没有空申报表 `
+        + '（`const XXX_HOST_REQUIRED = [];` ⇒ 构建期派生）。缺键将静默 undefined，'
+        + '违反 ADR-0014 S5.1 显式键集。');
+      process.exit(1);
+    }
+    return bodySrc;
+  }
+  const name = m[1];
+  const rest = bodySrc.slice(m.index + m[0].length);
+  const dm = rest.match(/const\s*\{([\s\S]*?)\}\s*=\s*host\s*;/);
+  if (!dm) {
+    console.error(`[build-client] ${entryLabel} 有申报表 ${name}，但其后找不到 \`} = host;\` 解构：`
+      + '申报表无从派生（空表会让运行期缺键检查空转）。');
+    process.exit(1);
+  }
+  const keys = dm[1]
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\/\/[^\n]*/g, '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((s) => s.split(':')[0].trim());
+  if (keys.length === 0) {
+    console.error(`[build-client] ${entryLabel} 的 \`} = host;\` 解构解析出 0 个键（形状变了？）。`);
+    process.exit(1);
+  }
+  if (new Set(keys).size !== keys.length) {
+    const dup = keys.filter((k, i) => keys.indexOf(k) !== i);
+    console.error(`[build-client] ${entryLabel} 的 host 解构里出现重复键：${[...new Set(dup)].join(', ')}。`);
+    process.exit(1);
+  }
+  const hostKeys = hostBridgeKeys();
+  const missing = keys.filter((k) => !hostKeys.includes(k));
+  if (missing.length > 0) {
+    console.error(`[build-client] ${entryLabel} 从 host 解构了主 bundle 没有的键：${missing.join(', ')}。\n`
+      + '  要么在 src/host-bridge.js 的 HOST_BRIDGE_BINDINGS 里补键（并在 src/client.js 正文给出同名绑定），\n'
+      + '  要么从本文件的解构里去掉（ADR-0014 S5.1：多一个键就是多一条隐式契约）。');
+    process.exit(1);
+  }
+  const arrayText = '[' + keys.map((k) => JSON.stringify(k).replace(/"/g, "'")).join(', ') + ']';
+  return bodySrc.slice(0, m.index) + `const ${name} = ${arrayText};` + bodySrc.slice(m.index + m[0].length);
+}
+
+/**
  * 组装一份客户端产物 —— 主 bundle 与子包 bundle **同形**（同一个 window.__ModuleLoader__.load
  * 形状），差别只有两处：
  *   · 子包 bundle 由构建发出 `const host = require('<主包名>')`，那是跨包通道的唯一入口
@@ -995,9 +1085,10 @@ function buildSubpackageBundle(recipe) {
   const entryRel = toPosix(recipe.entry);
   const source = readNormalized(resolve(dir, entryRel));
   const { body: rawBody, codeStart: lineOffset } = stripHeader(source);
-  const bodySrc = rawBody.replace(/\n+$/, '');
   const label = `${recipe.dir}/`;
   const entryLabel = `${label}${entryRel}`;
+  // 申报表派生（P3-lite 第二刀）：换行数不变（单行空表 → 单行字面量），下面的行号判据仍指回原文件。
+  const bodySrc = deriveHostRequiredTable(rawBody.replace(/\n+$/, ''), entryLabel);
   const prelude = readInlinedPrelude(recipe.inline, dir, bodySrc, label);
   assertNoShadowedScopeDecls({ bodySrc, lineOffset, bodyFile: entryLabel, modules: recipe.inline, baseDir: dir, label });
   return assembleBundle({ id: recipe.name, prelude, bodySrc, hostPackage: id, bodyLabel: entryLabel });

@@ -3,10 +3,11 @@
  *
  * 子包产物由 loader 用 `require("dsh-plugin-wallpaper-engine")` 取主 bundle 的导出面。
  * 这里挂的是**显式键集**，不是整个 module.exports：子包要什么就登记什么，多给一个键就是多
- * 一条没人维护的隐式契约。键集与各子包 src/client.js 的 *_HOST_REQUIRED 逐字对齐
- * （缺键那几包自己会大声抛），判据见 test/verify-subpackage-client-half.mjs 的 D-7 双向对账。
+ * 一条没人维护的隐式契约。键集与各子包 src/client.js 里 `const { … } = host;` 的解构逐键对齐
+ * （解构名单 = 申报键真源；子包产物里的 *_HOST_REQUIRED 由构建期从它派生，见 scripts/build-client.mjs
+ * 的 deriveHostRequiredTable），判据见 test/verify-subpackage-client-half.mjs 的 D-7。
  *
- * 为什么单独成文件：这张表是**跨包契约**，改一个键要同时对账 8 张申报表，还要过
+ * 为什么单独成文件：这张表是**跨包契约**，改一个键要同时对账 6 处解构名单，还要过
  * verify-client 的键面断言；它原先埋在 6,696 行的 src/client.js 正文最深处，改键的人
  * 先要翻过整页渲染逻辑。搬到独立模块后，主 bundle 的行为**逐字不变**：构建器把本文件
  * 内联在正文之前，与正文同处一个工厂作用域（`var exports = module.exports;` 已在
@@ -41,8 +42,8 @@ const HOST_BRIDGE_BINDINGS = {
   registerExtensionModule: () => weRegisterExtensionModule,
   registerLayerHooks: () => weRegisterLayerHooks,
   // ── 字体半边（packages/fonts）的显式键集（ADR-0014 S5.1 / S5.4）──────────────────────
-  // 来源 = 被搬渲染器里的**自由标识符**逐个点名（键集真源 = 本表；子包侧的 *_HOST_REQUIRED
-  // 由 verify-subpackage-client-half 双向对账）。
+  // 来源 = 被搬渲染器里的**自由标识符**逐个点名（键集真源 = 本表；子包侧解构名单
+  // 由 verify-subpackage-client-half 与本表对账，产物里的申报表由构建期派生）。
   // 判据：命中「留在主 bundle 的文件在工厂作用域声明」才在这里登记（0 个未归类）。
   // 反面同样严格：这里每多一个键就是多一条没人维护的隐式契约（多一个都不给）。
   // React / weT / ctlText / switchRow 是 fx 那半已经要过的四个键，fonts 复用它们、**不重复登记**
@@ -103,7 +104,7 @@ const HOST_BRIDGE_BINDINGS = {
   codecLabel: () => codecLabel,
   // ── 玻璃半边（packages/glass，ADR-0016 第二刀）的显式键集 ───────────────────────────
   // 来源 = packages/glass/src/glass-panel.js 的**自由标识符**逐个点名（键集真源 = 本表；
-  // 子包侧 *_HOST_REQUIRED 由 verify-subpackage-client-half 双向对账）。
+  // 子包侧解构名单由 verify-subpackage-client-half 与本表对账，产物里的申报表由构建期派生）。
   // React / weT / switchRow / SliderRow / swatchRow / ctlText / sectionHead / renderConfirmRow
   // 是 fx / fonts / media-bridge 已登记过的键，glass 复用、**不重复登记**。新增七键如下（另有 `apiUrl` 已在通用键段登记，玻璃行状态轮询依赖它）；
   // 反面同样严格：多一个键就是多一条没人维护的隐式契约（多一个都不给）。

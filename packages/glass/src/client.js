@@ -15,8 +15,9 @@
  *   · 唯一例外 = 产物里由构建循环 outline 发出的那一行 `const host = require('<主包名>');`（S5.2）。
  *
  * ## 消费侧契约（唯一跨包通道 = 主 bundle 的显式键集，ADR-0014 S5.1 / S5.4）
- * GLASS_HOST_REQUIRED 与主包 `src/host-bridge.js` 的 HOST_BRIDGE_BINDINGS 玻璃段**逐键一致**（缺键大声抛，
- * 不许静默 undefined）。键集依据 = 被搬文件（第二刀 glass-panel.js + 第三刀 glass.js /
+ * 下面的解构名单与主包 `src/host-bridge.js` 的 HOST_BRIDGE_BINDINGS 玻璃段**逐键一致**（缺键大声抛，
+ * 不许静默 undefined）；产物里的 GLASS_HOST_REQUIRED 由构建期从这份解构派生（源码里是空表）。
+ * 键集依据 = 被搬文件（第二刀 glass-panel.js + 第三刀 glass.js /
  * glass-surfaces.js / glass-extra.js / glass-layer.js）的**自由标识符**逐个点名（fonts 同款 acorn 取证）：
  *   · 面板半边（第二刀）：React×65 · weT×176 · SliderRow×14 · switchRow×15 · swatchRow×6 · ctlText×5
  *     · sectionHead×2 · moduleResetButtonNode×1 · renderConfirmRow×1 · GLASS_CHILDREN×2
@@ -42,19 +43,10 @@
  * 缺键**大声失败**（ADR-0014 S5.1 / S5.4 显式键集 + ADR-0013 D3③「宁可显示、不可静默消失」）。
  * 主包被关 ⇒ 本 bundle 根本不会被 require（ADR-0014 S7.2 连坐）；能走到这里却缺键 = 键集与申报表脱钩。
  */
-const GLASS_HOST_REQUIRED = [
-  // 内核与渲染助手（主 bundle 的共享零件表；后四个与 fx / fonts 复用）
-  'React', 'weT', 'SliderRow', 'switchRow', 'swatchRow', 'ctlText', 'sectionHead',
-  // 玻璃域的产地数据 / 构件（留在主包的文件里；panelGlassPair 的家 = lib/settings-schema.js）
-  'moduleResetButtonNode', 'renderConfirmRow',
-  'GLASS_CHILDREN', 'childGlassKey', 'GLASS_COLOR_PRESETS', 'panelGlassPair',
-  'ROPE_FORMS', 'ROPE_FORM_VALUES',
-  // 运行时半边（第三刀）：store 活绑定 + 主包侧的纯函数内核与常量 + 状态路由轮询的同源地址
-  'selection', 'skinYieldActive', 'weClampSurfaceColor', 'glassColorOf',
-  'sanitizeExtraGlassSelectors', 'GLASS_SATURATE', 'useLegacySaturateCoupling', 'apiUrl',
-  // 贡献面（主 bundle 的收件箱）：面板节 + 行为层 + 状态投影回传
-  'registerPanelSection', 'registerLayerHooks', 'registerGlassStatus',
-];
+/** 由构建期填充：scripts/build-client.mjs 从下方 `} = host;` 的解构逐键派生本表
+ * （源码留空表只为 eslint/typecheck 可读；产物里是一份生成好的键数组）。
+ * 手工加键的正确顺序：① src/host-bridge.js 的 HOST_BRIDGE_BINDINGS ② 本文件的解构名单。 */
+const GLASS_HOST_REQUIRED = [];
 for (const key of GLASS_HOST_REQUIRED) {
   if (!(key in host)) {
     throw new Error('[wallpaper-engine-glass] 主 bundle 键集缺少 "' + key

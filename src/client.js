@@ -6558,8 +6558,8 @@ const petLink = {
 // ── 跨包浏览器半边通道（ADR-0014 S5.1 / S5.4「宿主注入显式键集」）────────────────────
 // 显式键集表已独立到 `src/host-bridge.js`（契约真源；构建期内联在本正文之前，同处一个
 // 扁平工厂作用域 ⇒ 正文里的活绑定照旧以 getter 形式给出去，产物行为逐字不变）。
-// 搬走的原因：这张表是跨包契约，改一个键要同时对账 8 张 *_HOST_REQUIRED（判据见
-// test/verify-subpackage-client-half.mjs 的 D-7 双向对账），不该埋在 6,000+ 行正文深处。
+// 搬走的原因：这张表是跨包契约，改一个键要同时对账 6 处 `} = host;` 解构名单（判据见
+// test/verify-subpackage-client-half.mjs 的 D-7；产物里的申报表由构建期从解构派生），不该埋在 6,000+ 行正文深处。
 // 窄键常量 `ROTATION_INTERVAL_DEFAULT` 只服务键表，随表一起搬走。
 // ── 玻璃运行时状态门面（ADR-0016 第三刀）────────────────────────────────────
 // weGlassSurfaceStatus（表面策略诊断投影）的真实现住 packages/glass 的 glass-surfaces.js ——
