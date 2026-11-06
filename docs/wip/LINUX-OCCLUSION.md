@@ -13,14 +13,14 @@
 
 壁纸是壳窗口内的 DOM 层（[`src/styles.js`](../../src/styles.js) 的 `.we-layer`，`fixed; inset:0;
 z-index:-2`），不是独立 OS 窗口。目标：宿主侧获取「壳窗口之上有哪些窗口、各自矩形」，换算成
-壁纸画布坐标喂给 vendored WebWallGL 渲染器既有的遮挡管线，实现**分档降帧（heavy/light）、
+壁纸画布坐标喂给 WebWallGL 渲染器（npm 依赖，见 §5）既有的遮挡管线，实现**分档降帧（heavy/light）、
 完全遮挡暂停（pause）**与 ROI 剔除，省 GPU/CPU/电池。
 
 Chromium 在 Linux **没有**原生窗口遮挡追踪（其 WindowOcclusionTracker 文档明说
 "On non-Windows platforms, this does nothing"），`document.visibilityState` 只反映显隐/最小化
 ⇒ 必须自建生产端。
 
-## 1. 消费端契约（WebWallGL 2.1.0，vendored pin `4ba71c40`）
+## 1. 消费端契约（WebWallGL npm 依赖 ^3.0.0；`setOcclusion` 契约自 2.1.0 起未变）
 
 渲染页控制器（bundle 内含 `setOcclusion` 方法的那个对象）提供：
 
@@ -42,7 +42,7 @@ setOcclusion({
 3. **矩形不只调帧**：`rects` 同时进 ROI 剔除 ⇒ 喂精确矩形能省真实 GPU 绘制，不要只喂 ratio。
 4. 阈值等由渲染器 `occlusionCfg` 管，生产端不复制数值。
 
-### 锚点定位法（防上游同步漂移）
+### 锚点定位法（vendored 期遗留；现引擎是 npm 依赖、不再改上游产物，见 §5）
 
 bundle 是压缩产物，符号名（`me`/`Qb` 等）会随上游同步变化。定位改点**只用行为锚点**，且
 守卫测试只做行为断言、不引用压缩符号名。pin `4ba71c40` 版本下的两个已知锚点：
@@ -56,10 +56,10 @@ bundle 是压缩产物，符号名（`me`/`Qb` 等）会随上游同步变化。
 ## 2. 数据通路总览
 
 ```
-[lib/occlusion] OcclusionHub（Node，插件宿主进程）
+[packages/media-bridge/lib/occlusion] OcclusionHub（Node，插件宿主进程）
    会话判定 → 适配器(X11) → 事件驱动 + 1Hz 心跳 → 快照
         ↓  HTTP 轮询（沿插件既有 client↔host 模式）
-[lib/routes/occlusion.js]  GET /wallpaper-engine/occlusion
+[packages/media-bridge/lib/routes/occlusion.js]  GET /wallpaper-engine/occlusion
         ↓  1Hz 轮询（仅 live 层挂载且页面可见时）
 [src/occlusion.js] 像素→CSS 换算 → postMessage 进 .we-live-iframe
         ↓  {__weLive:1, op:'setOcclusion'|'clearOcclusion', …}
@@ -68,15 +68,15 @@ bundle 是压缩产物，符号名（`me`/`Qb` 等）会随上游同步变化。
 渲染器遮挡管线（§1）→ run/light/heavy/pause + ROI
 ```
 
-## 3. 生产端 OcclusionHub（新目录 `lib/occlusion/`）
+## 3. 生产端 OcclusionHub（hub 在 `packages/media-bridge/lib/occlusion/`；纯运算在 `lib/occlusion/`）
 
 ### 3.1 文件布局
 
 | 文件 | 职责 |
 | --- | --- |
-| `index.js` | Hub：会话判定、适配器装载、快照组装、epoch/gen 管理、1Hz 心跳、失联降级 |
-| `rects.js` | 纯矩形运算：裁剪到自窗、矩形差集（自底向上扣减）、并集面积、合并；无 IO，可单测 |
-| `x11.js` | X11 适配器（本轮唯一后端，见 §3.3） |
+| `packages/media-bridge/lib/occlusion/index.js` | Hub：会话判定、适配器装载、快照组装、epoch/gen 管理、1Hz 心跳、失联降级 |
+| `lib/occlusion/rects.js` | 纯矩形运算：裁剪到自窗、矩形差集（自底向上扣减）、并集面积、合并；无 IO，可单测 |
+| `lib/occlusion/x11.js` | X11 适配器（本轮唯一后端，见 §3.3） |
 
 ### 3.2 快照 schema（hub → 路由 → client 的唯一契约）
 
@@ -113,11 +113,10 @@ bundle 是压缩产物，符号名（`me`/`Qb` 等）会随上游同步变化。
   （按 `send_event` 标志过滤伪造），触发即重算；另有 1Hz 心跳兜底轮询；
 - **降级**：连接失败 / X11 不可用 ⇒ `backend:"none"`，**绝不抛错影响宿主**（全入口 try/catch）。
 
-## 4. 宿主路由（`lib/routes/occlusion.js`）
+## 4. 宿主路由（`packages/media-bridge/lib/routes/occlusion.js`）
 
 - `GET /wallpaper-engine/occlusion` → 快照 JSON（鉴权、JSON 响应族沿
   [`packages/media-bridge/lib/routes/now-playing.js`](../../packages/media-bridge/lib/routes/now-playing.js)
-  （P-D 阶段1 前该包目录名是 `media-bridge`）
   等同族路由先例；
   `lib/json-response.js` 工具）；
 - 加路由后**必须**跑 `node test/tools/host-route-index.mjs --write` 重算
@@ -156,8 +155,8 @@ bundle 是压缩产物，符号名（`me`/`Qb` 等）会随上游同步变化。
 
 | 代理 | 独占文件域 | 交付 |
 | --- | --- | --- |
-| A | `lib/occlusion/**`、`lib/routes/occlusion.js`、`package.json`、`docs/ROUTE-INDEX.md`(工具)、`test/verify-occlusion-hub.mjs` | hub + rects 单测 + X11 适配器 + 路由 + 依赖 + verify 接线 |
-| B | `lib/webwallgl/**`、`lib/routes/scene-serve.js`、`test/verify-scene-live-occlusion.mjs` | bundle 曝光 + 桥 + HTML 注入 + 注入机检 |
+| A | `packages/media-bridge/lib/occlusion/**`、`packages/media-bridge/lib/routes/occlusion.js`、`lib/occlusion/**`、`package.json`、`docs/ROUTE-INDEX.md`(工具)、`test/verify-occlusion-hub.mjs` | hub + rects 单测 + X11 适配器 + 路由 + 依赖 + verify 接线 |
+| B | `lib/webwallgl/**`、`packages/media-bridge/lib/routes/scene-serve.js`、`test/verify-scene-live-occlusion.mjs` | bundle 曝光 + 桥 + HTML 注入 + 注入机检 |
 | C | `src/**`、`lib/client.js`(构建产物)、`test/verify-occlusion-client.mjs` | 轮询/变换/下发 + 生命周期挂钩 + 机检 |
 
 **红线**：任何人不得跑 git 写命令；不得碰 `patches/`、`_refs/`、他人文件域；C 不改
