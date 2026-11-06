@@ -10,7 +10,7 @@
 
 把 Wallpaper Engine 的场景、网页和视频壁纸放到 DSH 聊天界面背后，再调整玻璃、字体、配色与吉祥物。没有 Wallpaper Engine 也能上传自己的 JPG / PNG / MP4。Application 类型需要运行第三方程序，本插件不支持。
 
-界面美化不向 AI 注册工具或注入提示词，**不额外消耗模型 token**。壁纸保存在本机；运行时下载、仓库统计和主动开启的在线歌词仍会联网。
+界面美化不向 AI 注册工具或注入提示词，**不额外消耗模型 token**。壁纸保存在本机；运行时下载与仓库统计仍会联网。
 
 ### 安装前准备
 
@@ -104,7 +104,7 @@ node scripts/install-source.mjs --profile web --dsh-home "<目标 DSH 数据目�
 先调暗化、底色与边框。玻璃按表面管理，可在对应设置回退原生；未知插件表面不保证自动兼容，见 [共存说明](docs/HOW-IT-WORKS.md#共存玻璃表面与其他-ui-插件)。
 
 **插件会把壁纸上传到网上吗？**
-不会。壁纸在本机读取和保存。不过下载运行时、查询仓库数据，以及开启在线歌词后的曲目信息查询会联网。系统频谱采集的是输出回环，不是麦克风。
+不会。壁纸在本机读取和保存。不过下载运行时、查询仓库数据会联网。系统频谱采集的是输出回环，不是麦克风。
 
 ### 项目与致谢
 
@@ -141,7 +141,7 @@ Open **Settings → Wallpaper Engine → Library**, or pull the mascot cord. Cho
 
 Use JPG / PNG / MP4 uploads without Wallpaper Engine. macOS has no official WE client; existing project directories can also be used. Scene compatibility depends on assets and WebGL; a preview may be shown while preparing or after rendering failure. Rotation needs at least two playable candidates. Hiding a library item does not delete its source.
 
-**Theme-following is off by default.** Readability matters more than maximum transparency. Glass uses per-surface fallback rather than guaranteed compatibility with every third-party skin. System audio capture is output loopback, not the microphone. Online lyrics are opt-in and may send track information to LRCLIB.
+**Theme-following is off by default.** Readability matters more than maximum transparency. Glass uses per-surface fallback rather than guaranteed compatibility with every third-party skin. System audio capture is output loopback, not the microphone.
 
 ### Optional official pet integration
 
@@ -157,7 +157,7 @@ General wallpaper settings persist in `~/.dsh-wallpaper-engine/config.json`. Env
 
 For installation errors, verify the complete checkout, supported versions, and exact home / profile / CLI. For an empty library, check filters and Steam detection; `DSH_WE_STEAM_ROOT` points at the Steam root containing `steamapps`. For decoding errors, try H.264 MP4. See [troubleshooting](docs/TROUBLESHOOTING.md) and the [English README](README.en.md).
 
-Wallpapers stay local, but runtime downloads, repository statistics and opt-in lyric queries access external services. The plugin registers no model tools or prompt text, so it adds no model token overhead.
+Wallpapers stay local, but runtime downloads and repository statistics access external services. The plugin registers no model tools or prompt text, so it adds no model token overhead.
 
 ### Credits
 

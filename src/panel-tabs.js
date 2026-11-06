@@ -137,7 +137,7 @@ function weComponentVisibleOf(components, name) {
   function renderAudioTab(ctx) {
     const { onToggleAudio, onVideoVolume, sel } = ctx;
     // 声音：壁纸音轨（视频 / 场景内嵌 MP4 / 场景包内音频共用一套设置）。
-    // 系统音频反应 / 媒体信息 / 在线歌词三键**恒为常开**（schema kind 'const'）：
+    // 系统音频反应 / 媒体信息两键**恒为常开**（schema kind 'const'）：
     // 面板不提供页面定义，运行时两侧一律按默认接入读值。
     return React.createElement(React.Fragment, null,
       React.createElement("div", { className: "we-picker__section" },

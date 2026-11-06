@@ -7,7 +7,7 @@
  *   1. 产物解析表：平台/架构 → 附件名 + 固定的 sha256 齐全
  *   2. 门面默认走中间件：握手 protocol=1、快照字段映射、封面路径与 MIME、状态形状
  *   3. 位置外推：两次读取之间进度在走（且不超过 duration）
- *   4. 歌词换算：lines{tMs} + offsetMs → 渲染页要的 [[秒, 文本], …]
+ *   4. 命令行恒关在线歌词查询（--no-online）：歌词透传已整条移除
  *   5. 反向控制：动作白名单（五个渲染页动作）+ 未就绪时如实拒绝且不触发懒启动 +
  *      打真中间件（mock）：pause/play 后回读到新状态
  *   6. 回落：产物不可用时门面切回内置实现，且原因进 status.fallback
@@ -59,7 +59,7 @@ import {
   MEDIA_BRIDGE_TAG, MEDIA_BRIDGE_ASSETS, MEDIA_BRIDGE_SHA256, MEDIA_BRIDGE_FALLBACKS,
   mediaBridgeAssetFor, mediaBridgeCachePath, binaryMagicOk, provisionMediaBridge,
 } from '../packages/media-bridge/lib/provision.js';
-import { lyricsToTuples, bridgeServeArgs, MEDIA_CONTROL_ACTIONS, createBridgeSupervisor, bootAttemptBudgets } from '../packages/media-bridge/lib/supervisor.js';
+import { bridgeServeArgs, MEDIA_CONTROL_ACTIONS, createBridgeSupervisor, bootAttemptBudgets } from '../packages/media-bridge/lib/supervisor.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const TEST_DIR = join(root, '.test-cache', 'verify-media-bridge');
@@ -258,20 +258,14 @@ check('可执行魔数识别（PE / ELF / Mach-O / universal）',
   && binaryMagicOk(Buffer.from([0xca, 0xfe, 0xba, 0xbe]))
   && !binaryMagicOk(Buffer.from([0x3c, 0x21, 0x44, 0x4f])));
 
-// ── 2. 歌词换算（纯函数，样例数据）─────────────────────────────────────────
-console.log('· 歌词换算（渲染页要 [[秒, 文本], …]）');
-const lyr = lyricsToTuples({
-  offsetMs: 500,                                  // LRC [offset:500] = 整体晚 0.5s
-  lines: [{ tMs: 1000, text: '第一句' }, { tMs: 12500, text: '第二句' }, { tMs: null, text: '丢掉' }],
-});
-check('ms → 秒并叠加 offsetMs',
-  Array.isArray(lyr) && lyr.length === 2
-  && lyr[0][0] === 1.5 && lyr[0][1] === '第一句' && lyr[1][0] === 13,
-  JSON.stringify(lyr));
-check('空歌词返回 null（渲染页退回「没有歌词」）',
-  lyricsToTuples(null) === null && lyricsToTuples({ lines: [] }) === null
-  && lyricsToTuples({ lines: [{ tMs: 100 }] }) !== null);
-check('时间轴不会被 offset 推成负数', lyricsToTuples({ offsetMs: -90000, lines: [{ tMs: 100, text: 'x' }] })[0][0] === 0);
+// ── 2. 命令行（纯函数）：在线歌词查询恒关 ────────────────────────────────────
+// 本插件已不再消费歌词（整条透传移除），中间件自带的在线歌词查询会外发歌名/歌手/专辑，
+// 所以命令行**恒带** `--no-online`，不依赖中间件各版本的默认值。
+console.log('· 命令行恒关在线歌词查询');
+check('bridgeServeArgs 恒带 --no-online、不出现 --online',
+  bridgeServeArgs({ cacheDir: 'x' }).includes('--no-online')
+  && !bridgeServeArgs({ cacheDir: 'x' }).includes('--online')
+  && bridgeServeArgs({ cacheDir: 'x', audio: false }).includes('--no-online'));
 
 // ── 2c. 反向控制的门面契约（离线，不需要产物）──────────────────────────────
 // 动作白名单是**闸门**：`/media-control` 是开放的 HTTP 入口，动作名不得直达中间件
@@ -366,7 +360,7 @@ if (!binPath) {
   // 守护侧日志要能被断言（"换姿势重试真的发生了"），但仍原样打到 stdout。
   const bootLogs = [];
   const backend = createMediaBackend({ dataDir: TEST_DIR, log: (m) => { bootLogs.push(String(m)); console.log('    · ' + m); } });
-  backend.start({ audio: false, online: false });   // 不碰系统音频权限
+  backend.start({ audio: false });   // 不碰系统音频权限
   let ready = false;
   const readyDeadline = Date.now() + bootMs + 15000;   // 引导预算 + 收尾余量
   while (!ready && Date.now() < readyDeadline) { await sleep(150); ready = backend.usingBridge(); }
@@ -405,8 +399,8 @@ if (!binPath) {
     check('封面文件真的落盘了且 MIME 可用',
       !backend.artworkFile() || (existsSync(backend.artworkFile()) && /^image\//.test(backend.artworkMime())),
       backend.artworkFile() ? backend.artworkMime() : '（无封面）');
-    check('歌词缺省时不硬塞空数组（不给渲染页假歌词）',
-      !np || np.lyrics === undefined || Array.isArray(np.lyrics));
+    check('快照不再带 lyrics 字段（歌词透传已整条移除）',
+      !np || !('lyrics' in np));
 
     // 频谱形状：音频关掉时也必须是「形状正确的 64 段」，而不是报错
     const sp = backend.spectrum();
@@ -462,7 +456,7 @@ if (!binPath) {
     // **产物可信**（sha256 就是发布产物）才允许把失败归因给环境。三种结局都把原因写进
     // **同一条**判据的明细（唯一入口 `judgeReady`），退出码照旧是红 —— 见文件头。
     const probe = await probeHandshakeViaFiles(binPath, bridgeServeArgs({
-      cacheDir: join(TEST_DIR, 'probe-cache'), audio: false, online: false, mock: true,
+      cacheDir: join(TEST_DIR, 'probe-cache'), audio: false, mock: true,
     }), join(TEST_DIR, 'probe'));
     const verdict = classifyProbe(probe);
     const trust = artifactTrusted(binPath, asset);
@@ -527,7 +521,7 @@ if (!binPath) {
 console.log('· 回落路径');
 process.env.DSH_WE_MEDIA_LEGACY = '1';   // 等价于「中间件不可用」
 const fb = createMediaBackend({ dataDir: join(TEST_DIR, 'fallback'), log: () => {} });
-fb.start({ audio: false, online: false });
+fb.start({ audio: false });
 await sleep(300);
 const fst = fb.status();
 check('强制内置实现时不走中间件', fb.usingBridge() === false);
@@ -557,7 +551,7 @@ process.env.DSH_WE_MEDIA_BRIDGE = bogus;
 //    `judgeBootRetry`，于是"重试被短路 / 换姿势行丢了"在任何一次运行里都会红。
 const bogLogs = [];
 const bog = createMediaBackend({ dataDir: join(TEST_DIR, 'bogus'), log: (m) => { bogLogs.push(String(m)); } });
-bog.start({ audio: false, online: false });
+bog.start({ audio: false });
 let bogFallback = '';
 for (let i = 0; i < 120 && !bogFallback; i++) { await sleep(150); bogFallback = bog.status().fallback || ''; }
 check('坏产物 → 回落内置实现（不无限等）', Boolean(bogFallback) && bog.usingBridge() === false,
@@ -688,10 +682,10 @@ check('环境差异不与通过同形（唯一失败来源是环境差异 ⇒ �
     ? `本次环境跳过：verdict=${outcome.verdict} code=${outcome.code} failed=${failed}（必须 code=3 且 failed ≥ 1）`
     : '本次没有环境跳过');
 
-// 覆盖面地板（全局）：离线那一段（产物表 7 / 歌词 3 / 反向控制 5 / 探针判定 4 = 19 条，加文末
-// 两条契约判据 = **21** 条）与有没有产物无关，恒在。整段被短路或删空时，下面的"全绿 / --allow-skip"
+// 覆盖面地板（全局）：离线那一段（产物表 7 / 命令行 1 / 反向控制 5 / 探针判定 4 = 17 条，加文末
+// 两条契约判据 = **19** 条）与有没有产物无关，恒在。整段被短路或删空时，下面的"全绿 / --allow-skip"
 // 就是**空域上的通过**，所以钉一个绝对下界（改离线判据条数时同步改这个数）。
-check('覆盖面地板：本次至少执行 21 条判据（否则汇总的"通过"是空域上的）', passed + failed >= 21,
+check('覆盖面地板：本次至少执行 19 条判据（否则汇总的"通过"是空域上的）', passed + failed >= 19,
   '已执行 ' + (passed + failed) + ' 条');
 
 /** 机器可读判词行**恰好一次**（包装器 fail-closed：缺这行当红）。 */

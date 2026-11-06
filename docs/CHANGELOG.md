@@ -16,6 +16,10 @@
 > 完整逐提交历史见 GitHub Commits / Releases；升级前置条件见 [`UPGRADING.md`](./UPGRADING.md)。
 > `test/verify-scene-live.mjs` 这一类判据条数**只记该条写作当时的实测总数**（如 466 / 465），不是现在的总数 —— 后续条目会往上加（现为 502）；照原文保留，好让它与当次提交对得上。
 
+### 未发布（清理轮，2026-11-06）
+
+- **删：未展示的歌词转发整条移除（含在线歌词查询）**。插件侧从未渲染歌词（`src/` 只有透传，官方素材 `assets/**` 0 处使用 `mediaLyrics`），这条通路却横跨"设置键 → 宿主 → 中间件 → 客户端 → 渲染页载荷"五层：现删除 `setMedia` 的 `lyrics` 字段与歌词版本 key、`supervisor` 的 `lyrics` 事件 / 快照字段 / `lyricsToTuples` / `lyricsFor` 与 `online` 参数、以及 `mediaLyricsOnline` 常开设置键（`kind: 'const'`，面板本就无开关）。中间件启动参数改为**恒传 `--no-online`**（显式隐私闸门：本机不再向 lrclib.net 外发歌名 / 歌手 / 专辑；中间件自带的本地 `.lrc` 读取仍可用，只是本插件不消费）。旧配置里的残留键由 `sanitizeFromSchema` 当未知键丢弃，**无需迁移**。守卫：`verify-media-bridge` 钉"命令行不含 `--online`、快照无 `lyrics` 字段"，`verify-scene-live` 钉"不再订阅歌词事件 / client 不再透传 / 白名单与预设里不再有该键"，golden 夹具按 `--intend` 重录。
+
 ### v1.4.2（2026-11-06 · 紧急修复）
 
 - **修：拖动吉祥物时右侧栏按帧反复弹出又收回**（1.4.1 回归）。根因是两处叠在一起：

@@ -2782,8 +2782,8 @@ check('位置外推用 updatedAtMs + rate（暂停不外推）',
   supSrc.includes('playing && pb.positionSource !== ') && supSrc.includes('Date.now() - ref'));
 check('事件里已外推的位置不重复外推（参考时刻改写成事件时刻）',
   supSrc.includes("pb.positionSource === 'interpolated'") && supSrc.includes('pb.updatedAtMs = refMs'));
-check('歌词换算成渲染页要的 [[秒, 文本], …]（含 LRC offset）',
-  supSrc.includes('export function lyricsToTuples') && supSrc.includes('offsetMs'));
+check('不再订阅歌词事件、命令行恒带 --no-online（歌词透传已整条移除）',
+  !supSrc.includes("'lyrics'") && supSrc.includes("'--no-online'") && !supSrc.includes('lyricsToTuples'));
 // 状态缓存兜底：中间件的 status 事件只在元数据源报错时发时，音频源
 // idle→preparing→running 的变化不通知 —— 消费端只在启动时读一次 status，会永远停在
 // preparing（频谱有数据、客户端却拿不到）。所以插件这层自己也兜底刷新，两层互不依赖。
@@ -2842,7 +2842,7 @@ check('spectrum 路由回报 running（客户端据此决定装不装音频桥�
 check('媒体状态族已搬出 lib/index.js（正文零路径字面量 + 一次调用）',
   !/path: `\$\{BASE\}\/(media-status|audio-spectrum|now-playing)/.test(readFileSync(join(root, 'lib', 'index.js'), 'utf8'))
     && /registerNowPlayingRoutes\(webServer, \{/.test(hostSrc));
-check('settings 白名单保留 mediaLyricsOnline（否则开关会被丢）', hostKeeps('mediaLyricsOnline', true));
+check('settings 白名单不再保留 mediaLyricsOnline（在线歌词键已移除）', !hostKeeps('mediaLyricsOnline', true));
 
 // 客户端：封面必须转成**自包含 data URL** —— 宿主给的是插件路由，
 // 沙箱壁纸在 Desktop 上取不到（能力头栅栏只放行同源 frame）。
@@ -2851,11 +2851,8 @@ check('client 把封面降采样成 data URL 再推给壁纸',
     && src.includes('toDataURL("image/jpeg"') && src.includes('thumbnail: mediaArtData || undefined'));
 check('client 按曲目缓存封面并重试（宿主下载封面是异步的）',
   src.includes('function scheduleArtworkFetch(') && src.includes('MEDIA_ART_MAX_TRIES'));
-check('client 透传歌词与 albumArtist（[[秒, 文本]] 原样给渲染页）',
-  src.includes('lyrics: Array.isArray(m.lyrics) && m.lyrics.length ? m.lyrics : undefined')
-    && src.includes('albumArtist: m.albumArtist || ""'));
-check('client 的 push key 带歌词版本（歌词晚到也要再推一帧）',
-  src.includes('const lyrRev =') && src.includes('lyrRev].join('));
+check('client 不再向渲染页透传歌词（lyrics 字段与 push key 里的歌词版本都已移除）',
+  !src.includes('m.lyrics') && !src.includes('lyrRev') && src.includes('albumArtist: m.albumArtist || ""'));
 check('音频桥按宿主 running 装卸（装了桥 = 渲染页放弃自带音频源）',  src.includes('function syncAudioBridge(frame, running)') && src.includes('syncAudioBridge(frame, d.running === true)'));
 // 无真实频谱时收起「靠频谱才有内容」的合成层（#167）：没有音频输入时，音频可视化层
 // 退化成一整块**空矩形**，而作者叠在其上的 scroll 照跑 ⇒ 屏幕上是一条匀速横爬的带子，
@@ -2907,30 +2904,34 @@ check('host 侧 /media-control 只收 POST + 动作走 mediaBackend.control（�
   nowPlayingSrc.includes('path: `${BASE}/media-control`')
     && nowPlayingSrc.includes('mediaBackend.control(action)')
     && !/media-control[\s\S]{0,700}ensureMedia\(\)/.test(nowPlayingSrc));
-// 「在线歌词 / 系统音频反应 / 媒体信息」三键已**退役为常开**（用户口径：默认接入，
+// 「系统音频反应 / 媒体信息」两键已**退役为常开**（用户口径：默认接入，
 // 设置页与侧边栏都不再提供页面定义）。三件事一起钉：① schema 侧 kind 'const'（读取
 // 时老配置里的关闭值被默认值取代）+ 默认 on；② UI 侧两个来源（设置页签渲染器 /
-// 快捷播放面板）按**代码**（剥注释）都不得再出现这三个开关。
+// 快捷播放面板）按**代码**（剥注释）都不得再出现这两个开关。
+// （原第三个键「在线歌词」已整条删除 —— 连设置键一起，见上面的白名单判据。）
 {
-  const RETIRED_LABELS = ['系统音频反应', '媒体信息', '在线歌词'];
+  const RETIRED_LABELS = ['系统音频反应', '媒体信息'];
   const leftoversIn = (text) => RETIRED_LABELS.filter((label) => text.includes(label));
   const tabsCode = stripComments(tabsSrc);
   const qpCode = stripComments(readFileSync(join(root, 'src', 'quick-panel.js'), 'utf8'));
-  check('三键退役为常开（schema kind const + 默认接入）',
+  check('两键退役为常开（schema kind const + 默认接入）',
     schemaMod.DEFAULTS.audioSource === 'auto' && schemaMod.KINDS.audioSource.kind === 'const'
       && schemaMod.DEFAULTS.mediaIntegration === true && schemaMod.KINDS.mediaIntegration.kind === 'const'
-      && schemaMod.DEFAULTS.mediaLyricsOnline === true && schemaMod.KINDS.mediaLyricsOnline.kind === 'const',
+      && !('mediaLyricsOnline' in schemaMod.DEFAULTS) && !('mediaLyricsOnline' in schemaMod.KINDS),
     'kinds=' + schemaMod.KINDS.audioSource.kind + '/' + schemaMod.KINDS.mediaIntegration.kind
-      + '/' + schemaMod.KINDS.mediaLyricsOnline.kind
       + ' · defaults=' + schemaMod.DEFAULTS.audioSource + '/' + schemaMod.DEFAULTS.mediaIntegration
-      + '/' + schemaMod.DEFAULTS.mediaLyricsOnline);
-  check('三个开关的页面定义已从设置页与快捷面板移除（按代码判，注释里提到不算）',
+      + ' · lyrics 键=' + ('mediaLyricsOnline' in schemaMod.DEFAULTS));
+  check('两个开关的页面定义已从设置页与快捷面板移除（按代码判，注释里提到不算）',
     leftoversIn(tabsCode).length === 0 && leftoversIn(qpCode).length === 0,
     '残留：' + ([...leftoversIn(tabsCode), ...leftoversIn(qpCode)].join(', ') || '无'));
   // 负对照：同一条判据喂合成文本 —— 真出现开关文案必须被判出（判据不是恒真）。
   check('negative control: 合成代码里的开关文案会被同一条判据点出',
-    leftoversIn('switchRow("在线歌词", v)').join(',') === '在线歌词'
-      && leftoversIn('switchRow("媒体信息", v) && switchRow("系统音频反应", v)').length === 2);
+    leftoversIn('switchRow("媒体信息", v)').join(',') === '媒体信息'
+      && leftoversIn('switchRow("系统音频反应", v) && switchRow("媒体信息", v)').length === 2);
+  // 「在线歌词」不是"退役成常开"，而是**整条删除**（含设置键）：文案里出现它属于残留。
+  check('在线歌词不再是常开键（已整条删除，文案出现即残留）',
+    leftoversIn('switchRow("在线歌词", v)').length === 0
+      && !('mediaLyricsOnline' in schemaMod.KINDS));
 
 // 用户口径（更新）：侧栏壁纸列表的类型档（全部 / 场景 / 网页 / 视频 / 图片）
 // **与设置页是同一个键 `typeFilter`** —— 类型变动两处同步、不做单独的档（原「面板本地

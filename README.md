@@ -123,7 +123,7 @@ node scripts/install-source.mjs --profile desktop --dsh-home "<DSH 数据目录>
 
 - Windows / macOS / Linux 使用同一份源码；macOS 没有 WE 客户端，可上传图片 / 视频或指向 WE 项目目录。
 - Scene 渲染依赖浏览器 WebGL 与显卡驱动，复杂工坊项目可能存在兼容差异；失败会逐级降级。
-- 遮挡暂停、窗口失焦暂停与音频回环采集按平台适配；在线歌词默认关闭。
+- 遮挡暂停、窗口失焦暂停与音频回环采集按平台适配。
 - 与其他皮肤 / 插件同时启用时，先看 [共存说明](docs/HOW-IT-WORKS.md#共存玻璃表面与其他-ui-插件)。
 
 <a href="https://github.com/elysia395/dsh-wallpaper-engine/releases/download/media-v1/better-sidebar-font.png">

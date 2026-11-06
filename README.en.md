@@ -123,7 +123,7 @@ Keep the source directory in place after installation. See [upgrading](docs/UPGR
 
 - Windows, macOS and Linux share the same source. macOS has no Wallpaper Engine client: upload images / videos or point custom-wallpaper storage at WE project directories.
 - Scene rendering depends on browser WebGL and drivers; complex workshop projects may differ. Failures degrade gracefully.
-- Occlusion pause, focus-loss pause and audio loopback are platform-adapted; online lyrics are off by default.
+- Occlusion pause, focus-loss pause and audio loopback are platform-adapted.
 - When running with other skins / plugins, read [Coexistence](docs/en/HOW-IT-WORKS.md#coexistence-glass-surfaces-vs-other-ui-plugins) first.
 
 <a href="https://github.com/elysia395/dsh-wallpaper-engine/releases/download/media-v1/better-sidebar-font.png">
