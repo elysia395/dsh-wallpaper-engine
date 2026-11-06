@@ -4347,7 +4347,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     // 六个外观节各有一处调用，且共用构件必须阻止冒泡（否则点 ↺ 会连带收起该节）。
     const mrSrc = readFileSync(join(root, 'src', 'module-reset.js'), 'utf8').replace(/\r\n/g, '\n');
     const gpSrc = readFileSync(join(root, 'packages', 'glass', 'src', 'glass-panel.js'), 'utf8').replace(/\r\n/g, '\n');
-    // ⚠️ 刀4 之后节的渲染器搬到了 src/panel-tabs-*.js 域模块 ⇒ 扫**页签族全文**（组装点在末尾），
+    // ⚠️ 刀4 之后节的渲染器搬到了 src/panel-tabs/*.js 域模块 ⇒ 扫**页签族全文**（组装点在末尾），
     //    而不是组装点单文件（否则六处调用全在域模块里 ⇒ 假红 missing=theme,detail,…）。
     const appearanceModules = ['theme', 'detail', 'corners', 'uiColor', 'font'];
     const panelAllSrc = panelText() + '\n;\n' + fontSectionSrc + '\n;\n' + wallpaperSectionsSrc + '\n;\n' + playbackSectionsSrc;
@@ -4845,7 +4845,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     // 于是两件事：① 节头里 ↺ 排到折叠三角**之后**（坐进原来"小绿点"那一列）；
     //            ② 有三角同排时 ↺ 不再抢剩余空间（让位给三角的 auto）。
     const headSrc = readFileSync(join(root, 'src', 'section-head.js'), 'utf8').replace(/\r\n/g, '\n');
-    // ⚠️ 同上：CSS 住在 src/styles-*.js 域模块里，`src/styles.js` 只是组装点 ⇒ 读样式族全文。
+    // ⚠️ 同上：CSS 住在 src/styles/*.js 域模块里，`src/styles.js` 只是组装点 ⇒ 读样式族全文。
     const styleSrc = styleText();
     /** 节头尾部次序：标签 → 折叠三角 → ↺（正/负对照共用**这一个**函数）。 */
     const tailOrderOk = (src2) => {

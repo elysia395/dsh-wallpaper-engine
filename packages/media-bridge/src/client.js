@@ -18,7 +18,7 @@
  *     `const host = require('dsh-plugin-wallpaper-engine');`（ADR-0014 S5.2）。
  *
  * ## 消费侧契约（唯一跨包通道 = 主 bundle 的显式键集，ADR-0014 S5.1 / S5.4）
- * 下面的 WALLPAPER_SECTIONS_HOST_REQUIRED 与主包 `src/client.js` 的 HOST_BRIDGE_BINDINGS
+ * 下面的 WALLPAPER_SECTIONS_HOST_REQUIRED 与主包 `src/host-bridge.js` 的 HOST_BRIDGE_BINDINGS
  * 壁纸段**逐键一致**（缺键大声抛，不许静默 undefined）。键集依据 = 被搬渲染器的**自由标识符**
  * 逐个点名：
  *   · 四节共享：React / weT；当前壁纸另要 VinylRecord / vinylSpinVisible / liveFailReasonOf；

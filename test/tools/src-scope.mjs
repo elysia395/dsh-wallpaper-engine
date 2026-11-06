@@ -110,7 +110,7 @@ export function liveText(sep = '\n;\n') { return scopeText('src/live-layer', sep
 
 /**
  * 客户端正文族：组装点 `src/client.js` **本身不在** `INLINE_MODULES` 里（它是被内联的正文），
- * 但它的助手模块（`src/client-*.js`）在。所以这里把"正文 + 以 client 前缀登记的构建期模块"
+ * 但它的助手模块（`src/client/*.js`）在。所以这里把"正文 + 以 client 前缀登记的构建期模块"
  * 显式拼起来 —— 顺序 = 正文在前、模块按构建序在后。判据读到的就是运行时的整份正文作用域。
  */
 export function clientSources() {
@@ -122,7 +122,7 @@ export function clientSources() {
  * 客户端正文族源码文本（正文 + 已搬出的助手模块，按上述顺序拼接）。
  * 这里**再写一次前缀字面量**（不转发 `clientSources()`）：守卫覆盖表按"助手块内出现
  * `scopeFiles('前缀')`"识别族读法（见 test/tools/guard-targets.mjs 的 familyHelpers），
- * 只有转发的话本助手解析不出前缀，新搬出的 `src/client-*.js` 会被判"零覆盖未登记"。
+ * 只有转发的话本助手解析不出前缀，新搬出的 `src/client/*.js` 会被判"零覆盖未登记"。
  */
 export function clientText(sep = '\n;\n') {
   const mods = scopeFiles('src/client');

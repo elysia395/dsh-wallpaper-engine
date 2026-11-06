@@ -22,7 +22,7 @@
  *    scripts/build-client.mjs 的 outline 里冻结 module.exports 之后逐字对齐；若改名，
  *    **只改本文件的解构那一段**，四个兄弟文件一个字不用动）。
  *
- * 键集的依据 = 两个基座/渲染器文件的**自由标识符**接缝（键集真源 = 主包 `HOST_BRIDGE_BINDINGS`）：
+ * 键集的依据 = 两个基座/渲染器文件的**自由标识符**接缝（键集真源 = 主包 `src/host-bridge.js` 的 `HOST_BRIDGE_BINDINGS`）：
  *   packages/fx/src/fx-layer.js : selection · weClampTo · weNow
  *   packages/fx/src/ext-fx.js   : weT · React · SliderRow · switchRow · ctlText
  *                                 · swatchRow · FX_BLEND_VALUES

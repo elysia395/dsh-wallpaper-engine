@@ -351,7 +351,7 @@ const INLINE_MODULES = [
   },
   {
     file: 'src/panel-tabs.js',
-    why: '面板页签**组装点**：只留一个页签一个 render*Tab（其中「扩展」页签只画 extensionModules() 里登记的模块）；五个域的节渲染器在 panel-tabs-*.js 里 —— 显式 ctx 取外界',
+    why: '面板页签**组装点**：只留一个页签一个 render*Tab（其中「扩展」页签只画 extensionModules() 里登记的模块）；五个域的节渲染器在 src/panel-tabs/*.js 里 —— 显式 ctx 取外界',
     markers: ['function renderWallpaperTab(ctx) {', '    const { } = ctx;',
       'function renderExtensionsTab(ctx) {', 'function renderAboutTab(ctx) {',
       'renderWallpaperTab, renderAppearanceTab, renderAudioTab, renderMascotTab, renderEffectsTab, renderAdvancedTab,'],

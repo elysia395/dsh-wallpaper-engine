@@ -15,7 +15,7 @@
  *   · 品牌与代码标识不译：DSH / DeepSeek Harness / Wallpaper Engine / WebWallGL / Edge /
  *     JPG / PNG / MP4 / project.json / `--dsl-*` / `GET /wallpaper-engine/…` 等原样保留。
  *   · 只读不写：本文件是词表的**组装点**（构建期内联进 bundle 的工厂作用域），顶层只有常量
- *     声明、无可执行语句；表体按域住在同族的 `src/i18n-copy-*.js` 里（各域文件头写明归属）。
+ *     声明、无可执行语句；表体按域住在同族的 `src/i18n/i18n-copy-*.js` 里（各域文件头写明归属）。
  */
 
 // ── 客户端文案（src/**）──────────────────────────────────────────────────────

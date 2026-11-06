@@ -17,7 +17,7 @@
  *     test/verify-subpackage-purity.mjs 判红（只放行产物、只放行主包名出现在本包 lib/client*.js 里）。
  *
  * ## 消费侧契约（唯一跨包通道 = 主 bundle 的显式键集，ADR-0014 S5.1 / S5.4）
- * 下面的 FONTS_HOST_REQUIRED 与主包 `src/client.js` 的 HOST_BRIDGE_BINDINGS 字体段**逐键一致**
+ * 下面的 FONTS_HOST_REQUIRED 与主包 `src/host-bridge.js` 的 HOST_BRIDGE_BINDINGS 字体段**逐键一致**
  * （缺键大声抛，不许静默 undefined）。键集的依据 = 两个渲染器文件里的**自由标识符**逐个点名；
  * **逐键清单以主包 `HOST_BRIDGE_BINDINGS` 为准**，本注释不复制清单（ADR-0017 D1）。
  *   ⚠️ 每多一个键就是多一条没人维护的隐式契约（ADR-0014 S5.2）⇒ 清单之外一个都**不**解构。

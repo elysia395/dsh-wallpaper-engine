@@ -124,7 +124,7 @@ function weComponentVisibleOf(components, name) {
   // 喂给它 —— 中文因此留在本文件的 `weT(...)` 里（i18n 扫描器认这个形态；写进被调模块会
   // 被判成"裸中文"），各节调用点则保持 `moduleResetButton("模块名", onResetModule)` 这么短。
   // ⚠️ 必须是**本文件的模块级（工厂作用域）声明**，不能留在 `renderAppearanceTab` 体内：
-  //    四个域模块（src/panel-tabs-*.js）按域搬出后仍按这个名字引用它 —— 打包后同一工厂
+  //    四个域模块（src/panel-tabs/*.js）按域搬出后仍按这个名字引用它 —— 打包后同一工厂
   //    作用域没问题，但按文件 import 的守卫台架（verify-fontset / verify-scene-live 的
   //    侧栏档）只有把真实现挂到全局才找得到。
   function moduleResetButton(moduleName, onResetModule) {

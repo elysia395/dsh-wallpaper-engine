@@ -18,6 +18,7 @@
 
 ### 未发布（清理轮，2026-11-06）
 
+- **内部：`src/` 按函数族归档 + 71 键契约表搬出正文（零行为改动）**。`src/client.js` 正文里的 `HOST_BRIDGE_BINDINGS`（71 键）、`HOST_BRIDGE_KEYS`、`Object.defineProperty` 挂载与 `hostBridgeKeys` 搬进 `src/host-bridge.js`（仍内联进同一工厂作用域，内联位置必须排在 `lib/settings-schema.js` 之后——它在顶层读 `DEFAULTS`）；`src/` 顶层 `.js` 从 62 收到 **33**：`styles/`(7)、`panel-tabs/`(4)、`live-layer/`(5)、`client/`(3)、`i18n/`(10) 各归目录，组装点（`src/styles.js` / `src/panel-tabs.js` / `src/live-layer.js` / `src/client.js` / `src/i18n/i18n.js`）留在顶层，`test/tools/src-scope.mjs` 的族读法前缀同步（前缀读法本就兼容目录，i18n 族需改前缀）。硬判据：构建期内联**不嵌路径** ⇒ 每批 `lib/client.js` 把新路径归一化回旧名后**逐字节相同**（基线 1,414,799 字符）；`verify-subpackage-client-half` 的 D-7 改读 `src/host-bridge.js` 并新增"单一真源（表只在契约表文件里）"；`verify-module-layout` ⑥ 在"子目录成员数 ≥3"之外增 `SRC_TOP_LEVEL_MAX = 33` 顶层棘轮（事实值，只许缩小）。avatar / picker 两族**不建目录**——它们在 `CODE-STRUCTURE.md` §3.1 里本就被判"两半跨角色清单 / 形态不同"。
 - **删：未展示的歌词转发整条移除（含在线歌词查询）**。插件侧从未渲染歌词（`src/` 只有透传，官方素材 `assets/**` 0 处使用 `mediaLyrics`），这条通路却横跨"设置键 → 宿主 → 中间件 → 客户端 → 渲染页载荷"五层：现删除 `setMedia` 的 `lyrics` 字段与歌词版本 key、`supervisor` 的 `lyrics` 事件 / 快照字段 / `lyricsToTuples` / `lyricsFor` 与 `online` 参数、以及 `mediaLyricsOnline` 常开设置键（`kind: 'const'`，面板本就无开关）。中间件启动参数改为**恒传 `--no-online`**（显式隐私闸门：本机不再向 lrclib.net 外发歌名 / 歌手 / 专辑；中间件自带的本地 `.lrc` 读取仍可用，只是本插件不消费）。旧配置里的残留键由 `sanitizeFromSchema` 当未知键丢弃，**无需迁移**。守卫：`verify-media-bridge` 钉"命令行不含 `--online`、快照无 `lyrics` 字段"，`verify-scene-live` 钉"不再订阅歌词事件 / client 不再透传 / 白名单与预设里不再有该键"，golden 夹具按 `--intend` 重录。
 
 ### v1.4.2（2026-11-06 · 紧急修复）

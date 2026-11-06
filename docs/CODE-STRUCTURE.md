@@ -335,8 +335,8 @@ node test/verify-guard-map.mjs           # 覆盖例外表只留"确实零覆盖
 graph LR
     subgraph SRC["src/**（手写真源，浏览器侧唯一真源）"]
         C["src/client.js<br/>正文"]
-        A["src/styles-*.js + src/styles.js<br/>纯数据：样式域模板 + 组装点"]
-        B["src/panel-tabs.js（组装点）+ src/panel-tabs-*.js（域节渲染器）· src/picker-*.js · packages/fx/src/ext-fx.js · packages/parallax/src/ext-parallax.js · src/ext-avatar.js<br/>UI 面"]
+        A["src/styles/*.js + src/styles.js<br/>纯数据：样式域模板 + 组装点"]
+        B["src/panel-tabs.js（组装点）+ src/panel-tabs/*.js（域节渲染器）· src/picker-*.js · packages/fx/src/ext-fx.js · packages/parallax/src/ext-parallax.js · src/ext-avatar.js<br/>UI 面"]
         D["src/live-layer.js · src/video-layer.js · packages/fx/src/fx-layer.js · packages/parallax/src/parallax-layer.js · src/avatar-layer.js · src/layer-core.js · src/media-prep.js<br/>行为面"]
         E["src/font/*<br/>字体系统"]
         F["lib/settings-schema.js<br/>唯一共享内核"]
@@ -569,7 +569,9 @@ DSH 升级后**重取角色表**的命令写在 [`typography.js`](../src/font/ty
 1. **要在浏览器里跑吗？**
    → `src/**`，**并且必须登记进 `scripts/build-client.mjs` 的 `INLINE_MODULES`**（含 `markers` 锚点）。
    ⚠️ 忘了登记**不会报错**，只是这个文件永远不进产物（本仓踩过一次）。
-   **`src/` 默认平铺**：根目录就是默认落点。只有当一个子系统**同时**满足两条时，才为它建子目录：
+   **`src/` 默认平铺**：根目录就是默认落点。只有当一个子系统**同时**满足两条时，才为它建子目录
+   （现有族目录：`src/font/`、`src/styles/`、`src/panel-tabs/`、`src/live-layer/`、`src/client/`、`src/i18n/`，
+   见 §3.1 函数族表；顶层文件数另有棘轮，只许缩小）：
    - ① **成员数达到准入门槛**（`.js 计数，含嵌套`）—— 门槛的**唯一真源**是守卫里的
      `SRC_DIR_MIN_MEMBERS`（`test/verify-module-layout.mjs`），本文不抄那个数字；
      同一条守卫还挂着**顶层文件数棘轮** `SRC_TOP_LEVEL_MAX`（只许缩小）：新增顶层模块要么进已有族目录，

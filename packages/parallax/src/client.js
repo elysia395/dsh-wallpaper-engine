@@ -12,7 +12,7 @@
  *    循环 outline 在正文与内联件之前发出：`const host = require('dsh-plugin-wallpaper-engine');`。
  *    下面的 prelude 是消费侧契约。
  *
- * 键集的依据 = 两个基座/渲染器文件的**自由标识符**（键集真源 = 主包 `HOST_BRIDGE_BINDINGS`）：
+ * 键集的依据 = 两个基座/渲染器文件的**自由标识符**（键集真源 = 主包 `src/host-bridge.js` 的 `HOST_BRIDGE_BINDINGS`）：
  *   packages/parallax/src/parallax-layer.js : selection · weClampTo · weNow · weBody
  *   packages/parallax/src/ext-parallax.js   : weT · React · SliderRow · switchRow
  *   ⚠️ PARALLAX_PLUGIN_DEFAULT / PARALLAX_GROUP_DEPTH_MIN / PARALLAX_GROUP_DEPTH_MAX

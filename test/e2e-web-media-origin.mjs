@@ -113,7 +113,7 @@ const matchRoute = (pathname) => routes.find((r) => (
 let wrapperHtml = '';
 // 插件真实 CSS（样式族的域模板拼成的一份样式表）——布局断言必须在真 CSS 上做，
 // 否则「抽屉里按钮上下排列、间距 8px」这种要求测了等于没测。
-// ⚠️ 样式拆段后（`src/styles-*.js` 域模板 + `src/styles.js` 组装点）取文必须走**族**：
+// ⚠️ 样式拆段后（`src/styles/*.js` 域模板 + `src/styles.js` 组装点）取文必须走**族**：
 //    `styleText()` 按 `INLINE_MODULES` 顺序拼同族全文，`cssBodyOf()` 抽出全部域模板体。
 //    原先的 `match(/const CSS = `…`/) ? m[1] : ''` 在拆段后恒得空串，下游只印一句
 //    "布局断言会跳过"就放过 ⇒ 判据静默降级。**取不到一律判红**（不是 warn）。

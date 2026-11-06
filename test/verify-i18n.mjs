@@ -154,7 +154,7 @@ function fragmentedCjk(hits, dataBlocks = DATA_BLOCKS) {
 }
 
 /**
- * 从词表族（组装点 `src/i18n/i18n-copy.js` + 各域模块 `src/i18n-copy-*.js`）切出两块词表。
+ * 从词表族（组装点 `src/i18n/i18n-copy.js` + 各域模块 `src/i18n/i18n-copy-*.js`）切出两块词表。
  *
  * 取文口径**刻意保持朴素**：声明行到第一个 `\n};`（不配平大括号）—— 见 verify-module-layout 的
  * "朴素切片是刻意的"纪律：配平会改边界语义，反而把坏输入切"好"了。
@@ -234,7 +234,7 @@ function componentsWithoutLocaleHook(sources) {
 // **词表模块本身在扫描面之外**：它的中文就是键（`src/i18n/i18n.js` 的设计），不是"漏包的界面文案"。
 // 排除它必须留牙：下面 ① 里那条"词表里确实还有中文键"的判据钉住这次排除不是空豁免。
 const DICT_MODULE = 'src/i18n/i18n-copy.js';
-// 词表落在**一个族**里：组装点 `DICT_MODULE` + 各域模块 `src/i18n-copy-*.js`。族顺序 = 构建期内联
+// 词表落在**一个族**里：组装点 `DICT_MODULE` + 各域模块 `src/i18n/i18n-copy-*.js`。族顺序 = 构建期内联
 // 顺序（INLINE_MODULES 单一真源）⇒ 扫描面、切片面、vm 装载面三处用同一份清单，不会各自漂移。
 const DICT_FAMILY = parseInlineModules().map(({ file }) => file)
   .filter((file) => /(?:^|\/)i18n-copy(?:-[^/]+)?\.js$/.test(file));
