@@ -3026,11 +3026,11 @@ check('negative control: 取文漏掉包内「当前壁纸」节 ⇒ 「壁纸�
 // 「侧栏播放控制行」这一节钉两件事：全局主按钮款式不被二次覆盖、窄容器下控制行不溢出。
 // 两件都只看**当前形态**，不涉及某枚具体按钮。
 {
-  // 全局 primary 款式仍是"实心底 + 墨随 accent"（styles-ext.js 那条未限定作用域的覆盖
-  // 是历史上真实发生过的隐形 bug —— 这里正面钉住 panel 段那条主规则还在、且 styles-ext
+  // 全局 primary 款式仍是"实心底 + 墨随 accent"（src/styles/ext.js 那条未限定作用域的覆盖
+  // 是历史上真实发生过的隐形 bug —— 这里正面钉住 panel 段那条主规则还在、且 ext 域
   // 中不再有第二份 .we-picker__btn--primary 覆盖把它压掉）。
-  const extStyleSrc = readFileSync(join(root, 'src', 'styles-ext.js'), 'utf8');
-  check('全局主按钮款式不被 styles-ext 二次覆盖（隐形 bug 防复发）',
+  const extStyleSrc = readFileSync(join(root, 'src', 'styles', 'ext.js'), 'utf8');
+  check('全局主按钮款式不被 styles 的 ext 域二次覆盖（隐形 bug 防复发）',
     stylesSrc.includes('color: var(--we-accent-ink, #fff);')
       && !/^\s*\.we-picker__btn--primary\s*\{/m.test(extStyleSrc),
     'ext 覆盖规则数=' + (extStyleSrc.match(/^\s*\.we-picker__btn--primary\s*\{/m) || []).length

@@ -205,7 +205,7 @@ export default [
   // ── 豁免面：**必须排在最后** ─────────────────────────────────────────────────
   // 上面 `src/**` 那块 spread 了 `js.configs.recommended.rules`，而 `@eslint/js` v10 的
   // recommended **包含** `no-irregular-whitespace` ⇒ 任何写在它**之前**的豁免都会被重新打开
-  // （实测：`src/styles-base.js` 的 U+3000 一度照红）。所以形态级豁免集中放在数组末尾，
+  // （实测：`src/styles/base.js` 的 U+3000 一度照红）。所以形态级豁免集中放在数组末尾，
   // 并保持"一处豁免一段理由"。
   {
     // 注释里的全角空格是**排版**：中文注释用 U+3000 对齐列是刻意的书写方式；代码里的不规则
@@ -213,10 +213,10 @@ export default [
     rules: { 'no-irregular-whitespace': ['error', { skipComments: true }] },
   },
   {
-    // `src/styles-*.js` 的模板串体是从原 `src/styles.js` **逐字节**搬出来的（拆域的唯一验收
+    // `src/styles/*.js` 的模板串体是从原 `src/styles.js` **逐字节**搬出来的（拆域的唯一验收
     // 判据就是"拼回的 CSS 与拆前逐字节相同"）；里面的 U+3000 在 CSS 注释文本里，属**被搬运的
     // 数据**而不是书写失误 ⇒ 只对这几个数据文件关。
-    files: ['src/styles.js', 'src/styles-*.js'],
+    files: ['src/styles.js', 'src/styles/*.js'],
     rules: { 'no-irregular-whitespace': 'off' },
   },
   {

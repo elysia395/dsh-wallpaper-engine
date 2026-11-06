@@ -2460,7 +2460,7 @@ function VinylRecord(props) {
 // view closes. pickerFocusPending: one-shot flag so the view's initial focus
 // lands exactly once on open (an inline ref callback would re-fire every render).
 let pickerOpener = null;
-// eslint-disable-next-line prefer-const -- 跨片段写入：panel-tabs-effects.js 的 `customFrameInput`
+// eslint-disable-next-line prefer-const -- 跨片段写入：src/panel-tabs/effects.js 的 `customFrameInput`
 let customFrameInput = null;
 let pickerFocusPending = false;
 // GPU 抓帧缓存状态（面板展示用）：wid 对应当前面板壁纸，pinned=缓存里已有

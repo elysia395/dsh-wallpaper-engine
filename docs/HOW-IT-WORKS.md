@@ -239,7 +239,7 @@ Windows PowerShell 的 `InstalledFontCollection` / Linux `fc-list`）；都拿�
 
 壁纸与玻璃独立：关闭壁纸不会关闭玻璃。皮肤中心的公开标记 `html[data-dsh-skin]` 仍使本插件整体让路，离场后恢复。
 
-壁纸在场时，页面让开所需的 `--dsw-alias-bg-base` 与 `--dsw-specific-sidebar-fill` 以**作者 `!important`** 声明（`src/styles-base.js` 的 `body[data-we-wallpaper]` 与深色档两块）。这是**跨插件契约**，不是防御性写法：DSH 的主题 API 允许插件（如 DS Bot 的 Bot 模式）用 `ctx.theme.overrideTokens` 给宿主上色，宿主把令牌以**内联样式**写在 `<body>` 上；普通作者声明必输给内联声明，壁纸层就会被不透明页面基色盖住（[#282](https://github.com/elysia395/dsh-wallpaper-engine/issues/282)，与 [#279](https://github.com/elysia395/dsh-wallpaper-engine/issues/279) 同属「其他插件盖住壁纸」一类）。`!important` 只在壁纸门内生效，壁纸退场后本插件不再声明，宿主内联值原样生效 —— 单向接管，不读不写其他插件的状态。需要自带背板的第三方面板请用自己的底色声明或 `data-we-surface-preserve`，不要改写这两枚页面背景令牌。
+壁纸在场时，页面让开所需的 `--dsw-alias-bg-base` 与 `--dsw-specific-sidebar-fill` 以**作者 `!important`** 声明（`src/styles/base.js` 的 `body[data-we-wallpaper]` 与深色档两块）。这是**跨插件契约**，不是防御性写法：DSH 的主题 API 允许插件（如 DS Bot 的 Bot 模式）用 `ctx.theme.overrideTokens` 给宿主上色，宿主把令牌以**内联样式**写在 `<body>` 上；普通作者声明必输给内联声明，壁纸层就会被不透明页面基色盖住（[#282](https://github.com/elysia395/dsh-wallpaper-engine/issues/282)，与 [#279](https://github.com/elysia395/dsh-wallpaper-engine/issues/279) 同属「其他插件盖住壁纸」一类）。`!important` 只在壁纸门内生效，壁纸退场后本插件不再声明，宿主内联值原样生效 —— 单向接管，不读不写其他插件的状态。需要自带背板的第三方面板请用自己的底色声明或 `data-we-surface-preserve`，不要改写这两枚页面背景令牌。
 
 玻璃的**页面级背景层令牌映射**（`--dsw-alias-bg-layer-1/2/3`、`--dsw-alias-button-elevated-fill`、`--dsw-alias-bg-overlay` 等）作用在 `body[data-we-glass-page]` 上，对**整页**生效：宿主自己的侧栏按钮、右栏页签栏、设置窗内的卡片都读这一族令牌，只把它传给聊天流会让这些面退回宿主实底。每条映射都带可读性下限（`--we-readability-floor`），不是无下限透明。设置窗口、侧栏和声明式表面的**霜与底色**仍由统一运行管理器按面认领；未知第三方面板的**自有底色声明**、按钮语义色、编辑器语法色和终端 ANSI 色不被改写。
 

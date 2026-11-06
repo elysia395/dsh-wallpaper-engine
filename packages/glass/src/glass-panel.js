@@ -134,7 +134,7 @@ function renderGlassPresetsBlock(gp) {
         : weT("本机没有自定义立绘 —— 「本机现状」会存成「无」；也可以直接选一只出厂自带，让套用它的人换回那一只")),
       // （并入 #180 后形态 3 → 11，「小女仆」除名后为 10）：最多 1 + 10 = 11 个键。段控件的基样式
       // 是「等分、不换行」，11 个键在 564px 内容宽下会被压成同样的窄格、标签互相截断 ⇒ 走 chips 变体
-      // （换行 + 每键取内容宽，见 src/styles-settings.js 里 .we-picker__seg--chips 的注释，#253）。
+      // （换行 + 每键取内容宽，见 src/styles/settings.js 里 .we-picker__seg--chips 的注释，#253）。
       React.createElement("div", { className: "we-picker__seg we-picker__seg--chips", role: "group", "aria-label": weT("吉祥物 · 指向") },
         React.createElement("button", {
           key: "own",

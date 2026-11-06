@@ -54,14 +54,14 @@ const check = (name, ok, detail) => {
 const DATA_BLOCKS = [
   // ADR-0016 第四刀：玻璃段出户到 packages/glass/src/glass-css.js（templates 表登记它、
   // 主包被切的四个域模板放宽 minLength——它们只剩非玻璃段）。
-  { file: 'src/styles-base.js', kind: 'template', minLength: 3000, why: '样式域 base 是纯数据；其内的中文只出现在 CSS 注释（不渲染到界面）' },
-  { file: 'src/styles-shell.js', kind: 'template', minLength: 800, why: '样式域 shell 是纯数据；其内的中文只出现在 CSS 注释（不渲染到界面）' },
-  { file: 'src/styles-chrome.js', kind: 'template', minLength: 2000, why: '样式域 chrome 是纯数据；其内的中文只出现在 CSS 注释（不渲染到界面）' },
+  { file: 'src/styles/base.js', kind: 'template', minLength: 3000, why: '样式域 base 是纯数据；其内的中文只出现在 CSS 注释（不渲染到界面）' },
+  { file: 'src/styles/shell.js', kind: 'template', minLength: 800, why: '样式域 shell 是纯数据；其内的中文只出现在 CSS 注释（不渲染到界面）' },
+  { file: 'src/styles/chrome.js', kind: 'template', minLength: 2000, why: '样式域 chrome 是纯数据；其内的中文只出现在 CSS 注释（不渲染到界面）' },
   { file: 'packages/glass/src/glass-css.js', kind: 'template', minLength: 10000, why: '玻璃样式表（原 sidebar 整域 + base/shell/chrome/ext 的玻璃段）是纯数据；其内的中文只出现在 CSS 注释（不渲染到界面）' },
-  { file: 'src/styles-settings.js', kind: 'template', minLength: 10000, why: '样式域 settings 是纯数据；其内的中文只出现在 CSS 注释（不渲染到界面）' },
-  { file: 'src/styles-panel.js', kind: 'template', minLength: 10000, why: '样式域 panel 是纯数据；其内的中文只出现在 CSS 注释（不渲染到界面）' },
-  { file: 'src/styles-quick.js', kind: 'template', minLength: 10000, why: '样式域 quick 是纯数据；其内的中文只出现在 CSS 注释（不渲染到界面）' },
-  { file: 'src/styles-ext.js', kind: 'template', minLength: 10000, why: '样式域 ext 是纯数据；其内的中文只出现在 CSS 注释（不渲染到界面）' },
+  { file: 'src/styles/settings.js', kind: 'template', minLength: 10000, why: '样式域 settings 是纯数据；其内的中文只出现在 CSS 注释（不渲染到界面）' },
+  { file: 'src/styles/panel.js', kind: 'template', minLength: 10000, why: '样式域 panel 是纯数据；其内的中文只出现在 CSS 注释（不渲染到界面）' },
+  { file: 'src/styles/quick.js', kind: 'template', minLength: 10000, why: '样式域 quick 是纯数据；其内的中文只出现在 CSS 注释（不渲染到界面）' },
+  { file: 'src/styles/ext.js', kind: 'template', minLength: 10000, why: '样式域 ext 是纯数据；其内的中文只出现在 CSS 注释（不渲染到界面）' },
 ];
 
 /**

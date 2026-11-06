@@ -374,7 +374,7 @@ console.log('sidebar glass selectors are wallpaper-independent: true · page gla
   // #255⑤ 后半：23 处「值+单位」预格式化后缀已改裸单位（否则那些行仍只读）；
   // 唯一保留的预格式化是吉祥物大小（显示倍率刻度 ≠ 存储刻度，保持只读）。
   const readSrc = (rel) => readFileSync(new URL('../' + rel, import.meta.url), 'utf8');
-  const bareUnitFiles = ['packages/glass/src/glass-panel.js', 'src/panel-tabs-effects.js', 'src/panel-tabs-appearance.js'];
+  const bareUnitFiles = ['packages/glass/src/glass-panel.js', 'src/panel-tabs/effects.js', 'src/panel-tabs/appearance.js'];
   const leftovers = bareUnitFiles.filter((rel) => /\+ "(?:px|%)"/.test(readSrc(rel)));
   assert.ok(leftovers.length === 0, '滑杆后缀应已全部改裸单位（仍预格式化的文件：' + leftovers.join(', ') + '）');
   assert.ok(/Math\.round\(sel\.ropeScale \* 100\) \+ "%"/.test(readSrc('src/panel-tabs.js')),
@@ -2860,7 +2860,7 @@ setTimeout(async () => {
 
     // ── 模态框**标记等价**（搬迁前后逐字未变）────────────────────────────────
     // 模态框那棵子树被 116 个 `.we-picker__*` 选择器按**层级 / 相邻关系**选元素
-    // （主包样式域模块，picker 族在 styles-panel.js），test/e2e-web-media-origin.mjs 里另有一份**手抄**的
+    // （主包样式域模块，picker 族在 src/styles/panel.js），test/e2e-web-media-origin.mjs 里另有一份**手抄**的
     // picker DOM 镜像 —— 标记只要改一个类名、或只挪一层嵌套，CSS 与那份镜像都会**静默**漂，
     // 所以"搬走这段渲染"必须证明逐字未变。判据：以 `we-picker__modal` 为根深度优先遍历，
     // 把每个元素的 class 令牌按「深度:令牌」摊平成序列，与搬迁前录下的 golden 逐项相等。

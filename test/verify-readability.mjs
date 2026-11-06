@@ -431,9 +431,9 @@ function main() {
       && !r.header.includes('@supports'));
     // ⚠️ §11 A1-4：这里原先允许"头里有 [data-chat-flow] 就放行"，于是把
     //    `… [data-chat-flow] [class*="_bubble"]:not([role="tooltip"]) .md-code-block`（当前
-    //    `src/styles-shell.js` 里那一条）的 `:not(...)` 摘掉仍全绿。作用域与豁免是**两件事**：
+    //    `src/styles/shell.js` 里那一条）的 `:not(...)` 摘掉仍全绿。作用域与豁免是**两件事**：
     //    `[data-chat-flow]` 只说"在对话流里"，不说"不是宿主 Tooltip 那个 _bubble"。
-    //    今天四条 `_bubble` 规则（三条在 `src/styles-shell.js`、一条在 `src/styles-ext.js`）都同时有两者
+    //    今天四条 `_bubble` 规则（三条在 `src/styles/shell.js`、一条在 `src/styles/ext.js`）都同时有两者
     //    ⇒ 收紧成"每条都必须带 role 豁免"：语义不放松，判据才有牙。
     const bubbleExempt = (r) => (r.header || '').includes(':not([role="tooltip"])');
     check('F2dN every [class*="_bubble"] rule excludes the host Tooltip (role="tooltip")',

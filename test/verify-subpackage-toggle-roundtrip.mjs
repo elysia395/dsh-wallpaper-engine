@@ -770,7 +770,7 @@ function fontsSectionOwnershipProblems(t) {
     bad.push('主包客户端产物读不到（' + (t.rootArtifactRel || 'lib/client.js') + '）—— "主包没有内联这一节"对它是真空为真');
   }
   if (typeof t.rootAppearanceSrc !== 'string' || t.rootAppearanceSrc.length === 0) {
-    bad.push('外观页签源码读不到（src/panel-tabs-appearance.js）—— 同上，"没有内联注册"是真空为真');
+    bad.push('外观页签源码读不到（src/panel-tabs/appearance.js）—— 同上，"没有内联注册"是真空为真');
   }
   for (const [label, text] of [['主包客户端产物', t.rootArtifact], ['外观页签源码', t.rootAppearanceSrc]]) {
     if (typeof text === 'string' && FONTS_REG_RE.test(stripComments(text))) {
@@ -915,12 +915,12 @@ function fontsSectionOwnershipProblems(t) {
       : '';
     const fontsArtifactAbs = fontsPkg && fontsArtifactRel ? fontsPkg.dir + '/' + fontsArtifactRel : '';
     const rootClientRel = (exportTarget(rootPkg.exports && rootPkg.exports['./client']) || './lib/client.js').replace(/^\.\//, '');
-    const panelSrcRels = ['src/panel-tabs-appearance.js', 'src/panel-tabs.js', 'src/client.js'].filter((rel) => isFile(join(ROOT, rel)));
+    const panelSrcRels = ['src/panel-tabs/appearance.js', 'src/panel-tabs.js', 'src/client.js'].filter((rel) => isFile(join(ROOT, rel)));
     const owned = {
       fontsArtifactRel: fontsArtifactAbs || '(清单里没有 exports["./client"])',
       fontsArtifact: fontsArtifactAbs && isFile(join(ROOT, fontsArtifactAbs)) ? read(fontsArtifactAbs) : '',
       rootArtifact: isFile(join(ROOT, rootClientRel)) ? read(rootClientRel) : '',
-      rootAppearanceSrc: isFile(join(ROOT, 'src/panel-tabs-appearance.js')) ? read('src/panel-tabs-appearance.js') : '',
+      rootAppearanceSrc: isFile(join(ROOT, 'src/panel-tabs/appearance.js')) ? read('src/panel-tabs/appearance.js') : '',
       panelSrcs: panelSrcRels.map((rel) => [rel, read(rel)]),
       rootArtifactRel: rootClientRel,
     };

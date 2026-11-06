@@ -74,7 +74,7 @@ function switchFrames(id, dir) {
 // ① `scripts/build-client.mjs` 的内联 markers 钉住它的声明字面量（构建期校验）；
 // ② `test/verify-client.mjs` 的 `LIVE_FIRST_FADE_MS` 判据断言产物文本里同时出现 ROTATION_FADE_MS
 //    与本常量（1800）；
-// ③ `src/styles-base.js` 里 `.we-live-iframe` 的 transition 注释要求与之同步。
+// ③ `src/styles/base.js` 里 `.we-live-iframe` 的 transition 注释要求与之同步。
 // ⇒ 这条腿的时长实际由 CSS transition 承担，改值必须同时改这三处。
 const LIVE_FIRST_FADE_MS = 1800;
 

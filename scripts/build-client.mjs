@@ -121,12 +121,12 @@ const INLINE_MODULES = [
       'function useWeLocale()', 'function weOnLocaleChange('],
   },
   {
-    file: 'src/styles-base.js',
+    file: 'src/styles/base.js',
     why: '样式域 base（原 styles.js 61–592；ADR-0016 第四刀玻璃段出户后）：画布兜底 · 全局 UI 配色 · 面板色与弹层行配对',
     markers: ['const CSS_BASE = `', '/* ── 画布兜底色', '--we-popup-row-bg'],
   },
   {
-    file: 'src/styles-shell.js',
+    file: 'src/styles/shell.js',
     why: '样式域 shell（ADR-0016 第四刀玻璃段出户后）：原生左栏模式底 · 外壳画布底（壁纸让位两段）',
     markers: ['const CSS_SHELL = `', '/* ── 原生左栏在 extended/advanced 窗口模式下的不透明底', '/* ── 外壳画布底'],
   },
@@ -134,27 +134,27 @@ const INLINE_MODULES = [
   //    玻璃接管：左栏 / 四角圆角 / 标题栏 / better-sidebar / 官方右栏 / 内容面）——
   //    内容住 packages/glass/src/glass-css.js 的 CSS_GLASS，主包组装式不再有 CSS_SIDEBAR 段。
   {
-    file: 'src/styles-chrome.js',
+    file: 'src/styles/chrome.js',
     why: '样式域 chrome（ADR-0016 第四刀玻璃段出户后）：统一控件 token · corner-shape 兼容(#74)',
     markers: ['const CSS_CHROME = `', '/* ── 统一控件 token', '/* ── DSH harness corner-shape 兼容'],
   },
   {
-    file: 'src/styles-settings.js',
+    file: 'src/styles/settings.js',
     why: '样式域 settings（原 styles.js 1916–2167）：预设圆角表格 · 原生下拉弹层 · 视觉分组 divider · 可折叠节头 · 窄栏兜底 · 页签栏 · 统一设置行 32px',
     markers: ['const CSS_SETTINGS = `', '/* ── 预设方案'],
   },
   {
-    file: 'src/styles-panel.js',
+    file: 'src/styles/panel.js',
     why: '样式域 panel（原 styles.js 2168–2925）：吉祥物 3D 圆环转盘 · 圆点跳转 · 效果空态 · 黑胶 · 当前壁纸卡 · 壁纸属性面板 · 库下钻 · 目录浏览器',
     markers: ['const CSS_PANEL = `', '/* ── 吉祥物形态'],
   },
   {
-    file: 'src/styles-quick.js',
+    file: 'src/styles/quick.js',
     why: '样式域 quick（原 styles.js 2926–3357）：Rope dock · 快捷播放面板 QuickPanel',
     markers: ['const CSS_QUICK = `', '/* ── Rope dock'],
   },
   {
-    file: 'src/styles-ext.js',
+    file: 'src/styles/ext.js',
     why: '样式域 ext（ADR-0016 第四刀玻璃段出户后）：「关于」页签 · 扩展槽位与三号模块',
     markers: ['const CSS_EXT = `', '/* ── 「关于」页签：静态页'],
   },
@@ -329,23 +329,23 @@ const INLINE_MODULES = [
       'function weRegisterLayerHooks(', 'function weDiscoveredGroupsOf('],
   },
   {
-    file: 'src/panel-tabs-appearance.js',
+    file: 'src/panel-tabs/appearance.js',
     why: '「外观」页签的节渲染器与字体一族（从 src/panel-tabs.js 按域拆出）',
     markers: ['function renderAppearanceThemeSection(ctx) {', '    const { onResetModule, onToggleThemeFollow, sel } = ctx;'],
   },
   {
-    file: 'src/panel-tabs-mascot.js',
+    file: 'src/panel-tabs/mascot.js',
     why: '「吉祥物」页签的节渲染器与其模块级常量/拖拽状态（从 src/panel-tabs.js 按域拆出）',
     markers: ['function renderMascotFormCards(sel, previewArt, previewW, previewH,', '  const MASCOT_BOX_PX = 64;'],
   },
   {
-    file: 'src/panel-tabs-effects.js',
+    file: 'src/panel-tabs/effects.js',
     why: '「播放」页签的三个节渲染器：滑块 / 实时帧 / 出图来源（从 src/panel-tabs.js 按域拆出；倍速·帧率上限与适配·翻转两节住在 packages/media-bridge 的浏览器半边，ADR-0013/ADR-0014）',
     markers: ['function renderEffectsSlidersSection(ctx) {',
       '    const { onBackgroundBrightness, onBackgroundContrast, onBackgroundSaturate, onLayerPositionX, onLayerPositionY, onLayerReset, onLayerScale, onScrim, onWallpaperBlur, onWallpaperOpacity, sel } = ctx;'],
   },
   {
-    file: 'src/panel-tabs-advanced.js',
+    file: 'src/panel-tabs/advanced.js',
     why: '「系统」页签的六个节渲染器（从 src/panel-tabs.js 按域拆出）',
     markers: ['function renderAdvancedBrowsingSection(ctx) {', '    const { onLayoutChange, sel } = ctx;'],
   },
