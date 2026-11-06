@@ -5018,7 +5018,7 @@ function readRopePos(size) {
 }
 
 function RopeDock() {
-  useWeLocale(); // 语言切换 → 吉祥物/抽屉里的文案跟着换（见 src/i18n.js）
+  useWeLocale(); // 语言切换 → 吉祥物/抽屉里的文案跟着换（见 src/i18n/i18n.js）
   const sel = useStore();
   const hidden = !sel.ropeShown;
   // 立绘：自定义优先（用户导入的那张），否则当前形态的内置图（同一条解析见 ropeArtOf）。
@@ -6017,7 +6017,7 @@ weRegisterLayerHooks("avatar", { sync: syncAvatarLayer, dispose: disposeAvatarLa
 
 function apply(ctx) {
   // 0. i18n：把插件文案接上宿主的 locale 服务（`ctx.get("locale")`，可选服务 + 短轮询 ——
-  //    缺服务时静默停在默认语言，见 src/i18n.js）。放在最前面：界面首次渲染就要按当前
+  //    缺服务时静默停在默认语言，见 src/i18n/i18n.js）。放在最前面：界面首次渲染就要按当前
   //    语言取词；服务通常已在（dsh-web-app 的 base bundle 自带），轮询只是兜底。
   if (ctx.effect) ctx.effect(() => weI18nAttach(ctx) || undefined);
 

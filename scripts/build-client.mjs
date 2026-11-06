@@ -67,55 +67,55 @@ const INLINE_MODULES = [
     markers: ['function weClampTo(', 'function weNow(', 'function weBody('],
   },
   {
-    // 词表域模块（8 个）必须排在组装点 `src/i18n-copy.js` **之前**：构建期内联进同一工厂作用域，
+    // 词表域模块（8 个）必须排在组装点 `src/i18n/i18n-copy.js` **之前**：构建期内联进同一工厂作用域，
     // 组装点顶层读它们是 TDZ 的正面用法。域划分 = 文案归属的界面域（表体一行未改、顺序未动）；
     // 顺序即键插入序，守卫 test/verify-i18n.mjs 按 INLINE_MODULES 顺序逐条比对。
-    file: 'src/i18n-copy-core.js',
+    file: 'src/i18n/i18n-copy-core.js',
     why: '英文词表域：客户端外壳（adapter / client / 更新公告）',
     markers: ['const WE_I18N_EN_CORE = {', '"自动检测": "Auto-detect",'],
   },
   {
-    file: 'src/i18n-copy-font.js',
+    file: 'src/i18n/i18n-copy-font.js',
     why: '英文词表域：字体与配色（font/* · fontset-store；fontset-editor 与外观页签字体节已搬进 packages/fonts，词表仍住本域、由主包 weT 供词）',
     markers: ['const WE_I18N_EN_FONT = {', '"正文": "Primary text",'],
   },
   {
-    file: 'src/i18n-copy-live.js',
+    file: 'src/i18n/i18n-copy-live.js',
     why: '英文词表域：实时层与素材预处理（live-layer · media-prep）',
     markers: ['const WE_I18N_EN_LIVE = {', '"首帧超时（{secs} 秒内无画面）": "First-frame timeout'],
   },
   {
-    file: 'src/i18n-copy-panel.js',
+    file: 'src/i18n/i18n-copy-panel.js',
     why: '英文词表域：设置面板页签（panel-tabs）',
     markers: ['const WE_I18N_EN_PANEL = {', '"当前壁纸": "Current wallpaper",'],
   },
   {
-    file: 'src/i18n-copy-picker.js',
+    file: 'src/i18n/i18n-copy-picker.js',
     why: '英文词表域：壁纸选择器与快捷面板（picker-* · quick-panel · sidebar-right · theme-follow）',
     markers: ['const WE_I18N_EN_PICKER = {', '"返回": "Back",'],
   },
   {
-    file: 'src/i18n-copy-ext.js',
+    file: 'src/i18n/i18n-copy-ext.js',
     why: '英文词表域：扩展页签 · 关于页签 · 更新公告（ext-* · panel-tabs）',
     markers: ['const WE_I18N_EN_EXT = {', '"扩展模块": "Extension modules",'],
   },
   {
-    file: 'src/i18n-copy-glass.js',
+    file: 'src/i18n/i18n-copy-glass.js',
     why: '英文词表域：玻璃预设与外观细项（思考块 · 系统字体 · 预设 · 侧栏圆角）',
     markers: ['const WE_I18N_EN_GLASS = {', '"思考块液态玻璃": "Thinking-block liquid glass",'],
   },
   {
-    file: 'src/i18n-copy-pet-link.js',
+    file: 'src/i18n/i18n-copy-pet-link.js',
     why: '英文词表域：桌宠联动（pet-link 的浏览器半边文字；源在包内时属"停在主 bundle"的域表，收口后按 fonts 惯例归主包 src/）',
     markers: ['const WE_I18N_EN_PET_LINK = {'],
   },
   {
-    file: 'src/i18n-copy.js',
+    file: 'src/i18n/i18n-copy.js',
     why: '英文词表的**组装点** + 宿主显示表（域模块在前，这里只展开组装；两张表的键集各由 verify-i18n 双向对账）',
     markers: ['const WE_I18N_EN = {', 'const WE_I18N_HOST_EN = {'],
   },
   {
-    file: 'src/i18n.js',
+    file: 'src/i18n/i18n.js',
     why: 'i18n 运行时：跟随宿主 locale 服务的取词层（语言种类与 dsh web 同一份目录；含 ?we-lang 逃生舱）',
     markers: ['const WE_I18N_NS = ', 'function weT(', 'function weI18nAttach(',
       'function useWeLocale()', 'function weOnLocaleChange('],
@@ -589,7 +589,7 @@ function loadSubpackageRecipes() {
 /**
  * 读取一个构建输入、归一化成 LF，**并断言不再有孤立 CR**。
  *
- * 为什么这条断言值得让构建**红**：源文件里若混进多余的回车（历史形态：`src/i18n-copy.js` 曾有
+ * 为什么这条断言值得让构建**红**：源文件里若混进多余的回车（历史形态：`src/i18n/i18n-copy.js` 曾有
  * 28 行是 `\r\r\n`），Windows 检出会把它放大成 `\r\r\n`、Linux 检出是 `\r\n`，而这里只做
  * `\r\n → \n` 归一化 ⇒ Windows 上会**残留一个孤立 CR** ⇒ **同一份源码在两个平台产出不同字节的
  * 产物**。于是同一份源码在不同机器上会产出不同字节的产物（实测过：一条 CI 腿红、另一条绿，

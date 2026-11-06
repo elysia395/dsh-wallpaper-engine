@@ -13,7 +13,7 @@
  *   D) 内联产物        `lib/client.js` · `packages/<pkg>/lib/client.<x>.js` —— 单独一档（多数行为
  *      判据是隔着产物做的）。产物面**取发现层 `clientPackages`**（不写死清单），且把**整个产物
  *      集合**从「直接读的模块」列里移出 —— 主包产物与子包产物同档。
- *   E) **前缀族读法**  `scopeFiles('src/i18n-copy')` / `scopeText('src/i18n-copy')`
+ *   E) **前缀族读法**  `scopeFiles('src/i18n/i18n-copy')` / `scopeText('src/i18n/i18n-copy')`
  *      （`test/tools/src-scope.mjs` 的 API）—— 构建期内联族是"一族文件平铺进同一作用域"，
  *      于是"这条守卫管这一族"的自然写法就是**前缀**：路径以该前缀开头的模块全部算命中。
  *   F) **经共享族助手读**  `import { panelText } from './tools/src-scope.mjs'` + 真调用

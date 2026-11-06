@@ -1923,7 +1923,7 @@ section('④b 行为判据：删除令牌链 + broken 行禁用与可删 + 勾�
 // ── ④c #199 失败文案：真跑分类函数 + 词表对齐 ═════════════════════════════════
 section('④c #199 失败文案：404 不再把宿主英文原句直落上屏，窗口期出路口径在词表里');
 {
-  const copyText = scopeText('src/i18n-copy');
+  const copyText = scopeText('src/i18n/i18n-copy');
   const storeCode = stripComments(readFileSync(join(root, 'src', 'preset-store.js'), 'utf8'));
   // 真跑 `src/preset-store.js` 里的 `glassPresetFailureReason()`：按花括号配平提取具名函数、喂桩执行。
   // grep 到 `reason` 三个字符串**不算**证据 —— 把分类改回"一句到底"它照样能匹配到。
@@ -1966,7 +1966,7 @@ section('④c #199 失败文案：404 不再把宿主英文原句直落上屏，
       'missing=' + String(missing404).slice(0, 24) + ' tomb=' + String(tomb404).slice(0, 24));
     // 词表对齐：文案的**唯一**来源是词表键（中文原文作键），客户端不许出现未登记的散句。
     const dictOk = (keys) => keys.every((k) => dictEn(k).trim().length > 0 && dictEn(k) !== k);
-    check('词表对齐：「重启 DSH」那条在 src/i18n-copy 里、英文非空且不是中英同形',
+    check('词表对齐：「重启 DSH」那条在 src/i18n/i18n-copy 里、英文非空且不是中英同形',
       dictEn(RESTART).trim().length > 0 && dictEn(RESTART) !== RESTART,
       dictEn(RESTART).slice(0, 44) || '词表里找不到这条键');
     // ★ 因果三分（#199 的 P2）：路由**在**、预设真没了 ⇒ 出路不是"重启 DSH"（重启没用）。
@@ -1976,7 +1976,7 @@ section('④c #199 失败文案：404 不再把宿主英文原句直落上屏，
     check('★ #199-P2：三条出路两两不同（窗口期 / 真不存在 / 已删除，不许并成一句）',
       threeWay({ missing: missing404, tomb: tomb404 }),
       'missing=' + String(missing404).slice(0, 22) + ' tomb=' + String(tomb404).slice(0, 22));
-    check('★ #199-P2：三条出路都在 src/i18n-copy 里，英文非空且不是中英同形',
+    check('★ #199-P2：三条出路都在 src/i18n/i18n-copy 里，英文非空且不是中英同形',
       dictOk([RESTART, missing404, tomb404]),
       [RESTART, missing404, tomb404].map((k) => (dictOk([k]) ? 'ok' : '缺/同形')).join(','));
     // 负对照：把 reason 两分整块拿掉（回到 #199 原文的"一句到底"）⇒ 上面两条必须判红。

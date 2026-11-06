@@ -21,7 +21,7 @@
 | `rotation-live-smoke.mjs` | — | ✅ |
 | `rotation-prepared-leak-smoke.mjs` | — | ✅ |
 | `rotation-smoke.mjs` | — | ✅ |
-| `verify-about.mjs` | `lib/host-boot.js` `lib/index.js` `lib/json-response.js` `packages/about-notice/lib/index.js` `packages/about-notice/lib/routes/about-qr.js` `packages/about-notice/lib/routes/github-stars.js` `src/about-assets.js` `src/client.js` `src/i18n-copy-core.js` `src/i18n-copy-ext.js` `src/i18n-copy-font.js` `src/i18n-copy-glass.js` `src/i18n-copy-live.js` `src/i18n-copy-panel.js` `src/i18n-copy-pet-link.js` `src/i18n-copy-picker.js` `src/i18n-copy.js` `src/panel-tabs.js` `src/panel-tabs/advanced.js` `src/panel-tabs/appearance.js` `src/panel-tabs/effects.js` `src/panel-tabs/mascot.js` | ✅ |
+| `verify-about.mjs` | `lib/host-boot.js` `lib/index.js` `lib/json-response.js` `packages/about-notice/lib/index.js` `packages/about-notice/lib/routes/about-qr.js` `packages/about-notice/lib/routes/github-stars.js` `src/about-assets.js` `src/client.js` `src/i18n/i18n-copy-core.js` `src/i18n/i18n-copy-ext.js` `src/i18n/i18n-copy-font.js` `src/i18n/i18n-copy-glass.js` `src/i18n/i18n-copy-live.js` `src/i18n/i18n-copy-panel.js` `src/i18n/i18n-copy-pet-link.js` `src/i18n/i18n-copy-picker.js` `src/i18n/i18n-copy.js` `src/panel-tabs.js` `src/panel-tabs/advanced.js` `src/panel-tabs/appearance.js` `src/panel-tabs/effects.js` `src/panel-tabs/mascot.js` | ✅ |
 | `verify-adapter.mjs` | `lib/index.js` `lib/settings-schema.js` `packages/glass/src/glass-css.js` `src/adapter.js` `src/client.js` `src/effects.js` `src/panel-tabs.js` `src/panel-tabs/advanced.js` `src/panel-tabs/appearance.js` `src/panel-tabs/effects.js` `src/panel-tabs/mascot.js` `src/persistence.js` `src/styles.js` `src/styles/base.js` `src/styles/chrome.js` `src/styles/ext.js` `src/styles/panel.js` `src/styles/quick.js` `src/styles/settings.js` `src/styles/shell.js` |  |
 | `verify-api-client.mjs` | `src/api-client.js` `src/client.js` `src/panel-tabs.js` | ✅ |
 | `verify-asset-paths.mjs` | `lib/media/media-dirs.js` `lib/upload-dir.js` `lib/we-assets.js` |  |
@@ -56,7 +56,7 @@
 | `verify-host-diag.mjs` | `lib/diag-trace.js` |  |
 | `verify-host-paint-scope.mjs` | — | ✅ |
 | `verify-host-teardown.mjs` | `lib/index.js` `lib/media-origin.js` `packages/media-bridge/lib/legacy.js` `packages/media-bridge/lib/occlusion/index.js` `packages/media-bridge/lib/supervisor.js` `packages/pet-link/lib/routes/official-pet.js` |  |
-| `verify-i18n.mjs` | `packages/glass/src/glass-css.js` `packages/pet-link/src/pet-link/extension-card.js` `packages/pet-link/src/pet-link/i18n.js` `packages/pet-link/src/pet-link/panel-params.js` `packages/pet-link/src/pet-link/panel.js` `src/client.js` `src/i18n-copy.js` `src/i18n.js` `src/nav-icon.js` `src/quick-panel.js` `src/sidebar-right.js` `src/styles.js` `src/styles/base.js` `src/styles/chrome.js` `src/styles/ext.js` `src/styles/panel.js` `src/styles/quick.js` `src/styles/settings.js` `src/styles/shell.js` | ✅ |
+| `verify-i18n.mjs` | `packages/glass/src/glass-css.js` `packages/pet-link/src/pet-link/extension-card.js` `packages/pet-link/src/pet-link/i18n.js` `packages/pet-link/src/pet-link/panel-params.js` `packages/pet-link/src/pet-link/panel.js` `src/client.js` `src/i18n/i18n-copy.js` `src/i18n/i18n.js` `src/nav-icon.js` `src/quick-panel.js` `src/sidebar-right.js` `src/styles.js` `src/styles/base.js` `src/styles/chrome.js` `src/styles/ext.js` `src/styles/panel.js` `src/styles/quick.js` `src/styles/settings.js` `src/styles/shell.js` | ✅ |
 | `verify-inject-contracts.mjs` | `lib/subpackage-boot.js` |  |
 | `verify-inventory-index.mjs` | `lib/inventory.js` `packages/media-bridge/lib/routes/inventory.js` |  |
 | `verify-issue-claim-policy.mjs` | — |  |
@@ -99,7 +99,7 @@
 | `verify-picker-props.mjs` | — | ✅ |
 | `verify-picker-upload.mjs` | — | ✅ |
 | `verify-playback-controls.mjs` | — | ✅ |
-| `verify-presets.mjs` | `lib/index.js` `lib/media/media-dirs.js` `lib/routes/presets.js` `lib/settings-schema.js` `packages/glass/src/glass-panel.js` `src/client.js` `src/i18n-copy-core.js` `src/i18n-copy-ext.js` `src/i18n-copy-font.js` `src/i18n-copy-glass.js` `src/i18n-copy-live.js` `src/i18n-copy-panel.js` `src/i18n-copy-pet-link.js` `src/i18n-copy-picker.js` `src/i18n-copy.js` `src/persistence.js` `src/preset-store.js` `src/quick-panel.js` | ✅ |
+| `verify-presets.mjs` | `lib/index.js` `lib/media/media-dirs.js` `lib/routes/presets.js` `lib/settings-schema.js` `packages/glass/src/glass-panel.js` `src/client.js` `src/i18n/i18n-copy-core.js` `src/i18n/i18n-copy-ext.js` `src/i18n/i18n-copy-font.js` `src/i18n/i18n-copy-glass.js` `src/i18n/i18n-copy-live.js` `src/i18n/i18n-copy-panel.js` `src/i18n/i18n-copy-pet-link.js` `src/i18n/i18n-copy-picker.js` `src/i18n/i18n-copy.js` `src/persistence.js` `src/preset-store.js` `src/quick-panel.js` | ✅ |
 | `verify-reachability.mjs` | `lib/index.js` | ✅ |
 | `verify-readability.mjs` | `packages/glass/src/glass-css.js` `src/styles.js` `src/styles/base.js` `src/styles/chrome.js` `src/styles/ext.js` `src/styles/panel.js` `src/styles/quick.js` `src/styles/settings.js` `src/styles/shell.js` | ✅ |
 | `verify-release-set.mjs` | `lib/index.js` `lib/subpackage-boot.js` |  |
@@ -116,7 +116,7 @@
 | `verify-settings-namespaces.mjs` | `lib/index.js` `lib/kernel/data-dir.js` `lib/routes/settings.js` `lib/settings-schema.js` `src/persistence.js` |  |
 | `verify-settings-schema-exports.mjs` | `lib/index.js` `lib/subpackage-boot.js` | ✅ |
 | `verify-slides.mjs` | `lib/fs-paths.js` `lib/wallpaper-scan.js` `packages/media-bridge/lib/routes/slides.js` |  |
-| `verify-slideshow-client.mjs` | `packages/media-bridge/src/wallpaper-rotation-section.js` `src/client.js` `src/i18n-copy-panel.js` `src/media-prep.js` `src/styles/base.js` | ✅ |
+| `verify-slideshow-client.mjs` | `packages/media-bridge/src/wallpaper-rotation-section.js` `src/client.js` `src/i18n/i18n-copy-panel.js` `src/media-prep.js` `src/styles/base.js` | ✅ |
 | `verify-softrender.mjs` | — | ✅ |
 | `verify-static.mjs` | — |  |
 | `verify-steam-discovery.mjs` | `lib/kernel/host-kernel.js` `lib/steam-discovery.js` |  |
@@ -302,16 +302,16 @@
 | `src/font/typography.js` | 4 | `verify-fontset` `verify-scene-live` `verify-system-fonts` `verify-theme-layer` |
 | `src/fontset-store.js` | 4 | `verify-client` `verify-contracts` `verify-fontset` `verify-subpackage-purity` |
 | `src/host-bridge.js` | 1 | `verify-subpackage-client-half` |
-| `src/i18n-copy-core.js` | 2 | `verify-about` `verify-presets` |
-| `src/i18n-copy-ext.js` | 2 | `verify-about` `verify-presets` |
-| `src/i18n-copy-font.js` | 2 | `verify-about` `verify-presets` |
-| `src/i18n-copy-glass.js` | 2 | `verify-about` `verify-presets` |
-| `src/i18n-copy-live.js` | 2 | `verify-about` `verify-presets` |
-| `src/i18n-copy-panel.js` | 3 | `verify-about` `verify-presets` `verify-slideshow-client` |
-| `src/i18n-copy-pet-link.js` | 2 | `verify-about` `verify-presets` |
-| `src/i18n-copy-picker.js` | 2 | `verify-about` `verify-presets` |
-| `src/i18n-copy.js` | 3 | `verify-about` `verify-i18n` `verify-presets` |
-| `src/i18n.js` | 1 | `verify-i18n` |
+| `src/i18n/i18n-copy-core.js` | 2 | `verify-about` `verify-presets` |
+| `src/i18n/i18n-copy-ext.js` | 2 | `verify-about` `verify-presets` |
+| `src/i18n/i18n-copy-font.js` | 2 | `verify-about` `verify-presets` |
+| `src/i18n/i18n-copy-glass.js` | 2 | `verify-about` `verify-presets` |
+| `src/i18n/i18n-copy-live.js` | 2 | `verify-about` `verify-presets` |
+| `src/i18n/i18n-copy-panel.js` | 3 | `verify-about` `verify-presets` `verify-slideshow-client` |
+| `src/i18n/i18n-copy-pet-link.js` | 2 | `verify-about` `verify-presets` |
+| `src/i18n/i18n-copy-picker.js` | 2 | `verify-about` `verify-presets` |
+| `src/i18n/i18n-copy.js` | 3 | `verify-about` `verify-i18n` `verify-presets` |
+| `src/i18n/i18n.js` | 1 | `verify-i18n` |
 | `src/layer-core.js` | 3 | `verify-layer-ownership` `verify-resume-repaint` `verify-scene-live` |
 | `src/live-layer.js` | 7 | `verify-client` `verify-glass-surfaces` `verify-layer-ownership` `verify-logging` `verify-occlusion-client` `verify-scene-live` `verify-theme-follow` |
 | `src/live-layer/diag.js` | 5 | `verify-glass-surfaces` `verify-logging` `verify-occlusion-client` `verify-scene-live` `verify-theme-follow` |
