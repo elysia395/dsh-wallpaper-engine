@@ -68,9 +68,16 @@ function applyGlass(selection, s) {
     const rec = selection.glassMode;
     return !!(rec && typeof rec === 'object' && rec[surface] === 'custom');
   };
-  /** 面 × 参数 → 取值：**模式是 custom** 读 profile，否则读全局。 */
+  /** 面 × 参数 → 取值：**模式是 custom** 读 profile，否则读全局。
+   *
+   *  ⚠️ custom 档上**没设过值**（undefined / null / 空串）时仍回落全局（#324）：
+   *  `conversationColor` 这类键在 schema 里没有默认值，用户只翻开关、没点色板时它
+   *  是 undefined；旧写法直接把它交给 `weClampSurfaceColor`，颜色一缺就掉到主题常量
+   *  （深色 #0d1524 / 浅色 #ffffff），面板上看着"跟随全局"、实际画的是另一块板。
+   *  回落判据按"有没有值"而不是真假：0 / false 都是合法取值。 */
+  const hasOwnValue = (v) => v !== undefined && v !== null && v !== '';
   const glassValue = (surface, param, profileValue, globalValue) =>
-    (glassModeOn(surface) ? profileValue : globalValue);
+    (glassModeOn(surface) && hasOwnValue(profileValue) ? profileValue : globalValue);
 
   // ── 设置窗口这个玻璃面的**按面**釉层变量 ────────────────────────────────────────
   // 该面的 CSS 现在读 `var(--we-settings-window-<x>, <原全局表达式>)`（见 glass-css.js 的
