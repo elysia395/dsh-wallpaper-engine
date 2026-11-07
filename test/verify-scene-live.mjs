@@ -5102,7 +5102,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       && parSrc.includes('function parallaxGroupBlocked(el)')
       && parSrc.includes('function parallaxGroupNeedsRelative(el)')
       && parSrc.includes('function parallaxGroupOffsets(kind)')
-      && parSrc.includes("return kind === 'sidebar';")
+      && parSrc.includes("return kind === 'sidebar' || kind === 'composer';")
       && parSrc.includes('function parallaxTargetIsOffset(rec)')
       && parSrc.includes('function parallaxTargetOffset(rec, x, y)')
       && parSrc.includes('parallaxVarOn(el, PARALLAX_POSITION, PARALLAX_POSITION_RELATIVE);')
@@ -5452,7 +5452,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
         parallaxEnabled: true, parallaxBg: 1, parallaxMascot: true,
         parallaxSmooth: 85, parallaxUi: true,
         // 四个区域**各是绝对距离**（新口径 m02697-①/③：不再乘在总倍率上）⇒ 故意给四个不同的数，
-        // 下面要验"分档各自生效"（侧栏 / 气泡都比会话文本区小；输入卡片被 fixed 后代挡下）。
+        // 下面要验"分档各自生效"（侧栏 / 气泡都比会话文本区小；输入卡片用相对偏移保留 fixed 锚点）。
         parallaxUiChatDepth: 1, parallaxUiComposerDepth: 1.5,
         parallaxUiSidebarDepth: 0.6, parallaxUiBubbleDepth: 0.4,
       };
@@ -5485,7 +5485,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
         const m = /^(-?\d+\.\d\d)px (-?\d+\.\d\d)px$/.exec(String(box.props['translate'] || ''));
         return m ? [Number(m[1]), Number(m[2])] : null;
       };
-      // 左栏走的是相对偏移 ⇒ 读的是 `left` / `top` 这一对（换算回设备像素的整数量化）。
+      // 左栏与输入卡走的是相对偏移 ⇒ 读的是 `left` / `top` 这一对（换算回设备像素的整数量化）。
       const offsetNum = (box) => {
         const m = /^(-?\d+\.\d\d)px (-?\d+\.\d\d)px$/.exec(
           String((box.props['left'] || '') + ' ' + (box.props['top'] || '')));
@@ -5520,6 +5520,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
         && !('translate' in nestedGroup.box.props)
         && !('translate' in composerGroup.outlet.props)
         && !('translate' in composerGroup.box.props)
+        && !!offsetNum(composerGroup.box)
         && !chatGroup.box.classList.contains('we-parallax--moving')
         && !composerGroup.box.classList.contains('we-parallax--moving')
         && !sidebarGroup.box.classList.contains('we-parallax--moving')
@@ -5643,15 +5644,16 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
         .every((g) => !('translate' in g.box.props) && !('translate' in g.outlet.props))
         && !('left' in sidebarGroup.box.props) && !('top' in sidebarGroup.box.props)
         && sidebarGroup.box.props['position'] === 'relative'
+        && !('left' in composerGroup.box.props) && !('top' in composerGroup.box.props)
         && bubbles.every((b) => !('translate' in b.box.props))
         // 插件那一组也归零（开关还开着 ⇒ 这一条验的是"回到中心就收干净"，不是"关掉才收"）。
         && !('translate' in pluginChild.props) && !('translate' in pluginOutlet.props);
       const dbg = globalThis.window.__weParallaxStats;
-      // 自检里还带一份界面组清点：会话 1、侧栏 1、气泡 24（截尾后的）、被 fixed 挡下 1（输入卡片）。
+      // 自检里还带一份界面组清点：会话 1、侧栏 1、输入卡 1、气泡 24；两组相对偏移、无被挡下组。
       dbgOk = !!dbg && dbg.frames > 0 && dbg.writes > 0
         && typeof dbg.costMs.p50 === 'number' && typeof dbg.gapMs.max === 'number'
         && !!dbg.groups && dbg.groups.chat === 1 && dbg.groups.sidebar === 1
-        && dbg.groups.bubble === 24 && dbg.groups.blocked === 1 && dbg.groups.offset === 1;
+        && dbg.groups.bubble === 24 && dbg.groups.blocked === 0 && dbg.groups.offset === 2;
       globalThis.selection = { parallaxEnabled: false };
       parallaxLayerMod.syncParallaxLayer();
       cleared = targets.every((el) => !('translate' in el.props)
@@ -5660,10 +5662,12 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
         // 左栏那条腿连 `position` 一起还回去（记录都没了，这一列还原成 static 才算收干净）。
         && !('position' in sidebarGroup.box.props)
         && !('left' in sidebarGroup.box.props) && !('top' in sidebarGroup.box.props)
+        && !('position' in composerGroup.box.props)
+        && !('left' in composerGroup.box.props) && !('top' in composerGroup.box.props)
         && !('translate' in pluginChild.props) && !('translate' in pluginOutlet.props)
         && typeof listeners.pointermove === 'function';
       // ── P3 三条行为腿（都在最尾部：这一段会把假组件的形态改掉，前面那批断言要看到的是
-      //    旧形态=输入卡片被 fixed 后代挡下、自检里"被 fixed 挡下 1"）。────────────────────
+      //    初始形态=输入卡片带 fixed 后代，但走相对偏移、不被挡下）。────────────────────
       // 视觉系数：光标在最右下时 `u = (1600−800)/50 = 16`、`(900−450)/50 = 9`（PARALLAX_DIRECTION
       // = −1）⇒ 位移 = `u × ratio / 50`；1% 档 = −16、1.5% 档 = −24（Y 侧 −9 / −13.5 之后再量化）。
       // 断言一律**与同台的基准组（会话文本区 = 1% 档）相对**比，不抄绝对值 —— 绝对值属于另一条
@@ -5706,25 +5710,24 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       //    不成立，删掉不改变任何可达形态 ⇒ 那个方向由源码结构那条判据钉。）
       //    ⚠️ 位移落在哪一层：`mkGroup` 给的出口已经是 `display: contents`（照宿主 ANCHOR_STYLE），
       //    所以 `parallaxGroupBox()` 会走过出口、把记录与位移都落在**父盒子上**
-      //    （`packages/parallax/src/parallax-layer.js` 的 `parallaxGroupBox()`）⇒ 读数一律读 `.box` 的 `translate`，出口那份 props
+      //    （`packages/parallax/src/parallax-layer.js` 的 `parallaxGroupBox()`）⇒ 读数一律读 `.box` 的相对偏移，出口那份 props
       //    永远没有 translate（老腿里"出口无 translate"那条断言因此是恒真的，改读盒子才有牙）。
       const composerAttr = mkGroup({ 'data-composer-card': '' });
       docGroups.push(composerAttr.outlet);
       rescanTwice(1600, 900);
-      const composerAttrNum = numOf(composerAttr.box);
-      // ② 整组不动是"组里有 fixed 后代"这一条的功劳，**不是**"没认出组件身份"：同一个锚点先记下
-      //    "确实一个位移都没有"，撤掉那个 fixed 后代后必须立刻拿到它自己的 1.5% 档。
-      const composerBeforeNum = numOf(composerGroup.box);
+      const composerAttrNum = offsetNum(composerAttr.box);
+      // ② #257：输入卡走相对偏移，fixed 后代挂载/撤除都不改变本卡自己的 1.5% 档。
+      const composerBeforeNum = offsetNum(composerGroup.box);
       composerGroup.box.children = [];
       rescanTwice(1600, 900);
-      const composerFixedGoneNum = numOf(composerGroup.box);
+      const composerFixedGoneNum = offsetNum(composerGroup.box);
       // ── P3-1：超限组（>400 节点）在冷却窗内**一次都不再枚举**。老写法是"先整棵枚举、再看
       //    长度" ⇒ 每 250ms 一轮重扫都为一句"没验完"白付一次全量 `querySelectorAll('*')`。
       //    ⚠️ 假桩要挂在**盒子**上（真语义：`box.querySelectorAll('*')` 返回后代节点）。挂在出口上
       //    是挂错元素 ⇒ 计数恒 0、判据失去意义（踩过）。
       //    ⚠️ 锚点数组必须**真的超过** 400：没数出"太大"之前缓存写的是 `big:false`，那种组不会走
       //    冷却（踩过：喂 1 个节点 ⇒ 缓存 `big:false` ⇒ 冷却那侧恒 0）。
-      const overNode = mkGroup({ 'data-composer-card': '' });
+      const overNode = mkGroup({ 'data-slot': 'conversation.view' });
       const overKids = new Array(401).fill(null);
       let overCalls = 0;
       overNode.box.querySelectorAll = () => { overCalls += 1; return overKids; };
@@ -5791,9 +5794,10 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
         && composerAttrNum[0] === -unitX * 1.5              // 自己的 1.5% 档（-24，精确）
         && Math.abs(composerAttrNum[1] + unitY * 1.5) <= 1  // -13.5 量化后 ±1
         && composerAttrNum[0] !== chatRef[0]                // ≠ 会话文本区那一档（1.2% ⇒ -19）
-        && !composerBeforeNum                               // 带 fixed 后代时一个位移都没有
+        && !!composerBeforeNum && composerBeforeNum[0] === -unitX * 1.5
+        && !('translate' in composerAttr.box.props) && !('translate' in composerGroup.box.props)
         && !!composerFixedGoneNum
-        && composerFixedGoneNum[0] === -unitX * 1.5;         // 撤掉后立刻拿到 1.5% 档
+        && composerFixedGoneNum[0] === -unitX * 1.5;         // 撤掉后保持 1.5% 档
       overScanOk = overCallsFirst >= 1 && overElapsedWithin < 1000
         && overCallsSecond === overCallsFirst
         && overCallsAfterCooldown > overCallsSecond && overElapsed > 1000;
@@ -5818,7 +5822,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       setLocalStorage(PREV_LS);
       restoreWeBase();
     }
-    check('parallax-layer.js 位移直接写在那几层自己的 translate 上 · body 只放补边系数 · 起帧提合成层到位摘 · 自检出帧统计 · 停用全收干净 · 界面组量化位移(带迟滞)/与壁纸同向/分档(四个区域距离各自生效)/气泡截尾/静止摘属性/fixed 后代整组不动/左栏走相对偏移不吃那条判定/槽出口没盒子就落父盒子/插件前端独立开关(默认关 · 只开它也能动)/嵌在原生组里的插件槽跟「界面元素跟随」那道闸走/插件槽没存过值也照样缓动/跨中线不跳变 · P3 三条:组件只认属性且吃自己的距离(撤掉 fixed 后代立刻拿到)/超限组冷却窗内一次都不重数/非有限槽值与缺键同距',
+    check('parallax-layer.js 位移直接写在那几层自己的 translate 上 · body 只放补边系数 · 起帧提合成层到位摘 · 自检出帧统计 · 停用全收干净 · 界面组量化位移(带迟滞)/与壁纸同向/分档(四个区域距离各自生效)/气泡截尾/静止摘属性/fixed 后代整组不动/左栏与输入卡走相对偏移不吃那条判定/槽出口没盒子就落父盒子/插件前端独立开关(默认关 · 只开它也能动)/嵌在原生组里的插件槽跟「界面元素跟随」那道闸走/插件槽没存过值也照样缓动/跨中线不跳变 · P3 三条:组件只认属性且吃自己的距离(fixed 后代挂载撤除均保持)/超限组冷却窗内一次都不重数/非有限槽值与缺键同距',
       !threw && movedOn && groupsOk && settled && centerCleared && dbgOk && hysteresisOk
         && regionsOk && pluginOk && pluginNestedOk && pluginSmoothOk && crossZeroOk && cleared
         && composerAttrOk && overScanOk && badDepthOk,

@@ -5,7 +5,7 @@
 > 口径：只统计守卫**代码**里真正碰到的模块（先剥注释），并区分"直接读源文件"与"隔着产物 `lib/client.js`"。
 > 写法：字面量路径 / `join(...)` 拼接 / 唯一 basename / 产物配方 / **前缀族读法** `scopeFiles|scopeText(<前缀>)` / **经共享族助手读**（`import { panelText } from './tools/src-scope.mjs'` + 真调用；族口径封在那个库里，见 DEV-GUIDE §4.6「同时是守卫的库」）/ **真源定位读**（`locate('符号')` / `locateFile('文件名')`，`test/tools/source-locator.mjs`：符号唯一声明在哪就是读了哪个模块）。
 
-模块面 203 个 · 守卫 129 个
+模块面 203 个 · 守卫 130 个
 
 ## 守卫 → 模块
 
@@ -40,6 +40,7 @@
 | `verify-component-face.mjs` | `lib/host-boot.js` `lib/kernel/component-session.js` `lib/kernel/host-kernel.js` |  |
 | `verify-component-fonts.mjs` | `lib/settings-schema.js` `src/client.js` `src/effects.js` `src/font/apply.js` `src/font/components.js` | ✅ |
 | `verify-component-visibility.mjs` | `lib/component-visibility.js` `lib/kernel/component-session.js` `packages/media-bridge/lib/routes/inventory.js` `src/panel-tabs.js` |  |
+| `verify-composer-fixed-browser-case.mjs` | `src/we-base.js` |  |
 | `verify-config-store.mjs` | `lib/kernel/config.js` `lib/media/transcode.js` |  |
 | `verify-contracts.mjs` | `lib/host-boot.js` `lib/index.js` `lib/kernel/host-kernel.js` `lib/media/media-dirs.js` `lib/settings-schema.js` `packages/fonts/lib/routes/fontsets.js` `packages/fonts/src/fontset-editor.js` `packages/mascot-avatar/lib/routes/avatar.js` `packages/mascot-avatar/lib/routes/mascot.js` `packages/media-bridge/lib/backend.js` `packages/media-bridge/lib/index.js` `packages/media-bridge/lib/legacy.js` `packages/media-bridge/lib/supervisor.js` `src/api-client.js` `src/client.js` `src/fontset-store.js` `src/panel-tabs-advanced.js` `src/panel-tabs-appearance.js` `src/panel-tabs-effects.js` `src/panel-tabs-mascot.js` `src/panel-tabs.js` |  |
 | `verify-dead-declarations.mjs` | — |  |
@@ -252,7 +253,7 @@
 | `packages/media-bridge/src/wallpaper-rotation-section.js` | 4 | `verify-avatar-interval-and-rotation` `verify-client` `verify-scene-live` `verify-slideshow-client` |
 | `packages/media-bridge/src/wallpaper-transition-section.js` | 2 | `verify-client` `verify-scene-live` |
 | `packages/media-bridge/src/wallpaper-uploads-section.js` | 2 | `verify-client` `verify-scene-live` |
-| `packages/parallax/lib/client.parallax.js` | 3 | `verify-client-sync` `verify-client` `verify-scene-live` |
+| `packages/parallax/lib/client.parallax.js` | 4 | `verify-client-sync` `verify-client` `verify-composer-fixed-browser-case` `verify-scene-live` |
 | `packages/parallax/lib/index.js` | 0 | **（无）** |
 | `packages/parallax/src/client.js` | 0 | **（无）** |
 | `packages/parallax/src/ext-parallax.js` | 1 | `verify-scene-live` |
@@ -346,5 +347,5 @@
 | `src/system-fonts.js` | 4 | `verify-client` `verify-fontset` `verify-scene-live` `verify-system-fonts` |
 | `src/theme-follow.js` | 2 | `verify-client` `verify-theme-follow` |
 | `src/video-layer.js` | 5 | `verify-avatar-interval-and-rotation` `verify-client` `verify-layer-ownership` `verify-scene-live` `verify-transcode-state` |
-| `src/we-base.js` | 1 | `verify-scene-live` |
+| `src/we-base.js` | 2 | `verify-composer-fixed-browser-case` `verify-scene-live` |
 | `src/we-cond.js` | 3 | `verify-client` `verify-fontset` `verify-scene-live` |
