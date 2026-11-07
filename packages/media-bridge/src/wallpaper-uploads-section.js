@@ -6,7 +6,9 @@
  *
  * 归属（ADR-0013 D20）：随包走的是**渲染器**；上传目录 / 官方资源目录 / 上传列表 /
  * 确认令牌这些键、默认值、持久化与动作体全留主包，本文件只读 ctx 值 + 经 host 显式键集
- * （入口 src/client.js 的 WALLPAPER_UPLOADS_HOST_REQUIRED）调主包动作。
+ * 调主包动作。键集真源 = `src/host-bridge.js` 的 `HOST_BRIDGE_BINDINGS`（71 键；ADR-0014 S5.1），
+ * 本包的申报表是 `WALLPAPER_SECTIONS_HOST_REQUIRED`（`packages/media-bridge/src/client.js`，
+ * 源码留空表，构建期从同文件的 `} = host;` 解构逐键派生）。
  *
  * 唯一跨包通道 = 主 bundle 的显式键集（ADR-0014 S5.1 / S5.4）；本文件里出现的 React / weT /
  * changeUploadDir / changeWeAssetsDir / uploadWallpaperFile / removeUploadWallpaper /

@@ -9,7 +9,7 @@
 
 旧架构同时依赖全局背景令牌、私有类名补丁和目标本体滤镜。设置窗口透明并不意味着内部插件背景适配；为侧栏添加定位与层叠上下文还会困住第三方模态。背景修补与字体修补不能解决这类所有权和层叠问题。
 
-证据入口为 `src/styles-base.js`、`src/styles-sidebar.js`、`src/styles-chrome.js` 的旧绘制路径，行为复现由 `test/verify-glass-runtime-browser.mjs` 维护。保留旧决策正文作为历史，不将历史约束解释为本轮禁止回退原生的要求。
+证据入口为 `src/styles/base.js`、`src/styles/chrome.js` 的旧绘制路径（第三处 `src/styles-sidebar.js` 已删除，不再可作入口），行为复现由 `test/verify-glass-runtime-browser.mjs` 维护。保留旧决策正文作为历史，不将历史约束解释为本轮禁止回退原生的要求。
 
 ## Decision
 
