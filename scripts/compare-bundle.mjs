@@ -48,10 +48,9 @@ function normalize(afterText, maps) {
   const used = new Map(sorted.map((m) => [m.to, 0]));
   let out = afterText;
   for (const m of sorted) {
-    let count = 0;
     // 按字面量切分，避免正则元字符；只替换完整出现，不做大小写/边界猜测。
     const parts = out.split(m.to);
-    count = parts.length - 1;
+    const count = parts.length - 1;
     out = parts.join(m.from);
     used.set(m.to, count);
   }
