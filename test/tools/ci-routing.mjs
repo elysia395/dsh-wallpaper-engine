@@ -34,12 +34,12 @@ export const MODE_NOTICE = 'notice';
 export const MODE_FULL = 'full';
 export const MODES = [MODE_DOCS, MODE_DOCS_ASSETS, MODE_NOTICE, MODE_FULL];
 
-/** 公告区块的起止标记（逐字出现在 `src/client.js` 与 `src/i18n-copy-ext.js` 里）。 */
+/** 公告区块的起止标记（逐字出现在 `src/client.js` 与 `src/i18n/i18n-copy-ext.js` 里）。 */
 export const NOTICE_MARK_BEGIN = 'UPDATE NOTICE COPY（begin）';
 export const NOTICE_MARK_END = 'UPDATE NOTICE COPY（end）';
 
 /** 允许被公告快通道覆盖的文件（**只允许这两个**；多了就是放行了别的代码）。 */
-export const NOTICE_FILES = ['src/client.js', 'src/i18n-copy-ext.js'];
+export const NOTICE_FILES = ['src/client.js', 'src/i18n/i18n-copy-ext.js'];
 
 /** 差异条目超过这个数就直接 full（防"大范围改动被分类成文档"）。 */
 export const DIFF_FLOOR = 300;
@@ -489,7 +489,7 @@ export function auditDocs(input) {
 // ## 守的是什么实害（以及为什么这条捷径比文档通道更危险）
 // 更新公告是**每版必改**的一小块文案，改一句错别字也要跑双平台全链（装依赖 / 构建 /
 // 全量守卫 / 媒体桥 / 冒烟）。但公告住在 `src/client.js`（整份浏览器半边）与
-// `src/i18n-copy-ext.js`（词表域）里 —— **按文件名放行等于让整份客户端免检**。
+// `src/i18n/i18n-copy-ext.js`（词表域）里 —— **按文件名放行等于让整份客户端免检**。
 // 因此这条通道**不认文件名**，只认**内容级事实**：
 //   ① 两个文件里被 `UPDATE NOTICE COPY` 标记圈出的区块**之外**，逐字节完全一致；
 //   ② 区块**之内**，把字符串字面量的内容挖空、注释剥掉后得到的「代码骨架」逐字节一致。
@@ -710,7 +710,7 @@ export function judgeNoticeEdit(input) {
   //    ⚠️ 两个范围限制，都有实测理由：
   //      · 查**整份词表文件**而不是只查它的公告区块 —— 配图 caption / 求星入口这几条的
   //        词条**故意住在公告区块外**（它们不随公告换血，是稳定面）；
-  //      · 「知道了」的词条住在**另一个域文件**（`src/i18n-copy-core.js`）⇒ 调用方必须把
+  //      · 「知道了」的词条住在**另一个域文件**（`src/i18n/i18n-copy-core.js`）⇒ 调用方必须把
   //        整个词表族的内容拼起来传进来（`scripts/ci-routing.mjs` 那边按 DICT_FAMILY 拼）。
   //        只传 `i18n-copy-ext.js` 会把它误判成漏译（实测：1 条假红）。
   const clientText = after[NOTICE_FILES[0]];
@@ -740,7 +740,7 @@ export function judgeNoticeEdit(input) {
  * 词表双向对账在 full 链上不分语种，这里保持同一口径（少一条就判红）。
  *
  * @param {string} clientBlock `src/client.js` 的公告区块原文
- * @param {string} dictBlock   `src/i18n-copy-ext.js` 的公告区块原文
+ * @param {string} dictBlock   `src/i18n/i18n-copy-ext.js` 的公告区块原文
  * @returns {string[]} 缺词条的原文
  */
 export function noticeKeysWithoutTranslation(clientBlock, dictBlock) {

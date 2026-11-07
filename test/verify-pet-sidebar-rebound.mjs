@@ -2,7 +2,8 @@
 /** 执行真实官方侧栏控制面，确保反击仅调整过渡，不改宿主网格。 */
 import assert from 'node:assert/strict';
 import {readFileSync}from'node:fs';
-const source=readFileSync(new URL('../src/client.js',import.meta.url),'utf8');
+// RopeDock 组件自 2026-11-07（S7 试点）起住 `src/client/rope-dock.js`；切片锚点不变。
+const source=readFileSync(new URL('../src/client/rope-dock.js',import.meta.url),'utf8');
 const a=source.indexOf('  const officialPull = {'),b=source.indexOf('  }, [hidden, petOfficialMode]);',a);assert.ok(a>=0&&b>a);
 const changes=[],values=new Map([['--ds-transition-duration-slow','450ms']]);
 const style={getPropertyValue:k=>values.get(k)||'',setProperty(k,v){assert.notEqual(k,'grid-template-columns');values.set(k,v);},removeProperty:k=>values.delete(k)};

@@ -214,7 +214,7 @@ function applyGlass(selection, s) {
   // 标题栏液态玻璃：壳层顶栏（AppFrame 那个 grid 容器，锚点是**运行时探针**打的
   // `data-we-titlebar-anchor` —— 宿主类名是 CSS-module 构建哈希、跨构建漂移，写死必然在
   // 下次升级静默失效（#235）；探针见 glass-layer.js 的 findTitlebarFrame）默认只是那条不透明的
-  // 底色（上面主包 styles-shell.js 的「外壳画布底」把外壳画布清成 transparent 之后，这一层是唯一
+  // 底色（上面主包 src/styles/shell.js 的「外壳画布底」把外壳画布清成 transparent 之后，这一层是唯一
   // 必须保留底色的面）。
   // 打开后 CSS 把它换成**与其余面板同一张配方表**，且与左侧栏那条**逐条同形**
   // （唯一差别是锚点；**不画**底分割线，理由见 glass-css.js）。
@@ -305,7 +305,7 @@ function applyGlass(selection, s) {
   else document.body.removeAttribute("data-we-floater-solid");
 
   // ── 插件自身浮层的**按面**釉层变量 ───────────────────────────────────────────
-  // 该面的 CSS 现在读 `var(--we-floaters-<x>, <原全局表达式>)`（styles-quick.js 的
+  // 该面的 CSS 现在读 `var(--we-floaters-<x>, <原全局表达式>)`（src/styles/quick.js 的
   // `.we-update-notice` 与 `.we-repo-panel--open` 两条规则）⇒ 这一组变量就是它的来源。
   // 涉及两处玻璃面：**更新提示**（自己一块面板）与**壁纸仓库抽屉**（打开态才画玻璃）。
   //

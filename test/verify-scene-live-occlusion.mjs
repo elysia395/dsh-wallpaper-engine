@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 /**
  * verify-scene-live-occlusion.mjs — 遮挡入口曝光 + 父页消息桥 + 宿主 HTML 注入的机检
- * （规格：docs/wip/LINUX-OCCLUSION.md §5/§8；沿 test/verify-scene-live.mjs 的
+ * （规格：docs/LINUX-OCCLUSION.md §5/§8；沿 test/verify-scene-live.mjs 的
  *  mock webServer + 真实 handler 请求模式）。
  *
  * Levels:

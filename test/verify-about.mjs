@@ -477,8 +477,8 @@ console.log('\n④ 客户端：三态文案 + 只读 + 不进设置');
 const clientSrc = read('src/client.js');
 // 刀4：页签族并集（5 个域模块 + 组装点）；判据与断言一字未改。
 const tabsSrc = panelText();
-// 词表已按域拆族（`src/i18n-copy-*.js` + 组装点）：读**族并集**，判据与断言一字未改。
-const copySrc = scopeFiles('src/i18n-copy').map(read).join('\n');
+// 词表已按域拆族（`src/i18n/i18n-copy-*.js` + 组装点）：读**族并集**，判据与断言一字未改。
+const copySrc = scopeFiles('src/i18n/i18n-copy').map(read).join('\n');
 
 check('客户端只读宿主这条路由（apiJson 唯一入口）',
   clientSrc.includes('apiJson("/star-count")') && !/fetch\(\s*["'`]\/star-count/.test(clientSrc));

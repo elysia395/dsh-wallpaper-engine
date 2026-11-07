@@ -21,7 +21,7 @@
 | 2 | `/diag` | lib/routes/diag.js:149 | 箭头 | disposers | 13 |
 | 3 | `/diag` | lib/routes/diag.js:150 | 箭头 | disposers base | 13 |
 | 4 | `/diag-log` | lib/routes/diag.js:151 | 箭头 | disposers log base componentsProbe | 3 |
-| 5 | `/glass-presets` | lib/routes/presets.js:502 | async 箭头 | disposers base | 1 |
+| 5 | `/glass-presets` | lib/routes/presets.js:153 | async 箭头 | disposers base | 1 |
 | 6 | `/settings` | lib/routes/settings.js:158 | 箭头 | disposers base ctx mediaOriginApi readSettings isBetterSidebarLoaded …(+3) | 21 |
 | 7 | `/cache-dir` | lib/routes/cache-dir.js:47 | 箭头 | disposers base CONTROL_JSON_MAX_BYTES normalizeUserDir cacheBaseDir setCacheDir …(+1) | 1 |
 | 8 | `/cache-dir/browse` | lib/routes/cache-dir.js:115 | 箭头 | disposers base normalizeUserDir | 1 |
@@ -33,11 +33,11 @@
 | 14 | `/glass-row-state` | packages/glass/lib/routes/glass-row.js:23 | async 箭头 | disposers base http | **0** |
 | 15 | `/mascot` | packages/mascot-avatar/lib/routes/mascot.js:50 | 箭头 | disposers base serveFile http mascotDir mascotPath …(+5) | 4 |
 | 16 | `/avatar` | packages/mascot-avatar/lib/routes/avatar.js:54 | 箭头 | disposers base serveFile http avatarDir avatarPath …(+6) | 5 |
-| 17 | `/media-status` | packages/media-bridge/lib/routes/now-playing.js:87 | 箭头 | disposers base | 2 |
-| 18 | `/audio-spectrum` | packages/media-bridge/lib/routes/now-playing.js:97 | 箭头 | disposers base | 2 |
-| 19 | `/now-playing` | packages/media-bridge/lib/routes/now-playing.js:116 | 箭头 | disposers base | 4 |
-| 20 | `/now-playing/artwork` | packages/media-bridge/lib/routes/now-playing.js:130 | 箭头 | disposers base serveFile | 2 |
-| 21 | `/media-control` | packages/media-bridge/lib/routes/now-playing.js:148 | 箭头 | disposers base CONTROL_JSON_MAX_BYTES http | 3 |
+| 17 | `/media-status` | packages/media-bridge/lib/routes/now-playing.js:86 | 箭头 | disposers base | 2 |
+| 18 | `/audio-spectrum` | packages/media-bridge/lib/routes/now-playing.js:96 | 箭头 | disposers base | 2 |
+| 19 | `/now-playing` | packages/media-bridge/lib/routes/now-playing.js:115 | 箭头 | disposers base | 4 |
+| 20 | `/now-playing/artwork` | packages/media-bridge/lib/routes/now-playing.js:129 | 箭头 | disposers base serveFile | 2 |
+| 21 | `/media-control` | packages/media-bridge/lib/routes/now-playing.js:147 | 箭头 | disposers base CONTROL_JSON_MAX_BYTES http | 3 |
 | 22 | `/api/local-assets` | packages/media-bridge/lib/routes/we-assets.js:67 | async 箭头 | disposers serveFile listWeAssetNames weAssetsAvailable WE_ASSETS_SOURCE_ID getWeAssetsDir …(+1) | 2 |
 | 23 | `/we-assets-dir` | packages/media-bridge/lib/routes/we-assets.js:115 | 箭头 | disposers base CONTROL_JSON_MAX_BYTES normalizeUserDir setWeAssetsDir listWeAssetNames …(+3) | 3 |
 | 24 | `/inventory` | packages/media-bridge/lib/routes/inventory.js:104 | async 箭头 | disposers base mediaOriginApi buildInventory componentsProbe | 29 |

@@ -8,7 +8,7 @@
  * `ReferenceError: weT is not defined`。
  *
  * 这个 shim 让"单独 import"与"在 bundle 里"的语义**逐字一致**：中文态下 `weT(k)` 就是 `k`
- * （`src/i18n.js` 的口径）。于是守卫读到的 label 正是面板在中文下会显示的那串。
+ * （`src/i18n/i18n.js` 的口径）。于是守卫读到的 label 正是面板在中文下会显示的那串。
  *
  * 用法（**必须在 import 目标模块之前**调用一次）：
  *   import { installWeTShim } from './tools/weT-shim.mjs';

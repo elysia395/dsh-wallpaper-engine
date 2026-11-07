@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import {readFileSync} from 'node:fs';
-const source=readFileSync(new URL('../src/client.js',import.meta.url),'utf8');
+// RopeDock 组件自 2026-11-07（S7 试点）起住 `src/client/rope-dock.js`；切片锚点不变。
+const source=readFileSync(new URL('../src/client/rope-dock.js',import.meta.url),'utf8');
 const start=source.indexOf('  const officialPull = {');
 const end=source.indexOf('  }, [hidden, petOfficialMode]);',start);
 const events=[];let api;

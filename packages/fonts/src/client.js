@@ -17,8 +17,9 @@
  *     test/verify-subpackage-purity.mjs 判红（只放行产物、只放行主包名出现在本包 lib/client*.js 里）。
  *
  * ## 消费侧契约（唯一跨包通道 = 主 bundle 的显式键集，ADR-0014 S5.1 / S5.4）
- * 下面的 FONTS_HOST_REQUIRED 与主包 `src/client.js` 的 HOST_BRIDGE_BINDINGS 字体段**逐键一致**
- * （缺键大声抛，不许静默 undefined）。键集的依据 = 两个渲染器文件里的**自由标识符**逐个点名；
+ * 下面的解构名单与主包 `src/host-bridge.js` 的 HOST_BRIDGE_BINDINGS 字体段**逐键一致**（缺键大声抛，
+ * 不许静默 undefined）；产物里的 FONTS_HOST_REQUIRED 由构建期从这份解构派生（源码里是空表）。
+ * 键集的依据 = 两个渲染器文件里的**自由标识符**逐个点名；
  * **逐键清单以主包 `HOST_BRIDGE_BINDINGS` 为准**，本注释不复制清单（ADR-0017 D1）。
  *   ⚠️ 每多一个键就是多一条没人维护的隐式契约（ADR-0014 S5.2）⇒ 清单之外一个都**不**解构。
  *
@@ -32,17 +33,10 @@
  * 缺键**大声失败**（ADR-0014 S5.1 / S5.4 显式键集 + ADR-0013 D3③「宁可显示、不可静默消失」）。
  * 主包被关 ⇒ 本 bundle 根本不会被 require（ADR-0014 S7.2 连坐）；能走到这里却缺键 = 键集与申报表脱钩。
  */
-const FONTS_HOST_REQUIRED = [
-  // 内核与渲染助手（主 bundle 的共享零件表）
-  'React', 'weT', 'ctlText', 'switchRow', 'sectionHead', 'moduleResetButton',
-  // 字族与主题数据表 / 取值器（产地在留在主包的文件里）
-  'FONT_FAMILY_LABELS', 'fontFamilyKeyOf', 'filterUsableSystemFonts', 'systemFontKeyOf',
-  'systemFontNameOf', 'sanitizeFamilyKey',
-  'THEME_COLOR_ROLES', 'THEME_TYPE_ROLES', 'THEME_SIZE_MIN', 'THEME_SIZE_MAX',
-  'COMPONENT_FONT_TARGETS', 'componentFontDefaults',
-  // 贡献面（主 bundle 的收件箱：值 + 回调，写权留主包）
-  'registerPanelSection',
-];
+/** 由构建期填充：scripts/build-client.mjs 从下方 `} = host;` 的解构逐键派生本表
+ * （源码留空表只为 eslint/typecheck 可读；产物里是一份生成好的键数组）。
+ * 手工加键的正确顺序：① src/host-bridge.js 的 HOST_BRIDGE_BINDINGS ② 本文件的解构名单。 */
+const FONTS_HOST_REQUIRED = [];
 for (const key of FONTS_HOST_REQUIRED) {
   if (!(key in host)) {
     throw new Error('[wallpaper-engine-fonts] 主 bundle 键集缺少 "' + key

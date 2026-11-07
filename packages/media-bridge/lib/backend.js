@@ -44,7 +44,7 @@ export function createMediaBackend({ dataDir, cacheBaseDir = join(dataDir, 'cach
   let booting = null;
   let sup = null;
   let legacy = null;
-  const optsRef = { audio: true, online: false };
+  const optsRef = { audio: true };
   const forceLegacy = String(process.env.DSH_WE_MEDIA_LEGACY || '').trim() === '1';
 
   /** 内置实现按需构造（音频开关要跟着用户设置走，不能构造时就定死）。 */
@@ -82,7 +82,7 @@ export function createMediaBackend({ dataDir, cacheBaseDir = join(dataDir, 'cach
         diag,
         onFatal: (why) => fallBackTo(why),
       });
-      const ok = await sup.start({ audio: optsRef.audio, online: optsRef.online });
+      const ok = await sup.start({ audio: optsRef.audio });
       if (!ok) { fallBackTo(sup.lastError() || '中间件启动失败'); return; }
       useBridge = true;
       note = '';
@@ -98,7 +98,7 @@ export function createMediaBackend({ dataDir, cacheBaseDir = join(dataDir, 'cach
     start(opts = {}) {
       if (started) return;
       started = true;
-      Object.assign(optsRef, { audio: opts.audio !== false, online: opts.online === true });
+      Object.assign(optsRef, { audio: opts.audio !== false });
       if (forceLegacy) {
         fallback = '按 DSH_WE_MEDIA_LEGACY=1 使用内置实现';
         log('媒体数据源：内置实现（DSH_WE_MEDIA_LEGACY=1）', 'info');

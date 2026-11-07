@@ -1070,6 +1070,8 @@ section('⑧ 面板渲染回归（配色区在总开关打开时必须渲染得�
     // 同理：「玻璃 UI」节的渲染器住 packages/glass/src/glass-panel.js（ADR-0016 第二刀），
     // `panel-tabs.js` 里对它的调用只在**打包后**同作用域 ⇒ 这里也要映成全局。
     await import(pathToFileURL(join(root, 'packages', 'glass', 'src', 'glass-panel.js')).href),
+    // S3：预设块折出到 glass-presets-panel.js —— 同一条"按文件 import 映成全局"的理由。
+    await import(pathToFileURL(join(root, 'packages', 'glass', 'src', 'glass-presets-panel.js')).href),
     // 同理：节头构件抽到了 `src/section-head.js`（三节在侧边栏默认收敛那一刀）。
     // ⚠️ 必须给**真实现**，不能靠上面那个"自动补 noop"的循环 —— 它在 client.js 里已找不到
     // `sectionHead`（搬走了），而就算找到、补成 noop 也会让**每个节头变成 `null`**：

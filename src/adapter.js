@@ -27,7 +27,7 @@
 
 // 选项文案。值域与 schema 的 ADAPTER_TARGET_VALUES 逐字对齐（守卫比对）。
 // 取值用 getter 现取（不在模块级冻结）：语言在 bundle 求值之后才由 locale 服务确定，
-// 冻结的值会让 en 界面永远停在中文（见 src/i18n.js 的"模块级冻结"纪律）。
+// 冻结的值会让 en 界面永远停在中文（见 src/i18n/i18n.js 的"模块级冻结"纪律）。
 const ADAPTER_LABELS = {
   get auto() { return weT('自动检测'); },
   get browser() { return weT('原生浏览器'); },

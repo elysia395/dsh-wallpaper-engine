@@ -374,7 +374,7 @@ console.log('sidebar glass selectors are wallpaper-independent: true · page gla
   // #255⑤ 后半：23 处「值+单位」预格式化后缀已改裸单位（否则那些行仍只读）；
   // 唯一保留的预格式化是吉祥物大小（显示倍率刻度 ≠ 存储刻度，保持只读）。
   const readSrc = (rel) => readFileSync(new URL('../' + rel, import.meta.url), 'utf8');
-  const bareUnitFiles = ['packages/glass/src/glass-panel.js', 'src/panel-tabs-effects.js', 'src/panel-tabs-appearance.js'];
+  const bareUnitFiles = ['packages/glass/src/glass-panel.js', 'packages/glass/src/glass-presets-panel.js', 'src/panel-tabs/effects.js', 'src/panel-tabs/appearance.js'];
   const leftovers = bareUnitFiles.filter((rel) => /\+ "(?:px|%)"/.test(readSrc(rel)));
   assert.ok(leftovers.length === 0, '滑杆后缀应已全部改裸单位（仍预格式化的文件：' + leftovers.join(', ') + '）');
   assert.ok(/Math\.round\(sel\.ropeScale \* 100\) \+ "%"/.test(readSrc('src/panel-tabs.js')),
@@ -466,7 +466,7 @@ const readoutOfSlider = (row) => {
 // 「扩展」页签的三张卡现在来自三个 bundle：avatar（本 bundle 模块作用域注册）、fx、parallax。
 // 子包产物只在 loader 上注册自己那份 bundle，真正的注册动作发生在它们各自的 factory：
 // 它们用 require('dsh-plugin-wallpaper-engine') 取主 bundle 的**显式键集**
-// （src/client.js 的 HOST_BRIDGE_BINDINGS），再 registerExtensionModule / registerLayerHooks。
+// （src/host-bridge.js 的 HOST_BRIDGE_BINDINGS），再 registerExtensionModule / registerLayerHooks。
 // 所以这里必须在 apply(ctx) **之前**、同一个 vm 上下文里把两份产物求值掉，且 requireMock 要把
 // 主 bundle 的导出面交给它们 —— 否则页签只剩 avatar，:788 会红（这正是本判据要看见的形态）。
 // 求值顺序**故意反着来**（先 parallax 后 fx）：屏上顺序必须由 descriptor.order 决定，
@@ -1805,7 +1805,8 @@ setTimeout(async () => {
     // 结构半边：旧实现是按主题选一侧（`singleGlassOnDark = sidebarSurface && panelThemeIsDark()`）。
     // 挂载台里 `document.body` 没有能力齐全的 hasAttribute ⇒ 只靠上面的行为断言抓不到"条件选侧"
     // 那一种回退，所以再钉一条源码判据 + 一条证明该判据真能抓到的负对照。
-    const glassPanelSrc = readFileSync(new URL('../packages/glass/src/glass-panel.js', import.meta.url), 'utf8');
+    const glassPanelSrc = readFileSync(new URL('../packages/glass/src/glass-panel.js', import.meta.url), 'utf8')
+      + '\n' + readFileSync(new URL('../packages/glass/src/glass-presets-panel.js', import.meta.url), 'utf8');
     // 只判**代码**：注释里正好写着"panelThemeIsDark 已随之删除"这句（第一版被自己的注释判红）。
     // 剥注释走共享的**字符串感知**实现（`test/tools/js-text.mjs`）—— 手写"块注释一条正则 +
     // 行注释一条正则"不认字符串与行注释，注释里出现那两个字符就会静默吃掉中间的真实代码，
@@ -2860,7 +2861,7 @@ setTimeout(async () => {
 
     // ── 模态框**标记等价**（搬迁前后逐字未变）────────────────────────────────
     // 模态框那棵子树被 116 个 `.we-picker__*` 选择器按**层级 / 相邻关系**选元素
-    // （主包样式域模块，picker 族在 styles-panel.js），test/e2e-web-media-origin.mjs 里另有一份**手抄**的
+    // （主包样式域模块，picker 族在 src/styles/panel.js），test/e2e-web-media-origin.mjs 里另有一份**手抄**的
     // picker DOM 镜像 —— 标记只要改一个类名、或只挪一层嵌套，CSS 与那份镜像都会**静默**漂，
     // 所以"搬走这段渲染"必须证明逐字未变。判据：以 `we-picker__modal` 为根深度优先遍历，
     // 把每个元素的 class 令牌按「深度:令牌」摊平成序列，与搬迁前录下的 golden 逐项相等。
@@ -3843,7 +3844,7 @@ setTimeout(async () => {
           why: '实时看护的会话内标志：组装点（syncLayers 收尾那一跳）也会直写它，故与看护域两处分别登记（登记表按「哪个文件真的写了」记账）',
           fields: ['sceneLiveActive'],
         },
-        'src/live-layer-watch.js': {
+        'src/live-layer/watch.js': {
           why: '实时看护的会话内标志；该字段的直写随实时管线的看护域搬进本模块（入口仍是 `startLiveWatch` / `stopLiveWatch`）',
           fields: ['sceneLiveActive'],
         },

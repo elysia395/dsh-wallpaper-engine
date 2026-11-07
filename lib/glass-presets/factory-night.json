@@ -29,7 +29,6 @@
     "audioSource": "auto",
     "adapterTarget": "auto",
     "mediaIntegration": true,
-    "mediaLyricsOnline": true,
     "pauseOnHidden": true,
     "pauseOnBlur": false,
     "pauseOnBattery": false,

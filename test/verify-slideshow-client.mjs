@@ -34,9 +34,9 @@ const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const ISO = join(ROOT, '.test-cache', 'slideshow-client-guard');
 const MEDIA_SRC = join(ROOT, 'src', 'media-prep.js');
 const PANEL_SRC = join(ROOT, 'packages', 'media-bridge', 'src', 'wallpaper-rotation-section.js');
-const STYLE_SRC = join(ROOT, 'src', 'styles-base.js');
+const STYLE_SRC = join(ROOT, 'src', 'styles', 'base.js');
 const CLIENT_SRC = join(ROOT, 'src', 'client.js');
-const I18N_SRC = join(ROOT, 'src', 'i18n-copy-panel.js');
+const I18N_SRC = join(ROOT, 'src', 'i18n', 'i18n-copy-panel.js');
 
 let passed = 0; let failed = 0;
 function check (name, ok, detail) {

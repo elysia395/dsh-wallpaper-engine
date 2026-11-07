@@ -49,10 +49,17 @@
       ]
     },
     {
-      "file": "src/glass-panel.js",
-      "why": "「主题预设」+「玻璃 UI」节的渲染器（ADR-0016 迁入）：注册表驱动（GLASS_CHILDREN + childGlassKey）、只读 ctx、动作经 on* 处理器",
+      "file": "src/glass-presets-panel.js",
+      "why": "「主题预设」独立节的渲染器（2026-11-07 从 glass-panel.js 纯搬移折出）：出厂名字走词表、破坏性动作两步确认、坏预设禁用但可删、资产勾选对话框；只画界面，数据与网络全经 gp ctx。",
       "markers": [
-        "function renderGlassPresetsBlock(gp) {",
+        "let gpImportInput = null;",
+        "function renderGlassPresetsBlock(gp) {"
+      ]
+    },
+    {
+      "file": "src/glass-panel.js",
+      "why": "「玻璃 UI」节的渲染器外壳（ADR-0016 迁入；S3 起「主题预设」块在 glass-presets-panel.js）：四件套旋钮 + 外观节组装、注册表驱动（GLASS_CHILDREN + childGlassKey）、只读 ctx、动作经 on* 处理器",
+      "markers": [
         "function renderGlassSurfaceControls(ctx) {",
         "function renderAppearanceGlassSection(ctx) {"
       ]

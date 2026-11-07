@@ -7,9 +7,10 @@
  *     读进度/位置/抛掷/租约/气泡全走页面内 `link.*`（逐帧零请求）；
  *   · native：回落主包原生吉祥物（`wallSidebarToggle`），主包一行不改。
  */
-const PET_LINK_HOST_REQUIRED = [
-  'weT', 'apiUrl', 'apiFetch', 'wallSidebarOpen', 'wallSidebarClose', 'wallSidebarToggle', 'registerPetLink',
-];
+/** 由构建期填充：scripts/build-client.mjs 从下方 `} = host;` 的解构逐键派生本表
+ * （源码留空表只为 eslint/typecheck 可读；产物里是一份生成好的键数组）。
+ * 手工加键的正确顺序：① src/host-bridge.js 的 HOST_BRIDGE_BINDINGS ② 本文件的解构名单。 */
+const PET_LINK_HOST_REQUIRED = [];
 for (const key of PET_LINK_HOST_REQUIRED) {
   if (!(key in host)) throw new Error('[wallpaper-engine-pet-link] 主 bundle 键集缺少 "' + key + '"');
 }

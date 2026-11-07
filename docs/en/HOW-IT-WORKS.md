@@ -30,7 +30,7 @@ with the document.
   renderer decides from `project.json`'s `file` suffix, so the host only has to answer "is this a scene".
   **The first-frame timeout is not a fixed wall clock**: the first
   frame **cannot exist before the whole package has arrived**, so the budget is computed from the
-  **package size** by `liveFirstFrameBudget()` (`src/live-layer-watch.js`) and carries a ceiling; and the host
+  **package size** by `liveFirstFrameBudget()` (`src/live-layer/watch.js`) and carries a ceiling; and the host
   keeps a **payload ledger**
   (`GET /wallpaper-engine/scene-payload-progress?token=…`, see [`ROUTE-INDEX.md`](../ROUTE-INDEX.md))
   that resets the clock every tick while bytes are still arriving — "still downloading" is no longer
@@ -41,7 +41,7 @@ with the document.
   **When there really is no first frame, the cause decides the bookkeeping**: the ledger saying
   "transferred but never completed" ⇒ only a **session-local** soft failure (never the shared failure
   memory every window reads), with an automatic retry after a cooldown and a bounded number of attempts
-  (both are constants in `src/live-layer-watch.js`: `LIVE_TRANSFER_RETRY_DELAY_MS` / `LIVE_TRANSFER_RETRY_LIMIT`); only a
+  (both are constants in `src/live-layer/watch.js`: `LIVE_TRANSFER_RETRY_DELAY_MS` / `LIVE_TRANSFER_RETRY_LIMIT`); only a
   renderer that genuinely never produces a frame, or loses its heartbeat, is persisted.
 - **Out-figure sources (the one authoritative order; code in `packages/media-bridge/lib/routes/scene-frame.js`)**:
   ① live-render iframe → ② the author-embedded MP4 (`sceneVideo`) → ③ **live-captured frame**
@@ -336,7 +336,7 @@ A byte-size threshold is unreliable (measured black PNGs from a headless run: 96
 downsampled to `LIVE_FRAME_SAMPLE` and its brightness distribution inspected: near-black or almost no
 contrast means "nothing has been rendered yet" and the capture is abandoned (the CPU frame stays), plus a
 resolution-scaled size floor.
-**The sampling edge and every threshold are constants in `src/live-layer-watch.js`**
+**The sampling edge and every threshold are constants in `src/live-layer/watch.js`**
 (`LIVE_FRAME_SAMPLE` · `LIVE_FRAME_LIT_RATIO` · `LIVE_FRAME_MIN_VARIANCE` · `LIVE_FRAME_BYTES_PER_PX`);
 this document does not copy their values — they are **tunable parameters**, and a copy here would drift
 away from the implementation. When a capture is unsatisfactory there are entries under
@@ -420,7 +420,7 @@ the whole feature stays inert**.
 
 Wallpaper and glass remain independent. Turning wallpaper off does not disable glass. The skin-centre marker `html[data-dsh-skin]` still makes the plugin yield as a whole and restore after the skin leaves.
 
-While a wallpaper is active, the two page-let-through tokens (`--dsw-alias-bg-base`, `--dsw-specific-sidebar-fill`) are declared with author `!important` (`src/styles-base.js`, the `body[data-we-wallpaper]` and dark-theme blocks). This is a **cross-plugin contract**, not defensive coding: DSH's theme API lets a plugin (DS Bot's Bot mode, for example) colour the host through `ctx.theme.overrideTokens`, and the host writes the composed tokens as **inline styles** on `<body>`; a normal author declaration always loses to an inline one, so the wallpaper layer stays hidden behind the opaque page base ([#282](https://github.com/elysia395/dsh-wallpaper-engine/issues/282), the same "another plugin covers the wallpaper" class as [#279](https://github.com/elysia395/dsh-wallpaper-engine/issues/279)). The `!important` only applies inside the wallpaper gate; with no wallpaper this plugin declares nothing and the host's inline values apply unchanged — a one-way takeover that reads and writes no other plugin's state. A third-party panel that needs its own backing should paint its own surface background or use `data-we-surface-preserve` instead of rewriting these two page-background tokens.
+While a wallpaper is active, the two page-let-through tokens (`--dsw-alias-bg-base`, `--dsw-specific-sidebar-fill`) are declared with author `!important` (`src/styles/base.js`, the `body[data-we-wallpaper]` and dark-theme blocks). This is a **cross-plugin contract**, not defensive coding: DSH's theme API lets a plugin (DS Bot's Bot mode, for example) colour the host through `ctx.theme.overrideTokens`, and the host writes the composed tokens as **inline styles** on `<body>`; a normal author declaration always loses to an inline one, so the wallpaper layer stays hidden behind the opaque page base ([#282](https://github.com/elysia395/dsh-wallpaper-engine/issues/282), the same "another plugin covers the wallpaper" class as [#279](https://github.com/elysia395/dsh-wallpaper-engine/issues/279)). The `!important` only applies inside the wallpaper gate; with no wallpaper this plugin declares nothing and the host's inline values apply unchanged — a one-way takeover that reads and writes no other plugin's state. A third-party panel that needs its own backing should paint its own surface background or use `data-we-surface-preserve` instead of rewriting these two page-background tokens.
 
 The **page-level background-layer token mapping** (`--dsw-alias-bg-layer-1/2/3`, `--dsw-alias-button-elevated-fill`, `--dsw-alias-bg-overlay`, …) applies on `body[data-we-glass-page]` to the **whole page**: the host's own sidebar buttons, right-panel tab strip and settings-window cards all read that family, so scoping it to the chat flow alone makes those surfaces fall back to the host's solid fills. Every mapping still carries the readability floor (`--we-readability-floor`), so it is not unbounded transparency. Frost and backing plates for the settings window, sidebars and declared surfaces are still claimed per surface by the shared ownership runtime; unknown third-party panels keep their own background declarations, button semantics, syntax colours and terminal ANSI colours.
 

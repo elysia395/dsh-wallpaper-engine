@@ -55,6 +55,7 @@
     "lib/occlusion/",
     "lib/fontsets/",
     "lib/glass-presets/",
+    "lib/glass-presets-store.js",
     "lib/about/",
     "lib/component-visibility.js",
     "lib/client.js",

@@ -113,7 +113,7 @@ const matchRoute = (pathname) => routes.find((r) => (
 let wrapperHtml = '';
 // 插件真实 CSS（样式族的域模板拼成的一份样式表）——布局断言必须在真 CSS 上做，
 // 否则「抽屉里按钮上下排列、间距 8px」这种要求测了等于没测。
-// ⚠️ 样式拆段后（`src/styles-*.js` 域模板 + `src/styles.js` 组装点）取文必须走**族**：
+// ⚠️ 样式拆段后（`src/styles/*.js` 域模板 + `src/styles.js` 组装点）取文必须走**族**：
 //    `styleText()` 按 `INLINE_MODULES` 顺序拼同族全文，`cssBodyOf()` 抽出全部域模板体。
 //    原先的 `match(/const CSS = `…`/) ? m[1] : ''` 在拆段后恒得空串，下游只印一句
 //    "布局断言会跳过"就放过 ⇒ 判据静默降级。**取不到一律判红**（不是 warn）。
@@ -444,11 +444,10 @@ wrapperHtml = `<!doctype html><html><head><meta charset="utf-8"><title>e2e host<
   + `try{st=wp&&wp.getState?wp.getState():null;}catch(e){}`
   + `if(st&&st.iframeLoaded){clearInterval(timer);`
   + `var pushErr='';`
-  // 推的字段对齐 client 的真实 wire：albumArtist + 歌词（[[秒,文本]]）+ 进度。
-  // 歌词放在 0s 与 8s 两行、position=5（渲染页只认这种元组，自己按 position 取当前行）。
+  // 推的字段对齐 client 的真实 wire：albumArtist + 进度（歌词字段已随透传整条移除）。
   + `try{wp.setMedia({hasMedia:true,title:'E2E Song',artist:'E2E Artist',album:'E2E Album',`
   + `albumArtist:'E2E AlbumArtist',playing:true,state:1,position:5,duration:100,`
-  + `lyrics:[[0,'line1'],[8,'line2']],thumbnail:${JSON.stringify(THUMB_DATA_URL)}});}catch(e){pushErr=String(e&&e.message||e);}`
+  + `thumbnail:${JSON.stringify(THUMB_DATA_URL)}});}catch(e){pushErr=String(e&&e.message||e);}`
   + `(function(){var im=new Image();im.src='${APP}/wallpaper-engine/diag?msg='+encodeURIComponent('${MARKER} SETMEDIA push='+(pushErr?('err:'+pushErr):'ok')+' hasFn='+(typeof wp.setMedia)+' type='+(st.type||''));})();`
   + `setTimeout(function(){try{wp.updateWebProps({color0:{value:'0 1 0'}});}catch(e){}},1200);return;}`
   + `if(tries>60)clearInterval(timer);},250);`
