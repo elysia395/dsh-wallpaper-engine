@@ -12,11 +12,11 @@
  *   ③ **值纪律**：每条译文非空、不含中文、`{}` 占位符集合与键**逐个相等**（少一个占位符 =
  *      英文句子把数字吞了；多一个 = 永远插不进去）。宿主表（`WE_I18N_HOST_EN`）另判"键必须能在
  *      `lib/**` 里找到同一条字面量"，防凭空造句。
- *   ④ **运行期行为**：在 vm 沙箱里真跑 `src/i18n-copy*.js`（词表族）+ `src/i18n.js`，判
+ *   ④ **运行期行为**：在 vm 沙箱里真跑 `src/i18n-copy*.js`（词表族）+ `src/i18n/i18n.js`，判
  *      中文=原文 / 英文=词表 / 未知键原样 / `{name}` 插值 / **接上宿主 locale 服务后跟随切换**
  *      （`locale/change` → 译文变、修订号 +1、订阅者被通知）/ 服务缺席时回落默认语言。
  *
- * 为什么要有这个门禁：插件的界面文案是**中文原文即键**（见 `src/i18n.js`），漏包一处不会报错 ——
+ * 为什么要有这个门禁：插件的界面文案是**中文原文即键**（见 `src/i18n/i18n.js`），漏包一处不会报错 ——
  * 英文用户只是看到一句中文；漏一条词表也不会报错 —— 那处原样露原文。两者都是"静默降级"，
  * 正是本仓最不想要的失败形态。所以两条都必须在提交前变红。
  *
@@ -54,14 +54,14 @@ const check = (name, ok, detail) => {
 const DATA_BLOCKS = [
   // ADR-0016 第四刀：玻璃段出户到 packages/glass/src/glass-css.js（templates 表登记它、
   // 主包被切的四个域模板放宽 minLength——它们只剩非玻璃段）。
-  { file: 'src/styles-base.js', kind: 'template', minLength: 3000, why: '样式域 base 是纯数据；其内的中文只出现在 CSS 注释（不渲染到界面）' },
-  { file: 'src/styles-shell.js', kind: 'template', minLength: 800, why: '样式域 shell 是纯数据；其内的中文只出现在 CSS 注释（不渲染到界面）' },
-  { file: 'src/styles-chrome.js', kind: 'template', minLength: 2000, why: '样式域 chrome 是纯数据；其内的中文只出现在 CSS 注释（不渲染到界面）' },
+  { file: 'src/styles/base.js', kind: 'template', minLength: 3000, why: '样式域 base 是纯数据；其内的中文只出现在 CSS 注释（不渲染到界面）' },
+  { file: 'src/styles/shell.js', kind: 'template', minLength: 800, why: '样式域 shell 是纯数据；其内的中文只出现在 CSS 注释（不渲染到界面）' },
+  { file: 'src/styles/chrome.js', kind: 'template', minLength: 2000, why: '样式域 chrome 是纯数据；其内的中文只出现在 CSS 注释（不渲染到界面）' },
   { file: 'packages/glass/src/glass-css.js', kind: 'template', minLength: 10000, why: '玻璃样式表（原 sidebar 整域 + base/shell/chrome/ext 的玻璃段）是纯数据；其内的中文只出现在 CSS 注释（不渲染到界面）' },
-  { file: 'src/styles-settings.js', kind: 'template', minLength: 10000, why: '样式域 settings 是纯数据；其内的中文只出现在 CSS 注释（不渲染到界面）' },
-  { file: 'src/styles-panel.js', kind: 'template', minLength: 10000, why: '样式域 panel 是纯数据；其内的中文只出现在 CSS 注释（不渲染到界面）' },
-  { file: 'src/styles-quick.js', kind: 'template', minLength: 10000, why: '样式域 quick 是纯数据；其内的中文只出现在 CSS 注释（不渲染到界面）' },
-  { file: 'src/styles-ext.js', kind: 'template', minLength: 10000, why: '样式域 ext 是纯数据；其内的中文只出现在 CSS 注释（不渲染到界面）' },
+  { file: 'src/styles/settings.js', kind: 'template', minLength: 10000, why: '样式域 settings 是纯数据；其内的中文只出现在 CSS 注释（不渲染到界面）' },
+  { file: 'src/styles/panel.js', kind: 'template', minLength: 10000, why: '样式域 panel 是纯数据；其内的中文只出现在 CSS 注释（不渲染到界面）' },
+  { file: 'src/styles/quick.js', kind: 'template', minLength: 10000, why: '样式域 quick 是纯数据；其内的中文只出现在 CSS 注释（不渲染到界面）' },
+  { file: 'src/styles/ext.js', kind: 'template', minLength: 10000, why: '样式域 ext 是纯数据；其内的中文只出现在 CSS 注释（不渲染到界面）' },
 ];
 
 /**
@@ -154,7 +154,7 @@ function fragmentedCjk(hits, dataBlocks = DATA_BLOCKS) {
 }
 
 /**
- * 从词表族（组装点 `src/i18n-copy.js` + 各域模块 `src/i18n-copy-*.js`）切出两块词表。
+ * 从词表族（组装点 `src/i18n/i18n-copy.js` + 各域模块 `src/i18n/i18n-copy-*.js`）切出两块词表。
  *
  * 取文口径**刻意保持朴素**：声明行到第一个 `\n};`（不配平大括号）—— 见 verify-module-layout 的
  * "朴素切片是刻意的"纪律：配平会改边界语义，反而把坏输入切"好"了。
@@ -231,10 +231,10 @@ function componentsWithoutLocaleHook(sources) {
 }
 
 // ══ 读源码 ═══════════════════════════════════════════════════════════════════
-// **词表模块本身在扫描面之外**：它的中文就是键（`src/i18n.js` 的设计），不是"漏包的界面文案"。
+// **词表模块本身在扫描面之外**：它的中文就是键（`src/i18n/i18n.js` 的设计），不是"漏包的界面文案"。
 // 排除它必须留牙：下面 ① 里那条"词表里确实还有中文键"的判据钉住这次排除不是空豁免。
-const DICT_MODULE = 'src/i18n-copy.js';
-// 词表落在**一个族**里：组装点 `DICT_MODULE` + 各域模块 `src/i18n-copy-*.js`。族顺序 = 构建期内联
+const DICT_MODULE = 'src/i18n/i18n-copy.js';
+// 词表落在**一个族**里：组装点 `DICT_MODULE` + 各域模块 `src/i18n/i18n-copy-*.js`。族顺序 = 构建期内联
 // 顺序（INLINE_MODULES 单一真源）⇒ 扫描面、切片面、vm 装载面三处用同一份清单，不会各自漂移。
 const DICT_FAMILY = parseInlineModules().map(({ file }) => file)
   .filter((file) => /(?:^|\/)i18n-copy(?:-[^/]+)?\.js$/.test(file));
@@ -299,7 +299,7 @@ for (const file of libFiles) {
   for (const h of scanCjkStrings(readFileSync(file, 'utf8'))) libValues.add(h.value);
 }
 
-const copySrc = readFileSync(join(ROOT, 'src', 'i18n-copy.js'), 'utf8');
+const copySrc = readFileSync(join(ROOT, 'src', 'i18n', 'i18n-copy.js'), 'utf8');
 const blocks = readCopyBlocks(DICT_FAMILY.map((rel) => readFileSync(join(ROOT, rel), 'utf8')));
 const enKeys = copyKeys(blocks.WE_I18N_EN);
 const hostKeys = copyKeys(blocks.WE_I18N_HOST_EN);
@@ -481,7 +481,7 @@ console.log('④ 宿主表（WE_I18N_HOST_EN 的键必须来自 lib/ 下的真�
 }
 
 // ══ ⑤ 运行期行为（真跑 i18n 层）══════════════════════════════════════════════
-console.log('⑤ 运行期行为（vm 沙箱里跑词表族 src/i18n-copy*.js + src/i18n.js）');
+console.log('⑤ 运行期行为（vm 沙箱里跑词表族 src/i18n-copy*.js + src/i18n/i18n.js）');
 {
   const runtime = loadI18nRuntime({ search: '' });
   const enDictSource = runtime.api.WE_I18N_EN || {};
@@ -522,13 +522,13 @@ console.log('⑤ 运行期行为（vm 沙箱里跑词表族 src/i18n-copy*.js + 
   check('zh 表是"原文身份"（值 == 原文）',
     Object.keys(zhDict).length > 0 && Object.keys(zhDict).every((k) => zhDict[k] === k.replace(/^[^\u0000]*\u0000/, '')),
     Object.keys(zhDict).length + ' 条');
-  // 期望值必须取自**磁盘上的词表原文**（`parseCopyEntries(blocks.…)` 从词表族 `src/i18n-copy.js`
+  // 期望值必须取自**磁盘上的词表原文**（`parseCopyEntries(blocks.…)` 从词表族 `src/i18n/i18n-copy.js`
   // 与各域模块原文解析），不能拿被测模块经沙箱交回的 `WE_I18N_EN`：同源意味着模块整段漏合并宿主表也会绿，
   // "含宿主表合并"那一半就从未被断言。
   const enDisk = parseCopyEntries(blocks.WE_I18N_EN);
   const hostDisk = parseCopyEntries(blocks.WE_I18N_HOST_EN);
   const asDict = (entries) => Object.fromEntries(entries.map((e) => [e.key, e.value]));
-  // 合并形态照产品实现（`src/i18n.js` 的 `Object.assign({}, WE_I18N_EN, WE_I18N_HOST_EN)` ⇒ 宿主表覆盖同名键）。
+  // 合并形态照产品实现（`src/i18n/i18n.js` 的 `Object.assign({}, WE_I18N_EN, WE_I18N_HOST_EN)` ⇒ 宿主表覆盖同名键）。
   const enExpected = Object.assign({}, asDict(enDisk), asDict(hostDisk));
   const diskMismatches = (dict, expected) => Object.keys(expected).filter((k) => dict[k] !== expected[k]);
   const enDictKeys = Object.keys(enDict);
@@ -582,7 +582,7 @@ console.log('⑤ 运行期行为（vm 沙箱里跑词表族 src/i18n-copy*.js + 
 console.log('⑥ 跟随契约（可选服务 / 不 park / 顶层订阅）');
 {
   const clientSrc = readFileSync(join(ROOT, 'src', 'client.js'), 'utf8');
-  const i18nSrc = readFileSync(join(ROOT, 'src', 'i18n.js'), 'utf8');
+  const i18nSrc = readFileSync(join(ROOT, 'src', 'i18n', 'i18n.js'), 'utf8');
   check('inject 里没有 locale（缺服务的旧宿主不该被 park）',
     !/const inject = \[[^\]]*"locale"/.test(clientSrc) && /const inject = \["slots"\]/.test(clientSrc),
     (clientSrc.match(/const inject = \[[^\]]*\]/) || [''])[0]);
@@ -594,7 +594,13 @@ console.log('⑥ 跟随契约（可选服务 / 不 park / 顶层订阅）');
   const comps = [
     { name: 'WallpaperPickerSection', src: clientSrc.slice(clientSrc.indexOf('function WallpaperPickerSection')) },
     { name: 'WallpaperPicker', src: clientSrc.slice(clientSrc.indexOf('function WallpaperPicker()')) },
-    { name: 'RopeDock', src: clientSrc.slice(clientSrc.indexOf('function RopeDock')) },
+    { name: 'RopeDock', src: (() => {
+      const s = readFileSync(join(ROOT, 'src', 'client', 'rope-dock.js'), 'utf8');
+      // 头部注释不算组件体：从 `function RopeDock` 起算（判据看组件前 400 字符内是否订阅语言）
+      const at = s.indexOf('function RopeDock');
+      if (at < 0) throw new Error('verify-i18n: src/client/rope-dock.js 里找不到 function RopeDock');
+      return s.slice(at);
+    })() },
     { name: 'UpdateNotice', src: clientSrc.slice(clientSrc.indexOf('function UpdateNotice')) },
     { name: 'QuickPanel', src: readFileSync(join(ROOT, 'src', 'quick-panel.js'), 'utf8').slice(readFileSync(join(ROOT, 'src', 'quick-panel.js'), 'utf8').indexOf('function QuickPanel')) },
   ];
@@ -635,7 +641,7 @@ function parseCopyEntries(block) {
 }
 
 /**
- * 把 `src/i18n-copy.js` + `src/i18n.js` 装进一个 vm 沙箱（与 bundle 的工厂作用域同形：
+ * 把 `src/i18n/i18n-copy.js` + `src/i18n/i18n.js` 装进一个 vm 沙箱（与 bundle 的工厂作用域同形：
  * 同一作用域里的函数声明 + const）。返回 `{api}`，api 就是脚本末尾那条表达式的值
  * （vm 里 `const`/`function` 是脚本作用域，只能由脚本自己导出 —— 不能从 context 上取）。
  * 沙箱里补上 bundle 里由别的内联模块提供的两个定时器助手（sidebar-right.js 的
@@ -647,7 +653,7 @@ function loadI18nRuntime({ search = '', service = null } = {}) {
   // 装载顺序 = 族顺序（域模块在前、组装点在后），与构建期内联进同一工厂作用域时同形：
   // 组装点顶层读域常量，顺序反了会 TDZ 报错。
   const code = DICT_FAMILY.map((rel) => stripExportBlocks(readFileSync(join(ROOT, rel), 'utf8'))).join('\n;\n')
-    + '\n;\n' + stripExportBlocks(readFileSync(join(ROOT, 'src', 'i18n.js'), 'utf8'))
+    + '\n;\n' + stripExportBlocks(readFileSync(join(ROOT, 'src', 'i18n', 'i18n.js'), 'utf8'))
     + '\n;\n({ weT, WE_I18N_EN, WE_I18N_HOST_EN, weI18nAttach, weLocaleSubscribe,'
     + ' weLocaleRevisionValue, weOnLocaleChange, weLocaleId });\n';
   const sandbox = {

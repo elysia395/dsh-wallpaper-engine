@@ -314,7 +314,7 @@ console.log('\n② /settings/<ns>：只写本簇键，段外键一字不动');
   check('② 本簇键真的落盘（id 改成 core-guard）', readCfg().settings.id === 'core-guard' && coreRes.ok === true);
 
   // ② c 逐簇：用一份"每簇各有一个合法改动"的完整 body 打每个 ns，只允许本簇键变化。
-  // media 簇里 `audioSource` / `mediaIntegration` / `mediaLyricsOnline` 都是 `kind:'const'`（值由宿主
+  // media 簇里 `audioSource` / `mediaIntegration` 都是 `kind:'const'`（值由宿主
   // 决定、body 改不动），唯一可写的键是枚举 `adapterTarget` —— 所以标记值取它。
   const other = schema.sanitizeFromSchema(Object.assign({}, baseline, {
     id: 'other-core', noticeSeen: 'other-seen', blur: 21, ropeShown: false,
@@ -596,7 +596,6 @@ console.log('\n⑦ 客户端差分：只发改动键、按 ns 分组、首启迁
   check('⑦ 陷阱 1：kind:"const" 的键一个都不发（media 簇只发 adapterTarget）',
     !('audioSource' in (putBody(c1.calls, 'media') || {}))
     && !('mediaIntegration' in (putBody(c1.calls, 'media') || {}))
-    && !('mediaLyricsOnline' in (putBody(c1.calls, 'media') || {}))
     && schema.KINDS.audioSource.kind === 'const');
   check('⑦ 请求形状不变：PUT + keepalive（pagehide 的 flush 能活下来）',
     puts1.length === 3 && puts1.every((p) => p.keepalive === true));

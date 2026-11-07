@@ -18,9 +18,9 @@
  *     `const host = require('dsh-plugin-wallpaper-engine');`（ADR-0014 S5.2）。
  *
  * ## 消费侧契约（唯一跨包通道 = 主 bundle 的显式键集，ADR-0014 S5.1 / S5.4）
- * 下面的 WALLPAPER_SECTIONS_HOST_REQUIRED 与主包 `src/client.js` 的 HOST_BRIDGE_BINDINGS
- * 壁纸段**逐键一致**（缺键大声抛，不许静默 undefined）。键集依据 = 被搬渲染器的**自由标识符**
- * 逐个点名：
+ * 下面的解构名单与主包 `src/host-bridge.js` 的 HOST_BRIDGE_BINDINGS 壁纸段**逐键一致**（缺键大声抛，
+ * 不许静默 undefined）；产物里的 WALLPAPER_SECTIONS_HOST_REQUIRED 由构建期从这份解构派生
+ * （源码里是空表）。键集依据 = 被搬渲染器的**自由标识符**逐个点名：
  *   · 四节共享：React / weT；当前壁纸另要 VinylRecord / vinylSpinVisible / liveFailReasonOf；
  *     自定义壁纸另要 renderConfirmRow；切换过场另要 ctlText / switchTransitionOf /
  *     SWITCH_TRANSITIONS / SWITCH_DIRS / SWITCH_DIR_LABELS / SWITCH_SPEEDS；
@@ -37,23 +37,10 @@
  * 缺键**大声失败**（ADR-0014 S5.1 / S5.4 显式键集 + ADR-0013 D3③「宁可显示、不可静默消失」）。
  * 主包被关 ⇒ 本 bundle 根本不会被 require（ADR-0014 S7.2 连坐）；能走到这里却缺键 = 键集与申报表脱钩。
  */
-const WALLPAPER_SECTIONS_HOST_REQUIRED = [
-  // 渲染内核（主 bundle 的共享零件表）
-  'React', 'weT', 'ctlText',
-  // 播放配置两节（S3d）：帧率上限档位表 / 编码显示名 / 开关行（倍速与适配的档位是节内字面量）
-  'FPS_CAP_VALUES', 'codecLabel', 'switchRow',
-  // 当前壁纸（第一节）：转盘组件 / 转盘自旋开关 / 实时渲染失败原因（getter 直给函数引用）
-  'VinylRecord', 'vinylSpinVisible', 'liveFailReasonOf',
-  // 切换过场（第二节）：类型表 / 方向表 / 速度档 / 当前生效值的活绑定
-  'switchTransitionOf', 'SWITCH_TRANSITIONS', 'SWITCH_DIRS', 'SWITCH_DIR_LABELS', 'SWITCH_SPEEDS',
-  // 自动轮播（第三节）：列表 / 编辑草稿 / 选片下钻 / 开关 / 确认行 / 默认间隔窄键
-  'groupWallpapers', 'startCreateGroup', 'startEditGroup', 'saveEditingGroup', 'cancelEditGroup',
-  'importPlaylistIntoDraft', 'Toggle', 'rotationIntervalDefault',
-  // 自定义壁纸（第四节）：上传目录 / 官方资源目录 / 上传 / 移除 / 确认行（动作体全留主包）
-  'changeUploadDir', 'changeWeAssetsDir', 'uploadWallpaperFile', 'removeUploadWallpaper', 'renderConfirmRow',
-  // 贡献面（主 bundle 的收件箱：值 + 回调，写权留主包）
-  'registerPanelSection',
-];
+/** 由构建期填充：scripts/build-client.mjs 从下方 `} = host;` 的解构逐键派生本表
+ * （源码留空表只为 eslint/typecheck 可读；产物里是一份生成好的键数组）。
+ * 手工加键的正确顺序：① src/host-bridge.js 的 HOST_BRIDGE_BINDINGS ② 本文件的解构名单。 */
+const WALLPAPER_SECTIONS_HOST_REQUIRED = [];
 for (const key of WALLPAPER_SECTIONS_HOST_REQUIRED) {
   if (!(key in host)) {
     throw new Error('[wallpaper-engine-media-bridge] 主 bundle 键集缺少 "' + key

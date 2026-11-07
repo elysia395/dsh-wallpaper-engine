@@ -139,6 +139,10 @@ async function loadExtensionRegistry() {
   // panel-tabs 的玻璃节是按 id 取渲染器的注册表占位桩，不登记它 ⇒ 占位桩查不到 ⇒ 整节消失
   // （下面所有玻璃节判据以"缺节"的形式假红）。
   const glassPanelMod = await import(pathToFileURL(join(root, 'packages', 'glass', 'src', 'glass-panel.js')).href);
+  // S3：预设块折出到 glass-presets-panel.js（inline 模块，打包期同作用域）；按文件 import 时
+  // 把它的导出映成全局 —— 否则外观节渲染到 `renderGlassPresetsBlock(...)` 会 ReferenceError。
+  const glassPresetsPanelMod = await import(pathToFileURL(join(root, 'packages', 'glass', 'src', 'glass-presets-panel.js')).href);
+  globalThis.renderGlassPresetsBlock = glassPresetsPanelMod.renderGlassPresetsBlock;
   reg.weRegisterPanelSection('appearance', 'glass', {
     id: 'glass',
     get title() { return globalThis.weT('玻璃 UI'); },
@@ -1070,7 +1074,9 @@ const qpCode = stripComments(qpSrc);
 // 刀3：样式族已拆成 8 个域模块 + 组装点 ⇒ 取整族源码文本（构建序拼接）；判据不变。
 const stylesSrc = styleText();
 const liveSrc = liveText();
-const prepSrc = readFileSync(join(root, 'src', 'media-prep.js'), 'utf8');
+// 媒体预备族（S5 起根 + 3 个同族模块；按 INLINE_MODULES 构建序拼接）
+const prepSrc = ['src/media-prep/prepare.js', 'src/media-prep/probe.js', 'src/media-prep/budget.js', 'src/media-prep.js']
+  .map((rel) => readFileSync(join(root, rel), 'utf8')).join('\n');
 // 刀4：panel-tabs 已按域拆成 5 个兄弟模块 + 组装点 ⇒ 判"页签族的渲染/接缝"一律扫**并集**。
 const tabsSrc = panelText();
 // P-C：外观页签第六节「全局字体」的渲染器随字体包搬出页签族（packages/fonts/src/appearance-font-section.js）
@@ -2337,7 +2343,7 @@ const hostLib = hostLibComposed;
 // （判据纪律同 hostHalfSrc："拆出的模块必须加进来"）。
 const componentMediaSources = ['packages/media-bridge/lib/index.js', 'packages/media-bridge/lib/legacy.js',
   'packages/media-bridge/lib/routes/now-playing.js', 'packages/media-bridge/lib/provision.js',
-  'packages/media-bridge/lib/supervisor.js']
+  'packages/media-bridge/lib/supervisor.js', 'packages/media-bridge/lib/supervisor-protocol.js']
   .map((f) => { try { return readFileSync(join(root, f), 'utf8'); } catch { return ''; } }).join('\n');
 // 再补 **P0 拆出的 lib 模块**：这些模块的实现形态（如 upload-dir 的 `up-dir-${name}` 前缀与
 // `resolveSceneMainFileP` 解析）本就是"原门面里那段代码"，判据按门面面扫时必须能看到它们。
@@ -2393,7 +2399,7 @@ check('host injects the engine shim into web HTML', /data-we-shim="host"/.test(s
 // ── 网页壁纸的**帧级夺焦围栏**（lib/we-focus-guard.js）────────────────────────────
 // 现象：播某些网页类壁纸时，DSH 的输入框 / 下拉选择框 / 左下角账号菜单每点一次就丢焦点 ——
 // 与点击位置无关、与组件类型有关（只有"必须持有键盘焦点才正常"的控件看得出来）。
-// 机制：宿主 window 捕获相把每次真实 mousedown 注入渲染页（src/live-layer-pointer.js 的 `ensureLivePointer()`，且只在
+// 机制：宿主 window 捕获相把每次真实 mousedown 注入渲染页（src/live-layer/pointer.js 的 `ensureLivePointer()`，且只在
 // `selection.sceneLiveActive` 时发 ⇒ 暂停即停）→ 严格沙箱下经 web-shim 的 op 通道 → shim 用
 // elementFromPoint + dispatchEvent 在壁纸文档里合成 pointer/mouse（isTrusted === false）→ 作者在
 // 捕获相 mousedown 里调 window.focus() 争键盘 ⇒ DSH 的焦点被搬进壁纸帧。
@@ -2749,7 +2755,8 @@ const mediaSrcCandidates = (f) => ['packages/media-bridge/lib/' + f, 'packages/m
   'lib/components/media-bridge/' + f, 'lib/media/' + f].map((rel) => join(root, rel));
 const mediaSrcPath = (f) => mediaSrcCandidates(f).find((abs) => existsSync(abs)) || mediaSrcCandidates(f)[0];
 const provSrc = readFileSync(mediaSrcPath('provision.js'), 'utf8');
-const supSrc = readFileSync(mediaSrcPath('supervisor.js'), 'utf8');
+const supSrc = readFileSync(mediaSrcPath('supervisor.js'), 'utf8')
+  + '\n' + readFileSync(mediaSrcPath('supervisor-protocol.js'), 'utf8');
 // ⚠️ 门面面 = 媒体桥子包的**整面**（不是只有 index.js）：'中间件优先/回落/音频已关透传'这些形态
 // 分布在 index.js 与 legacy.js/supervisor.js 里 ⇒ 只读一个文件会误报丢失（判据纪律：拆出的模块必须加进来）。
 const mediaPkgDir = ['packages/media-bridge/lib', 'lib/components/media-bridge']
@@ -2782,8 +2789,8 @@ check('位置外推用 updatedAtMs + rate（暂停不外推）',
   supSrc.includes('playing && pb.positionSource !== ') && supSrc.includes('Date.now() - ref'));
 check('事件里已外推的位置不重复外推（参考时刻改写成事件时刻）',
   supSrc.includes("pb.positionSource === 'interpolated'") && supSrc.includes('pb.updatedAtMs = refMs'));
-check('歌词换算成渲染页要的 [[秒, 文本], …]（含 LRC offset）',
-  supSrc.includes('export function lyricsToTuples') && supSrc.includes('offsetMs'));
+check('不再订阅歌词事件、命令行恒带 --no-online（歌词透传已整条移除）',
+  !supSrc.includes("'lyrics'") && supSrc.includes("'--no-online'") && !supSrc.includes('lyricsToTuples'));
 // 状态缓存兜底：中间件的 status 事件只在元数据源报错时发时，音频源
 // idle→preparing→running 的变化不通知 —— 消费端只在启动时读一次 status，会永远停在
 // preparing（频谱有数据、客户端却拿不到）。所以插件这层自己也兜底刷新，两层互不依赖。
@@ -2798,7 +2805,10 @@ check('空闲停进程 + 下次访问自动唤醒', supSrc.includes('IDLE_STOP_M
 // 的每一处 spawn 都要带上；macOS/Linux 专属的调用（media-control/playerctl/xattr 等）
 // 不在 Windows 上跑，但一并带上也无害。
 const winHideSites = [
-  { file: 'lib/media/supervisor.js', spawn: /spawn\(binPath[\s\S]{0,80}\.\.\.a\.opts/, minFlags: 2 },
+  { file: 'lib/media/supervisor.js', spawn: /spawn\(binPath[\s\S]{0,80}\.\.\.a\.opts/, minFlags: 2,
+    // S2 拆分（纯搬移）：POSTURES/a.opts 的 windowsHide 标志随协议层搬进 supervisor-protocol.js，
+    // 而 spawn 字面形态留在 supervisor.js —— 按「supervisor + protocol」拼接面判。
+    extra: ['supervisor-protocol.js'] },
   { file: 'lib/transcode.js', spawn: /spawn\(a\.file[\s\S]{0,80}\.\.\.a\.opts/, minFlags: 2 },
   { file: 'lib/media/legacy.js', spawn: /spawnSync\('ffmpeg'[\s\S]{0,220}windowsHide: true/, minFlags: 1 },
 ];
@@ -2812,7 +2822,8 @@ for (const site of winHideSites) {
     join(root, 'packages', 'media-bridge', 'lib', siteBase),
     join(root, 'lib', 'components', 'media-bridge', siteBase)]
     .find((abs) => existsSync(abs)) || join(root, site.file);
-  const body = readFileSync(siteAbs, 'utf8');
+  const body = readFileSync(siteAbs, 'utf8') + (site.extra || [])
+    .map((f) => '\n' + readFileSync(join(root, 'packages', 'media-bridge', 'lib', f), 'utf8')).join('');
   const flags = (body.match(/windowsHide: true/g) || []).length;
   if (!site.spawn.test(body) || flags < site.minFlags) winHideBad.push(site.file);
 }
@@ -2842,7 +2853,7 @@ check('spectrum 路由回报 running（客户端据此决定装不装音频桥�
 check('媒体状态族已搬出 lib/index.js（正文零路径字面量 + 一次调用）',
   !/path: `\$\{BASE\}\/(media-status|audio-spectrum|now-playing)/.test(readFileSync(join(root, 'lib', 'index.js'), 'utf8'))
     && /registerNowPlayingRoutes\(webServer, \{/.test(hostSrc));
-check('settings 白名单保留 mediaLyricsOnline（否则开关会被丢）', hostKeeps('mediaLyricsOnline', true));
+check('settings 白名单不再保留 mediaLyricsOnline（在线歌词键已移除）', !hostKeeps('mediaLyricsOnline', true));
 
 // 客户端：封面必须转成**自包含 data URL** —— 宿主给的是插件路由，
 // 沙箱壁纸在 Desktop 上取不到（能力头栅栏只放行同源 frame）。
@@ -2851,11 +2862,8 @@ check('client 把封面降采样成 data URL 再推给壁纸',
     && src.includes('toDataURL("image/jpeg"') && src.includes('thumbnail: mediaArtData || undefined'));
 check('client 按曲目缓存封面并重试（宿主下载封面是异步的）',
   src.includes('function scheduleArtworkFetch(') && src.includes('MEDIA_ART_MAX_TRIES'));
-check('client 透传歌词与 albumArtist（[[秒, 文本]] 原样给渲染页）',
-  src.includes('lyrics: Array.isArray(m.lyrics) && m.lyrics.length ? m.lyrics : undefined')
-    && src.includes('albumArtist: m.albumArtist || ""'));
-check('client 的 push key 带歌词版本（歌词晚到也要再推一帧）',
-  src.includes('const lyrRev =') && src.includes('lyrRev].join('));
+check('client 不再向渲染页透传歌词（lyrics 字段与 push key 里的歌词版本都已移除）',
+  !src.includes('m.lyrics') && !src.includes('lyrRev') && src.includes('albumArtist: m.albumArtist || ""'));
 check('音频桥按宿主 running 装卸（装了桥 = 渲染页放弃自带音频源）',  src.includes('function syncAudioBridge(frame, running)') && src.includes('syncAudioBridge(frame, d.running === true)'));
 // 无真实频谱时收起「靠频谱才有内容」的合成层（#167）：没有音频输入时，音频可视化层
 // 退化成一整块**空矩形**，而作者叠在其上的 scroll 照跑 ⇒ 屏幕上是一条匀速横爬的带子，
@@ -2907,30 +2915,34 @@ check('host 侧 /media-control 只收 POST + 动作走 mediaBackend.control（�
   nowPlayingSrc.includes('path: `${BASE}/media-control`')
     && nowPlayingSrc.includes('mediaBackend.control(action)')
     && !/media-control[\s\S]{0,700}ensureMedia\(\)/.test(nowPlayingSrc));
-// 「在线歌词 / 系统音频反应 / 媒体信息」三键已**退役为常开**（用户口径：默认接入，
+// 「系统音频反应 / 媒体信息」两键已**退役为常开**（用户口径：默认接入，
 // 设置页与侧边栏都不再提供页面定义）。三件事一起钉：① schema 侧 kind 'const'（读取
 // 时老配置里的关闭值被默认值取代）+ 默认 on；② UI 侧两个来源（设置页签渲染器 /
-// 快捷播放面板）按**代码**（剥注释）都不得再出现这三个开关。
+// 快捷播放面板）按**代码**（剥注释）都不得再出现这两个开关。
+// （原第三个键「在线歌词」已整条删除 —— 连设置键一起，见上面的白名单判据。）
 {
-  const RETIRED_LABELS = ['系统音频反应', '媒体信息', '在线歌词'];
+  const RETIRED_LABELS = ['系统音频反应', '媒体信息'];
   const leftoversIn = (text) => RETIRED_LABELS.filter((label) => text.includes(label));
   const tabsCode = stripComments(tabsSrc);
   const qpCode = stripComments(readFileSync(join(root, 'src', 'quick-panel.js'), 'utf8'));
-  check('三键退役为常开（schema kind const + 默认接入）',
+  check('两键退役为常开（schema kind const + 默认接入）',
     schemaMod.DEFAULTS.audioSource === 'auto' && schemaMod.KINDS.audioSource.kind === 'const'
       && schemaMod.DEFAULTS.mediaIntegration === true && schemaMod.KINDS.mediaIntegration.kind === 'const'
-      && schemaMod.DEFAULTS.mediaLyricsOnline === true && schemaMod.KINDS.mediaLyricsOnline.kind === 'const',
+      && !('mediaLyricsOnline' in schemaMod.DEFAULTS) && !('mediaLyricsOnline' in schemaMod.KINDS),
     'kinds=' + schemaMod.KINDS.audioSource.kind + '/' + schemaMod.KINDS.mediaIntegration.kind
-      + '/' + schemaMod.KINDS.mediaLyricsOnline.kind
       + ' · defaults=' + schemaMod.DEFAULTS.audioSource + '/' + schemaMod.DEFAULTS.mediaIntegration
-      + '/' + schemaMod.DEFAULTS.mediaLyricsOnline);
-  check('三个开关的页面定义已从设置页与快捷面板移除（按代码判，注释里提到不算）',
+      + ' · lyrics 键=' + ('mediaLyricsOnline' in schemaMod.DEFAULTS));
+  check('两个开关的页面定义已从设置页与快捷面板移除（按代码判，注释里提到不算）',
     leftoversIn(tabsCode).length === 0 && leftoversIn(qpCode).length === 0,
     '残留：' + ([...leftoversIn(tabsCode), ...leftoversIn(qpCode)].join(', ') || '无'));
   // 负对照：同一条判据喂合成文本 —— 真出现开关文案必须被判出（判据不是恒真）。
   check('negative control: 合成代码里的开关文案会被同一条判据点出',
-    leftoversIn('switchRow("在线歌词", v)').join(',') === '在线歌词'
-      && leftoversIn('switchRow("媒体信息", v) && switchRow("系统音频反应", v)').length === 2);
+    leftoversIn('switchRow("媒体信息", v)').join(',') === '媒体信息'
+      && leftoversIn('switchRow("系统音频反应", v) && switchRow("媒体信息", v)').length === 2);
+  // 「在线歌词」不是"退役成常开"，而是**整条删除**（含设置键）：文案里出现它属于残留。
+  check('在线歌词不再是常开键（已整条删除，文案出现即残留）',
+    leftoversIn('switchRow("在线歌词", v)').length === 0
+      && !('mediaLyricsOnline' in schemaMod.KINDS));
 
 // 用户口径（更新）：侧栏壁纸列表的类型档（全部 / 场景 / 网页 / 视频 / 图片）
 // **与设置页是同一个键 `typeFilter`** —— 类型变动两处同步、不做单独的档（原「面板本地
@@ -3025,11 +3037,11 @@ check('negative control: 取文漏掉包内「当前壁纸」节 ⇒ 「壁纸�
 // 「侧栏播放控制行」这一节钉两件事：全局主按钮款式不被二次覆盖、窄容器下控制行不溢出。
 // 两件都只看**当前形态**，不涉及某枚具体按钮。
 {
-  // 全局 primary 款式仍是"实心底 + 墨随 accent"（styles-ext.js 那条未限定作用域的覆盖
-  // 是历史上真实发生过的隐形 bug —— 这里正面钉住 panel 段那条主规则还在、且 styles-ext
+  // 全局 primary 款式仍是"实心底 + 墨随 accent"（src/styles/ext.js 那条未限定作用域的覆盖
+  // 是历史上真实发生过的隐形 bug —— 这里正面钉住 panel 段那条主规则还在、且 ext 域
   // 中不再有第二份 .we-picker__btn--primary 覆盖把它压掉）。
-  const extStyleSrc = readFileSync(join(root, 'src', 'styles-ext.js'), 'utf8');
-  check('全局主按钮款式不被 styles-ext 二次覆盖（隐形 bug 防复发）',
+  const extStyleSrc = readFileSync(join(root, 'src', 'styles', 'ext.js'), 'utf8');
+  check('全局主按钮款式不被 styles 的 ext 域二次覆盖（隐形 bug 防复发）',
     stylesSrc.includes('color: var(--we-accent-ink, #fff);')
       && !/^\s*\.we-picker__btn--primary\s*\{/m.test(extStyleSrc),
     'ext 覆盖规则数=' + (extStyleSrc.match(/^\s*\.we-picker__btn--primary\s*\{/m) || []).length
@@ -4345,8 +4357,9 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     // 模块级 ↺ 必须**覆盖外观页签下的每个模块**（用户口径："外观下的模块也要能单独重置"）：
     // 六个外观节各有一处调用，且共用构件必须阻止冒泡（否则点 ↺ 会连带收起该节）。
     const mrSrc = readFileSync(join(root, 'src', 'module-reset.js'), 'utf8').replace(/\r\n/g, '\n');
-    const gpSrc = readFileSync(join(root, 'packages', 'glass', 'src', 'glass-panel.js'), 'utf8').replace(/\r\n/g, '\n');
-    // ⚠️ 刀4 之后节的渲染器搬到了 src/panel-tabs-*.js 域模块 ⇒ 扫**页签族全文**（组装点在末尾），
+    const gpSrc = readFileSync(join(root, 'packages', 'glass', 'src', 'glass-panel.js'), 'utf8').replace(/\r\n/g, '\n')
+      + '\n' + readFileSync(join(root, 'packages', 'glass', 'src', 'glass-presets-panel.js'), 'utf8').replace(/\r\n/g, '\n');
+    // ⚠️ 刀4 之后节的渲染器搬到了 src/panel-tabs/*.js 域模块 ⇒ 扫**页签族全文**（组装点在末尾），
     //    而不是组装点单文件（否则六处调用全在域模块里 ⇒ 假红 missing=theme,detail,…）。
     const appearanceModules = ['theme', 'detail', 'corners', 'uiColor', 'font'];
     const panelAllSrc = panelText() + '\n;\n' + fontSectionSrc + '\n;\n' + wallpaperSectionsSrc + '\n;\n' + playbackSectionsSrc;
@@ -4844,7 +4857,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     // 于是两件事：① 节头里 ↺ 排到折叠三角**之后**（坐进原来"小绿点"那一列）；
     //            ② 有三角同排时 ↺ 不再抢剩余空间（让位给三角的 auto）。
     const headSrc = readFileSync(join(root, 'src', 'section-head.js'), 'utf8').replace(/\r\n/g, '\n');
-    // ⚠️ 同上：CSS 住在 src/styles-*.js 域模块里，`src/styles.js` 只是组装点 ⇒ 读样式族全文。
+    // ⚠️ 同上：CSS 住在 src/styles/*.js 域模块里，`src/styles.js` 只是组装点 ⇒ 读样式族全文。
     const styleSrc = styleText();
     /** 节头尾部次序：标签 → 折叠三角 → ↺（正/负对照共用**这一个**函数）。 */
     const tailOrderOk = (src2) => {

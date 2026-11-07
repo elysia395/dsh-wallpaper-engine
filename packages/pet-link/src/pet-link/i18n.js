@@ -3,7 +3,7 @@
  *
  * 为什么需要它：这两个面（panel-params / panel / extension-card）的文案通过**注入的 translator**
  * （`translate()` / `t()`）在运行时翻译；生产端 translator 由 `createPetLinkTranslate` 生成——
- * **先查本表（EN）再回落主包 `weT`**。这样无需改主包 `src/i18n-copy-ext.js`（保住 M7「主包零改动」），
+ * **先查本表（EN）再回落主包 `weT`**。这样无需改主包 `src/i18n/i18n-copy-ext.js`（保住 M7「主包零改动」），
  * 又让英文界面下这些文案有真正生效的译文（不是塞进没人查的表）。
  *
  * 维护：本表的**键 = 源码里出现的中文字面量原文**，值 = 英文。`verify-i18n` 会对这三个 UI 文件做

@@ -5,7 +5,7 @@
 > 口径：只统计守卫**代码**里真正碰到的模块（先剥注释），并区分"直接读源文件"与"隔着产物 `lib/client.js`"。
 > 写法：字面量路径 / `join(...)` 拼接 / 唯一 basename / 产物配方 / **前缀族读法** `scopeFiles|scopeText(<前缀>)` / **经共享族助手读**（`import { panelText } from './tools/src-scope.mjs'` + 真调用；族口径封在那个库里，见 DEV-GUIDE §4.6「同时是守卫的库」）/ **真源定位读**（`locate('符号')` / `locateFile('文件名')`，`test/tools/source-locator.mjs`：符号唯一声明在哪就是读了哪个模块）。
 
-模块面 203 个 · 守卫 129 个
+模块面 212 个 · 守卫 129 个
 
 ## 守卫 → 模块
 
@@ -14,15 +14,15 @@
 | `compat-harness-live.mjs` | — |  |
 | `compat-harness-pages.mjs` | — |  |
 | `compat-harness-surfaces.mjs` | — |  |
-| `e2e-web-media-origin.mjs` | `lib/index.js` `packages/media-bridge/lib/index.js` `packages/media-bridge/lib/provision.js` `packages/media-bridge/src/wallpaper-current-section.js` `src/quick-panel.js` `src/styles-base.js` `src/styles-chrome.js` `src/styles-ext.js` `src/styles-panel.js` `src/styles-quick.js` `src/styles-settings.js` `src/styles-shell.js` `src/styles.js` |  |
+| `e2e-web-media-origin.mjs` | `lib/index.js` `packages/media-bridge/lib/index.js` `packages/media-bridge/lib/provision.js` `packages/media-bridge/src/wallpaper-current-section.js` `src/quick-panel.js` `src/styles.js` `src/styles/base.js` `src/styles/chrome.js` `src/styles/ext.js` `src/styles/panel.js` `src/styles/quick.js` `src/styles/settings.js` `src/styles/shell.js` |  |
 | `fontset-load-smoke.mjs` | — | ✅ |
 | `live-frame-async-identity-smoke.mjs` | — | ✅ |
 | `live-frame-backfill-smoke.mjs` | — | ✅ |
 | `rotation-live-smoke.mjs` | — | ✅ |
 | `rotation-prepared-leak-smoke.mjs` | — | ✅ |
 | `rotation-smoke.mjs` | — | ✅ |
-| `verify-about.mjs` | `lib/host-boot.js` `lib/index.js` `lib/json-response.js` `packages/about-notice/lib/index.js` `packages/about-notice/lib/routes/about-qr.js` `packages/about-notice/lib/routes/github-stars.js` `src/about-assets.js` `src/client.js` `src/i18n-copy-core.js` `src/i18n-copy-ext.js` `src/i18n-copy-font.js` `src/i18n-copy-glass.js` `src/i18n-copy-live.js` `src/i18n-copy-panel.js` `src/i18n-copy-pet-link.js` `src/i18n-copy-picker.js` `src/i18n-copy.js` `src/panel-tabs-advanced.js` `src/panel-tabs-appearance.js` `src/panel-tabs-effects.js` `src/panel-tabs-mascot.js` `src/panel-tabs.js` | ✅ |
-| `verify-adapter.mjs` | `lib/index.js` `lib/settings-schema.js` `packages/glass/src/glass-css.js` `src/adapter.js` `src/client.js` `src/effects.js` `src/panel-tabs-advanced.js` `src/panel-tabs-appearance.js` `src/panel-tabs-effects.js` `src/panel-tabs-mascot.js` `src/panel-tabs.js` `src/persistence.js` `src/styles-base.js` `src/styles-chrome.js` `src/styles-ext.js` `src/styles-panel.js` `src/styles-quick.js` `src/styles-settings.js` `src/styles-shell.js` `src/styles.js` |  |
+| `verify-about.mjs` | `lib/host-boot.js` `lib/index.js` `lib/json-response.js` `packages/about-notice/lib/index.js` `packages/about-notice/lib/routes/about-qr.js` `packages/about-notice/lib/routes/github-stars.js` `src/about-assets.js` `src/client.js` `src/i18n/i18n-copy-core.js` `src/i18n/i18n-copy-ext.js` `src/i18n/i18n-copy-font.js` `src/i18n/i18n-copy-glass.js` `src/i18n/i18n-copy-live.js` `src/i18n/i18n-copy-panel.js` `src/i18n/i18n-copy-pet-link.js` `src/i18n/i18n-copy-picker.js` `src/i18n/i18n-copy.js` `src/panel-tabs.js` `src/panel-tabs/advanced.js` `src/panel-tabs/appearance.js` `src/panel-tabs/effects.js` `src/panel-tabs/mascot.js` | ✅ |
+| `verify-adapter.mjs` | `lib/index.js` `lib/settings-schema.js` `packages/glass/src/glass-css.js` `src/adapter.js` `src/client.js` `src/effects.js` `src/panel-tabs.js` `src/panel-tabs/advanced.js` `src/panel-tabs/appearance.js` `src/panel-tabs/effects.js` `src/panel-tabs/mascot.js` `src/persistence.js` `src/styles.js` `src/styles/base.js` `src/styles/chrome.js` `src/styles/ext.js` `src/styles/panel.js` `src/styles/quick.js` `src/styles/settings.js` `src/styles/shell.js` |  |
 | `verify-api-client.mjs` | `src/api-client.js` `src/client.js` `src/panel-tabs.js` | ✅ |
 | `verify-asset-paths.mjs` | `lib/media/media-dirs.js` `lib/upload-dir.js` `lib/we-assets.js` |  |
 | `verify-avatar-interval-and-rotation.mjs` | `lib/fs-paths.js` `lib/inventory.js` `lib/media/image-preview.js` `lib/serve.js` `lib/settings-schema.js` `lib/upload-dir.js` `lib/upload-store.js` `packages/media-bridge/lib/routes/inventory.js` `packages/media-bridge/lib/routes/media-bytes.js` `packages/media-bridge/src/wallpaper-rotation-section.js` `src/avatar-layer.js` `src/client.js` `src/ext-avatar.js` `src/video-layer.js` |  |
@@ -36,40 +36,40 @@
 | `verify-ci-routing.mjs` | — |  |
 | `verify-ci-steps.mjs` | — |  |
 | `verify-client-sync.mjs` | — | ✅ |
-| `verify-client.mjs` | `lib/index.js` `lib/kernel/data-dir.js` `lib/settings-schema.js` `packages/fonts/src/appearance-font-section.js` `packages/glass/src/glass-layer.js` `packages/glass/src/glass-panel.js` `packages/glass/src/glass.js` `packages/media-bridge/src/playback-rate-section.js` `packages/media-bridge/src/wallpaper-current-section.js` `packages/media-bridge/src/wallpaper-fit-section.js` `packages/media-bridge/src/wallpaper-rotation-section.js` `packages/media-bridge/src/wallpaper-transition-section.js` `packages/media-bridge/src/wallpaper-uploads-section.js` `src/client.js` `src/effects.js` `src/focus-handback.js` `src/font/apply.js` `src/fontset-store.js` `src/live-layer-watch.js` `src/live-layer.js` `src/media-prep.js` `src/nav-icon.js` `src/panel-tabs-advanced.js` `src/panel-tabs-appearance.js` `src/panel-tabs-effects.js` `src/panel-tabs-mascot.js` `src/panel-tabs.js` `src/persistence.js` `src/picker-modal.js` `src/picker-props-panel.js` `src/preset-store.js` `src/quick-panel.js` `src/styles-base.js` `src/styles-chrome.js` `src/styles-ext.js` `src/styles-panel.js` `src/styles-quick.js` `src/styles-settings.js` `src/styles-shell.js` `src/styles.js` `src/system-fonts.js` `src/theme-follow.js` `src/video-layer.js` `src/we-cond.js` | ✅ |
+| `verify-client.mjs` | `lib/index.js` `lib/kernel/data-dir.js` `lib/settings-schema.js` `packages/fonts/src/appearance-font-section.js` `packages/glass/src/glass-layer.js` `packages/glass/src/glass-panel.js` `packages/glass/src/glass-presets-panel.js` `packages/glass/src/glass.js` `packages/media-bridge/src/playback-rate-section.js` `packages/media-bridge/src/wallpaper-current-section.js` `packages/media-bridge/src/wallpaper-fit-section.js` `packages/media-bridge/src/wallpaper-rotation-section.js` `packages/media-bridge/src/wallpaper-transition-section.js` `packages/media-bridge/src/wallpaper-uploads-section.js` `src/client.js` `src/effects.js` `src/focus-handback.js` `src/font/apply.js` `src/fontset-store.js` `src/live-layer.js` `src/live-layer/watch.js` `src/media-prep.js` `src/nav-icon.js` `src/panel-tabs.js` `src/panel-tabs/advanced.js` `src/panel-tabs/appearance.js` `src/panel-tabs/effects.js` `src/panel-tabs/mascot.js` `src/persistence.js` `src/picker-modal.js` `src/picker-props-panel.js` `src/preset-store.js` `src/quick-panel.js` `src/styles.js` `src/styles/base.js` `src/styles/chrome.js` `src/styles/ext.js` `src/styles/panel.js` `src/styles/quick.js` `src/styles/settings.js` `src/styles/shell.js` `src/system-fonts.js` `src/theme-follow.js` `src/video-layer.js` `src/we-cond.js` | ✅ |
 | `verify-component-face.mjs` | `lib/host-boot.js` `lib/kernel/component-session.js` `lib/kernel/host-kernel.js` |  |
 | `verify-component-fonts.mjs` | `lib/settings-schema.js` `src/client.js` `src/effects.js` `src/font/apply.js` `src/font/components.js` | ✅ |
 | `verify-component-visibility.mjs` | `lib/component-visibility.js` `lib/kernel/component-session.js` `packages/media-bridge/lib/routes/inventory.js` `src/panel-tabs.js` |  |
 | `verify-config-store.mjs` | `lib/kernel/config.js` `lib/media/transcode.js` |  |
-| `verify-contracts.mjs` | `lib/host-boot.js` `lib/index.js` `lib/kernel/host-kernel.js` `lib/media/media-dirs.js` `lib/settings-schema.js` `packages/fonts/lib/routes/fontsets.js` `packages/fonts/src/fontset-editor.js` `packages/mascot-avatar/lib/routes/avatar.js` `packages/mascot-avatar/lib/routes/mascot.js` `packages/media-bridge/lib/backend.js` `packages/media-bridge/lib/index.js` `packages/media-bridge/lib/legacy.js` `packages/media-bridge/lib/supervisor.js` `src/api-client.js` `src/client.js` `src/fontset-store.js` `src/panel-tabs-advanced.js` `src/panel-tabs-appearance.js` `src/panel-tabs-effects.js` `src/panel-tabs-mascot.js` `src/panel-tabs.js` |  |
+| `verify-contracts.mjs` | `lib/host-boot.js` `lib/index.js` `lib/kernel/host-kernel.js` `lib/media/media-dirs.js` `lib/settings-schema.js` `packages/fonts/lib/routes/fontsets.js` `packages/fonts/src/fontset-editor.js` `packages/mascot-avatar/lib/routes/avatar.js` `packages/mascot-avatar/lib/routes/mascot.js` `packages/media-bridge/lib/backend.js` `packages/media-bridge/lib/index.js` `packages/media-bridge/lib/legacy.js` `packages/media-bridge/lib/supervisor-protocol.js` `packages/media-bridge/lib/supervisor.js` `src/api-client.js` `src/client.js` `src/fontset-store.js` `src/panel-tabs.js` `src/panel-tabs/advanced.js` `src/panel-tabs/appearance.js` `src/panel-tabs/effects.js` `src/panel-tabs/mascot.js` |  |
 | `verify-dead-declarations.mjs` | — |  |
 | `verify-deployment.mjs` | — |  |
 | `verify-eol.mjs` | — |  |
-| `verify-extra-glass.mjs` | `lib/settings-schema.js` `packages/glass/src/glass-extra.js` `packages/glass/src/glass-layer.js` `packages/glass/src/glass-panel.js` `src/client.js` `src/quick-panel.js` | ✅ |
-| `verify-fontset.mjs` | `lib/index.js` `lib/settings-schema.js` `packages/fonts/lib/index.js` `packages/fonts/src/appearance-font-section.js` `packages/fonts/src/fontset-editor.js` `packages/glass/src/glass-panel.js` `packages/media-bridge/src/playback-rate-section.js` `packages/media-bridge/src/wallpaper-fit-section.js` `src/client.js` `src/extension-registry.js` `src/font/apply.js` `src/font/color-roles.js` `src/font/components.js` `src/font/typography.js` `src/fontset-store.js` `src/media-prep.js` `src/module-reset.js` `src/panel-tabs-advanced.js` `src/panel-tabs-appearance.js` `src/panel-tabs-effects.js` `src/panel-tabs-mascot.js` `src/panel-tabs.js` `src/picker-modal.js` `src/picker-props-panel.js` `src/section-head.js` `src/styles-base.js` `src/styles-chrome.js` `src/styles-ext.js` `src/styles-panel.js` `src/styles-quick.js` `src/styles-settings.js` `src/styles-shell.js` `src/styles.js` `src/system-fonts.js` `src/we-cond.js` | ✅ |
+| `verify-extra-glass.mjs` | `lib/settings-schema.js` `packages/glass/src/glass-extra.js` `packages/glass/src/glass-layer.js` `packages/glass/src/glass-panel.js` `packages/glass/src/glass-presets-panel.js` `src/client.js` `src/quick-panel.js` | ✅ |
+| `verify-fontset.mjs` | `lib/index.js` `lib/settings-schema.js` `packages/fonts/lib/index.js` `packages/fonts/src/appearance-font-section.js` `packages/fonts/src/fontset-editor.js` `packages/glass/src/glass-panel.js` `packages/glass/src/glass-presets-panel.js` `packages/media-bridge/src/playback-rate-section.js` `packages/media-bridge/src/wallpaper-fit-section.js` `src/client.js` `src/extension-registry.js` `src/font/apply.js` `src/font/color-roles.js` `src/font/components.js` `src/font/typography.js` `src/fontset-store.js` `src/media-prep.js` `src/module-reset.js` `src/panel-tabs.js` `src/panel-tabs/advanced.js` `src/panel-tabs/appearance.js` `src/panel-tabs/effects.js` `src/panel-tabs/mascot.js` `src/picker-modal.js` `src/picker-props-panel.js` `src/section-head.js` `src/styles.js` `src/styles/base.js` `src/styles/chrome.js` `src/styles/ext.js` `src/styles/panel.js` `src/styles/quick.js` `src/styles/settings.js` `src/styles/shell.js` `src/system-fonts.js` `src/we-cond.js` | ✅ |
 | `verify-glass-compat.mjs` | `lib/settings-schema.js` `packages/glass/src/glass-panel.js` |  |
 | `verify-glass-compositing.mjs` | — | ✅ |
 | `verify-glass-runtime-browser.mjs` | — | ✅ |
 | `verify-glass-runtime.mjs` | `packages/glass/src/client.js` `packages/glass/src/glass-surfaces.js` | ✅ |
-| `verify-glass-surfaces.mjs` | `lib/settings-schema.js` `packages/glass/src/glass-css.js` `packages/glass/src/glass-layer.js` `packages/glass/src/glass-panel.js` `packages/glass/src/glass-surfaces.js` `packages/glass/src/glass.js` `src/client.js` `src/effects.js` `src/live-layer-diag.js` `src/live-layer-gate.js` `src/live-layer-pointer.js` `src/live-layer-underlay.js` `src/live-layer-watch.js` `src/live-layer.js` `src/panel-tabs-advanced.js` `src/panel-tabs-appearance.js` `src/panel-tabs-effects.js` `src/panel-tabs-mascot.js` `src/panel-tabs.js` `src/styles-base.js` `src/styles-chrome.js` `src/styles-ext.js` `src/styles-panel.js` `src/styles-quick.js` `src/styles-settings.js` `src/styles-shell.js` `src/styles.js` | ✅ |
+| `verify-glass-surfaces.mjs` | `lib/settings-schema.js` `packages/glass/src/glass-css.js` `packages/glass/src/glass-layer.js` `packages/glass/src/glass-panel.js` `packages/glass/src/glass-presets-panel.js` `packages/glass/src/glass-surfaces.js` `packages/glass/src/glass.js` `src/client.js` `src/effects.js` `src/live-layer.js` `src/live-layer/diag.js` `src/live-layer/gate.js` `src/live-layer/pointer.js` `src/live-layer/probe.js` `src/live-layer/underlay.js` `src/live-layer/watch.js` `src/panel-tabs.js` `src/panel-tabs/advanced.js` `src/panel-tabs/appearance.js` `src/panel-tabs/effects.js` `src/panel-tabs/mascot.js` `src/styles.js` `src/styles/base.js` `src/styles/chrome.js` `src/styles/ext.js` `src/styles/panel.js` `src/styles/quick.js` `src/styles/settings.js` `src/styles/shell.js` | ✅ |
 | `verify-guard-chain.mjs` | — |  |
 | `verify-host-diag.mjs` | `lib/diag-trace.js` |  |
 | `verify-host-paint-scope.mjs` | — | ✅ |
 | `verify-host-teardown.mjs` | `lib/index.js` `lib/media-origin.js` `packages/media-bridge/lib/legacy.js` `packages/media-bridge/lib/occlusion/index.js` `packages/media-bridge/lib/supervisor.js` `packages/pet-link/lib/routes/official-pet.js` |  |
-| `verify-i18n.mjs` | `packages/glass/src/glass-css.js` `packages/pet-link/src/pet-link/extension-card.js` `packages/pet-link/src/pet-link/i18n.js` `packages/pet-link/src/pet-link/panel-params.js` `packages/pet-link/src/pet-link/panel.js` `src/client.js` `src/i18n-copy.js` `src/i18n.js` `src/nav-icon.js` `src/quick-panel.js` `src/sidebar-right.js` `src/styles-base.js` `src/styles-chrome.js` `src/styles-ext.js` `src/styles-panel.js` `src/styles-quick.js` `src/styles-settings.js` `src/styles-shell.js` `src/styles.js` | ✅ |
-| `verify-inject-contracts.mjs` | `lib/subpackage-boot.js` |  |
+| `verify-i18n.mjs` | `packages/glass/src/glass-css.js` `packages/pet-link/src/pet-link/extension-card.js` `packages/pet-link/src/pet-link/i18n.js` `packages/pet-link/src/pet-link/panel-params.js` `packages/pet-link/src/pet-link/panel.js` `src/client.js` `src/client/rope-dock.js` `src/i18n/i18n-copy.js` `src/i18n/i18n.js` `src/nav-icon.js` `src/quick-panel.js` `src/sidebar-right.js` `src/styles.js` `src/styles/base.js` `src/styles/chrome.js` `src/styles/ext.js` `src/styles/panel.js` `src/styles/quick.js` `src/styles/settings.js` `src/styles/shell.js` | ✅ |
+| `verify-inject-contracts.mjs` | `lib/glass-presets-store.js` `lib/routes/presets.js` `lib/subpackage-boot.js` |  |
 | `verify-inventory-index.mjs` | `lib/inventory.js` `packages/media-bridge/lib/routes/inventory.js` |  |
 | `verify-issue-claim-policy.mjs` | — |  |
 | `verify-json-response.mjs` | `lib/json-response.js` `lib/subpackage-boot.js` | ✅ |
-| `verify-layer-ownership.mjs` | `lib/routes/diag.js` `packages/fx/src/fx-layer.js` `src/client-audio-playback.js` `src/client.js` `src/layer-core.js` `src/live-layer-pointer.js` `src/live-layer-watch.js` `src/live-layer.js` `src/media-prep.js` `src/video-layer.js` |  |
+| `verify-layer-ownership.mjs` | `lib/routes/diag.js` `packages/fx/src/fx-layer.js` `src/client.js` `src/client/audio-playback.js` `src/layer-core.js` `src/live-layer.js` `src/live-layer/pointer.js` `src/live-layer/watch.js` `src/media-prep.js` `src/media-prep/probe.js` `src/video-layer.js` |  |
 | `verify-lazy-engine-dir.mjs` | `lib/host-boot.js` `lib/kernel/host-kernel.js` `lib/shim-seed.js` `lib/subpackage-boot.js` `packages/media-bridge/lib/routes/scene-serve.js` |  |
-| `verify-logging.mjs` | `lib/host-boot.js` `lib/index.js` `lib/kernel/host-kernel.js` `lib/kernel/host-session.js` `lib/log.js` `lib/notice.js` `lib/routes/diag.js` `lib/serve.js` `lib/webwallgl/renderer.js` `packages/media-bridge/lib/routes/scene-serve.js` `src/live-layer-diag.js` `src/live-layer-gate.js` `src/live-layer-pointer.js` `src/live-layer-underlay.js` `src/live-layer-watch.js` `src/live-layer.js` |  |
-| `verify-media-bridge.mjs` | `packages/media-bridge/lib/backend.js` `packages/media-bridge/lib/provision.js` `packages/media-bridge/lib/supervisor.js` |  |
+| `verify-logging.mjs` | `lib/host-boot.js` `lib/index.js` `lib/kernel/host-kernel.js` `lib/kernel/host-session.js` `lib/log.js` `lib/notice.js` `lib/routes/diag.js` `lib/serve.js` `lib/webwallgl/renderer.js` `packages/media-bridge/lib/routes/scene-serve.js` `src/live-layer.js` `src/live-layer/diag.js` `src/live-layer/gate.js` `src/live-layer/pointer.js` `src/live-layer/probe.js` `src/live-layer/underlay.js` `src/live-layer/watch.js` |  |
+| `verify-media-bridge.mjs` | `packages/media-bridge/lib/backend.js` `packages/media-bridge/lib/provision.js` `packages/media-bridge/lib/supervisor-protocol.js` `packages/media-bridge/lib/supervisor.js` |  |
 | `verify-media-probe.mjs` | `lib/media/mp4-probe.js` |  |
 | `verify-module-layout.mjs` | `lib/index.js` `lib/settings-schema.js` `src/client.js` | ✅ |
 | `verify-mp4-vfs.mjs` | `lib/faststart.js` `lib/host-boot.js` `lib/kernel/host-session.js` `lib/mp4-vfs.js` |  |
 | `verify-notice-routing.mjs` | `lib/index.js` `src/client.js` |  |
-| `verify-occlusion-client.mjs` | `src/api-client.js` `src/live-layer-diag.js` `src/live-layer-gate.js` `src/live-layer-pointer.js` `src/live-layer-underlay.js` `src/live-layer-watch.js` `src/live-layer.js` `src/occlusion.js` | ✅ |
+| `verify-occlusion-client.mjs` | `src/api-client.js` `src/live-layer.js` `src/live-layer/diag.js` `src/live-layer/gate.js` `src/live-layer/pointer.js` `src/live-layer/probe.js` `src/live-layer/underlay.js` `src/live-layer/watch.js` `src/occlusion.js` | ✅ |
 | `verify-occlusion-debounce.mjs` | `src/client.js` |  |
 | `verify-occlusion-hub.mjs` | `lib/index.js` `lib/json-response.js` `lib/occlusion/rects.js` `lib/occlusion/x11.js` `packages/media-bridge/lib/occlusion/index.js` `packages/media-bridge/lib/routes/occlusion.js` |  |
 | `verify-package-files.mjs` | `lib/http-body.js` `lib/index.js` `lib/pkg-read.js` `src/client.js` | ✅ |
@@ -86,22 +86,22 @@
 | `verify-pet-official.mjs` | `lib/subpackage-boot.js` `packages/pet-link/lib/index.js` `packages/pet-link/src/official-pet.js` `packages/pet-link/src/pet-link-performer.js` |  |
 | `verify-pet-optional-probe.mjs` | `packages/pet-link/lib/index.js` `packages/pet-link/src/pet-link.js` `packages/pet-link/src/pet-link/bubble.js` `packages/pet-link/src/pet-link/constants.js` `packages/pet-link/src/pet-link/linked-egg1.js` `packages/pet-link/src/pet-link/linked-egg2.js` `packages/pet-link/src/pet-link/linked-mascot.js` `packages/pet-link/src/pet-link/linked-shared.js` `packages/pet-link/src/pet-link/linked-sidebar.js` `packages/pet-link/src/pet-link/linked.js` `packages/pet-link/src/pet-link/mode.js` `packages/pet-link/src/pet-link/native.js` |  |
 | `verify-pet-package.mjs` | `lib/index.js` `lib/subpackage-boot.js` `packages/pet-link/lib/index.js` `src/sidebar-right.js` |  |
-| `verify-pet-panel.mjs` | `packages/pet-link/src/pet-link.js` `packages/pet-link/src/pet-link/bubble.js` `packages/pet-link/src/pet-link/constants.js` `packages/pet-link/src/pet-link/linked-egg1.js` `packages/pet-link/src/pet-link/linked-egg2.js` `packages/pet-link/src/pet-link/linked-mascot.js` `packages/pet-link/src/pet-link/linked-shared.js` `packages/pet-link/src/pet-link/linked-sidebar.js` `packages/pet-link/src/pet-link/linked.js` `packages/pet-link/src/pet-link/mode.js` `packages/pet-link/src/pet-link/native.js` `packages/pet-link/src/pet-link/panel-params.js` `packages/pet-link/src/pet-link/panel.js` |  |
-| `verify-pet-rope-entry.mjs` | `src/client.js` |  |
+| `verify-pet-panel.mjs` | `packages/pet-link/src/pet-link.js` `packages/pet-link/src/pet-link/bubble.js` `packages/pet-link/src/pet-link/constants.js` `packages/pet-link/src/pet-link/linked-egg1.js` `packages/pet-link/src/pet-link/linked-egg2.js` `packages/pet-link/src/pet-link/linked-mascot.js` `packages/pet-link/src/pet-link/linked-shared.js` `packages/pet-link/src/pet-link/linked-sidebar.js` `packages/pet-link/src/pet-link/linked.js` `packages/pet-link/src/pet-link/mode.js` `packages/pet-link/src/pet-link/native.js` `packages/pet-link/src/pet-link/panel-params.js` |  |
+| `verify-pet-rope-entry.mjs` | `src/client/rope-dock.js` |  |
 | `verify-pet-sidebar-diag.mjs` | `src/client.js` |  |
 | `verify-pet-sidebar-glass-browser-case.mjs` | — |  |
 | `verify-pet-sidebar-glass.mjs` | `packages/glass/src/glass-surfaces.js` |  |
 | `verify-pet-sidebar-rebound.mjs` | `src/client.js` `src/sidebar-right.js` |  |
 | `verify-pet-tuner-browser.mjs` | `packages/pet-link/lib/prepared.js` `packages/pet-link/src/pet-link-performer.js` `packages/pet-link/src/pet-link-tuner.js` |  |
-| `verify-pet-tuner-coverage.mjs` | `packages/pet-link/src/pet-link/panel-params.js` `packages/pet-link/src/pet-link/panel.js` |  |
+| `verify-pet-tuner-coverage.mjs` | `packages/pet-link/src/pet-link/panel-params.js` |  |
 | `verify-pet-tuner.mjs` | `packages/pet-link/src/pet-link-performer.js` `packages/pet-link/src/pet-link-tuner.js` |  |
 | `verify-picker-model.mjs` | `lib/settings-schema.js` `src/client.js` `src/picker-modal.js` `src/picker-model.js` | ✅ |
 | `verify-picker-props.mjs` | — | ✅ |
 | `verify-picker-upload.mjs` | — | ✅ |
 | `verify-playback-controls.mjs` | — | ✅ |
-| `verify-presets.mjs` | `lib/index.js` `lib/media/media-dirs.js` `lib/routes/presets.js` `lib/settings-schema.js` `packages/glass/src/glass-panel.js` `src/client.js` `src/i18n-copy-core.js` `src/i18n-copy-ext.js` `src/i18n-copy-font.js` `src/i18n-copy-glass.js` `src/i18n-copy-live.js` `src/i18n-copy-panel.js` `src/i18n-copy-pet-link.js` `src/i18n-copy-picker.js` `src/i18n-copy.js` `src/persistence.js` `src/preset-store.js` `src/quick-panel.js` | ✅ |
+| `verify-presets.mjs` | `lib/glass-presets-store.js` `lib/index.js` `lib/media/media-dirs.js` `lib/routes/presets.js` `lib/settings-schema.js` `packages/glass/src/glass-panel.js` `packages/glass/src/glass-presets-panel.js` `src/client.js` `src/i18n/i18n-copy-core.js` `src/i18n/i18n-copy-ext.js` `src/i18n/i18n-copy-font.js` `src/i18n/i18n-copy-glass.js` `src/i18n/i18n-copy-live.js` `src/i18n/i18n-copy-panel.js` `src/i18n/i18n-copy-pet-link.js` `src/i18n/i18n-copy-picker.js` `src/i18n/i18n-copy.js` `src/persistence.js` `src/preset-store.js` `src/quick-panel.js` | ✅ |
 | `verify-reachability.mjs` | `lib/index.js` | ✅ |
-| `verify-readability.mjs` | `packages/glass/src/glass-css.js` `src/styles-base.js` `src/styles-chrome.js` `src/styles-ext.js` `src/styles-panel.js` `src/styles-quick.js` `src/styles-settings.js` `src/styles-shell.js` `src/styles.js` | ✅ |
+| `verify-readability.mjs` | `packages/glass/src/glass-css.js` `src/styles.js` `src/styles/base.js` `src/styles/chrome.js` `src/styles/ext.js` `src/styles/panel.js` `src/styles/quick.js` `src/styles/settings.js` `src/styles/shell.js` | ✅ |
 | `verify-release-set.mjs` | `lib/index.js` `lib/subpackage-boot.js` |  |
 | `verify-resume-repaint.mjs` | `src/layer-core.js` |  |
 | `verify-retired-lines.mjs` | — |  |
@@ -110,26 +110,26 @@
 | `verify-route-ownership.mjs` | `lib/index.js` `lib/kernel/component-session.js` |  |
 | `verify-scene-frame-master.mjs` | `lib/index.js` `packages/media-bridge/lib/routes/scene-frame.js` |  |
 | `verify-scene-live-occlusion.mjs` | `lib/webwallgl/occlusion-bridge.js` `lib/webwallgl/renderer.js` |  |
-| `verify-scene-live.mjs` | `lib/cache-dir.js` `lib/diag-trace.js` `lib/faststart.js` `lib/fs-paths.js` `lib/http-lifecycle.js` `lib/index.js` `lib/inventory.js` `lib/media-origin.js` `lib/mp4-vfs.js` `lib/routes/diag.js` `lib/serve.js` `lib/settings-schema.js` `lib/shim-seed.js` `lib/startup-sweep.js` `lib/upload-dir.js` `lib/upload-store.js` `lib/we-assets.js` `lib/we-focus-guard.js` `lib/we-props.js` `lib/webwallgl/renderer.js` `packages/fonts/src/appearance-font-section.js` `packages/fx/src/ext-fx.js` `packages/fx/src/fx-layer.js` `packages/glass/src/glass-panel.js` `packages/media-bridge/lib/index.js` `packages/media-bridge/lib/legacy.js` `packages/media-bridge/lib/provision.js` `packages/media-bridge/lib/routes/media-bytes.js` `packages/media-bridge/lib/routes/now-playing.js` `packages/media-bridge/lib/routes/scene-serve.js` `packages/media-bridge/lib/routes/we-assets.js` `packages/media-bridge/lib/supervisor.js` `packages/media-bridge/src/playback-rate-section.js` `packages/media-bridge/src/wallpaper-current-section.js` `packages/media-bridge/src/wallpaper-fit-section.js` `packages/media-bridge/src/wallpaper-rotation-section.js` `packages/media-bridge/src/wallpaper-transition-section.js` `packages/media-bridge/src/wallpaper-uploads-section.js` `packages/parallax/src/ext-parallax.js` `packages/parallax/src/parallax-layer.js` `src/avatar-import.js` `src/avatar-layer.js` `src/client-audio-playback.js` `src/client-media-frame.js` `src/client-rotation.js` `src/client.js` `src/effects.js` `src/ext-avatar.js` `src/extension-registry.js` `src/font/color-roles.js` `src/font/typography.js` `src/layer-core.js` `src/live-layer-diag.js` `src/live-layer-gate.js` `src/live-layer-pointer.js` `src/live-layer-underlay.js` `src/live-layer-watch.js` `src/live-layer.js` `src/media-prep.js` `src/module-reset.js` `src/panel-tabs-advanced.js` `src/panel-tabs-appearance.js` `src/panel-tabs-effects.js` `src/panel-tabs-mascot.js` `src/panel-tabs.js` `src/picker-modal.js` `src/quick-panel.js` `src/section-head.js` `src/sidebar-right.js` `src/styles-base.js` `src/styles-chrome.js` `src/styles-ext.js` `src/styles-panel.js` `src/styles-quick.js` `src/styles-settings.js` `src/styles-shell.js` `src/styles.js` `src/system-fonts.js` `src/video-layer.js` `src/we-base.js` `src/we-cond.js` | ✅ |
+| `verify-scene-live.mjs` | `lib/cache-dir.js` `lib/diag-trace.js` `lib/faststart.js` `lib/fs-paths.js` `lib/http-lifecycle.js` `lib/index.js` `lib/inventory.js` `lib/media-origin.js` `lib/mp4-vfs.js` `lib/routes/diag.js` `lib/serve.js` `lib/settings-schema.js` `lib/shim-seed.js` `lib/startup-sweep.js` `lib/upload-dir.js` `lib/upload-store.js` `lib/we-assets.js` `lib/we-focus-guard.js` `lib/we-props.js` `lib/webwallgl/renderer.js` `packages/fonts/src/appearance-font-section.js` `packages/fx/src/ext-fx.js` `packages/fx/src/fx-layer.js` `packages/glass/src/glass-panel.js` `packages/glass/src/glass-presets-panel.js` `packages/media-bridge/lib/index.js` `packages/media-bridge/lib/legacy.js` `packages/media-bridge/lib/provision.js` `packages/media-bridge/lib/routes/media-bytes.js` `packages/media-bridge/lib/routes/now-playing.js` `packages/media-bridge/lib/routes/scene-serve.js` `packages/media-bridge/lib/routes/we-assets.js` `packages/media-bridge/lib/supervisor-protocol.js` `packages/media-bridge/lib/supervisor.js` `packages/media-bridge/src/playback-rate-section.js` `packages/media-bridge/src/wallpaper-current-section.js` `packages/media-bridge/src/wallpaper-fit-section.js` `packages/media-bridge/src/wallpaper-rotation-section.js` `packages/media-bridge/src/wallpaper-transition-section.js` `packages/media-bridge/src/wallpaper-uploads-section.js` `packages/parallax/src/ext-parallax.js` `packages/parallax/src/parallax-layer.js` `src/avatar-import.js` `src/avatar-layer.js` `src/client.js` `src/client/audio-playback.js` `src/client/media-frame.js` `src/client/rope-dock.js` `src/client/rotation.js` `src/effects.js` `src/ext-avatar.js` `src/extension-registry.js` `src/font/color-roles.js` `src/font/typography.js` `src/layer-core.js` `src/live-layer.js` `src/live-layer/diag.js` `src/live-layer/gate.js` `src/live-layer/pointer.js` `src/live-layer/probe.js` `src/live-layer/underlay.js` `src/live-layer/watch.js` `src/media-prep.js` `src/media-prep/budget.js` `src/media-prep/prepare.js` `src/media-prep/probe.js` `src/module-reset.js` `src/panel-tabs.js` `src/panel-tabs/advanced.js` `src/panel-tabs/appearance.js` `src/panel-tabs/effects.js` `src/panel-tabs/mascot.js` `src/picker-modal.js` `src/quick-panel.js` `src/section-head.js` `src/sidebar-right.js` `src/styles.js` `src/styles/base.js` `src/styles/chrome.js` `src/styles/ext.js` `src/styles/panel.js` `src/styles/quick.js` `src/styles/settings.js` `src/styles/shell.js` `src/system-fonts.js` `src/video-layer.js` `src/we-base.js` `src/we-cond.js` | ✅ |
 | `verify-scene-probe.mjs` | `lib/cache-keys.js` `lib/media/scene-probe.js` `lib/pkg-read.js` `lib/scene-manifest.js` |  |
 | `verify-scene.mjs` | `lib/cache-keys.js` `lib/index.js` `lib/kernel/host-kernel.js` `lib/kernel/host-session.js` `lib/media/frame-store.js` `lib/pkg-read.js` `lib/routes/settings.js` `lib/scene-manifest.js` `packages/media-bridge/lib/index.js` `packages/media-bridge/lib/routes/live-frame.js` `packages/media-bridge/lib/routes/media-bytes.js` `packages/media-bridge/lib/routes/props.js` `packages/media-bridge/lib/routes/scene-frame.js` `packages/media-bridge/lib/routes/scene-media.js` | ✅ |
 | `verify-settings-namespaces.mjs` | `lib/index.js` `lib/kernel/data-dir.js` `lib/routes/settings.js` `lib/settings-schema.js` `src/persistence.js` |  |
 | `verify-settings-schema-exports.mjs` | `lib/index.js` `lib/subpackage-boot.js` | ✅ |
 | `verify-slides.mjs` | `lib/fs-paths.js` `lib/wallpaper-scan.js` `packages/media-bridge/lib/routes/slides.js` |  |
-| `verify-slideshow-client.mjs` | `packages/media-bridge/src/wallpaper-rotation-section.js` `src/client.js` `src/i18n-copy-panel.js` `src/media-prep.js` `src/styles-base.js` | ✅ |
+| `verify-slideshow-client.mjs` | `packages/media-bridge/src/wallpaper-rotation-section.js` `src/client.js` `src/i18n/i18n-copy-panel.js` `src/media-prep.js` `src/styles/base.js` | ✅ |
 | `verify-softrender.mjs` | — | ✅ |
 | `verify-static.mjs` | — |  |
 | `verify-steam-discovery.mjs` | `lib/kernel/host-kernel.js` `lib/steam-discovery.js` |  |
 | `verify-subpackage-boot.mjs` | `lib/index.js` `lib/subpackage-boot.js` |  |
-| `verify-subpackage-client-half.mjs` | `src/client.js` | ✅ |
+| `verify-subpackage-client-half.mjs` | `src/client.js` `src/host-bridge.js` | ✅ |
 | `verify-subpackage-manifests.mjs` | `lib/kernel/component-session.js` `lib/subpackage-boot.js` |  |
 | `verify-subpackage-purity.mjs` | `lib/host-boot.js` `lib/index.js` `lib/subpackage-boot.js` `packages/fonts/src/client.js` `src/client.js` `src/fontset-store.js` |  |
-| `verify-subpackage-toggle-roundtrip.mjs` | `lib/index.js` `lib/subpackage-boot.js` `packages/fonts/src/client.js` `src/client.js` `src/extension-registry.js` `src/panel-tabs-appearance.js` `src/panel-tabs.js` | ✅ |
-| `verify-system-fonts.mjs` | `lib/json-response.js` `lib/settings-schema.js` `packages/fonts/lib/routes/system-fonts.js` `packages/fonts/src/appearance-font-section.js` `src/client.js` `src/font/typography.js` `src/panel-tabs-advanced.js` `src/panel-tabs-appearance.js` `src/panel-tabs-effects.js` `src/panel-tabs-mascot.js` `src/panel-tabs.js` `src/quick-panel.js` `src/system-fonts.js` | ✅ |
-| `verify-theme-follow.mjs` | `lib/settings-schema.js` `src/client.js` `src/live-layer-diag.js` `src/live-layer-gate.js` `src/live-layer-pointer.js` `src/live-layer-underlay.js` `src/live-layer-watch.js` `src/live-layer.js` `src/media-prep.js` `src/panel-tabs-advanced.js` `src/panel-tabs-appearance.js` `src/panel-tabs-effects.js` `src/panel-tabs-mascot.js` `src/panel-tabs.js` `src/theme-follow.js` | ✅ |
-| `verify-theme-layer.mjs` | `lib/settings-schema.js` `packages/fonts/src/appearance-font-section.js` `src/client.js` `src/effects.js` `src/font/apply.js` `src/font/color-roles.js` `src/font/typography.js` `src/panel-tabs-advanced.js` `src/panel-tabs-appearance.js` `src/panel-tabs-effects.js` `src/panel-tabs-mascot.js` `src/panel-tabs.js` | ✅ |
+| `verify-subpackage-toggle-roundtrip.mjs` | `lib/index.js` `lib/subpackage-boot.js` `packages/fonts/src/client.js` `src/client.js` `src/extension-registry.js` `src/panel-tabs.js` `src/panel-tabs/appearance.js` | ✅ |
+| `verify-system-fonts.mjs` | `lib/json-response.js` `lib/settings-schema.js` `packages/fonts/lib/routes/system-fonts.js` `packages/fonts/src/appearance-font-section.js` `src/client.js` `src/font/typography.js` `src/panel-tabs.js` `src/panel-tabs/advanced.js` `src/panel-tabs/appearance.js` `src/panel-tabs/effects.js` `src/panel-tabs/mascot.js` `src/quick-panel.js` `src/system-fonts.js` | ✅ |
+| `verify-theme-follow.mjs` | `lib/settings-schema.js` `src/client.js` `src/live-layer.js` `src/live-layer/diag.js` `src/live-layer/gate.js` `src/live-layer/pointer.js` `src/live-layer/probe.js` `src/live-layer/underlay.js` `src/live-layer/watch.js` `src/media-prep.js` `src/panel-tabs.js` `src/panel-tabs/advanced.js` `src/panel-tabs/appearance.js` `src/panel-tabs/effects.js` `src/panel-tabs/mascot.js` `src/theme-follow.js` | ✅ |
+| `verify-theme-layer.mjs` | `lib/settings-schema.js` `packages/fonts/src/appearance-font-section.js` `src/client.js` `src/effects.js` `src/font/apply.js` `src/font/color-roles.js` `src/font/typography.js` `src/panel-tabs.js` `src/panel-tabs/advanced.js` `src/panel-tabs/appearance.js` `src/panel-tabs/effects.js` `src/panel-tabs/mascot.js` | ✅ |
 | `verify-titlebar-anchor.mjs` | `packages/glass/src/glass-css.js` `packages/glass/src/glass-layer.js` `src/effects.js` |  |
-| `verify-token-contract.mjs` | `src/styles-base.js` `src/styles-chrome.js` `src/styles-ext.js` `src/styles-panel.js` `src/styles-quick.js` `src/styles-settings.js` `src/styles-shell.js` `src/styles.js` |  |
+| `verify-token-contract.mjs` | `src/styles.js` `src/styles/base.js` `src/styles/chrome.js` `src/styles/ext.js` `src/styles/panel.js` `src/styles/quick.js` `src/styles/settings.js` `src/styles/shell.js` |  |
 | `verify-token-domain.mjs` | `lib/index.js` `lib/kernel/host-session.js` `lib/subpackage-boot.js` `packages/media-bridge/lib/index.js` |  |
 | `verify-tolerant-register.mjs` | `lib/host-boot.js` `lib/index.js` `lib/subpackage-boot.js` |  |
 | `verify-transcode-state.mjs` | `lib/index.js` `lib/media/transcode.js` `packages/media-bridge/lib/index.js` `packages/media-bridge/lib/routes/media-derived.js` `src/client.js` `src/media-prep.js` `src/video-layer.js` | ✅ |
@@ -152,6 +152,7 @@
 | `lib/diag-trace.js` | 2 | `verify-host-diag` `verify-scene-live` |
 | `lib/faststart.js` | 3 | `verify-cache-dir` `verify-mp4-vfs` `verify-scene-live` |
 | `lib/fs-paths.js` | 4 | `verify-avatar-interval-and-rotation` `verify-scene-live` `verify-slides` `verify-wallpaper-scan` |
+| `lib/glass-presets-store.js` | 2 | `verify-inject-contracts` `verify-presets` |
 | `lib/host-boot.js` | 9 | `verify-about` `verify-bundle-rows` `verify-component-face` `verify-contracts` `verify-lazy-engine-dir` `verify-logging` `verify-mp4-vfs` `verify-subpackage-purity` `verify-tolerant-register` |
 | `lib/http-body.js` | 2 | `verify-body-caps` `verify-package-files` |
 | `lib/http-lifecycle.js` | 1 | `verify-scene-live` |
@@ -179,7 +180,7 @@
 | `lib/pkg-read.js` | 4 | `verify-package-files` `verify-package-publish` `verify-scene-probe` `verify-scene` |
 | `lib/routes/cache-dir.js` | 1 | `verify-cache-dir` |
 | `lib/routes/diag.js` | 3 | `verify-layer-ownership` `verify-logging` `verify-scene-live` |
-| `lib/routes/presets.js` | 1 | `verify-presets` |
+| `lib/routes/presets.js` | 2 | `verify-inject-contracts` `verify-presets` |
 | `lib/routes/rope-art.js` | 0 | **（无）** |
 | `lib/routes/settings.js` | 2 | `verify-scene` `verify-settings-namespaces` |
 | `lib/scene-manifest.js` | 2 | `verify-scene-probe` `verify-scene` |
@@ -220,6 +221,7 @@
 | `packages/glass/src/glass-extra.js` | 1 | `verify-extra-glass` |
 | `packages/glass/src/glass-layer.js` | 4 | `verify-client` `verify-extra-glass` `verify-glass-surfaces` `verify-titlebar-anchor` |
 | `packages/glass/src/glass-panel.js` | 7 | `verify-client` `verify-extra-glass` `verify-fontset` `verify-glass-compat` `verify-glass-surfaces` `verify-presets` `verify-scene-live` |
+| `packages/glass/src/glass-presets-panel.js` | 6 | `verify-client` `verify-extra-glass` `verify-fontset` `verify-glass-surfaces` `verify-presets` `verify-scene-live` |
 | `packages/glass/src/glass-surfaces.js` | 3 | `verify-glass-runtime` `verify-glass-surfaces` `verify-pet-sidebar-glass` |
 | `packages/glass/src/glass.js` | 2 | `verify-client` `verify-glass-surfaces` |
 | `packages/mascot-avatar/lib/index.js` | 0 | **（无）** |
@@ -244,6 +246,7 @@
 | `packages/media-bridge/lib/routes/slides.js` | 1 | `verify-slides` |
 | `packages/media-bridge/lib/routes/upload.js` | 1 | `verify-body-caps` |
 | `packages/media-bridge/lib/routes/we-assets.js` | 1 | `verify-scene-live` |
+| `packages/media-bridge/lib/supervisor-protocol.js` | 3 | `verify-contracts` `verify-media-bridge` `verify-scene-live` |
 | `packages/media-bridge/lib/supervisor.js` | 4 | `verify-contracts` `verify-host-teardown` `verify-media-bridge` `verify-scene-live` |
 | `packages/media-bridge/src/client.js` | 0 | **（无）** |
 | `packages/media-bridge/src/playback-rate-section.js` | 3 | `verify-client` `verify-fontset` `verify-scene-live` |
@@ -282,16 +285,17 @@
 | `packages/pet-link/src/pet-link/mode.js` | 5 | `verify-pet-egg` `verify-pet-linked` `verify-pet-mascot` `verify-pet-optional-probe` `verify-pet-panel` |
 | `packages/pet-link/src/pet-link/native.js` | 5 | `verify-pet-egg` `verify-pet-linked` `verify-pet-mascot` `verify-pet-optional-probe` `verify-pet-panel` |
 | `packages/pet-link/src/pet-link/panel-params.js` | 3 | `verify-i18n` `verify-pet-panel` `verify-pet-tuner-coverage` |
-| `packages/pet-link/src/pet-link/panel.js` | 3 | `verify-i18n` `verify-pet-panel` `verify-pet-tuner-coverage` |
+| `packages/pet-link/src/pet-link/panel.js` | 1 | `verify-i18n` |
 | `src/about-assets.js` | 1 | `verify-about` |
 | `src/adapter.js` | 1 | `verify-adapter` |
 | `src/api-client.js` | 3 | `verify-api-client` `verify-contracts` `verify-occlusion-client` |
 | `src/avatar-import.js` | 1 | `verify-scene-live` |
 | `src/avatar-layer.js` | 2 | `verify-avatar-interval-and-rotation` `verify-scene-live` |
-| `src/client-audio-playback.js` | 2 | `verify-layer-ownership` `verify-scene-live` |
-| `src/client-media-frame.js` | 1 | `verify-scene-live` |
-| `src/client-rotation.js` | 1 | `verify-scene-live` |
-| `src/client.js` | 32 | `verify-about` `verify-adapter` `verify-api-client` `verify-avatar-interval-and-rotation` `verify-client` `verify-component-fonts` `verify-contracts` `verify-extra-glass` `verify-fontset` `verify-glass-surfaces` `verify-i18n` `verify-layer-ownership` `verify-module-layout` `verify-notice-routing` `verify-occlusion-debounce` `verify-package-files` `verify-package-publish` `verify-pet-rope-entry` `verify-pet-sidebar-diag` `verify-pet-sidebar-rebound` `verify-picker-model` `verify-presets` `verify-scene-live` `verify-slideshow-client` `verify-subpackage-client-half` `verify-subpackage-purity` `verify-subpackage-toggle-roundtrip` `verify-system-fonts` `verify-theme-follow` `verify-theme-layer` `verify-transcode-state` `verify-types` |
+| `src/client.js` | 31 | `verify-about` `verify-adapter` `verify-api-client` `verify-avatar-interval-and-rotation` `verify-client` `verify-component-fonts` `verify-contracts` `verify-extra-glass` `verify-fontset` `verify-glass-surfaces` `verify-i18n` `verify-layer-ownership` `verify-module-layout` `verify-notice-routing` `verify-occlusion-debounce` `verify-package-files` `verify-package-publish` `verify-pet-sidebar-diag` `verify-pet-sidebar-rebound` `verify-picker-model` `verify-presets` `verify-scene-live` `verify-slideshow-client` `verify-subpackage-client-half` `verify-subpackage-purity` `verify-subpackage-toggle-roundtrip` `verify-system-fonts` `verify-theme-follow` `verify-theme-layer` `verify-transcode-state` `verify-types` |
+| `src/client/audio-playback.js` | 2 | `verify-layer-ownership` `verify-scene-live` |
+| `src/client/media-frame.js` | 1 | `verify-scene-live` |
+| `src/client/rope-dock.js` | 3 | `verify-i18n` `verify-pet-rope-entry` `verify-scene-live` |
+| `src/client/rotation.js` | 1 | `verify-scene-live` |
 | `src/effects.js` | 7 | `verify-adapter` `verify-client` `verify-component-fonts` `verify-glass-surfaces` `verify-scene-live` `verify-theme-layer` `verify-titlebar-anchor` |
 | `src/ext-avatar.js` | 2 | `verify-avatar-interval-and-rotation` `verify-scene-live` |
 | `src/extension-registry.js` | 4 | `verify-fontset` `verify-pet-extension-card` `verify-scene-live` `verify-subpackage-toggle-roundtrip` |
@@ -301,32 +305,37 @@
 | `src/font/components.js` | 2 | `verify-component-fonts` `verify-fontset` |
 | `src/font/typography.js` | 4 | `verify-fontset` `verify-scene-live` `verify-system-fonts` `verify-theme-layer` |
 | `src/fontset-store.js` | 4 | `verify-client` `verify-contracts` `verify-fontset` `verify-subpackage-purity` |
-| `src/i18n-copy-core.js` | 2 | `verify-about` `verify-presets` |
-| `src/i18n-copy-ext.js` | 2 | `verify-about` `verify-presets` |
-| `src/i18n-copy-font.js` | 2 | `verify-about` `verify-presets` |
-| `src/i18n-copy-glass.js` | 2 | `verify-about` `verify-presets` |
-| `src/i18n-copy-live.js` | 2 | `verify-about` `verify-presets` |
-| `src/i18n-copy-panel.js` | 3 | `verify-about` `verify-presets` `verify-slideshow-client` |
-| `src/i18n-copy-pet-link.js` | 2 | `verify-about` `verify-presets` |
-| `src/i18n-copy-picker.js` | 2 | `verify-about` `verify-presets` |
-| `src/i18n-copy.js` | 3 | `verify-about` `verify-i18n` `verify-presets` |
-| `src/i18n.js` | 1 | `verify-i18n` |
+| `src/host-bridge.js` | 1 | `verify-subpackage-client-half` |
+| `src/i18n/i18n-copy-core.js` | 2 | `verify-about` `verify-presets` |
+| `src/i18n/i18n-copy-ext.js` | 2 | `verify-about` `verify-presets` |
+| `src/i18n/i18n-copy-font.js` | 2 | `verify-about` `verify-presets` |
+| `src/i18n/i18n-copy-glass.js` | 2 | `verify-about` `verify-presets` |
+| `src/i18n/i18n-copy-live.js` | 2 | `verify-about` `verify-presets` |
+| `src/i18n/i18n-copy-panel.js` | 3 | `verify-about` `verify-presets` `verify-slideshow-client` |
+| `src/i18n/i18n-copy-pet-link.js` | 2 | `verify-about` `verify-presets` |
+| `src/i18n/i18n-copy-picker.js` | 2 | `verify-about` `verify-presets` |
+| `src/i18n/i18n-copy.js` | 3 | `verify-about` `verify-i18n` `verify-presets` |
+| `src/i18n/i18n.js` | 1 | `verify-i18n` |
 | `src/layer-core.js` | 3 | `verify-layer-ownership` `verify-resume-repaint` `verify-scene-live` |
-| `src/live-layer-diag.js` | 5 | `verify-glass-surfaces` `verify-logging` `verify-occlusion-client` `verify-scene-live` `verify-theme-follow` |
-| `src/live-layer-gate.js` | 5 | `verify-glass-surfaces` `verify-logging` `verify-occlusion-client` `verify-scene-live` `verify-theme-follow` |
-| `src/live-layer-pointer.js` | 6 | `verify-glass-surfaces` `verify-layer-ownership` `verify-logging` `verify-occlusion-client` `verify-scene-live` `verify-theme-follow` |
-| `src/live-layer-underlay.js` | 5 | `verify-glass-surfaces` `verify-logging` `verify-occlusion-client` `verify-scene-live` `verify-theme-follow` |
-| `src/live-layer-watch.js` | 7 | `verify-client` `verify-glass-surfaces` `verify-layer-ownership` `verify-logging` `verify-occlusion-client` `verify-scene-live` `verify-theme-follow` |
 | `src/live-layer.js` | 7 | `verify-client` `verify-glass-surfaces` `verify-layer-ownership` `verify-logging` `verify-occlusion-client` `verify-scene-live` `verify-theme-follow` |
+| `src/live-layer/diag.js` | 5 | `verify-glass-surfaces` `verify-logging` `verify-occlusion-client` `verify-scene-live` `verify-theme-follow` |
+| `src/live-layer/gate.js` | 5 | `verify-glass-surfaces` `verify-logging` `verify-occlusion-client` `verify-scene-live` `verify-theme-follow` |
+| `src/live-layer/pointer.js` | 6 | `verify-glass-surfaces` `verify-layer-ownership` `verify-logging` `verify-occlusion-client` `verify-scene-live` `verify-theme-follow` |
+| `src/live-layer/probe.js` | 5 | `verify-glass-surfaces` `verify-logging` `verify-occlusion-client` `verify-scene-live` `verify-theme-follow` |
+| `src/live-layer/underlay.js` | 5 | `verify-glass-surfaces` `verify-logging` `verify-occlusion-client` `verify-scene-live` `verify-theme-follow` |
+| `src/live-layer/watch.js` | 7 | `verify-client` `verify-glass-surfaces` `verify-layer-ownership` `verify-logging` `verify-occlusion-client` `verify-scene-live` `verify-theme-follow` |
 | `src/media-prep.js` | 7 | `verify-client` `verify-fontset` `verify-layer-ownership` `verify-scene-live` `verify-slideshow-client` `verify-theme-follow` `verify-transcode-state` |
+| `src/media-prep/budget.js` | 1 | `verify-scene-live` |
+| `src/media-prep/prepare.js` | 1 | `verify-scene-live` |
+| `src/media-prep/probe.js` | 2 | `verify-layer-ownership` `verify-scene-live` |
 | `src/module-reset.js` | 2 | `verify-fontset` `verify-scene-live` |
 | `src/nav-icon.js` | 2 | `verify-client` `verify-i18n` |
 | `src/occlusion.js` | 1 | `verify-occlusion-client` |
-| `src/panel-tabs-advanced.js` | 10 | `verify-about` `verify-adapter` `verify-client` `verify-contracts` `verify-fontset` `verify-glass-surfaces` `verify-scene-live` `verify-system-fonts` `verify-theme-follow` `verify-theme-layer` |
-| `src/panel-tabs-appearance.js` | 11 | `verify-about` `verify-adapter` `verify-client` `verify-contracts` `verify-fontset` `verify-glass-surfaces` `verify-scene-live` `verify-subpackage-toggle-roundtrip` `verify-system-fonts` `verify-theme-follow` `verify-theme-layer` |
-| `src/panel-tabs-effects.js` | 10 | `verify-about` `verify-adapter` `verify-client` `verify-contracts` `verify-fontset` `verify-glass-surfaces` `verify-scene-live` `verify-system-fonts` `verify-theme-follow` `verify-theme-layer` |
-| `src/panel-tabs-mascot.js` | 10 | `verify-about` `verify-adapter` `verify-client` `verify-contracts` `verify-fontset` `verify-glass-surfaces` `verify-scene-live` `verify-system-fonts` `verify-theme-follow` `verify-theme-layer` |
 | `src/panel-tabs.js` | 13 | `verify-about` `verify-adapter` `verify-api-client` `verify-client` `verify-component-visibility` `verify-contracts` `verify-fontset` `verify-glass-surfaces` `verify-scene-live` `verify-subpackage-toggle-roundtrip` `verify-system-fonts` `verify-theme-follow` `verify-theme-layer` |
+| `src/panel-tabs/advanced.js` | 10 | `verify-about` `verify-adapter` `verify-client` `verify-contracts` `verify-fontset` `verify-glass-surfaces` `verify-scene-live` `verify-system-fonts` `verify-theme-follow` `verify-theme-layer` |
+| `src/panel-tabs/appearance.js` | 11 | `verify-about` `verify-adapter` `verify-client` `verify-contracts` `verify-fontset` `verify-glass-surfaces` `verify-scene-live` `verify-subpackage-toggle-roundtrip` `verify-system-fonts` `verify-theme-follow` `verify-theme-layer` |
+| `src/panel-tabs/effects.js` | 10 | `verify-about` `verify-adapter` `verify-client` `verify-contracts` `verify-fontset` `verify-glass-surfaces` `verify-scene-live` `verify-system-fonts` `verify-theme-follow` `verify-theme-layer` |
+| `src/panel-tabs/mascot.js` | 10 | `verify-about` `verify-adapter` `verify-client` `verify-contracts` `verify-fontset` `verify-glass-surfaces` `verify-scene-live` `verify-system-fonts` `verify-theme-follow` `verify-theme-layer` |
 | `src/persistence.js` | 4 | `verify-adapter` `verify-client` `verify-presets` `verify-settings-namespaces` |
 | `src/picker-modal.js` | 4 | `verify-client` `verify-fontset` `verify-picker-model` `verify-scene-live` |
 | `src/picker-model.js` | 1 | `verify-picker-model` |
@@ -335,14 +344,14 @@
 | `src/quick-panel.js` | 7 | `e2e-web-media-origin` `verify-client` `verify-extra-glass` `verify-i18n` `verify-presets` `verify-scene-live` `verify-system-fonts` |
 | `src/section-head.js` | 2 | `verify-fontset` `verify-scene-live` |
 | `src/sidebar-right.js` | 4 | `verify-i18n` `verify-pet-package` `verify-pet-sidebar-rebound` `verify-scene-live` |
-| `src/styles-base.js` | 10 | `e2e-web-media-origin` `verify-adapter` `verify-client` `verify-fontset` `verify-glass-surfaces` `verify-i18n` `verify-readability` `verify-scene-live` `verify-slideshow-client` `verify-token-contract` |
-| `src/styles-chrome.js` | 9 | `e2e-web-media-origin` `verify-adapter` `verify-client` `verify-fontset` `verify-glass-surfaces` `verify-i18n` `verify-readability` `verify-scene-live` `verify-token-contract` |
-| `src/styles-ext.js` | 9 | `e2e-web-media-origin` `verify-adapter` `verify-client` `verify-fontset` `verify-glass-surfaces` `verify-i18n` `verify-readability` `verify-scene-live` `verify-token-contract` |
-| `src/styles-panel.js` | 9 | `e2e-web-media-origin` `verify-adapter` `verify-client` `verify-fontset` `verify-glass-surfaces` `verify-i18n` `verify-readability` `verify-scene-live` `verify-token-contract` |
-| `src/styles-quick.js` | 9 | `e2e-web-media-origin` `verify-adapter` `verify-client` `verify-fontset` `verify-glass-surfaces` `verify-i18n` `verify-readability` `verify-scene-live` `verify-token-contract` |
-| `src/styles-settings.js` | 9 | `e2e-web-media-origin` `verify-adapter` `verify-client` `verify-fontset` `verify-glass-surfaces` `verify-i18n` `verify-readability` `verify-scene-live` `verify-token-contract` |
-| `src/styles-shell.js` | 9 | `e2e-web-media-origin` `verify-adapter` `verify-client` `verify-fontset` `verify-glass-surfaces` `verify-i18n` `verify-readability` `verify-scene-live` `verify-token-contract` |
 | `src/styles.js` | 9 | `e2e-web-media-origin` `verify-adapter` `verify-client` `verify-fontset` `verify-glass-surfaces` `verify-i18n` `verify-readability` `verify-scene-live` `verify-token-contract` |
+| `src/styles/base.js` | 10 | `e2e-web-media-origin` `verify-adapter` `verify-client` `verify-fontset` `verify-glass-surfaces` `verify-i18n` `verify-readability` `verify-scene-live` `verify-slideshow-client` `verify-token-contract` |
+| `src/styles/chrome.js` | 9 | `e2e-web-media-origin` `verify-adapter` `verify-client` `verify-fontset` `verify-glass-surfaces` `verify-i18n` `verify-readability` `verify-scene-live` `verify-token-contract` |
+| `src/styles/ext.js` | 9 | `e2e-web-media-origin` `verify-adapter` `verify-client` `verify-fontset` `verify-glass-surfaces` `verify-i18n` `verify-readability` `verify-scene-live` `verify-token-contract` |
+| `src/styles/panel.js` | 9 | `e2e-web-media-origin` `verify-adapter` `verify-client` `verify-fontset` `verify-glass-surfaces` `verify-i18n` `verify-readability` `verify-scene-live` `verify-token-contract` |
+| `src/styles/quick.js` | 9 | `e2e-web-media-origin` `verify-adapter` `verify-client` `verify-fontset` `verify-glass-surfaces` `verify-i18n` `verify-readability` `verify-scene-live` `verify-token-contract` |
+| `src/styles/settings.js` | 9 | `e2e-web-media-origin` `verify-adapter` `verify-client` `verify-fontset` `verify-glass-surfaces` `verify-i18n` `verify-readability` `verify-scene-live` `verify-token-contract` |
+| `src/styles/shell.js` | 9 | `e2e-web-media-origin` `verify-adapter` `verify-client` `verify-fontset` `verify-glass-surfaces` `verify-i18n` `verify-readability` `verify-scene-live` `verify-token-contract` |
 | `src/system-fonts.js` | 4 | `verify-client` `verify-fontset` `verify-scene-live` `verify-system-fonts` |
 | `src/theme-follow.js` | 2 | `verify-client` `verify-theme-follow` |
 | `src/video-layer.js` | 5 | `verify-avatar-interval-and-rotation` `verify-client` `verify-layer-ownership` `verify-scene-live` `verify-transcode-state` |

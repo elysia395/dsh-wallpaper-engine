@@ -17,156 +17,12 @@
  * 事件会插在任意两条响应之间 —— 所以绝不能用「下一行就是我的响应」这种读法。
  */
 import { spawn } from 'node:child_process';
-
-/** 支持的协议版本（`hello.protocol`）；不匹配就回落 legacy，不做猜测性兼容。 */
-const PROTOCOL_VERSION = 1;
-const BANDS = 64;
-/** 频谱推送间隔：与客户端 50ms 拉取节奏对齐。 */
-const SPECTRUM_INTERVAL_MS = 50;
-const CALL_TIMEOUT_MS = 8000;
-/**
- * 引导阶段的超时放宽：刚下载下来的二进制第一次执行时，macOS 会先做一遍安全
- * 检查（实测首次启动可慢到数秒），这段时间里 hello 还没回来是正常的，不该
- * 因此判定「中间件起不来」而回落。
- */
-const BOOT_CALL_TIMEOUT_MS = 25000;
-const SPAWN_TIMEOUT_MS = 15000;
-/**
- * 引导预算的**逐次读取**覆盖（`DSH_WE_MEDIA_BOOT_MS`，毫秒，下限 1000）。
- * 为什么是一个函数而不是顶层常量：顶层常量在 **import 时**就冻结了，调用方
- * （`test/verify-media-bridge.mjs`）在 import 之后才设 env ⇒ 覆盖会静默失效
- * ——同文件的 `IDLE_STOP_MS` 就是这个形状（顶层常量，同样读不到 import 后设的 env）。
- * 为什么需要这个旋钮：CI runner 上**首次执行**一个刚下载的 7MB 二进制可能远超
- * 25s（实测 `verify:bridge` 在 windows-latest 上 25s 拿不到 `hello`，而同一个
- * 产物在同一套参数下在本机 <25s 就绪）。现场默认值**不动**——把"冷启动慢"与
- * "真的起不来"分开，靠的是一个显式旋钮，而不是把现场的回落延迟一起调大。
- */
-function bootCallTimeoutMs() {
-  const raw = process.env.DSH_WE_MEDIA_BOOT_MS;
-  if (raw === undefined || raw === '') return BOOT_CALL_TIMEOUT_MS;
-  const n = Number(raw);
-  return Number.isFinite(n) && n >= 1000 ? n : BOOT_CALL_TIMEOUT_MS;
-}
-
-/** 第一次握手尝试占总预算的比例（余下留给"换 spawn 姿势再试一次"）。 */
-const FIRST_ATTEMPT_SHARE = 0.6;
-/** 单次尝试的最小预算：少于它就不值得起一个进程（第二次直接不试）。 */
-const MIN_ATTEMPT_MS = 3000;
-
-/**
- * 把**总**引导预算分给两次握手尝试（姿势 A → 姿势 B）—— **绝不翻倍**。
- *
- * 为什么要分：CI run `38357286484` windows 腿红过一次典型抖动 ——
- * 子进程**活着、两路输出皆空、`hello` 直到预算耗尽都没回**；同提交重跑即绿。
- * 这类抖动落在"起进程 + 握手"这一层：换一种 spawn 姿势（`detached` ↔ `plain`）
- * 重来一次往往就好了。但重试**不能**把等待时间翻倍（那会把现场回落延迟一起拉长），
- * 所以第一次只拿 `FIRST_ATTEMPT_SHARE`（且至少 `MIN_ATTEMPT_MS`），余下全给第二次；
- * 两次之和恒 ≤ `bootMs`。
- *
- * @param {number} bootMs 总预算（毫秒，来自 `DSH_WE_MEDIA_BOOT_MS` / 默认值）
- * @returns {{ first: number, second: number }} 两次尝试各自的预算（`second === 0` = 不重试）
- */
-export function bootAttemptBudgets(bootMs) {
-  const total = Math.max(0, Math.floor(Number(bootMs) || 0));
-  const first = Math.max(MIN_ATTEMPT_MS, Math.floor(total * FIRST_ATTEMPT_SHARE));
-  const second = total - first;
-  return { first: second >= MIN_ATTEMPT_MS ? first : total, second: second >= MIN_ATTEMPT_MS ? second : 0 };
-}
-
-/** 两种 spawn 姿势（值即 `spawn()` 的 opts 增量）；顺序按平台（Windows 先 detached）。 */
-const POSTURES = {
-  detached: { detached: true, windowsHide: true },
-  plain: { windowsHide: true },
-};
-/** 姿势尝试顺序：平台第一选择在前，另一种作为抖动重试。 */
-function postureOrder() {
-  return process.platform === 'win32' ? ['detached', 'plain'] : ['plain', 'detached'];
-}
-
-const KILL_GRACE_MS = 3000;
-/** 崩溃重启预算：窗口内超过这个次数就判定为「跑不起来」，回落 legacy。 */
-const MAX_RESTARTS = 3;
-const RESTART_WINDOW_MS = 5 * 60 * 1000;
-/**
- * 空闲停进程：没有任何取数请求这么久就退出（下次访问再自动拉起）。
- * 壁纸实时渲染时客户端 50ms 拉一次，永不触发；没在用的时候不该白占一个
- * 20MB 进程 + 一路系统音频采集。0 = 不停。DSH_WE_MEDIA_IDLE_MS 可覆盖。
- */
-/** 状态缓存的兜底刷新间隔：中间件只在「元数据源出错」时推 status 事件，音频源
- *  idle→preparing→running 的变化不主动通知（v0.1.3 实测；已在 v0.1.4 补事件）。
- *  这里定期重问一次，避免消费端一直看到过期的 preparing —— 症状是频谱明明有数据、
- *  客户端却因为 `running===false` 不把音频交给壁纸。 */
-const STATUS_REFRESH_MS = 5000;
-
-const IDLE_STOP_MS = (() => {
-  const raw = process.env.DSH_WE_MEDIA_IDLE_MS;
-  if (raw === undefined || raw === '') return 15 * 60 * 1000;
-  const n = Number(raw);
-  return Number.isFinite(n) && n >= 0 ? n : 15 * 60 * 1000;
-})();
-
-/** 播放态 → 旧 wire 的数值约定（0 停止 / 1 播放 / 2 暂停）。 */
-function stateCode(state) {
-  if (state === 'playing') return 1;
-  if (state === 'paused') return 2;
-  return 0;
-}
-
-/**
- * 宿主动作名 → 中间件的 `control` action。**白名单就是闸门**：
- * `/media-control` 是开放的 HTTP 入口，调用方给的字符串不得直达中间件
- * （协议里还有 seek / set-loop / toggle-shuffle 这类本插件不暴露的动作）。
- * 键与渲染页的媒体控制面五个方法同名（play/pause/playPause/skipNext/skipPrevious）
- * —— 壁纸里的播放按钮推断出动作名后，经它原样落到这里。
- */
-export const MEDIA_CONTROL_ACTIONS = {
-  play: 'play',
-  pause: 'pause',
-  playPause: 'play-pause',
-  skipNext: 'next',
-  skipPrevious: 'previous',
-};
-
-/** 控制命令的响应窗口：中间件发命令后会睡一小拍再回读状态（<250ms），5s 足够。 */
-const CONTROL_TIMEOUT_MS = 5000;
-
-/**
- * 中间件歌词 → 渲染页要的 `[[秒, 文本], …]`。
- *
- * 渲染页的 `xd()`/`jA()` 只认这种元组数组（自己按 position 找当前行），而中间件给
- * 的是 `{ lines: [{ tMs, text }], offsetMs }`：这里做单位换算（ms → 秒）并叠加 LRC
- * 头部的 `[offset:]`（正值 = 歌词整体晚出现）。导出成纯函数是为了自检能直接用
- * 样例数据验证换算（真歌词要靠真实播放器，mock provider 不给歌词）。
- */
-export function lyricsToTuples(lyr) {
-  if (!lyr || !Array.isArray(lyr.lines) || !lyr.lines.length) return null;
-  const off = Number(lyr.offsetMs) || 0;
-  const out = [];
-  for (const ln of lyr.lines) {
-    const raw = ln && ln.tMs;
-    // 只认「数字 / 能解析成数字的字符串」；null 会被 Number() 变成 0 混进来
-    // （那会让一行歌词跑到 0 秒上），所以先按类型挡掉。
-    if (raw === null || raw === undefined || typeof raw === 'boolean' || typeof raw === 'object') continue;
-    const ms = Number(raw);
-    if (!Number.isFinite(ms)) continue;
-    out.push([Math.max(0, (ms + off) / 1000), String(ln.text == null ? '' : ln.text)]);
-  }
-  return out.length ? out : null;
-}
-
-/**
- * 中间件的完整命令行（宿主设置 → 开关）。**纯函数、单一真源**：守护侧与自检的
- * "不经过管道"探针（`verify-media-bridge` 的文件探针）必须用同一套参数，否则探针失败
- * 分不清是环境问题还是参数漂移。
- */
-export function bridgeServeArgs({ cacheDir = '', audio = true, online = false, mock = false, verbose = false } = {}) {
-  const args = ['serve', '--cache-dir', String(cacheDir), '--poll-ms', '1000'];
-  if (!audio) args.push('--no-audio');              // 音频关但元数据要：连授权都不会弹
-  args.push(online ? '--online' : '--no-online');
-  if (mock) args.push('--provider', 'mock');
-  if (verbose) args.push('--verbose');
-  return args;
-}
+import {
+  PROTOCOL_VERSION, BANDS, SPECTRUM_INTERVAL_MS, CALL_TIMEOUT_MS, BOOT_CALL_TIMEOUT_MS,
+  SPAWN_TIMEOUT_MS, bootCallTimeoutMs, POSTURES, postureOrder, KILL_GRACE_MS, MAX_RESTARTS,
+  RESTART_WINDOW_MS, STATUS_REFRESH_MS, IDLE_STOP_MS, stateCode, MEDIA_CONTROL_ACTIONS,
+  CONTROL_TIMEOUT_MS, bootAttemptBudgets, bridgeServeArgs,
+} from './supervisor-protocol.js';
 
 /**
  * 建一个中间件监督者：起子进程、走 hello/subscribe/now 协议、崩溃重启与空闲停进程。
@@ -183,8 +39,7 @@ export function createBridgeSupervisor({ binPath, cacheDir, log = () => {}, diag
   let buf = '';
   let seq = 0;
   const pending = new Map();
-  const optsRef = { audio: true, online: false, mock: false };
-  const lyricsMemo = { key: '', value: null };
+  const optsRef = { audio: true, mock: false };
 
   let started = false;
   let stopping = false;
@@ -244,14 +99,6 @@ export function createBridgeSupervisor({ binPath, cacheDir, log = () => {}, diag
           diag('media-artwork', { mime: art.mime, bytes: Number(ev.artwork.bytes) || 0 });
         }
         break;
-      case 'lyrics':
-        // 歌词可能晚几秒（在线查询）；只认当前曲目，避免把上一首的歌词贴过来。
-        if (snap && snap.track) {
-          const cur = snap.track.id;
-          if (!ev.trackId || !cur || ev.trackId === cur) snap.track.lyrics = ev.lyrics || null;
-        }
-        lyricsMemo.key = '';
-        break;
       case 'status':
         if (ev.status && Array.isArray(ev.status.sources)) sources = ev.status.sources;
         break;
@@ -290,7 +137,6 @@ export function createBridgeSupervisor({ binPath, cacheDir, log = () => {}, diag
     if (pb && pb.positionSource === 'interpolated' && refMs) pb.updatedAtMs = refMs;
     const a = snap && snap.track && snap.track.artwork;
     if (a && a.path) art = { path: String(a.path), mime: String(a.mime || '') };
-    lyricsMemo.key = '';
   }
 
   function call(method, params = {}, timeoutMs = CALL_TIMEOUT_MS) {
@@ -323,7 +169,6 @@ export function createBridgeSupervisor({ binPath, cacheDir, log = () => {}, diag
     return bridgeServeArgs({
       cacheDir,
       audio: optsRef.audio,
-      online: optsRef.online,
       mock: optsRef.mock,
       verbose: process.env.DSH_WE_MEDIA_DEBUG === '1',
     });
@@ -489,7 +334,7 @@ export function createBridgeSupervisor({ binPath, cacheDir, log = () => {}, diag
               throw new Error(`协议版本不匹配（中间件 protocol=${h && h.protocol}，本插件支持 ${PROTOCOL_VERSION}）`);
             }
 
-            const events = ['track', 'playback', 'artwork', 'lyrics', 'status'];
+            const events = ['track', 'playback', 'artwork', 'status'];
             if (optsRef.audio) events.push('spectrum');
             await call('subscribe', optsRef.audio
               ? { events, intervalMs: SPECTRUM_INTERVAL_MS }
@@ -545,7 +390,7 @@ export function createBridgeSupervisor({ binPath, cacheDir, log = () => {}, diag
             + (optsRef.audio ? '，含系统音频' : '，仅元数据'), 'info');
           diag('media-ready', {
             version: hello.version, provider: hello.provider, platform: hello.platform,
-            arch: hello.arch, audio: optsRef.audio, online: optsRef.online, via: spawnVia,
+            arch: hello.arch, audio: optsRef.audio, via: spawnVia,
           });
           return true;
         }
@@ -637,19 +482,6 @@ export function createBridgeSupervisor({ binPath, cacheDir, log = () => {}, diag
     return { status: st, hint: String(s.hint || '') };
   }
 
-  /** 歌词换算（带备忘：同一首反复读不该反复构造数组）。 */
-  function lyricsFor(track) {
-    const lyr = track && track.lyrics;
-    const key = lyr && Array.isArray(lyr.lines)
-      ? `${track.id || ''}|${lyr.lines.length}|${lyr.offsetMs || 0}|${lyr.source || ''}`
-      : '';
-    if (!key) return null;
-    if (lyricsMemo.key === key) return lyricsMemo.value;
-    lyricsMemo.key = key;
-    lyricsMemo.value = lyricsToTuples(lyr);
-    return lyricsMemo.value;
-  }
-
   return {
     /** 启动并握手。resolve(false) = 起不来（含 spawn 失败/协议不符/超时）。 */
     async start(opts = {}) {
@@ -658,7 +490,6 @@ export function createBridgeSupervisor({ binPath, cacheDir, log = () => {}, diag
       stopping = false;
       Object.assign(optsRef, {
         audio: opts.audio !== false,
-        online: opts.online === true,
         mock: opts.mock === true || process.env.DSH_WE_MEDIA_PROVIDER === 'mock',
       });
       ensureIdleTimer();
@@ -694,7 +525,6 @@ export function createBridgeSupervisor({ binPath, cacheDir, log = () => {}, diag
         if (durMs > 0) posMs = Math.min(posMs, durMs);
       }
       const hasArt = Boolean(art.path);
-      const lyrics = lyricsFor(t);
       return {
         hasMedia: true,
         title: String(t.title || ''),
@@ -709,7 +539,6 @@ export function createBridgeSupervisor({ binPath, cacheDir, log = () => {}, diag
         loopMode: String(pb.loopMode || ''),
         shuffle: pb.shuffle === true,
         appName: String((t.source && t.source.appName) || ''),
-        ...(lyrics ? { lyrics } : {}),
       };
     },
     artworkFile: () => (art.path || null),
@@ -747,7 +576,6 @@ export function createBridgeSupervisor({ binPath, cacheDir, log = () => {}, diag
         ? mapSource('audio', 'idle')
         : { status: 'off', hint: '已在设置中关闭「系统音频反应」' };
       const np = mapSource('metadata', 'idle');
-      const lyrics = mapSource('lyrics', 'idle');
       return {
         backend: 'bridge',
         bridge: info ? {
@@ -757,7 +585,6 @@ export function createBridgeSupervisor({ binPath, cacheDir, log = () => {}, diag
         } : null,
         audio: { status: audio.status, hint: audio.hint },
         nowPlaying: { status: np.status, hint: np.hint },
-        lyrics: { status: lyrics.status, hint: lyrics.hint },
         sources: sources.slice(),
       };
     },

@@ -57,6 +57,7 @@
 | [SUBPACKAGE-GRAPH.md](./SUBPACKAGE-GRAPH.md) | **子包依赖图（人工维护速查，可能滞后；以代码与守卫为准）** —— 行树（组件行 vs 独立子包行）、**两张平面**的 Mermaid 图、允许/禁止边表；规范条款在 [`adr/0014`](./adr/0014-subpackage-contract.md)，登记点与条数由守卫现算 |
 | [DEV-GUIDE.md](./DEV-GUIDE.md) | **二次开发指南** —— "怎么加一个 X" 的配方（加路由 / 加设置项 / 加浏览器端代码）；**§4 是验证与测试**：三层结构、两档判据、运行矩阵、覆盖范围、`test/tools/` 清单、写判据的十条约定 |
 | [DSH-UI-INTERFACES.md](./DSH-UI-INTERFACES.md) | **我们去依赖了 DSH 的哪些 UI 接口** —— 按"客户端产物 / node 宿主 / 桌面壳 / 第三方插件"四层记账：哪些是宿主刻意提供的稳定契约（设计令牌、源码作者写的数据属性）、哪些是构建哈希或第三方私有类名、哪些**与预想不同**（宿主有正式的槽系统而我们钉渲染后的 DOM；`data-dsh-desktop-mode` 其实是桌面壳的 URL 参数）。含**复算方法**（asar 直读 + 偏移→包索引），升级前照它重跑 |
+| [LINUX-OCCLUSION.md](./LINUX-OCCLUSION.md) | **Linux 壳窗遮挡规格** —— X11 / Wayland 的「壳窗之上有哪些窗口、各自矩形」获取 → 画布坐标 → WebWallGL 降帧 / 暂停 / ROI 剔除；含消费端 `setOcclusion` 契约。状态：X11 已落地，Wayland 未落地（§10 是待办，不是账本）；判据在 `test/verify-occlusion-hub.mjs` 与 `test/verify-scene-live-occlusion.mjs` |
 | [RELEASING.md](./RELEASING.md) | **发布** —— 九包发布集（主包 + 八个子包版本锁步）、两条通道（npm / GitHub Release）共用同一份产物、发布顺序与"顺序反了怎么恢复"；发布集的硬闸是 `test/verify-release-set.mjs` |
 | [ROUTE-INDEX.md](./ROUTE-INDEX.md) | 宿主路由的**生成索引**（由 `test/tools/host-route-index.mjs` 重算并逐字节比对 —— 手写必烂） |
 | [GUARD-MAP.md](./GUARD-MAP.md) | **守卫 ↔ 模块的双向派生映射**（"改了某个模块该跑哪几条"）：守卫→模块、模块→守卫两张表，由 `test/tools/guard-targets.mjs` 从**守卫代码里**派生（`--write` 重算，逐字节比对；生成物，不手改） |

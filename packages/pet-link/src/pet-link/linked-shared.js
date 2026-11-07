@@ -150,104 +150,13 @@ function measurePetAlphaBounds(det, rt) {
 }
 
 /**
- * 造共享骨架：`rt` 是装配层 `createPetLink` 注入的运行时。
- * 所有逻辑分区拿到同一个 kit，保证"同一套租约 / 同一套量测 / 同一个 tune 入口"。
- * @param rt - 注入运行时。
- * @returns 共享能力集合（tune / 量测 / 走路 / 贴边跟随 / 段播放 / 抛掷 / 气泡 …）。
+ * 页面内租约套件：取锁 / 心跳续期 / 白名单动画 / 释放 / 睡醒重取锁。
+ *
+ * 租约状态（持锁 det / ttl / 上次续期时刻 / 白名单动画名）是 kit 里**唯一**的可变锁状态，
+ * 收进本套件闭包 —— 调用方只拿能力，不拿状态。
+ * @param deps - { rt, tune, waitUntil }（waitUntil 用于「睡醒」等待）
  */
-function createLinkedKit(rt) {
-  const state = rt.state;
-
-  /** 读某逻辑的调参值（覆盖层优先，其次默认）。**唯一**参数入口。 */
-  const tune = (key, logic) => {
-    const group = logic || state.logic || 'sidebar';
-    const override = state.tuning[group] ? state.tuning[group][key] : undefined;
-    if (Number.isFinite(override)) return override;
-    return PETLINK_DEFAULTS[key];
-  };
-
-  /** 侧栏（主包 RopeDock 注册进来的窄接口）方法转发；缺席安静 no-op。 */
-  const sidebarCall = (method, ...args) => {
-    const api = state.sidebar;
-    const fn = api ? api[method] : undefined;
-    if (typeof fn !== 'function') return undefined;
-    try { return fn(...args); } catch { return undefined; }
-  };
-
-  /** 当前目标宠物的根节点 rect（px）；取不到 null。**逐帧 DOM 真测**，不看归一化坐标。 */
-  const rectOf = det => {
-    try {
-      const root = det.link.getRoot(det.target);
-      if (!root || typeof root.getBoundingClientRect !== 'function') return null;
-      const rect = root.getBoundingClientRect();
-      return rect && Number.isFinite(rect.left) && Number.isFinite(rect.top) ? rect : null;
-    } catch { return null; }
-  };
-  const centerOf = rect => ({
-    x: rect.left + rect.width / 2,
-    y: rect.top + rect.height / 2,
-  });
-
-  /** 当前显示端：`link.surface`（PET 侧按配置 display 解析）。旧运行时不带该字段 → 按 web。 */
-  const surfaceOf = det => {
-    const value = det && det.link ? det.link.surface : undefined;
-    return value === 'desktop' ? 'desktop' : 'web';
-  };
-
-  /**
-   * 写宠物位置：web 端直接走页面内 `adoptPosition`（逐帧零请求）；
-   * desktop 端（独立桌面窗口里的那只）不在本页 DOM 里，`adoptPosition` 控不到它，
-   * 所以必须改走宿主 HTTP `POST /position?surface=desktop`（由装配层的 `rt.positionDesktop` 发送）。
-   */
-  const writePosition = (det, x, y) => {
-    if (surfaceOf(det) === 'desktop') {
-      try { rt.positionDesktop?.(det.target, x, y); } catch { /* 卸载竞态：交给 alive 收尾 */ }
-      return;
-    }
-    try { det.link.adoptPosition({ x, y }, det.target); } catch { /* 卸载竞态：下一次 alive 会退出 */ }
-  };
-
-  /** 当前朝向（从 pose / data-facing 读；读不到按 left）。 */
-  const facing = det => {
-    try {
-      const pose = rt.getApi()?.pose?.(det.target);
-      if (pose && (pose.facing === 'left' || pose.facing === 'right')) return pose.facing;
-    } catch { /* 降级到 DOM 属性 */ }
-    try {
-      const root = det.link.getRoot(det.target);
-      const attr = root && root.getAttribute ? root.getAttribute('data-facing') : null;
-      if (attr === 'left' || attr === 'right') return attr;
-    } catch { /* 都没有 */ }
-    return 'left';
-  };
-
-  /** 段键选实际动作名（缺池时用顶替，再缺就跳过）。 */
-  const animNameOf = key => {
-    const name = PETLINK_ANIM[key];
-    if (!name) return '';
-    const pool = state.pool && state.pool.length ? state.pool : null;
-    if (pool && !pool.includes(name)) return PETLINK_FALLBACK[key] || '';
-    return name;
-  };
-
-  /** 走一步等待：轻量、可被 epoch 取消（run 的 finally 负责收尾）。 */
-  const waitUntil = async (predicate, timeoutMs) => {
-    const start = rt.now();
-    while (rt.now() - start < timeoutMs) {
-      let ok = false;
-      try { ok = predicate() === true; } catch { ok = false; }
-      if (ok) return true;
-      await rt.wait(PETLINK_POLL_MS);
-    }
-    return false;
-  };
-
-  /** 段与段之间的最小间隙（`segGapMs`，默认 0 = 立刻切）：只在 >0 时真等。 */
-  const gap = async (logic) => {
-    const ms = Math.max(0, tune('segGapMs', logic));
-    if (ms > 0 && rt.wait) await rt.wait(ms);
-  };
-
+function createPetLinkLeaseSuite({ rt, tune, waitUntil }) {
   // ── 页面内租约 + 心跳续期（`lockHeartbeatMs` 真消费）────────────────────────
   // 旧版租约 TTL 固定 60s；新版把「续期间隔」变成面板可调：心跳按 `lockHeartbeatMs`
   // 周期用**同名** `lock()` 续期（同名续期只顺延 expiresAt，不清我方已展示的气泡），
@@ -319,6 +228,20 @@ function createLinkedKit(rt) {
     return true;
   };
 
+  return { acquireLease, renewLease, allowOnly, releaseLease, ensureAwake };
+}
+
+/**
+ * 气泡时间线套件（`bubbleTiming` 真消费）：每逻辑一份时间线，每 spec 一条 track。
+ *
+ * 旧蓝本 `petLinkCreateBubbleTimeline`(L1870-2012) 的等价实现：在**段播放推进 / 显式 default
+ * 触发 / 主动 pump** 时评估 `{action,edge,offsetMs}` 节点，触发真实 show/hide —— 而不是
+ * "段末统一弹一次"。规则默认值见 `PETLINK_BUBBLE_DEFAULTS`。
+ *
+ * 时间线状态（当前轮 bubbleRun）收进本套件闭包；段播放处通过 `currentRun()` 取当前轮。
+ * @param deps - { rt, state, tune, rectOf }
+ */
+function createPetLinkBubbleSuite({ rt, state, tune, rectOf }) {
   // ── 气泡时间节点（bubbleTiming）真消费 ─────────────────────────────────────
   // 旧蓝本 `petLinkCreateBubbleTimeline`(L1870-2012) 的等价实现：每逻辑一份时间线，
   // 每个气泡 spec 各一条 track（show/hide 规则），在**段播放推进 / 显式 default 触发 /
@@ -538,6 +461,18 @@ function createLinkedKit(rt) {
     if (rt.bubble) rt.bubble.hide();
   };
 
+  return { begin: beginBubbles, end: endBubbles, pump: pumpBubbles, show: showBubble, hide: hideBubble, currentRun: () => bubbleRun };
+}
+
+/**
+ * 走位 / 贴边跟随套件：逐帧 `adoptPosition`（页面内），不发请求。
+ *
+ * 拆分自 createLinkedKit 的运动阶段：moveTo（位置插值）/ edgeTarget（贴边目标几何）/
+ * followEdge（逐帧跟随 + openSettled/宽限/静止窗口收尾）。三者的几何口径必须一致
+ * （见 edgeTarget 与 followEdge 里「不要 clamp」的注释），所以收进同一套件。
+ * @param deps - { rt, state, tune, sidebarCall, rectOf, centerOf, writePosition, renewLease }
+ */
+function createPetLinkMotionSuite({ rt, state, tune, sidebarCall, rectOf, centerOf, writePosition, renewLease }) {
   /** 位置插值：每帧只写 adoptPosition（页面内），不发请求。
    *  缓动对齐旧蓝本 `petLinkGlide` 的 easeInOutQuad（起步与收尾都软，避免瞬移/线性生硬）。
    *  ⚠️ 旧版写 `transform` 偏移、新版写 `adoptPosition` 绝对中心——这是**有意替换**：
@@ -797,6 +732,18 @@ function createLinkedKit(rt) {
     return true;
   };
 
+  return { moveTo, edgeTarget, followEdge };
+}
+
+/**
+ * 绳段几何：把「下拉 / 脱手回弹 / 落点」换算成位移像素与时间线。
+ *
+ * 纯函数（只读 `rt.rope` / `rt.viewport()`），不碰租约、气泡与运动状态；
+ * 拆分自 createLinkedKit 的绳段，语义与旧蓝本 `petLinkMascotPlaybackMotion` 对齐
+ * （见 ropeSegmentAt 注释里的夹紧语义）。
+ * @param deps - { rt }
+ */
+function createPetLinkRopeKit({ rt }) {
   /**
    * 绳子按下拉/回弹分段求位移像素（对齐旧蓝本 `petLinkMascotPlaybackMotion` lines 1277–1307）。
    *
@@ -855,6 +802,21 @@ function createLinkedKit(rt) {
     return { x: point.x * view.width, y: point.y * view.height, top };
   };
 
+  return { ropeSegmentAt, ropeTimeline, ropeTarget };
+}
+
+/**
+ * 动作脚本：播一段动画并等它播完，以及走位 / 归位 / 抛掷的时序编排。
+ *
+ * 拆分自 createLinkedKit 的播放与走抛阶段。依赖按角色传入：
+ *   rt            - 运行时端口（playAnim / getPlayback / wait / viewport）
+ *   tune          - 调参读取；facing / animNameOf - 朝向与动画名换算
+ *   bubbles       - 气泡套件（currentRun() 取当前段做时序对齐）
+ *   renewLease    - 动作期间续租；moveTo        - 走位插值
+ *   rectOf/centerOf - 目标几何
+ * @param deps - 见上（共 9 项，均为 createLinkedKit 内的既有能力）
+ */
+function createPetLinkActionKit({ rt, tune, facing, animNameOf, bubbles, renewLease, moveTo, rectOf, centerOf }) {
   /**
    * 播一段动作并等它播完。
    * 只在这里发一次 HTTP（`rt.playAnim`）；之后逐帧读 `getPlayback`（页面内）。
@@ -882,7 +844,7 @@ function createLinkedKit(rt) {
     try { ok = await rt.playAnim(det.target, name, pose); } catch { ok = false; }
     if (!ok) return false;
     // 气泡时间线：登记本段锚点（startWall=现在；endWall 由 clip 时长补齐）。
-    if (bubbleRun) bubbleRun.segmentBegin(key);
+    bubbles.currentRun()?.segmentBegin(key);
     try {
       // ── 段时长 = **固定 hold**（旧版口径，蓝本 petLinkDrain: readyAt = now + hold）──
       // 旧版从不看素材进度：发完 /anim 就按 hold 掐表，到点发下一段。
@@ -902,7 +864,7 @@ function createLinkedKit(rt) {
         // 气泡时间线的锚点要用**素材真实时长**（offsetMs 是相对片长算的）；
         // 读不到片长时才退回 hold。用错会让气泡提前/延后出现（T12 夹具会红）。
         const clipMs = (p && Number.isFinite(p.duration) && p.duration > 0) ? p.duration * 1000 : hold;
-        if (bubbleRun) bubbleRun.segmentUpdate(key, clipMs);
+        bubbles.currentRun()?.segmentUpdate(key, clipMs);
         if (typeof onTick === 'function') {
           // onTick 收到**段内已耗时**（不是素材进度），用于走位启动与彩蛋时刻编排。
           await onTick(Math.min(elapsed, hold), hold);
@@ -924,7 +886,7 @@ function createLinkedKit(rt) {
       }
       return false;
     } finally {
-      if (bubbleRun) bubbleRun.segmentEnd(key);
+      bubbles.currentRun()?.segmentEnd(key);
     }
   };
 
@@ -1002,6 +964,131 @@ function createLinkedKit(rt) {
     }
     return false;
   };
+
+  return { playSegment, walkTo, returnHome, startThrow, settleThrow };
+}
+
+/**
+ * 造共享骨架：`rt` 是装配层 `createPetLink` 注入的运行时。
+ * 所有逻辑分区拿到同一个 kit，保证"同一套租约 / 同一套量测 / 同一个 tune 入口"。
+ * @param rt - 注入运行时。
+ * @returns 共享能力集合（tune / 量测 / 走路 / 贴边跟随 / 段播放 / 抛掷 / 气泡 …）。
+ */
+function createLinkedKit(rt) {
+  const state = rt.state;
+
+  /** 读某逻辑的调参值（覆盖层优先，其次默认）。**唯一**参数入口。 */
+  const tune = (key, logic) => {
+    const group = logic || state.logic || 'sidebar';
+    const override = state.tuning[group] ? state.tuning[group][key] : undefined;
+    if (Number.isFinite(override)) return override;
+    return PETLINK_DEFAULTS[key];
+  };
+
+  /** 侧栏（主包 RopeDock 注册进来的窄接口）方法转发；缺席安静 no-op。 */
+  const sidebarCall = (method, ...args) => {
+    const api = state.sidebar;
+    const fn = api ? api[method] : undefined;
+    if (typeof fn !== 'function') return undefined;
+    try { return fn(...args); } catch { return undefined; }
+  };
+
+  /** 当前目标宠物的根节点 rect（px）；取不到 null。**逐帧 DOM 真测**，不看归一化坐标。 */
+  const rectOf = det => {
+    try {
+      const root = det.link.getRoot(det.target);
+      if (!root || typeof root.getBoundingClientRect !== 'function') return null;
+      const rect = root.getBoundingClientRect();
+      return rect && Number.isFinite(rect.left) && Number.isFinite(rect.top) ? rect : null;
+    } catch { return null; }
+  };
+  const centerOf = rect => ({
+    x: rect.left + rect.width / 2,
+    y: rect.top + rect.height / 2,
+  });
+
+  /** 当前显示端：`link.surface`（PET 侧按配置 display 解析）。旧运行时不带该字段 → 按 web。 */
+  const surfaceOf = det => {
+    const value = det && det.link ? det.link.surface : undefined;
+    return value === 'desktop' ? 'desktop' : 'web';
+  };
+
+  /**
+   * 写宠物位置：web 端直接走页面内 `adoptPosition`（逐帧零请求）；
+   * desktop 端（独立桌面窗口里的那只）不在本页 DOM 里，`adoptPosition` 控不到它，
+   * 所以必须改走宿主 HTTP `POST /position?surface=desktop`（由装配层的 `rt.positionDesktop` 发送）。
+   */
+  const writePosition = (det, x, y) => {
+    if (surfaceOf(det) === 'desktop') {
+      try { rt.positionDesktop?.(det.target, x, y); } catch { /* 卸载竞态：交给 alive 收尾 */ }
+      return;
+    }
+    try { det.link.adoptPosition({ x, y }, det.target); } catch { /* 卸载竞态：下一次 alive 会退出 */ }
+  };
+
+  /** 当前朝向（从 pose / data-facing 读；读不到按 left）。 */
+  const facing = det => {
+    try {
+      const pose = rt.getApi()?.pose?.(det.target);
+      if (pose && (pose.facing === 'left' || pose.facing === 'right')) return pose.facing;
+    } catch { /* 降级到 DOM 属性 */ }
+    try {
+      const root = det.link.getRoot(det.target);
+      const attr = root && root.getAttribute ? root.getAttribute('data-facing') : null;
+      if (attr === 'left' || attr === 'right') return attr;
+    } catch { /* 都没有 */ }
+    return 'left';
+  };
+
+  /** 段键选实际动作名（缺池时用顶替，再缺就跳过）。 */
+  const animNameOf = key => {
+    const name = PETLINK_ANIM[key];
+    if (!name) return '';
+    const pool = state.pool && state.pool.length ? state.pool : null;
+    if (pool && !pool.includes(name)) return PETLINK_FALLBACK[key] || '';
+    return name;
+  };
+
+  /** 走一步等待：轻量、可被 epoch 取消（run 的 finally 负责收尾）。 */
+  const waitUntil = async (predicate, timeoutMs) => {
+    const start = rt.now();
+    while (rt.now() - start < timeoutMs) {
+      let ok = false;
+      try { ok = predicate() === true; } catch { ok = false; }
+      if (ok) return true;
+      await rt.wait(PETLINK_POLL_MS);
+    }
+    return false;
+  };
+
+  /** 段与段之间的最小间隙（`segGapMs`，默认 0 = 立刻切）：只在 >0 时真等。 */
+  const gap = async (logic) => {
+    const ms = Math.max(0, tune('segGapMs', logic));
+    if (ms > 0 && rt.wait) await rt.wait(ms);
+  };
+
+  // ── 页面内租约 + 心跳续期（`lockHeartbeatMs` 真消费）────────────────────────
+  // 租约状态收在文件顶部的 createPetLinkLeaseSuite 闭包里；这里只解构能力。
+  const { acquireLease, renewLease, allowOnly, releaseLease, ensureAwake } = createPetLinkLeaseSuite({ rt, tune, waitUntil });
+
+  // ── 气泡时间节点（bubbleTiming）真消费 ─────────────────────────────────────
+  // 时间线状态收在文件顶部的 createPetLinkBubbleSuite 闭包里；段播放处用 bubbles.currentRun()。
+  const bubbles = createPetLinkBubbleSuite({ rt, state, tune, rectOf });
+  const { begin: beginBubbles, end: endBubbles, pump: pumpBubbles, show: showBubble, hide: hideBubble } = bubbles;
+
+  // ── 走位 / 贴边跟随（逐帧 adoptPosition）────────────────────────────────────
+  // 实现收在文件顶部的 createPetLinkMotionSuite；这里只解构能力。
+  const { moveTo, edgeTarget, followEdge } = createPetLinkMotionSuite({ rt, state, tune, sidebarCall, rectOf, centerOf, writePosition, renewLease });
+
+  // ── 绳段几何（纯函数）─────────────────────────────────────────────────────
+  // 实现收在文件顶部的 createPetLinkRopeKit；这里只解构能力。
+  const { ropeSegmentAt, ropeTimeline, ropeTarget } = createPetLinkRopeKit({ rt });
+
+  // ── 动作脚本（播放 / 走位 / 归位 / 抛掷）─────────────────────────────────
+  // 实现收在文件顶部的 createPetLinkActionKit；这里只解构能力。
+  const { playSegment, walkTo, returnHome, startThrow, settleThrow } = createPetLinkActionKit({
+    rt, tune, facing, animNameOf, bubbles, renewLease, moveTo, rectOf, centerOf,
+  });
 
   return {
     rt, state, tune, sidebarCall,

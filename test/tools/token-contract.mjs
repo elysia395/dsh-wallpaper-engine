@@ -7,7 +7,7 @@
  * 规范就是「用 `--dsw-alias-*` 上色」⇒ **任何按规范写的第三方 UI 插件都会自动
  * 继承我们的玻璃** —— 这是全仓最大的隐式耦合面，但今天没有任何一份文件列出
  * 「我们到底改写了哪些 token、在哪个门控下」。手写清单一定会烂，所以本工具从
- * **样式族**（`src/styles-base.js` … `src/styles-ext.js`，由主包 7 个样式域模块
+ * **样式族**（`src/styles/base.js` … `src/styles/ext.js`，由主包 7 个样式域模块
  * + 玻璃包 `packages/glass/src/glass-css.js` 的 CSS 模板**现算**出契约，`test/verify-token-contract.mjs`
  * 重算并逐字节比对 `docs/TOKEN-CONTRACT.md`。
  *
@@ -248,7 +248,7 @@ export function buildContract() {
   L.push('> 生成：`node test/tools/token-contract.mjs --write`；核对：`node test/verify-token-contract.mjs`');
   L.push('> （守卫在契约与代码不一致时失败 —— 令牌集合因此不会烂掉）。');
   L.push('>');
-  L.push('> **口径**：只计样式族（`src/styles-base.js` … `src/styles-ext.js` 的 8 个域模板）里**属性位**的');
+  L.push('> **口径**：只计样式族（`src/styles/base.js` … `src/styles/ext.js` 的 8 个域模板）里**属性位**的');
   L.push('> `--dsw-*` 声明（值里的 `var(--dsw-…)` 是读不是写，不计）；门控归属按花括号栈上的**选择器链**判定。');
   L.push('> **玻璃** = 链上有 `[data-we-glass-*]`；**UI 配色** = 链上有 `[data-we-ui-color]`（主包自有门，ADR-0016）；');
   L.push('> **壁纸** = 只有 `[data-we-wallpaper]`；');

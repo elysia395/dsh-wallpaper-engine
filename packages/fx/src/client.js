@@ -22,7 +22,7 @@
  *    scripts/build-client.mjs 的 outline 里冻结 module.exports 之后逐字对齐；若改名，
  *    **只改本文件的解构那一段**，四个兄弟文件一个字不用动）。
  *
- * 键集的依据 = 两个基座/渲染器文件的**自由标识符**接缝（键集真源 = 主包 `HOST_BRIDGE_BINDINGS`）：
+ * 键集的依据 = 两个基座/渲染器文件的**自由标识符**接缝（键集真源 = 主包 `src/host-bridge.js` 的 `HOST_BRIDGE_BINDINGS`）：
  *   packages/fx/src/fx-layer.js : selection · weClampTo · weNow
  *   packages/fx/src/ext-fx.js   : weT · React · SliderRow · switchRow · ctlText
  *                                 · swatchRow · FX_BLEND_VALUES
@@ -34,16 +34,10 @@
  * 缺键**大声失败**，不许静默 undefined（ADR-0014 S5.1 / S5.4 服务面显式键集 + ADR-0013 D3③「宁可显示、不可静默消失」）。
  * 主包被关 ⇒ 本 bundle 根本不会被 require（ADR-0014 S7.2 连坐）；能走到这里却缺键 = 键集与申报表脱钩。
  */
-const FX_HOST_REQUIRED = [
-  // 内核（只读面）
-  'selection', 'weNow', 'weClampTo',
-  // 渲染助手（主 bundle 的共享零件表）
-  'React', 'weT', 'switchRow', 'SliderRow', 'ctlText', 'swatchRow',
-  // 设置真源里的字面量（lib/settings-schema.js 的 FX_BLEND_VALUES，随主 bundle 内联）
-  'FX_BLEND_VALUES',
-  // 贡献面（主 bundle 的收件箱：值 + 回调，写权留主包）
-  'registerExtensionModule', 'registerLayerHooks',
-];
+/** 由构建期填充：scripts/build-client.mjs 从下方 `} = host;` 的解构逐键派生本表
+ * （源码留空表只为 eslint/typecheck 可读；产物里是一份生成好的键数组）。
+ * 手工加键的正确顺序：① src/host-bridge.js 的 HOST_BRIDGE_BINDINGS ② 本文件的解构名单。 */
+const FX_HOST_REQUIRED = [];
 for (const key of FX_HOST_REQUIRED) {
   if (!(key in host)) {
     throw new Error('[wallpaper-engine-fx] 主 bundle 键集缺少 "' + key

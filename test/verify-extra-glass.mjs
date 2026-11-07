@@ -43,7 +43,8 @@ const schema = await import(pathToFileURL(join(ROOT, 'lib', 'settings-schema.js'
 // ADR-0016 第三刀：effects.js 的玻璃段（含 syncExtraGlassCss 调用与 --we-blur 写入）随玻璃层
 // 出户到 packages/glass —— 接线判据改读**玻璃层源码**。
 const glassLayerSrc = readFileSync(join(ROOT, 'packages', 'glass', 'src', 'glass-layer.js'), 'utf8');
-const panelSrc = readFileSync(join(ROOT, 'packages', 'glass', 'src', 'glass-panel.js'), 'utf8');
+const panelSrc = readFileSync(join(ROOT, 'packages', 'glass', 'src', 'glass-panel.js'), 'utf8')
+  + '\n' + readFileSync(join(ROOT, 'packages', 'glass', 'src', 'glass-presets-panel.js'), 'utf8');
 const clientSrc = readFileSync(join(ROOT, 'src', 'client.js'), 'utf8');
 const quickSrc = readFileSync(join(ROOT, 'src', 'quick-panel.js'), 'utf8');
 // ADR-0016 第三刀：glass-extra 随玻璃子包出产物 ⇒ 登记面判据改读**该包自己的配方**。

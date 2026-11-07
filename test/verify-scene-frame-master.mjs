@@ -91,7 +91,7 @@ function tolerancePairProblems(hostTol, clientTol) {
 }
 
 /**
- * 客户端的「保留主帧」判定 —— 逐字照 `src/live-layer-watch.js` 的 cover 阈值语义
+ * 客户端的「保留主帧」判定 —— 逐字照 `src/live-layer/watch.js` 的 cover 阈值语义
  * （`主帧面积 ≥ 画布 × (1 − TOL) ⇒ 不抓新帧`）。只用于**后果面**负对照。
  */
 function clientKeepsMainFrame(frameArea, canvasArea, tol) {
@@ -347,7 +347,7 @@ if (token) {
   // 把常量从 0.05 弱化到 0.30（强度弱化 6 倍）仍 18/18 全绿。边界两侧各贴一个 ±1% 近邻用例后，
   // 任何"跨过这两个点"的弱化/收紧都会当场红（见 4d/4e）。
   // 容差**从真源现算**：`GPU_FRAME_AREA_TOL` 在 lib 半边唯一声明 —— ⚠️ 客户端半边
-  // `src/live-layer-watch.js` 有自己的同名副本（cover 阈值），所以必须限定 `{ in: 'lib' }`，
+  // `src/live-layer/watch.js` 有自己的同名副本（cover 阈值），所以必须限定 `{ in: 'lib' }`，
   // 否则 source-locator 会（正确地）判"两处声明 ⇒ 谁对不确定"。
   const tolDecl = locate('GPU_FRAME_AREA_TOL', { in: 'lib' });
   const tolMatch = tolDecl.ok

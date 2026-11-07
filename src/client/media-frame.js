@@ -246,9 +246,6 @@ function pushMediaSnapshot(frame, m) {
       position: Number(m.position) || 0,
       duration: Number(m.duration) || 0,
       thumbnail: mediaArtData || undefined,
-      // 歌词：宿主已换算成渲染页要的 [[秒, 文本], …]（含 LRC 的 [offset:]），
-      // 渲染页自己按 position 算当前行（xd() → jA()），这里只透传，不做二次加工。
-      lyrics: Array.isArray(m.lyrics) && m.lyrics.length ? m.lyrics : undefined,
     });
   } catch { /* ignore */ }
 }
@@ -457,11 +454,7 @@ function startMediaSync(frame) {
           const d = res.data;
           if (!d || !d.ok) return;
           const m = d.media || null;
-          // key 里带歌词版本：歌词是异步到齐的（本地 .lrc → 缓存 → 在线），
-          // 到齐时 title/position 都没变 —— 不带它就不会再推一帧，壁纸永远拿不到歌词。
-          const lyr = m && Array.isArray(m.lyrics) ? m.lyrics : [];
-          const lyrRev = lyr.length ? lyr.length + ":" + String(lyr[lyr.length - 1][1] || "").length : 0;
-          const key = m ? [m.title, m.artist, m.playing ? 1 : 0, Math.floor((m.position || 0) / 5), lyrRev].join("\u0000") : "";
+          const key = m ? [m.title, m.artist, m.playing ? 1 : 0, Math.floor((m.position || 0) / 5)].join("\u0000") : "";
           if (key === mediaNpKey) return;
           mediaNpKey = key;
           // 换曲：清掉上一首的封面缓存与重试计数（position 每 5 秒变一次 key，

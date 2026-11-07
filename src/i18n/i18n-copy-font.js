@@ -1,8 +1,8 @@
 /**
  * i18n-copy-font.js — 英文词表域：字体与配色（src/font/* · fontset-editor · fontset-store）
  *
- * 本域词条**原样搬自** `src/i18n-copy.js`（拆分属纯搬移：中文键与英文值一行未改、顺序未动）。
- * 组装点在同族的 `src/i18n-copy.js`（composer）；域模块必须排在 composer **之前**登记进
+ * 本域词条**原样搬自** `src/i18n/i18n-copy.js`（拆分属纯搬移：中文键与英文值一行未改、顺序未动）。
+ * 组装点在同族的 `src/i18n/i18n-copy.js`（composer）；域模块必须排在 composer **之前**登记进
  * `scripts/build-client.mjs` 的 INLINE_MODULES —— 构建期内联进同一工厂作用域，顶层读受 TDZ 约束。
  * 只读不写：纯数据，不得有可执行语句。守卫判据见 `test/verify-i18n.mjs`（族读法 test/tools/src-scope.mjs）。
  */

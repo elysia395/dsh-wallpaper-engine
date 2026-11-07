@@ -14,7 +14,7 @@
  *   · `base`           ← 路径前缀 `BASE`（宿主唯一的定义处；这里以别名 BASE 使用）
  *   · `appendDiagLine` ← `lib/diag-trace.js` 的落盘函数（多族共用；主包各族由门面注入，本组件行走组件会话交出）
  *   · `configPath`     ← 模块级：数据目录里的 `config.json` 路径（后端的 `dataDir` 取它的父目录）
- *   · `readConfig`     ← 模块级：读取设置（启动决策读 `audioSource` / `mediaIntegration` / `mediaLyricsOnline`）
+ *   · `readConfig`     ← 模块级：读取设置（启动决策读 `audioSource` / `mediaIntegration`）
  *   · `log`            ← `lib/log.js` 的宿主日志入口（已带 `[media]` 标签）⇒ 后端的注入契约为
  *                        `log(msg, level)`：级别由调用点标注，缺省 `info`
  *   · `serveFile`      ← 组件会话交出的静态文件发送器（多族共用；规模由 `node test/tools/host-route-index.mjs --deps` 现算）
@@ -80,7 +80,6 @@ export function registerNowPlayingRoutes(webServer, c) {
     mediaBackend.start({
       // DSH_WE_MEDIA_NO_AUDIO=1：只取元数据、永不碰系统音频采集（不申请授权）。
       audio: st.audioSource !== 'off' && process.env.DSH_WE_MEDIA_NO_AUDIO !== '1',
-      online: st.mediaLyricsOnline === true,
     });
   };
 

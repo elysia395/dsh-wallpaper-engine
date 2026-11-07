@@ -89,7 +89,7 @@ function liveRenderEnabled(selLike) {
 const LIVE_FIRST_FRAME_MS = 15000;
 const LIVE_STALL_TICKS = 20;
 // 取值用 getter 现取（不在模块级冻结）：语言由 locale 服务在 bundle 求值之后确定，
-// 冻结的值会让 en 界面的失败行永远停在中文（见 src/i18n.js 的"模块级冻结"纪律）。
+// 冻结的值会让 en 界面的失败行永远停在中文（见 src/i18n/i18n.js 的"模块级冻结"纪律）。
 const LIVE_FAIL_LABELS = {
   get timeout() { return weT("首帧超时（{secs} 秒内无画面）", { secs: Math.round(LIVE_FIRST_FRAME_MS / 1000) }); },
   get stall() { return weT("运行中断（{secs} 秒无帧）", { secs: LIVE_STALL_TICKS }); },

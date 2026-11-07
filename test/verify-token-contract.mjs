@@ -78,9 +78,9 @@ console.log('\n② 无门控白名单封闭（M1 的止损线）');
   const thinking = scanTokenDecls('const CSS = `\n  body[data-we-thinking-native] [x] { --dsw-probe-think: red; }\n`;\n');
   check('负对照：thinking-native 门控在白名单内（白名单不是空的）',
     thinking.length === 1 && ungatedReason(thinking[0].chain) !== null);
-  // 正向锚点 4：插件自有 bare roots 封闭集的组选择器链（styles-panel.js picker/快捷面板
+  // 正向锚点 4：插件自有 bare roots 封闭集的组选择器链（src/styles/panel.js picker/快捷面板
   // 实底的真实形态）——整条链是纯逗号列表且每段精确命中集合成员 ⇒ 必须给出理由而非 stray。
-  // 独立来源：src/styles-panel.js 的 `.we-picker, .we-picker__modal, .we-qp` 注释自证
+  // 独立来源：src/styles/panel.js 的 `.we-picker, .we-picker__modal, .we-qp` 注释自证
   // 「本插件自有控件的局部表面，令牌仅挂本插件根节点」（与 .we-layer 同类豁免）。
   const picker = scanTokenDecls('const CSS = `\n  .we-picker, .we-picker__modal, .we-qp { --dsw-probe-picker: red; }\n`;\n');
   check('正向锚点：`.we-picker, .we-picker__modal, .we-qp` 组选择器链在白名单内',
@@ -134,12 +134,12 @@ console.log('\n②b 独立锚点表（A1：口径不能自己证明自己）');
   //      · 无门控封闭白名单 = thinking-native + 插件自有 bare roots 封闭集
   //        {.we-layer, .we-picker, .we-picker__modal, .we-qp}
   //        （thinking/layer 来源=docs/HOW-IT-WORKS.md「共存」节、docs/adr/0010-glass-off-revisit-four-states.md、
-  //        docs/TOKEN-CONTRACT.md；picker 三根来源=src/styles-panel.js
+  //        docs/TOKEN-CONTRACT.md；picker 三根来源=src/styles/panel.js
   //        注释自证「本插件自有控件的局部表面…令牌仅挂本插件根节点」，与 .we-layer 同类
   //        豁免，经 t9 窄 amend 授权加入；docs/TOKEN-CONTRACT.md 白名单表与工具口径同步）；
   //      · 玻璃门 = 链上有 `[data-we-glass-*]`（docs/CHANGELOG.md「页面玻璃锚点 data-we-glass-page」、
   //        docs/HOW-IT-WORKS.md、packages/glass/src/glass-css.js 的 `body[data-we-glass-page]` 块）；
-  //      · 壁纸门 = 只有 `[data-we-wallpaper]`（src/styles-base.js 里 bg-base/侧栏填充那两条）；
+  //      · 壁纸门 = 只有 `[data-we-wallpaper]`（src/styles/base.js 里 bg-base/侧栏填充那两条）；
   //      · 契约口径只收 `--dsw-*`（docs/TOKEN-CONTRACT.md 的口径段；`--we-*` 是插件自有变量族）。
   //    工具口径若被放宽（例如把 `:root` 或 `@media` 也当门控/白名单），这张表当场红。
   const ANCHORS = [
@@ -309,7 +309,7 @@ console.log('\n⑥ 门控计数自洽（A1-3：工具曾把每格算成 0，而�
     for (let i = 0; i < lines.length; i++) {
       const m = rowRe.exec(lines[i]);
       // 只认**全量令牌表**里那几行（tokenList 是 ⑥ 正在核对的那份名单），
-      // 别把无门控白名单表的行（第二格是 `src/styles-base.js`）或说明行当成计数格。
+      // 别把无门控白名单表的行（第二格是 `src/styles/base.js`）或说明行当成计数格。
       if (!m || !tokenList.some((t) => t.token === m[1])) continue;
       const gm = /\(([1-9]\d*)\)/.exec(m[3]);
       if (!gm) continue;

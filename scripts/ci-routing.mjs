@@ -49,7 +49,7 @@ import {
 } from '../test/tools/ci-routing.mjs';
 
 /**
- * 词表族文件（`src/i18n-copy.js` + 各 `src/i18n-copy-*.js`）。
+ * 词表族文件（`src/i18n/i18n-copy.js` + 各 `src/i18n/i18n-copy-*.js`）。
  * 从构建脚本的 INLINE_MODULES 现解析（单一真源，不抄第二份）；解析失败就退回只查公告
  * 词表文件 —— 缺文件的真实缺陷由 full 链的 `verify-i18n` 判，不在这里重复实现。
  */
@@ -58,7 +58,7 @@ function dictionaryFamilyFiles() {
     return parseInlineModules().map(({ file }) => file)
       .filter((file) => /(?:^|\/)i18n-copy(?:-[^/]+)?\.js$/.test(file));
   } catch {
-    return ['src/i18n-copy-ext.js'];
+    return ['src/i18n/i18n-copy-ext.js'];
   }
 }
 
@@ -428,7 +428,7 @@ export function noticeMain(args, deps) {
   const changed = diff.entries.map((e) => e.path).filter((p) => NOTICE_FILES.includes(p));
 
   // 译文覆盖检查要**整个词表族**：公告里的「知道了」等词条住在别的域文件
-  // （`src/i18n-copy-core.js`），只查 `i18n-copy-ext.js` 会误判成漏译。族清单从构建脚本的
+  // （`src/i18n/i18n-copy-core.js`），只查 `i18n-copy-ext.js` 会误判成漏译。族清单从构建脚本的
   // INLINE_MODULES 现解析（不抄第二份），文件读不到就跳过（缺文件由 full 链判）。
   const dictionary = dictionaryFamilyFiles()
     .map((rel) => readCurrent(rel))

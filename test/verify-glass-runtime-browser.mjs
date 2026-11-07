@@ -200,11 +200,11 @@ try {
     })()`);
     await evaluate('new Promise(resolve=>requestAnimationFrame(()=>requestAnimationFrame(resolve)))');
     const tag = (dark ? 'dark-' : 'light-') + width;
-    // 两段配方解析器（t9-003 computed 取证）：与 packages/glass/src/glass-extra.js / src/styles-panel.js
+    // 两段配方解析器（t9-003 computed 取证）：与 packages/glass/src/glass-extra.js / src/styles/panel.js
     // 同构 —— base@readability-floor 叠 tint 段@settings-window-alpha×0.9。序列化兼容
     // rgba(...) 与 Chrome 新式 color(srgb r g b / a)。floor/tint 按 loop 的 dark 取值，
     // 与 fixture 注入一致；base 不再硬编码（t30 F1：#151515/#ffffff 与产品真源
-    // src/styles-base.js/585 的 tint 链自相矛盾）—— 读解析后的 --we-readability-base，
+    // src/styles/base.js/585 的 tint 链自相矛盾）—— 读解析后的 --we-readability-base，
     // 期望与真实级联同源；解析失败 ⇒ NaN 让 own-four 如实 FAIL（detail 带原始文本）。
     const hex1 = (h) => parseInt(h, 16) / 255;
     const floor = dark ? FLOOR.dark : FLOOR.light;
@@ -602,9 +602,9 @@ try {
     check(tag+' 编辑内容底板受控且语法选区不改',compat.editor!=='rgb(255, 255, 255)' && compat.syntax==='rgb(197, 104, 228)' && compat.selection==='rgb(60, 80, 160)',compat);
     check(tag+' 本插件页签与上传区不继承宿主黑色实底',compat.ownTab!=='rgb(0, 0, 0)' && compat.ownUploads!=='rgb(0, 0, 0)',compat);
     // own 面 computed 精确配方（t8 修复的浏览器级验证）：玻璃页门别名块
-    // （src/styles-panel.js）在 .we-picker 根上把 --dsw-alias-bg-layer-1 换成
+    // （src/styles/panel.js）在 .we-picker 根上把 --dsw-alias-bg-layer-1 换成
     // 两段 color-mix（tint×alpha×0.9 + floor 地板）；.we-tabs(:249)/.we-picker__current(:208)/
-    // .we-picker__uploads(:258)/.we-ext__module(styles-ext.js) 消费同一令牌 ⇒
+    // .we-picker__uploads(:258)/.we-ext__module(src/styles/ext.js) 消费同一令牌 ⇒
     // 四元素 computed 必须等于配方解析值，且不等于宿主黑实底/宿主灰。深浅主题分叉由
     // tint 色相差异体现（light #8fd0ff / dark #0d1524，mixOut 已按主题取值）。
     const ownMix = mixOut(0.15); // phase-two fixture 显式给了 --we-settings-window-alpha:.15
@@ -679,7 +679,7 @@ try {
     // 不是自有设置窗 5..42/5..50）；--we-blur ∈ [0,60]px（packages/glass/src/glass-panel.js SliderRow(cn.blur,0,60,1)）。
     // extra normal 霜读 --we-blur（packages/glass/src/glass-extra.js），底色两段 color-mix 消费
     // --we-settings-window-alpha×0.9 + readability-floor 地板（packages/glass/src/glass-extra.js）；
-    // own-current 走同一配方表（src/styles-panel.js）⇒ 同一断言面。phase-two 此处
+    // own-current 走同一配方表（src/styles/panel.js）⇒ 同一断言面。phase-two 此处
     // 已无 #settings（:248 移除），霜载体读 extra 面 ::before 本体。
     await evaluate(`(() => {
       __selection.extraGlassSelectors='.extra';

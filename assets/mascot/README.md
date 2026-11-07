@@ -106,7 +106,7 @@
 | `src/client.js` | 删掉内联常量 `ROPE_IMG`（113,771 B / 256×283 / base64 151,696 chars）与 `ROPE_FORMS.maid` 条目；`ropeArtOf` 的兜底改为 `ROPE_FORMS.deepseek` |
 | `lib/glass-presets/factory-author.json` | `assets.mascot` = **对象**（`file: mascot-maidart001.png`、`box: 52x57`、`data: <那张 256×283 的 base64>`）⇒ 立绘随预设走，出厂列表里不再有它 |
 | 其余五套预设 | `assets.mascot` / `values.ropeForm` 一律 → `"deepseek"`（`purple-mood` 仍携带自定义图片、指向 `phoebe`） |
-| `src/i18n-copy.js` | 删掉「小女仆」词条（`maid` 除名后成孤儿） |
+| `src/i18n/i18n-copy.js` | 删掉「小女仆」词条（`maid` 除名后成孤儿） |
 
 > 老配置里存着 `ropeForm: "maid"` 的机器会被 sanitize **折成新默认 `deepseek`**（不是崩、也不是留空）；
 > 这条被 `test/fixtures/settings-sanitize-golden.json` 的 `defaults-echo` 用例钉住。

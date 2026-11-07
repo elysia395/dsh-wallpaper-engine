@@ -34,7 +34,7 @@
 `test/verify-subpackage-purity.mjs` 的 inject 一致性判据原实现用正则抽 `ctx.<ident>` 当作「消费的服务名」，
 把 `ctx.get` 的**方法名 `get`** 也当成服务，于是误报 `用了 ctx.get 但 inject 里没有声明它`。
 
-修正：引入 `CORDIS_CONTEXT_API` 集合（真源 = cordis 4.0.5 `src/reflect.ts` 的 mixin 表：
+修正：引入 `CORDIS_CONTEXT_API` 集合（真源 = cordis 4.0.5 内置 npm 包 `reflect` 的 mixin 表：
 `get/set/provide/accessor/mixin`、`runtime/effect`、`inject/plugin`、`on/once/parallel/emit/serial/bail/waterfall`，
 外加 `logger/root/intercept`），在「消费的服务名」里排除这些 **Cordis 内建 API**。
 

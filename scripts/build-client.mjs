@@ -67,66 +67,66 @@ const INLINE_MODULES = [
     markers: ['function weClampTo(', 'function weNow(', 'function weBody('],
   },
   {
-    // 词表域模块（8 个）必须排在组装点 `src/i18n-copy.js` **之前**：构建期内联进同一工厂作用域，
+    // 词表域模块（8 个）必须排在组装点 `src/i18n/i18n-copy.js` **之前**：构建期内联进同一工厂作用域，
     // 组装点顶层读它们是 TDZ 的正面用法。域划分 = 文案归属的界面域（表体一行未改、顺序未动）；
     // 顺序即键插入序，守卫 test/verify-i18n.mjs 按 INLINE_MODULES 顺序逐条比对。
-    file: 'src/i18n-copy-core.js',
+    file: 'src/i18n/i18n-copy-core.js',
     why: '英文词表域：客户端外壳（adapter / client / 更新公告）',
     markers: ['const WE_I18N_EN_CORE = {', '"自动检测": "Auto-detect",'],
   },
   {
-    file: 'src/i18n-copy-font.js',
+    file: 'src/i18n/i18n-copy-font.js',
     why: '英文词表域：字体与配色（font/* · fontset-store；fontset-editor 与外观页签字体节已搬进 packages/fonts，词表仍住本域、由主包 weT 供词）',
     markers: ['const WE_I18N_EN_FONT = {', '"正文": "Primary text",'],
   },
   {
-    file: 'src/i18n-copy-live.js',
+    file: 'src/i18n/i18n-copy-live.js',
     why: '英文词表域：实时层与素材预处理（live-layer · media-prep）',
     markers: ['const WE_I18N_EN_LIVE = {', '"首帧超时（{secs} 秒内无画面）": "First-frame timeout'],
   },
   {
-    file: 'src/i18n-copy-panel.js',
+    file: 'src/i18n/i18n-copy-panel.js',
     why: '英文词表域：设置面板页签（panel-tabs）',
     markers: ['const WE_I18N_EN_PANEL = {', '"当前壁纸": "Current wallpaper",'],
   },
   {
-    file: 'src/i18n-copy-picker.js',
+    file: 'src/i18n/i18n-copy-picker.js',
     why: '英文词表域：壁纸选择器与快捷面板（picker-* · quick-panel · sidebar-right · theme-follow）',
     markers: ['const WE_I18N_EN_PICKER = {', '"返回": "Back",'],
   },
   {
-    file: 'src/i18n-copy-ext.js',
+    file: 'src/i18n/i18n-copy-ext.js',
     why: '英文词表域：扩展页签 · 关于页签 · 更新公告（ext-* · panel-tabs）',
     markers: ['const WE_I18N_EN_EXT = {', '"扩展模块": "Extension modules",'],
   },
   {
-    file: 'src/i18n-copy-glass.js',
+    file: 'src/i18n/i18n-copy-glass.js',
     why: '英文词表域：玻璃预设与外观细项（思考块 · 系统字体 · 预设 · 侧栏圆角）',
     markers: ['const WE_I18N_EN_GLASS = {', '"思考块液态玻璃": "Thinking-block liquid glass",'],
   },
   {
-    file: 'src/i18n-copy-pet-link.js',
+    file: 'src/i18n/i18n-copy-pet-link.js',
     why: '英文词表域：桌宠联动（pet-link 的浏览器半边文字；源在包内时属"停在主 bundle"的域表，收口后按 fonts 惯例归主包 src/）',
     markers: ['const WE_I18N_EN_PET_LINK = {'],
   },
   {
-    file: 'src/i18n-copy.js',
+    file: 'src/i18n/i18n-copy.js',
     why: '英文词表的**组装点** + 宿主显示表（域模块在前，这里只展开组装；两张表的键集各由 verify-i18n 双向对账）',
     markers: ['const WE_I18N_EN = {', 'const WE_I18N_HOST_EN = {'],
   },
   {
-    file: 'src/i18n.js',
+    file: 'src/i18n/i18n.js',
     why: 'i18n 运行时：跟随宿主 locale 服务的取词层（语言种类与 dsh web 同一份目录；含 ?we-lang 逃生舱）',
     markers: ['const WE_I18N_NS = ', 'function weT(', 'function weI18nAttach(',
       'function useWeLocale()', 'function weOnLocaleChange('],
   },
   {
-    file: 'src/styles-base.js',
+    file: 'src/styles/base.js',
     why: '样式域 base（原 styles.js 61–592；ADR-0016 第四刀玻璃段出户后）：画布兜底 · 全局 UI 配色 · 面板色与弹层行配对',
     markers: ['const CSS_BASE = `', '/* ── 画布兜底色', '--we-popup-row-bg'],
   },
   {
-    file: 'src/styles-shell.js',
+    file: 'src/styles/shell.js',
     why: '样式域 shell（ADR-0016 第四刀玻璃段出户后）：原生左栏模式底 · 外壳画布底（壁纸让位两段）',
     markers: ['const CSS_SHELL = `', '/* ── 原生左栏在 extended/advanced 窗口模式下的不透明底', '/* ── 外壳画布底'],
   },
@@ -134,27 +134,27 @@ const INLINE_MODULES = [
   //    玻璃接管：左栏 / 四角圆角 / 标题栏 / better-sidebar / 官方右栏 / 内容面）——
   //    内容住 packages/glass/src/glass-css.js 的 CSS_GLASS，主包组装式不再有 CSS_SIDEBAR 段。
   {
-    file: 'src/styles-chrome.js',
+    file: 'src/styles/chrome.js',
     why: '样式域 chrome（ADR-0016 第四刀玻璃段出户后）：统一控件 token · corner-shape 兼容(#74)',
     markers: ['const CSS_CHROME = `', '/* ── 统一控件 token', '/* ── DSH harness corner-shape 兼容'],
   },
   {
-    file: 'src/styles-settings.js',
+    file: 'src/styles/settings.js',
     why: '样式域 settings（原 styles.js 1916–2167）：预设圆角表格 · 原生下拉弹层 · 视觉分组 divider · 可折叠节头 · 窄栏兜底 · 页签栏 · 统一设置行 32px',
     markers: ['const CSS_SETTINGS = `', '/* ── 预设方案'],
   },
   {
-    file: 'src/styles-panel.js',
+    file: 'src/styles/panel.js',
     why: '样式域 panel（原 styles.js 2168–2925）：吉祥物 3D 圆环转盘 · 圆点跳转 · 效果空态 · 黑胶 · 当前壁纸卡 · 壁纸属性面板 · 库下钻 · 目录浏览器',
     markers: ['const CSS_PANEL = `', '/* ── 吉祥物形态'],
   },
   {
-    file: 'src/styles-quick.js',
+    file: 'src/styles/quick.js',
     why: '样式域 quick（原 styles.js 2926–3357）：Rope dock · 快捷播放面板 QuickPanel',
     markers: ['const CSS_QUICK = `', '/* ── Rope dock'],
   },
   {
-    file: 'src/styles-ext.js',
+    file: 'src/styles/ext.js',
     why: '样式域 ext（ADR-0016 第四刀玻璃段出户后）：「关于」页签 · 扩展槽位与三号模块',
     markers: ['const CSS_EXT = `', '/* ── 「关于」页签：静态页'],
   },
@@ -329,29 +329,29 @@ const INLINE_MODULES = [
       'function weRegisterLayerHooks(', 'function weDiscoveredGroupsOf('],
   },
   {
-    file: 'src/panel-tabs-appearance.js',
+    file: 'src/panel-tabs/appearance.js',
     why: '「外观」页签的节渲染器与字体一族（从 src/panel-tabs.js 按域拆出）',
     markers: ['function renderAppearanceThemeSection(ctx) {', '    const { onResetModule, onToggleThemeFollow, sel } = ctx;'],
   },
   {
-    file: 'src/panel-tabs-mascot.js',
+    file: 'src/panel-tabs/mascot.js',
     why: '「吉祥物」页签的节渲染器与其模块级常量/拖拽状态（从 src/panel-tabs.js 按域拆出）',
     markers: ['function renderMascotFormCards(sel, previewArt, previewW, previewH,', '  const MASCOT_BOX_PX = 64;'],
   },
   {
-    file: 'src/panel-tabs-effects.js',
+    file: 'src/panel-tabs/effects.js',
     why: '「播放」页签的三个节渲染器：滑块 / 实时帧 / 出图来源（从 src/panel-tabs.js 按域拆出；倍速·帧率上限与适配·翻转两节住在 packages/media-bridge 的浏览器半边，ADR-0013/ADR-0014）',
     markers: ['function renderEffectsSlidersSection(ctx) {',
       '    const { onBackgroundBrightness, onBackgroundContrast, onBackgroundSaturate, onLayerPositionX, onLayerPositionY, onLayerReset, onLayerScale, onScrim, onWallpaperBlur, onWallpaperOpacity, sel } = ctx;'],
   },
   {
-    file: 'src/panel-tabs-advanced.js',
+    file: 'src/panel-tabs/advanced.js',
     why: '「系统」页签的六个节渲染器（从 src/panel-tabs.js 按域拆出）',
     markers: ['function renderAdvancedBrowsingSection(ctx) {', '    const { onLayoutChange, sel } = ctx;'],
   },
   {
     file: 'src/panel-tabs.js',
-    why: '面板页签**组装点**：只留一个页签一个 render*Tab（其中「扩展」页签只画 extensionModules() 里登记的模块）；五个域的节渲染器在 panel-tabs-*.js 里 —— 显式 ctx 取外界',
+    why: '面板页签**组装点**：只留一个页签一个 render*Tab（其中「扩展」页签只画 extensionModules() 里登记的模块）；五个域的节渲染器在 src/panel-tabs/*.js 里 —— 显式 ctx 取外界',
     markers: ['function renderWallpaperTab(ctx) {', '    const { } = ctx;',
       'function renderExtensionsTab(ctx) {', 'function renderAboutTab(ctx) {',
       'renderWallpaperTab, renderAppearanceTab, renderAudioTab, renderMascotTab, renderEffectsTab, renderAdvancedTab,'],
@@ -389,10 +389,24 @@ const INLINE_MODULES = [
     markers: ['function probeVideoPoster(', 'function videoContentReady(', 'VIDEO_POSTER_BUDGET_MS', 'let mediaInfoToken = ', 'function clearUpgradePoll(', 'async function refreshMediaInfo(', 'function abortTranscodeUpgrade(', 'function maybeUpgradeToTranscoded(', 'function invalidateMediaInfoProbe('],
   },
   {
+    file: 'src/media-prep/prepare.js',
+    why: '媒体预备族·轮换预准备：候选预挂载 + 准备超时记账 + 按类型分派到 video/web/scene 预处理器',
+    markers: ['function beginRotationPrepare(', 'function prepareWallpaper('],
+  },
+  {
+    file: 'src/media-prep/probe.js',
+    why: '媒体预备族·探测：detached <video> 预载预播 + detached <iframe>（we-layer--staging 容器，iframe 不直接挂 body）',
+    markers: ['function prepareVideoProbe(', 'function prepareWebProbe('],
+  },
+  {
+    file: 'src/media-prep/budget.js',
+    why: '媒体预备族·live 准备超时账本：连续超时上限 / 隐藏期持有上限 / 隐藏期轮询间隔 + 记账三助手',
+    markers: ['const prepareLiveTimeouts = ', 'function prepareLiveExhausted('],
+  },
+  {
     file: 'src/media-prep.js',
-    why: '选中项落地：预准备（预挂载 + 探测 + 超时记账）→ buildMedia → applySelection',
-    markers: ['function beginRotationPrepare(', 'function prepareWallpaper(', 'const prepareLiveTimeouts = ',
-      'function prepareSceneLiveStage(', 'function applySelection(', 'function buildMedia('],
+    why: '媒体预备族根与组装点：scene 两阶段 → buildMedia → applySelection（族内三段见 media-prep/ 目录）',
+    markers: ['function prepareSceneLiveStage(', 'function prepareSceneStaticStage(', 'function applySelection(', 'function buildMedia('],
   },
   {
     file: 'src/layer-core.js',
@@ -405,27 +419,32 @@ const INLINE_MODULES = [
     markers: ['function installFocusHandback(', 'function weIsWallpaperFrame(', 'GESTURE_WINDOW_MS', 'window.__weFocusHandback'],
   },
   {
-    file: 'src/live-layer-diag.js',
+    file: 'src/live-layer/diag.js',
     why: '实时渲染管线·诊断与日志域：分级日志 / 状态摘要 / 诊断留痕的安装',
     markers: ['function liveLog(', 'const LIVE_DIAG_KEY = '],
   },
   {
-    file: 'src/live-layer-watch.js',
-    why: '实时渲染管线·心跳与载荷域：看护 tick / 判失败 / 转移重试 / 抓帧回填',
+    file: 'src/live-layer/probe.js',
+    why: '实时渲染管线·心跳读数与载荷取证域：__wpStats 读数 / 首帧预算 / 载荷账本轮询与失败归因 / FPS 诊断上报',
+    markers: ['function liveStats(frame) {', 'function liveFirstFrameBudget(wid) {'],
+  },
+  {
+    file: 'src/live-layer/watch.js',
+    why: '实时渲染管线·看护域：看护 tick / 转移重试 / 抓帧回填',
     markers: ['function startLiveWatch(', 'function scheduleLiveFrameBackfill('],
   },
   {
-    file: 'src/live-layer-pointer.js',
+    file: 'src/live-layer/pointer.js',
     why: '实时渲染管线·指针与帧域：指针注入 / 帧字节簿记 / poster 与挂载',
     markers: ['function livePointerFlush(', 'function liveFrameEl('],
   },
   {
-    file: 'src/live-layer-gate.js',
+    file: 'src/live-layer/gate.js',
     why: '实时渲染管线·内容闸门域：待显层的揭示闸门与失败记忆的管线身份',
     markers: ['function armLayerContentReveal(', 'function livePipelineNow('],
   },
   {
-    file: 'src/live-layer-underlay.js',
+    file: 'src/live-layer/underlay.js',
     why: '实时渲染管线·兜底色域：画布兜底色采样与可见性恢复',
     markers: ['function writeUnderlayColor(', 'function refreshUnderlayColor('],
   },
@@ -441,7 +460,7 @@ const INLINE_MODULES = [
       'const apiJson = ', 'const apiHead = '],
   },
   {
-    // Linux 壳窗遮挡轮询器（docs/wip/LINUX-OCCLUSION.md §6）：宿主 /occlusion 快照
+    // Linux 壳窗遮挡轮询器（docs/LINUX-OCCLUSION.md §6）：宿主 /occlusion 快照
     // → innerWidth/own.w 缩放到画布 CSS 像素 → postMessage 给 scene-live 遮挡桥。
     // 顶层只声明函数与 var 状态、apiJson 在调用期解引用（无 TDZ 交互），跟随
     // api-client 之后内联。
@@ -463,22 +482,39 @@ const INLINE_MODULES = [
       'function clearEffects()', 'function resolveWallpaperFadeBg()'],
   },
   {
-    file: 'src/client-media-frame.js',
+    file: 'src/client/media-frame.js',
     why: 'src/client.js 正文的媒体/帧渲染助手（画布绘制、GPU 帧钉、音频桥与封面、属性面板装配；含其模块级状态变量）—— 构建期内联在正文之前，同处一个扁平作用域',
     markers: ['function weStopDraw()', 'const GPU_FRAME_PIN_TTL_MS = 30000;',
       'function renderUserPropsPanel()'],
   },
   {
-    file: 'src/client-rotation.js',
+    file: 'src/client/rotation.js',
     why: 'src/client.js 正文的轮换/媒体生命周期助手（过场几何、探测元素领养与释放、隐藏期轮换推迟；含其顶层状态）—— 构建期内联在正文之前，同处一个扁平作用域',
     markers: ['function barsPolygon(dir, p) {', 'const LIVE_FIRST_FADE_MS = 1800;',
       'function installRotationResumeListeners() {'],
   },
   {
-    file: 'src/client-audio-playback.js',
+    file: 'src/client/audio-playback.js',
     why: 'src/client.js 正文的音频/播放桥助手（期望音量与元素音量写入、轮换音频闸、层内媒体元素枚举、live iframe 音量与场景包 BGM 起停、播放状态应用；含其顶层状态）—— 构建期内联在正文之前，同处一个扁平作用域',
     markers: ['function weApplyAudio(video) {', 'let rotationAudioGate = null;',
       'const LAYER_KEY_FIELDS = ["type", "url", "edge", "sceneVideo", "audio", "live"];'],
+  },
+  {
+    file: 'src/client/rope-dock.js',
+    why: 'src/client.js 正文的主页面吉祥物组件（RopeDock：拖拽/吸附/侧栏抽屉/气泡与走抛动画；只读正文的 ROPE_FORMS / ropeArtOf / 侧栏桥等自由名）—— 构建期内联在正文之前，同处一个扁平作用域',
+    markers: ['function RopeDock() {', 'ropeDrawerControl = {'],
+  },
+  {
+    // 跨包浏览器半边的**显式键集契约表**（ADR-0014 S5.1 / S5.4）：71 个 getter 挂到 module.exports。
+    // 必须排在内联清单**末尾**：表顶层读 `DEFAULTS`（lib/settings-schema.js 的内联件）⇒ 要排在它之后；
+    // 正文里的函数声明在工厂体内提升、getter 又是惰性求值 ⇒ 与正文的先后无关。
+    // （原先住 src/client.js 正文底部，搬出来只为让"改一个键要同时对账 6 处解构名单"
+    // 的契约表有个能一眼找到的家；产物行为逐字不变 —— verify 链与 golden 快照会兜住这一点。）
+    file: 'src/host-bridge.js',
+    why: '跨包浏览器半边契约表：子包经 require(主包名) 取到的显式键集 + 冻结的 exports.hostBridgeKeys；改一个键要同时对账 6 处解构名单（产物里的 *_HOST_REQUIRED 由本构建器从解构派生，test/verify-subpackage-client-half.mjs D-7 对账）',
+    markers: ['const HOST_BRIDGE_BINDINGS = {',
+      'const HOST_BRIDGE_KEYS = Object.keys(HOST_BRIDGE_BINDINGS);',
+      'exports.hostBridgeKeys = Object.freeze(HOST_BRIDGE_KEYS.slice());'],
   },
 ];
 
@@ -577,7 +613,7 @@ function loadSubpackageRecipes() {
 /**
  * 读取一个构建输入、归一化成 LF，**并断言不再有孤立 CR**。
  *
- * 为什么这条断言值得让构建**红**：源文件里若混进多余的回车（历史形态：`src/i18n-copy.js` 曾有
+ * 为什么这条断言值得让构建**红**：源文件里若混进多余的回车（历史形态：`src/i18n/i18n-copy.js` 曾有
  * 28 行是 `\r\r\n`），Windows 检出会把它放大成 `\r\r\n`、Linux 检出是 `\r\n`，而这里只做
  * `\r\n → \n` 归一化 ⇒ Windows 上会**残留一个孤立 CR** ⇒ **同一份源码在两个平台产出不同字节的
  * 产物**。于是同一份源码在不同机器上会产出不同字节的产物（实测过：一条 CI 腿红、另一条绿，
@@ -927,6 +963,96 @@ function stripHeader(srcText) {
 }
 
 /**
+ * 子包 `*_HOST_REQUIRED` 申报表 = **构建期从解构派生**（P3-lite 第二刀）。
+ *
+ * 为什么：申报表与紧随其后的 `const { … } = host;` 解构是同一份事实写了两遍（六个包 102 个键），
+ * 而「改一个键要同时对账 N 张申报表」正是跨包键面维护成本的主要来源。现在源码只留空表：
+ *
+ *     const GLASS_HOST_REQUIRED = [];          // 源码面：空表，只为 eslint/typecheck 可读
+ *     for (const key of GLASS_HOST_REQUIRED) …  // 运行期防版本错配的响亮检查（保留）
+ *     const { React, weT, … } = host;           // 唯一真源：本文件解了哪些键，产物就申报哪些键
+ *
+ * 构建期在这里把 `[]` 换成从解构名单派生的字面量数组，并**当场断言**每个名字都在
+ * `src/host-bridge.js` 的 HOST_BRIDGE_BINDINGS 里 —— 少给键的报错从「用户机器上运行期抛」
+ * 提前到「构建红」，且报错文案直接点名该补哪张表。
+ *
+ * 保留运行期检查的理由（不因构建期断言而删）：九包各自独立发版，用户机器上可能出现
+ * 主包/子包版本错配（主包旧、子包新）⇒ 构建期断言管不到，只有产物里的键数组能当场响亮失败。
+ */
+/** 缓存挂在函数对象上（本文件在此函数定义之前就会跑子包构建循环 ⇒ 模块级 let 会踩 TDZ）。 */
+function hostBridgeKeys() {
+  if (hostBridgeKeys.cache) return hostBridgeKeys.cache;
+  const src = readNormalized(resolve(root, 'src', 'host-bridge.js'));
+  const at = src.indexOf('const HOST_BRIDGE_BINDINGS = {');
+  if (at < 0) {
+    console.error('[build-client] src/host-bridge.js 里找不到 `const HOST_BRIDGE_BINDINGS = {`：'
+      + '子包申报表无法派生，产物会带一张空键表（运行期缺键检查全部空转）。');
+    process.exit(1);
+  }
+  const end = src.indexOf('\n};', at);
+  if (end < 0) {
+    console.error('[build-client] src/host-bridge.js 的 HOST_BRIDGE_BINDINGS 没有收尾 `\\n};`（形状变了？）。');
+    process.exit(1);
+  }
+  const keys = [...src.slice(at, end).matchAll(/^ {2}([A-Za-z_$][\w$]*):/gm)].map((m) => m[1]);
+  if (keys.length === 0) {
+    console.error('[build-client] HOST_BRIDGE_BINDINGS 解析出 0 个键（形状变了？）。');
+    process.exit(1);
+  }
+  hostBridgeKeys.cache = keys;
+  return keys;
+}
+
+/** 把入口正文里的空申报表换成从 `} = host;` 解构派生的字面量数组；无申报表的子包原样返回。 */
+function deriveHostRequiredTable(bodySrc, entryLabel) {
+  const m = bodySrc.match(/const\s+([A-Z][A-Z0-9_]*_HOST_REQUIRED)\s*=\s*\[\s*\]\s*;/);
+  if (!m) {
+    // 解构了 host 却没有申报表 ⇒ 缺键会静默 undefined（ADR-0014 S5.1 禁止）。宁可构建红。
+    if (/const\s*\{[\s\S]*?\}\s*=\s*host\s*;/.test(bodySrc)) {
+      console.error(`[build-client] ${entryLabel} 从 host 解构了键，却没有空申报表 `
+        + '（`const XXX_HOST_REQUIRED = [];` ⇒ 构建期派生）。缺键将静默 undefined，'
+        + '违反 ADR-0014 S5.1 显式键集。');
+      process.exit(1);
+    }
+    return bodySrc;
+  }
+  const name = m[1];
+  const rest = bodySrc.slice(m.index + m[0].length);
+  const dm = rest.match(/const\s*\{([\s\S]*?)\}\s*=\s*host\s*;/);
+  if (!dm) {
+    console.error(`[build-client] ${entryLabel} 有申报表 ${name}，但其后找不到 \`} = host;\` 解构：`
+      + '申报表无从派生（空表会让运行期缺键检查空转）。');
+    process.exit(1);
+  }
+  const keys = dm[1]
+    .replace(/\/\*[\s\S]*?\*\//g, '')
+    .replace(/\/\/[^\n]*/g, '')
+    .split(',')
+    .map((s) => s.trim())
+    .filter(Boolean)
+    .map((s) => s.split(':')[0].trim());
+  if (keys.length === 0) {
+    console.error(`[build-client] ${entryLabel} 的 \`} = host;\` 解构解析出 0 个键（形状变了？）。`);
+    process.exit(1);
+  }
+  if (new Set(keys).size !== keys.length) {
+    const dup = keys.filter((k, i) => keys.indexOf(k) !== i);
+    console.error(`[build-client] ${entryLabel} 的 host 解构里出现重复键：${[...new Set(dup)].join(', ')}。`);
+    process.exit(1);
+  }
+  const hostKeys = hostBridgeKeys();
+  const missing = keys.filter((k) => !hostKeys.includes(k));
+  if (missing.length > 0) {
+    console.error(`[build-client] ${entryLabel} 从 host 解构了主 bundle 没有的键：${missing.join(', ')}。\n`
+      + '  要么在 src/host-bridge.js 的 HOST_BRIDGE_BINDINGS 里补键（并在 src/client.js 正文给出同名绑定），\n'
+      + '  要么从本文件的解构里去掉（ADR-0014 S5.1：多一个键就是多一条隐式契约）。');
+    process.exit(1);
+  }
+  const arrayText = '[' + keys.map((k) => JSON.stringify(k).replace(/"/g, "'")).join(', ') + ']';
+  return bodySrc.slice(0, m.index) + `const ${name} = ${arrayText};` + bodySrc.slice(m.index + m[0].length);
+}
+
+/**
  * 组装一份客户端产物 —— 主 bundle 与子包 bundle **同形**（同一个 window.__ModuleLoader__.load
  * 形状），差别只有两处：
  *   · 子包 bundle 由构建发出 `const host = require('<主包名>')`，那是跨包通道的唯一入口
@@ -983,9 +1109,10 @@ function buildSubpackageBundle(recipe) {
   const entryRel = toPosix(recipe.entry);
   const source = readNormalized(resolve(dir, entryRel));
   const { body: rawBody, codeStart: lineOffset } = stripHeader(source);
-  const bodySrc = rawBody.replace(/\n+$/, '');
   const label = `${recipe.dir}/`;
   const entryLabel = `${label}${entryRel}`;
+  // 申报表派生（P3-lite 第二刀）：换行数不变（单行空表 → 单行字面量），下面的行号判据仍指回原文件。
+  const bodySrc = deriveHostRequiredTable(rawBody.replace(/\n+$/, ''), entryLabel);
   const prelude = readInlinedPrelude(recipe.inline, dir, bodySrc, label);
   assertNoShadowedScopeDecls({ bodySrc, lineOffset, bodyFile: entryLabel, modules: recipe.inline, baseDir: dir, label });
   return assembleBundle({ id: recipe.name, prelude, bodySrc, hostPackage: id, bodyLabel: entryLabel });

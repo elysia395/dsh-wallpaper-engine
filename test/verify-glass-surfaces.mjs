@@ -403,7 +403,8 @@ const STYLES_TEXT = styleText() + readFileSync(join(ROOT, 'packages', 'glass', '
 const CLIENT_SRC = readFileSync(join(ROOT, 'src', 'client.js'), 'utf8');
 // 「独立配置」开关的**两个落点**：登记表子项由 glass-panel 自动渲染，既有面（左侧栏 / 侧栏 /
 // 内容面）的开关手写在 panel-tabs。第 ⑧ 组的"mode 可达性"判据要同时看这两处。
-const GLASS_PANEL_SRC = readFileSync(join(ROOT, 'packages', 'glass', 'src', 'glass-panel.js'), 'utf8');
+const GLASS_PANEL_SRC = readFileSync(join(ROOT, 'packages', 'glass', 'src', 'glass-panel.js'), 'utf8')
+  + '\n' + readFileSync(join(ROOT, 'packages', 'glass', 'src', 'glass-presets-panel.js'), 'utf8');
 const PANEL_SRC = panelText();
 // schema 模块（模块级：多个判据组都要读它的 DEFAULTS / GLASS_CHILDREN）。
 const SCHEMA = await import(new URL('../lib/settings-schema.js', import.meta.url).href);
