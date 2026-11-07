@@ -5,7 +5,7 @@
 > 口径：只统计守卫**代码**里真正碰到的模块（先剥注释），并区分"直接读源文件"与"隔着产物 `lib/client.js`"。
 > 写法：字面量路径 / `join(...)` 拼接 / 唯一 basename / 产物配方 / **前缀族读法** `scopeFiles|scopeText(<前缀>)` / **经共享族助手读**（`import { panelText } from './tools/src-scope.mjs'` + 真调用；族口径封在那个库里，见 DEV-GUIDE §4.6「同时是守卫的库」）/ **真源定位读**（`locate('符号')` / `locateFile('文件名')`，`test/tools/source-locator.mjs`：符号唯一声明在哪就是读了哪个模块）。
 
-模块面 212 个 · 守卫 129 个
+模块面 212 个 · 守卫 130 个
 
 ## 守卫 → 模块
 
@@ -40,6 +40,7 @@
 | `verify-component-face.mjs` | `lib/host-boot.js` `lib/kernel/component-session.js` `lib/kernel/host-kernel.js` |  |
 | `verify-component-fonts.mjs` | `lib/settings-schema.js` `src/client.js` `src/effects.js` `src/font/apply.js` `src/font/components.js` | ✅ |
 | `verify-component-visibility.mjs` | `lib/component-visibility.js` `lib/kernel/component-session.js` `packages/media-bridge/lib/routes/inventory.js` `src/panel-tabs.js` |  |
+| `verify-composer-fixed-browser-case.mjs` | `src/we-base.js` |  |
 | `verify-config-store.mjs` | `lib/kernel/config.js` `lib/media/transcode.js` |  |
 | `verify-contracts.mjs` | `lib/host-boot.js` `lib/index.js` `lib/kernel/host-kernel.js` `lib/media/media-dirs.js` `lib/settings-schema.js` `packages/fonts/lib/routes/fontsets.js` `packages/fonts/src/fontset-editor.js` `packages/mascot-avatar/lib/routes/avatar.js` `packages/mascot-avatar/lib/routes/mascot.js` `packages/media-bridge/lib/backend.js` `packages/media-bridge/lib/index.js` `packages/media-bridge/lib/legacy.js` `packages/media-bridge/lib/supervisor-protocol.js` `packages/media-bridge/lib/supervisor.js` `src/api-client.js` `src/client.js` `src/fontset-store.js` `src/panel-tabs.js` `src/panel-tabs/advanced.js` `src/panel-tabs/appearance.js` `src/panel-tabs/effects.js` `src/panel-tabs/mascot.js` |  |
 | `verify-dead-declarations.mjs` | — |  |
@@ -88,10 +89,10 @@
 | `verify-pet-package.mjs` | `lib/index.js` `lib/subpackage-boot.js` `packages/pet-link/lib/index.js` `src/sidebar-right.js` |  |
 | `verify-pet-panel.mjs` | `packages/pet-link/src/pet-link.js` `packages/pet-link/src/pet-link/bubble.js` `packages/pet-link/src/pet-link/constants.js` `packages/pet-link/src/pet-link/linked-egg1.js` `packages/pet-link/src/pet-link/linked-egg2.js` `packages/pet-link/src/pet-link/linked-mascot.js` `packages/pet-link/src/pet-link/linked-shared.js` `packages/pet-link/src/pet-link/linked-sidebar.js` `packages/pet-link/src/pet-link/linked.js` `packages/pet-link/src/pet-link/mode.js` `packages/pet-link/src/pet-link/native.js` `packages/pet-link/src/pet-link/panel-params.js` |  |
 | `verify-pet-rope-entry.mjs` | `src/client/rope-dock.js` |  |
-| `verify-pet-sidebar-diag.mjs` | `src/client.js` |  |
+| `verify-pet-sidebar-diag.mjs` | `src/client/rope-dock.js` |  |
 | `verify-pet-sidebar-glass-browser-case.mjs` | — |  |
 | `verify-pet-sidebar-glass.mjs` | `packages/glass/src/glass-surfaces.js` |  |
-| `verify-pet-sidebar-rebound.mjs` | `src/client.js` `src/sidebar-right.js` |  |
+| `verify-pet-sidebar-rebound.mjs` | `src/client/rope-dock.js` `src/sidebar-right.js` |  |
 | `verify-pet-tuner-browser.mjs` | `packages/pet-link/lib/prepared.js` `packages/pet-link/src/pet-link-performer.js` `packages/pet-link/src/pet-link-tuner.js` |  |
 | `verify-pet-tuner-coverage.mjs` | `packages/pet-link/src/pet-link/panel-params.js` |  |
 | `verify-pet-tuner.mjs` | `packages/pet-link/src/pet-link-performer.js` `packages/pet-link/src/pet-link-tuner.js` |  |
@@ -255,7 +256,7 @@
 | `packages/media-bridge/src/wallpaper-rotation-section.js` | 4 | `verify-avatar-interval-and-rotation` `verify-client` `verify-scene-live` `verify-slideshow-client` |
 | `packages/media-bridge/src/wallpaper-transition-section.js` | 2 | `verify-client` `verify-scene-live` |
 | `packages/media-bridge/src/wallpaper-uploads-section.js` | 2 | `verify-client` `verify-scene-live` |
-| `packages/parallax/lib/client.parallax.js` | 3 | `verify-client-sync` `verify-client` `verify-scene-live` |
+| `packages/parallax/lib/client.parallax.js` | 4 | `verify-client-sync` `verify-client` `verify-composer-fixed-browser-case` `verify-scene-live` |
 | `packages/parallax/lib/index.js` | 0 | **（无）** |
 | `packages/parallax/src/client.js` | 0 | **（无）** |
 | `packages/parallax/src/ext-parallax.js` | 1 | `verify-scene-live` |
@@ -291,10 +292,10 @@
 | `src/api-client.js` | 3 | `verify-api-client` `verify-contracts` `verify-occlusion-client` |
 | `src/avatar-import.js` | 1 | `verify-scene-live` |
 | `src/avatar-layer.js` | 2 | `verify-avatar-interval-and-rotation` `verify-scene-live` |
-| `src/client.js` | 31 | `verify-about` `verify-adapter` `verify-api-client` `verify-avatar-interval-and-rotation` `verify-client` `verify-component-fonts` `verify-contracts` `verify-extra-glass` `verify-fontset` `verify-glass-surfaces` `verify-i18n` `verify-layer-ownership` `verify-module-layout` `verify-notice-routing` `verify-occlusion-debounce` `verify-package-files` `verify-package-publish` `verify-pet-sidebar-diag` `verify-pet-sidebar-rebound` `verify-picker-model` `verify-presets` `verify-scene-live` `verify-slideshow-client` `verify-subpackage-client-half` `verify-subpackage-purity` `verify-subpackage-toggle-roundtrip` `verify-system-fonts` `verify-theme-follow` `verify-theme-layer` `verify-transcode-state` `verify-types` |
+| `src/client.js` | 29 | `verify-about` `verify-adapter` `verify-api-client` `verify-avatar-interval-and-rotation` `verify-client` `verify-component-fonts` `verify-contracts` `verify-extra-glass` `verify-fontset` `verify-glass-surfaces` `verify-i18n` `verify-layer-ownership` `verify-module-layout` `verify-notice-routing` `verify-occlusion-debounce` `verify-package-files` `verify-package-publish` `verify-picker-model` `verify-presets` `verify-scene-live` `verify-slideshow-client` `verify-subpackage-client-half` `verify-subpackage-purity` `verify-subpackage-toggle-roundtrip` `verify-system-fonts` `verify-theme-follow` `verify-theme-layer` `verify-transcode-state` `verify-types` |
 | `src/client/audio-playback.js` | 2 | `verify-layer-ownership` `verify-scene-live` |
 | `src/client/media-frame.js` | 1 | `verify-scene-live` |
-| `src/client/rope-dock.js` | 3 | `verify-i18n` `verify-pet-rope-entry` `verify-scene-live` |
+| `src/client/rope-dock.js` | 5 | `verify-i18n` `verify-pet-rope-entry` `verify-pet-sidebar-diag` `verify-pet-sidebar-rebound` `verify-scene-live` |
 | `src/client/rotation.js` | 1 | `verify-scene-live` |
 | `src/effects.js` | 7 | `verify-adapter` `verify-client` `verify-component-fonts` `verify-glass-surfaces` `verify-scene-live` `verify-theme-layer` `verify-titlebar-anchor` |
 | `src/ext-avatar.js` | 2 | `verify-avatar-interval-and-rotation` `verify-scene-live` |
@@ -355,5 +356,5 @@
 | `src/system-fonts.js` | 4 | `verify-client` `verify-fontset` `verify-scene-live` `verify-system-fonts` |
 | `src/theme-follow.js` | 2 | `verify-client` `verify-theme-follow` |
 | `src/video-layer.js` | 5 | `verify-avatar-interval-and-rotation` `verify-client` `verify-layer-ownership` `verify-scene-live` `verify-transcode-state` |
-| `src/we-base.js` | 1 | `verify-scene-live` |
+| `src/we-base.js` | 2 | `verify-composer-fixed-browser-case` `verify-scene-live` |
 | `src/we-cond.js` | 3 | `verify-client` `verify-fontset` `verify-scene-live` |
