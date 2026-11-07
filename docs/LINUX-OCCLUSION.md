@@ -1,9 +1,9 @@
 # Linux 壳窗遮挡区域获取 → WebWallGL 降帧/暂停 —— 实施规格
 
-<!-- status-banner: work-in-progress -->
-> **状态：进行中 —— P0（X11 适配器）已落地（2026-10-12，见 §10），Wayland 与后续项未落地。** 本文按 [`docs/README.md`](../README.md) §目录的寿命规则只放
-> **还没做成事实的东西**；做完即整体归档。
-> **本文不是进度真源**：机制 → 实现文件头注释、判据 → `test/`、取舍 → [`adr/`](../adr/)。
+<!-- status-banner: spec -->
+> **状态：现行规格，实施进行中 —— P0（X11 适配器）已落地（2026-10-12，见 §10），Wayland 与后续项未落地。** 本文是 Linux 遮挡的**常青规范**，放在 `docs/` 根（分类见 [`docs/README.md`](./README.md) §目录的寿命规则）；
+> 未落地清单是**待办**，不是账本。
+> **本文不是进度真源**：机制 → 实现文件头注释、判据 → `test/`、取舍 → [`adr/`](./adr/)。
 >
 > **范围**：仅 Linux 会话（X11 / Wayland）。Windows/macOS 数据通路不同，另行立项。
 > **调研来源**：两份 light 代理调研报告（X11 线 / Wayland 线，2026 年，含一手文档引用与
@@ -11,7 +11,7 @@
 
 ## 0. 背景与目标
 
-壁纸是壳窗口内的 DOM 层（[`src/styles.js`](../../src/styles.js) 的 `.we-layer`，`fixed; inset:0;
+壁纸是壳窗口内的 DOM 层（[`src/styles.js`](../src/styles.js) 的 `.we-layer`，`fixed; inset:0;
 z-index:-2`），不是独立 OS 窗口。目标：宿主侧获取「壳窗口之上有哪些窗口、各自矩形」，换算成
 壁纸画布坐标喂给 WebWallGL 渲染器（npm 依赖，见 §5）既有的遮挡管线，实现**分档降帧（heavy/light）、
 完全遮挡暂停（pause）**与 ROI 剔除，省 GPU/CPU/电池。
@@ -116,16 +116,16 @@ bundle 是压缩产物，符号名（`me`/`Qb` 等）会随上游同步变化。
 ## 4. 宿主路由（`packages/media-bridge/lib/routes/occlusion.js`）
 
 - `GET /wallpaper-engine/occlusion` → 快照 JSON（鉴权、JSON 响应族沿
-  [`packages/media-bridge/lib/routes/now-playing.js`](../../packages/media-bridge/lib/routes/now-playing.js)
+  [`packages/media-bridge/lib/routes/now-playing.js`](../packages/media-bridge/lib/routes/now-playing.js)
   等同族路由先例；
   `lib/json-response.js` 工具）；
 - 加路由后**必须**跑 `node test/tools/host-route-index.mjs --write` 重算
-  [`docs/ROUTE-INDEX.md`](../ROUTE-INDEX.md)（`verify-route-index` 会机检）。
+  [`docs/ROUTE-INDEX.md`](./ROUTE-INDEX.md)（`verify-route-index` 会机检）。
 
 ## 5. 渲染页桥（`lib/webwallgl/`，两处改动）
 
 1. **渲染页曝光**：引擎改为 npm 依赖 `webwallgl` 后，渲染页是本仓的
-   [`lib/webwallgl/renderer.js`](../../lib/webwallgl/renderer.js)，在其中定义
+   [`lib/webwallgl/renderer.js`](../lib/webwallgl/renderer.js)，在其中定义
    `window.__weSetOcclusion = (payload) => inst.setOcclusion(payload ?? null)`（带 try/catch）。
    不再改任何上游产物，也不再需要同步后重放打点。
    （原方案：在 vendored bundle 的 §1 控制器创建锚点后追加一行曝光，由 `sync-webwallgl` 同步后重放。）
@@ -134,7 +134,7 @@ bundle 是压缩产物，符号名（`me`/`Qb` 等）会随上游同步变化。
    - `op:'setOcclusion'` → 校验 `payload.occluders` 为数组后调 `window.__weSetOcclusion`；
    - `op:'clearOcclusion'` → 调 `__weSetOcclusion(null)`；
    - `window.__weSetOcclusion` 未就绪时静默丢弃（渲染器晚启动是正常态）。
-3. **注入**：[`packages/media-bridge/lib/routes/scene-serve.js`](../../packages/media-bridge/lib/routes/scene-serve.js) 响应
+3. **注入**：[`packages/media-bridge/lib/routes/scene-serve.js`](../packages/media-bridge/lib/routes/scene-serve.js) 响应
    `/scene-live/index.html`（现状 no-store）时注入一个 `<script>`，其 `src` 指向
    `<BASE>/scene-live/occlusion-bridge.js`；注入方式沿该文件既有的
    shim 注入先例；桥文件经 `WEBWALLGL_DIR` 围栏天然可服务。
@@ -148,7 +148,7 @@ bundle 是压缩产物，符号名（`me`/`Qb` 等）会随上游同步变化。
   - **下发**：`postMessage` 到 `.we-live-iframe.contentWindow`，消息形
     `{__weLive:1, op:'setOcclusion', payload:{occluders, epoch, gen}}`；`rects:null` 或轮询
     连续失败 ⇒ `op:'clearOcclusion'`；
-  - 挂载/卸载 live 层时启停轮询（挂进 [`src/live-layer.js`](../../src/live-layer.js) 既有
+  - 挂载/卸载 live 层时启停轮询（挂进 [`src/live-layer.js`](../src/live-layer.js) 既有
     生命周期，改动最小化）。
 
 ## 7. 并行分工与文件所有权（本轮，三个代理 + 集成人）
