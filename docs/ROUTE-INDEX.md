@@ -21,7 +21,7 @@
 | 2 | `/diag` | lib/routes/diag.js:149 | 箭头 | disposers | 13 |
 | 3 | `/diag` | lib/routes/diag.js:150 | 箭头 | disposers base | 13 |
 | 4 | `/diag-log` | lib/routes/diag.js:151 | 箭头 | disposers log base componentsProbe | 3 |
-| 5 | `/glass-presets` | lib/routes/presets.js:502 | async 箭头 | disposers base | 1 |
+| 5 | `/glass-presets` | lib/routes/presets.js:153 | async 箭头 | disposers base | 1 |
 | 6 | `/settings` | lib/routes/settings.js:158 | 箭头 | disposers base ctx mediaOriginApi readSettings isBetterSidebarLoaded …(+3) | 21 |
 | 7 | `/cache-dir` | lib/routes/cache-dir.js:47 | 箭头 | disposers base CONTROL_JSON_MAX_BYTES normalizeUserDir cacheBaseDir setCacheDir …(+1) | 1 |
 | 8 | `/cache-dir/browse` | lib/routes/cache-dir.js:115 | 箭头 | disposers base normalizeUserDir | 1 |

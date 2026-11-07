@@ -331,18 +331,21 @@ const dispose = apply(mockCtx);
 const route = routes.find((r) => r.path && r.path.endsWith('/glass-presets'));
 check('整机快照族路由已注册（prefix）', Boolean(route), route && route.path);
 const routeSrc = readFileSync(join(root, 'lib', 'routes', 'presets.js'), 'utf8');
+// S1 纯搬移后存储层折出为 `lib/glass-presets-store.js`（路由文件只留 HTTP 面）：
+// 文本判据按「族文件 + 存储实现」的拼接面做，与拆分前单文件同一遍扫描。
+const presetsFamilySrc = routeSrc + '\n' + readFileSync(join(root, 'lib', 'glass-presets-store.js'), 'utf8');
 check('路由族文件在位：注册器与前缀路径的形状未漂移',
-  /export function registerGlassPresetsRoutes/.test(routeSrc)
-  && routeSrc.includes('`${BASE}/glass-presets`')
-  && /GLASS_PRESET_TOMBSTONE_TAG/.test(routeSrc));
+  /export function registerGlassPresetsRoutes/.test(presetsFamilySrc)
+  && presetsFamilySrc.includes('`${BASE}/glass-presets`')
+  && /GLASS_PRESET_TOMBSTONE_TAG/.test(presetsFamilySrc));
 // 本文件头旧决策已被 ADR-0011 D7 推翻。判据分两层：
 //   · **行为层**（真路由）：export / import 两条路都不得回 405 —— 这才是"这条路没被禁着"的证据；
 //   · **文本层**：文件头必须有一段把这条推翻讲清楚（旧句子只允许出现在"旧版这里写着"的引述里，
 //     不允许还挂在**断言当前状态**的位置上）。文本判据刻意宽松 —— 引用旧决策是 D7 明确要求的做法。
 check('文件头写明 import/export 已存在（D7 更正注释在位）',
-  /为什么 import \/ export 现在有/.test(routeSrc));
+  /为什么 import \/ export 现在有/.test(presetsFamilySrc));
 check('文件头不再把"没有 import\/export"当作**当前**决策来陈述（只允许作为被推翻的旧话引述）',
-  !/^\s*\*\s*没有 import \/ export\s*[:：]/m.test(routeSrc));
+  !/^\s*\*\s*没有 import \/ export\s*[:：]/m.test(presetsFamilySrc));
 
 // ★ 行为层判据（不靠正则读注释）见下方「端点存在性探针」段 —— 必须排在 callRoute 定义之后。
 
@@ -1149,8 +1152,8 @@ section('③d 资产段：install-assets 落盘与 applied 语义、export→imp
     // 结构判据：两阶段必须在**源码序**上成立 —— 所有 assetOverBudget 调用都在第一条
     // landImage 之前（预检阶段），落盘循环里不再出现超限判定（否则又会落一半）。
     {
-      const fnAt = routeSrc.indexOf('async function installAssets(');
-      const fnBody = fnAt >= 0 ? routeSrc.slice(fnAt, routeSrc.indexOf('\n}', fnAt) + 2) : '';
+      const fnAt = presetsFamilySrc.indexOf('async function installAssets(');
+      const fnBody = fnAt >= 0 ? presetsFamilySrc.slice(fnAt, presetsFamilySrc.indexOf('\n}', fnAt) + 2) : '';
       const lastOver = fnBody.lastIndexOf('assetOverBudget(');
       const firstLand = fnBody.indexOf('landImage(');
       check('结构判据：installAssets 的字节闸预检全部在落盘（landImage）之前 —— 源码序钉死两阶段',
@@ -1214,7 +1217,7 @@ section('③d 资产段：install-assets 落盘与 applied 语义、export→imp
     bigCreate.__state.status === 413, 'status=' + bigCreate.__state.status);
   // 结构判据：import 的总闸必须由单份闸**推出来**（单份一改就自动跟上，不是两处手抄数字）。
   {
-    const src = stripComments(routeSrc);
+    const src = stripComments(presetsFamilySrc);
     const reDecl = /const PRESET_IMPORT_MAX_BYTES\s*=\s*([^;]+);/;
     const decl = src.match(reDecl);
     check('结构判据：PRESET_IMPORT_MAX_BYTES 由单份闸推导（不是写死的第二个数字）',
@@ -1576,7 +1579,8 @@ section('④ 客户端形态棘轮：新编排链（合并→落盘→reapplyAll
     //    但 `publicAssets()` 只白名单 font/mascot/avatar ⇒ theme 在宿主侧被整个丢掉，
     //    客户端收不到 ⇒ 套用预设永远不切深色，而且**不报错**）。
     //    这条判据盯的是"声明存在"与"能穿过宿主白名单"之间那个缝 —— 光有 ⑤ 不够。
-    const presetsRouteSrc = readFileSync(join(root, 'lib', 'routes', 'presets.js'), 'utf8');
+    const presetsRouteSrc = readFileSync(join(root, 'lib', 'routes', 'presets.js'), 'utf8')
+      + '\n' + readFileSync(join(root, 'lib', 'glass-presets-store.js'), 'utf8');
     const publicAssetsOk = (s) => {
       const at = s.indexOf('function publicAssets(');
       if (at < 0) return false;

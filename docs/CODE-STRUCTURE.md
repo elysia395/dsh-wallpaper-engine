@@ -113,6 +113,10 @@ graph TB
   放回所属行），路由级视图是生成物 `docs/ROUTE-INDEX.md`（`verify-route-index` 重算并逐字节比对）。
   `verify-route-families` 按它自己的 `FAMILY_TRIGGER` 盯「某族条数超线 ⇒ 拆族或改线」（阈值、归族规则
   与负对照都在 `test/verify-route-families.mjs`）。
+  族的实现落点可以再分层：族文件只留 HTTP 面；读写 / 消毒 / 落盘这类**存储层**在体量大时折进同域实现文件
+  `lib/<域>-store.js`（现有 `lib/routes/presets.js` + `lib/glass-presets-store.js`），契约扫描按
+  「族文件 + 实现文件」的拼接面做（`verify-inject-contracts` 的 `FAMILY_IMPL`），文本判据同样拼接
+  （`verify-presets` 的 `presetsFamilySrc`）—— 拼接面等价于拆分前的单文件面。
 - **组件行**（**组件包** `packages/<组件>/lib/` —— `packages/about-notice/`、`packages/mascot-avatar/`、`packages/media-bridge/`）—— 一个 bundle 多行（[`adr/0013`](./adr/0013-bundle-multi-component-rows.md)）：
   组件入口 `index.js` + 它自己的路由族实现 + 该行消费的组件视图。行的开关是宿主的
   （`cordis.patch.yml`）；"哪个实现属于哪一行"由 `test/verify-route-ownership.mjs` 钉住，
@@ -643,6 +647,7 @@ DSH 升级后**重取角色表**的命令写在 [`typography.js`](../src/font/ty
 | 要加什么 | 落在哪 | 还必须在哪登记 |
 |---|---|---|
 | 一条宿主路由 | `lib/routes/<族>.js`（成族才单独成文件，否则就近）；属于某组件行 ⇒ `packages/<组件>/lib/routes/<族>.js` | 路由索引由生成器自动重算；组件归属另由 `verify-route-ownership` 判 |
+| 某族的存储层（读写 / 消毒 / 落盘） | 同域实现文件 `lib/<域>-store.js`（现有 `lib/glass-presets-store.js`，由 `routes/presets.js` 纯搬移折出） | `package.json` 的 `files`（P1 判）；`verify-inject-contracts` 的 `FAMILY_IMPL` 与 `verify-presets` 的族拼接面同步 |
 | 一个设置项 | `lib/settings-schema.js` 的 `DEFAULTS` + `KINDS` | 面板读取即可，**不要另写一张 UI 表**。⚠️ 若涉及**字体角色 / 字号上下限**，浏览器侧那份副本（`src/font/color-roles.js` / `typography.js`）**也要改**（见 §7 第 1 行） |
 | 两端都要用的状态 | `lib/<语义名>.js` | `INLINE_MODULES`（构建期内联；这是**唯一**被允许的共享形态） |
 | 浏览器端一块 UI / 行为 | `src/<语义名>.js` | `INLINE_MODULES`（**漏登记静默失效**） |

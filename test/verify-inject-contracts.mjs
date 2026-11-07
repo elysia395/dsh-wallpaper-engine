@@ -838,7 +838,13 @@ async function main() {
   };
 
   console.log('\n① 路由族的声明面 ↔ 消费面（每个路由族模块：`lib/routes/*.js` ∪ 组件目录直接子文件）');
-  const modules = routeModuleFiles().map((rel) => parseModuleContract(readFileSync(join(ROOT, rel), 'utf8'), rel));
+  // 实现接缝（S1 起）：族把存储层折进同域实现文件（`routes/presets.js` + `lib/glass-presets-store.js`），
+  // 契约扫描按「族文件 + 实现文件」的拼接文本做 —— 与拆分前单文件同一遍解析，只是多了一段尾部。
+  // 若只读族文件，helper 的消费面会凭空消失 ⇒ DEPS 变成「声明了没消费」的假红。
+  const FAMILY_IMPL = { 'lib/routes/presets.js': ['lib/glass-presets-store.js'] };
+  const familySource = (rel) => [rel, ...(FAMILY_IMPL[rel] || [])]
+    .map((f) => readFileSync(join(ROOT, f), 'utf8')).join('\n');
+  const modules = routeModuleFiles().map((rel) => parseModuleContract(familySource(rel), rel));
   const byFn = new Map(modules.filter((m) => m.ok).map((m) => [m.fnName, m]));
   const moduleIssues = [];
   for (const m of modules) {
@@ -878,7 +884,7 @@ async function main() {
   const disagree = [];
   for (const m of modules) {
     if (!m.ok) continue;
-    const host = parseRouteModuleText(readFileSync(join(ROOT, m.rel), 'utf8'), m.rel, m.fnName);
+    const host = parseRouteModuleText(familySource(m.rel), m.rel, m.fnName);
     for (const f of host.fields) if (!m.consumed.has(f.field)) disagree.push(m.rel + ':' + f.field);
   }
   check('一致性：host-route-index 解析出的 `c` 字段必须都在本守卫的消费面里（两个解析器不许互相矛盾）',

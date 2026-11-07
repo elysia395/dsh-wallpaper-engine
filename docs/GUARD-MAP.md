@@ -5,7 +5,7 @@
 > 口径：只统计守卫**代码**里真正碰到的模块（先剥注释），并区分"直接读源文件"与"隔着产物 `lib/client.js`"。
 > 写法：字面量路径 / `join(...)` 拼接 / 唯一 basename / 产物配方 / **前缀族读法** `scopeFiles|scopeText(<前缀>)` / **经共享族助手读**（`import { panelText } from './tools/src-scope.mjs'` + 真调用；族口径封在那个库里，见 DEV-GUIDE §4.6「同时是守卫的库」）/ **真源定位读**（`locate('符号')` / `locateFile('文件名')`，`test/tools/source-locator.mjs`：符号唯一声明在哪就是读了哪个模块）。
 
-模块面 204 个 · 守卫 129 个
+模块面 205 个 · 守卫 129 个
 
 ## 守卫 → 模块
 
@@ -57,7 +57,7 @@
 | `verify-host-paint-scope.mjs` | — | ✅ |
 | `verify-host-teardown.mjs` | `lib/index.js` `lib/media-origin.js` `packages/media-bridge/lib/legacy.js` `packages/media-bridge/lib/occlusion/index.js` `packages/media-bridge/lib/supervisor.js` `packages/pet-link/lib/routes/official-pet.js` |  |
 | `verify-i18n.mjs` | `packages/glass/src/glass-css.js` `packages/pet-link/src/pet-link/extension-card.js` `packages/pet-link/src/pet-link/i18n.js` `packages/pet-link/src/pet-link/panel-params.js` `packages/pet-link/src/pet-link/panel.js` `src/client.js` `src/i18n/i18n-copy.js` `src/i18n/i18n.js` `src/nav-icon.js` `src/quick-panel.js` `src/sidebar-right.js` `src/styles.js` `src/styles/base.js` `src/styles/chrome.js` `src/styles/ext.js` `src/styles/panel.js` `src/styles/quick.js` `src/styles/settings.js` `src/styles/shell.js` | ✅ |
-| `verify-inject-contracts.mjs` | `lib/subpackage-boot.js` |  |
+| `verify-inject-contracts.mjs` | `lib/glass-presets-store.js` `lib/routes/presets.js` `lib/subpackage-boot.js` |  |
 | `verify-inventory-index.mjs` | `lib/inventory.js` `packages/media-bridge/lib/routes/inventory.js` |  |
 | `verify-issue-claim-policy.mjs` | — |  |
 | `verify-json-response.mjs` | `lib/json-response.js` `lib/subpackage-boot.js` | ✅ |
@@ -99,7 +99,7 @@
 | `verify-picker-props.mjs` | — | ✅ |
 | `verify-picker-upload.mjs` | — | ✅ |
 | `verify-playback-controls.mjs` | — | ✅ |
-| `verify-presets.mjs` | `lib/index.js` `lib/media/media-dirs.js` `lib/routes/presets.js` `lib/settings-schema.js` `packages/glass/src/glass-panel.js` `src/client.js` `src/i18n/i18n-copy-core.js` `src/i18n/i18n-copy-ext.js` `src/i18n/i18n-copy-font.js` `src/i18n/i18n-copy-glass.js` `src/i18n/i18n-copy-live.js` `src/i18n/i18n-copy-panel.js` `src/i18n/i18n-copy-pet-link.js` `src/i18n/i18n-copy-picker.js` `src/i18n/i18n-copy.js` `src/persistence.js` `src/preset-store.js` `src/quick-panel.js` | ✅ |
+| `verify-presets.mjs` | `lib/glass-presets-store.js` `lib/index.js` `lib/media/media-dirs.js` `lib/routes/presets.js` `lib/settings-schema.js` `packages/glass/src/glass-panel.js` `src/client.js` `src/i18n/i18n-copy-core.js` `src/i18n/i18n-copy-ext.js` `src/i18n/i18n-copy-font.js` `src/i18n/i18n-copy-glass.js` `src/i18n/i18n-copy-live.js` `src/i18n/i18n-copy-panel.js` `src/i18n/i18n-copy-pet-link.js` `src/i18n/i18n-copy-picker.js` `src/i18n/i18n-copy.js` `src/persistence.js` `src/preset-store.js` `src/quick-panel.js` | ✅ |
 | `verify-reachability.mjs` | `lib/index.js` | ✅ |
 | `verify-readability.mjs` | `packages/glass/src/glass-css.js` `src/styles.js` `src/styles/base.js` `src/styles/chrome.js` `src/styles/ext.js` `src/styles/panel.js` `src/styles/quick.js` `src/styles/settings.js` `src/styles/shell.js` | ✅ |
 | `verify-release-set.mjs` | `lib/index.js` `lib/subpackage-boot.js` |  |
@@ -152,6 +152,7 @@
 | `lib/diag-trace.js` | 2 | `verify-host-diag` `verify-scene-live` |
 | `lib/faststart.js` | 3 | `verify-cache-dir` `verify-mp4-vfs` `verify-scene-live` |
 | `lib/fs-paths.js` | 4 | `verify-avatar-interval-and-rotation` `verify-scene-live` `verify-slides` `verify-wallpaper-scan` |
+| `lib/glass-presets-store.js` | 2 | `verify-inject-contracts` `verify-presets` |
 | `lib/host-boot.js` | 9 | `verify-about` `verify-bundle-rows` `verify-component-face` `verify-contracts` `verify-lazy-engine-dir` `verify-logging` `verify-mp4-vfs` `verify-subpackage-purity` `verify-tolerant-register` |
 | `lib/http-body.js` | 2 | `verify-body-caps` `verify-package-files` |
 | `lib/http-lifecycle.js` | 1 | `verify-scene-live` |
@@ -179,7 +180,7 @@
 | `lib/pkg-read.js` | 4 | `verify-package-files` `verify-package-publish` `verify-scene-probe` `verify-scene` |
 | `lib/routes/cache-dir.js` | 1 | `verify-cache-dir` |
 | `lib/routes/diag.js` | 3 | `verify-layer-ownership` `verify-logging` `verify-scene-live` |
-| `lib/routes/presets.js` | 1 | `verify-presets` |
+| `lib/routes/presets.js` | 2 | `verify-inject-contracts` `verify-presets` |
 | `lib/routes/rope-art.js` | 0 | **（无）** |
 | `lib/routes/settings.js` | 2 | `verify-scene` `verify-settings-namespaces` |
 | `lib/scene-manifest.js` | 2 | `verify-scene-probe` `verify-scene` |
