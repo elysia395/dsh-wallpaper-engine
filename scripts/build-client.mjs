@@ -500,6 +500,11 @@ const INLINE_MODULES = [
       'const LAYER_KEY_FIELDS = ["type", "url", "edge", "sceneVideo", "audio", "live"];'],
   },
   {
+    file: 'src/client/rope-dock.js',
+    why: 'src/client.js 正文的主页面吉祥物组件（RopeDock：拖拽/吸附/侧栏抽屉/气泡与走抛动画；只读正文的 ROPE_FORMS / ropeArtOf / 侧栏桥等自由名）—— 构建期内联在正文之前，同处一个扁平作用域',
+    markers: ['function RopeDock() {', 'ropeDrawerControl = {'],
+  },
+  {
     // 跨包浏览器半边的**显式键集契约表**（ADR-0014 S5.1 / S5.4）：71 个 getter 挂到 module.exports。
     // 必须排在内联清单**末尾**：表顶层读 `DEFAULTS`（lib/settings-schema.js 的内联件）⇒ 要排在它之后；
     // 正文里的函数声明在工厂体内提升、getter 又是惰性求值 ⇒ 与正文的先后无关。

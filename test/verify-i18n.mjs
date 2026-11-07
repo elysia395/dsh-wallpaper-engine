@@ -594,7 +594,13 @@ console.log('⑥ 跟随契约（可选服务 / 不 park / 顶层订阅）');
   const comps = [
     { name: 'WallpaperPickerSection', src: clientSrc.slice(clientSrc.indexOf('function WallpaperPickerSection')) },
     { name: 'WallpaperPicker', src: clientSrc.slice(clientSrc.indexOf('function WallpaperPicker()')) },
-    { name: 'RopeDock', src: clientSrc.slice(clientSrc.indexOf('function RopeDock')) },
+    { name: 'RopeDock', src: (() => {
+      const s = readFileSync(join(ROOT, 'src', 'client', 'rope-dock.js'), 'utf8');
+      // 头部注释不算组件体：从 `function RopeDock` 起算（判据看组件前 400 字符内是否订阅语言）
+      const at = s.indexOf('function RopeDock');
+      if (at < 0) throw new Error('verify-i18n: src/client/rope-dock.js 里找不到 function RopeDock');
+      return s.slice(at);
+    })() },
     { name: 'UpdateNotice', src: clientSrc.slice(clientSrc.indexOf('function UpdateNotice')) },
     { name: 'QuickPanel', src: readFileSync(join(ROOT, 'src', 'quick-panel.js'), 'utf8').slice(readFileSync(join(ROOT, 'src', 'quick-panel.js'), 'utf8').indexOf('function QuickPanel')) },
   ];
