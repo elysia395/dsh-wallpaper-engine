@@ -410,8 +410,13 @@ const INLINE_MODULES = [
     markers: ['function liveLog(', 'const LIVE_DIAG_KEY = '],
   },
   {
+    file: 'src/live-layer/probe.js',
+    why: '实时渲染管线·心跳读数与载荷取证域：__wpStats 读数 / 首帧预算 / 载荷账本轮询与失败归因 / FPS 诊断上报',
+    markers: ['function liveStats(frame) {', 'function liveFirstFrameBudget(wid) {'],
+  },
+  {
     file: 'src/live-layer/watch.js',
-    why: '实时渲染管线·心跳与载荷域：看护 tick / 判失败 / 转移重试 / 抓帧回填',
+    why: '实时渲染管线·看护域：看护 tick / 转移重试 / 抓帧回填',
     markers: ['function startLiveWatch(', 'function scheduleLiveFrameBackfill('],
   },
   {

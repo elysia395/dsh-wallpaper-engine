@@ -24,7 +24,7 @@ HTML 里注入 WE API shim（运行期从 `webwallgl` 包的 `webwallgl.mjs` 中
   站点根两种形态一致，形态判定交给渲染器（`project.json` 的 `file` 后缀）；host 只认"是不是场景"。
   重新打开开关会清空失败记忆（显式重试入口）。
   **首帧超时不是一个固定墙钟**：首帧**必须等整包到齐**，所以预算由
-  `liveFirstFrameBudget()`（`src/live-layer/watch.js`）按**包大小**现算，并有上限；
+  `liveFirstFrameBudget()`（`src/live-layer/probe.js`）按**包大小**现算，并有上限；
   而且宿主侧有一本**载荷账本**（客户端轮询
   `GET /wallpaper-engine/scene-payload-progress?token=…`，见 [`ROUTE-INDEX.md`](./ROUTE-INDEX.md)），
   字节还在涨就每拍重置计时 ——
