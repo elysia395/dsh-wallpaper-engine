@@ -409,7 +409,7 @@ graph LR
 | **词表族** | `i18n`（组装点 `src/i18n/i18n.js`）· `i18n-copy`（组装点 `src/i18n/i18n-copy.js` + 各域词表 `i18n/i18n-copy-{core,ext,font,glass,live,panel,pet-link,picker}.js`） | 域词表**互相零读取**；组装点按 `INLINE_MODULES` 顺序相加 | ✅ `src/i18n/`（组装点留根；成员同职责=域词表、每族 ≥3 成员；`src-scope` 前缀改成 `src/i18n/i18n-copy`，判据仍是「双向对账逐条相同」） |
 | **picker** | `picker-model`（纯函数、零外界） · `picker-modal` · `picker-props-panel` · `quick-panel` | `modal → model` | 平铺（见下） |
 | **渲染器层** | `panel-tabs`（族：组装点 + 各域模块，成员与内联顺序真源 = `scripts/build-client.mjs` 的 `INLINE_MODULES`，按 `src/panel-tabs.js` 前缀读） · `picker-modal` · `picker-props-panel` · `fontset-editor` · `ext-fx` · `ext-parallax` · `ext-avatar` | **互相零读取**（只读门面与纯函数工具） | ✅ `src/panel-tabs/`（组装点 `src/panel-tabs.js` 留根；`src-scope` 按前缀 `src/panel-tabs` 读 ⇒ 搬动零改判据） |
-| **媒体管线** | `live-layer`（组装点 `src/live-layer.js` + 各域模块 `live-layer/{diag,probe,watch,pointer,gate,underlay}.js`） · `video-layer` · `media-prep` · `layer-core` · `effects` | `live-layer` → 家族内 | ✅ `src/live-layer/`（组装点留根；`src-scope` 按前缀 `src/live-layer` 读 ⇒ 搬动零改判据） |
+| **媒体管线** | `live-layer`（组装点 `src/live-layer.js` + 各域模块 `live-layer/{diag,probe,watch,pointer,gate,underlay}.js`） · `video-layer` · `media-prep`（组装点 `src/media-prep.js` + 各域模块 `media-prep/{prepare,probe,budget}.js`） · `layer-core` · `effects` | `live-layer` → 家族内；`media-prep` 域模块按 `INLINE_MODULES` 顺序相加、彼此零读取 | ✅ `src/live-layer/`（组装点留根；`src-scope` 按前缀 `src/live-layer` 读 ⇒ 搬动零改判据）；`src/media-prep/`（组装点留根；判据走 bundle 文本与 `src/media-prep.js` 直读） |
 
 **客户端正文的助手模块**（`src/client-*.js` → `src/client/*.js`：`audio-playback` · `media-frame` · `rotation`）**不在上表**：
 它们不是一族，而是从 `src/client.js` 正文里按职责搬出的助手（正文仍在 `src/client.js`，由 `clientSources()` 拼）。搬进 `src/client/` 只是让"助手住哪"一眼可见，读法前缀 `src/client` 不变。
@@ -648,6 +648,7 @@ DSH 升级后**重取角色表**的命令写在 [`typography.js`](../src/font/ty
 |---|---|---|
 | 一条宿主路由 | `lib/routes/<族>.js`（成族才单独成文件，否则就近）；属于某组件行 ⇒ `packages/<组件>/lib/routes/<族>.js` | 路由索引由生成器自动重算；组件归属另由 `verify-route-ownership` 判 |
 | 某族的存储层（读写 / 消毒 / 落盘） | 同域实现文件 `lib/<域>-store.js`（现有 `lib/glass-presets-store.js`，由 `routes/presets.js` 纯搬移折出） | `package.json` 的 `files`（P1 判）；`verify-inject-contracts` 的 `FAMILY_IMPL` 与 `verify-presets` 的族拼接面同步 |
+| 某族的子域模块（同作用域组装） | `src/<族>/<域>.js`，族根/组装点留 `src/<族>.js`（现有 `src/styles/` · `src/i18n/` · `src/panel-tabs/` · `src/live-layer/` · `src/media-prep/`） | `INLINE_MODULES` 按"域模块在前、组装点在后"的顺序登记（新增模块另有 `markers`）；族目录成员数达 `SRC_DIR_MIN_MEMBERS` |
 | 一个设置项 | `lib/settings-schema.js` 的 `DEFAULTS` + `KINDS` | 面板读取即可，**不要另写一张 UI 表**。⚠️ 若涉及**字体角色 / 字号上下限**，浏览器侧那份副本（`src/font/color-roles.js` / `typography.js`）**也要改**（见 §7 第 1 行） |
 | 两端都要用的状态 | `lib/<语义名>.js` | `INLINE_MODULES`（构建期内联；这是**唯一**被允许的共享形态） |
 | 浏览器端一块 UI / 行为 | `src/<语义名>.js` | `INLINE_MODULES`（**漏登记静默失效**） |

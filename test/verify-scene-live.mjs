@@ -1074,7 +1074,9 @@ const qpCode = stripComments(qpSrc);
 // 刀3：样式族已拆成 8 个域模块 + 组装点 ⇒ 取整族源码文本（构建序拼接）；判据不变。
 const stylesSrc = styleText();
 const liveSrc = liveText();
-const prepSrc = readFileSync(join(root, 'src', 'media-prep.js'), 'utf8');
+// 媒体预备族（S5 起根 + 3 个同族模块；按 INLINE_MODULES 构建序拼接）
+const prepSrc = ['src/media-prep/prepare.js', 'src/media-prep/probe.js', 'src/media-prep/budget.js', 'src/media-prep.js']
+  .map((rel) => readFileSync(join(root, rel), 'utf8')).join('\n');
 // 刀4：panel-tabs 已按域拆成 5 个兄弟模块 + 组装点 ⇒ 判"页签族的渲染/接缝"一律扫**并集**。
 const tabsSrc = panelText();
 // P-C：外观页签第六节「全局字体」的渲染器随字体包搬出页签族（packages/fonts/src/appearance-font-section.js）

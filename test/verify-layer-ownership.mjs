@@ -198,7 +198,8 @@ check('P1.6 子包源码面零引用 LAYER_ID / SCRIM_ID（层引用不外流）
  */
 const BODY_MOUNT_WHITELIST = Object.freeze({
   'src/live-layer.js': { count: 2, owner: 'layer+scrim' },
-  'src/media-prep.js': { count: 2, owner: 'rotation-staging' },
+  'src/media-prep.js': { count: 1, owner: 'rotation-staging' },
+  'src/media-prep/probe.js': { count: 1, owner: 'rotation-staging' },
   'src/client/audio-playback.js': { count: 1, owner: 'scene-audio' },
   'src/client.js': { count: 3, owner: 'transient-input|download-anchor|rope-dock' },
   'packages/fx/src/fx-layer.js': { count: 1, owner: 'pkg-own-host(fx overlay)' },
@@ -526,7 +527,7 @@ if (cleanup) {
 const IFRAME_CREATORS = [
   ['src/live-layer/pointer.js', 'function createLiveFrame(sel)'],
   ['src/live-layer/watch.js', 'function rebuildLiveFrame(frame, watch)'],
-  ['src/media-prep.js', 'function prepareWebProbe(w, prep, onReady)'],
+  ['src/media-prep/probe.js', 'function prepareWebProbe(w, prep, onReady)'],
   ['src/media-prep.js', 'function prepareSceneLiveStage(w, prep, onReady, onFail)'],
   ['src/media-prep.js', 'function buildMedia(sel)'],
 ];
@@ -548,7 +549,7 @@ function iframeViolations(files) {
   const sites = iframeCreateSites(files);
   const counts = {};
   for (const s of sites) counts[s.rel] = (counts[s.rel] || 0) + 1;
-  const expected = { 'src/live-layer/pointer.js': 1, 'src/live-layer/watch.js': 1, 'src/media-prep.js': 3 };
+  const expected = { 'src/live-layer/pointer.js': 1, 'src/live-layer/watch.js': 1, 'src/media-prep/probe.js': 1, 'src/media-prep.js': 2 };
   if (JSON.stringify(counts) !== JSON.stringify(expected)) {
     problems.push('iframe 创建点分布漂移：实测 ' + JSON.stringify(counts) + '，契约 ' + JSON.stringify(expected));
   }
@@ -606,11 +607,11 @@ check('P4.1 iframe 创建点恰 5 处（3 文件）+ 创建函数体不直接挂
     iframeViolations(SRC.concat([{ rel: 'src/video-layer.js', text: 'const z = document.createElement("iframe");' }]))
       .some((p) => /分布漂移/.test(p)));
   const probeBodyBad = 'function prepareWebProbe(w, prep, onReady) { const f = document.createElement("iframe"); document.body.appendChild(f); }';
-  const mediaPrepFake = {
-    rel: 'src/media-prep.js',
-    text: probeBodyBad + '\n' + SRC.filter((f) => f.rel === 'src/media-prep.js').map((f) => stripComments(f.text)).join('\n'),
+  const probeFake = {
+    rel: 'src/media-prep/probe.js',
+    text: probeBodyBad + '\n' + SRC.filter((f) => f.rel === 'src/media-prep/probe.js').map((f) => stripComments(f.text)).join('\n'),
   };
-  const filesFake = SRC.map((f) => (f.rel === 'src/media-prep.js' ? { rel: f.rel, text: mediaPrepFake.text } : f));
+  const filesFake = SRC.map((f) => (f.rel === 'src/media-prep/probe.js' ? { rel: f.rel, text: probeFake.text } : f));
   negOk('staging 探测函数直接挂 body 判红（父链含 body）',
     iframeViolations(filesFake).some((p) => /prepareWebProbe.*body/.test(p)), iframeViolations(filesFake).join(' | '));
 }

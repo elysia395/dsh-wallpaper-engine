@@ -389,10 +389,24 @@ const INLINE_MODULES = [
     markers: ['function probeVideoPoster(', 'function videoContentReady(', 'VIDEO_POSTER_BUDGET_MS', 'let mediaInfoToken = ', 'function clearUpgradePoll(', 'async function refreshMediaInfo(', 'function abortTranscodeUpgrade(', 'function maybeUpgradeToTranscoded(', 'function invalidateMediaInfoProbe('],
   },
   {
+    file: 'src/media-prep/prepare.js',
+    why: '媒体预备族·轮换预准备：候选预挂载 + 准备超时记账 + 按类型分派到 video/web/scene 预处理器',
+    markers: ['function beginRotationPrepare(', 'function prepareWallpaper('],
+  },
+  {
+    file: 'src/media-prep/probe.js',
+    why: '媒体预备族·探测：detached <video> 预载预播 + detached <iframe>（we-layer--staging 容器，iframe 不直接挂 body）',
+    markers: ['function prepareVideoProbe(', 'function prepareWebProbe('],
+  },
+  {
+    file: 'src/media-prep/budget.js',
+    why: '媒体预备族·live 准备超时账本：连续超时上限 / 隐藏期持有上限 / 隐藏期轮询间隔 + 记账三助手',
+    markers: ['const prepareLiveTimeouts = ', 'function prepareLiveExhausted('],
+  },
+  {
     file: 'src/media-prep.js',
-    why: '选中项落地：预准备（预挂载 + 探测 + 超时记账）→ buildMedia → applySelection',
-    markers: ['function beginRotationPrepare(', 'function prepareWallpaper(', 'const prepareLiveTimeouts = ',
-      'function prepareSceneLiveStage(', 'function applySelection(', 'function buildMedia('],
+    why: '媒体预备族根与组装点：scene 两阶段 → buildMedia → applySelection（族内三段见 media-prep/ 目录）',
+    markers: ['function prepareSceneLiveStage(', 'function prepareSceneStaticStage(', 'function applySelection(', 'function buildMedia('],
   },
   {
     file: 'src/layer-core.js',
