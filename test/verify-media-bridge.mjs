@@ -59,7 +59,8 @@ import {
   MEDIA_BRIDGE_TAG, MEDIA_BRIDGE_ASSETS, MEDIA_BRIDGE_SHA256, MEDIA_BRIDGE_FALLBACKS,
   mediaBridgeAssetFor, mediaBridgeCachePath, binaryMagicOk, provisionMediaBridge,
 } from '../packages/media-bridge/lib/provision.js';
-import { bridgeServeArgs, MEDIA_CONTROL_ACTIONS, createBridgeSupervisor, bootAttemptBudgets } from '../packages/media-bridge/lib/supervisor.js';
+import { bridgeServeArgs, MEDIA_CONTROL_ACTIONS, bootAttemptBudgets } from '../packages/media-bridge/lib/supervisor-protocol.js';
+import { createBridgeSupervisor } from '../packages/media-bridge/lib/supervisor.js';
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 const TEST_DIR = join(root, '.test-cache', 'verify-media-bridge');

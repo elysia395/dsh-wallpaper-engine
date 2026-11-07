@@ -2337,7 +2337,7 @@ const hostLib = hostLibComposed;
 // （判据纪律同 hostHalfSrc："拆出的模块必须加进来"）。
 const componentMediaSources = ['packages/media-bridge/lib/index.js', 'packages/media-bridge/lib/legacy.js',
   'packages/media-bridge/lib/routes/now-playing.js', 'packages/media-bridge/lib/provision.js',
-  'packages/media-bridge/lib/supervisor.js']
+  'packages/media-bridge/lib/supervisor.js', 'packages/media-bridge/lib/supervisor-protocol.js']
   .map((f) => { try { return readFileSync(join(root, f), 'utf8'); } catch { return ''; } }).join('\n');
 // 再补 **P0 拆出的 lib 模块**：这些模块的实现形态（如 upload-dir 的 `up-dir-${name}` 前缀与
 // `resolveSceneMainFileP` 解析）本就是"原门面里那段代码"，判据按门面面扫时必须能看到它们。
@@ -2749,7 +2749,8 @@ const mediaSrcCandidates = (f) => ['packages/media-bridge/lib/' + f, 'packages/m
   'lib/components/media-bridge/' + f, 'lib/media/' + f].map((rel) => join(root, rel));
 const mediaSrcPath = (f) => mediaSrcCandidates(f).find((abs) => existsSync(abs)) || mediaSrcCandidates(f)[0];
 const provSrc = readFileSync(mediaSrcPath('provision.js'), 'utf8');
-const supSrc = readFileSync(mediaSrcPath('supervisor.js'), 'utf8');
+const supSrc = readFileSync(mediaSrcPath('supervisor.js'), 'utf8')
+  + '\n' + readFileSync(mediaSrcPath('supervisor-protocol.js'), 'utf8');
 // ⚠️ 门面面 = 媒体桥子包的**整面**（不是只有 index.js）：'中间件优先/回落/音频已关透传'这些形态
 // 分布在 index.js 与 legacy.js/supervisor.js 里 ⇒ 只读一个文件会误报丢失（判据纪律：拆出的模块必须加进来）。
 const mediaPkgDir = ['packages/media-bridge/lib', 'lib/components/media-bridge']
@@ -2798,7 +2799,10 @@ check('空闲停进程 + 下次访问自动唤醒', supSrc.includes('IDLE_STOP_M
 // 的每一处 spawn 都要带上；macOS/Linux 专属的调用（media-control/playerctl/xattr 等）
 // 不在 Windows 上跑，但一并带上也无害。
 const winHideSites = [
-  { file: 'lib/media/supervisor.js', spawn: /spawn\(binPath[\s\S]{0,80}\.\.\.a\.opts/, minFlags: 2 },
+  { file: 'lib/media/supervisor.js', spawn: /spawn\(binPath[\s\S]{0,80}\.\.\.a\.opts/, minFlags: 2,
+    // S2 拆分（纯搬移）：POSTURES/a.opts 的 windowsHide 标志随协议层搬进 supervisor-protocol.js，
+    // 而 spawn 字面形态留在 supervisor.js —— 按「supervisor + protocol」拼接面判。
+    extra: ['supervisor-protocol.js'] },
   { file: 'lib/transcode.js', spawn: /spawn\(a\.file[\s\S]{0,80}\.\.\.a\.opts/, minFlags: 2 },
   { file: 'lib/media/legacy.js', spawn: /spawnSync\('ffmpeg'[\s\S]{0,220}windowsHide: true/, minFlags: 1 },
 ];
@@ -2812,7 +2816,8 @@ for (const site of winHideSites) {
     join(root, 'packages', 'media-bridge', 'lib', siteBase),
     join(root, 'lib', 'components', 'media-bridge', siteBase)]
     .find((abs) => existsSync(abs)) || join(root, site.file);
-  const body = readFileSync(siteAbs, 'utf8');
+  const body = readFileSync(siteAbs, 'utf8') + (site.extra || [])
+    .map((f) => '\n' + readFileSync(join(root, 'packages', 'media-bridge', 'lib', f), 'utf8')).join('');
   const flags = (body.match(/windowsHide: true/g) || []).length;
   if (!site.spawn.test(body) || flags < site.minFlags) winHideBad.push(site.file);
 }

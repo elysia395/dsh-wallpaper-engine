@@ -71,7 +71,8 @@ const hasNodeEngine = (p) => Boolean(p && p.engines && p.engines.node);
   // ⚠️ 媒体子系统在本分支住**组件行**（P2 拆包）：面要跟着实现走，否则'是否用了有版本要求的 API'
 // 会推导出 0（判据非空转自检立刻报红——这正是它该做的）。
 const hostSrc = ['lib/index.js', 'packages/media-bridge/lib/legacy.js', 'packages/media-bridge/lib/backend.js',
-  'packages/media-bridge/lib/supervisor.js', 'packages/media-bridge/lib/index.js']
+  'packages/media-bridge/lib/supervisor.js', 'packages/media-bridge/lib/supervisor-protocol.js',
+  'packages/media-bridge/lib/index.js']
     .map((f) => { try { return read(f); } catch { return ''; } }).join('\n');
   const need = requiredFloor(hostSrc);
   const declared = pkg.engines && pkg.engines.node;
