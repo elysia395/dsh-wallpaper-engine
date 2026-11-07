@@ -1362,7 +1362,8 @@ section('③e #199：随包层旧 tag ⇒ 422「版本已作废」（不是 404�
 section('④ 客户端形态棘轮：新编排链（合并→落盘→reapplyAll→emit）/ 失败滚回 / 无第二持久化');
 {
   const storeSrc = readFileSync(join(root, 'src', 'preset-store.js'), 'utf8');
-  const panelSrc = readFileSync(join(root, 'packages', 'glass', 'src', 'glass-panel.js'), 'utf8');
+  const panelSrc = [readFileSync(join(root, 'packages', 'glass', 'src', 'glass-presets-panel.js'), 'utf8'),
+    readFileSync(join(root, 'packages', 'glass', 'src', 'glass-panel.js'), 'utf8')].join('\n');
   const storeCode = stripComments(storeSrc);
   const panelCode = stripComments(panelSrc);
 
@@ -1653,7 +1654,8 @@ section('④b 行为判据：删除令牌链 + broken 行禁用与可删 + 勾�
       glm: 'GLM', grok: 'Grok', kimi: 'Kimi', qwen: 'Qwen',
     }).map(([k, label]) => [k, { label }])),
   };
-  const gpSrc = readFileSync(join(root, 'packages', 'glass', 'src', 'glass-panel.js'), 'utf8')
+  const gpSrc = [readFileSync(join(root, 'packages', 'glass', 'src', 'glass-presets-panel.js'), 'utf8'),
+    readFileSync(join(root, 'packages', 'glass', 'src', 'glass-panel.js'), 'utf8')].join('\n')
     .replace(/export\s*\{[^}]*\};?/g, '');
   const makeBlock = new Function(...Object.keys(gpStub), gpSrc + ';return { renderGlassPresetsBlock };');
   const { renderGlassPresetsBlock } = makeBlock(...Object.keys(gpStub).map((k) => gpStub[k]));

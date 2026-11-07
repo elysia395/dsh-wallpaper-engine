@@ -18,7 +18,8 @@
  * 下面的解构名单与主包 `src/host-bridge.js` 的 HOST_BRIDGE_BINDINGS 玻璃段**逐键一致**（缺键大声抛，
  * 不许静默 undefined）；产物里的 GLASS_HOST_REQUIRED 由构建期从这份解构派生（源码里是空表）。
  * 键集依据 = 被搬文件（第二刀 glass-panel.js + 第三刀 glass.js /
- * glass-surfaces.js / glass-extra.js / glass-layer.js）的**自由标识符**逐个点名（fonts 同款 acorn 取证）：
+ * glass-surfaces.js / glass-extra.js / glass-layer.js；S3 起「主题预设」块折出
+ * glass-presets-panel.js）的**自由标识符**逐个点名（fonts 同款 acorn 取证）：
  *   · 面板半边（第二刀）：React×65 · weT×176 · SliderRow×14 · switchRow×15 · swatchRow×6 · ctlText×5
  *     · sectionHead×2 · moduleResetButtonNode×1 · renderConfirmRow×1 · GLASS_CHILDREN×2
  *     · childGlassKey×1 · GLASS_COLOR_PRESETS×6 · ROPE_FORMS×2 · ROPE_FORM_VALUES×1 · panelGlassPair×1

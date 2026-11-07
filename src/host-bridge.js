@@ -103,7 +103,7 @@ const HOST_BRIDGE_BINDINGS = {
   FPS_CAP_VALUES: () => FPS_CAP_VALUES,
   codecLabel: () => codecLabel,
   // ── 玻璃半边（packages/glass，ADR-0016 第二刀）的显式键集 ───────────────────────────
-  // 来源 = packages/glass/src/glass-panel.js 的**自由标识符**逐个点名（键集真源 = 本表；
+  // 来源 = packages/glass/src/glass-panel.js 与 glass-presets-panel.js 的**自由标识符**逐个点名（S3 起预设块在后者；键集真源 = 本表；
   // 子包侧解构名单由 verify-subpackage-client-half 与本表对账，产物里的申报表由构建期派生）。
   // React / weT / switchRow / SliderRow / swatchRow / ctlText / sectionHead / renderConfirmRow
   // 是 fx / fonts / media-bridge 已登记过的键，glass 复用、**不重复登记**。新增七键如下（另有 `apiUrl` 已在通用键段登记，玻璃行状态轮询依赖它）；

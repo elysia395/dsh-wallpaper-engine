@@ -374,7 +374,7 @@ console.log('sidebar glass selectors are wallpaper-independent: true · page gla
   // #255⑤ 后半：23 处「值+单位」预格式化后缀已改裸单位（否则那些行仍只读）；
   // 唯一保留的预格式化是吉祥物大小（显示倍率刻度 ≠ 存储刻度，保持只读）。
   const readSrc = (rel) => readFileSync(new URL('../' + rel, import.meta.url), 'utf8');
-  const bareUnitFiles = ['packages/glass/src/glass-panel.js', 'src/panel-tabs/effects.js', 'src/panel-tabs/appearance.js'];
+  const bareUnitFiles = ['packages/glass/src/glass-panel.js', 'packages/glass/src/glass-presets-panel.js', 'src/panel-tabs/effects.js', 'src/panel-tabs/appearance.js'];
   const leftovers = bareUnitFiles.filter((rel) => /\+ "(?:px|%)"/.test(readSrc(rel)));
   assert.ok(leftovers.length === 0, '滑杆后缀应已全部改裸单位（仍预格式化的文件：' + leftovers.join(', ') + '）');
   assert.ok(/Math\.round\(sel\.ropeScale \* 100\) \+ "%"/.test(readSrc('src/panel-tabs.js')),
@@ -1805,7 +1805,8 @@ setTimeout(async () => {
     // 结构半边：旧实现是按主题选一侧（`singleGlassOnDark = sidebarSurface && panelThemeIsDark()`）。
     // 挂载台里 `document.body` 没有能力齐全的 hasAttribute ⇒ 只靠上面的行为断言抓不到"条件选侧"
     // 那一种回退，所以再钉一条源码判据 + 一条证明该判据真能抓到的负对照。
-    const glassPanelSrc = readFileSync(new URL('../packages/glass/src/glass-panel.js', import.meta.url), 'utf8');
+    const glassPanelSrc = readFileSync(new URL('../packages/glass/src/glass-panel.js', import.meta.url), 'utf8')
+      + '\n' + readFileSync(new URL('../packages/glass/src/glass-presets-panel.js', import.meta.url), 'utf8');
     // 只判**代码**：注释里正好写着"panelThemeIsDark 已随之删除"这句（第一版被自己的注释判红）。
     // 剥注释走共享的**字符串感知**实现（`test/tools/js-text.mjs`）—— 手写"块注释一条正则 +
     // 行注释一条正则"不认字符串与行注释，注释里出现那两个字符就会静默吃掉中间的真实代码，

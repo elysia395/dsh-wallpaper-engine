@@ -139,6 +139,10 @@ async function loadExtensionRegistry() {
   // panel-tabs 的玻璃节是按 id 取渲染器的注册表占位桩，不登记它 ⇒ 占位桩查不到 ⇒ 整节消失
   // （下面所有玻璃节判据以"缺节"的形式假红）。
   const glassPanelMod = await import(pathToFileURL(join(root, 'packages', 'glass', 'src', 'glass-panel.js')).href);
+  // S3：预设块折出到 glass-presets-panel.js（inline 模块，打包期同作用域）；按文件 import 时
+  // 把它的导出映成全局 —— 否则外观节渲染到 `renderGlassPresetsBlock(...)` 会 ReferenceError。
+  const glassPresetsPanelMod = await import(pathToFileURL(join(root, 'packages', 'glass', 'src', 'glass-presets-panel.js')).href);
+  globalThis.renderGlassPresetsBlock = glassPresetsPanelMod.renderGlassPresetsBlock;
   reg.weRegisterPanelSection('appearance', 'glass', {
     id: 'glass',
     get title() { return globalThis.weT('玻璃 UI'); },
@@ -4351,7 +4355,8 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     // 模块级 ↺ 必须**覆盖外观页签下的每个模块**（用户口径："外观下的模块也要能单独重置"）：
     // 六个外观节各有一处调用，且共用构件必须阻止冒泡（否则点 ↺ 会连带收起该节）。
     const mrSrc = readFileSync(join(root, 'src', 'module-reset.js'), 'utf8').replace(/\r\n/g, '\n');
-    const gpSrc = readFileSync(join(root, 'packages', 'glass', 'src', 'glass-panel.js'), 'utf8').replace(/\r\n/g, '\n');
+    const gpSrc = readFileSync(join(root, 'packages', 'glass', 'src', 'glass-panel.js'), 'utf8').replace(/\r\n/g, '\n')
+      + '\n' + readFileSync(join(root, 'packages', 'glass', 'src', 'glass-presets-panel.js'), 'utf8').replace(/\r\n/g, '\n');
     // ⚠️ 刀4 之后节的渲染器搬到了 src/panel-tabs/*.js 域模块 ⇒ 扫**页签族全文**（组装点在末尾），
     //    而不是组装点单文件（否则六处调用全在域模块里 ⇒ 假红 missing=theme,detail,…）。
     const appearanceModules = ['theme', 'detail', 'corners', 'uiColor', 'font'];
