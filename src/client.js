@@ -1961,6 +1961,16 @@ function livePauseReason() {
   return weT("用户暂停");
 }
 function isEffectivelyPlaying() {
+  // 标签页隐藏（`document.hidden`）必须显式算进来：Chromium 对隐藏页**冻结 rAF**，
+  // 出帧物理上不可能，而首帧预算与运行期 stall 两条判据都以"有帧"为唯一证据。
+  // 少了这一项，收拍期间窗口被最小化 / 切到别的标签页 ⇒ 渲染页被冻结 ⇒ 看护按
+  // `LIVE_FIRST_FRAME_MAX_MS` 判 timeout；而 `liveFailCauseOf` 在"本窗口内确有整包
+  // 完成证据"时会归成渲染侧并**落盘**（实测事故 2026-10-27：一张 29.7MB 的场景壁纸
+  // 在隐藏期被判 timeout 写进 sceneLiveFailures，此后六天多每次启动都直接降级静态帧，
+  // 直到下一次管线变更才被 migrateStaleLiveFailures 清掉）。
+  // 运行期 stall 规则此前已有同款守卫（看护心跳的 `!isEffectivelyPlaying()` 分支），
+  // 首帧预算这一侧必须与其对称 —— 否则"隐藏"在两个判据里有两种语义。
+  if (typeof document !== "undefined" && document.hidden) return false;
   return selection.playing && !occlusionActive() && !occlusionRendererPaused();
 }
 

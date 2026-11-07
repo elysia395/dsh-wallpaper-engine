@@ -134,9 +134,17 @@ function liveFailCauseOf(watch) {
   if (p.active > 0) return "transfer";
   const s = watch.payloadStart;
   if (s) {
-    if (p.completed - s.completed <= 0) {
-      const size = p.size > 0 ? p.size : 0;
-      if (!(size > 0 && p.served - s.served >= size)) return "transfer";
+    const grew = p.completed - s.completed > 0;
+    const size = p.size > 0 ? p.size : 0;
+    const servedEnough = size > 0 && p.served - s.served >= size;
+    if (!grew && !servedEnough) {
+      // 窗口内既没有整包完成、也没有涨够一个整包。此时**不能**直接判传输侧：
+      // 「窗口开始前就已传完」与「本窗口确实没传完」在账本上都是"无增长"，靠上面
+      // 那两个量分不开。两者处置相反（见本函数注释最后一条）——窗口第一次采样时
+      // 就已经有完成的整包（`completed > 0`）⇒ 视为窗口前传完，维持渲染侧（落盘）；
+      // 否则本窗口从零开始且一分钱没进展 ⇒ 传输侧，只记会话内 + 冷却重试。
+      if (s.completed > 0) return "";
+      return "transfer";
     }
   }
   return "";
