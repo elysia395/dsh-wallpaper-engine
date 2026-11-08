@@ -979,9 +979,12 @@ function stripHeader(srcText) {
  * 保留运行期检查的理由（不因构建期断言而删）：九包各自独立发版，用户机器上可能出现
  * 主包/子包版本错配（主包旧、子包新）⇒ 构建期断言管不到，只有产物里的键数组能当场响亮失败。
  */
-/** 缓存挂在函数对象上（本文件在此函数定义之前就会跑子包构建循环 ⇒ 模块级 let 会踩 TDZ）。 */
+/**
+ * 缓存挂在函数对象上（本文件在此函数定义之前就会跑子包构建循环 ⇒ 模块级 let 会踩 TDZ）。
+ */
 function hostBridgeKeys() {
-  if (hostBridgeKeys.cache) return hostBridgeKeys.cache;
+  const self = /** @type {{ cache?: string[] }} */ (hostBridgeKeys);
+  if (self.cache) return self.cache;
   const src = readNormalized(resolve(root, 'src', 'host-bridge.js'));
   const at = src.indexOf('const HOST_BRIDGE_BINDINGS = {');
   if (at < 0) {
@@ -999,7 +1002,7 @@ function hostBridgeKeys() {
     console.error('[build-client] HOST_BRIDGE_BINDINGS 解析出 0 个键（形状变了？）。');
     process.exit(1);
   }
-  hostBridgeKeys.cache = keys;
+  self.cache = keys;
   return keys;
 }
 
