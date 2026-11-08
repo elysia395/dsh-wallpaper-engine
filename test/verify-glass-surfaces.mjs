@@ -2062,6 +2062,25 @@ console.log('\n⑬ CSS 契约（按面变量零兜底 / 门控许可证 / 双向
       fakeBare.length === 1, '判出 ' + fakeBare.length + ' 条');
   }
 
+  // ── #333 常驻判据：设置页顶部标题卡的几何住**主包**，玻璃子包禁用时不得塌 ────────
+  // 背景：#333「禁用 wallpaper-engine-glass 后设置页顶部标题排版错」。标题卡由主包
+  // client.js 渲染（.we-picker__card-shell/card-head/card-name/card-badge/card-desc），
+  // 但几何曾只写在玻璃 CSS 里 ⇒ 停玻璃行后玻璃 CSS 不再注入，标题塌成裸文本。
+  // 判据：几何必须在主包样式里；玻璃 CSS 不得重复声明同一批选择器（两份工件会漂移）。
+  {
+    const MAIN_CSS = cssBodyOf(styleText());
+    const GLASS_CSS = cssBodyOf(readFileSync(join(ROOT, 'packages', 'glass', 'src', 'glass-css.js'), 'utf8'));
+    const CARD_CLASSES = ['we-picker__card-shell', 'we-picker__card-head',
+      'we-picker__card-name', 'we-picker__card-badge', 'we-picker__card-desc'];
+    const missing = CARD_CLASSES.filter((c) => !new RegExp('\\.' + c + '\\s*[,{]').test(MAIN_CSS));
+    const duplicated = CARD_CLASSES.filter((c) => new RegExp('\\.' + c + '\\s*[,{]').test(GLASS_CSS));
+    check('设置页标题卡几何在主包样式里，不随玻璃子包启停（#333）',
+      missing.length === 0 && duplicated.length === 0,
+      missing.length ? '主包缺：' + missing.join(', ')
+        : (duplicated.length ? '玻璃包重复声明：' + duplicated.join(', ')
+          : CARD_CLASSES.length + ' 个选择器全在主包、玻璃包无重复'));
+  }
+
   // ⚠️ **模板字符串的边界**：样式族的每份 CSS 各自住在一个 JS 模板字符串里
   //    （`const CSS[_域] = \`…\`;`）⇒ 注释或规则里出现**裸反引号**会提前终止它，
   //    产物随即是语法错误。构建会拦住，但它报的是 `Unexpected identifier` /

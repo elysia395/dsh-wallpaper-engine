@@ -1571,24 +1571,6 @@ const CSS_GLASS = `
     backdrop-filter: none !important;
   }
 
-  /* Section wrapper：融合官方设置页（官方分区没有外壳卡），内容直接落在设置对话框的面层上。
-     注意类名与 DOM 结构是**契约**，守卫按结构断言 —— 拍平的是外观，不是这层壳的存在。 */
-  .we-picker__card-shell { display: block; }
-  /* Card header: name + count badge + description (mirrors skin-center). */
-  .we-picker__card-head {
-    display: flex; align-items: baseline; gap: 8px;
-    padding-bottom: 10px; border-bottom: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.22));
-  }
-  .we-picker__card-name {
-    font-size: 15px; font-weight: 600; color: var(--dsw-alias-label-primary, inherit);
-  }
-  .we-picker__card-badge {
-    font-size: 11px; font-weight: 500; color: var(--dsw-alias-label-secondary, #6b7280);
-  }
-  .we-picker__card-desc {
-    margin-left: auto; font-size: 12px; color: var(--dsw-alias-label-tertiary, #6b7280);
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
   /* 配色 swatches: circular preset buttons + native color picker. The active
      swatch gets an accent ring so the current choice is obvious at a glance. */
   /* ── 软件渲染回退（upstream #95，运行时探测）───────────────────────────────

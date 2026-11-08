@@ -18,6 +18,8 @@
 
 ### 未发布（清理轮，2026-11-06）
 
+- **修：禁用「液态玻璃」子包后，设置页顶部标题不再塌排版（#333）**。1.4.2 拆玻璃子包时，设置页标题卡的几何（`.we-picker__card-shell` / `-head` / `-name` / `-badge` / `-desc`：flex 基线对齐、8px 间距、下边框、字号与墨色、说明省略号）留在了 `packages/glass/src/glass-css.js`，而标题卡由主包 `src/client.js` 无条件渲染 ⇒ 在插件管理器里禁用 `wallpaper-engine-glass` 后玻璃 CSS 不再注入，标题塌成裸文本。现在这 5 条几何规则搬回主包 `src/styles/settings.js`（玻璃包只负责玻璃外观，不再重复这份几何）；`verify-glass-surfaces` 新增常驻判据「标题卡几何在主包样式里、玻璃包不得重复声明」。纯 CSS 归属调整，玻璃开启时逐条相同、零视觉变化，刷新页面即生效。
+
 - **修：深色主题的「全局 UI 配色」不再把亮 accent 一律掺白洗淡（#334）**。1.4.2 为修 #239（暗 accent 在深色底上 ~1.1:1）把深色孪生块的三处令牌一律 `color-mix(… 45%, #ffffff)`，亮 accent 因此降饱和（#F1717F → ≈#F7B1B9，饱和度掉一半）。现在 `src/effects.js` 按 WCAG 相对亮度分流（`weUiDarkKeep`：亮于 0.3 ⇒ 100% 原色直出，否则 55% = 掺白 45% 的**逐位现状**），写 `--we-ui-keep-{link,deep-diving,tab}` 与 shimmer 专用档（亮 82% / 暗 70%），`src/styles/base.js` 的深色块改成 `color-mix(… var(--we-ui-keep-*, 55%), #ffffff)` 的单侧百分比；缺省仍是 55%，JS 没跑/旧产物下自动落回 #239 的可读兜底。默认 accent `#4f8cff`（0.256）与 #239 现场 `#2050a0`（0.086）/ `#242424`（0.018）逐位不变，`#F1717F`（0.320）/ `#7aaaff`（0.401）不再被提亮。守卫：`verify-readability` 新增 C0c（从产物抽出 `weUiDarkKeep` / `weUiDarkShimmerKeep`，复算六个输入的正负两端），`TOKEN-CONTRACT` 重算。纯客户端改动，刷新页面即生效。
 
 - **内部：客户端正文的主页面吉祥物组件折出 `src/client/rope-dock.js`（`RopeDock` 619 行；`src/client.js` 6,582→5,963 行，纯搬移）**。拖拽 / 吸附 / 侧栏抽屉 / 气泡与走抛动画整段搬进 `src/client/` 助手族（`clientSources()` 既有模式），函数体逐字未改；正文仍以 `React.createElement(RopeDock, null)` 挂载，自由名（`ROPE_FORMS` / `ropeArtOf` / `QuickPanel` / `UpdateNotice` / `weT` / `useWeLocale` 等）由正文与其它内联模块提供。内联模块同作用域拼接，`INLINE_MODULES` 条目排在正文之前并带 markers。零行为改动：`verify:all` 116 步全绿；`verify-i18n` 的「五个顶层组件都订阅语言」判据改读新文件（从 `function RopeDock` 起算，头部注释不算组件体），`clientText()` 族读法自动覆盖其余读面。

@@ -252,6 +252,27 @@ const CSS_SETTINGS = `  /* ── 预设方案：两行四列的圆角表格（�
   .we-picker__error { font-size: 0.82em; opacity: 0.9; color: #e5534b; }
   .we-picker__note { font-size: 0.8em; opacity: 0.85; color: var(--we-accent, var(--dsw-alias-brand-primary, #4f8cff)); }
 
+  /* ── 设置页顶部标题卡（名称 + 可播放计数 + 说明）──────────────────────────
+     #333：标题排版住主包，不随玻璃子包启停。玻璃子包被禁用时玻璃 CSS 不再注入，
+     标题若只住在玻璃包里就会塌成裸文本（行内挤作一团、无分隔线）。
+     类名与 DOM 结构是契约（守卫按结构断言），这里只负责壳与卡头的排版；
+     玻璃包只负责玻璃外观，不再重复这份几何。 ── */
+  .we-picker__card-shell { display: block; }
+  .we-picker__card-head {
+    display: flex; align-items: baseline; gap: 8px;
+    padding-bottom: 10px; border-bottom: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.22));
+  }
+  .we-picker__card-name {
+    font-size: 15px; font-weight: 600; color: var(--dsw-alias-label-primary, inherit);
+  }
+  .we-picker__card-badge {
+    font-size: 11px; font-weight: 500; color: var(--dsw-alias-label-secondary, #6b7280);
+  }
+  .we-picker__card-desc {
+    margin-left: auto; font-size: 12px; color: var(--dsw-alias-label-tertiary, #6b7280);
+    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+  }
+
   /* ── Visual grouping: sections with a hairline divider + quiet label. ── */
   .we-picker__section { display: flex; flex-direction: column; gap: 10px; }
   .we-picker__section + .we-picker__section {
