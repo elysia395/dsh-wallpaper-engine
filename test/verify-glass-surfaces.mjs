@@ -2511,7 +2511,7 @@ console.log('\n⑲ 标记值跟走 resolver（t9-001 运行级断言：真跑 we
   // weSurfaceRefresh 真正跑起来 —— 源码子串断言看不见运行期的标记值漂移
   // （t9-001：resolver 返回 extra-fallback 时标记仍停留 "extra"，CSS 规则全不匹配）。
   const SURF_SRC = readFileSync(join(ROOT, 'packages', 'glass', 'src', 'glass-surfaces.js'), 'utf8');
-  const runSurfaces = (src) => {
+  const runSurfaces = (src, opts = {}) => {
     const elAttrs = new Map();
     const bodyAttrs = new Map([['data-we-glass-page', '']]);
     const mkRect = () => ({ left: 0, top: 0, right: 100, bottom: 100, width: 100, height: 100, x: 0, y: 0, toJSON() { return this; } });
@@ -2531,7 +2531,7 @@ console.log('\n⑲ 标记值跟走 resolver（t9-001 运行级断言：真跑 we
       MutationObserver: class { observe() {} disconnect() {} },
       requestAnimationFrame: () => 0, cancelAnimationFrame: () => {},
       addEventListener: () => {}, removeEventListener: () => {},
-      getComputedStyle: (target, pseudo) => (pseudo ? { content: 'normal' } : elStyle()),
+      getComputedStyle: (target, pseudo) => (pseudo ? { content: 'normal' } : (opts.unsafeExtra ? { ...elStyle(), position: 'static' } : elStyle())),
     };
     const el = {
       nodeType: 1, isConnected: true, scrollTop: 0, scrollLeft: 0,
@@ -2667,6 +2667,39 @@ console.log('\n⑲ 标记值跟走 resolver（t9-001 运行级断言：真跑 we
     strippedRules.length === 2
       && !strippedRules.every((h) => h.includes(':not([data-we-surface-runtime])'))
       && !strippedRules.every((h) => h.includes(':not([data-we-host-dialog])')));
+
+  // ── ㉑ #315 无 role 浮层的可声明实底：只认声明产生的稳定锚点 ──────────────────────
+  // #277 修掉 ARIA 浮层后，没有 role 的框架层/吸顶条/第三方容器仍是「半透明且无霜」。
+  // 按类名猜会误伤宿主框架层，所以出路是「用户显式声明 → 运行时打稳定锚点」：
+  //   a  CSS 规则必须同时在玻璃门与 floaterSolidBase 门内（一把可回退）；
+  //   b  运行时只在 extra 面 resolver 退回原生时打锚点（可玻璃化时不打）；
+  //   c  退出声明（从额外选择器里删掉）后锚点还原，不残留实底；
+  //   negative control：摘掉运行时打锚点那一行，b 必须判红（判据有牙）。
+  console.log('\n㉑ #315 无 role 浮层的可声明实底：规则在门内 + 运行时锚点成对');
+  const solidRules = rulesOf(CSS).filter((r) => /\[data-we-solid-base\]/.test(r.header)
+    && /background-color\s*:/.test(r.body));
+  check('㉑a 实底规则存在且同时带玻璃门与浮层门（floaterSolidBase 一把回退）',
+    solidRules.length === 1
+      && /body\[data-we-glass-page\]/.test(solidRules[0].header)
+      && /data-we-floater-solid/.test(solidRules[0].header)
+      && /var\(--we-readability-base/.test(solidRules[0].body),
+    solidRules.length ? solidRules[0].header : '规则不存在');
+  const solidRun = runSurfaces(SURF_SRC, { unsafeExtra: true });
+  solidRun.sync({ extraGlassSelectors: '#plugin-card' });
+  check('㉑b extra 只能退回原生时打上数据锚点（声明过才补实底）',
+    solidRun.el.getAttribute('data-we-solid-base') === 'extra',
+    '实际=' + String(solidRun.el.getAttribute('data-we-solid-base')));
+  solidRun.sync({ extraGlassSelectors: '' });
+  check('㉑c 退出声明后锚点被还原（删选择器不残留实底）',
+    solidRun.el.getAttribute('data-we-solid-base') === null,
+    '实际=' + String(solidRun.el.getAttribute('data-we-solid-base')));
+  const solidLine = '      if (entry.id === "extra") weSurfaceSolid(record);';
+  const noSolidSrc = SURF_SRC.replace(solidLine, '      // (removed for negative control)');
+  const noSolidRun = runSurfaces(noSolidSrc, { unsafeExtra: true });
+  noSolidRun.sync({ extraGlassSelectors: '#plugin-card' });
+  check('negative control: 摘掉运行时打锚点后 ㉑b 会判红（判据不是恒真）',
+    SURF_SRC.split(solidLine).length === 2
+      && noSolidRun.el.getAttribute('data-we-solid-base') === null);
 }
 
 console.log('');
