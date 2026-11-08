@@ -64,7 +64,12 @@ const CLASSIFY_CASES = [
   { name: 'package.json ⇒ full', entries: [E('M', 'package.json')], mode: MODE_FULL, reason: '包清单' },
   { name: 'CI 接线 ⇒ full', entries: [E('M', '.github/workflows/verify.yml')], mode: MODE_FULL, reason: 'CI 接线' },
   { name: '符号链接（mode 120000）冒充 Markdown ⇒ full', entries: [E('A', 'docs/sneaky.md', { newMode: '120000' })], mode: MODE_FULL, reason: '符号链接' },
+  { name: 'gitlink（mode 160000）冒充 Markdown ⇒ full（P08）', entries: [E('A', 'docs/sub.md', { newMode: '160000' })], mode: MODE_FULL, reason: '非普通文件模式' },
+  { name: '普通文件改成 gitlink（M 100644→160000）⇒ full', entries: [E('M', 'docs/sub.md', { oldMode: '100644', newMode: '160000' })], mode: MODE_FULL, reason: '非普通文件模式' },
+  { name: '未知模式位 ⇒ full', entries: [E('M', 'docs/weird.md', { newMode: '100777' })], mode: MODE_FULL, reason: '非普通文件模式' },
+  { name: '公告文件变 gitlink ⇒ 拒绝 notice 快通道（④-b 在 ⑦ 之前加理由）', entries: [E('A', 'src/client.js', { newMode: '160000' })], mode: MODE_FULL, reason: '非普通文件模式' },
   { name: '普通文件 mode 100644 的 Markdown ⇒ docs（mode 不误伤）', entries: [E('M', 'docs/README.md', { newMode: '100644' })], mode: MODE_DOCS },
+  { name: '可执行位 100755 也不误伤', entries: [E('M', 'docs/run.md', { oldMode: '100644', newMode: '100755' })], mode: MODE_DOCS },
 ];
 
 for (const c of CLASSIFY_CASES) {
@@ -159,6 +164,28 @@ const fakeFs = (files) => ({
   const fs7 = fakeFs({ 'docs/README.md': 'a  \n' });
   const r = auditDocs({ entries: [E('M', 'docs/README.md')], ...fs7 });
   check('Markdown 的行尾双空格是换行语义 ⇒ 不查尾随空白', r.findings.length === 0, JSON.stringify(r.findings));
+}
+{
+  // P08（二审 F02）：A/M 白名单文档读不到内容 ⇒ 显式 unreadable 发现，不是零审计假成功。
+  const fs8 = fakeFs({});
+  const r = auditDocs({ entries: [E('A', 'docs/new.md')], ...fs8 });
+  check('A/M 文档读不到 ⇒ unreadable 发现（拒绝静默放行）',
+    r.findings.some((f) => f.kind === 'unreadable' && f.file === 'docs/new.md')
+    && r.counts.files === 0, JSON.stringify(r.findings));
+}
+{
+  // 删除件读不到仍豁免：分类层把 D 判 full，审计不重复判（保留原语义，不制造假红）。
+  const fs9 = fakeFs({});
+  const r = auditDocs({ entries: [E('D', 'docs/gone.md')], ...fs9 });
+  check('D 读到 null 不报 unreadable（分类层负责）', r.findings.length === 0, JSON.stringify(r.findings));
+}
+{
+  // 图片素材读不到文本不受影响：素材走"存在与大小"检查（asset-missing / asset-empty）。
+  const fs10 = fakeFs({});
+  const r = auditDocs({ entries: [E('A', 'assets/readme/new.png')], ...fs10 });
+  check('新增图片不在盘上 ⇒ asset-missing（unreadable 不误伤图片通道）',
+    r.findings.some((f) => f.kind === 'asset-missing')
+    && !r.findings.some((f) => f.kind === 'unreadable'), JSON.stringify(r.findings));
 }
 {
   // 路径越界：引用爬出仓库的，必须由探针拒绝（CLI 的 exists 会做包含性检查）。

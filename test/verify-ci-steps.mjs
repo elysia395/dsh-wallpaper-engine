@@ -41,6 +41,7 @@ import {
   setContinueOnError,
   setJobIf,
   setPermissionScope,
+  setStepIf,
   swapSteps,
   swapStepsNamed,
   topLevelPermissions,
@@ -114,15 +115,68 @@ control('push exact 档退化成 merge-base',
 // dispatch 分支（github.sha 空差异 ⇒ 保守 full）被删 ⇒ 无事件边界时接线不完整 ⇒ 判红。
 control('dispatch 边界分支被删',
   removeLineMatching(workflowText, /github\.sha.*base-mode exact/), 'changes-wiring');
+// 二审 F01 P03：分类器之后**同一步**再写一次 mode —— 后写的赢，分类结论被换成 docs 后
+// full 链整段跳过。旧判据只查"分类器存在 + 差异对齐"会放行；新判据扫分类器行之后
+// 的 mode 写出 ⇒ 必须红。
+control('P03：分类器同一步内追加第二次 mode 输出', workflowText.replace(
+  'node scripts/ci-routing.mjs check --github-output "${BASE_ARGS[@]}"',
+  'node scripts/ci-routing.mjs check --github-output "${BASE_ARGS[@]}"\n'
+  + '          echo "mode=docs" >> "$GITHUB_OUTPUT"'), 'changes-wiring');
+// 二审 F01 P03 变体：**另起一步**覆盖 mode（分类步本身没动）⇒ 后续步骤覆写检测 ⇒ 必须红。
+control('P03 变体：后续步骤再写 mode',
+  insertStepIntoJob(workflowText, 'changes', 'echo "mode=full" >> "$GITHUB_OUTPUT"', '覆盖分类结论'), 'changes-wiring');
+
+// ── ③-d 评审补洞：初版"令牌在场 + 按行计数"指纹的一行级绕过（全部必须红）──────────
+// 同一行串第二条 fetch：后一次 fetch 改写 FETCH_HEAD ⇒ 信任边界指向 PR merge commit。
+control('P02 补洞：同行串第二条 fetch 改写 FETCH_HEAD', workflowText.replace(
+  'git fetch --no-tags origin "${{ github.event.pull_request.base.ref }}"',
+  'git fetch --no-tags origin "${{ github.event.pull_request.base.ref }}"; git fetch --no-tags origin "${{ github.sha }}"'),
+  'trusted-gate');
+// show 重定向丢弃：文件保持 PR 树版本，令牌全部在场。
+control('P02 补洞：git show 重定向改 /dev/null（覆盖失效）', workflowText.split('git show "$BASE:$f" > "$f"')
+  .join('git show "$BASE:$f" > /dev/null'), 'trusted-gate');
+// BASE 二次赋值：保留受信赋值，其后改写（保持缩进，模拟结构合法的语义等价变异）。
+control('P02 补洞：BASE=FETCH_HEAD 之后二次赋值', workflowText.split('BASE=FETCH_HEAD')
+  .join('BASE=FETCH_HEAD\n            BASE="${{ github.sha }}"'), 'trusted-gate');
+// overlay 步挂 if：运行时整步跳过，文件保持 PR 树版本。
+control('P02 补洞：overlay 步挂 if: false', setStepIf(workflowText, '取受信判定脚本', 'false'), 'trusted-gate');
+// 恢复步：overlay 之后另起一步把 PR 版判定器拷回来（不经过 git show 形态）。
+control('P02 补洞：追加 git checkout 恢复 PR 版判定器', insertStepIntoJob(workflowText, 'changes',
+  'git checkout "${{ github.sha }}" -- scripts/ci-routing.mjs', '恢复 PR 版判定器'), 'trusted-gate');
+// 同行 && 追加覆写：该行本身匹配分类器 CLI，"从下一行开始扫"的口径漏它 ⇒ 逐字 pin 必须接住。
+control('P03 补洞：分类器同行 && 追加第二次 mode 输出', workflowText.replace(
+  'node scripts/ci-routing.mjs check --github-output "${BASE_ARGS[@]}"',
+  'node scripts/ci-routing.mjs check --github-output "${BASE_ARGS[@]}" && echo "mode=docs" >> "$GITHUB_OUTPUT"'),
+  'changes-wiring');
+// outputs 改指：分类器一字未动，作业级输出改指（可被 bootstrap 步喂假 mode）。
+control('P03 补洞：outputs.mode 改指别的步骤输出', workflowText.split('mode: ${{ steps.classify.outputs.mode }}')
+  .join('mode: ${{ steps.bootstrap.outputs.mode }}'), 'changes-wiring');
+// 变量间接写：后续步不带 mode 字样也能覆写 ⇒ 后续步只认"碰没碰 GITHUB_OUTPUT"。
+control('P03 补洞：后续步骤用变量间接写 mode',
+  insertStepIntoJob(workflowText, 'changes', 'printf "$OUT_KEY=docs" >> "$GITHUB_OUTPUT"', '间接覆写'), 'changes-wiring');
 control('full 漏掉 verify:bridge', dropStep(workflowText, 'verify:bridge'), 'full-coverage');
 control('full 漏掉 smoke', dropStep(workflowText, 'smoke'), 'full-coverage');
 control('full 把安装放到第一次 npm run 之后', swapStepsNamed(workflowText, 'npm ci', 'verify:static'), 'full-coverage');
 control('给 verify 加 continue-on-error', setContinueOnError(workflowText, 'verify', true), 'soft-tier');
 // 信任边界负对照：判定脚本不再从 base 树取（把 overlay 的 git show 全换成 true）⇒ trusted-gate 必须红。
 control('去掉 base 树判定脚本 overlay（判定器变回 PR 树）', workflowText.replace(/git show/g, 'true'), 'trusted-gate');
+// 二审 F01 P02：PR 分支的 BASE=FETCH_HEAD 换成 github.sha —— pull_request 事件下那是
+// merge commit（**含 PR 内容**），信任边界名存实亡。旧判据只查"有 git show"会放行；
+// 形状指纹判据要求 fetch base.ref → BASE=FETCH_HEAD 的形状必须存在 ⇒ 必须红。
+control('P02：overlay 的 BASE 被换成 github.sha（信任边界指向 PR 内容）',
+  workflowText.split('BASE=FETCH_HEAD').join('BASE="${{ github.sha }}"'), 'trusted-gate');
+// 二审 F01 P02 变体：fetch 的 ref 换成 head（FETCH_HEAD 内容 = PR 树）⇒ 同罪，必须红。
+control('P02 变体：overlay 的 fetch 改取 head ref',
+  workflowText.split('git fetch --no-tags origin "${{ github.event.pull_request.base.ref }}"')
+    .join('git fetch --no-tags origin "${{ github.event.pull_request.head.ref }}"'), 'trusted-gate');
 // 硬化负对照：full 作业去掉 timeout-minutes ⇒ job-timeouts 必须红。
 control('full 作业去掉 timeout-minutes', workflowText.replace('    timeout-minutes: 30\n', ''), 'job-timeouts');
 control('ci/result 不再 always()', removeLineMatching(workflowText, /if: always\(\)/), 'result-gate');
+// 二审 F01 P04：if: always() 从**作业级**挪到**步骤级** —— 依赖作业被 skip 时步骤根本不会
+// 执行，等于没写（GitHub needs 语义）。旧判据用"作业或任一步有 always"放行这个坏形态；
+// 新判据只认作业级 ⇒ 必须红。
+control('P04：ci/result 的 always() 挪到步骤级',
+  setStepIf(setJobIf(workflowText, 'result', ''), 'judgeResult', 'always()'), 'result-gate');
 control('ci/result 不用 judgeResult', removeLineMatching(workflowText, /judgeResult/), 'result-gate');
 control('ci/result 少 needs 一条腿', removeLineMatching(workflowText, /needs: \[changes, docs, notice, full\]/), 'result-gate');
 control('改用 pull_request_target', insertTopLevel(workflowText, 'pull_request_target:\n  branches: [main]'), 'fork-safety');
@@ -180,6 +234,7 @@ check('变异器恒等：renameNpmScript 对不存在的脚本',
 check('变异器恒等：insertNpmStepAfter 对不存在的锚点',
   insertNpmStepAfter(workflowText, 'verify:bogus', 'lint') === workflowText);
 check('变异器恒等：setJobIf 对不存在的作业', setJobIf(workflowText, 'nope', 'true') === workflowText);
+check('变异器恒等：setStepIf 对不存在的片段', setStepIf(workflowText, '不存在的步骤片段', 'always()') === workflowText);
 
 // 正对照：脚本表为空时"每个 npm 步骤的脚本都存在"必须判红（否则那条判据永远真）。
 const emptyScripts = auditCiWorkflow({ workflowText, scripts: {} });

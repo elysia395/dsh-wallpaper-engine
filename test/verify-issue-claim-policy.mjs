@@ -297,6 +297,70 @@ test('issue changes leave unrelated PRs alone', async () => {
   assert.deepEqual(f.state.writes, []);
 });
 
+// 二审 F03：批量重验必须**逐条隔离**——一条 PR 的 API 故障不再让其余关联 PR 失去重验。
+// 验收口径：其余仍被尝试；批次最终不是 success（抛错）；故障不触发自动关闭；未验证可追踪。
+const threePulls = (f) => {
+  const p2 = { ...f.state.pull, number: 31, head: { sha: 'def456' } };
+  const p3 = { ...f.state.pull, number: 32, head: { sha: 'ghi789' } };
+  f.github.rest.pulls.list = async () => [f.state.pull, p2, p3];
+  return p2;
+};
+
+test('one API failure does not stop re-verification of the remaining PRs (first fails)', async () => {
+  const f = fixture();
+  const p2 = threePulls(f);
+  let getCalls = 0;
+  f.github.rest.pulls.get = async (params) => {
+    getCalls += 1;
+    if (params.pull_number === f.state.pull.number) throw Object.assign(new Error('503 upstream'), { status: 503 });
+    return { data: params.pull_number === p2.number ? p2 : { ...f.state.pull, number: 32, head: { sha: 'ghi789' } } };
+  };
+  const warnings = [];
+  const core = { warning: (m) => warnings.push(m), info: () => {} };
+  await assert.rejects(
+    policy.recheckIssue({ github: f.github, context: f.context, core, number: 12 }),
+    /NOT a success\. Failed: #30 \(/,
+  );
+  assert.equal(getCalls, 3, '三条关联 PR 都必须被尝试（故障不截断队列）');
+  assert.equal(f.state.writes.some(([n, p]) => n === 'check.create' && p.head_sha === 'def456'), true, 'PR #31 仍被重验');
+  assert.equal(f.state.writes.some(([n, p]) => n === 'check.create' && p.head_sha === 'ghi789'), true, 'PR #32 仍被重验');
+  assert.equal(warnings.some((m) => m.includes('#30')), true, '失败 PR 按号可追踪（core.warning）');
+  assert.equal(f.state.writes.some(([n]) => n === 'close'), false, 'API 故障不得自动关闭任何 PR');
+});
+
+test('one API failure does not stop re-verification of the remaining PRs (second fails)', async () => {
+  const f = fixture();
+  const p2 = threePulls(f);
+  let getCalls = 0;
+  f.github.rest.pulls.get = async (params) => {
+    getCalls += 1;
+    if (params.pull_number === p2.number) throw new Error('boom');
+    return { data: params.pull_number === f.state.pull.number ? f.state.pull : { ...f.state.pull, number: 32, head: { sha: 'ghi789' } } };
+  };
+  const warnings = [];
+  const core = { warning: (m) => warnings.push(m), info: () => {} };
+  await assert.rejects(
+    policy.recheckIssue({ github: f.github, context: f.context, core, number: 12 }),
+    /NOT a success\. Failed: #31 \(/,
+  );
+  assert.equal(getCalls, 3, '第 2 条故障后第 3 条仍被尝试');
+  assert.equal(f.state.writes.some(([n, p]) => n === 'check.create' && p.head_sha === 'abc123'), true, 'PR #30 在故障前已被重验');
+  assert.equal(f.state.writes.some(([n, p]) => n === 'check.create' && p.head_sha === 'ghi789'), true, 'PR #32 仍被重验');
+  assert.equal(warnings.some((m) => m.includes('#31')), true);
+  assert.equal(f.state.writes.some(([n]) => n === 'close'), false, 'API 故障不得自动关闭任何 PR');
+});
+
+test('a batch without API failures keeps returning plain results', async () => {
+  const f = fixture();
+  threePulls(f);
+  const warnings = [];
+  const core = { warning: (m) => warnings.push(m), info: () => {} };
+  const result = await policy.recheckIssue({ github: f.github, context: f.context, core, number: 12 });
+  assert.deepEqual(warnings, []);
+  assert.equal(result.length, 3);
+  assert.equal(result.every((r) => r.ok), true);
+});
+
 for (const [body, result] of [['/assign', { name: 'assign', target: null }], ['/APPROVE @alice', { name: 'approve', target: 'alice' }],
   ['/unassign bob', { name: 'unassign', target: 'bob' }], ['Please /assign', null], ['/assign\n/approve @alice', null], ['/approve @alice extra', null]]) {
   test(`strict command parser: ${JSON.stringify(body)}`, () => assert.deepEqual(policy.parseCommand(body), result));

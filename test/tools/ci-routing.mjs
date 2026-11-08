@@ -213,6 +213,13 @@ export function parseRawDiff(raw) {
 export const SYMLINK_MODE = '120000';
 
 /**
+ * 普通 blob 的模式位（二审 F02：快通道只认**明确的普通文件**）。
+ * `000000` 表示该侧不存在（新增条目的 oldMode / 删除条目的 newMode），不算文件类型；
+ * `120000`（符号链接）与 `160000`（gitlink/子模块指针）及任何未知值都不给快通道。
+ */
+export const REGULAR_BLOB_MODES = ['100644', '100755'];
+
+/**
  * 分类本体（纯函数）：变更条目 → `{ mode, reasons, files }`。
  *
  * 顺序即 fail-closed 的顺序：**任何一条不放心就 full**，绝不因为"看起来主要是文档"而放行。
@@ -247,6 +254,25 @@ export function classify(entries) {
   const links = list.filter((e) => e.newMode === SYMLINK_MODE || e.oldMode === SYMLINK_MODE);
   if (links.length) {
     reasons.push('含符号链接（mode ' + SYMLINK_MODE + '）：' + links.slice(0, 5).map((e) => e.path).join(' '));
+  }
+  // ④-b gitlink / 未知模式：只有 120000 之外还有一种"名字可伪造"的形态 —— 160000（子模块
+  //     指针）。P08 实证（二审 F02）：`docs/x.md` 若是 gitlink，名字在白名单里、状态是 A、
+  //     又不是符号链接 ⇒ 旧判据把它当普通 Markdown 放进 docs 快通道；而文档审计读不到
+  //     gitlink 内容（read=null 被静默跳过）⇒ **零文件审计也"通过"**。因此快通道只认
+  //     REGULAR_BLOB_MODES；`000000` 只许出现在不存在的一侧（新增的 oldMode / 删除的
+  //     newMode —— 而删除/改名本就被 ③ 判 full）。符号链接已在 ④ 有专属理由，这里不再重复计。
+  //     ⚠️ 前提：本判据只对**带模式位**的条目生效。生产路径不可达空洞——parseRawDiff 的
+  //     正则保证模式位必在、CLI 本地通道有 modeOfFile 兜底——但 classify 是导出纯函数，
+  //     未来的直接调用方必须先经 parseRawDiff / collectDiff 取条目，别手工喂裸对象。
+  const nonBlob = [];
+  for (const e of list) {
+    const bad = [e.newMode, e.oldMode].find((m) => m
+      && m !== '000000' && m !== SYMLINK_MODE && !REGULAR_BLOB_MODES.includes(m));
+    if (bad) nonBlob.push(e.path + '（' + bad + '）');
+  }
+  if (nonBlob.length) {
+    reasons.push('含非普通文件模式（gitlink/子模块或未知类型，快通道只认 ' + REGULAR_BLOB_MODES.join('/') + '）：'
+      + nonBlob.slice(0, 5).join(' '));
   }
   // ⑤ 机器派生契约：判据给自己免检就是假牙。
   const contracts = list.filter((e) => isGeneratedContract(e.path));
@@ -435,9 +461,19 @@ export function auditDocs(input) {
     if (!path) continue;
     // 图片类素材：只查存在与大小（下面的素材段落），文本检查一律不做。
     if (isImageAsset(path)) continue;
-    // 只查**还在盘上**的那一侧：删除件由分类层判 full，这里没有可读内容 ⇒ 不重复判。
+    // 只查**还在盘上**的那一侧：删除件（D）由分类层判 full，这里没有可读内容 ⇒ 不重复判。
+    // 但**新增/修改**（A/M）读不到内容不能静默当作"审计完成" —— P08 实证（二审 F02）：
+    // gitlink 冒充 Markdown 时 read=null，旧逻辑零文件审计也报通过（fail-open）。分类层
+    // 已把 gitlink/未知模式判 full（④-b），这里兜住其余"该在盘上却读不到"的情形：显式
+    // 记一条发现，让快通道红出来，而不是让 counts.files 停在 0 假装干净。
     const text = read(path);
-    if (text == null) continue;
+    if (text == null) {
+      const status = String(entry && entry.status || '').toUpperCase();
+      if (status === 'A' || status === 'M') {
+        push(path, 'unreadable', '白名单文档有 A/M 改动但读不到内容（gitlink / 不在盘上 / 权限）——拒绝静默放行');
+      }
+      continue;
+    }
     if (textKind(path, text) === 'binary') { counts.binarySkipped += 1; continue; }
     counts.files += 1;
     const isMd = /\.md$/i.test(path);

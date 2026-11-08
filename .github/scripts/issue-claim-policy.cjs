@@ -207,15 +207,44 @@ async function enforcePullRequest({ github, context, core, number, hasWrite, dry
   }
 }
 
+/**
+ * 批量重验的**逐条隔离**执行器（二审 F03）。
+ *
+ * 旧写法在循环里直接 `await`，一条 PR 的 API 故障（限流 / 5xx / 超时）会让整个循环抛出，
+ * 队列里其余 PR 全部没有重验、旧判定原样留在 Checks 上（P11 实证：两条关联 PR、第一条
+ * pulls.get 注入 503 ⇒ 实际只访问了 [1]，PR #2 没有被尝试）。现在每条独立捕获并继续：
+ *   · 失败即时 `core.warning` —— Actions 页面可见，未验证对象按号可追踪；
+ *   · 循环结束后统一抛错 —— 本次批量 run 因此**不是 success**（"批次最终不是 success"），
+ *     但已验证的 PR 保留本次结果，故障 PR 不自动关闭（验证不可用 ≠ 判定不合格）；
+ *   · 不在 catch 里盲目补 `checks.create`：早失败可能还没有可靠的 head SHA，
+ *     也可能正是 Checks API 本身在故障（enforcePullRequest 内部已对"check 已建"的
+ *     情形把该 check 判 failure）。
+ */
+async function enforceEach({ github, context, core, pulls, hasWrite, dryRun }) {
+  const results = [];
+  const failed = [];
+  for (const pull of pulls) {
+    try {
+      results.push(await enforcePullRequest({ github, context, core, number: pull.number, hasWrite, dryRun }));
+    } catch (error) {
+      const message = String(error && error.message ? error.message : error);
+      failed.push({ number: pull.number, message });
+      core.warning(`PR #${pull.number} could not be verified and keeps its previous check result: ${message}`);
+    }
+  }
+  if (failed.length) {
+    throw new Error(`issue-claim-policy: ${failed.length} PR(s) could not be verified`
+      + ' (they keep their previous check result; re-run the workflow to retry) — this batch is NOT a success. '
+      + 'Failed: ' + failed.map((f) => `#${f.number} (${f.message})`).join('; '));
+  }
+  return results;
+}
+
 async function recheckIssue({ github, context, core, number, dryRun = false }) {
   const pulls = await github.paginate(github.rest.pulls.list, { ...context.repo, state: 'open', per_page: 100 });
   const hasWrite = permissionChecker(github, context.repo);
-  const results = [];
-  for (const pull of pulls) {
-    if (!parseIssueReferences(pull.body, context.repo).numbers.includes(number)) continue;
-    results.push(await enforcePullRequest({ github, context, core, number: pull.number, hasWrite, dryRun }));
-  }
-  return results;
+  const related = pulls.filter((pull) => parseIssueReferences(pull.body, context.repo).numbers.includes(number));
+  return enforceEach({ github, context, core, pulls: related, hasWrite, dryRun });
 }
 
 async function run({ github, context, core, dryRun = false }) {
@@ -231,9 +260,7 @@ async function run({ github, context, core, dryRun = false }) {
   if (input && !/^[1-9]\d*$/.test(input)) throw new Error('pull_number must be a positive integer or empty.');
   const pulls = input ? [{ number: Number(input) }]
     : await github.paginate(github.rest.pulls.list, { ...context.repo, state: 'open', per_page: 100 });
-  const results = [];
-  for (const pull of pulls) results.push(await enforcePullRequest({ github, context, core, number: pull.number, hasWrite, dryRun }));
-  return results;
+  return enforceEach({ github, context, core, pulls, hasWrite, dryRun });
 }
 
 module.exports = { CHECK_NAME, COMMENT_MARKER, parseCommand, permissionChecker, parseIssueReferences, findClaimRequest,

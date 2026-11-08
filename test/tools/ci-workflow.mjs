@@ -80,6 +80,39 @@ export const BASE_MODE_MERGE_BASE = '--base-mode merge-base';
 /** push 差异边界模式档（collectDiff 按 before→after 原样 diff —— force-push 安全）。 */
 export const BASE_MODE_EXACT = '--base-mode exact';
 
+/**
+ * 信任边界 overlay 步的**整块指纹**（判据：trusted-gate；二审 F01 P02 实证 + 评审补洞）。
+ *
+ * 初版按"令牌在场 + 按行计数"校验，评审构造出一批一行级最小变异照样全绿：同一行串第二条
+ * `git fetch`（后一次改写 FETCH_HEAD ⇒ 信任边界指向 PR merge commit）、`git show` 重定向改
+ * `/dev/null`（文件保持 PR 树版本）、`BASE=FETCH_HEAD` 之后二次赋值、fetch 行尾追加 refspec。
+ * 根因都一样：**令牌在场 ≠ 语义成立**。因此改为**整块逐字节全等** —— 四个判定作业
+ * （changes / docs / notice / result）的 overlay run 块逐字相同（与 `INSTALL_COMMAND` 的
+ * "逐字 pin"先例同款），改形状必须显式成对改这里与 workflow。
+ *
+ * push / dispatch 事件没有 PR base，回退 `BASE="${{ github.sha }}"` 是**合法**的
+ * （push 的 github.sha 就是 main 上被推的提交本身，不存在"不可信的 PR 内容"）。
+ * 行文取解析器口径：每行 trim 后以 `\n` 相接（parseStepsBlock 的块标量折叠规则）。
+ */
+export const TRUSTED_OVERLAY_RUN = [
+  'set -euo pipefail',
+  'if [ -n "${{ github.event.pull_request.base.ref }}" ]; then',
+  'git fetch --no-tags origin "${{ github.event.pull_request.base.ref }}"',
+  'BASE=FETCH_HEAD',
+  'else',
+  'BASE="${{ github.sha }}"',
+  'fi',
+  'for f in scripts/ci-routing.mjs test/tools/ci-routing.mjs test/tools/src-scope.mjs; do',
+  'git show "$BASE:$f" > "$f"',
+  'done',
+].join('\n');
+/** overlay 允许触碰的判定脚本（base ci-routing 链的全部三个文件；缺一 = 那个文件继续走 PR 树）。 */
+export const TRUSTED_OVERLAY_FILES = ['scripts/ci-routing.mjs', 'test/tools/ci-routing.mjs', 'test/tools/src-scope.mjs'];
+/** 分类器命令行的**逐字**形态（判据：changes-wiring；评审补洞：同行 `&&` 追加覆写必须红）。 */
+export const CLASSIFIER_CLI_LINE = 'node scripts/ci-routing.mjs check --github-output "${BASE_ARGS[@]}"';
+/** changes 作业 outputs.mode 的**逐字**映射（评审补洞：改指 bootstrap 步的输出必须红）。 */
+export const CHANGES_OUTPUTS_MODE = '${{ steps.classify.outputs.mode }}';
+
 const ITEM_RE = /^(\s*)-\s+(\S.*)$/;
 const KEY_RE = /^([A-Za-z_][\w-]*):\s*(.*)$/;
 
@@ -191,7 +224,7 @@ export function parseWorkflow(text) {
   }
   const jobs = heads.map((h, idx) => {
     const end = idx + 1 < heads.length ? heads[idx + 1].line : lines.length;
-    return { id: h.id, line: h.line, end, name: '', needs: [], runsOn: '', if: '', steps: [] };
+    return { id: h.id, line: h.line, end, name: '', needs: [], runsOn: '', if: '', outputs: {}, steps: [] };
   });
   for (const job of jobs) {
     const jobIndent = lineIndent(lines[job.line]);
@@ -209,6 +242,16 @@ export function parseWorkflow(text) {
       else if (kv.key === 'runs-on') job.runsOn = kv.value;
       else if (kv.key === 'if') job.if = kv.value;
       else if (kv.key === 'needs' && kv.value) job.needs = flowList(kv.value);
+      else if (kv.key === 'outputs') {
+        // outputs 条目比 `outputs:` 再深一层（jobIndent + 4）；回到 jobIndent + 2 及以下 ⇒ 块结束。
+        for (let j = i + 1; j < job.end; j += 1) {
+          const l2 = lines[j];
+          if (!l2.trim() || /^\s*#/.test(l2)) continue;
+          if (lineIndent(l2) <= jobIndent + 2) break;
+          const kv2 = readKeyValue(l2);
+          if (kv2) job.outputs[kv2.key] = kv2.value;
+        }
+      }
     }
     // block 形式的 needs（`needs:` 换行后逐个 `- id`）。
     for (let i = job.line + 1; i < job.end; i += 1) {
@@ -420,48 +463,111 @@ export function auditCiWorkflow(input) {
   // ⑥ 分类接线：changes 作业真的在调分类器、把 mode 写进 GITHUB_OUTPUT，且差异边界与 docs
   //    腿**同一表达式**（丢掉 --base/--head ⇒ 与 docs 各审各的，非同一差异 ⇒ 判红；
   //    退化为父提交/最后提交同罪——表达式就是三种事件的完整范围，见 DIFF_BASE_EXPR）。
+  //    二审 F01 P03 实证的"接线还在、结论被换"形态 + 评审补洞（同行 `&&` 追加、outputs 改指、
+  //    变量间接写）都必须判红 —— 后写的 mode 赢，分类结论被换成 docs 就能让 full 链整段跳过：
+  //      · 分类器命令行**逐字**等于 CLASSIFIER_CLI_LINE（同行夹带任何尾巴 ⇒ 不全等 ⇒ 红）；
+  //      · 分类器行**之后**的行（注释行不算——注释不执行，口径与 installsDeps 的"提及不算"
+  //        对齐）不得再写 mode / GITHUB_OUTPUT；
+  //      · 分类器**之后的任何步骤**不得触碰 GITHUB_OUTPUT（不要求带 mode 字样——变量间接写
+  //        如 `printf "$OUT_KEY=docs" >> …` 同样拦下）；
+  //      · `id: classify` 恰好一条，且作业级 outputs.mode **逐字**等于 CHANGES_OUTPUTS_MODE
+  //        （改指 bootstrap 步的输出 ⇒ 红）。
+  //      · 分类器行**之前**的 GITHUB_OUTPUT 写出不算（分类器随后必然覆盖它；分类器不写 = 作业红）。
+  const CLASSIFIER_CLI = /node\s+\S*ci-routing\.mjs\s+check\s+--github-output/;
   const classifyHits = changes
-    ? changes.steps.filter((s) => String(s.run || '').includes('--github-output')
-      && String(s.run || '').includes('ci-routing.mjs'))
+    ? changes.steps.filter((s) => CLASSIFIER_CLI.test(String(s.run || '')))
     : [];
-  const changesAligned = !!changes && classifyHits.length >= 1 && diffAlignedFull(classifyHits[0].run);
+  const classifyIdx = classifyHits.length ? changes.steps.indexOf(classifyHits[0]) : -1;
+  const classifyLineAt = classifyHits.length === 1
+    ? runLines(classifyHits[0]).findIndex((l) => CLASSIFIER_CLI.test(l))
+    : -1;
+  const classifierLineExact = classifyLineAt >= 0
+    && runLines(classifyHits[0])[classifyLineAt] === CLASSIFIER_CLI_LINE;
+  const sameStepOverwrite = classifyLineAt >= 0
+    && runLines(classifyHits[0]).slice(classifyLineAt + 1)
+      .some((l) => !l.startsWith('#') && (/GITHUB_OUTPUT/.test(l) || /\bmode\s*=/.test(l)));
+  const laterOverwrite = classifyIdx >= 0 && changes.steps.slice(classifyIdx + 1)
+    .some((s) => /GITHUB_OUTPUT/.test(String(s.run || '')));
+  const classifyIds = changes
+    ? changes.steps.filter((s) => String(s.id || '').trim() === 'classify').length
+    : 0;
+  const outputsModePinned = !!changes && changes.outputs.mode === CHANGES_OUTPUTS_MODE;
+  const changesAligned = !!changes && classifyHits.length === 1 && diffAlignedFull(classifyHits[0].run);
   add('changes-wiring',
-    'changes 作业调 scripts/ci-routing.mjs 分类、写 GITHUB_OUTPUT、差异边界与 docs 腿**按事件分支**同一'
+    'changes 作业恰好一条真分类器步（id: classify 唯一 · 命令行逐字 pin · outputs.mode 逐字 pin）、'
+    + '其后同一步（注释除外）与后续步都不得再写 GITHUB_OUTPUT（后写即覆盖分类结论）、'
+    + '差异边界与 docs 腿**按事件分支**同一'
     + '（PR=merge-base 档 / push=exact 档 / dispatch=保守 full；丢分支或丢 --base-mode ⇒ 判红）',
-    changesAligned,
+    changesAligned && classifierLineExact && !sameStepOverwrite && !laterOverwrite
+      && classifyIds === 1 && outputsModePinned,
     changes ? '接线步=' + classifyHits.length + ' alignedFull=' + (classifyHits.length ? diffAlignedFull(classifyHits[0].run) : false)
+      + ' 行逐字=' + classifierLineExact + ' 同步覆写=' + sameStepOverwrite + ' 后续覆写=' + laterOverwrite
+      + ' id/classify=' + classifyIds + ' outputs.mode=' + (outputsModePinned ? 'pin' : String(changes.outputs.mode || '缺'))
       : '缺 changes 作业');
 
   // ⑦ 汇总 fail-closed：ci/result 用 judgeResult 核验"该跑的作业真的 success"，
-  //    且 `if: always()`（**作业级**才是本意：docs/full 按设计跳过时汇总作业仍要被调度执行；
-  //    步骤级写法在作业整体被 skip 时根本不会执行，等于没写）、且 needs 三条腿齐全。
+  //    且 `if: always()`（**只认作业级**：docs/full 按设计跳过时汇总作业仍要被调度执行；
+  //    步骤级写法在作业整体被 skip 时根本不会执行，等于没写。二审 F01 P04 实证：旧判据用
+  //    "作业有 always **或任一步有 always**"放行 —— 恰好接受了它自己注释里写明的坏形态，
+  //    见 GitHub needs 语义：依赖被 skip 时其步骤不会救活作业）、且 needs 三条腿齐全。
   const resultNeedsOk = !!result && ['changes', 'docs', 'notice', 'full'].every((n) => result.needs.includes(n));
-  const resultAlways = !!result && (/always\(\)/.test(String(result.if || ''))
-    || result.steps.some((s) => /always\(\)/.test(String(s.if || ''))));
+  const resultAlways = !!result && /always\(\)/.test(String(result.if || ''));
+  const resultAlwaysStepOnly = !!result && !resultAlways
+    && result.steps.some((s) => /always\(\)/.test(String(s.if || '')));
   const resultJudge = !!result && result.steps.some((s) => String(s.run || '').includes('judgeResult'));
   add('result-gate',
-    '汇总作业 needs [changes, docs, notice, full] · if: always() · 用 judgeResult 核验（失败/取消/缺失/意外跳过/未知 mode 都不放行）',
+    '汇总作业 needs [changes, docs, notice, full] · **作业级** if: always()（步骤级不作数）'
+    + ' · 用 judgeResult 核验（失败/取消/缺失/意外跳过/未知 mode 都不放行）',
     !!result && resultNeedsOk && resultAlways && resultJudge,
-    result ? 'needs=' + JSON.stringify(result.needs) + ' always=' + resultAlways + ' judge=' + resultJudge
+    result ? 'needs=' + JSON.stringify(result.needs) + ' 作业级always=' + resultAlways
+      + (resultAlwaysStepOnly ? '（步骤级有但作业级没有 —— 不作数）' : '') + ' judge=' + resultJudge
       : '缺 result 作业');
 
   // ⑦-b 判定脚本信任边界（P0）：changes / docs / notice / result 四个作业都必须先取 base 分支的
   //     判定脚本（`git show <base>:scripts/ci-routing.mjs`），**之后**才允许执行 `node scripts/ci-routing.mjs`。
   //     否则 PR 可改分类器/汇总器，让自己的 full 链整段跳过；fail-closed 只对"作业失败"成立，
   //     对"判定器被改"不成立。
+  //     二审 F01 P02 实证旧判据失明（`BASE=FETCH_HEAD` 换成 github.sha 照样全绿）；初版"令牌
+  //     在场 + 按行计数"的指纹又被评审构造出一批一行级绕过（同行串第二条 fetch / show 重定向
+  //     丢弃 / BASE 二次赋值 / 行尾追加 refspec）。根因是**令牌在场 ≠ 语义成立**，因此升格为
+  //     **整块逐字节全等**（TRUSTED_OVERLAY_RUN，四个作业的 overlay 块逐字相同），外加三条
+  //     边界钉：overlay 步不得挂 if / continue-on-error（挂了 = 运行时整步跳过、文件保持 PR
+  //     树版本）；作业内**只许** overlay 与 CLI 两步触碰判定脚本路径（多出一步 = 可以用
+  //     `git checkout <head> -- scripts/ci-routing.mjs` 之类的恢复步把 PR 版判定器换回来）；
+  //     overlay 必须在 CLI 之前。
+  //     ⚠️ 残余边界（如实写明，不夸大）：不点名判定脚本路径的整树恢复（如 `git checkout . `）
+  //     不在本判据射程内 —— 检查器自身活在 PR 可改的 workflow 里，机器上没有最终信任根，
+  //     这是 D01（信任边界决策）的领域，不是本判据能单独解决的。
+  const TRUSTED_PATH_RE = /scripts\/ci-routing\.mjs|test\/tools\/ci-routing\.mjs|test\/tools\/src-scope\.mjs/;
   const gateJobIds = ['changes', 'docs', 'notice', 'result'];
   const gateFailures = [];
   for (const id of gateJobIds) {
     const job = jobOf(id);
     if (!job) { gateFailures.push(id + ':缺作业'); continue; }
-    const overlayIdx = job.steps.findIndex((s) => /git show/.test(String(s.run || ''))
+    const overlays = job.steps.filter((s) => /git show/.test(String(s.run || ''))
       && /scripts\/ci-routing\.mjs/.test(String(s.run || '')));
+    if (overlays.length !== 1) { gateFailures.push(id + ':overlay步=' + overlays.length); continue; }
+    const overlay = overlays[0];
+    const overlayIdx = job.steps.indexOf(overlay);
+    if (String(overlay.run || '') !== TRUSTED_OVERLAY_RUN) {
+      gateFailures.push(id + ':overlay 与 TRUSTED_OVERLAY_RUN 指纹不全等'); continue;
+    }
+    if (String(overlay.if || '').trim() || overlay.continueOnError) {
+      gateFailures.push(id + ':overlay 步挂了 if / continue-on-error（运行时可整步跳过）'); continue;
+    }
+    // 触碰面：作业内提到判定脚本路径的步必须恰好是 overlay + CLI 两步、且顺序正确。
+    const touchers = job.steps.filter((s) => TRUSTED_PATH_RE.test(String(s.run || '')));
     const cliIdx = job.steps.findIndex((s) => /node\s+\S*ci-routing\.mjs\s+(check|docs|notice|judgeResult)/.test(String(s.run || '')));
-    if (overlayIdx < 0 || cliIdx < 0 || overlayIdx > cliIdx) gateFailures.push(id + ':overlay=' + overlayIdx + '/cli=' + cliIdx);
+    if (touchers.length !== 2) {
+      gateFailures.push(id + ':触碰判定脚本路径的步=' + touchers.length + '（只许 overlay + CLI）'); continue;
+    }
+    if (cliIdx < 0 || overlayIdx > cliIdx) gateFailures.push(id + ':overlay=' + overlayIdx + '/cli=' + cliIdx);
   }
   add('trusted-gate',
-    '判定脚本信任边界：changes / docs / notice / result 先从 base 分支取 ci-routing 脚本（git show），再执行'
-    + '（否则 PR 可改判定器跳过 full 链）',
+    '判定脚本信任边界：四个判定作业的 overlay 步与 TRUSTED_OVERLAY_RUN **逐字节全等**'
+    + '（fetch base.ref → BASE=FETCH_HEAD → git show "$BASE:" 覆盖三文件），overlay 步无 if/continue-on-error、'
+    + '作业内只有 overlay + CLI 两步触碰判定脚本路径、且 overlay 在前'
+    + '（否则 PR 可改判定器跳过 full 链；任何形状偏差 ⇒ 判红）',
     gateFailures.length === 0,
     gateFailures.length ? gateFailures.join(' · ') : '四个判定作业均为 base 脚本 → 再执行');
 
@@ -670,6 +776,31 @@ export function setJobIf(text, jobId, value) {
     return lines.join('\n');
   }
   lines[ifAt] = (lines[ifAt].match(/^\s*/) || [''])[0] + 'if: ' + value;
+  return lines.join('\n');
+}
+
+/**
+ * 设置/清空某一条**步骤**的 `if:`（按 name/run 片段定位；value 空串 ⇒ 删掉；找不到 ⇒ 恒等）。
+ * 负对照 P04（二审 F01）用它把 `if: always()` 从汇总作业挪到步骤级 —— 旧判据把
+ * "任一步有 always"当作作业级 always 的替代，恰好接受了这个坏形态。
+ */
+export function setStepIf(text, fragment, value) {
+  const { steps, lines } = parseWorkflow(text);
+  const step = steps.find((s) => matchesFragment(s, fragment));
+  if (!step) return text;
+  const ifAt = lines.findIndex((l, i) => i >= step.line && i < step.end && /^\s*if\s*:/.test(l));
+  if (!String(value || '')) {
+    if (ifAt < 0) return text;
+    lines.splice(ifAt, 1);
+    return lines.join('\n');
+  }
+  if (ifAt >= 0) {
+    lines[ifAt] = (lines[ifAt].match(/^\s*/) || [''])[0] + 'if: ' + value;
+    return lines.join('\n');
+  }
+  const runAt = lines.findIndex((l, i) => i >= step.line && i < step.end && /^\s*run\s*:/.test(l));
+  const indent = runAt >= 0 ? (lines[runAt].match(/^\s*/) || [''])[0] : ' '.repeat(step.indent + 2);
+  lines.splice(runAt >= 0 ? runAt : step.end, 0, indent + 'if: ' + value);
   return lines.join('\n');
 }
 
