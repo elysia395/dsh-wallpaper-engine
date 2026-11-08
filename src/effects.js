@@ -180,6 +180,28 @@ function weAccentInk(hex) {
   return lum > 0.45 ? "#0f1115" : "#ffffff";
 }
 
+// ── #334：深色孪生块的「保留比例」───────────────────────────────────────────
+// #239 为了让暗 accent 在深色底上可读，把深色块的三处令牌**一律**往白里掺 45%。方向对，
+// 但一刀切把本来就够亮的 accent 也洗淡了（#334 现场 #F1717F → ≈#F7B1B9，饱和度掉一半）。
+// 这里按 WCAG 相对亮度分流：亮于阈值 ⇒ 100%（原色直出），否则 55% —— 55% 色 + 45% 白
+// 正是 #239 的现状，所以默认 accent #4f8cff 与 #239 现场（#2050a0 / #242424）逐位不变。
+// 阈值 0.3 按「深色面板 #1e1f26 上已达 ~5:1」取：#F1717F(0.320)、#7aaaff(0.401) 走原色，
+// #4176e6(0.198)、#2050a0(0.086)、#242424(0.018) 仍按 55% 提亮。返回 color-mix 的单侧
+// 百分比字符串（单侧 % 由 color-mix 自动补足另一侧，不需要 calc）。纯函数、无 DOM。
+function weUiDarkKeep(hex) {
+  const m = /^#?([0-9a-fA-F]{6})$/.exec(String(hex || ""));
+  if (!m) return "55%";
+  const s2l = (c) => { c /= 255; return c <= 0.03928 ? c / 12.92 : Math.pow((c + 0.055) / 1.055, 2.4); };
+  const lin = [0, 2, 4].map((i) => s2l(parseInt(m[1].slice(i, i + 2), 16)));
+  const lum = 0.2126 * lin[0] + 0.7152 * lin[1] + 0.0722 * lin[2];
+  return lum >= 0.3 ? "100%" : "55%";
+}
+// 微光伴生色（-shimmer）比主色再往白里提一档：亮 accent 只提一点（82% 保留）以留住
+// 饱和度；暗 accent 维持 #239 的 70%（比主色的 55% 更亮，仍是「深度求索中…」的微光）。
+function weUiDarkShimmerKeep(hex) {
+  return weUiDarkKeep(hex) === "100%" ? "82%" : "70%";
+}
+
 // ── #164：选中行的墨（accent 填充 × 与填充成对比的墨）────────────────────────
 // 选中行不能吃 --we-popup-row-* 那一对（那对是"行底 vs 正文墨"，语义不同），也**不能
 // 直接吃 --we-accent-ink**：后者的 0.45 阈值是宿主按钮沿用下来的口径，在**中亮度**
@@ -474,6 +496,14 @@ function applyEffects(opts) {
   s.setProperty("--we-ui-file-icon", uiColor("uiColorFileIcon"));
   s.setProperty("--we-ui-tab", uiColor("uiColorTab"));
   s.setProperty("--we-ui-deep-diving", uiColor("uiColorDeepDiving"));
+  // - #334：深色孪生块的掺白比例改为按相对亮度分流（见 weUiDarkKeep 的注释与
+  //   styles/base.js 深色块）。亮 accent 写 100%（原色直出）、暗 accent 写 55%
+  //   （= #239 的掺白 45% 逐位不变）。这四条**恒定义**，由样式表只在深色块消费；
+  //   浅色块不读，所以关掉/换主题都不会留下半份派生值。
+  s.setProperty("--we-ui-keep-link", weUiDarkKeep(uiColor("uiColorLink")));
+  s.setProperty("--we-ui-keep-deep-diving", weUiDarkKeep(uiColor("uiColorDeepDiving")));
+  s.setProperty("--we-ui-keep-deep-diving-shimmer", weUiDarkShimmerKeep(uiColor("uiColorDeepDiving")));
+  s.setProperty("--we-ui-keep-tab", weUiDarkKeep(uiColor("uiColorTab")));
   // - #164：原生 <select> 弹层的行配对。**只在用户自定义了「正文」墨色时写**：
   //   没自定义时样式表的缺省就是主题默认配对（逐位还原现状），不写比写更不容易漂。
   //   两档同时写、由样式表按主题挑 —— 与上面的 --we-surface-tint-* 同法，省掉一个
@@ -596,6 +626,10 @@ function clearEffects() {
   s.removeProperty("--we-ui-file-icon");
   s.removeProperty("--we-ui-tab");
   s.removeProperty("--we-ui-deep-diving");
+  s.removeProperty("--we-ui-keep-link");
+  s.removeProperty("--we-ui-keep-deep-diving");
+  s.removeProperty("--we-ui-keep-deep-diving-shimmer");
+  s.removeProperty("--we-ui-keep-tab");
   // ── 玻璃段的摘除清单已随 ADR-0016 第三刀出户（packages/glass 的 disposeGlassLayer）：
   //    全局玻璃量 / 逐面釉层变量 / 门控属性 / 软渲染钩子 / 额外补雾化标签都由那一层成对收走。
   document.body.removeAttribute("data-we-adapter"); // 适配目标钩子随 fiber 注销

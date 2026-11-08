@@ -355,14 +355,17 @@ const CSS_BASE = `
      #239：早先这里与浅色块**逐字相同**（都直接吃 --we-ui-* 单一标量）⇒ 用户 accent 选暗色时，
      深色壁纸上这三处对比度掉到 ~1.1:1（链接文字 / 「深度求索中…」/ 插入光标几乎不可见）。
      现在按主题把**同一个用户色往白里提一档**：仍是用户配色（不是硬编码回宿主蓝），但保证深色底可读。
-     浅色块保持不变（--we-ui-* 原值在浅底上即可读）。守卫 verify-glass-compositing 的 G9 钉
-     「主题成对令牌禁止浅深同值」；它必须按本组自己的门 data-we-ui-color 扫描 —— 扫
-     data-we-glass-page 会退化成空集对空集（静默假绿）。 */
+     浅色块保持不变（--we-ui-* 原值在浅底上即可读）。
+     #334：掺白改按相对亮度分流（effects.js 的 weUiDarkKeep）—— 亮 accent 保留 100%（原色直出），
+     暗 accent 保留 55%（= 掺白 45%，与 #239 现状逐位一致）。--we-ui-keep-* 恒定义，缺省 55%
+     让「JS 没跑/旧版残留」时仍落回 #239 的可读兜底；shimmer 单独一档（亮 82% / 暗 70%）。
+     守卫 verify-glass-compositing 的 G9 钉「主题成对令牌禁止浅深同值」；它必须按本组自己的门
+     data-we-ui-color 扫描 —— 扫 data-we-glass-page 会退化成空集对空集（静默假绿）。 */
   body[data-ds-dark-theme][data-we-ui-color] {
-    --dsw-alias-link: color-mix(in srgb, var(--we-ui-link, #4f8cff) 45%, #ffffff);
-    --dsw-alias-label-deep-diving: color-mix(in srgb, var(--we-ui-deep-diving, #4f8cff) 45%, #ffffff);
-    --dsw-alias-label-deep-diving-shimmer: color-mix(in srgb, var(--we-ui-deep-diving, #4f8cff) 70%, #ffffff);
-    --dsw-alias-state-business-primary: color-mix(in srgb, var(--we-ui-tab, #4f8cff) 45%, #ffffff);
+    --dsw-alias-link: color-mix(in srgb, var(--we-ui-link, #4f8cff) var(--we-ui-keep-link, 55%), #ffffff);
+    --dsw-alias-label-deep-diving: color-mix(in srgb, var(--we-ui-deep-diving, #4f8cff) var(--we-ui-keep-deep-diving, 55%), #ffffff);
+    --dsw-alias-label-deep-diving-shimmer: color-mix(in srgb, var(--we-ui-deep-diving, #4f8cff) var(--we-ui-keep-deep-diving-shimmer, 70%), #ffffff);
+    --dsw-alias-state-business-primary: color-mix(in srgb, var(--we-ui-tab, #4f8cff) var(--we-ui-keep-tab, 55%), #ffffff);
   }
   /* 发送键：填充 + 悬停（悬停往黑压一档，与宿主原来的 fill→hover 明暗关系同向）。
      ⚠️ 作用域用 data-composer-seat（输入**座位**，宿主自带锚点）而**不是**
