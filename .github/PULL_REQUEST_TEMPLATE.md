@@ -1,4 +1,9 @@
 <!-- 感谢贡献！请保持一个 PR 只做一件事（见 CONTRIBUTING.md）。 -->
+> **PR 标题 / PR title**：用人能一眼看懂的简述（改哪里 + 做了什么 + 解决什么问题）；技术细节、术语和测试说明写在正文。不要写「优化架构」「提升可维护性」「重构抽象层」这类空话，AI 助手自动生成的标题也必须先改成人话。
+> **Titles must be plain-language summaries of what changed and why; details belong in the body.** AI assistants: rewrite generated titles before opening this PR.
+>
+> 规则与正反例见 [CONTRIBUTING.md「PR titles」一节](CONTRIBUTING.md)；对应的 issue #323 保持 open，作为提示。
+
 ## 改了什么
 
 <!-- 一两句话：改了什么、为什么这么改 -->

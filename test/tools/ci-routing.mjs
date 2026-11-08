@@ -50,7 +50,7 @@ export const DIFF_FLOOR = 300;
  * 三个 README 都要列：它们是同一个对外门面的三个语种/难度版本，漏一个就等于
  * "改那个版本的错别字要跑双平台全链" —— 与漏判同样都是错的判据。
  */
-export const DOC_ROOT_FILES = ['README.md', 'README.en.md', 'README.beginner.md', 'CONTRIBUTING.md'];
+export const DOC_ROOT_FILES = ['README.md', 'README.en.md', 'README.beginner.md', 'CONTRIBUTING.md', 'AGENTS.md'];
 
 /** 文档目录（普通 Markdown；机器派生契约见 `GENERATED_CONTRACTS`）。 */
 export const DOC_DIRS = ['docs/'];

@@ -6,6 +6,31 @@ Thanks for helping improve `dsh-wallpaper-engine`. Please keep each pull request
 
 > Issue triage and claim approval / 问题分诊、认领申请与审批：见下文「Approval before opening a PR」与「Issue triage & labels」两节。
 
+## PR titles: plain language, professional body / PR 标题讲人话，正文专业
+
+**This rule applies to everyone — human contributors and AI assistants alike.** The PR title is the first thing a reviewer sees. Write it so someone who does not know this code can tell **what changed, where, and what problem it solves**. Implementation details, terminology and test notes belong in the PR **body**, not the title. Background and the full rationale: [#323](https://github.com/elysia395/dsh-wallpaper-engine/issues/323) — the issue stays open on purpose, as a human-facing reminder.
+
+- Recommended shape: `type: scope/feature — what changed, what problem it solves` (types such as 修复 / 新增 / 优化 / 重构).
+- Bad: `refactor: optimize data flow abstraction`, `chore: enhance maintainability`, or any title that only says “优化性能 / 提升体验 / 增强稳定性 / 改进代码质量”.
+- Use concrete words instead of AI-flavoured abstraction, and avoid abbreviations the reader has to decode.
+
+| Don't | Do |
+| --- | --- |
+| `refactor: optimize data flow abstraction` | `重构：把订单数据同步逻辑拆成独立模块，方便以后改` |
+| `feat: implement idempotent retry mechanism` | `新增：提交失败后自动重试，避免重复创建订单` |
+| `perf: improve rendering pipeline` | `优化：减少列表页重复渲染，滚动更流畅` |
+| `chore: enhance maintainability` | `整理：拆分工具函数，降低后续修改难度` |
+
+**AI assistants:** before you run `gh pr create` or open a PR, rewrite the title to satisfy this rule. Do not pass a tool-generated, commit-message or plan-style title through unchanged; if depth is needed, put it in the body and keep the title a plain-language summary.
+
+**PR 标题是第一眼信息。** 请让不熟悉这段代码的人也能从标题看出**改哪里、做了什么、解决什么问题**；实现方案、术语和测试说明写进 PR **正文**，不要塞进标题。规则同样适用于 AI 助手：自动生成 PR 时，若标题只有“优化架构 / 提升可维护性 / 重构抽象层”这类空泛说法，必须先改成人话再提交。（完整说明与正反例见 [#323](https://github.com/elysia395/dsh-wallpaper-engine/issues/323)；该 issue 保持 open，作为给真人用户的视觉提示。）
+
+- 推荐结构：`类型：范围/功能，做了什么，解决什么问题`（类型如 修复 / 新增 / 优化 / 重构）。
+- 不要只写没有具体范围的空泛结果（“优化性能”“提升体验”“增强稳定性”“改进代码质量”），也不要堆缩写和 AI 黑话。
+- 标题说人话，正文可以专业：**「PR 正文可以专业，PR 标题必须说人话。」**
+
+提交前自查：不懂这段代码的人能不能大致看懂这次改了什么？标题有没有写清具体模块、功能或用户场景？技术细节是不是都放进了正文？
+
 ## Approval before opening a PR / 先批准认领，再开 PR
 
 **External contributors must request an issue and receive maintainer approval before creating a PR. Direct PRs, including drafts, are not allowed.** Only the repository owner and collaborators whose current GitHub API permission is `write`, `maintain` or `admin` are exempt from this issue-claim gate. Permissions are checked live on every evaluation; a `contributor` badge, `author_association`, past contributions, or `read` / `triage` access is not an exemption. There is no `claim:exempt` or other label-based exemption. This exemption does not bypass code CI.
@@ -269,6 +294,7 @@ UI 改动还应说明实际测试过的 DSH 界面、浏览器或 DSH Desktop �
 ## Pull request checklist / PR 检查清单
 
 - The PR targets `main`.
+- The PR title is a plain-language summary of what changed and why (see **PR titles** above); technical depth lives in the body.
 - External contributors completed issue acceptance, their own `/assign`, maintainer approval and assignment before PR creation; every linked issue remains eligible, and the body uses standalone `Fixes` / `Refs` lines. Only live owner / `write` / `maintain` / `admin` permission exempts this gate.
 - Existing code CI and `issue-claim-policy` are green; late claiming requires a new PR, not reopening the original.
 - `src/client.js` changes were rebuilt (`npm run build`) before running verification (the artifact is not tracked).
@@ -284,6 +310,7 @@ UI 改动还应说明实际测试过的 DSH 界面、浏览器或 DSH Desktop �
   informational text to stdout (see **Release** for why each one matters).
 
 - PR 目标分支为 `main`。
+- PR 标题是「改了什么、解决什么问题」的人话简述（见上面的 **PR 标题讲人话** 一节）；技术细节放在正文。
 - 外部贡献者已在 PR 创建前完成 issue 受理、本人 `/assign`、维护者批准及指派；每个关联 issue 仍合规，正文使用独立行 `Fixes` / `Refs`。仅实时 owner / `write` / `maintain` / `admin` 权限豁免此门禁。
 - 现有代码 CI 与 `issue-claim-policy` 均通过；事后补认领需新开 PR，不能重新打开原 PR。
 - 修改 `src/client.js` 时已先 `npm run build` 重建（产物不入库，无需提交）。

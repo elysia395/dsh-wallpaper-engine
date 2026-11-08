@@ -37,7 +37,8 @@
     },
     "./subpackage-boot.js": "./lib/subpackage-boot.js",
     "./cordis.patch.yml": "./cordis.patch.yml",
-    "./package.json": "./package.json"
+    "./package.json": "./package.json",
+    "./locale/*.json": "./locale/*.json"
   },
   "files": [
     "icon.png",
@@ -139,7 +140,10 @@
     "assets/readme/mascot-eating-rice-1280x1784.jpg",
     "README.md",
     "README.en.md",
-    "README.beginner.md"
+    "README.beginner.md",
+    "plugin-detail.zh.md",
+    "plugin-detail.en.md",
+    "locale/"
   ],
   "dsh": {
     "bundle": {
