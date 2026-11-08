@@ -43,6 +43,7 @@ const CLASSIFY_CASES = [
   { name: '根目录 README.en.md ⇒ docs（不是白名单外）', entries: [E('M', 'README.en.md')], mode: MODE_DOCS },
   { name: '根目录 README.beginner.md ⇒ docs', entries: [E('M', 'README.beginner.md')], mode: MODE_DOCS },
   { name: 'CONTRIBUTING.md ⇒ docs', entries: [E('M', 'CONTRIBUTING.md')], mode: MODE_DOCS },
+{ name: 'AGENTS.md ⇒ docs', entries: [E('M', 'AGENTS.md')], mode: MODE_DOCS },
   { name: 'docs/ 子目录 Markdown ⇒ docs', entries: [E('M', 'docs/DEV-GUIDE.md')], mode: MODE_DOCS },
   { name: '展示素材图片 ⇒ docs-assets', entries: [E('M', 'assets/readme/hero-dark.png')], mode: MODE_DOCS_ASSETS },
   { name: 'docs + 展示素材 ⇒ docs-assets', entries: [E('M', 'docs/README.md'), E('M', 'assets/readme/hero-dark.png')], mode: MODE_DOCS_ASSETS },

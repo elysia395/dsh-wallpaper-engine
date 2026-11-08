@@ -1,0 +1,7 @@
+{
+  "meta": {
+    "title": "壁纸引擎",
+    "description": "把本机 Wallpaper Engine 壁纸带进 DSH 对话界面：Scene / Web 实时渲染、Video 直接播放，配合液态玻璃、字体、吉祥物与外观预设。",
+    "detail": "plugin-detail.zh.md"
+  }
+}

@@ -20,7 +20,7 @@ import { readFileSync, readdirSync, statSync, existsSync, mkdirSync, writeFileSy
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { join, relative, sep, dirname, resolve } from 'node:path';
-import { builtinModules } from 'node:module';
+import { builtinModules, createRequire } from 'node:module';
 // 剥注释：共享的字符串感知实现（test/tools/js-text.mjs）。
 import { stripComments, blankStringLiterals } from './tools/js-text.mjs';
 // 拿子进程输出的唯一方式（沙箱禁管道 ⇒ 走文件）：见该文件头。
@@ -205,6 +205,102 @@ async function main() {
         + ' missingOnDisk=[' + missingOnDisk.join(', ') + ']'
         + ' uncovered=[' + uncoveredPngs.join(', ') + ']'
         + ' stray=[' + strayPngs.join(', ') + ']');
+  }
+
+  // ── P9: 插件详情文档链（DSH 0.2.2 插件页读 locale meta.detail，缺声明才回退 README）──
+  // DSH 的插件详情页正文 = 包根 `locale/<lang>.json` 里 `meta.detail` 指向的 Markdown
+  // （宿主 `readPackageDocument`：按语言链找首个声明，文件缺失即报 invalid；没声明才回退
+  // 包根 README）。声明写坏 / 正文没随包 / 正文里的图没随包，在仓库里都不会红 ——
+  // 只有在用户机器上变成空白详情或破图，故这里按宿主口径复刻一遍。
+  {
+    const localeDir = join(ROOT, 'locale');
+    const locales = existsSync(localeDir)
+      ? readdirSync(localeDir).filter((name) => name.endsWith('.json')).sort().map((name) => 'locale/' + name)
+      : [];
+    // 宿主 detailPath：非空、`/` 分隔、不得离开包根、必须是 Markdown。
+    const detailOf = (value) => {
+      if (typeof value !== 'string' || value.trim() === '') return undefined;
+      if (value.includes('\\') || /^[A-Za-z][A-Za-z\d+.-]*:/u.test(value)) return undefined;
+      if (value.split('/').some((segment) => segment === '' || segment === '.' || segment === '..')) return undefined;
+      return /\.(?:md|markdown)$/iu.test(value) ? value : undefined;
+    };
+    const problems = [];
+    const details = [];
+    for (const rel of locales) {
+      if (!/^locale\/[a-z]{2,8}(?:-[a-z0-9]{1,8})*\.json$/u.test(rel)) {
+        problems.push(rel + ': filename must be a language id');
+        continue;
+      }
+      let meta;
+      try {
+        meta = JSON.parse(readFileSync(join(ROOT, rel), 'utf8')).meta;
+      } catch (error) {
+        problems.push(rel + ': ' + error.message);
+        continue;
+      }
+      const detail = detailOf(meta && meta.detail);
+      if (detail === undefined) {
+        if (meta && meta.detail !== undefined) problems.push(rel + ': meta.detail is not an in-package Markdown path');
+        continue;
+      }
+      details.push(detail);
+      if (!existsSync(join(ROOT, detail))) {
+        problems.push(detail + ' named by ' + rel + ' does not exist');
+        continue;
+      }
+      if (!files.some((entry) => coveredBy(detail, entry))) problems.push(detail + ' is not shipped by `files`');
+      const markdown = readFileSync(join(ROOT, detail), 'utf8');
+      for (const image of markdown.matchAll(/!\[[^\]]*\]\(([^)\s]+)/gu)) {
+        const written = image[1];
+        if (/^(?:[a-z][a-z\d+.-]*:|\/\/|#)/iu.test(written)) continue;
+        let decoded;
+        try {
+          decoded = decodeURIComponent(written.replace(/[?#].*$/u, ''));
+        } catch {
+          problems.push(detail + ' names a malformed image ' + written);
+          continue;
+        }
+        const imageRel = decoded.startsWith('/')
+          ? decoded.slice(1)
+          : join(dirname(detail), decoded).split(sep).join('/');
+        if (imageRel.startsWith('..')) problems.push(detail + ' references an image outside the package ' + written);
+        else if (!existsSync(join(ROOT, imageRel))) problems.push(detail + ' references a missing image ' + written);
+        else if (!files.some((entry) => coveredBy(imageRel, entry))) problems.push(detail + ' references an unshipped image ' + written);
+      }
+    }
+    check('P9 plugin detail chain (locale meta.detail → shipped Markdown → shipped images)',
+      locales.length >= 2 && locales.includes('locale/en.json')
+        && details.length === locales.length && problems.length === 0,
+      'locales=[' + locales.join(', ') + '] details=' + details.length
+        + ' problems=[' + problems.join('; ') + ']');
+    // 负对照：同一条路径验证器必须拒绝越界 / 绝对 / 非 Markdown，并接受包内相对 Markdown。
+    const rejected = ['../x.md', '/x.md', 'C:\\x.md', 'https://x/x.md', 'x.txt', 'x/../y.md', 'a\\\\b.md', ''];
+    check('P9 negative control: meta.detail validator rejects escaping/absolute/non-Markdown paths',
+      rejected.every((value) => detailOf(value) === undefined)
+        && detailOf('plugin-detail.zh.md') === 'plugin-detail.zh.md',
+      'rejected=' + rejected.length + ' accepted=plugin-detail.zh.md');
+    // 插件列表的标题/描述走宿主 `readPluginMeta`：它按 `${specifier}/locale/en.json` 做模块解析，
+    // 根包一旦声明了 `exports` 却漏掉 `./locale/*.json`，解析抛 ERR_PACKAGE_PATH_NOT_EXPORTED 后被
+    // 静默忽略，列表回退到 package.json 的英文 description（详情正文走 files.read 不受影响，所以很难发现）。
+    const allowsLocaleExport = (exportsField, rel) => {
+      if (!exportsField || typeof exportsField !== 'object') return false;
+      if (exportsField['./locale/*.json'] !== './locale/*.json') return false;
+      return /^locale\/[a-z]{2,8}(?:-[a-z0-9]{1,8})*\.json$/u.test(rel);
+    };
+    const requireFromHere = createRequire(import.meta.url);
+    const unresolved = locales.filter((rel) => {
+      try { requireFromHere.resolve(pkg.name + '/' + rel); return false; } catch { return true; }
+    });
+    check('P9 locale subpaths resolve through package `exports` (plugin list title/description)',
+      allowsLocaleExport(pkg.exports, 'locale/en.json') && locales.length > 0 && unresolved.length === 0,
+      'name=' + pkg.name + ' exports[./locale/*.json]=' + String(pkg.exports && pkg.exports['./locale/*.json'])
+        + ' unresolved=[' + unresolved.join(', ') + ']');
+    check('P9 negative control: exports gate rejects missing / wrong-target / exact-key-only locale exports',
+      !allowsLocaleExport({}, 'locale/en.json')
+        && !allowsLocaleExport({ './locale/*.json': './lib/*.json' }, 'locale/en.json')
+        && !allowsLocaleExport({ './locale/en.json': './locale/en.json' }, 'locale/en.json')
+        && allowsLocaleExport({ './locale/*.json': './locale/*.json' }, 'locale/en.json'),
+      'negative control: 3 rejected / 1 accepted');
   }
 
   // ── P6: 每个 lib/ 运行时模块都能被解析（语法 / 早期错误；`lib/` 里还有 .swift/LICENSE/.html，不参与）─────────────────────────
