@@ -1793,11 +1793,19 @@ const CSS_GLASS = `
        要么明确接受这些面半透明）。
        这样做的好处：射程可验证、零误伤、不与 W5 的锚点门控纪律冲突。
 
+     ⚠️ 实底只能靠「在浮层作用域里重声明层令牌」落地，**不能**直接涂
+        background-color，更不能摘 backdrop-filter（用户截图回归：ContextMeter /
+        Token 用量 / 会话统计 三个宿主锚定浮层都是 portal 到 body 的 role="dialog"，
+        自带菜单材质 background: var(--dsw-specific-menu) + blur(40px) 的霜；
+        一刀切涂底 + 摘霜会把它们刷成不透明板，用户口径就是「玻璃组件丢失」）。
+        令牌重声明只影响读 --dsw-alias-bg-layer-* 的浮层（正是 #277 的受害者），
+        读菜单材质令牌的浮层一个字节都不碰：它们的底与霜都是宿主自己的玻璃。
+
      ⚠️ 门控 = data-we-floater-solid（设置项 floaterSolidBase，默认开）。
         摘掉属性整组失效 ⇒ W5「关 ⇒ 回退干净」成立。
-     ⚠️ 底色取 --we-readability-base（本包按主题钳制过的染色地板）⇒ 跟着主题与
+     ⚠️ 令牌值取 --we-readability-base（本包按主题钳制过的染色地板）⇒ 跟着主题与
         用户选的玻璃色走，不是硬编码另一种灰。
-     ⚠️ 只写 background-color 与不会生效的 backdrop-filter，不碰 border / 圆角 / 阴影。
+     ⚠️ 只重声明三层背景令牌，不碰 border / 圆角 / 阴影，也不碰霜。
      ⚠️ **必须显式排除宿主自己的对话框**（两个 :not，各管一个档位）：
         设置窗在真实 DOM 里**就是** role="dialog" —— 它的玻璃画在 ::before（z-index:-1）上、
         本体透明。本组规则若命中本体，会给它涂一层不透明底把玻璃整个盖掉
@@ -1814,14 +1822,14 @@ const CSS_GLASS = `
           "未登记的玻璃面"，且会让本组规则被算进 settings-window 面而使 W5 判红（都实测踩过）。
           两个 data-we-* 都是本插件自己的标记，anchorsOf() 按前缀跳过，不参与枚举。 */
   body[data-we-glass-page][data-we-floater-solid] :where([role="dialog"], [aria-modal="true"]):not([data-we-surface-runtime]):not([data-we-host-dialog]) {
-    background-color: var(--we-readability-base, #ffffff) !important;
-    -webkit-backdrop-filter: none !important;
-    backdrop-filter: none !important;
+    --dsw-alias-bg-layer-1: var(--we-readability-base, #ffffff);
+    --dsw-alias-bg-layer-2: var(--we-readability-base, #ffffff);
+    --dsw-alias-bg-layer-3: var(--we-readability-base, #ffffff);
   }
   body[data-we-glass-page][data-we-floater-solid] :where([role="alertdialog"]):not([data-we-surface-runtime]):not([data-we-host-dialog]) {
-    background-color: var(--we-readability-base, #ffffff) !important;
-    -webkit-backdrop-filter: none !important;
-    backdrop-filter: none !important;
+    --dsw-alias-bg-layer-1: var(--we-readability-base, #ffffff);
+    --dsw-alias-bg-layer-2: var(--we-readability-base, #ffffff);
+    --dsw-alias-bg-layer-3: var(--we-readability-base, #ffffff);
   }
   /* #315：无 role 浮层的可声明实底（#277 的剩余边界第一步）。
      上面两条只认 ARIA 面；没有 role 的框架层 / 吸顶条 / 第三方容器没有稳定锚点，
