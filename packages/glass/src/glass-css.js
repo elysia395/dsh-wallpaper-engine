@@ -1571,24 +1571,6 @@ const CSS_GLASS = `
     backdrop-filter: none !important;
   }
 
-  /* Section wrapper：融合官方设置页（官方分区没有外壳卡），内容直接落在设置对话框的面层上。
-     注意类名与 DOM 结构是**契约**，守卫按结构断言 —— 拍平的是外观，不是这层壳的存在。 */
-  .we-picker__card-shell { display: block; }
-  /* Card header: name + count badge + description (mirrors skin-center). */
-  .we-picker__card-head {
-    display: flex; align-items: baseline; gap: 8px;
-    padding-bottom: 10px; border-bottom: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.22));
-  }
-  .we-picker__card-name {
-    font-size: 15px; font-weight: 600; color: var(--dsw-alias-label-primary, inherit);
-  }
-  .we-picker__card-badge {
-    font-size: 11px; font-weight: 500; color: var(--dsw-alias-label-secondary, #6b7280);
-  }
-  .we-picker__card-desc {
-    margin-left: auto; font-size: 12px; color: var(--dsw-alias-label-tertiary, #6b7280);
-    overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-  }
   /* 配色 swatches: circular preset buttons + native color picker. The active
      swatch gets an accent ring so the current choice is obvious at a glance. */
   /* ── 软件渲染回退（upstream #95，运行时探测）───────────────────────────────
@@ -1831,12 +1813,28 @@ const CSS_GLASS = `
         ⚠️ 不写 :has([data-slot="settings.section"]) 之类的宿主锚点排除：会被 ② 组判成
           "未登记的玻璃面"，且会让本组规则被算进 settings-window 面而使 W5 判红（都实测踩过）。
           两个 data-we-* 都是本插件自己的标记，anchorsOf() 按前缀跳过，不参与枚举。 */
-  body[data-we-glass-page][data-we-floater-solid] :where([role="dialog"]):not([data-we-surface-runtime]):not([data-we-host-dialog]) {
+  body[data-we-glass-page][data-we-floater-solid] :where([role="dialog"], [aria-modal="true"]):not([data-we-surface-runtime]):not([data-we-host-dialog]) {
     background-color: var(--we-readability-base, #ffffff) !important;
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
   }
   body[data-we-glass-page][data-we-floater-solid] :where([role="alertdialog"]):not([data-we-surface-runtime]):not([data-we-host-dialog]) {
+    background-color: var(--we-readability-base, #ffffff) !important;
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+  /* #315：无 role 浮层的可声明实底（#277 的剩余边界第一步）。
+     上面两条只认 ARIA 面；没有 role 的框架层 / 吸顶条 / 第三方容器没有稳定锚点，
+     按类名或结构猜会误伤宿主自己的框架层（壁纸该透出来的地方），也会被对方改类名
+     静默失效。这里给「用户显式声明过的额外选择器」一条确定出路：运行时在
+     resolver 判定该面**只能退回原生**（无法安全玻璃化）时打上 data-we-solid-base，
+     本规则据此补实底 —— 观感从「半透明且无霜」变成「实底可读」。
+     ⚠️ 只认锚点：没被声明的面不匹配本规则；锚点由 glass-surfaces.js 的
+        weSurfaceSolid/weSurfaceUnsolid 成对写入/还原，随退出枚举、退回可玻璃化档位、
+        行级重挂与 dispose 一并清掉。
+     ⚠️ 与上面一组同门（floaterSolidBase，默认开）：摘掉 body 门整组回退。
+     ⚠️ 不写 background-image、不碰 border/圆角/阴影，保持与 #277 实底同一口径。 */
+  body[data-we-glass-page][data-we-floater-solid] [data-we-solid-base]:not([data-we-host-dialog]) {
     background-color: var(--we-readability-base, #ffffff) !important;
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;

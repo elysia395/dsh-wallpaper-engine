@@ -327,6 +327,50 @@ function main() {
   check('C0b the accent-ink function ships and picks a contrast-safe foreground per accent luminance (#127)',
     inkUsable, 'extracted=' + (inkSrc !== null) + ' ' + inkDetail);
 
+  // ── C0c: #334 深色孪生块的「保留比例」（亮 accent 不再被一律掺白洗淡）────────
+  // #239 的现场修法是"深色块一律掺白 45%"；对暗 accent 有效，却把亮 accent（#F1717F，
+  // 相对亮度 0.320）洗成 ≈#F7B1B9。#334 要求按相对亮度分流：亮于 0.3 ⇒ 100%（原色直出），
+  // 否则 55%（= 掺白 45% 的逐位现状）；shimmer 单独一档（亮 82% / 暗 70%）。
+  // 判据直接钉这几个数：默认 accent #4f8cff(0.256) 与 #239 现场 #2050a0/#242424 必须
+  // 仍落 55%（可读性保证不回退），#F1717F/#7aaaff 必须 100%（饱和度不回退）。
+  const fnSrcOf = (name) => {
+    const at = SRC.indexOf('function ' + name + '(');
+    if (at < 0) return null;
+    let depth = 0;
+    for (let i = at; i < SRC.length; i++) {
+      const ch = SRC[i];
+      if (ch === '{') depth++;
+      else if (ch === '}') { depth--; if (depth === 0) return SRC.slice(at, i + 1); }
+    }
+    return null;
+  };
+  const keepSrc = fnSrcOf('weUiDarkKeep');
+  const shimmerSrc = fnSrcOf('weUiDarkShimmerKeep');
+  let keepFx = null;
+  let keepDetail = '';
+  let keepUsable = false;
+  if (keepSrc && shimmerSrc) {
+    try {
+      keepFx = new Function(keepSrc + '\n' + shimmerSrc + '\nreturn { weUiDarkKeep, weUiDarkShimmerKeep };')();
+      const bright = keepFx.weUiDarkKeep('#F1717F');
+      const hostDark = keepFx.weUiDarkKeep('#7aaaff');
+      const defaultAccent = keepFx.weUiDarkKeep('#4f8cff');
+      const darkAccent = keepFx.weUiDarkKeep('#2050a0');
+      const blackAccent = keepFx.weUiDarkKeep('#242424');
+      const invalid = keepFx.weUiDarkKeep('not-a-color');
+      const shimmerBright = keepFx.weUiDarkShimmerKeep('#F1717F');
+      const shimmerDark = keepFx.weUiDarkShimmerKeep('#4f8cff');
+      keepUsable = bright === '100%' && hostDark === '100%' && defaultAccent === '55%'
+        && darkAccent === '55%' && blackAccent === '55%' && invalid === '55%'
+        && shimmerBright === '82%' && shimmerDark === '70%';
+      keepDetail = 'bright=' + bright + ' hostDark=' + hostDark + ' default=' + defaultAccent
+        + ' dark=' + darkAccent + ' black=' + blackAccent
+        + ' shimmer=' + shimmerBright + '/' + shimmerDark;
+    } catch (e) { keepUsable = false; keepDetail = String(e && e.message); }
+  }
+  check('C0c the dark-twin keep-ratio function ships: bright accents keep 100%, dark accents keep 55% (#334)',
+    keepUsable, 'extracted=' + Boolean(keepFx) + ' ' + keepDetail);
+
   const FLOOR = {
     light: lightVars ? Number(lightVars[1]) : NaN,
     dark: darkVars ? Number(darkVars[1]) : NaN,

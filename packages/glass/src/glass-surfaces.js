@@ -40,6 +40,11 @@ const WE_HOST_FLOATER_MARKER = "data-we-host-dialog";
 // 不随模块实例重置的页面级登记：HMR / 行重挂后的新实例靠它找到并拆掉旧实例
 // 的观察者与装饰根，避免同一 target 被多份 backdrop-filter 同时认领。
 const WE_SURFACE_RUNTIME_KEY = "__dshWallpaperGlassSurfaceRuntime";
+// #315：无 role 浮层的**可声明实底锚点**。只在「用户显式声明的额外选择器」这一组
+// 生效：resolver 判这块面无法安全玻璃化（退回原生）时，给它一个本插件自己的稳定
+// 锚点，CSS 侧据此补实底 —— 否则这类面是「半透明且没有霜」，背后内容直接透上来。
+// 刻意不按类名/结构猜第三方面：锚点由声明产生，没声明的面继续维持原生观感。
+const WE_SOLID_MARKER = "data-we-solid-base";
 
 function weSurfaceOwnNode(node) {
   const el = node && (node.nodeType === 1 ? node : node.parentElement);
@@ -61,8 +66,30 @@ function weSurfaceUnmark(record) {
   }
   record.layouts = new Map();
   record.marked = false;
+  // #315：实底锚点与 markValue 同生命周期 —— 退回原生/退出枚举/重挂时必须还原，
+  // 否则用户把选择器删掉后那块面仍带着实底（且下次声明会读到错的 before 值）。
+  if (record.solidBefore !== undefined) {
+    if (record.solidBefore === null) record.target.removeAttribute(WE_SOLID_MARKER);
+    else record.target.setAttribute(WE_SOLID_MARKER, record.solidBefore);
+    record.solidBefore = undefined;
+  }
   if (record.plate) record.plate.remove();
   record.plate = null;
+}
+
+/** 给「声明了、但只能退回原生」的 extra 面打实底锚点（幂等；before 只记第一次）。 */
+function weSurfaceSolid(record) {
+  if (record.solidBefore !== undefined) return;
+  record.solidBefore = record.target.getAttribute(WE_SOLID_MARKER);
+  record.target.setAttribute(WE_SOLID_MARKER, "extra");
+}
+
+/** 摘掉实底锚点并还原声明前的值（回到可玻璃化的档位时用）。 */
+function weSurfaceUnsolid(record) {
+  if (record.solidBefore === undefined) return;
+  if (record.solidBefore === null) record.target.removeAttribute(WE_SOLID_MARKER);
+  else record.target.setAttribute(WE_SOLID_MARKER, record.solidBefore);
+  record.solidBefore = undefined;
 }
 
 function weSurfaceGeometry(target, id, owned) {
@@ -282,8 +309,12 @@ function weSurfaceRefresh(state) {
     const resolved = record.before !== null && !record.marked ? { mode: "native", reason: "foreign-owner" }
       : weResolveSurface(entry.id, state.selection, facts);
     Object.assign(record, resolved);
-    if (resolved.mode === "native") weSurfaceUnmark(record);
-    else {
+    if (resolved.mode === "native") {
+      weSurfaceUnmark(record);
+      // #315：显式声明过的额外面若只能退回原生，至少要可读 —— 打实底锚点让 CSS 补底。
+      if (entry.id === "extra") weSurfaceSolid(record);
+    } else {
+      weSurfaceUnsolid(record);
       // 标记值跟走 resolver（t9-001）：软渲档把 extra 面标记从 "extra" 切到
       // "extra-fallback"，解除时切回；weSurfaceUnmark 按 record.markValue 判摘。
       // 不跟走时软渲专属 CSS 规则（:where([data-we-surface-runtime="extra-fallback"])）
@@ -401,6 +432,7 @@ function syncGlassSurfaces(selection) {
     for (const node of document.querySelectorAll('[data-we-surface-root]')) node.remove();
     for (const node of document.querySelectorAll('[data-we-surface-runtime]')) node.removeAttribute('data-we-surface-runtime');
     for (const node of document.querySelectorAll('[data-we-host-dialog]')) node.removeAttribute('data-we-host-dialog');
+    for (const node of document.querySelectorAll('[data-we-solid-base]')) node.removeAttribute('data-we-solid-base');
     for (const node of document.querySelectorAll('[data-we-layout-runtime]')) node.removeAttribute('data-we-layout-runtime');
     state = { doc: document, win, selection, selectors: [], records: new Map(), observed: new Set(), root: null, frame: null, moving: false, followFrames: 0, listeners: [] };
     weSurfaceRuntime = state;
@@ -466,6 +498,7 @@ function disposeGlassSurfaces() {
     for (const node of document.querySelectorAll("[data-we-surface-root]")) node.remove();
     for (const node of document.querySelectorAll(`[${WE_SURFACE_MARKER}]`)) node.removeAttribute(WE_SURFACE_MARKER);
     for (const node of document.querySelectorAll(`[${WE_HOST_FLOATER_MARKER}]`)) node.removeAttribute(WE_HOST_FLOATER_MARKER);
+    for (const node of document.querySelectorAll(`[${WE_SOLID_MARKER}]`)) node.removeAttribute(WE_SOLID_MARKER);
     for (const node of document.querySelectorAll("[data-we-layout-runtime]")) node.removeAttribute("data-we-layout-runtime");
     try { delete document[WE_SURFACE_RUNTIME_KEY]; } catch { /* ignore */ }
   }
@@ -485,6 +518,7 @@ function disposeSurfaceState(state) {
   // 仍要把运行标记与装饰根全部摘掉；否则回注样式后会多出一层旧滤镜。
   for (const node of state.doc.querySelectorAll('[data-we-surface-root]')) node.remove();
   for (const node of state.doc.querySelectorAll(`[${WE_SURFACE_MARKER}]`)) node.removeAttribute(WE_SURFACE_MARKER);
+  for (const node of state.doc.querySelectorAll(`[${WE_SOLID_MARKER}]`)) node.removeAttribute(WE_SOLID_MARKER);
   for (const node of state.doc.querySelectorAll('[data-we-layout-runtime]')) node.removeAttribute('data-we-layout-runtime');
   state.records.clear(); state.observed.clear();
 }
