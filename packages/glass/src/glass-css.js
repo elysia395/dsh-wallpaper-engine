@@ -1806,27 +1806,36 @@ const CSS_GLASS = `
      ⚠️ 令牌值取 --we-readability-base（本包按主题钳制过的染色地板）⇒ 跟着主题与
         用户选的玻璃色走，不是硬编码另一种灰。
      ⚠️ 只重声明三层背景令牌，不碰 border / 圆角 / 阴影，也不碰霜。
-     ⚠️ **必须显式排除宿主自己的对话框**（两个 :not，各管一个档位）：
+     ⚠️ **必须显式排除宿主自己的对话框**（三个 :not）：
         设置窗在真实 DOM 里**就是** role="dialog" —— 它的玻璃画在 ::before（z-index:-1）上、
         本体透明。本组规则若命中本体，会给它涂一层不透明底把玻璃整个盖掉
         （实测：门开 ⇒ 设置窗完全不透，与"壁纸该透出来"直接冲突）。
-        :where() 压特异性**救不了**这条：本组带 !important，而玻璃在伪元素上，
-        两者根本不在同一场声明竞争里。
         · :not([data-we-surface-runtime]) —— 本插件认领过的面（玻璃开着时都带这个标记），
           它们各有自己的底板规则，这里一个都不许碰。
         · :not([data-we-host-dialog]) —— 覆盖「保留原生」档：那一档 glass-surfaces.js
           会把 data-we-surface-runtime **摘掉**，只用上面那一个 :not 挡不住
           （实测：宿主面板色 rgb(30,31,38) 被改成 --we-readability-base）。
           这个标记由同一个运行时在识别设置窗时无条件打上，与玻璃开不开无关。
+        · :not([class*="_dialog"]) —— 宿主 primitives 的 Modal（role="dialog" +
+          CSS Module 语义后缀 _dialog：「添加插件」安装对话框、确认框、审批卡…
+          首例见用户截图）。它们的遮罩**自己就画** backdrop-filter:
+          var(--dsw-mask-blur)，而本包在 body 上把这条通道换成了模糊配方
+          （见上面 #156① 那段）⇒ 卡片背后已经是模糊的页面，读层令牌就是半透明玻璃，
+          没有"两行字叠在一起"的重影风险；1.4.2 发布版本来就是这种玻璃观感。
+          本组最初一刀切实底化，用户口径是「添加插件界面玻璃丢失」。
+          ⚠️ 用类名后缀而不是 aria-modal：宿主 Modal 的 dialog 类名恒定带 _dialog
+          （Modal.module.css 的 .dialog），第三方浮层用 dshMarketOverlay /
+          typeFilterPanel 这类名字，照旧命中实底。
         ⚠️ 不写 :has([data-slot="settings.section"]) 之类的宿主锚点排除：会被 ② 组判成
           "未登记的玻璃面"，且会让本组规则被算进 settings-window 面而使 W5 判红（都实测踩过）。
-          两个 data-we-* 都是本插件自己的标记，anchorsOf() 按前缀跳过，不参与枚举。 */
-  body[data-we-glass-page][data-we-floater-solid] :where([role="dialog"], [aria-modal="true"]):not([data-we-surface-runtime]):not([data-we-host-dialog]) {
+          三个排除项里两个 data-we-* 是本插件自己的标记，anchorsOf() 按前缀跳过，不参与枚举；
+          class 子串不是 data-* 锚点，也不参与。 */
+  body[data-we-glass-page][data-we-floater-solid] :where([role="dialog"], [aria-modal="true"]):not([class*="_dialog"]):not([data-we-surface-runtime]):not([data-we-host-dialog]) {
     --dsw-alias-bg-layer-1: var(--we-readability-base, #ffffff);
     --dsw-alias-bg-layer-2: var(--we-readability-base, #ffffff);
     --dsw-alias-bg-layer-3: var(--we-readability-base, #ffffff);
   }
-  body[data-we-glass-page][data-we-floater-solid] :where([role="alertdialog"]):not([data-we-surface-runtime]):not([data-we-host-dialog]) {
+  body[data-we-glass-page][data-we-floater-solid] :where([role="alertdialog"]):not([class*="_dialog"]):not([data-we-surface-runtime]):not([data-we-host-dialog]) {
     --dsw-alias-bg-layer-1: var(--we-readability-base, #ffffff);
     --dsw-alias-bg-layer-2: var(--we-readability-base, #ffffff);
     --dsw-alias-bg-layer-3: var(--we-readability-base, #ffffff);
@@ -1847,7 +1856,6 @@ const CSS_GLASS = `
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
   }
-
 
   /* ── 上下文占用环（ContextMeter）：轨道不得吃「边框」滑杆 ────────────────────
      症状（用户截图）：底栏上下文占用的小圈"总是像满了"，进度弧看不出来。

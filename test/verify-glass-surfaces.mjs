@@ -2654,6 +2654,11 @@ console.log('\n⑲ 标记值跟走 resolver（t9-001 运行级断言：真跑 we
     roleRules.length === 2 && roleRules.every((r) => r.header.includes(':not([data-we-surface-runtime])')));
   check('⑳c 每条都排除宿主对话框标记（保留原生档的兜底；只用 b 挡不住）',
     roleRules.length === 2 && roleRules.every((r) => r.header.includes(':not([data-we-host-dialog])')));
+  // ⑳e：宿主 primitives 的 Modal（role=dialog + class*="_dialog"）不进实底组。
+  // 「添加插件」安装对话框 / 确认框 / 审批卡都走这套 Modal；它们的遮罩自己画
+  // var(--dsw-mask-blur)（本包在 body 上换成模糊配方），卡片玻璃是安全且既有的观感。
+  check('⑳e 每条都排除宿主 Modal（class*="_dialog"；添加插件界面玻璃丢失的回归）',
+    roleRules.length === 2 && roleRules.every((r) => r.header.includes(':not([class*="_dialog"])')));
 
   // 运行时那一半：同一份 SURF_SRC 造出设置窗节点，确认标记真的打上。
   const markedRun = runSurfaces(SURF_SRC);
@@ -2664,11 +2669,13 @@ console.log('\n⑲ 标记值跟走 resolver（t9-001 运行级断言：真跑 we
     '实际=' + String(markedRun.dialog.getAttribute('data-we-host-dialog')));
 
   // 负对照：把排除条件从选择器里摘掉，b/c 的判据必须判红（证明它们有牙）。
-  const strippedRules = roleRules.map((r) => r.header.replace(/:not\(\[data-we-(?:surface-runtime|host-dialog)\]\)/g, ''));
-  check('negative control: 摘掉排除条件后 ⑳b/⑳c 会判红（判据不是恒真）',
+  const strippedRules = roleRules.map((r) => r.header.replace(/:not\(\[data-we-(?:surface-runtime|host-dialog)\]\)/g, '')
+    .replace(/:not\(\[class\*="_dialog"\]\)/g, ''));
+  check('negative control: 摘掉排除条件后 ⑳b/⑳c/⑳e 会判红（判据不是恒真）',
     strippedRules.length === 2
       && !strippedRules.every((h) => h.includes(':not([data-we-surface-runtime])'))
-      && !strippedRules.every((h) => h.includes(':not([data-we-host-dialog])')));
+      && !strippedRules.every((h) => h.includes(':not([data-we-host-dialog])'))
+      && !strippedRules.every((h) => h.includes(':not([class*="_dialog"])')));
 
   // ── ㉑ #315 无 role 浮层的可声明实底：只认声明产生的稳定锚点 ──────────────────────
   // #277 修掉 ARIA 浮层后，没有 role 的框架层/吸顶条/第三方容器仍是「半透明且无霜」。
@@ -2728,6 +2735,8 @@ console.log('\n⑲ 标记值跟走 resolver（t9-001 运行级断言：真跑 we
     body: 'background-color: var(--we-readability-base) !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important;',
   };
   const oldForm = floaterFormOf(syntheticOldFloater);
+  check('negative control: 旧形态（涂底 + 杀霜）会被 ㉑a/㉑b 判红',
+    oldForm.paints && oldForm.killsFrost && oldForm.layers.length === 0);
 
   // ── ㉓ 上下文占用环：轨道不得吃「边框」滑杆 ──────────────────────────────────
   // 用户截图：底栏那个上下文占用的小圈「总像满了」。根因是 #255④ 把
