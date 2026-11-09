@@ -4710,6 +4710,118 @@ setTimeout(async () => {
     '负对照：item / foot / viewbar 标记必须落在对应的 qpRender* 子渲染器体内');
 }
 
+// ── B4-b2：虚拟面板的窗口必须跟随**祖先**滚动容器的尺寸 / 布局变化重测（issue #340）──
+// 侧栏官方档 sc === el，观察 el 就够了；但设置页库视图的网格随内容生长（max-height:none），
+// sc 是祖先容器 —— 容器变高时 el 的尺寸常常不变，只观察 el 会让 start/end 停在上一次
+// 测量的旧值（旧会话里"只能看到局部卡片"）。这里把 qpVirtWindow 的**原函数**放进最小
+// DOM 替身里跑行为，而不是只 grep 源码：
+//   · 容器变高且**不滚动**（稳定信号；缩小可能只是网格被动重排）⇒ 窗口必须自己扩大；
+//   · 容器只改相对位置（宿主换会话 / 插队头）⇒ MutationObserver 也要触发重测；
+//   · 卸载 ⇒ RO / MO / scroll 监听全部解绑。
+{
+  const src = readFileSync(new URL('../src/quick-panel.js', import.meta.url), 'utf8');
+  const constOf = (name) => {
+    const m = new RegExp('const ' + name + ' = [^;]+;').exec(src);
+    assert.ok(m, '找不到虚拟滚动常量 ' + name + '（判据不得空转）');
+    return m[0];
+  };
+  const codeText = [
+    ...[ 'QP_ROW_H', 'QP_ROW_GAP', 'QP_CARD_H', 'QP_CARD_GAP', 'QP_CARD_MIN', 'QP_VP_OVERSCAN', 'QP_VP_FIRST'
+    ].map(constOf),
+    'function qpFindScroller(el) {' + braceBody(src, 'qpFindScroller') + '}',
+    'function qpVirtWindow(ref, count, itemH, gap, cards, tag) {' + braceBody(src, 'qpVirtWindow') + '}',
+    'globalThis.__qpVirt = { qpFindScroller, qpVirtWindow };',
+  ].join('\n');
+
+  const makeNode = (tag) => ({
+    tagName: String(tag).toUpperCase(),
+    parentElement: null,
+    clientWidth: 0, clientHeight: 0, scrollTop: 0, scrollHeight: 0, offsetWidth: 0,
+    overflowY: 'visible',
+    rect: { top: 0, height: 0 },
+    listeners: {},
+    querySelector: () => null,
+    getBoundingClientRect() { return { top: this.rect.top, height: this.rect.height, width: this.clientWidth }; },
+    addEventListener(ev, fn) { (this.listeners[ev] ||= new Set()).add(fn); },
+    removeEventListener(ev, fn) { if (this.listeners[ev]) this.listeners[ev].delete(fn); },
+  });
+  const body = makeNode('body');
+  const sc = makeNode('div');            // 祖先滚动容器（设置页内容列）
+  const wrap = makeNode('div');
+  const el = makeNode('div');            // 虚拟网格（随内容生长，自身尺寸不随容器变）
+  el.parentElement = wrap; wrap.parentElement = sc; sc.parentElement = body;
+  sc.overflowY = 'auto'; sc.scrollHeight = 2000; sc.clientHeight = 300;
+  sc.rect = { top: 0, height: 300 };
+  el.clientWidth = 746; el.clientHeight = 300; el.rect = { top: 0, height: 300 };
+
+  const ros = []; const mos = [];
+  class FakeRO {
+    constructor(cb) { this.cb = cb; this.targets = []; this.disconnected = false; ros.push(this); }
+    observe(t) { this.targets.push(t); }
+    disconnect() { this.disconnected = true; }
+  }
+  class FakeMO {
+    constructor(cb) { this.cb = cb; this.targets = []; this.options = null; this.disconnected = false; mos.push(this); }
+    observe(t, o) { this.targets.push(t); this.options = o; }
+    disconnect() { this.disconnected = true; }
+  }
+  const qpWinState = { box: null };
+  const qpCleanups = [];
+  const ReactStub = {
+    useState(init) {
+      const box = { value: typeof init === 'function' ? init() : init };
+      qpWinState.box = box;
+      return [box.value, (u) => { box.value = typeof u === 'function' ? u(box.value) : u; }];
+    },
+    useRef: (v) => ({ current: v }),
+    useEffect(fn) { const cleanup = fn(); if (typeof cleanup === 'function') qpCleanups.push(cleanup); },
+  };
+  const rafQueue = [];
+  const ctx = {
+    React: ReactStub,
+    document: { body },
+    window: { addEventListener() {}, removeEventListener() {} },
+    getComputedStyle: (n) => ({ overflowY: n.overflowY }),
+    requestAnimationFrame: (fn) => { rafQueue.push(fn); return rafQueue.length; },
+    cancelAnimationFrame() {},
+    ResizeObserver: FakeRO,
+    MutationObserver: FakeMO,
+  };
+  vm.createContext(ctx);
+  new vm.Script(codeText, { filename: 'quick-panel-virt.js' }).runInContext(ctx);
+  const { qpVirtWindow } = ctx.__qpVirt;
+  const flushRaf = () => { const q = rafQueue.splice(0); q.forEach((fn) => fn()); };
+  const fire = (insts) => insts.forEach((i) => i.cb());
+
+  // 初始：容器 300px、网格 5 列 ⇒ 只画 9 行（45 条），200 条里其余都靠 spacer 撑开。
+  qpVirtWindow({ current: el }, 200, 92, 8, true, 'normal');
+  assert.equal(qpWinState.box.value.end, 45, '初始窗口按祖先容器高度测量（300px / 5 列 = 45 条）');
+  const scRo = ros.filter((r) => r.targets.includes(sc));
+  assert.ok(scRo.length >= 1, 'ResizeObserver 必须观察祖先滚动容器 sc（#340 的根因）');
+
+  // 稳定复现：容器放大到 746px、**不滚动**，只触发 sc 自己的尺寸回调 ⇒ 窗口必须立即扩到 70 条。
+  sc.clientHeight = 746; sc.rect.height = 746;
+  fire(scRo);
+  flushRaf();
+  assert.equal(qpWinState.box.value.end, 70, '祖先容器变高且不滚动时窗口必须自动重测（放大是稳定信号）');
+
+  // 容器尺寸不变、只改相对位置（网格被宿主整体上移 400px）⇒ MutationObserver 触发重测。
+  const scMo = mos.filter((m) => m.targets.includes(sc));
+  assert.ok(scMo.length >= 1 && scMo[0].options && scMo[0].options.attributes === true
+    && String(scMo[0].options.attributeFilter) === 'class,style',
+    'MutationObserver 必须观察 sc 的 class/style（尺寸不变、位置变的布局切换）');
+  el.rect.top = -400;
+  fire(scMo);
+  flushRaf();
+  assert.equal(qpWinState.box.value.end, 90, 'sc 布局位置变化必须触发重测（hidden 400px ⇒ 18 行 = 90 条）');
+
+  // 卸载：两类观察器与 scroll 监听都要解绑（否则旧会话切走后仍会被宿主布局反复唤醒）。
+  qpCleanups.forEach((fn) => fn());
+  assert.ok(ros.every((r) => r.disconnected) && mos.every((m) => m.disconnected),
+    '卸载时必须断开 ResizeObserver / MutationObserver');
+  assert.equal((sc.listeners.scroll && sc.listeners.scroll.size) || 0, 0, '卸载时必须移除 scroll 监听');
+}
+
 // ── B4-c：设置页「外观 / 播放」两节也已拆成"派生 + 装配"，标记移进了子渲染器 ──────────
 // `renderAppearanceFontSection` / `renderMascotTab` / `renderEffectsPlaybackSection` 不再内联
 // 那几棵子树（字体角色 / 组件表、吉祥物卡片一排、转码进度条）的标记。判据盯**代码**：

@@ -114,13 +114,21 @@
       if (sc) sc.addEventListener("scroll", schedule, { passive: true });
       // 尺寸变化（窗口缩放 / 页签换档 / 列表换视图 / 列数增减）都从 el 的尺寸兜一道；
       // 再补 window resize 覆盖"滚动容器变高但列表没变"的形态。
+      // issue #340：设置页库视图里 sc 是**祖先**滚动容器，网格随内容生长（max-height:none）
+      // ⇒ 容器变高不会改 el 的尺寸、el 的 RO 不响；必须同时观察 sc 本身。
       const ro = typeof ResizeObserver === "function" ? new ResizeObserver(schedule) : null;
-      if (ro) ro.observe(el);
+      if (ro) { ro.observe(el); if (sc && sc !== el) ro.observe(sc); }
+      // 宿主换会话 / 切页签时，sc 可能只改 class/style（尺寸不变、相对位置变）⇒ RO 不响；
+      // 属性变化再兜一道。只看属性、不看子树 —— 子树里就是本列表自己的渲染结果，会自激。
+      const mo = typeof MutationObserver === "function" && sc
+        ? new MutationObserver(schedule) : null;
+      if (mo) mo.observe(sc, { attributes: true, attributeFilter: ["class", "style"] });
       window.addEventListener("resize", schedule);
       return () => {
         if (raf) cancelAnimationFrame(raf);
         if (sc) sc.removeEventListener("scroll", schedule);
         if (ro) ro.disconnect();
+        if (mo) mo.disconnect();
         window.removeEventListener("resize", schedule);
       };
     }, [ref, count, itemH, gap, cards, tag]);
