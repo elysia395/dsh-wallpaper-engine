@@ -142,7 +142,7 @@ async function loadExtensionRegistry() {
   // S3：预设块折出到 glass-presets-panel.js（inline 模块，打包期同作用域）；按文件 import 时
   // 把它的导出映成全局 —— 否则外观节渲染到 `renderGlassPresetsBlock(...)` 会 ReferenceError。
   const glassPresetsPanelMod = await import(pathToFileURL(join(root, 'packages', 'glass', 'src', 'glass-presets-panel.js')).href);
-  globalThis.renderGlassPresetsBlock = glassPresetsPanelMod.renderGlassPresetsBlock;
+  globalThis.renderGlassPresetsBlock = glassPresetsPanelMod.renderGlassPresetsBlock; // eslint-disable-line require-atomic-updates -- 全局注册：模块加载完成后的一次性写入，无并发读写
   reg.weRegisterPanelSection('appearance', 'glass', {
     id: 'glass',
     get title() { return globalThis.weT('玻璃 UI'); },
