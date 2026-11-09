@@ -17,7 +17,7 @@
   - [4.3 怎么跑（运行矩阵）](#43-怎么跑运行矩阵)
   - [4.4 覆盖范围](#44-覆盖范围每层各自保证什么)
   - [4.5 怎么写一条新判据](#45-怎么写一条新判据最短路径--十条约定)
-  - [4.6 `test/tools/` 清单](#46-testtools-清单都没有-ci-消费者)
+  - [4.6 `test/tools/` 清单（见 CODE-STRUCTURE §12）](./CODE-STRUCTURE.md)
   - [4.7 约定（十条，守卫会判）](#47-约定十条守卫会判)
   - [4.8 守卫链在哪（`test/run-guards.mjs`）](#48-守卫链在哪testrun-guardsmjs)
   - [4.9 静态门禁（`npm run verify:static`）](#49-静态门禁npm-run-verifystatic)
@@ -199,7 +199,7 @@ node test/tools/host-route-index.mjs --write   # 重算并写入 docs/ROUTE-INDE
 | **`test/*-smoke.mjs`（冒烟）** | 节点级行为冒烟：轮换、实时帧回填与身份校验、字体集加载 | `npm run smoke`（在 `verify:all` 里） |
 | **`test/e2e-*.mjs`（端到端）** | 真浏览器路径（需本机 Chromium 系浏览器） | `npm run verify:e2e`（不进 verify 链） |
 | **`test/compat-*.mjs`（适配）** | 真 harness 集成面，三个入口：`compat-harness-live` —— 插件进真实 `@deepseek-ai/dsh` 并启动，断言宿主路由注册可达 / 落盘诊断出现探活标记 / 插件树无加载失败（自带 HOME 隔离与 `DSH_WE_MEDIA_LEGACY=1`，媒体桥等第三方全程不拉起）。**两条安装通道**：`--channel link`（默认，软链工作区）与 `--channel tarball`（先 `npm pack`、再把 **.tgz** 装进去）+ `--fresh` —— **tarball 通道是 `peerDependencies` 能否在安装闭包里解析的唯一判据**（软链不参与依赖解析，结构性地看不见这一类）；它还带"通道自证"（装进去的是真目录而非软链）与两条针对性的失败串断言（`peer validation failed` / `does not resolve from the installation closure`）。CI 里两条通道各跑一步；`compat-harness-surfaces` —— UI 面清单棘轮（已装 harness 的 `dsh-client-ui-*` 与 `test/fixtures/harness-ui-surfaces.json` 做差，**新表面未登记即红**）+ sidebar 源码活判据；`compat-harness-pages` —— 无头浏览器**逐页 DOM/样式断言**（零依赖 CDP 走计算样式探针；`--dump` 为探查模式） | `.github/workflows/harness-compat.yml`（需网络、`dsh` CLI 与 Chromium 系浏览器，不进 verify 链） |
-| **`test/tools/`（工具）** | 诊断 / 分析 / 生成 —— **没有 CI 消费者**，靠手敲（清单见 §4.6） | 手动 |
+| **`test/tools/`（工具）** | 诊断 / 分析 / 生成 —— **没有 CI 消费者**，靠手敲（清单见 [CODE-STRUCTURE.md](./CODE-STRUCTURE.md) §12） | 手动 |
 
 ### 4.2 两档：硬档挡 PR，软档只出声
 
@@ -308,7 +308,7 @@ node test/tools/host-route-index.mjs --write   # 重算并写入 docs/ROUTE-INDE
    否则"零残留"这类判据会在空域上恒真。
 4. **剥注释用字符串感知实现**（`test/tools/js-text.mjs`），别用朴素块注释正则。
 5. **验证判据本身有效**：把判据中和成"永远说没问题"，负对照**必须变红**（§4.7 约定 8）。
-6. 新工具写不写进 §4.6 由作者决定；**不再有"文档名册必须同步"的守卫**（ADR-0017：代码即真相）。
+6. 新工具写不写进 [CODE-STRUCTURE.md](./CODE-STRUCTURE.md) §12 由作者决定；**不再有"文档名册必须同步"的守卫**（ADR-0017：代码即真相）。
 
 **⚠️ 不要加"守散文"的守卫。** 判据若去正则匹配**文档里的措辞或数字**，它守的就是编辑而不是腐化：
 句子一改写，判据就从"复算"退化成"守住那两句话"。这条边界由
@@ -331,51 +331,8 @@ node test/tools/host-route-index.mjs --write   # 重算并写入 docs/ROUTE-INDE
 
 ### 4.6 `test/tools/` 清单（都没有 CI 消费者）
 
-> 本表只是索引，**不是必须维护的名册**：新增工具不必更新本表（ADR-0017）。`test/tools/` 的磁盘枚举才是权威。
-
-| 工具 | 回答什么 | 怎么跑 |
-|---|---|---|
-| `analyze-host-apply.mjs` | 宿主 `apply(ctx)` 的拆分评估取证（路由数 / 按首段归组 / 巨石体量） | `node test/tools/analyze-host-apply.mjs` |
-| `assert-harness.mjs` | 两个大守卫（`test/verify-scene-live.mjs` / `test/verify-client.mjs`）共用的**判据工具**：计数打点 `createCheck()`、CRLF 归一 `normCrlf()`、取函数体 `fnNameBody()`（首个 `\n}`，朴素截断是契约）、配平大括号 `braceBody()`（跳过字符串 / 模板串 / 注释里的花括号）。**行为逐字节冻结**：迁移前后守卫的 PASS 数必须一致 | 守卫 `import` 消费，无 CLI |
-| `audit-fixture-coverage.mjs` | **夹具是不是把被测行为中和掉了** | `node test/tools/audit-fixture-coverage.mjs` |
-| `audit-guard-teeth.mjs` | 守卫"牙齿"普查 A–F（对照没被评估 / log 式伪判据 / 零引用判据 / 恒真 / 无红出口 / 朴素剥注释吃代码）—— **只给候选** | `node test/tools/audit-guard-teeth.mjs` |
-| `audit-import-closure.mjs` | `lib/` 的**运行时导入闭包** vs `package.json` 的 `files`（缺文件 ⇒ registry 装上就崩） | `node test/tools/audit-import-closure.mjs` |
-| `audit-write-only-state.mjs` | `test/**` 里**只被写、从不被读**的局部变量与对象字段（eslint 作用域 + AST 引用面）—— **只印候选、不判红、不登记进链**：四类结构性假阳（外部工具参数 / 断言期望值字面量 / 身份标记桩字段 / DOM 桩完整性字段）说明这条规则现在还不是机械可判的，文件头写了升级成守卫的前置条件 | `node test/tools/audit-write-only-state.mjs [--all]` |
-| `branch-notify.mjs` | **分支级**"改了 store 却没通知" —— **只印候选供人读**：改动 `src/client.js` 的 store 处理器之后跑一遍，逐条判"这条路径该不该通知"（该通知 ⇒ 改代码；误报 ⇒ 属文件头「已知边界」那几类）。真正的判据是 `verify-client` ①h/①i（与本工具共用同一份实现） | `node test/tools/branch-notify.mjs audit` |
-| `child-out.mjs` | **拿子进程输出的唯一方式**（本仓）：受限环境**禁子进程管道**，而 `execFileSync` / `spawnSync` 默认就是 pipe ⇒ `EPERM`，判据里"读 runner 的 `--list-json` / 检查子进程输出"会因此**假红**（看起来像链坏了）。收敛到这一处：`runNodeCaptured()` 把 stdout 落到 `.test-cache` 临时文件再读回，`runNodeStatus()` 只要退出码（`stdio: 'ignore'`，不建管道） | 守卫 `import` 消费（如 `test/verify-package-files.mjs`），无 CLI |
-| `ci-routing.mjs` | **CI 变更分类 + 文档快通道 + 公告快通道**的判据库（`scripts/ci-routing.mjs` 是它的薄 CLI 壳）：把"哪些改动算纯文档 / 纯公告"变成机器事实 —— 文档白名单逐个列（不用 `assets/**` 通配）、`docs/TOKEN-CONTRACT.md` 这类机器派生契约不豁免、删除 / 重命名 / 未知状态 / 差异超 `DIFF_FLOOR=300` / 取不到差异一律 fail-closed 走 `full`。四条路径常量 `MODE_DOCS` / `MODE_DOCS_ASSETS` / `MODE_NOTICE` / `MODE_FULL` 就是 `ci/result` 只认的那四个值。**公告快通道是内容级的**（`judgeNoticeEdit`）：公告文件的 `UPDATE NOTICE COPY` 区块**外**逐字节一致、区块**内**代码骨架一致（`noticeSkeleton` 挖空字符串内容但保留引号 / 逗号 / 括号）⇒ 只许改引号里的字；增删条目 / 改 props / 加分支都会让骨架变 ⇒ 回落 `full`。**允许只改单文件**（改中文措辞时英文常可原样复用），漏译由 `noticeKeysWithoutTranslation` 单独核：区块内每个 `weT("原文")` 都必须在**词表族**（含 `i18n-copy-core.js`，不只是公告词表文件）里有键。**不读盘、不写盘、无副作用**：正判据与负对照都喂同一个纯函数 | 守卫 `import` 消费；CLI 在 `node scripts/ci-routing.mjs check\|docs\|notice` |
-| `ci-routing-red.mjs` | 分流第一阶段的**最小**守卫（链上正式硬档）：对着 `.github/workflows/verify.yml` 原文断言两件事 —— 有固定名 `ci/result` 汇总作业、分类 / 文档审计 / 汇总真的在跑 `node scripts/ci-routing.mjs`。防的是工作流被整体换回旧的单 `verify` 矩阵时链上无声脱钩；**完整**的作业结构 / 覆盖责任 / 负对照不在这里 | `node test/tools/ci-routing-red.mjs` |
-| `ci-routing-selftest.mjs` | **分类器与文档审计的自检**（条数以工具输出为准）：白名单边界、删除 / 重命名 / 未知状态 / 超大差异的 fail-closed、`--base-mode` 档位（PR=merge-base、push=exact、dispatch 保守 full）、`judgeResult` 的失败 / 取消 / 缺失 / 意外跳过 / 未知 mode 五种不放行。断言对象是 `test/tools/ci-routing.mjs` 的纯函数，不碰真工作流 | `node test/tools/ci-routing-selftest.mjs` |
-| `ci-workflow.mjs` | **CI 步骤表自身**的解析与判据（`test/verify-ci-steps.mjs` 用它，R-7）：刻意**零 import**（链上零裸依赖，也不引 YAML 库）⇒ 手写行扫描把 `.github/workflows/verify.yml` 折成步骤表，`auditCiWorkflow()` 判 `npm run` 序列恰好、脚本名真实存在、`continue-on-error` 只允许且必须出现在 `verify:docs`、存在带 `git ls-files` 的 bash 出库步、`npm ci …` 在首个 `npm run` 之前（**逐行**判，多行 `run` 里藏在第二行也算，见 `installsDeps`）、顶层 `permissions:` 存在且 `contents: read` 且无任何 scope 取 write；**正判据与全部负对照共用这一个纯函数**（变异文本喂回它，真文件不动） | 守卫 `import` 消费，无 CLI |
-| `css-text.mjs` | **CSS 源码的文本级工具**（剥块注释的**唯一真源**）：逐字符扫描、等长替换且保换行（行号不漂）、未配对即抛错。为什么不复用 `js-text.mjs` —— 那个认 `//` 行注释，而 CSS 里 `url(//host/x)` 是合法值，套 JS 词法会把 URL 后半段当注释删掉。`token-contract` 与玻璃样式侧的剥注释都走这一处 | `node test/tools/css-text.mjs selftest` |
-| `diagnose-web-blank.mjs` | 网页壁纸「白屏」排查台（无头真浏览器） | `node test/tools/diagnose-web-blank.mjs` |
-| `guard-chain.mjs` | **守卫链与冻结 fixture 的对账判据**（`test/verify-guard-chain.mjs` 用它）：把 `test/run-guards.mjs --list-json` 折成可比形状，逐条比成员 / 顺序 / 档位 / 参数，另有地板、死路径、组合三组派生判据 —— 抽出来是为了**正判据与负对照走同一段代码**（§4.7 约定 5） | `node test/verify-guard-chain.mjs [--write-fixture]` |
-| `guard-targets.mjs` | **「哪个守卫管哪个模块」的派生映射**（从守卫**代码**里派生，不维护清单）：`--write` 重算生成物 `docs/GUARD-MAP.md`；改了某模块后查"该跑哪几条"就看它 | `node test/tools/guard-targets.mjs [--write] [--json]` |
-| `host-route-index.mjs` | 生成 / 核对**宿主路由索引**（产出 `docs/ROUTE-INDEX.md`） | `node test/tools/host-route-index.mjs [--write]` |
-| `i18n-scan.mjs` | 源码里的**中文字面量**扫描（判"进没进 `weT(...)`"；迁移与 `verify-i18n` 共用同一实现） | `node test/tools/i18n-scan.mjs [--json] [paths…]` · `selftest` |
-| `js-text.mjs` | JS/TS 源码的**文本级**工具（字符串 / 正则感知的剥注释） | `node test/tools/js-text.mjs selftest` |
-| `m2-facade-code-share.mjs` | **门面「非装配代码」占比（M2 口径）的复算**：逐字符扫描（跳过字符串 / 模板串 / 注释 / 正则）求出每行净括号增量 ⇒ 把**顶层语句**分成 `assembly`（体内出现 `ctx.` 或 `registerXxxRoutes(`）/ `code` / `other`，报 `nonAssemblyShare` 等四数。段窗走**内容锚点**（锚点全缺即非 0 退出 —— 宁可不算，也不输出一份可能误导的段表）；`--plan-legacy` 复现计划时代的硬编码段窗 | `node test/tools/m2-facade-code-share.mjs [文件] [--list] [--plan-legacy] [--self-check]` |
-| `multi-source-mutants.mjs` | **多源变异体加载器**（守卫共用的基础设施）：一条负对照可能横跨多个模块，本工具按"源键 → 文件 / 工厂导出名"把 `[源键, find, replace]` 的编辑打在该源的文本上，并内置三件纪律 —— **命中自检**（锚点落空 / 空转编辑 / 未知源键 / 取不到工厂导出都即抛，防"变异体 = 原版 ⇒ 负对照假绿"）、源码先归一 LF（锚点写的是 `\n`）、相对说明符改写成绝对 `file:` URL（变异体住 `.test-cache/` 仍能 import 真源模块）。消费者：`verify-asset-paths` / `verify-cache-prune` | `import { makeMultiSourceMutants } from './tools/multi-source-mutants.mjs'`（库，无 CLI） |
-| `official-performer.mjs` | **官方 pet 演出的三个夹具**（`clientEntryFixture` / `performerFixture` 一族）：把 `packages/pet-link/src/official-pet.js` + `pet-link.js` 的源码拼成工厂、喂一份假 facade 求值，得到可驱动的 `createOfficialPetPerformer`；时间与锁／播放态全部捏在夹具手里（不连官方插件、不起宿主）。消费者：`verify-pet-official` / `verify-pet-hotplug-client` / `verify-pet-hotplug-integration` / `verify-pet-tuner` | 守卫 `import` 消费，无 CLI |
-| `official-pet-case.mjs` | **官方 pet 路由的端到端台架**（真 `node:http` 服务 + 真路由注册）：起一个只认官方 pet 协议（`config` / `lock` / `play` / `position` 一族）的桩服务，把 `verifyOfficialPet` 喂给守卫，断言协调器在锁冲突、进度缺失、动作失败下的排播与退场 | 守卫 `import` 消费（`test/verify-pet-hotplug-host.mjs`），无 CLI |
-| `regen-golden.mjs` | **设置 golden 夹具的漂移核对与重录**：逐侧列出与当前 `lib/settings-schema.js` 的差异（host 侧的值有判据管、client 侧没有），写入必须先声明意图（`--intend`）—— 防止把缺陷输出自动录成"期望" | `node test/tools/regen-golden.mjs [--write --intend <host\|client>:<键>]` |
-| `repo-face.mjs` | **「仓库扫描面」的唯一口径**（本机脏面 ⇒ **假绿**）：判据自己 `listFiles + SKIP_DIRS` 现算面时，**本机多出来的副本**会一起进面（仓库里嵌着另一个完整 git worktree、被 `.gitignore` 忽略的本地目录）⇒ 本机恒绿、CI 才红。两条口径都要：① **嵌套仓库一律不扫**（任何目录里出现 `.git` —— 目录，或 linked worktree 的 `.git` 文件）；② **gitignore 的本地目录按 `DEFAULT_SKIP` 名单不扫**（名单是**实测**出来的，加条目要写理由，不许"把不确定的都塞进来"）。另有 `gitTrackedFiles()` / `gitViewDiff()` 拿 **`git ls-files` 当独立真源**对账：走出来的文件不在 git 视角 ⇒ 要么是被有意忽略的产物（`allowedExtra` 逐条说明）、要么判红；git 视角里的代码文件没被走到 ⇒ 面变窄 ⇒ 判红 | 守卫 `import` 消费（如 `test/verify-settings-schema-exports.mjs`），无 CLI |
-| `sidebar-props-scroll-rig.mjs` | 侧栏「壁纸属性」下钻的**真浏览器滚动判定台**：属性多的壁纸能不能滚到底（官方壳的页签内容区固定高 + overflow:hidden，面板必须自带滚动） | `node test/tools/sidebar-props-scroll-rig.mjs [bundle.js] [label]` |
-| `subpackage-shapes.mjs` | **`packages/*` 包形态的唯一真源**：目前只登记一种形态（一般子包 = `<主包名>-<目录名>` + 同号版本）；上游 fork 形态表 `UPSTREAM_FORKS` 目前为空（分支代码与判据全部保留、等 provider 重新接入时按原口径复活）。形态判定**只读本文件、不读清单自称字段**，防止包给自己写个标记就跳过判据 | `node -e "import('./test/tools/subpackage-shapes.mjs')"`（被 `verify-subpackage-*` 一族直接 import） |
-| `source-locator.mjs` | **真源定位器**：给符号名 / 文件名，回答"它**唯一的**声明处 / 落点在哪" —— 命中恰一处才 `ok`；命中 **0 处**（符号被重命名/删除）或 **多处**（出现第二份真源）都判红，判据因此能写"**缺锚即红**"而不是"找不到就用默认值兜底"。三条硬口径：先剥注释（共享 `js-text.mjs`，散文里的符号不算声明）、只认可缩进的真实声明语句（**缩进不作为"是不是顶层"的判据**，唯一性才是契约）、生成物 `lib/client.js` 不算真源（否则 `src/` 每个符号都"命中两处"而恒红） | `node test/tools/source-locator.mjs <符号\|文件> [--in lib\|src]` · `--selftest` |
-| `src-scope.mjs` | **构建期内联族**（组装点 + 域模块）的按序读法：清单从 `scripts/build-client.mjs` 的 `INLINE_MODULES` 现算（单一真源），供守卫读"同族并集"：`parseInlineModules()` / `scopeFiles(prefix)` / `scopeText(prefix, sep?)`（API 已冻结，空族抛错防静默全绿） | 守卫 `import` 消费，无 CLI |
-| `token-contract.mjs` | **`--dsw-*` 令牌契约的生成与核对**（共存审计 S2）：从 `src/styles.js` 的 CSS 模板现算「改写了哪些 token、在哪个门控下」，`--write` 重算生成物 `docs/TOKEN-CONTRACT.md`（守卫 `verify-token-contract` 逐字节比对） | `node test/tools/token-contract.mjs [--write] [--stats]` |
-| `underlay-pixel-rig.mjs` | **画布兜底色**的真浏览器像素对照：壁纸的像素没送到屏上时，页面自己画的是什么颜色（掉层 → 白闪还是同色底） | `node test/tools/underlay-pixel-rig.mjs <bundle.js> [label]` |
-| `fx-perf-rig.mjs` | **光效层帧耗时对照**（issue #190）：真浏览器里跑真的 `packages/fx/src/fx-layer.js`，灌固定指针轨迹 + 周期性点击，报帧间隔 mean / p50 / p95 / max。A/B 走两份 `fx-layer.js` | `node test/tools/fx-perf-rig.mjs <fx-layer.js> [label]` |
-| `weT-shim.mjs` | 给**单独 import `src/**`** 的守卫装身份译文层（`weT(k) === k`，与 bundle 里中文态逐字一致） | `node test/tools/weT-shim.mjs` |
-
-> 其中 `host-route-index.mjs` / `js-text.mjs` / `css-text.mjs` / `branch-notify.mjs` / `guard-chain.mjs` /
-> `src-scope.mjs` / `assert-harness.mjs` / `child-out.mjs`（被 `verify-package-files` 直接 import）/
-> `source-locator.mjs`（被 `guard-targets.mjs` 消费，其 `--selftest` 由 `verify-guard-map` ⑥e 挂上链）/
-> `repo-face.mjs`（扫描面口径，被 `verify-settings-schema-exports` 等直接 import）
-> **同时是守卫的库** ⇒ 改它们等于改判据，走 `npm run verify:all`。
-> 另有 **`test/warn-only.mjs`**（不在本清单里）：两档共用的**入口包装** —— 降级退出码
-> 与"本环境起不了子进程就显式 SKIP"。它自己不是判据，所以没有独立守卫覆盖它。
+工具很多，清单见 [`CODE-STRUCTURE.md`](./CODE-STRUCTURE.md) §12。本表只是索引、不是必须维护的名册（ADR-0017），`test/tools/` 的磁盘枚举才是权威。
+新增工具的约定见 §4.7 约定 4；改「同时是守卫的库」那一族等于改判据，走 `npm run verify:all`。
 
 ### 4.7 约定（十条，守卫会判）
 
@@ -388,7 +345,7 @@ node test/tools/host-route-index.mjs --write   # 重算并写入 docs/ROUTE-INDE
    合成的 `import … from '…'` 字符串 —— 不剥注释的判据会被自己的负对照绊倒。
 4. **新守卫只按"域"判定，没有登记动作**：判据的域应当**从磁盘枚举**，而不是靠一张手工维护的
    名单 —— 名单漏一行只会让那个文件**静默脱离判据**。
-   ⚠️ 唯独 `test/tools/*.mjs` 与 `test/compat-*.mjs` **仍要在 §4.6 点名**。
+   ⚠️ 唯独 `test/tools/*.mjs` 与 `test/compat-*.mjs` **仍要在 [CODE-STRUCTURE.md](./CODE-STRUCTURE.md) §12 点名**。
 5. **负对照必须把变异输入喂进「同一条判据」**：判据只在**一侧**定义 —— 命名函数、
    或命名的正则常量 —— 正判据与负对照都调它。两种写法不算数：
    - ① **只断言某个常量 / 数组不含 X**：判据根本没被执行，判据空转时它照样绿；
@@ -606,7 +563,7 @@ review 失去意义；真正的格式守卫是无尾随空白那两条（CI 的 
 - [ ] 新增了 `src/**` 文件吗？→ 登记进 `INLINE_MODULES` 并给 `markers`。
 - [ ] 新增了设置项吗？→ 只改 `lib/settings-schema.js`，没另写 UI 表。
 - [ ] 新增了路由吗？→ `node test/tools/host-route-index.mjs --write` 重算索引。
-- [ ] 新增了守卫吗？→ 正负对照成对；工具已进 §4.6；没有去守文档散文。
+- [ ] 新增了守卫吗？→ 正负对照成对；工具已进 [CODE-STRUCTURE.md](./CODE-STRUCTURE.md) §12；没有去守文档散文。
 - [ ] 新增了 npm 脚本 / 新模块吗？→ **至少真跑一次 `npm run verify`**：新增脚本若引用了未随包发布的
   路径，`test/verify-package-publish.mjs` ⑦ 会红（命令里真有那类引用才需要登记进它的 `DEV_ONLY` 表，
   `lint` / `typecheck` 这种不需要）；新增 `lib/**` / `src/**` 文件会让 `verify-guard-map` ① 报

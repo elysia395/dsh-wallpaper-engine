@@ -595,7 +595,7 @@ function main() {
     check('negative control: 抽掉 [data-chat-flow] 后两条特异性相等，顺序又成为唯一决胜因素（#197）',
       !!thinkChip && !!chipSpec
       && SPEC_ORDER(specificity(thinkChip.header.replaceAll('[data-chat-flow]', '')), chipSpec) === 0);
-    // 语义锚点必须扛事：_thinkBody 是构建期哈希的一半，DSH-UI-INTERFACES.md 判其
+    // 语义锚点必须扛事：_thinkBody 是构建期哈希的一半，docs/CODE-STRUCTURE.md §13 判其
     // 稳定性为低、明确不许把用户可见功能单独挂上去（宿主改个类名就静默复发）。
     check('F2d3b3 收口规则带着语义锚点 [data-variant="think"]，不只挂类名后缀（#197）',
       !!thinkChip && thinkChip.header.includes('[data-variant="think"]'));

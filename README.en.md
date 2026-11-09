@@ -95,7 +95,7 @@ dsh plugin --profile web add dsh-plugin-wallpaper-engine
 
 Use `desktop` instead of `web` for the desktop host.
 
-The repository ships a **multi-package release set**: installing the main package resolves the same-version subpackages (current package/tarball counts and `publishOrder` live in [RELEASING](docs/RELEASING.md); per-version changes in [CHANGELOG](docs/CHANGELOG.md)).
+The repository ships a **multi-package release set**: installing the main package resolves the same-version subpackages (current package/tarball counts and `publishOrder` live in [release procedure](CONTRIBUTING.md#发布流程维护者); per-version changes in [CHANGELOG](docs/CHANGELOG.md)).
 
 **From source**
 
@@ -136,7 +136,7 @@ Bug reports, platform feedback, documentation fixes and feature PRs are welcome.
 
 - [How it works](docs/HOW-IT-WORKS.md) · [Troubleshooting](docs/TROUBLESHOOTING.md) · [Upgrading](docs/UPGRADING.md)
 - [Changelog](docs/CHANGELOG.md) · [Coexistence](docs/en/HOW-IT-WORKS.md#coexistence-glass-surfaces-vs-other-ui-plugins) · [Code structure](docs/CODE-STRUCTURE.md)
-- [Contributing](CONTRIBUTING.md) · [Release process](docs/RELEASING.md)
+- [Contributing](CONTRIBUTING.md) · [Release process](CONTRIBUTING.md#发布流程维护者)
 
 <h2 id="community">Community</h2>
 

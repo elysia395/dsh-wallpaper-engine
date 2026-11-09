@@ -201,20 +201,19 @@ $env:DSH_WE_NOTICE = "1"   # 启动 DSH 前设置；设成 0 则永久静默（�
 那时**没有旧层可守**，闸门压根没武装 ⇒ 首帧到位前屏上是层底色。实测这条"刚加载后的第一张"路上
 `loadedmetadata` 来得很快（读数与条件见 `docs/CHANGELOG.md` 的对应条目）。
 
-**现状（未做）**：做法是给视频档一个**真静帧**当门面（复用已有的抽帧路径），而不是等 `<video>` 的第一帧。
+**现状（未做）**：仍会露这一小段底色；候选方案（给视频档一个**真静帧**当门面，复用已有的抽帧路径）登记在 [`wip/UNIMPLEMENTED.md`](./wip/UNIMPLEMENTED.md)。
 
 ### 切到"网页壁纸（旧链）"时有一小段白 / 空
 
 切层闸门认的是 `iframe.we-live-iframe` 的 `we-live-on`；裸 `iframe.we-iframe` 落在"不拦"那一档。
 
-**现状（未做）**：这一档**可以覆盖** —— iframe 元素自己的 `load` / `error` 跨域也会触发（同一份代码在
-`prepareWebProbe` 里就是这么用的），缺的只是把这两个信号接进闸门的信号表。
+**现状（未做）**：仍可能短暂白 / 空；`iframe` 自己的 `load` / `error` 跨域也会触发（`prepareWebProbe` 已在用），把这两个信号接进闸门信号表的方案登记在 [`wip/UNIMPLEMENTED.md`](./wip/UNIMPLEMENTED.md)。
 
-### 玻璃态下，第三方浮层还是半透明：没有 `role` 的那一类
+### 玻璃态下，第三方浮层还是半透明：没有稳定锚点的那一类
 
-「第三方弹窗不透明底 → 给第三方插件的弹窗补实底」（`floaterSolidBase`，默认开）原先只认 ARIA 浮层
-（`role="dialog"` / `role="alertdialog"`）。下面这几类**没有稳定锚点**，玻璃态下曾是"半透明且没有霜"
-（#315 在真 Chromium 里实测底色 α ≈ 0.65、`backdrop-filter: none`），背后内容直接透上来：
+「第三方弹窗不透明底 → 给第三方插件的弹窗补实底」（`floaterSolidBase`，默认开）按**稳定锚点**认浮层。
+下面这几类本身不带锚点，玻璃态下会呈现「半透明且没有霜」（图样见 #315：底色 α ≈ 0.65、
+`backdrop-filter: none`），背后内容直接透上来：
 
 - `body` 直系的框架层容器（第三方插件自绘的覆盖层 / 抽屉 / 自定义菜单）；
 - 吸顶条、悬浮工具条这类没有 dialog 语义的常驻浮层；
@@ -223,8 +222,8 @@ $env:DSH_WE_NOTICE = "1"   # 启动 DSH 前设置；设成 0 则永久静默（�
 **做法：只认稳定锚点，不猜类名。** 按类名匹配等于把第三方的内部结构写进本插件 —— 对方改一次类名
 就静默失效，而且会误伤同名面板。现在有三条确定的锚点路（都受同一把 `floaterSolidBase` 门控制）：
 
-1. **ARIA 面**：除 `role="dialog"` / `role="alertdialog"` 外，`aria-modal="true"` 也认（#315 新增，
-   覆盖"弹窗语义写在 aria-modal 上、没有 role"的一类）；
+1. **ARIA 面**：`role="dialog"` / `role="alertdialog"` 与 `aria-modal="true"`（覆盖「弹窗语义写在
+   aria-modal 上、没有 role」的一类）；
 2. **用户声明**：把浮层的 CSS 选择器写进「额外补雾化的选择器」（`extraGlassSelectors`）—— 这些面在
    玻璃态下若**只能退回原生**（无法安全玻璃化，例如 `position: static`），运行时会给它打上
    `data-we-solid-base`，玻璃 CSS 据此补实底（`--we-readability-base` + 无 `backdrop-filter`）；

@@ -8,7 +8,7 @@
 > **玻璃** = 链上有 `[data-we-glass-*]`；**UI 配色** = 链上有 `[data-we-ui-color]`（主包自有门，ADR-0016）；
 > **壁纸** = 只有 `[data-we-wallpaper]`；
 > **无门控** = 两者都不挂（共存审计 M1 的全部暴露面 —— 白名单见下表，新增一条守卫即红）。
-> JS 侧的令牌写入（`src/font/apply.js` 的 label 族等）不在本契约口径内，见 `docs/DSH-UI-INTERFACES.md`。
+> JS 侧的令牌写入（`src/font/apply.js` 的 label 族等）不在本契约口径内，见 `docs/CODE-STRUCTURE.md` §13。
 
 共 **189** 条声明 / **60** 个不同令牌。门控归属：
 玻璃 **156** 条 · UI 配色 **11** 条 · 壁纸 **3** 条 · 无门控 **19** 条。

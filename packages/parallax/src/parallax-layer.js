@@ -34,7 +34,7 @@
  *     fixed` 后代的**包含块** —— 那是本仓 #89 的坑（卡片里挂着第三方插件的座位，包含块一换
  *     就跑到卡片角上）；组里真有 fixed 后代时整组不动，见 parallaxGroupBlocked()。
  *     **左栏与输入卡片是例外**：左栏里长着宿主自己的 fixed 标题栏按钮（Windows 标题栏模式下的
- *     「收起 / 展开侧边栏」钉在标题栏左上角，见 docs/DSH-UI-INTERFACES.md），加 `translate`
+ *     「收起 / 展开侧边栏」钉在标题栏左上角，见 docs/CODE-STRUCTURE.md §13），加 `translate`
  *     会把按钮整体推下去一个标题栏高度（用户口径 m01915-③，与本仓 #131 同一类事故）⇒
  *     两者改用 `position: relative` + `left`/`top`：相对定位**不是** fixed 后代的包含块，
  *     按钮照旧钉在视口上（见 parallaxTargetOffset()）。输入卡片也会动态挂载 fixed 浮层：
@@ -43,7 +43,7 @@
  *     正向 left/top 仍可能扩张卡片自身的滚动边界，不承诺零溢出。给原本 static 的卡片
  *     补 relative 也会建立 absolute 后代的包含块；宿主新增此类装饰时须核对其预期锚点。
  *     ③ **槽出口自己没有盒子，位移要落到有盒子的那一层上**：宿主给每个槽出口写死
- *     `display: contents`（asar 里的 `ANCHOR_STYLE`，见 docs/DSH-UI-INTERFACES.md），`translate`
+ *     `display: contents`（asar 里的 `ANCHOR_STYLE`，见 docs/CODE-STRUCTURE.md §13），`translate`
  *     写在出口身上屏上一点都不会动（"只有输入框在动"就是这个缘故）⇒ 见 parallaxGroupBox()：
  *     **从锚点自身起判**，自己有盒子就用自己（输入卡片动的是卡片本体、每条用户气泡各自成为
  *     独立的位移目标），一路 `contents` 才往上找；
@@ -143,7 +143,7 @@ const PARALLAX_IDLE_MS = 180;
 const PARALLAX_IDLE_VISIBLE_PX = 1;
 /** 要动的那几层（与 src/styles.js 视差段的规则一一对应）：壁纸层与吉祥物。 */
 const PARALLAX_TARGET_SELECTOR = '.we-layer, .we-rope';
-/** 跟着动的**界面整块**（开关 `parallaxUi`）—— 四组都是宿主真实锚点（见 docs/DSH-UI-INTERFACES.md
+/** 跟着动的**界面整块**（开关 `parallaxUi`）—— 四组都是宿主真实锚点（见 docs/CODE-STRUCTURE.md §13
  *  与 test/verify-glass-surfaces.mjs 的玻璃面登记表）：`[data-composer-card]` 输入卡片、
  *  `[data-slot="conversation.view"]` 会话文本区、`[data-slot="sidebar"]` 左栏，以及聊天流里
  *  **用户消息那一行** `[data-chat-flow-kind="user"]`（`steering` 渲染的是同一个气泡组件）。
@@ -164,7 +164,7 @@ const PARALLAX_GROUP_BUBBLE = 1.4;
 const PARALLAX_GROUP_DEPTH_MIN = 0;
 const PARALLAX_GROUP_DEPTH_MAX = 10;
 /** 别的插件注册的前端元素组（用户裁决 m02697-②/③）。**槽出口自己没有盒子**（宿主给每个出口
- *  写死 `display: contents`，见 docs/DSH-UI-INTERFACES.md 与 parallaxGroupBox()）⇒ 位移落在
+ *  写死 `display: contents`，见 docs/CODE-STRUCTURE.md §13 与 parallaxGroupBox()）⇒ 位移落在
  *  出口的**元素子节点**上：那才是插件自己渲染出来、真有盒子的内容（一个出口可能有多个子节点，
  *  各有各的位移记录 —— DOM 上一个出口只有槽键、认不出占用它的插件，所以移动单位只能是节点）。
  *  **不参与的槽**（挪了没有意义或会与别的那一组打架）：
@@ -549,7 +549,7 @@ function parallaxDiscoveredGroups() {
 /**
  * 界面上**真正要挪的那个盒子**（位移落点）。
  * 为什么不能直接写在命中的锚点上：宿主给每个槽出口写死 `display: contents`
- * （asar 里的 `ANCHOR_STYLE`，见 docs/DSH-UI-INTERFACES.md）—— 出口自己不生成盒子，
+ * （asar 里的 `ANCHOR_STYLE`，见 docs/CODE-STRUCTURE.md §13）—— 出口自己不生成盒子，
  * `translate` 写在它身上屏上一点都不会动。用户看到"只有输入框在动"就是这个缘故：输入卡片是
  * 有盒子的真元素，侧栏与会话文本区都只是出口。
  * ⇒ **从锚点自身起判**，一路 `display: contents` 才往上找第一个有自己盒子的元素

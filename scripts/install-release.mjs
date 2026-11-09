@@ -13,7 +13,7 @@
  * `file:` 依赖**不能满足**传递依赖的 registry 版本范围（同样实测 404）。唯一能让"离线九件套"装上的
  * 机制是 profile 的 `overrides:` 把每个子包名钉到同目录的 tarball —— DSH 自己的兼容性实跑
  * （`test/compat-harness-live.mjs`）走的就是这条路，`test/verify-deployment.mjs` 之外另有一份
- * 端到端探针（见 `docs/RELEASING.md` §证据）。
+ * 端到端探针（见 `CONTRIBUTING.md`「发布流程（维护者）」 §证据）。
  *
  * 本脚本把这套动作固化成一条命令，并在装完后**逐个 require.resolve** 自证：整套包都在、声明
  * `dsh.client` 的包连 `./client` 入口都在。它不发布、不改版本，只读发布集目录。

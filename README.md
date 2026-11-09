@@ -95,7 +95,7 @@ dsh plugin --profile web add dsh-plugin-wallpaper-engine
 
 桌面端把 `web` 改为 `desktop`。
 
-本仓按**多包发布集**发布：主包与同版本子包一起解析（具体包数、tarball 数与 `publishOrder` 见[发布说明](docs/RELEASING.md)，各版本变化见[变更记录](docs/CHANGELOG.md)）。
+本仓按**多包发布集**发布：主包与同版本子包一起解析（具体包数、tarball 数与 `publishOrder` 见[发布流程](CONTRIBUTING.md#发布流程维护者)，各版本变化见[变更记录](docs/CHANGELOG.md)）。
 
 **源码**
 
@@ -136,7 +136,7 @@ node scripts/install-source.mjs --profile desktop --dsh-home "<DSH 数据目录>
 
 - [工作原理](docs/HOW-IT-WORKS.md) · [故障排查](docs/TROUBLESHOOTING.md) · [升级指南](docs/UPGRADING.md)
 - [更新记录](docs/CHANGELOG.md) · [共存说明](docs/HOW-IT-WORKS.md#共存玻璃表面与其他-ui-插件) · [代码结构](docs/CODE-STRUCTURE.md)
-- [贡献指南](CONTRIBUTING.md) · [发布流程](docs/RELEASING.md)
+- [贡献指南](CONTRIBUTING.md) · [发布流程](CONTRIBUTING.md#发布流程维护者)
 
 <h2 id="联系方式"><picture><source media="(prefers-color-scheme: dark)" srcset="assets/readme/section-community-dark.png"><img src="assets/readme/section-community-light.png" alt="联系方式" width="1440"></picture></h2>
 

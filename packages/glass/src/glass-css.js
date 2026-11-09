@@ -703,7 +703,7 @@ const CSS_GLASS = `
      fill sliced per line box, and fences stay excluded by :not(pre).
      Two anchors carry this: the semantic data-variant="think" the host writes on
      the reasoning root, and the _thinkBody class suffix. The suffix is a build
-     hash half — DSH-UI-INTERFACES.md rates it low-stability and forbids hanging
+     hash half — docs/CODE-STRUCTURE.md §13 rates it low-stability and forbids hanging
      user-visible behaviour on it alone — so the semantic attribute is the load
      bearing one and the suffix is the fallback. The old data-vcp-* names stay
      for older host lines.
