@@ -18,8 +18,8 @@
  *      于是"这条守卫管这一族"的自然写法就是**前缀**：路径以该前缀开头的模块全部算命中。
  *   F) **经共享族助手读**  `import { panelText } from './tools/src-scope.mjs'` + 真调用
  *      —— 守卫常常不写前缀字面量，而是调助手（`panelText()` / `styleText()` …），
- *      族口径封在 `test/tools/src-scope.mjs` 里。那个库**同时是守卫的库**（DEV-GUIDE §4.6：
- *      改它等于改判据），所以判据跟着走一层：解析助手体里的字面量前缀。
+ *      族口径封在 `test/tools/src-scope.mjs` 里。那个库**同时是守卫的库**（`docs/CODE-STRUCTURE.md` §12
+ *      文末「同时是守卫的库」；改它等于改判据），所以判据跟着走一层：解析助手体里的字面量前缀。
  *   G) **真源定位读**  `locate('COMPONENT_VISIBILITY')` / `locateFile('cordis.patch.yml')`
  *      / `locateCallSites('registerSettingsRoutes')`（`test/tools/source-locator.mjs` 的 API）
  *      —— 判据不再写死"实现在哪个文件"，而是问真源定位器"这个符号唯一声明在哪 / 这个调用点在哪"。
@@ -388,7 +388,7 @@ function render(map) {
   out.push('> 由 `node test/tools/guard-targets.mjs --write` 重算；`test/verify-guard-map.mjs` 会重算并逐字比对。');
   out.push('> **怎么用**：改了 `src/` 或 `lib/` 的某个模块，在「模块 → 守卫」那张表里查该跑哪几条。');
   out.push('> 口径：只统计守卫**代码**里真正碰到的模块（先剥注释），并区分"直接读源文件"与"隔着产物 `lib/client.js`"。');
-  out.push('> 写法：字面量路径 / `join(...)` 拼接 / 唯一 basename / 产物配方 / **前缀族读法** `scopeFiles|scopeText(<前缀>)` / **经共享族助手读**（`import { panelText } from \'./tools/src-scope.mjs\'` + 真调用；族口径封在那个库里，见 DEV-GUIDE §4.6「同时是守卫的库」）/ **真源定位读**（`locate(\'符号\')` / `locateFile(\'文件名\')`，`test/tools/source-locator.mjs`：符号唯一声明在哪就是读了哪个模块）。');
+  out.push('> 写法：字面量路径 / `join(...)` 拼接 / 唯一 basename / 产物配方 / **前缀族读法** `scopeFiles|scopeText(<前缀>)` / **经共享族助手读**（`import { panelText } from \'./tools/src-scope.mjs\'` + 真调用；族口径封在那个库里，见 `docs/CODE-STRUCTURE.md` §12「同时是守卫的库」）/ **真源定位读**（`locate(\'符号\')` / `locateFile(\'文件名\')`，`test/tools/source-locator.mjs`：符号唯一声明在哪就是读了哪个模块）。');
   out.push('');
   out.push(`模块面 ${map.modules.length} 个 · 守卫 ${map.rows.length} 个`);
   out.push('');

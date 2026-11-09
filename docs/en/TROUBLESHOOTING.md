@@ -216,43 +216,55 @@ of base colour for a second or two).
 ### The first wallpaper after a page load shows a short stretch of base colour
 
 There is **no old layer to hold** at that moment, so the gate is not armed at all ⇒ the base colour is on
-screen until the first frame arrives. Measured (one-off; readings and conditions in the matching
-`docs/CHANGELOG.md` entry): on that "first wallpaper" path `loadedmetadata` arrives quickly.
+screen until the first frame arrives. On that "first wallpaper" path `loadedmetadata` arrives quickly, so the
+stretch is short.
 
-**Current state (not done)**: the fix is to give video wallpapers a **real still frame** as their face
-(reusing the existing frame-extraction path) instead of waiting for the `<video>`'s first frame.
+**Current state (not done)**: the stretch is still there; the candidate fix (give video wallpapers a **real
+still frame** as their face, reusing the existing frame-extraction path) is logged in
+[`wip/UNIMPLEMENTED.md`](../wip/UNIMPLEMENTED.md).
 
 ### Switching to a "web wallpaper (legacy link)" shows a short white / empty stretch
 
 The gate recognises `iframe.we-live-iframe` via `we-live-on`; a bare `iframe.we-iframe` falls into the
 "don't gate" bucket.
 
-**Current state (not done)**: this one **can be covered** — the iframe element's own `load` / `error` fire
-even cross-origin (the same code already uses them in `prepareWebProbe`); all that is missing is wiring those
-two signals into the gate's signal table.
+**Current state (not done)**: the legacy link can still briefly flash white / empty; the iframe element's own
+`load` / `error` fire even cross-origin (`prepareWebProbe` already uses them) — wiring those two signals into the
+gate's signal table is logged in [`wip/UNIMPLEMENTED.md`](../wip/UNIMPLEMENTED.md).
 
-### Under glass, third-party overlays are still translucent: the ones without `role` are out of scope
+### Under glass, third-party overlays without a stable anchor are still translucent
 
-"Opaque base for third-party dialogs" (`floaterSolidBase`, on by default) only covers ARIA overlays
-(`role="dialog"` / `role="alertdialog"`). The surfaces below have **no stable anchor** and keep the
-"translucent and frost-free" look (measured in real Chromium in #315: base alpha ≈ 0.65, `backdrop-filter:
-none`), so whatever is behind them shows straight through:
+"Opaque base for third-party dialogs" (`floaterSolidBase`, on by default) recognises overlays through **stable
+anchors**. The surfaces below carry none of them, so under glass they show the "translucent and frost-free"
+look (see #315: base alpha ≈ 0.65, `backdrop-filter: none`) and whatever is behind them shows straight through:
 
 - framework-layer containers parented directly to `body` (overlays / drawers / custom menus drawn by
   third-party plugins);
 - sticky headers and floating toolbars — persistent overlays with no dialog semantics;
 - third-party containers that carry neither a `role` nor one of the existing solid-base rules.
 
-**Why we do not guess class names**: matching on class names bakes third-party internals into this plugin —
-it silently stops working the day they rename a class, and it hits unrelated panels that happen to share the
-name. Solid bases for these surfaces need an anchor from the plugin side (`data-dsw-floater` /
-`data-dsw-overlay`, or `--dsw-menu-surface-*` as documented in the interface docs); the glass side only
-trusts anchors, and the host does not provide one yet.
+**What we do: only trust stable anchors, never guess class names.** Matching on class names bakes third-party
+internals into this plugin — it silently stops working the day they rename a class, and it hits unrelated
+panels that happen to share the name. There are three anchor paths (all gated by the same `floaterSolidBase`
+switch):
 
-**Current state (not done; tracked in #315)**: keep as is + this document. Only two workarounds:
+1. **ARIA surfaces**: `role="dialog"` / `role="alertdialog"` and `aria-modal="true"` (covers overlays that put
+   dialog semantics on `aria-modal` without a `role`);
+2. **User declaration**: add the overlay's CSS selector to "Extra frost targets" (`extraGlassSelectors`) — if
+   the surface can **only fall back to native** under glass (e.g. `position: static`, so it cannot be glassed
+   safely), the runtime tags it with `data-we-solid-base` and the glass CSS then gives it a solid base
+   (`--we-readability-base` + no `backdrop-filter`);
+3. **Plugin-provided anchor**: a third-party plugin's root node can carry `data-we-solid-base` directly as a
+   stable anchor (this plugin only trusts anchors, never the other side's class names or internals); host
+   dialogs keep using the native fallback via `data-we-host-dialog`.
 
-- turn off "Give third-party plugin dialogs a solid base" ⇒ every overlay (ARIA dialogs included) goes back
-  to the host's native translucent look;
-- if an overlay merely "has no frost" rather than "too see-through to read", add its selector to
-  "Extra frost targets" — that adds the blur channel, **not** a solid base.
+**Boundaries**: all of the above apply only while "Give third-party plugin dialogs a solid base" is on (default
+on); turning it off returns every overlay (ARIA dialogs included) to the host's native translucent look. Anchors
+are written and restored in pairs — removing the selector, the surface becoming glassable again, a row-level
+toggle remount, or dispose all clear it, so no residue is left. Undeclared surfaces without an anchor stay as
+they are (the cost of not guessing); workarounds:
 
+- turn off "Give third-party plugin dialogs a solid base" ⇒ every overlay goes back to the host's native
+  translucent look;
+- if an overlay merely "has no frost" rather than "too see-through to read", add its selector to "Extra frost
+  targets" — that adds the blur channel, **not** a solid base.

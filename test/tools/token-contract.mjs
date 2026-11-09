@@ -198,7 +198,7 @@ export function ungatedReason(chain) {
   return null; // 不在白名单 ⇒ 守卫红
 }
 
-/** 人工消费者注记：高危别名的宿主消费面（依据 styles.js 注释 + DSH-UI-INTERFACES §3.4）。 */
+/** 人工消费者注记：高危别名的宿主消费面（依据 styles.js 注释 + CODE-STRUCTURE §13 §3.4）。 */
 const NOTES = {
   '--dsw-alias-bg-layer-1': '面板层次 1（宿主对话框/侧栏底）；better-sidebar 亦按它上色',
   '--dsw-alias-bg-layer-2': '面板层次 2',
@@ -253,7 +253,7 @@ export function buildContract() {
   L.push('> **玻璃** = 链上有 `[data-we-glass-*]`；**UI 配色** = 链上有 `[data-we-ui-color]`（主包自有门，ADR-0016）；');
   L.push('> **壁纸** = 只有 `[data-we-wallpaper]`；');
   L.push('> **无门控** = 两者都不挂（共存审计 M1 的全部暴露面 —— 白名单见下表，新增一条守卫即红）。');
-  L.push('> JS 侧的令牌写入（`src/font/apply.js` 的 label 族等）不在本契约口径内，见 `docs/DSH-UI-INTERFACES.md`。');
+  L.push('> JS 侧的令牌写入（`src/font/apply.js` 的 label 族等）不在本契约口径内，见 `docs/CODE-STRUCTURE.md` §13。');
   L.push('');
   L.push(`共 **${decls.length}** 条声明 / **${tokens.length}** 个不同令牌。门控归属：`);
   L.push(`玻璃 **${buckets.glass.length}** 条 · UI 配色 **${buckets['ui-color'].length}** 条 · 壁纸 **${buckets.wallpaper.length}** 条 · 无门控 **${buckets.ungated.length}** 条。`);

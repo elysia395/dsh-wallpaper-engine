@@ -44,7 +44,7 @@
 
 ### 可测事实（符号名 / 文件路径作锚点，不写行号与数值）
 
-**宿主机制（`app.asar` 内 `@deepseek-ai/*` 的产物与随包文档；复算方法见 [`DSH-UI-INTERFACES.md`](../DSH-UI-INTERFACES.md)）**
+**宿主机制（`app.asar` 内 `@deepseek-ai/*` 的产物与随包文档；复算方法见 [`CODE-STRUCTURE.md`](../CODE-STRUCTURE.md) §13）**
 
 1. **一个包 = 一个 bundle = 多行**：`package.json` 声明 `dsh.bundle.patch`，patch 是**顶层 YAML 数组**；
    `- insert:`（**不带 `id`**）把若干行追加到根 `include` 上，每行是一个 loader entry
