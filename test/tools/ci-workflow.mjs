@@ -113,6 +113,69 @@ export const CLASSIFIER_CLI_LINE = 'node scripts/ci-routing.mjs check --github-o
 /** changes 作业 outputs.mode 的**逐字**映射（评审补洞：改指 bootstrap 步的输出必须红）。 */
 export const CHANGES_OUTPUTS_MODE = '${{ steps.classify.outputs.mode }}';
 
+/**
+ * 四条 CLI 步 run 块的**整块指纹**（判据：changes-wiring / docs-fast-path / notice-fast-path /
+ * result-gate；2026-11-09 评审补洞，实测越过判据的四种形态全部全绿）：
+ *   · `classify` 步里**同一 run 再串一条**分类器（`node … check --github-output --base …`
+ *     缩小差异范围）——按步计数只看到一条步，后写的那次覆盖 outputs.mode；
+ *   · 四条 CLI 行尾追加 `|| true`（judgeResult / docs / notice / classify）——
+ *     判据只查"字符串在场"，退出码被抑制后 full 链/汇总器失败照样绿；
+ *   · judgeResult 的**参数被换成常量**（`--full "${{ needs.full.result }}"` → `--full success`）
+ *     ——汇总器永远放行，判据只查"有 judgeResult 这个串"；
+ *   · CLI 步挂 `env: NODE_OPTIONS: --require …` / 改 `shell:` 模板 —— run 一字未动，
+ *     单看 run 的指纹看不见（node 侧可改退出码）。
+ * 根因同 trusted-gate 的 overlay：**令牌在场 ≠ 语义成立**。因此 CLI 步也改为**整块逐字全等**
+ * （与 `INSTALL_COMMAND` / `TRUSTED_OVERLAY_RUN` 同款），并把 CLI 步允许出现的 YAML 键收窄到
+ * allowlist（`CLI_STEP_KEYS`）：多出 `env:` / `working-directory:` / `uses:` 等键 = 判红。
+ * 改写 CLI 步的形状必须显式成对改这里与 workflow —— 这正是"门禁接线也是代码"的代价。
+ */
+export const CLASSIFY_RUN = [
+  'if [ -n "${{ github.event.pull_request.base.sha }}" ]; then',
+  'BASE_ARGS=(--base "${{ github.event.pull_request.base.sha }}" --head "${{ github.event.pull_request.head.sha }}" --base-mode merge-base)',
+  'elif [ -n "${{ github.event.before }}" ]; then',
+  'BASE_ARGS=(--base "${{ github.event.before }}" --head "${{ github.event.after }}" --base-mode exact)',
+  'else',
+  'BASE_ARGS=(--base "${{ github.sha }}" --head "${{ github.sha }}" --base-mode exact)',
+  'fi',
+  'node scripts/ci-routing.mjs check --github-output "${BASE_ARGS[@]}"',
+].join('\n');
+/** docs 快通道 CLI 步 run 块的逐字指纹（同一事件分支 + `docs` 子命令）。 */
+export const DOCS_CLI_RUN = [
+  'if [ -n "${{ github.event.pull_request.base.sha }}" ]; then',
+  'BASE_ARGS=(--base "${{ github.event.pull_request.base.sha }}" --head "${{ github.event.pull_request.head.sha }}" --base-mode merge-base)',
+  'elif [ -n "${{ github.event.before }}" ]; then',
+  'BASE_ARGS=(--base "${{ github.event.before }}" --head "${{ github.event.after }}" --base-mode exact)',
+  'else',
+  'BASE_ARGS=(--base "${{ github.sha }}" --head "${{ github.sha }}" --base-mode exact)',
+  'fi',
+  'node scripts/ci-routing.mjs docs "${BASE_ARGS[@]}"',
+].join('\n');
+/** notice 快通道 CLI 步 run 块的逐字指纹（同一事件分支 + `notice` 子命令）。 */
+export const NOTICE_CLI_RUN = DOCS_CLI_RUN.replace('ci-routing.mjs docs', 'ci-routing.mjs notice');
+/** 汇总作业 judgeResult 步 run 块的逐字指纹（参数映射原样 pin：改一个常量 = 汇总器恒放行）。 */
+export const RESULT_JUDGE_RUN = [
+  'node scripts/ci-routing.mjs judgeResult \\',
+  '--mode "${{ needs.changes.outputs.mode }}" \\',
+  '--changes "${{ needs.changes.result }}" \\',
+  '--docs "${{ needs.docs.result }}" \\',
+  '--notice "${{ needs.notice.result }}" \\',
+  '--full "${{ needs.full.result }}" \\',
+  '--github-output',
+].join('\n');
+
+/**
+ * CLI 步允许出现的键（解析器内部键也算）。多出来的键就是**整步级旁路**：
+ * `env:`（NODE_OPTIONS/BASH_ENV 注入）、`working-directory:`（换目录跑别的同名脚本）、
+ * `uses:`（把 run 换成 composite action）。判据要求 CLI 步是"纯 run 步"。
+ */
+export const CLI_STEP_KEYS = ['index', 'line', 'end', 'indent', 'name', 'uses', 'run', 'shell', 'continueOnError', 'if', 'id'];
+
+/** 这一步多出来的 YAML 键（不在 CLI_STEP_KEYS 里）；空数组 = 形状干净。 */
+export function unexpectedStepKeys(step) {
+  if (!step) return ['缺步骤'];
+  return Object.keys(step).filter((k) => !CLI_STEP_KEYS.includes(k));
+}
+
 const ITEM_RE = /^(\s*)-\s+(\S.*)$/;
 const KEY_RE = /^([A-Za-z_][\w-]*):\s*(.*)$/;
 
@@ -408,19 +471,27 @@ export function auditCiWorkflow(input) {
     return diffAligned(t) && t.includes(DIFF_PUSH_BASE_EXPR) && t.includes(DIFF_PUSH_HEAD_EXPR)
       && t.includes(DIFF_DISPATCH_EXPR) && t.includes(BASE_MODE_MERGE_BASE) && t.includes(BASE_MODE_EXACT);
   };
-  const docsSameDiff = docsCliHits.length === 1 && diffAlignedFull(docsCliHits[0].run);
+  const docsStep = docsCliHits.length === 1 ? docsCliHits[0] : null;
+  const docsSameDiff = !!docsStep && diffAlignedFull(docsStep.run);
+  const docsRunExact = !!docsStep && String(docsStep.run || '') === DOCS_CLI_RUN;
+  const docsExtra = docsStep ? unexpectedStepKeys(docsStep) : ['缺步骤'];
+  const docsShell = docsStep ? String(docsStep.shell || '').trim() : '';
+  const docsClean = !!docsStep && docsShell === 'bash'
+    && !String(docsStep.if || '').trim() && !docsStep.continueOnError && docsExtra.length === 0;
   const docsHeadCheckout = docs ? docs.steps.some((s) => String(s.ref || '').includes(DIFF_HEAD_EXPR)) : false;
   const docsNpmSteps = docs ? docs.steps.filter((s) => npmScriptOf(s)) : [];
   //    「不装依赖」按**逐行**判（`installsDeps`）：只比首行时，`run: |` 把安装藏到第二行
   //    （首行 `set -e`）就从判据底下溜过去 —— 实测 install=0 仍报绿（C3 盲区 A）。
   const docsInstalls = docs ? docs.steps.filter((s) => installsDeps(s)) : [];
   add('docs-fast-path',
-    'docs 快通道边界：核心步是真 docs CLI（ci-routing.mjs docs · --base/--head 与 changes 按事件分支同一）'
+    'docs 快通道边界：核心步是真 docs CLI（ci-routing.mjs docs · run 块与 DOCS_CLI_RUN **逐字全等**'
+    + ' · --base/--head 与 changes 按事件分支同一 · 纯 run 步：shell: bash，无 if/env/working-directory/uses）'
     + ' · checkout ref 指向 head 树 · 零 npm run 步（不许混入 verify:docs 内务或别的门禁）· 不装依赖 · 有路径 if 守卫',
-    !!docs && docsCliHits.length === 1 && docsSameDiff && docsHeadCheckout
+    !!docs && !!docsStep && docsSameDiff && docsRunExact && docsClean && docsHeadCheckout
       && docsNpmSteps.length === 0 && docsInstalls.length === 0
       && String(docs.if || '').trim().length > 0,
-    docs ? 'cli=' + docsCliHits.length + ' sameDiff=' + docsSameDiff + ' headRef=' + docsHeadCheckout
+    docs ? 'cli=' + docsCliHits.length + ' sameDiff=' + docsSameDiff + ' run块逐字=' + docsRunExact
+      + ' shell=' + (docsShell || '缺') + ' 多余键=' + JSON.stringify(docsExtra) + ' headRef=' + docsHeadCheckout
       + ' npm=' + JSON.stringify(docsNpmSteps.map(npmScriptOf)) + ' install=' + docsInstalls.length
       + ' if=' + briefOf(docs.if) : '缺 docs 作业');
 
@@ -434,18 +505,26 @@ export function auditCiWorkflow(input) {
   const noticeCliHits = noticeJob
     ? noticeJob.steps.filter((s) => /node\s+\S*ci-routing\.mjs\s+notice(?:\s|$)/.test(String(s.run || '')))
     : [];
-  const noticeSameDiff = noticeCliHits.length === 1 && diffAlignedFull(noticeCliHits[0].run);
+  const noticeStep = noticeCliHits.length === 1 ? noticeCliHits[0] : null;
+  const noticeSameDiff = !!noticeStep && diffAlignedFull(noticeStep.run);
+  const noticeRunExact = !!noticeStep && String(noticeStep.run || '') === NOTICE_CLI_RUN;
+  const noticeExtra = noticeStep ? unexpectedStepKeys(noticeStep) : ['缺步骤'];
+  const noticeShell = noticeStep ? String(noticeStep.shell || '').trim() : '';
+  const noticeClean = !!noticeStep && noticeShell === 'bash'
+    && !String(noticeStep.if || '').trim() && !noticeStep.continueOnError && noticeExtra.length === 0;
   const noticeHeadCheckout = noticeJob
     ? noticeJob.steps.some((s) => String(s.ref || '').includes(DIFF_HEAD_EXPR)) : false;
   const noticeNpmSteps = noticeJob ? noticeJob.steps.filter((s) => npmScriptOf(s)) : [];
   const noticeInstalls = noticeJob ? noticeJob.steps.filter((s) => installsDeps(s)) : [];
   add('notice-fast-path',
-    'notice 快通道边界：核心步是真 notice CLI（ci-routing.mjs notice · --base/--head 与 changes 按事件分支同一）'
+    'notice 快通道边界：核心步是真 notice CLI（ci-routing.mjs notice · run 块与 NOTICE_CLI_RUN **逐字全等**'
+    + ' · --base/--head 与 changes 按事件分支同一 · 纯 run 步：shell: bash，无 if/env/working-directory/uses）'
     + ' · checkout ref 指向 head 树 · 零 npm run 步 · 不装依赖 · 有路径 if 守卫',
-    !!noticeJob && noticeCliHits.length === 1 && noticeSameDiff && noticeHeadCheckout
+    !!noticeJob && !!noticeStep && noticeSameDiff && noticeRunExact && noticeClean && noticeHeadCheckout
       && noticeNpmSteps.length === 0 && noticeInstalls.length === 0
       && String(noticeJob.if || '').trim().length > 0,
-    noticeJob ? 'cli=' + noticeCliHits.length + ' sameDiff=' + noticeSameDiff + ' headRef=' + noticeHeadCheckout
+    noticeJob ? 'cli=' + noticeCliHits.length + ' sameDiff=' + noticeSameDiff + ' run块逐字=' + noticeRunExact
+      + ' shell=' + (noticeShell || '缺') + ' 多余键=' + JSON.stringify(noticeExtra) + ' headRef=' + noticeHeadCheckout
       + ' npm=' + JSON.stringify(noticeNpmSteps.map(npmScriptOf)) + ' install=' + noticeInstalls.length
       + ' if=' + briefOf(noticeJob.if) : '缺 notice 作业');
 
@@ -477,14 +556,23 @@ export function auditCiWorkflow(input) {
   const classifyHits = changes
     ? changes.steps.filter((s) => CLASSIFIER_CLI.test(String(s.run || '')))
     : [];
-  const classifyIdx = classifyHits.length ? changes.steps.indexOf(classifyHits[0]) : -1;
-  const classifyLineAt = classifyHits.length === 1
-    ? runLines(classifyHits[0]).findIndex((l) => CLASSIFIER_CLI.test(l))
+  const classifyStep = classifyHits.length === 1 ? classifyHits[0] : null;
+  const classifyIdx = classifyStep ? changes.steps.indexOf(classifyStep) : -1;
+  const classifyLineAt = classifyStep
+    ? runLines(classifyStep).findIndex((l) => CLASSIFIER_CLI.test(l))
     : -1;
   const classifierLineExact = classifyLineAt >= 0
-    && runLines(classifyHits[0])[classifyLineAt] === CLASSIFIER_CLI_LINE;
+    && runLines(classifyStep)[classifyLineAt] === CLASSIFIER_CLI_LINE;
+  // 整块逐字 pin：同 run 串第二条分类器（缩小差异范围/后写覆盖 mode）、行尾 `|| true` 抑制退出码、
+  // 事件分支退化 —— 全部只能通过"改文本"发生 ⇒ 文本不全等即判红（令牌在场 ≠ 语义成立）。
+  const classifierRunExact = !!classifyStep && String(classifyStep.run || '') === CLASSIFY_RUN;
+  // 整步级旁路：env（NODE_OPTIONS/BASH_ENV）/ working-directory / uses / if / continue-on-error / 非 bash shell。
+  const classifyExtra = classifyStep ? unexpectedStepKeys(classifyStep) : ['缺步骤'];
+  const classifyShell = classifyStep ? String(classifyStep.shell || '').trim() : '';
+  const classifyClean = !!classifyStep && classifyShell === 'bash'
+    && !String(classifyStep.if || '').trim() && !classifyStep.continueOnError && classifyExtra.length === 0;
   const sameStepOverwrite = classifyLineAt >= 0
-    && runLines(classifyHits[0]).slice(classifyLineAt + 1)
+    && runLines(classifyStep).slice(classifyLineAt + 1)
       .some((l) => !l.startsWith('#') && (/GITHUB_OUTPUT/.test(l) || /\bmode\s*=/.test(l)));
   const laterOverwrite = classifyIdx >= 0 && changes.steps.slice(classifyIdx + 1)
     .some((s) => /GITHUB_OUTPUT/.test(String(s.run || '')));
@@ -492,16 +580,19 @@ export function auditCiWorkflow(input) {
     ? changes.steps.filter((s) => String(s.id || '').trim() === 'classify').length
     : 0;
   const outputsModePinned = !!changes && changes.outputs.mode === CHANGES_OUTPUTS_MODE;
-  const changesAligned = !!changes && classifyHits.length === 1 && diffAlignedFull(classifyHits[0].run);
+  const changesAligned = !!changes && classifyHits.length === 1 && diffAlignedFull(classifyStep.run);
   add('changes-wiring',
-    'changes 作业恰好一条真分类器步（id: classify 唯一 · 命令行逐字 pin · outputs.mode 逐字 pin）、'
+    'changes 作业恰好一条真分类器步（id: classify 唯一 · run 块与 CLASSIFY_RUN **逐字全等** · outputs.mode 逐字 pin）、'
+    + 'CLI 步是纯 run 步（只许 shell: bash；不得挂 if / continue-on-error / env / working-directory / uses）、'
     + '其后同一步（注释除外）与后续步都不得再写 GITHUB_OUTPUT（后写即覆盖分类结论）、'
     + '差异边界与 docs 腿**按事件分支**同一'
     + '（PR=merge-base 档 / push=exact 档 / dispatch=保守 full；丢分支或丢 --base-mode ⇒ 判红）',
-    changesAligned && classifierLineExact && !sameStepOverwrite && !laterOverwrite
+    changesAligned && classifierRunExact && classifyClean && !sameStepOverwrite && !laterOverwrite
       && classifyIds === 1 && outputsModePinned,
-    changes ? '接线步=' + classifyHits.length + ' alignedFull=' + (classifyHits.length ? diffAlignedFull(classifyHits[0].run) : false)
-      + ' 行逐字=' + classifierLineExact + ' 同步覆写=' + sameStepOverwrite + ' 后续覆写=' + laterOverwrite
+    changes ? '接线步=' + classifyHits.length + ' alignedFull=' + (classifyStep ? diffAlignedFull(classifyStep.run) : false)
+      + ' 行逐字=' + classifierLineExact + ' run块逐字=' + classifierRunExact
+      + ' shell=' + (classifyShell || '缺') + ' 多余键=' + JSON.stringify(classifyExtra)
+      + ' 同步覆写=' + sameStepOverwrite + ' 后续覆写=' + laterOverwrite
       + ' id/classify=' + classifyIds + ' outputs.mode=' + (outputsModePinned ? 'pin' : String(changes.outputs.mode || '缺'))
       : '缺 changes 作业');
 
@@ -511,16 +602,30 @@ export function auditCiWorkflow(input) {
   //    "作业有 always **或任一步有 always**"放行 —— 恰好接受了它自己注释里写明的坏形态，
   //    见 GitHub needs 语义：依赖被 skip 时其步骤不会救活作业）、且 needs 三条腿齐全。
   const resultNeedsOk = !!result && ['changes', 'docs', 'notice', 'full'].every((n) => result.needs.includes(n));
-  const resultAlways = !!result && /always\(\)/.test(String(result.if || ''));
+  // 作业级 if 必须**逐字**等于 always()：子串匹配放行 `always() && false` /
+  // `always() && github.event_name == 'push'` —— PR 事件下汇总作业被 skip，而 GitHub 把必需
+  // check 的 skipped 与 success 同形对待 ⇒ 假绿合入（2026-11-09 评审实测，见 verify-ci-steps 负对照）。
+  const resultIf = result ? String(result.if || '').trim() : '';
+  const resultAlways = resultIf === 'always()';
   const resultAlwaysStepOnly = !!result && !resultAlways
     && result.steps.some((s) => /always\(\)/.test(String(s.if || '')));
-  const resultJudge = !!result && result.steps.some((s) => String(s.run || '').includes('judgeResult'));
+  // judgeResult 步：恰好一条、run 块逐字等于 RESULT_JUDGE_RUN（`--full success` 这类参数替换 =
+  // 汇总器恒放行）、纯 run 步（此前只查"有 judgeResult 这个串"：`|| true`、env 注入、非默认
+  // shell 都能骗过它）。
+  const judgeHits = result ? result.steps.filter((s) => String(s.run || '').includes('judgeResult')) : [];
+  const judgeStep = judgeHits.length === 1 ? judgeHits[0] : null;
+  const judgeRunExact = !!judgeStep && String(judgeStep.run || '') === RESULT_JUDGE_RUN;
+  const judgeExtra = judgeStep ? unexpectedStepKeys(judgeStep) : ['缺步骤'];
+  const judgeClean = !!judgeStep && !String(judgeStep.shell || '').trim()
+    && !String(judgeStep.if || '').trim() && !judgeStep.continueOnError && judgeExtra.length === 0;
   add('result-gate',
-    '汇总作业 needs [changes, docs, notice, full] · **作业级** if: always()（步骤级不作数）'
-    + ' · 用 judgeResult 核验（失败/取消/缺失/意外跳过/未知 mode 都不放行）',
-    !!result && resultNeedsOk && resultAlways && resultJudge,
-    result ? 'needs=' + JSON.stringify(result.needs) + ' 作业级always=' + resultAlways
-      + (resultAlwaysStepOnly ? '（步骤级有但作业级没有 —— 不作数）' : '') + ' judge=' + resultJudge
+    '汇总作业 needs [changes, docs, notice, full] · 作业级 if **逐字** always()（子串不算：'
+    + '`always() && false` 会让汇总作业被 skip） · judgeResult 步恰好一条且 run 块逐字等于 RESULT_JUDGE_RUN'
+    + '（参数映射逐一 pin · 纯 run 步：无 shell/env/if/continue-on-error）',
+    !!result && resultNeedsOk && resultAlways && judgeRunExact && judgeClean,
+    result ? 'needs=' + JSON.stringify(result.needs) + ' if=' + briefOf(result.if, 60) + ' 逐字always=' + resultAlways
+      + (resultAlwaysStepOnly ? '（步骤级有但作业级不逐字 —— 不作数）' : '')
+      + ' judge步=' + judgeHits.length + ' run块逐字=' + judgeRunExact + ' 多余键=' + JSON.stringify(judgeExtra)
       : '缺 result 作业');
 
   // ⑦-b 判定脚本信任边界（P0）：changes / docs / notice / result 四个作业都必须先取 base 分支的
@@ -554,6 +659,15 @@ export function auditCiWorkflow(input) {
     }
     if (String(overlay.if || '').trim() || overlay.continueOnError) {
       gateFailures.push(id + ':overlay 步挂了 if / continue-on-error（运行时可整步跳过）'); continue;
+    }
+    // 整步级旁路：override 的 run 一字未动，只把 shell 模板换成 `bash {0} || true`（失败不致命）
+    // 或挂 env（GIT_CONFIG_* / BASH_ENV）—— overlay 必须是纯 run 步。
+    if (String(overlay.shell || '').trim() !== 'bash') {
+      gateFailures.push(id + ':overlay 步 shell 不是 bash（shell 模板可吞掉 git show 失败）'); continue;
+    }
+    const overlayExtra = unexpectedStepKeys(overlay);
+    if (overlayExtra.length) {
+      gateFailures.push(id + ':overlay 步多出键 ' + JSON.stringify(overlayExtra) + '（env/working-directory 等可改取脚本行为）'); continue;
     }
     // 触碰面：作业内提到判定脚本路径的步必须恰好是 overlay + CLI 两步、且顺序正确。
     const touchers = job.steps.filter((s) => TRUSTED_PATH_RE.test(String(s.run || '')));
@@ -801,6 +915,23 @@ export function setStepIf(text, fragment, value) {
   const runAt = lines.findIndex((l, i) => i >= step.line && i < step.end && /^\s*run\s*:/.test(l));
   const indent = runAt >= 0 ? (lines[runAt].match(/^\s*/) || [''])[0] : ' '.repeat(step.indent + 2);
   lines.splice(runAt >= 0 ? runAt : step.end, 0, indent + 'if: ' + value);
+  return lines.join('\n');
+}
+
+/**
+ * 给某一步插入 `env:` 块（按 name/run 片段定位；找不到 ⇒ 恒等）。
+ * 负对照用：CLI 步 run 一字未动，只靠 `env: NODE_OPTIONS: --require ./hack.cjs`
+ * 就能在 node 侧改退出码 —— 判据必须看见"多出来的键"。
+ */
+export function setStepEnv(text, fragment, envBody) {
+  const { steps, lines } = parseWorkflow(text);
+  const step = steps.find((s) => matchesFragment(s, fragment));
+  if (!step) return text;
+  const runAt = lines.findIndex((l, i) => i >= step.line && i < step.end && /^\s*run\s*:/.test(l));
+  const indent = runAt >= 0 ? (lines[runAt].match(/^\s*/) || [''])[0] : ' '.repeat(step.indent + 2);
+  const body = String(envBody == null ? '' : envBody).split('\n');
+  lines.splice(runAt >= 0 ? runAt : step.end, 0, indent + 'env:',
+    ...body.map((l) => indent + '  ' + l));
   return lines.join('\n');
 }
 

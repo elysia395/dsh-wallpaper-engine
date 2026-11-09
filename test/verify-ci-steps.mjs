@@ -41,10 +41,12 @@ import {
   setContinueOnError,
   setJobIf,
   setPermissionScope,
+  setStepEnv,
   setStepIf,
   swapSteps,
   swapStepsNamed,
   topLevelPermissions,
+  unexpectedStepKeys,
 } from './tools/ci-workflow.mjs';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
@@ -179,6 +181,60 @@ control('P04：ci/result 的 always() 挪到步骤级',
   setStepIf(setJobIf(workflowText, 'result', ''), 'judgeResult', 'always()'), 'result-gate');
 control('ci/result 不用 judgeResult', removeLineMatching(workflowText, /judgeResult/), 'result-gate');
 control('ci/result 少 needs 一条腿', removeLineMatching(workflowText, /needs: \[changes, docs, notice, full\]/), 'result-gate');
+
+/* ── ③-e 2026-11-09 评审 P0：result-gate 与四条 CLI 步的"令牌在场 ≠ 语义成立"补洞 ────────
+ * 旧 result-gate 只查 `/always\(\)/` 子串 + "run 里有 judgeResult 这个串"：
+ *   · `always() && false` / `always() && event == 'push'` —— 汇总作业在 PR 事件下被 skip，
+ *     而 GitHub 把必需 check 的 skipped 与 success 同形对待 ⇒ 假绿合入；
+ *   · judgeResult 行尾 `|| true`、参数换常量（`--full success`）、env 注入 —— 汇总器恒放行。
+ * 旧 changes-wiring 按"步"计数 + 只扫分类器行**之后**的行：
+ *   · 同一 run 再串一条分类器（改差异范围/档位）⇒ 后写覆盖 outputs.mode，判据只看到一条步；
+ *   · 行尾 `|| true`、env/shell 模板旁路 —— run 文本一字未动也能量掉退出码。
+ * 现在四条 CLI 步都整块逐字 pin + 键 allowlist：以下每条都必须判红。 */
+control('P0：result 作业 if 改成 always() && false',
+  setJobIf(workflowText, 'result', '${{ always() && false }}'), 'result-gate');
+control('P0：result 作业 if 改成仅在 push 上跑（PR 下被 skip）',
+  setJobIf(workflowText, 'result', "${{ always() && github.event_name == 'push' }}"), 'result-gate');
+control('P0：judgeResult 行尾追加 || true（抑制汇总器退出码）',
+  workflowText.replace('            --github-output', '            --github-output || true'), 'result-gate');
+control('P0：judgeResult 的 --full 参数换成常量 success',
+  workflowText.replace('--full "${{ needs.full.result }}"', '--full success'), 'result-gate');
+control('P0：judgeResult 步注入 env（NODE_OPTIONS --require 改退出码）',
+  setStepEnv(workflowText, 'ci/result —— 汇总核验', 'NODE_OPTIONS: --require ./hack.cjs'), 'result-gate');
+control('P0：classify 同一 run 串第二条分类器（改差异范围/覆盖 mode）', workflowText.replace(
+  'node scripts/ci-routing.mjs check --github-output "${BASE_ARGS[@]}"',
+  'node scripts/ci-routing.mjs check --github-output "${BASE_ARGS[@]}"\n'
+  + '          node scripts/ci-routing.mjs check --github-output --base "$(git rev-parse HEAD^)" --head "$(git rev-parse HEAD)" --base-mode exact'),
+  'changes-wiring');
+control('P0：classify 行尾追加 || true',
+  workflowText.replace('node scripts/ci-routing.mjs check --github-output "${BASE_ARGS[@]}"',
+    'node scripts/ci-routing.mjs check --github-output "${BASE_ARGS[@]}" || true'), 'changes-wiring');
+control('P0：classify 步注入 env（BASH_ENV / NODE_OPTIONS）',
+  setStepEnv(workflowText, '分类这次差异', 'BASH_ENV: ./hack.sh'), 'changes-wiring');
+control('P0：classify 步 shell 模板改成 bash {0} || true',
+  workflowText.replace(
+    '      - name: 分类这次差异（docs / docs-assets / full，fail-closed）\n        id: classify\n        shell: bash',
+    '      - name: 分类这次差异（docs / docs-assets / full，fail-closed）\n        id: classify\n        shell: bash {0} || true'),
+  'changes-wiring');
+// overlay 步的同类旁路：run 一字未动，只换 shell 模板（git show 失败不致命 ⇒ 信任边界 fail-open）。
+control('P0：overlay 步 shell 模板改成 bash {0} || true',
+  workflowText.replace(
+    '      - name: 取受信判定脚本（base 分支，覆盖 PR 树里的同名文件）\n        shell: bash\n        run: |',
+    '      - name: 取受信判定脚本（base 分支，覆盖 PR 树里的同名文件）\n        shell: bash {0} || true\n        run: |'),
+  'trusted-gate');
+control('P0：docs CLI 行尾追加 || true',
+  workflowText.replace('node scripts/ci-routing.mjs docs "${BASE_ARGS[@]}"',
+    'node scripts/ci-routing.mjs docs "${BASE_ARGS[@]}" || true'), 'docs-fast-path');
+control('P0：notice CLI 行尾追加 || true',
+  workflowText.replace('node scripts/ci-routing.mjs notice "${BASE_ARGS[@]}"',
+    'node scripts/ci-routing.mjs notice "${BASE_ARGS[@]}" || true'), 'notice-fast-path');
+control('P0：docs CLI 步注入 env（NODE_OPTIONS --require）',
+  setStepEnv(workflowText, 'docs —— 同一差异二次分类', 'NODE_OPTIONS: --require ./hack.cjs'), 'docs-fast-path');
+// 键 allowlist 本体自检：干净 run 步无多余键；env 注入后被看见。
+check('unexpectedStepKeys：干净 CLI 步无多余键', unexpectedStepKeys({ run: 'node x' }).length === 0);
+check('unexpectedStepKeys：env / NODE_OPTIONS 被看见',
+  JSON.stringify(unexpectedStepKeys({ run: 'node x', env: '', NODE_OPTIONS: 'y' })) === JSON.stringify(['env', 'NODE_OPTIONS']),
+  JSON.stringify(unexpectedStepKeys({ run: 'node x', env: '', NODE_OPTIONS: 'y' })));
 control('改用 pull_request_target', insertTopLevel(workflowText, 'pull_request_target:\n  branches: [main]'), 'fork-safety');
 control('顶层加 paths-ignore', insertTopLevel(workflowText, 'paths-ignore:\n  - "docs/**"'), 'fork-safety');
 control('checkout 不取全历史', removeLineMatching(workflowText, /fetch-depth: 0/), 'checkout-depth');
@@ -235,6 +291,7 @@ check('变异器恒等：insertNpmStepAfter 对不存在的锚点',
   insertNpmStepAfter(workflowText, 'verify:bogus', 'lint') === workflowText);
 check('变异器恒等：setJobIf 对不存在的作业', setJobIf(workflowText, 'nope', 'true') === workflowText);
 check('变异器恒等：setStepIf 对不存在的片段', setStepIf(workflowText, '不存在的步骤片段', 'always()') === workflowText);
+check('变异器恒等：setStepEnv 对不存在的片段', setStepEnv(workflowText, '不存在的步骤片段', 'A: 1') === workflowText);
 
 // 正对照：脚本表为空时"每个 npm 步骤的脚本都存在"必须判红（否则那条判据永远真）。
 const emptyScripts = auditCiWorkflow({ workflowText, scripts: {} });
