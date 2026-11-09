@@ -514,40 +514,26 @@ function main() {
       !clear('background: rgba(28, 28, 28, 0.19) !important; backdrop-filter: none !important; -webkit-backdrop-filter: none !important;'));
     const chip = normal.find((r) => r.header.includes('[data-chat-flow] :not(pre) > code')
       && r.header.includes('[data-vcp-rawhtml] :not(pre) > code'));
-    check('F2d3 inline capsules restore ten-percent white mist and independent 8px frost',
+    check('F2d3 inline capsules keep the ten-percent mist and carry no backdrop carrier',
       normal.some((r) => r.header === 'body[data-we-glass-page][data-we-thinking-glass]'
         && declValue(r.body, '--dsw-alias-markdown-inline-code') === 'var(--we-capsule-glass-fill)')
       && normal.some((r) => r.header === 'body[data-we-glass-page]'
         && declValue(r.body, '--we-capsule-glass-fill') === 'rgba(var(--we-capsule-tint-rgb, 255, 255, 255), var(--we-inline-code-alpha, 0.10))')
       && !!chip && /background: var\(--dsw-alias-markdown-inline-code\) !important/.test(chip.body)
-      && declValue(chip.body, 'backdrop-filter') === 'blur(var(--we-inline-code-blur, 8px)) saturate(var(--we-saturate, 1.3)) brightness(var(--we-glass-brightness, 1.04))'
+      && declValue(chip.body, 'backdrop-filter') === 'none !important'
       && declValue(chip.body, '-webkit-backdrop-filter') === declValue(chip.body, 'backdrop-filter')
       && declValue(chip.body, 'background-image') === 'none !important'
       && (declValue(chip.body, 'border-color') || '').startsWith('var(--dsw-alias-border-l2')
       && declValue(chip.body, 'border-color') === 'var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.14)) !important'
       && !/(?:^|[;\s])(?:color|filter|opacity)\s*:/.test(chip.body));
-    // #197：推理正文由宿主用 compact 变体渲染（宿主模块类带 _thinkBody 后缀），那里的
-    // 行内代码是 display:inline。跨行折断时 backdrop-filter 的取值区取的是**所有行盒的
-    // 外接矩形**，于是胶囊霜釉长成一条横贯整列的矩形底板、盖住同行普通文字。修复=在推理
-    // 正文子树里**只撤模糊载体、保留胶囊填充**（宿主自身的 box-decoration-break: clone
-    // 已把背景按行盒分片）。判据两头钉：① 收口规则在位，且同时带玻璃门与 :not(pre) 围栏
-    // 排除；② 原 chip 规则的霜釉**不得被就地删掉** —— 否则"局部收口"退化成"全局摘霜"，
-    // 助手正文的胶囊也一起失去磨砂。
-    const capsuleScope = (header) => header.includes('[data-we-glass-page]')
-      && header.includes('[data-we-thinking-glass]')
-      && header.includes(':not(pre) > code');
-    const noFrost = (body) => /(?:^|[;\s])backdrop-filter: none !important/.test(body)
-      && /-webkit-backdrop-filter: none !important/.test(body)
-      && !/(?:^|[;\s])background(?:-color)?\s*:/.test(body);
-    // 特异性计数器（Selectors 规范的三级元组 #id / .class·[attr]·:pseudo / 元素名）。
-    // :is() 取最具体实参、:where() 计零、:not() 计其实参。逐条对教科书样例校准过：
-    // * → 0-0-0、li → 0-0-1、ul ol+li → 0-0-3、h1 + *[rel=up] → 0-1-1、li.red.level → 0-2-1。
-    const SPEC_ORDER = (a, b) => (a[0] - b[0]) || (a[1] - b[1]) || (a[2] - b[2]);
-    // 按**顶层**逗号拆选择器列表：`:is()` / `:not()` 实参里的逗号不是列表分隔符。
-    // 朴素 `header.split(',')` 会把 `:is(a, b)` 切成两段、留下一个没有闭括号的 `:is(`，
-    // 伪类计数被误加 —— 实测把收口规则的真实 0-4-3 算成 0-5-1，于是"特异性压过"那条
-    // 判据靠错误数字蒙混通过，只有负对照（去 [data-chat-flow] 应与原规则相等）把它咬出来。
-    const splitTop = (s) => {
+    // 胶囊的霜没了：backdrop-filter 载体会把胶囊背后的壁纸重新采样并重绘（壁纸自己的
+    // 细节变成糊条，读起来像文字被模糊了），跨行盒时还会断裂、糊成一条盖住同行普通文字
+    // 的横板（#197）。判据因此比 #197 那三条更强也更简单：**思考玻璃门下，任何规则都
+    // 不得给行内代码胶囊一个 backdrop-filter 载体**。
+    // 选取**不挑写法**：判据看的是选择器的**主语**（最后一个顶层 ">" 之后的复合选择器是不是
+    // code），不是某一种字面写法 —— "… [data-chat-flow] code {…}" 这类别写法也必须被收进来；
+    // 围栏（"pre > code"）不是行内胶囊，仍然放行。
+    const splitSelectors = (s) => {
       const out = [];
       let depth = 0;
       let cur = '';
@@ -559,49 +545,39 @@ function main() {
       out.push(cur);
       return out;
     };
-    const specificity = (header) => {
-      const oneSel = (sel) => {
-        let s = sel.replace(/:is\(([^()]*(?:\([^()]*\)[^()]*)*)\)/g, (_, inner) => {
-          const parts = splitTop(inner).map((p) => p.trim()).filter(Boolean);
-          return parts.reduce((best, cur) => (SPEC_ORDER(oneSel(cur), oneSel(best)) > 0 ? cur : best), parts[0] || '');
-        });
-        s = s.replace(/:where\([^()]*\)/g, ' ').replace(/:not\(([^()]*)\)/g, ' $1 ');
-        return [
-          (s.match(/#[\w-]+/g) || []).length,
-          (s.match(/\.[\w-]+|\[[^\]]+\]|:(?!:)[\w-]+(?:\([^)]*\))?/g) || []).length,
-          (s.match(/(?:^|[\s>+~])([a-zA-Z][\w-]*)/g) || []).length,
-        ];
-      };
-      return splitTop(header).map((p) => oneSel(p.trim()))
-        .reduce((best, cur) => (SPEC_ORDER(cur, best) > 0 ? cur : best), [0, 0, 0]);
+    const selectorSubject = (selector) => {
+      let depth = 0;
+      let cut = -1;
+      const s = selector.trim();
+      for (let i = 0; i < s.length; i += 1) {
+        const ch = s[i];
+        if (ch === '(') depth += 1;
+        else if (ch === ')') depth -= 1;
+        else if (ch === '>' && depth === 0) cut = i;
+      }
+      return (cut >= 0 ? s.slice(cut + 1) : s).trim();
     };
-    const thinkBodyCode = normal.filter((r) => r.header.includes('[class*="_thinkBody"]')
-      && r.header.includes(':not(pre) > code'));
-    const thinkChip = thinkBodyCode[0];
-    check('F2d3b 推理正文（compact 变体）行内代码只撤模糊载体、保留胶囊填充（#197）',
-      thinkBodyCode.length >= 1
-      && thinkBodyCode.every((r) => capsuleScope(r.header) && noFrost(r.body))
-      && !!chip && /backdrop-filter: blur\(var\(--we-inline-code-blur, 8px\)\)/.test(chip.body),
-      (thinkChip ? thinkChip.header : 'no _thinkBody capsule rule'));
-    // 收口规则必须**顺序无关地**压过原规则。两条都带 !important，若特异性相等，唯一决胜
-    // 因素就是源码顺序 —— 浏览器里把新规则挪到原规则之前，#197 会静默复活，而只看
-    // "规则在位 / 带门 / 保留 :not(pre)" 的判据抓不到（变异实测：对调后套件仍全绿）。
-    const thinkSpec = thinkChip ? specificity(thinkChip.header) : null;
-    const chipSpec = chip ? specificity(chip.header) : null;
-    check('F2d3b2 收口规则的特异性严格压过原 chip 规则（顺序无关，不靠后置取胜）',
-      !!thinkSpec && !!chipSpec && SPEC_ORDER(thinkSpec, chipSpec) > 0,
-      'closing=' + (thinkSpec ? thinkSpec.join('-') : 'n/a')
-        + ' · original=' + (chipSpec ? chipSpec.join('-') : 'n/a'));
-    check('negative control: 抽掉 [data-chat-flow] 后两条特异性相等，顺序又成为唯一决胜因素（#197）',
-      !!thinkChip && !!chipSpec
-      && SPEC_ORDER(specificity(thinkChip.header.replaceAll('[data-chat-flow]', '')), chipSpec) === 0);
-    // 语义锚点必须扛事：_thinkBody 是构建期哈希的一半，docs/CODE-STRUCTURE.md §13 判其
-    // 稳定性为低、明确不许把用户可见功能单独挂上去（宿主改个类名就静默复发）。
-    check('F2d3b3 收口规则带着语义锚点 [data-variant="think"]，不只挂类名后缀（#197）',
-      !!thinkChip && thinkChip.header.includes('[data-variant="think"]'));
-    check('negative control: 少了思考玻璃门的收口规则等于全局摘霜（#197）',
-      thinkBodyCode.length >= 1
-      && !capsuleScope(thinkBodyCode[0].header.replaceAll('[data-we-thinking-glass]', '')));
+    const isInlineCodeSubject = (selector) => {
+      if (selector.includes('pre >')) return false;
+      return /(?:^|[\s>+~])code$/.test(selectorSubject(selector));
+    };
+    const capsuleRules = normal.filter((r) => r.header.includes('[data-we-thinking-glass]')
+      && splitSelectors(r.header).some((s) => isInlineCodeSubject(s)));
+    const carrierless = (body) => declValue(body, 'backdrop-filter') === 'none !important'
+      && declValue(body, '-webkit-backdrop-filter') === 'none !important';
+    check('F2d3b 行内代码胶囊在思考玻璃门下不带 backdrop-filter 载体（无霜 ⇒ 无重采样、无跨行盒并集）',
+      capsuleRules.length >= 1 && capsuleRules.every((r) => carrierless(r.body)),
+      'capsule rules=' + capsuleRules.length
+        + (capsuleRules[0] ? ' · first=' + capsuleRules[0].header : ''));
+    check('negative control: 带霜的胶囊规则会被同一判据判红、无霜的放行',
+      !carrierless('backdrop-filter: blur(var(--we-inline-code-blur, 8px)) !important;')
+      && carrierless('backdrop-filter: none !important; -webkit-backdrop-filter: none !important;'));
+    check('negative control: 另一种写法的行内代码选择器也会被收进同一条判据（判据不挑写法）',
+      isInlineCodeSubject('body[data-we-glass-page][data-we-thinking-glass] [data-chat-flow] code')
+      && isInlineCodeSubject('body[data-we-glass-page][data-we-thinking-glass] [data-chat-flow] :not(pre) code')
+      && isInlineCodeSubject('body[data-we-glass-page][data-we-thinking-glass] [data-chat-flow] :not(pre) > code')
+      && !isInlineCodeSubject('body[data-we-glass-page][data-we-thinking-glass] [data-chat-flow] .md-code-block pre > code')
+      && !isInlineCodeSubject('body[data-we-glass-page][data-we-thinking-glass] [data-vcp-rawhtml] > div > div:has(> pre > code):has(> div > button[title="复制代码"])'));
     const tools = normal.find((r) => declValue(r.body, 'background-color') === 'var(--we-tool-glass-fill) !important');
     const toolScope = (header) => header.split(',').every((selector) =>
       selector.includes('[data-we-glass-page][data-we-thinking-glass]') && selector.includes('[data-chat-flow]')
@@ -643,6 +619,37 @@ function main() {
         && /color: var\(--dsw-alias-label-primary\) !important/.test(r.body))
       && all.some((r) => r.header.includes('data-we-glass-fallback')
         && /--we-chat-glass-fill: color-mix\(in srgb, var\(--we-readability-base\) 92%, transparent\)/.test(r.body)));
+
+    // ── F2h markdown 表格（思考玻璃门下）────────────────────────────────────
+    // 表格这块以前**一条规则都没有**：宿主用 .5px 发丝线画网格、表格自己没
+    // 有面、表头没有强调 ⇒ 壁纸上整张表读起来是一堆悬空的字。这三条新规则
+    // （底面 / 表头带 / 两级边框）必须被钉住，否则将来删掉任何一条都全绿。
+    const tableRules = normal.filter((r) => r.header.includes('[data-we-thinking-glass]')
+      && /\btable\b/.test(r.header));
+    const tableSelectors = tableRules.flatMap((r) => splitSelectors(r.header));
+    const hasTablePlate = tableRules.filter((r) => /(^|[\s>+~])table$/.test(r.header.trim()));
+    const hasHeaderBand = tableRules.filter((r) => /table\s+th$/.test(r.header.trim()));
+    const hasCellBorder = tableRules.filter((r) => /table\s+td$/.test(r.header.trim()));
+    check('F2h markdown 表格在思考玻璃门下：底面带可读性下限、表头带抬起、两级边框都落在插件的边框族',
+      tableRules.length >= 4
+      && hasTablePlate.length >= 1
+      && hasTablePlate.every((r) => hasVeil(declValue(r.body, 'background'), 'table plate').ok)
+      && hasHeaderBand.length >= 1
+      && hasHeaderBand.every((r) => /background-color: rgba\(180, 180, 180, calc\(var\(--we-border-alpha/.test(r.body)
+        && /border-bottom: 1px solid rgba\(180, 180, 180, min\(0\.8, calc\(var\(--we-border-alpha/.test(r.body)
+        && declValue(r.body, 'color') === 'var(--dsw-alias-label-primary) !important')
+      && hasCellBorder.length >= 1
+      && hasCellBorder.every((r) => /border-bottom: 1px solid rgba\(180, 180, 180, calc\(var\(--we-border-alpha/.test(r.body)),
+      'table rules=' + tableRules.length + ' plate=' + hasTablePlate.length
+        + ' th=' + hasHeaderBand.length + ' td=' + hasCellBorder.length);
+    check('F2h 表格规则的锚点只用语义元素与宿主写死的属性（不挂宿主 CSS 模块哈希类名）',
+      tableSelectors.length > 0
+      && tableSelectors.every((s) => !/\[class\*=/.test(s) && !/\[class\^=/.test(s))
+      && tableSelectors.every((s) => /\[data-chat-flow\]/.test(s) || /\[data-vcp-rawhtml\]/.test(s)),
+      tableSelectors.join(' | ').slice(0, 120));
+    check('negative control: 挂着宿主哈希类名的表格选择器会被同一判据判红',
+      /\[class\*=/.test('body[data-we-glass-page] [class*="_tableScroll_rve47_199"] table')
+      && tableSelectors.every((s) => !/\[class\*=/.test(s)));
   }
 
   // 负对照（DEV-GUIDE §4.7 约定 5：变异输入必须喂进**同一条判据**）：把一条真实声明改坏

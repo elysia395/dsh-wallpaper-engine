@@ -191,7 +191,7 @@ function renderAppearanceGlassSection(ctx) {
     if (sel.thinkingGlass === true && sel.thinkingNative !== true) {
       advRows.push(SliderRow(weT("胶囊雾化"), 0, 60, 1,
         sel.capsuleBlur, onCapsuleBlur, "px", "capsule-blur", {
-        tooltip: weT("正文里行内代码胶囊、新会话按钮、导航按钮的模糊半径 —— 越大越像磨砂玻璃。只在这些胶囊吃玻璃（思考块液态玻璃开着）时生效；0 = 关掉雾化。"),
+        tooltip: weT("正文里新会话按钮、导航按钮的模糊半径 —— 越大越像磨砂玻璃。只在这些胶囊吃玻璃（思考块液态玻璃开着）时生效；0 = 关掉雾化。"),
       }));
       // 胶囊釉色（capsuleColor，默认白 = 原观感）：与胶囊雾化同族同门。色板行不做
       // 可读性钳制（10% 雾底不是正文面，理由见 schema 注释）。
