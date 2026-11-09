@@ -22,6 +22,9 @@ let pendingReveal = null; // { node, outgoing, tr, fade, hooks }
 function noteLayerContent(el) {
   if (el && typeof el.__weContent === "function") el.__weContent();
 }
+function liveFrameHasContent(frame) {
+  return !!frame && /(?:^|\s)we-live-(?:on|fallback-ready)(?:\s|$)/.test(frame.className);
+}
 // 这一层现在有画面吗（同步判定）。判不了（精简 DOM，没有选择器）时不拦 —— 闸门只用
 // 来避免"显示了但没有画面"，不是给所有路径加一道等待。
 function layerContentReady(node) {
@@ -36,7 +39,7 @@ function layerContentReady(node) {
     if (poster.style && String(poster.style.backgroundImage || "")) return true;
     if (poster.dataset && poster.dataset.weContent === "pending") {
       const liveNow = node.querySelector("iframe.we-live-iframe");
-      return !!(liveNow && String(liveNow.className).indexOf("we-live-on") !== -1);
+      return liveFrameHasContent(liveNow);
     }
     return true;
   }
@@ -66,7 +69,7 @@ function layerContentReady(node) {
     return videoContentReady(video);
   }
   const live = node.querySelector("iframe.we-live-iframe");
-  if (live) return String(live.className).indexOf("we-live-on") !== -1;
+  if (live) return liveFrameHasContent(live);
   // 裸 iframe（web 旧链）的画面由它自己的文档决定，外面读不到 —— 不拦。
   // 空层没有任何可等的媒体，拦下去就永远放不出来。
   return true;

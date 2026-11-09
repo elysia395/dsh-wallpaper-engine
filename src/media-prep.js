@@ -131,6 +131,27 @@ function prepareSceneLiveStage(w, prep, onReady, onFail) {
   prepTimeout(prep, poll, 300); // 首拍稍早：小 pkg 可能一帧内就绪
 }
 
+// 全屏占位要作者原图：`?full=1` 让 `/preview/<token>` 直出源图（卡片仍拿缩略图）。
+// 查询串必须用 URL 拼，不能字符串相加 —— preview 一旦自带查询串（或以后换成绝对
+// URL），`${preview}?full=1` 就会拼出第二个 `?`（`/preview/x?w=320?full=1`）。
+// 根路径仍按**相对形态**返回：领养静态帧探针按 src 属性的字符串相等比对
+//（src/client/rotation.js 的 consumePreparedMedia），把相对路径绝对化会让同一个
+// 地址出现两种写法，预载好的元素会被判为不符而重建（白下载一次原图）。
+function scenePreviewUrl(preview) {
+  if (!preview) return null;
+  const sep = preview.includes("?") ? "&" : "?";
+  const rooted = preview.startsWith("/") && !preview.startsWith("//");
+  const absolute = /^[a-z][a-z0-9+.-]*:/i.test(preview);
+  if (!rooted && !absolute) return `${preview}${sep}full=1`; // 裸相对路径：没有可归一化的基准
+  try {
+    const url = rooted ? new URL(preview, "http://preview.invalid/") : new URL(preview);
+    url.searchParams.set("full", "1");
+    return rooted ? `${url.pathname}${url.search}${url.hash}` : url.href;
+  } catch {
+    return `${preview}${sep}full=1`; // 解析不了的形态保持旧行为（坏地址只影响这张图）
+  }
+}
+
 // 出图来源阶段：GET frameUrl 由 host 从磁盘取（`<key>_gpu.png` 或用户导入的自定义画面），
 // img onload = 解码完成，元素随 commit 移入新层。空槽是 404（no-frame）→ preview 探测；
 // 422 只属于 v=4 自定义画面缺失。preview 也失败 → onFail 跳过。
@@ -146,7 +167,7 @@ function prepareSceneStaticStage(w, prep, onReady, onFail) {
     p.alt = "";
     p.draggable = false;
     p.className = "we-media we-media--fit";
-    p.src = w.preview;
+    p.src = scenePreviewUrl(w.preview);
   };
   if (!w.frameUrl) { tryPreview(); return; }
   // 探针必须加载**提交后真正会显示的那个 URL**：提交时 selection.url 会带上该
@@ -269,7 +290,9 @@ function applySelection(id, opts) {
     return;
   }
   const savedVariant = Number(selection.frameVariants && selection.frameVariants[String(w.id)]) || 0;
-  selection.url = w.type === "scene" ? frameUrlWithVariant(w.frameUrl, savedVariant) : w.media;
+  // 场景全屏占位和静态帧失败回退都需要原图。清单的卡片 URL 不变。
+  selection.previewUrl = w.type === "scene" ? scenePreviewUrl(w.preview) : w.preview || null;
+  selection.url = w.type === "scene" ? frameUrlWithVariant(w.frameUrl, savedVariant) || selection.previewUrl : w.media;
   // 宿主 inventory 权威标记：已有自定义画面时同步进本地记忆（换机/清配置后恢复）。
   if (w.hasCustomFrame) {
     const cf = Object.assign({}, selection.customFrames || {});
@@ -332,8 +355,6 @@ function applySelection(id, opts) {
       }
     }).catch(() => { /* 无音频/探测失败：按钮保持隐藏 */ });
   }
-  // Keep the preview around so a failed static frame can fall back to it.
-  selection.previewUrl = w.preview || null;
   // 网页壁纸的实时抓帧缓存（宿主 inventory 的 liveFrame = /live-frame/<token>）。web 支把它当
   // 垫底图的**第 1 级候选**，并在 live 首帧稳定后向它回填抽帧；不落这条字段，那一整支
   //（候选、抽帧定时器、"真实渲染帧"那条取色腿）在客户端就没有入口。与 previewUrl 同址。
@@ -441,9 +462,10 @@ function buildMedia(sel) {
     // Scene frames are no longer generated (the host serves an existing frame: the live-backfilled
     // GPU frame, or the user-imported custom frame). 代码事实：该帧**加载失败**（img onerror）且该壁纸
     // 有工程预览图时，退到 previewUrl 垫底 —— 那是作者随包发布的图，不是本插件合成的"猜图"。
-    if (sel.type === "scene" && sel.previewUrl) {
+    if (sel.type === "scene" && sel.previewUrl && sel.url !== sel.previewUrl) {
       media.onerror = () => {
-        if (media.src !== sel.previewUrl) media.src = sel.previewUrl;
+        media.onerror = null;
+        media.src = sel.previewUrl;
       };
     }
   } else {

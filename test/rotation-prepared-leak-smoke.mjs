@@ -654,7 +654,7 @@ await runScenario('E. 静态帧预载按提交档位；不符（preview 回退�
   if (frameImg && typeof frameImg.onerror === 'function') frameImg.onerror(); // 提取失败 → preview 回退
   const previewImg = t.imageEls[t.imageEls.length-1];
   check('提取失败后回退到 preview 探针',
-    previewImg !== frameImg && t.mediaSrc(previewImg) === '/wallpaper-engine/preview/s3',
+    previewImg !== frameImg && t.mediaSrc(previewImg) === '/wallpaper-engine/preview/s3?full=1',
     'src=' + t.mediaSrc(previewImg));
   if (previewImg && typeof previewImg.onload === 'function') previewImg.onload(); // 就绪 → 提交
   // ── 核心 2（URL 校验不能退化）：src 与提交 URL 不符的元素（preview）
@@ -666,6 +666,40 @@ await runScenario('E. 静态帧预载按提交档位；不符（preview 回退�
     img2 ? ('src=' + String(img2.src) + ' same=' + (img2 === previewImg)) : 'no img');
   check('重建的 img 带 onerror 兜底（提取失败仍能退回 preview）',
     !!img2 && typeof img2.onerror === 'function');
+  img2?.onerror?.();
+  check('静态帧失败时只回退一次，使用作者原图',
+    t.mediaSrc(img2) === '/wallpaper-engine/preview/s3?full=1' && img2.onerror === null);
+});
+
+// ── E2：作者预览图自带查询串 ⇒ 拼 full=1 必须用 & 接（不能拼出第二个 ?）─────────
+// 旧实现是 `${preview}?full=1`：preview 一旦带查询串就变成 `…/s9?w=320&h=180?full=1`，
+// 服务端读不到 full=1（`/preview` 于是只发卡片缩略图，全屏占位糊掉）。
+await runScenario('E2. 预览图自带查询串时 ?full=1 用 & 接（不产生第二个 ?）', {
+  wallpapers: [wallpaperV,
+    { id:'s9', title:'S9', type:'scene', playable:false, media:null,
+      frameUrl:'/wallpaper-engine/scene-frame/s9', preview:'/wallpaper-engine/preview/s9?w=320&h=180',
+      contentrating:'Everyone' }],
+  selection: selSeed(['v','s9'], 'v'),
+}, (t) => {
+  const wantPreview = '/wallpaper-engine/preview/s9?w=320&h=180&full=1';
+  t.fireLatest(10000); // 准备 s9：先探针静态帧
+  const frameImg = t.imageEls[t.imageEls.length-1];
+  check('前置：静态帧探针先发（否则下面的 preview 断言空转）',
+    !!frameImg && t.mediaSrc(frameImg) === '/wallpaper-engine/scene-frame/s9',
+    'src=' + t.mediaSrc(frameImg));
+  if (frameImg && typeof frameImg.onerror === 'function') frameImg.onerror(); // 提取失败 → preview
+  const previewImg = t.imageEls[t.imageEls.length-1];
+  check('预览图自带查询串时用 & 拼 full=1（不产生第二个 ?）',
+    previewImg !== frameImg && t.mediaSrc(previewImg) === wantPreview
+      && (t.mediaSrc(previewImg).match(/\?/g) || []).length === 1,
+    'src=' + t.mediaSrc(previewImg));
+  if (previewImg && typeof previewImg.onload === 'function') previewImg.onload();
+  const layer = t.layerEl();
+  const img = layer && layer.querySelector('img');
+  // 静态帧按档位重建（preview 探针与提交 URL 不符，见 E），这之后帧又失败 → 退回作者原图。
+  if (img && typeof img.onerror === 'function') img.onerror();
+  check('静态帧失败后兜底用同一份「带 full=1 的原图地址」',
+    !!img && t.mediaSrc(img) === wantPreview, 'src=' + t.mediaSrc(img));
 });
 
 // ── F：渐变窗口内卸载 → 渐变中的旧层必须随 cleanup 一起退役 ────────────────
@@ -944,7 +978,7 @@ await runScenario('P. 首帧前垫底图：抓帧 → 作者预览图 → 主题
   const poster = layer && layer.querySelector('div.we-live-poster');
   check('场景 live 层带垫底图（不是空层）', !!poster);
   const frameSrc = '/wallpaper-engine/scene-frame/s1';
-  const previewSrc = '/wallpaper-engine/preview/s1';
+  const previewSrc = '/wallpaper-engine/preview/s1?full=1';
   const probeFrame = posterProbeForFrame(t, frameSrc);
   check('① 垫底图先试**实时抓帧**（当前视口的真实构图优先于预览图）',
     !!probeFrame, 'probe=' + (probeFrame ? t.mediaSrc(probeFrame) : 'none'));
@@ -987,16 +1021,16 @@ await runScenario('P2. 无预览图：垫底图只留主题色兜底，不猜图
 // ── P3–P7：垫底图的**存在性分级**（谁允许上屏）────────────────────────────────
 // P / P2 钉的是「来源顺序」（抓帧 → 作者预览图 → 主题色）与「不替作者猜图」。这一组钉的是
 // **上屏规则**本身，一条规则管三档：
-//   ① **缓存实时帧存在** ⇒ 直接用实时帧：P6 断言建层那一刻屏上就是它、缩略图一次都不上屏；
+//   ① **缓存实时帧存在** ⇒ 直接用实时帧：P6 断言建层那一刻屏上就是它、预览原图一次都不上屏；
 //      P7 断言命中**过期**（本会话见过、盘上已没有）时第 2 级才被补发并兜住画面；
 //   ② **判失败才准降级**：第 r 级只允许在比它更权威的每一级都**已判失败**之后上屏 —— 高权威级
-//      在飞 / 已就绪时，低权威级一律不许上屏（缓存实时帧存在时，缩略图**一次都不该成为屏上那张**，
-//      哪怕它先解码完）。P3（高权威级在飞 ⇒ 缩略图不上屏）/ P4（高权威级成功 ⇒ 只有它上屏，
-//      低权威级压不回来）/ P5（高权威级判失败 ⇒ 已就绪的缩略图此刻补上）钉的就是这一支；
+//      在飞 / 已就绪时，低权威级一律不许上屏（缓存实时帧存在时，预览原图**一次都不该成为屏上那张**，
+//      哪怕它先解码完）。P3（高权威级在飞 ⇒ 预览原图不上屏）/ P4（高权威级成功 ⇒ 只有它上屏，
+//      低权威级压不回来）/ P5（高权威级判失败 ⇒ 已就绪的预览原图此刻补上）钉的就是这一支；
 //   ③ **两者都不存在** ⇒ 主题色兜底（第 0 级同步铺底；P2 钉住"不猜图"那一半）。
 // **请求与上屏解耦**：各级探针仍然**并行发出**（第 1 级慢/挂都不挡第 2 级发请求），谁上屏由上面
-// 那条存在性闸门说了算 —— 少了并行，第 1 级一慢/一挂第 2 级连请求都发不出去；少了闸门，缩略图
-// 会先成为屏上那张（用户要的正是"缓存实时帧存在时不得先出缩略图那一帧"）。
+// 那条存在性闸门说了算 —— 少了并行，第 1 级一慢/一挂第 2 级连请求都发不出去；少了闸门，预览原图
+// 会先成为屏上那张（用户要的正是"缓存实时帧存在时不得先出预览原图那一帧"）。
 // 判断「存在」的**同步**证据仍是上一轮那只记账（本会话观测到这个 URL 加载成功过，见
 // buildLivePoster 的 liveFrameLoadedSrcs）；没有同步证据时，**判失败**是"不存在"的唯一依据 ——
 // 所以 P3–P5 的夹具都从冷会话起步（该 URL 还没被观测到）。
@@ -1030,7 +1064,7 @@ const posterShowsSrc = (t, poster, src) => posterBgSrc(t, poster) === (src ? 'ur
 const posterColor = (poster) => (poster && poster.style ? String(poster.style.backgroundColor || '') : '');
 const posterProbeFor = (t, src) => t.imageEls.filter((i) => t.mediaSrc(i) === src).pop() || null;
 // 分桶后海报第 1 级（实时抓帧）的 URL 带 `?ar=<本窗口视口比>`（查询串随窗口变）⇒
-// 抓帧探针的查找与"屏上是真帧"的比对一律按**路径部分**匹配；作者预览图没有查询串，
+// 抓帧探针的查找与"屏上是真帧"的比对一律按**路径部分**匹配；作者预览图用固定的 full=1，
 // 仍走精确匹配的 posterProbeFor / posterShowsSrc。
 const fireProbe = (probe, ev) => {
   if (probe && typeof probe[ev] === 'function') { probe[ev](); return true; }
@@ -1051,18 +1085,18 @@ const markVideoDecoded = (el) => {
   return el;
 };
 
-// ── P3：**无缓存实时帧**：第 1 级**还在飞行中**（既未成功也未失败）⇒ 缩略图不得上屏 ──
+// ── P3：**无缓存实时帧**：第 1 级**还在飞行中**（既未成功也未失败）⇒ 预览原图不得上屏 ──
 // 真机形态：本会话还没观测到这张抓帧，而盘上它其实**存在**（4K PNG 正在读/解码；宿主对两条来源
-// 都发 no-store，每次建层都要重读重解）。缩略图只有几十 KB、往往还是卡片刚用过的同一张图，几毫秒
+// 都发 no-store，每次建层都要重读重解）。作者预览原图也可能先于实时抓帧
 // 就解码完 —— 但它**更不权威**：第 1 级没判失败之前，它一次都不该成为屏上那张。
-await runScenario('P3. 无缓存实时帧：第 1 级仍在飞行中 ⇒ 缩略图不上屏（存在性闸门）', {
+await runScenario('P3. 无缓存实时帧：第 1 级仍在飞行中 ⇒ 预览原图不上屏（存在性闸门）', {
   wallpapers: [scene('s1', 'tok-s1')],
   stats: { 'tok-s1': { fps: 0, running: true } },
   selection: selSeed(['s1'], 's1'),
 }, (t) => {
   const poster = posterOf(t);
   const frameSrc = '/wallpaper-engine/scene-frame/s1';
-  const previewSrc = '/wallpaper-engine/preview/s1';
+  const previewSrc = '/wallpaper-engine/preview/s1?full=1';
   const probeFrame = posterProbeForFrame(t, frameSrc);
   const probePreview = posterProbeFor(t, previewSrc);
   check('① 抓帧未定（既未成功也未失败）时，两张探针**都已发出**（并行请求，不互相门控）',
@@ -1076,21 +1110,21 @@ await runScenario('P3. 无缓存实时帧：第 1 级仍在飞行中 ⇒ 缩略�
     !posterShowsSrc(t, poster, previewSrc), 'bg=' + posterBg(poster));
   check('   负对照（同一条判据，喂空 src）：屏上仍是"只有主题色"那个状态 —— 判据分得清两张图',
     posterShowsSrc(t, poster, ''), 'bg=' + posterBg(poster));
-  // 闸门由「高权威级判失败」打开：这时缩略图才补上（同时钉住"闸门不会被永久关死"）。
+  // 闸门由「高权威级判失败」打开：这时预览原图才补上（同时钉住"闸门不会被永久关死"）。
   fireProbe(probeFrame, 'onerror');
-  check('③ 第 1 级判失败（这一级确实不存在）⇒ 已就绪的缩略图**此刻**才上屏',
+  check('③ 第 1 级判失败（这一级确实不存在）⇒ 已就绪的预览原图**此刻**才上屏',
     posterShowsSrc(t, poster, previewSrc), 'bg=' + posterBg(poster));
 });
 
 // ── P4：**无缓存实时帧**：第 1 级成功 ⇒ 上屏的就是真帧；低权威级压不回来 ──────────────
-await runScenario('P4. 无缓存实时帧：第 1 级成功 ⇒ 真帧上屏，缩略图压不回来', {
+await runScenario('P4. 无缓存实时帧：第 1 级成功 ⇒ 真帧上屏，预览原图压不回来', {
   wallpapers: [scene('s1', 'tok-s1')],
   stats: { 'tok-s1': { fps: 0, running: true } },
   selection: selSeed(['s1'], 's1'),
 }, (t) => {
   const poster = posterOf(t);
   const frameSrc = '/wallpaper-engine/scene-frame/s1';
-  const previewSrc = '/wallpaper-engine/preview/s1';
+  const previewSrc = '/wallpaper-engine/preview/s1?full=1';
   const probeFrame = posterProbeForFrame(t, frameSrc);
   const probePreview = posterProbeFor(t, previewSrc);
   check('① 两张探针同场竞速（"谁允许上屏"的前提：两张都可能到）',
@@ -1110,25 +1144,25 @@ await runScenario('P4. 无缓存实时帧：第 1 级成功 ⇒ 真帧上屏，�
     'bg=' + posterBg(poster));
 });
 
-// ── P5：**无缓存实时帧**：第 1 级**判失败** ⇒ 已就绪的缩略图补上（不退回纯色） ──────────
-// 真机形态：首次激活 / 清帧之后抓帧必然 404。缩略图早在并行请求里就绪了，按闸门它必须等到这一级
+// ── P5：**无缓存实时帧**：第 1 级**判失败** ⇒ 已就绪的预览原图补上（不退回纯色） ──────────
+// 真机形态：首次激活 / 清帧之后抓帧必然 404。预览原图早在并行请求里就绪了，按闸门它必须等到这一级
 // **确实不存在**才上屏 —— 上屏那一刻是"补上"，语义是「这一级没有图」，不是「撤掉屏上已有的图」。
-await runScenario('P5. 无缓存实时帧：第 1 级判失败 ⇒ 已就绪的缩略图补上（不退回纯色）', {
+await runScenario('P5. 无缓存实时帧：第 1 级判失败 ⇒ 已就绪的预览原图补上（不退回纯色）', {
   wallpapers: [scene('s1', 'tok-s1')],
   stats: { 'tok-s1': { fps: 0, running: true } },
   selection: selSeed(['s1'], 's1'),
 }, (t) => {
   const poster = posterOf(t);
   const frameSrc = '/wallpaper-engine/scene-frame/s1';
-  const previewSrc = '/wallpaper-engine/preview/s1';
+  const previewSrc = '/wallpaper-engine/preview/s1?full=1';
   const probeFrame = posterProbeForFrame(t, frameSrc);
   const probePreview = posterProbeFor(t, previewSrc);
   const colorBefore = posterColor(poster);
-  fireProbe(probePreview, 'onload');            // 缩略图先就绪（按闸门还不能上屏）
-  check('① 前置：第 1 级尚未判失败 ⇒ 缩略图还没上屏（闸门关着）',
+  fireProbe(probePreview, 'onload');            // 预览原图先就绪（按闸门还不能上屏）
+  check('① 前置：第 1 级尚未判失败 ⇒ 预览原图还没上屏（闸门关着）',
     !posterShowsSrc(t, poster, previewSrc), 'bg=' + posterBg(poster));
   fireProbe(probeFrame, 'onerror');             // 抓帧 404：这一级不存在
-  check('② 第 1 级判失败 ⇒ 已就绪的缩略图**补上**（第 2 档语义：不存在 ⇒ 缩略图兜底）',
+  check('② 第 1 级判失败 ⇒ 已就绪的预览原图**补上**（第 2 档语义：不存在 ⇒ 预览原图兜底）',
     posterShowsSrc(t, poster, previewSrc), 'bg=' + posterBg(poster));
   check('   负对照（同一条判据，喂空 src）：屏上**不是**"只剩主题色"那个状态（不被纯色顶掉）',
     !posterShowsSrc(t, poster, ''), 'bg=' + posterBg(poster));
@@ -1146,13 +1180,13 @@ await runScenario('P5. 无缓存实时帧：第 1 级判失败 ⇒ 已就绪的�
 // 热的那一次量出"是" —— 判据在两种输入下给出相反结果，不是恒真。
 // 让同一个 key 建第二次层的办法：轮换出去再轮换回来（手动切换与轮换提交都经 syncLayers →
 // buildMedia → buildLivePoster）。stats fps=0 ⇒ live 永不出首帧，屏上就是垫底图本身。
-await runScenario('P6. 缓存实时帧存在：建层那一刻就是实时帧（缩略图不上屏）', {
+await runScenario('P6. 缓存实时帧存在：建层那一刻就是实时帧（预览原图不上屏）', {
   wallpapers: [wallpaperV, scene('s1', 'tok-s1')],
   stats: { 'tok-s1': { fps: 0, running: true } },
   selection: selSeed(['v', 's1'], 's1'),   // 启动即选中 s1：冷的那一次建层立刻发生
 }, (t) => {
   const frameSrc = '/wallpaper-engine/scene-frame/s1';
-  const previewSrc = '/wallpaper-engine/preview/s1';
+  const previewSrc = '/wallpaper-engine/preview/s1?full=1';
   const frameProbes = () => t.imageEls.filter((i) => String(t.mediaSrc(i) || '').split('?')[0] === frameSrc);
   const previewProbes = () => t.imageEls.filter((i) => t.mediaSrc(i) === previewSrc);
 
@@ -1161,7 +1195,7 @@ await runScenario('P6. 缓存实时帧存在：建层那一刻就是实时帧（
   check('① 冷（本会话还没见过第 1 级）⇒ 建层那一刻屏上没有任何图 —— 判据有牙，不是恒真',
     !!cold && posterShowsSrc(t, cold, '') && !posterShowsFrame(t, cold, frameSrc),
     'bg=' + posterBg(cold));
-  check('   负对照（同一条判据，换 src）：屏上也不是缩略图那张（这一刻谁都还没上屏）',
+  check('   负对照（同一条判据，换 src）：屏上也不是预览原图那张（这一刻谁都还没上屏）',
     !posterShowsSrc(t, cold, previewSrc), 'bg=' + posterBg(cold));
   // 第 1 级加载成功 ⇒ 它的**字节**留在本进程里（下一次建层据此同步上帧）
   fireProbe(frameProbes().pop(), 'onload');
@@ -1184,12 +1218,12 @@ await runScenario('P6. 缓存实时帧存在：建层那一刻就是实时帧（
   const probeBack = t.mediaEls[t.mediaEls.length - 1];
   markVideoDecoded(probeBack);   // 提交 → buildMedia → buildLivePoster（热）
   const warm = posterOf(t);
-  check('④ 缓存命中 ⇒ 第二次建层那一刻屏上**已经是实时帧**（不是缩略图、也不是纯色）',
+  check('④ 缓存命中 ⇒ 第二次建层那一刻屏上**已经是实时帧**（不是预览原图、也不是纯色）',
     !!warm && warm !== cold && posterShowsFrame(t, warm, frameSrc),
     'bg=' + posterBg(warm) + ' layer=' + (t.layerEl() ? String(t.layerEl().dataset.weKey).slice(0, 40) : 'none'));
-  check('   负对照（同一条判据，换 src）：缩略图从未成为屏上那张',
+  check('   负对照（同一条判据，换 src）：预览原图从未成为屏上那张',
     !posterShowsSrc(t, warm, previewSrc), 'bg=' + posterBg(warm));
-  check('⑤ 缓存命中 ⇒ 第 2 级连请求都不发（缩略图探针一个都没新增）',
+  check('⑤ 缓存命中 ⇒ 第 2 级连请求都不发（预览原图探针一个都没新增）',
     previewProbes().length === previewsBefore,
     'preview probes ' + previewsBefore + '→' + previewProbes().length);
   // 「有帧就直接上帧」的**确定性**判据：命中时连第 1 级探针都不再建 —— 屏上那张来自本进程留住的
@@ -1212,7 +1246,7 @@ await runScenario('P7. 拿不到 object URL：命中仍同步上帧（插入已�
   noFrameBytes: true,               // canvas.toBlob 拿不到字节这一档
 }, (t) => {
   const frameSrc = '/wallpaper-engine/scene-frame/s7';
-  const previewSrc = '/wallpaper-engine/preview/s7';
+  const previewSrc = '/wallpaper-engine/preview/s7?full=1';
   // 只数**网络探针**：`new Image()` 建的那种（没有 `data-we-frame-src`）。命中时插进屏里的那个
   // 已解码元素带这个标记 —— 它是留住的字节，不是一次新请求，两者必须分开数。
   const frameMark = (i) => String((i && i.attributes && i.attributes['data-we-frame-src']) || '');

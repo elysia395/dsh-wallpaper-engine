@@ -197,7 +197,9 @@ function buildLivePoster(sel) {
   //   · 预览图是**作者随包发布的那张**，不是本插件合成的"猜图"（与 buildMedia 里 scene 静态
   //     img 的 onerror 回落同源）⇒ 不破「要么给真画面、要么诚实留空」那条裁定。
   // 顺序不能反：抓帧才是当前视口的真实构图，它一到就被顶掉；预览图只是"还没来得及出帧"的占位。
-  const candidates = (sel.type === "web" ? [sel.liveFrame, sel.previewUrl] : [sel.url, sel.previewUrl])
+  const mediaFrame = sel.type === "web" ? (sel.liveFrame || "") : sel.url;
+  const frameSrc = mediaFrame === sel.previewUrl ? null : mediaFrame;
+  const candidates = [frameSrc, sel.previewUrl]
     .filter((s) => typeof s === "string" && s);
   if (!candidates.length) return poster;
   poster.dataset.weFrameSrc = candidates[0];
@@ -209,7 +211,6 @@ function buildLivePoster(sel) {
   // 字段，客户端却没有它的写入点 ⇒ web 的候选表里实际只剩预览图）。那种情况下不能把
   // `candidates[0]` 当成"实时帧已存在"记进来 —— 记下的会是缩略图，语义就假了。所以下面只认
   // 「rank 0 且确实等于实时帧 URL」的那一个。
-  const frameSrc = sel.type === "web" ? (sel.liveFrame || "") : (sel.url || "");
   const frameRank = frameSrc && candidates[0] === frameSrc ? 0 : -1;
   // **图恒盖色**：`background-image` 永远画在同一元素的 `background-color` 之上，且全仓只有
   // 上面那一处写底色 ⇒ 这里不存在"谁遮谁"，只有两件事要定：**谁允许上屏**与**什么时候发请求**。

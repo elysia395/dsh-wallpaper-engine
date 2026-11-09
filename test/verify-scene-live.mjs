@@ -29,6 +29,7 @@ import { readFileSync, writeFileSync, mkdirSync, existsSync, rmSync, readdirSync
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Readable, Writable } from 'node:stream';
+import { runInNewContext } from 'node:vm';
 // 剥注释：共享的字符串感知实现（`verify-module-layout` 的『剥注释必须字符串感知』一节钉住"不许再用朴素正则"）。
 import { stripComments, stripExportBlocks } from './tools/js-text.mjs';
 // 子包登记面的**发现层**：T2 起子包构建数据是逐包配方 JSON，本守卫不写死 packages/fx / packages/parallax。
@@ -382,6 +383,111 @@ check('fallback page present: default-wallpaper/index.html exists',
   existsSync(join(pageDir, 'default-wallpaper', 'index.html')));
 check('renderer page mounts the fallback page on error',
   pageJs.includes('./default-wallpaper/index.html') && /inst\.on\("error"/.test(pageJs));
+check('renderer page exposes the host poster before the canvas mounts',
+  /html,\s*body\s*\{[^}]*background:\s*transparent\s*;/.test(pageHtml));
+check('host can reveal a ready fallback without a live heartbeat',
+  /\.we-live-iframe\.we-live-fallback-ready\s*\{\s*--we-live-fade:\s*1/.test(styleText()));
+
+{
+  const loads = [];
+  const frames = new Set();
+  const frameClasses = new Set();
+  // 计时器一律由本用例托管：装配看门狗是「load() 挂死」的唯一落点，真实等 30s 没法测，
+  // 把回调抓在手里就能确定性地模拟「到点了，装配还是没落定」。
+  const timers = [];
+  const setTimeoutStub = (fn, ms) => { timers.push({ fn, ms, canceled: false }); return timers.length - 1; };
+  const clearTimeoutStub = (id) => { if (timers[id]) timers[id].canceled = true; };
+  const latestWatchdog = () => timers.filter((t) => t.ms === 30000).pop();
+  let onError;
+  let releases = 0;
+  const inst = {
+    load: () => new Promise((resolve, reject) => { loads.push({ resolve, reject }); }),
+    on: (_event, handler) => { onError = handler; },
+    release: () => { releases++; },
+    restore() {},
+    setVolume() {},
+  };
+  const window = {
+    addEventListener() {},
+    frameElement: { classList: { add: (name) => frameClasses.add(name), remove: (name) => frameClasses.delete(name) } },
+  };
+  const host = { appendChild: (frame) => frames.add(frame) };
+  runInNewContext(pageJs.replace('import.meta.url', JSON.stringify(pathToFileURL(join(pageDir, 'renderer.js')).href)), {
+    WebWallGL: { createScene: () => inst, httpSource: (url) => url },
+    location: { search: '?src=first&mediaBase=http://fixture', href: 'http://fixture/' },
+    document: {
+      getElementById: () => host,
+      addEventListener() {},
+      createElement: () => ({
+        setAttribute() {},
+        addEventListener(_name, listener) { this.onLoad = listener; },
+        remove() { frames.delete(this); },
+      }),
+    },
+    MutationObserver: class { observe() {} },
+    URL, URLSearchParams, window, setTimeout: setTimeoutStub, clearTimeout: clearTimeoutStub,
+  });
+  const settle = () => new Promise((resolve) => { setImmediate(resolve); });
+  window.__wp.setWallpaper({ src: 'second' });
+  onError(new Error('old canvas emitted while replacing its source'));
+  loads[0].reject(new Error('obsolete load'));
+  await settle();
+  check('obsolete renderer errors leave the current scene in place', frames.size === 0 && releases === 0);
+  loads[1].reject(new Error('first frame timed out'));
+  await settle();
+  const firstFallback = [...frames][0];
+  check('promise-only first-frame failure mounts one fallback',
+    frames.size === 1 && releases === 1 && firstFallback?.src.endsWith('/default-wallpaper/index.html'));
+  check('loading fallback leaves the host poster visible', frameClasses.size === 0);
+  firstFallback?.onLoad();
+  check('loaded fallback is revealed on the outer frame', frameClasses.has('we-live-fallback-ready'));
+  window.__wp.setWallpaper({ src: 'third' });
+  firstFallback?.onLoad();
+  check('a new scene clears the old fallback class and ignores its late load event',
+    frameClasses.size === 0 && frames.size === 0);
+  loads[2].resolve();
+  await settle();
+  check('a settled load disarms the hang watchdog (no bogus fallback later)',
+    latestWatchdog()?.canceled === true);
+  onError(new Error('engine emitted an error after mount'));
+  check('runtime engine error still mounts a fallback', frames.size === 1 && releases === 2);
+  window.__wp.setWallpaper({ src: 'fourth' });
+  const releasedWatchdog = latestWatchdog();
+  window.__wp.release();
+  check('a released renderer disarms its pending hang watchdog', releasedWatchdog?.canceled === true);
+  loads[3].reject(new Error('released load'));
+  await settle();
+  check('released renderer load cannot mount a fallback', frames.size === 0 && releases === 3);
+  window.__wp.restore();
+  onError(new Error('restore failed'));
+  const restoredFallback = [...frames][0];
+  check('restored renderer still reports runtime failures', frames.size === 1 && releases === 4);
+  window.__wp.release();
+  restoredFallback?.onLoad();
+  check('fallback loaded after release stays hidden', frameClasses.size === 0);
+  // 引擎挂死（load() 既不 resolve 也不 reject）：装配失败没有落点 —— loadSettled 一直
+  // false、error 全被吞，用户只剩宿主的占位图。看门狗必须把它落成一次可见的兜底。
+  window.__wp.setWallpaper({ src: 'fifth' });
+  const hangWatchdog = latestWatchdog();
+  const releasesBeforeHang = releases;
+  hangWatchdog?.fn();
+  await settle();
+  check('a hung load() still mounts the fallback when the watchdog fires',
+    frames.size === 1 && releases === releasesBeforeHang + 1,
+    'frames=' + frames.size + ' releases=' + releases);
+}
+
+{
+  const gate = readFileSync(join(root, 'src', 'live-layer', 'gate.js'), 'utf8');
+  const ready = runInNewContext(`${gate}\nlayerContentReady;`);
+  const poster = { style: {}, dataset: { weContent: 'pending' } };
+  const frame = { className: 'we-live-iframe' };
+  const layer = { querySelector: (selector) => selector === 'div.we-live-poster' ? poster : frame };
+  check('content gate waits while the poster and renderer have no pixels', !ready(layer));
+  frame.className += ' we-live-fallback-ready';
+  check('loaded fallback releases the content gate even while the poster is pending', ready(layer));
+}
+
 check('scene-serve serves default-wallpaper without long cache',
   /rest === 'default-wallpaper\/index.html'/.test(readFileSync(join(root, 'packages', 'media-bridge', 'lib', 'routes', 'scene-serve.js'), 'utf8')));
 
