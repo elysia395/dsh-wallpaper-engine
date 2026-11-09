@@ -1848,6 +1848,20 @@ const CSS_GLASS = `
     backdrop-filter: none !important;
   }
 
+
+  /* ── 上下文占用环（ContextMeter）：轨道不得吃「边框」滑杆 ────────────────────
+     症状（用户截图）：底栏上下文占用的小圈"总是像满了"，进度弧看不出来。
+     根因：#255④ 把 --dsw-alias-border-l3 一起接进「边框」滑杆；宿主
+     ContextMeter 的轨道圆环（circle class="*_track"）正是用它画的，进度弧
+     （circle class="*_fill"）用 --dsw-alias-label-tertiary。用户配置 border=0.9 时
+     轨道合成到 ~#a6a6a6，比弧（#979da6）还亮 ⇒ 整圈都像已占用。
+     修法：轨道改由文字三档色稀释而来（与进度弧同源，恒比它淡），不新增令牌、
+     不碰弧、也不改边框滑杆的其它消费者。锚点取 CSS Module 的语义后缀 _track
+     （哈希前缀随构建变、后缀稳定；宿主里只有 ContextMeter 用 circle._track）。 */
+  body[data-we-glass-page] circle[class*="_track"] {
+    stroke: color-mix(in srgb, var(--dsw-alias-label-tertiary, #979da6) 32%, transparent);
+  }
+
 `;
 
 export { CSS_GLASS };

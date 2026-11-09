@@ -2728,6 +2728,22 @@ console.log('\n⑲ 标记值跟走 resolver（t9-001 运行级断言：真跑 we
     body: 'background-color: var(--we-readability-base) !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important;',
   };
   const oldForm = floaterFormOf(syntheticOldFloater);
+
+  // ── ㉓ 上下文占用环：轨道不得吃「边框」滑杆 ──────────────────────────────────
+  // 用户截图：底栏那个上下文占用的小圈「总像满了」。根因是 #255④ 把
+  // --dsw-alias-border-l3 也接进「边框」滑杆（实测用户配置 border=0.9），而
+  // ContextMeter 的轨道圆环（circle._track）正是用它画的；进度弧（circle._fill）
+  // 用 --dsw-alias-label-tertiary。轨道被拉到 ~#a6a6a6 后比弧还亮 ⇒ 整圈都像已占用，
+  // 弧反而看不出来（截图采样：轨道 160~166，弧 #979da6=151~166）。
+  // 判据：轨道规则存在、带玻璃页门、且**不读** border 令牌。
+  console.log('\n㉓ 上下文占用环的轨道不吃「边框」滑杆（防"整圈像满了"）');
+  const trackRules = rulesOf(CSS).filter((r) => /circle\[class\*="_track"\]/.test(r.header));
+  check('㉓a 轨道规则存在且带 data-we-glass-page 门', trackRules.length === 1
+    && /data-we-glass-page/.test(trackRules[0].header));
+  check('㉓b 轨道 stroke 不读 border 令牌（边框滑杆才是"整圈亮"的来源）',
+    trackRules.length === 1 && !/--dsw-alias-border-l[0-9]/.test(trackRules[0].body));
+  check('㉓c 轨道由文字三档色稀释而来（与进度弧同源、恒比它淡）', trackRules.length === 1
+    && /--dsw-alias-label-tertiary/.test(trackRules[0].body) && /color-mix\(/.test(trackRules[0].body));
 }
 
 console.log('');
