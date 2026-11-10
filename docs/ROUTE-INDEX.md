@@ -55,7 +55,7 @@
 | 36 | `/scene-files` | packages/media-bridge/lib/routes/scene-serve.js:156 | 箭头 | disposers base handleSceneFiles | 5 |
 | 37 | `/media-origin` | packages/media-bridge/lib/routes/scene-serve.js:164 | 箭头 | disposers base mediaOriginInfo | 2 |
 | 38 | `/scene-payload-progress` | packages/media-bridge/lib/routes/scene-serve.js:184 | 箭头 | disposers base payloadProgress | 1 |
-| 39 | `/props` | packages/media-bridge/lib/routes/props.js:46 | 箭头 | disposers base mediaMap userPropsFor parseUserPropDefs entryDirPrefix …(+2) | 9 |
+| 39 | `/props` | packages/media-bridge/lib/routes/props.js:52 | 箭头 | disposers base mediaMap userPropsFor parseUserPropDefs entryDirPrefix …(+2) | 9 |
 | 40 | `/live-frame` | packages/media-bridge/lib/routes/live-frame.js:44 | 箭头 | disposers base mediaMap serveFile traceRequests liveFrameFile …(+3) | 3 |
 | 41 | `/scene-video` | packages/media-bridge/lib/routes/scene-media.js:57 | 箭头 | disposers base mediaMap serveFile ensureFrameCacheDir sceneVideoProbeKey …(+6) | 3 |
 | 42 | `/scene-audio` | packages/media-bridge/lib/routes/scene-media.js:141 | 箭头 | disposers base mediaMap serveFile ensureSceneAudio | 4 |

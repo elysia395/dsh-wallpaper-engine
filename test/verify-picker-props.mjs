@@ -904,7 +904,75 @@ console.log('\n8. 说明句按**成因**自陈（空表的三种成因必须能�
     propRows(tree).length + ' 行');
 }
 
-console.log('\n9. 清掉壁纸 ⇒ 面板收起（不留一个挂在开关上的空面板）');
+console.log('\n9. WE 当前值只读导入（issue #341）');
+{
+  // 上一节把选中项切到了网页壁纸 B —— 导入要落在 A（tokA）上，先切回来。
+  openModal(tree); tree = render();
+  pickCard(tree, '网页壁纸 A');
+  tree = render();
+  closeModal(tree); tree = render();
+
+  const toggle = () => { propsEntry(tree).props.onClick(); tree = render(); };
+  const importButton = (t) => {
+    const head = findByClass(t, 'we-picker__props-head');
+    return head
+      ? findNode(head, (n) => n.type === 'button' && String(textUnder(n)).indexOf('从 WE 导入') === 0)
+      : null;
+  };
+  // 本节的属性表用新对象：前面几节会就地改 `def.value`（同一份 PROPS_DEFS 被复用），
+  // 拿它算「与 WE 的差异数」会随执行顺序漂移。
+  const IMPORT_DEFS = [
+    { name: 'bgcolor', ptype: 'color', text: '背景颜色', order: 0, value: '0.1 0.2 0.3', default: '0 0 0', overridden: false },
+    { name: 'speed', ptype: 'slider', text: '速度', order: 1, value: 1.5, default: 1, overridden: false, min: 0, max: 4, step: 0.1, precision: 1 },
+    { name: 'glow', ptype: 'bool', text: '发光', order: 2, value: false, default: false, overridden: false },
+    { name: 'mode', ptype: 'combo', text: '模式', order: 3, value: 2, default: 1, overridden: false,
+      options: [{ label: '慢', value: 1 }, { label: '快', value: 2 }] },
+    { name: 'hiddenInternal', ptype: 'slider', text: '内部量', order: 4, value: 1, default: 1, overridden: false, hidden: true },
+  ];
+  propsBody = {
+    ok: true, token: PROPS_TOKEN, props: IMPORT_DEFS, overrides: {}, hasProject: true,
+    we: { ok: true, values: { bgcolor: '0 0 1', speed: '2.5', glow: 'false', mode: 1 }, monitor: 'Monitor0', profile: 'fixture' },
+  };
+  toggle(); toggle();   // 关再开 = 强制重拉
+  await sleep(0);
+  tree = render();
+  check('`hidden` 项不画在面板里（但它确实在回包里）',
+    propRows(tree).length === 4 && !rowByLabel(tree, '内部量'),
+    propRows(tree).length + ' 行');
+  const btn = importButton(tree);
+  check('WE 有差异时出现「从 WE 导入（N）」，N = 与面板当前值不同的项数（3：bgcolor/speed/mode）',
+    Boolean(btn) && textUnder(btn) === '从 WE 导入（3）', btn ? textUnder(btn) : 'missing');
+  if (btn) btn.props.onClick();
+  flushPersist();
+  tree = render();
+  const saved = (persistedUserProps()[PROPS_TOKEN] || {});
+  check('导入后落盘：偏离默认的值写进 userProps（slider 字符串→数字），与默认同值的不写（combo=1 是默认）',
+    saved.bgcolor === '0 0 1' && saved.speed === 2.5 && !('mode' in saved) && !('glow' in saved),
+    JSON.stringify(saved));
+  check('导入后按钮消失（已无差异），可见行数不变',
+    !importButton(tree) && propRows(tree).length === 4);
+
+  // 负对照：WE 值与面板完全一致 ⇒ 不得出现按钮（判据不是"有 we 就出按钮"）
+  const SAME_DEFS = [
+    { name: 'bgcolor', ptype: 'color', text: '背景颜色', order: 0, value: '0.1 0.2 0.3', default: '0 0 0', overridden: false },
+    { name: 'speed', ptype: 'slider', text: '速度', order: 1, value: 1.5, default: 1, overridden: false, min: 0, max: 4, step: 0.1, precision: 1 },
+    { name: 'glow', ptype: 'bool', text: '发光', order: 2, value: false, default: false, overridden: false },
+    { name: 'mode', ptype: 'combo', text: '模式', order: 3, value: 2, default: 1, overridden: false,
+      options: [{ label: '慢', value: 1 }, { label: '快', value: 2 }] },
+  ];
+  propsBody = {
+    ok: true, token: PROPS_TOKEN, props: SAME_DEFS, overrides: {}, hasProject: true,
+    we: { ok: true, values: { bgcolor: '0.1 0.2 0.3', speed: '1.5', glow: 'false', mode: 2 }, monitor: 'Monitor0', profile: 'fixture' },
+  };
+  toggle(); toggle();
+  await sleep(0);
+  tree = render();
+  check('负对照：WE 值与面板一致 ⇒ 不出按钮', !importButton(tree));
+}
+
+console.log('\n10. 清掉壁纸 ⇒ 面板收起（不留一个挂在开关上的空面板）');
+
+console.log('\n10. 清掉壁纸 ⇒ 面板收起（不留一个挂在开关上的空面板）');
 {
   // 内联设计下的对应不变量：清掉当前壁纸后，`sel.propsUrl` 随之消失 —— 面板必须跟着
   // 收起来，而不是"开关还是 true、面板却画不出来"（那正是侧栏那次"空白"的同源形态）。

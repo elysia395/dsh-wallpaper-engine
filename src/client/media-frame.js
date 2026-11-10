@@ -543,6 +543,8 @@ function userPropsStateOf() {
     error: String(propsState.error || ""),
     count: propsState.props.length,
     heard: !propsState.loading && !propsState.remote,
+    // issue #341：WE 里这张壁纸的当前值与本机覆盖值的差异摘要（null = 没有可导入项/没读到）。
+    we: userPropsWeImport(),
   };
 }
 
@@ -571,5 +573,8 @@ function renderUserPropsPanel() {
     },
     onPropInput: onUserPropInput,
     onReset: resetUserProps,
+    // issue #341：WE 当前值导入（只读；显式按钮触发）
+    we: st.we,
+    onImportWe: importUserPropsFromWe,
   });
 }

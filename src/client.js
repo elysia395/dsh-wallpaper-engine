@@ -1716,7 +1716,7 @@ const IS_EDGE = typeof navigator !== "undefined" && /Edg\//.test(navigator.userA
 
 // 面板状态：token 变了就重新拉一次（换壁纸/换目录）。
 let propsPanelOpen = false;
-let propsState = { token: "", loading: false, error: "", props: [], remote: false };
+let propsState = { token: "", loading: false, error: "", props: [], remote: false, we: null };
 
 
 /** 打开发送（侧栏下钻的入口）：先落状态再拉定义 —— 判据是"该有属性了"。 */
@@ -1778,7 +1778,7 @@ function loadUserPropDefs(token, force) {
   if (!token) return;
   if (!force && (propsState.token === token && (propsState.props.length || propsState.loading))) return;
   const url = PROPS_URL + "/" + encodeURIComponent(token);
-  propsState = { token, loading: true, error: "", props: propsState.token === token ? propsState.props : [], remote: true };
+  propsState = { token, loading: true, error: "", props: propsState.token === token ? propsState.props : [], remote: true, we: propsState.token === token ? propsState.we : null };
   apiJson(url)
     .then((res) => {
       const d = res.data;
@@ -1799,12 +1799,17 @@ function loadUserPropDefs(token, force) {
         if (!live || !(p.name in live)) return p;
         return { ...p, value: live[p.name], overridden: Boolean(d.overrides && p.name in d.overrides) };
       });
-      propsState = { token, loading: false, error: "", props, remote: false };
+      // issue #341：宿主只读带出的 WE 当前值（`wproperties`）。它**不参与**默认值合并，
+      // 只供面板「从 WE 导入」，所以这里单独存一份，进 UI 前剥掉宿主的绝对路径。
+      const we = d.we && d.we.ok && d.we.values && typeof d.we.values === "object"
+        ? { values: d.we.values, monitor: String(d.we.monitor || ""), profile: String(d.we.profile || "") }
+        : null;
+      propsState = { token, loading: false, error: "", props, remote: false, we };
       emit();
     })
     .catch((e) => {
       if (propsState.token !== token) return;
-      propsState = { token, loading: false, error: String((e && e.message) || e), props: [], remote: false };
+      propsState = { token, loading: false, error: String((e && e.message) || e), props: [], remote: false, we: null };
       emit();
     });
 }
@@ -1883,6 +1888,86 @@ function resetUserProps() {
   delete all[token];
   setSetting("userProps", all);
   emit();
+}
+
+/**
+ * WE 当前值 → 面板值的类型归位（WE `config.json` 存在以字符串存布尔/数字的机器）。
+ * 类型不对 ⇒ undefined（这项不导入，绝不把字符串塞进 slider）。
+ */
+function wePropValueOf(p, raw) {
+  if (raw === null || raw === undefined) return undefined;
+  if (p.ptype === "bool") {
+    if (typeof raw === "boolean") return raw;
+    if (typeof raw === "string") {
+      const s = raw.trim().toLowerCase();
+      if (s === "true" || s === "1") return true;
+      if (s === "false" || s === "0") return false;
+    }
+    return undefined;
+  }
+  if (p.ptype === "slider") {
+    const n = typeof raw === "number" ? raw : Number(raw);
+    return Number.isFinite(n) ? n : undefined;
+  }
+  if (p.ptype === "color" || p.ptype === "file" || p.ptype === "directory" || p.ptype === "textinput" || p.ptype === "other") {
+    return typeof raw === "string" ? raw : undefined;
+  }
+  return raw; // combo：保留声明类型（与 project.json 同一口径）
+}
+
+/** 「从 WE 导入」能带来的改动摘要（面板按钮的文案/可用态 + tooltip 用）。 */
+function userPropsWeImport() {
+  const we = propsState.we && propsState.we.values ? propsState.we.values : null;
+  if (!we) return null;
+  const labels = [];
+  for (const p of propsState.props) {
+    if (!p || p.hidden) continue;
+    if (!Object.prototype.hasOwnProperty.call(we, p.name)) continue;
+    const next = wePropValueOf(p, we[p.name]);
+    if (next === undefined || sameUserPropValue(next, p.value)) continue;
+    labels.push(p.text || p.name);
+  }
+  return { count: labels.length, labels };
+}
+
+/**
+ * 从 WE 当前值导入（issue #341）：把与面板当前显示不同的值写成用户覆盖值。
+ *
+ * 只做用户**显式**动作（面板按钮）：不自动应用 —— WE `config.json` 是外部状态，静默
+ * 覆盖会让"我在插件里调的值"凭空消失。导入后与手工改值同一条落盘路径
+ * （`settings.userProps`），所以刷新/重启后仍然生效。
+ */
+function importUserPropsFromWe() {
+  const token = propsState.token;
+  const we = propsState.we && propsState.we.values ? propsState.we.values : null;
+  if (!token || !we) return false;
+  cancelUserPropsCommit();
+  const wire = {};
+  let changed = 0;
+  for (const p of propsState.props) {
+    if (!p || typeof p.name !== "string") continue;
+    if (!Object.prototype.hasOwnProperty.call(we, p.name)) continue;
+    const next = wePropValueOf(p, we[p.name]);
+    if (next === undefined || sameUserPropValue(next, p.value)) continue;
+    p.value = next;
+    p.overridden = !sameUserPropValue(next, p.default);
+    wire[p.name] = { value: next };
+    changed += 1;
+  }
+  if (changed === 0) { emit(); return false; }
+  applyUserProps(wire);
+  const all = { ...(selection.userProps || {}) };
+  const cur = { ...(all[token] || {}) };
+  for (const p of propsState.props) {
+    if (!p || !Object.prototype.hasOwnProperty.call(wire, p.name)) continue;
+    if (p.overridden) cur[p.name] = wire[p.name].value;
+    else delete cur[p.name];
+  }
+  if (Object.keys(cur).length) all[token] = cur;
+  else delete all[token];
+  setSetting("userProps", all);
+  emit();
+  return true;
 }
 
 /** 就绪后回放覆盖值：网页壁纸由 host 并进 HTML 种子，场景壁纸没有种子通道。 */

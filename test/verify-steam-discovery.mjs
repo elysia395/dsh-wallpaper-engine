@@ -21,6 +21,13 @@ import { access } from 'node:fs/promises';
 import { dirname, join, normalize, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { createSteamDiscoveryKit } from '../lib/steam-discovery.js';
+import {
+  candidateConfigPaths,
+  extractWProperties,
+  libraryFoldersFromVdf,
+  normPath,
+  readWeConfigValues,
+} from '../packages/media-bridge/lib/we-wproperties.js';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
 const ISO = join(ROOT, '.test-cache', 'steam-discovery-guard');
@@ -471,6 +478,107 @@ console.log('  ⚠ 观察（不是判据）：生产谓词（`lib/kernel/host-ke
   + '要收紧就改宿主那个谓词（已报 Lead）');
 
 // ═══ F. 覆盖面地板 ═══════════════════════════════════════════════════════════════
+// ═══ G. #341：子包 we-wproperties（WE 安装根 config.json 的只读提取） ═══════════════
+// 为什么放在这个守卫而不是新开一条链：它和安装根探测是同一个问题（"WE 装在哪、里面写了
+// 什么"），只读、纯函数为主，夹具与临时目录现成；新开链条目要连带动 verify-chain 夹具与
+// CHAIN_FLOOR（见 docs/DEV-GUIDE.md §4.7 与 b53 的决策）。
+section('G. #341 we-wproperties（WE 安装根 config.json 的只读提取）');
+{
+  const gVariants = [
+    'C:\\Program Files\\Steam\\steamapps\\workshop\\content\\431960\\3624257712\\',
+    '\\\\?\\C:\\Program Files\\Steam\\steamapps\\workshop\\content\\431960\\3624257712',
+    'c:/program files/steam/steamapps/workshop/content/431960/3624257712',
+  ];
+  const gNorms = gVariants.map(normPath);
+  check('G1 路径归一：大小写 / 斜杠方向 / 尾斜杠 / `\\\\?\\` 前缀归一到同一形态',
+    gNorms[0] === 'c:/program files/steam/steamapps/workshop/content/431960/3624257712'
+    && gNorms[0] === gNorms[1] && gNorms[1] === gNorms[2],
+    JSON.stringify(gNorms));
+  check('G2 路径归一：空串 / 纯斜杠回空串（不做无意义匹配）',
+    normPath('') === '' && normPath('///') === '' && normPath(null) === '',
+    JSON.stringify([normPath(''), normPath('///'), normPath(null)]));
+
+  const vdfText = '"libraryfolders"\n{\n\t"0"\n\t{\n\t\t"path"\t\t"D:\\\\SteamLibrary"\n\t}\n'
+    + '\t"1"\n\t{\n\t\t"path"\t\t"D:\\\\SteamLibrary"\n\t}\n'
+    + '\t"2"\n\t{\n\t\t"path"\t\t"E:\\\\Games\\\\Steam"\n\t}\n}\n';
+  const vdfLibs = libraryFoldersFromVdf(vdfText);
+  check('G3 vdf：`"path"` 还原反斜杠转义、重复库去重、坏文本回空表',
+    vdfLibs.length === 2 && vdfLibs[0] === 'D:\\SteamLibrary' && vdfLibs[1] === 'E:\\Games\\Steam'
+    && libraryFoldersFromVdf(null).length === 0 && libraryFoldersFromVdf('"path" 未闭合').length === 0,
+    JSON.stringify(vdfLibs));
+
+  const gAbs = 'C:\\Games\\SteamLibrary\\steamapps\\workshop\\content\\431960\\3624257712';
+  const flatCfg = { wproperties: { [gAbs]: { Monitor0: { flag: true, volume: 0.3, title: 'x', list: [1], nested: { a: 1 } } } } };
+  const gFlat = extractWProperties(flatCfg, gAbs);
+  check('G4 扁平 `wproperties` 形态：只取标量（对象/数组跳过）、Monitor0 优先',
+    gFlat.ok && gFlat.monitor === 'Monitor0' && gFlat.values.flag === true && gFlat.values.volume === 0.3
+    && gFlat.values.title === 'x' && !('list' in gFlat.values) && !('nested' in gFlat.values),
+    JSON.stringify(gFlat));
+
+  const perProfile = { 'profile A': { general: { wproperties: { [normPath(gAbs)]: { Monitor2: { a: 2 }, Monitor0: { a: 0 } } } } } };
+  const gProfile = extractWProperties(perProfile, gAbs);
+  check('G5 per-profile 形态（`general.wproperties`）+ MonitorN 取数字最小的那个',
+    gProfile.ok && gProfile.monitor === 'Monitor0' && gProfile.values.a === 0 && gProfile.profile === 'profile A',
+    JSON.stringify(gProfile));
+
+  const tolerantCfg = { wproperties: { 'workshop/content/431960/3624257712': { Monitor0: { a: 1 } } } };
+  const gTolerant = extractWProperties(tolerantCfg, gAbs);
+  check('G6 键与壁纸目录形态不同也能对上（路径后缀 + 大小写不敏感）',
+    gTolerant.ok && gTolerant.values.a === 1, JSON.stringify(gTolerant));
+
+  const gNegs = [
+    ['无这张壁纸', extractWProperties({ wproperties: { 'C:/other/999': { Monitor0: { a: 1 } } } }, gAbs), 'no-match'],
+    ['config 无 wproperties', extractWProperties({ p1: { general: {} } }, gAbs), 'no-wproperties'],
+    ['config 非对象', extractWProperties([1, 2], gAbs), 'no-config'],
+  ];
+  check('G7 负对照：无匹配 / 无 wproperties / 坏结构 给出可区分原因，绝不抛',
+    gNegs.every(([, r, want]) => !r.ok && r.reason === want),
+    gNegs.map(([n, r]) => n + '=' + (r.ok ? 'ok' : r.reason)).join(' · '));
+
+  const gTmp = join(ISO, 'we-wprops');
+  const gSteam = join(gTmp, 'SteamLibrary');
+  const gWallDir = join(gSteam, 'steamapps', 'workshop', 'content', '431960', '3624257712');
+  mkdirSync(gWallDir, { recursive: true });
+  const gOtherLib = join(gTmp, 'OtherLibrary');
+  const gVdf = '"libraryfolders"\n{\n\t"0"\n\t{\n\t\t"path"\t\t"' + gOtherLib.replace(/\\/g, '\\\\') + '"\n\t}\n}\n';
+  const gCands = candidateConfigPaths(gWallDir, { DSH_WE_STEAM_ROOT: join(gTmp, 'PortableWE') },
+    (p) => (p.endsWith('libraryfolders.vdf') ? gVdf : null));
+  const gCandNorms = gCands.map(normPath);
+  check('G8 候选路径：env 覆盖最先、本库 `steamapps/common/wallpaper_engine` 其次、vdf 里的其它库最后',
+    gCandNorms[0] === normPath(join(gTmp, 'PortableWE', 'config.json'))
+    && gCandNorms.includes(normPath(join(gSteam, 'steamapps', 'common', 'wallpaper_engine', 'config.json')))
+    && gCandNorms.includes(normPath(join(gOtherLib, 'steamapps', 'common', 'wallpaper_engine', 'config.json'))),
+    gCands.map((c) => (c.startsWith(gTmp) ? '<tmp>' + c.slice(gTmp.length) : c)).join(' | '));
+
+  const gWeConfig = join(gSteam, 'steamapps', 'common', 'wallpaper_engine', 'config.json');
+  mkdirSync(dirname(gWeConfig), { recursive: true });
+  const gWrite = (clock) => {
+    const body = JSON.stringify({
+      profile: { general: { wproperties: { [normPath(gWallDir)]: { Monitor0: { clock, size: 'large' } } } } },
+    });
+    writeFileSync(gWeConfig, body, 'utf8');
+    return body;
+  };
+  gWrite(false);
+  const gReadA = readWeConfigValues(gWallDir, { env: {} });
+  const gReadB = readWeConfigValues(gWallDir, { env: {} });
+  const gWritten = gWrite(true);
+  const gReadC = readWeConfigValues(gWallDir, { env: {} });
+  check('G9 端到端：从壁纸目录向上找到 WE 安装根读到当前值；文件变了缓存不掩盖新值；读不写 WE 文件',
+    gReadA.ok && gReadA.values.clock === false && gReadB.ok && gReadB.values.clock === false
+    && gReadC.ok && gReadC.values.clock === true && readFileSync(gWeConfig, 'utf8') === gWritten,
+    [gReadA, gReadB, gReadC].map((r) => (r.ok ? r.monitor + ':' + JSON.stringify(r.values) : r.reason)).join(' → '));
+
+  const gOtherWall = join(gSteam, 'steamapps', 'workshop', 'content', '431960', '999');
+  mkdirSync(gOtherWall, { recursive: true });
+  const gReadMiss = readWeConfigValues(gOtherWall, { configPaths: [gWeConfig] });
+  const gReadNoFile = readWeConfigValues(gWallDir, { configPaths: [join(gTmp, 'not-there', 'config.json')] });
+  check('G10 负对照：没有这张壁纸 ⇒ `no-match`；config.json 不存在 ⇒ `unreadable`（不抛）',
+    !gReadMiss.ok && gReadMiss.reason === 'no-match'
+    && !gReadNoFile.ok && gReadNoFile.reason === 'unreadable',
+    (gReadMiss.ok ? 'ok' : gReadMiss.reason) + ' · ' + (gReadNoFile.ok ? 'ok' : gReadNoFile.reason));
+}
+
 section('F. 覆盖面地板');
 const MUTANTS = 13;
 check('地板：正向判据 ≥12 且变异体 ≥' + MUTANTS + '（防判据被掏空后仍报绿）',

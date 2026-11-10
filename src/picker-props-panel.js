@@ -30,7 +30,7 @@
  */
 
   function renderPickerPropsPanel(ctx) {
-    const { open, token, loading, error, props, sceneLiveActive, source, ensureDefs, onPropInput, onReset } = ctx;
+    const { open, token, loading, error, props, sceneLiveActive, source, we, ensureDefs, onPropInput, onReset, onImportWe } = ctx;
     if (!open) return null;
     // 没有 token ⇒ 不画。两个壳都不存在"开关开着却没有 token"的常态：侧栏那支由调用点的
     // 门保证（`userPropsPanelOpen() && propsAvailable`），而清掉壁纸时 `onClear` 会把开关
@@ -45,7 +45,9 @@
     // `props` 是**上一次求值留下的那张表**（宿主是异步的）：token 与当前选中项不一致时
     // 它属于上一张壁纸 —— 那种情况下不许画出来（否则改的是这张、看到的是上一张的值）。
     const stale = Boolean(source && source.token && source.token !== token);
-    const defs = stale ? [] : props;
+    // `hidden`：作者标记 `editable:false` 的条目（issue #341 起留在回包里、值照常下发）
+    // —— 只从面板隐藏，仍参与上面的条件求值（`values` 用全表）。
+    const defs = stale ? [] : props.filter((p) => !p.hidden);
     const rows = defs
       .filter((p) => !p.condition || weEvalCondition(p.condition, values))
       .map((p) => renderUserPropRow(p, onPropInput));
@@ -64,10 +66,24 @@
                 ? weT("当前条件下没有可调项")
                 : weT("这张壁纸没有用户属性（project.json 的 general.properties）")
             : weT("等待壁纸属性…（宿主尚未答复）");
+    // 头一行：标题 · 说明 · （WE 可导入时）导入按钮 · 恢复默认。
+    // 导入按钮只在真的有差异时出现（`we.count > 0`），差异数写在标题里，悬停列出将导入的项。
+    const canImport = Boolean(we && we.count > 0 && onImportWe);
+    // 悬停提示整句进 weT（占位符插值）：切片后的项名是数据不是文案，用 ASCII 逗号分隔。
+    const weList = canImport ? we.labels.slice(0, 6).join(", ") : "";
+    const weImportTitle = !canImport ? ""
+      : we.labels.length > 6
+        ? weT("将导入：{list} 等 {count} 项", { list: weList, count: we.count })
+        : weT("将导入：{list}", { list: weList });
     return React.createElement("div", { className: "we-picker__props" },
       React.createElement("div", { className: "we-picker__props-head" },
         React.createElement("span", { className: "we-picker__props-title" }, weT("壁纸属性")),
         React.createElement("span", { className: "we-picker__props-note" }, note),
+        canImport && React.createElement("button", {
+          className: "we-picker__btn we-picker__btn--mini", type: "button",
+          onClick: onImportWe,
+          title: weImportTitle,
+        }, weT("从 WE 导入（{count}）", { count: we.count })),
         React.createElement("button", {
           className: "we-picker__btn we-picker__btn--mini", type: "button",
           onClick: onReset,
