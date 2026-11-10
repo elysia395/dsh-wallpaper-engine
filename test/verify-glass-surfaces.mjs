@@ -2642,8 +2642,10 @@ console.log('\n⑲ 标记值跟走 resolver（t9-001 运行级断言：真跑 we
   //   c   运行时确实会打上 data-we-host-dialog（否则排除条件是个永不匹配的死条件，
   //       上面那半条会退化成"字面上有就算过"的空转）。
   console.log('\n⑳ #277 第三方浮层实底底板：两个排除条件 + 运行时真的打上标记');
+  // 实底经「层令牌重声明」落地（见下方 ㉒）：按 --dsw-alias-bg-layer-1 的声明筛规则，
+  // 而不是按旧的 background-color —— 后者正是误伤宿主菜单材质浮层的写法。
   const floaterRules = rulesOf(CSS).filter((r) => /data-we-floater-solid/.test(r.header)
-    && /background-color\s*:/.test(r.body));
+    && /--dsw-alias-bg-layer-1\s*:/.test(r.body));
   const roleRules = floaterRules.filter((r) => /\[role="(dialog|alertdialog)"\]/.test(r.header));
 
   check('⑳a 浮层底板规则存在（两条 ARIA 面）', roleRules.length === 2,
@@ -2652,6 +2654,11 @@ console.log('\n⑲ 标记值跟走 resolver（t9-001 运行级断言：真跑 we
     roleRules.length === 2 && roleRules.every((r) => r.header.includes(':not([data-we-surface-runtime])')));
   check('⑳c 每条都排除宿主对话框标记（保留原生档的兜底；只用 b 挡不住）',
     roleRules.length === 2 && roleRules.every((r) => r.header.includes(':not([data-we-host-dialog])')));
+  // ⑳e：宿主 primitives 的 Modal（role=dialog + class*="_dialog"）不进实底组。
+  // 「添加插件」安装对话框 / 确认框 / 审批卡都走这套 Modal；它们的遮罩自己画
+  // var(--dsw-mask-blur)（本包在 body 上换成模糊配方），卡片玻璃是安全且既有的观感。
+  check('⑳e 每条都排除宿主 Modal（class*="_dialog"；添加插件界面玻璃丢失的回归）',
+    roleRules.length === 2 && roleRules.every((r) => r.header.includes(':not([class*="_dialog"])')));
 
   // 运行时那一半：同一份 SURF_SRC 造出设置窗节点，确认标记真的打上。
   const markedRun = runSurfaces(SURF_SRC);
@@ -2662,11 +2669,13 @@ console.log('\n⑲ 标记值跟走 resolver（t9-001 运行级断言：真跑 we
     '实际=' + String(markedRun.dialog.getAttribute('data-we-host-dialog')));
 
   // 负对照：把排除条件从选择器里摘掉，b/c 的判据必须判红（证明它们有牙）。
-  const strippedRules = roleRules.map((r) => r.header.replace(/:not\(\[data-we-(?:surface-runtime|host-dialog)\]\)/g, ''));
-  check('negative control: 摘掉排除条件后 ⑳b/⑳c 会判红（判据不是恒真）',
+  const strippedRules = roleRules.map((r) => r.header.replace(/:not\(\[data-we-(?:surface-runtime|host-dialog)\]\)/g, '')
+    .replace(/:not\(\[class\*="_dialog"\]\)/g, ''));
+  check('negative control: 摘掉排除条件后 ⑳b/⑳c/⑳e 会判红（判据不是恒真）',
     strippedRules.length === 2
       && !strippedRules.every((h) => h.includes(':not([data-we-surface-runtime])'))
-      && !strippedRules.every((h) => h.includes(':not([data-we-host-dialog])')));
+      && !strippedRules.every((h) => h.includes(':not([data-we-host-dialog])'))
+      && !strippedRules.every((h) => h.includes(':not([class*="_dialog"])')));
 
   // ── ㉑ #315 无 role 浮层的可声明实底：只认声明产生的稳定锚点 ──────────────────────
   // #277 修掉 ARIA 浮层后，没有 role 的框架层/吸顶条/第三方容器仍是「半透明且无霜」。
@@ -2700,6 +2709,50 @@ console.log('\n⑲ 标记值跟走 resolver（t9-001 运行级断言：真跑 we
   check('negative control: 摘掉运行时打锚点后 ㉑b 会判红（判据不是恒真）',
     SURF_SRC.split(solidLine).length === 2
       && noSolidRun.el.getAttribute('data-we-solid-base') === null);
+  // ── ㉒ 浮层实底不是「涂底 + 杀霜」───────────────────────────────────────────
+  // 症状（用户截图：上下文已用 / Token 用量 / 会话统计 三个浮层）：这三类宿主锚定
+  // 浮层都是 portal 到 body 的 role="dialog"，且自带菜单材质
+  // （background: var(--dsw-specific-menu) + backdrop-filter: var(--dsw-menu-backdrop-filter)），
+  // 本来就有 blur(40px) 的玻璃。⑳ 那两条规则对**所有** role=dialog 一刀切涂实底
+  // 并摘霜 ⇒ 把它们刷成不透明板 = 用户口径的「玻璃组件丢失」。
+  // 判据：实底只经「层令牌重声明」落地（读 --dsw-alias-bg-layer-* 的浮层变实底），
+  // 不得直接涂 background-color，也不得摘 backdrop-filter —— 后者是宿主菜单霜的命门。
+  console.log('\n㉒ 浮层实底只重声明层令牌：不涂底、不摘霜（宿主菜单材质浮层保玻璃）');
+  const floaterFormOf = (r) => ({
+    paints: /(^|[;{\s])background-color\s*:/.test(r.body),
+    killsFrost: /(?:-webkit-)?backdrop-filter\s*:\s*none/.test(r.body),
+    layers: ['--dsw-alias-bg-layer-1', '--dsw-alias-bg-layer-2', '--dsw-alias-bg-layer-3']
+      .filter((k) => new RegExp(k + '\\s*:').test(r.body)),
+  });
+  const floaterForms = roleRules.map(floaterFormOf);
+  check('㉒a 不直接涂 background-color（涂底会盖掉菜单材质的 --dsw-specific-menu）',
+    roleRules.length === 2 && floaterForms.every((f) => !f.paints));
+  check('㉒b 不摘 backdrop-filter（菜单霜是宿主浮层自己的玻璃，摘掉只剩半透明板）',
+    roleRules.length === 2 && floaterForms.every((f) => !f.killsFrost));
+  check('㉒c 三层层令牌都重声明成 --we-readability-base（读层令牌的浮层仍然变实底）',
+    roleRules.length === 2 && floaterForms.every((f) => f.layers.length === 3));
+  const syntheticOldFloater = {
+    body: 'background-color: var(--we-readability-base) !important; -webkit-backdrop-filter: none !important; backdrop-filter: none !important;',
+  };
+  const oldForm = floaterFormOf(syntheticOldFloater);
+  check('negative control: 旧形态（涂底 + 杀霜）会被 ㉑a/㉑b 判红',
+    oldForm.paints && oldForm.killsFrost && oldForm.layers.length === 0);
+
+  // ── ㉓ 上下文占用环：轨道不得吃「边框」滑杆 ──────────────────────────────────
+  // 用户截图：底栏那个上下文占用的小圈「总像满了」。根因是 #255④ 把
+  // --dsw-alias-border-l3 也接进「边框」滑杆（实测用户配置 border=0.9），而
+  // ContextMeter 的轨道圆环（circle._track）正是用它画的；进度弧（circle._fill）
+  // 用 --dsw-alias-label-tertiary。轨道被拉到 ~#a6a6a6 后比弧还亮 ⇒ 整圈都像已占用，
+  // 弧反而看不出来（截图采样：轨道 160~166，弧 #979da6=151~166）。
+  // 判据：轨道规则存在、带玻璃页门、且**不读** border 令牌。
+  console.log('\n㉓ 上下文占用环的轨道不吃「边框」滑杆（防"整圈像满了"）');
+  const trackRules = rulesOf(CSS).filter((r) => /circle\[class\*="_track"\]/.test(r.header));
+  check('㉓a 轨道规则存在且带 data-we-glass-page 门', trackRules.length === 1
+    && /data-we-glass-page/.test(trackRules[0].header));
+  check('㉓b 轨道 stroke 不读 border 令牌（边框滑杆才是"整圈亮"的来源）',
+    trackRules.length === 1 && !/--dsw-alias-border-l[0-9]/.test(trackRules[0].body));
+  check('㉓c 轨道由文字三档色稀释而来（与进度弧同源、恒比它淡）', trackRules.length === 1
+    && /--dsw-alias-label-tertiary/.test(trackRules[0].body) && /color-mix\(/.test(trackRules[0].body));
 }
 
 console.log('');

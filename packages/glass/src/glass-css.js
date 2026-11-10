@@ -1793,35 +1793,52 @@ const CSS_GLASS = `
        要么明确接受这些面半透明）。
        这样做的好处：射程可验证、零误伤、不与 W5 的锚点门控纪律冲突。
 
+     ⚠️ 实底只能靠「在浮层作用域里重声明层令牌」落地，**不能**直接涂
+        background-color，更不能摘 backdrop-filter（用户截图回归：ContextMeter /
+        Token 用量 / 会话统计 三个宿主锚定浮层都是 portal 到 body 的 role="dialog"，
+        自带菜单材质 background: var(--dsw-specific-menu) + blur(40px) 的霜；
+        一刀切涂底 + 摘霜会把它们刷成不透明板，用户口径就是「玻璃组件丢失」）。
+        令牌重声明只影响读 --dsw-alias-bg-layer-* 的浮层（正是 #277 的受害者），
+        读菜单材质令牌的浮层一个字节都不碰：它们的底与霜都是宿主自己的玻璃。
+
      ⚠️ 门控 = data-we-floater-solid（设置项 floaterSolidBase，默认开）。
         摘掉属性整组失效 ⇒ W5「关 ⇒ 回退干净」成立。
-     ⚠️ 底色取 --we-readability-base（本包按主题钳制过的染色地板）⇒ 跟着主题与
+     ⚠️ 令牌值取 --we-readability-base（本包按主题钳制过的染色地板）⇒ 跟着主题与
         用户选的玻璃色走，不是硬编码另一种灰。
-     ⚠️ 只写 background-color 与不会生效的 backdrop-filter，不碰 border / 圆角 / 阴影。
-     ⚠️ **必须显式排除宿主自己的对话框**（两个 :not，各管一个档位）：
+     ⚠️ 只重声明三层背景令牌，不碰 border / 圆角 / 阴影，也不碰霜。
+     ⚠️ **必须显式排除宿主自己的对话框**（三个 :not）：
         设置窗在真实 DOM 里**就是** role="dialog" —— 它的玻璃画在 ::before（z-index:-1）上、
         本体透明。本组规则若命中本体，会给它涂一层不透明底把玻璃整个盖掉
         （实测：门开 ⇒ 设置窗完全不透，与"壁纸该透出来"直接冲突）。
-        :where() 压特异性**救不了**这条：本组带 !important，而玻璃在伪元素上，
-        两者根本不在同一场声明竞争里。
         · :not([data-we-surface-runtime]) —— 本插件认领过的面（玻璃开着时都带这个标记），
           它们各有自己的底板规则，这里一个都不许碰。
         · :not([data-we-host-dialog]) —— 覆盖「保留原生」档：那一档 glass-surfaces.js
           会把 data-we-surface-runtime **摘掉**，只用上面那一个 :not 挡不住
           （实测：宿主面板色 rgb(30,31,38) 被改成 --we-readability-base）。
           这个标记由同一个运行时在识别设置窗时无条件打上，与玻璃开不开无关。
+        · :not([class*="_dialog"]) —— 宿主 primitives 的 Modal（role="dialog" +
+          CSS Module 语义后缀 _dialog：「添加插件」安装对话框、确认框、审批卡…
+          首例见用户截图）。它们的遮罩**自己就画** backdrop-filter:
+          var(--dsw-mask-blur)，而本包在 body 上把这条通道换成了模糊配方
+          （见上面 #156① 那段）⇒ 卡片背后已经是模糊的页面，读层令牌就是半透明玻璃，
+          没有"两行字叠在一起"的重影风险；1.4.2 发布版本来就是这种玻璃观感。
+          本组最初一刀切实底化，用户口径是「添加插件界面玻璃丢失」。
+          ⚠️ 用类名后缀而不是 aria-modal：宿主 Modal 的 dialog 类名恒定带 _dialog
+          （Modal.module.css 的 .dialog），第三方浮层用 dshMarketOverlay /
+          typeFilterPanel 这类名字，照旧命中实底。
         ⚠️ 不写 :has([data-slot="settings.section"]) 之类的宿主锚点排除：会被 ② 组判成
           "未登记的玻璃面"，且会让本组规则被算进 settings-window 面而使 W5 判红（都实测踩过）。
-          两个 data-we-* 都是本插件自己的标记，anchorsOf() 按前缀跳过，不参与枚举。 */
-  body[data-we-glass-page][data-we-floater-solid] :where([role="dialog"], [aria-modal="true"]):not([data-we-surface-runtime]):not([data-we-host-dialog]) {
-    background-color: var(--we-readability-base, #ffffff) !important;
-    -webkit-backdrop-filter: none !important;
-    backdrop-filter: none !important;
+          三个排除项里两个 data-we-* 是本插件自己的标记，anchorsOf() 按前缀跳过，不参与枚举；
+          class 子串不是 data-* 锚点，也不参与。 */
+  body[data-we-glass-page][data-we-floater-solid] :where([role="dialog"], [aria-modal="true"]):not([class*="_dialog"]):not([data-we-surface-runtime]):not([data-we-host-dialog]) {
+    --dsw-alias-bg-layer-1: var(--we-readability-base, #ffffff);
+    --dsw-alias-bg-layer-2: var(--we-readability-base, #ffffff);
+    --dsw-alias-bg-layer-3: var(--we-readability-base, #ffffff);
   }
-  body[data-we-glass-page][data-we-floater-solid] :where([role="alertdialog"]):not([data-we-surface-runtime]):not([data-we-host-dialog]) {
-    background-color: var(--we-readability-base, #ffffff) !important;
-    -webkit-backdrop-filter: none !important;
-    backdrop-filter: none !important;
+  body[data-we-glass-page][data-we-floater-solid] :where([role="alertdialog"]):not([class*="_dialog"]):not([data-we-surface-runtime]):not([data-we-host-dialog]) {
+    --dsw-alias-bg-layer-1: var(--we-readability-base, #ffffff);
+    --dsw-alias-bg-layer-2: var(--we-readability-base, #ffffff);
+    --dsw-alias-bg-layer-3: var(--we-readability-base, #ffffff);
   }
   /* #315：无 role 浮层的可声明实底（#277 的剩余边界第一步）。
      上面两条只认 ARIA 面；没有 role 的框架层 / 吸顶条 / 第三方容器没有稳定锚点，
@@ -1838,6 +1855,19 @@ const CSS_GLASS = `
     background-color: var(--we-readability-base, #ffffff) !important;
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
+  }
+
+  /* ── 上下文占用环（ContextMeter）：轨道不得吃「边框」滑杆 ────────────────────
+     症状（用户截图）：底栏上下文占用的小圈"总是像满了"，进度弧看不出来。
+     根因：#255④ 把 --dsw-alias-border-l3 一起接进「边框」滑杆；宿主
+     ContextMeter 的轨道圆环（circle class="*_track"）正是用它画的，进度弧
+     （circle class="*_fill"）用 --dsw-alias-label-tertiary。用户配置 border=0.9 时
+     轨道合成到 ~#a6a6a6，比弧（#979da6）还亮 ⇒ 整圈都像已占用。
+     修法：轨道改由文字三档色稀释而来（与进度弧同源，恒比它淡），不新增令牌、
+     不碰弧、也不改边框滑杆的其它消费者。锚点取 CSS Module 的语义后缀 _track
+     （哈希前缀随构建变、后缀稳定；宿主里只有 ContextMeter 用 circle._track）。 */
+  body[data-we-glass-page] circle[class*="_track"] {
+    stroke: color-mix(in srgb, var(--dsw-alias-label-tertiary, #979da6) 32%, transparent);
   }
 
 `;
