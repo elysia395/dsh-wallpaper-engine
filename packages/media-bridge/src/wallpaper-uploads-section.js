@@ -15,13 +15,13 @@
  * renderConfirmRow 都会由构建期配方内联后的入口从 host 解构进**同一个工厂作用域**。
  */
   function renderWallpaperUploadsSection(ctx) {
-    const { armedConfirm, group, onArmConfirm, onCancelEditUploadDir, onCancelEditWeAssetsDir, onDisarmConfirm, onStartEditUploadDir, onStartEditWeAssetsDir, onUploadDirDraft, onWeAssetsDirDraft, playableCount, playableList, sel, uploadedList } = ctx;
+    const { armedConfirm, group, onArmConfirm, onCancelEditUploadDir, onCancelEditWeAssetsDir, onDisarmConfirm, onStartEditUploadDir, onStartEditWeAssetsDir, onUploadDirDraft, onUrlDraft, addUrlWallpaper, addBingWallpaper, refreshUrlWallpaper, onWeAssetsDirDraft, playableCount, playableList, sel, uploadedList } = ctx;
     const uploadToken = (w) => "upload:" + w.id;
     return React.createElement(React.Fragment, null,
-    // ── 自定义壁纸: local JPG/PNG/MP4 as wallpapers. Files are written by the
-    //    host into its plugin-managed directory and served through the same
-    //    media/preview routes (read-A storage: survives restarts, no quota
-    //    limits). Uploads merge into the inventory on the host side. ──
+    // ── 自定义壁纸: local JPG/PNG/WebP/MP4 as wallpapers, plus image URL sources.
+    //    Files are written by the host into its plugin-managed directory and served
+    //    through the same media/preview routes (read-A storage: survives restarts,
+    //    no quota limits). Uploads merge into the inventory on the host side. ──
     React.createElement("div", { className: "we-picker__section" },
       React.createElement("div", { className: "we-picker__section-head" },
         React.createElement("span", { className: "we-picker__section-label" }, weT("自定义壁纸")),
@@ -120,7 +120,7 @@
         React.createElement("span", { className: "we-picker__hint we-picker__label" }, weT("自定义")),
         React.createElement("input", {
           className: "we-picker__file", type: "file",
-          accept: ".jpg,.jpeg,.png,.mp4",
+          accept: ".jpg,.jpeg,.png,.webp,.mp4",
           disabled: sel.uploading,
           onChange: (e) => {
             const f = e.target.files && e.target.files[0];
@@ -130,17 +130,55 @@
         }),
         sel.uploading && React.createElement("span", { className: "we-picker__hint" }, weT("上传中…")),
       ),
+      // 图片 URL 源：宿主下载后就是普通自定义壁纸；Bing 每日一图每天自动换一次。
+      // 只有用户在这里主动添加时才会联网。
+      React.createElement("div", { className: "we-picker__row" },
+        React.createElement("span", { className: "we-picker__hint we-picker__label" }, weT("从 URL 添加")),
+        React.createElement("input", {
+          className: "we-picker__text", type: "text",
+          value: sel.urlDraft || "",
+          placeholder: weT("图片直链（http / https）"),
+          disabled: sel.uploading || sel.urlBusy,
+          onInput: onUrlDraft,
+          onKeyDown: (e) => { if (e.key === "Enter") addUrlWallpaper(); },
+        }),
+        React.createElement("button", {
+          className: "we-picker__btn", type: "button",
+          disabled: sel.uploading || sel.urlBusy,
+          onClick: addUrlWallpaper,
+        }, sel.urlBusy ? weT("抓取中…") : weT("添加")),
+      ),
+      React.createElement("div", { className: "we-picker__row" },
+        React.createElement("button", {
+          className: "we-picker__btn", type: "button",
+          disabled: sel.uploading || sel.urlBusy,
+          onClick: addBingWallpaper,
+        }, weT("添加 Bing 每日一图")),
+        React.createElement("span", { className: "we-picker__hint" },
+          weT("每天自动更新；图片来自 Bing，仅限桌面壁纸使用")),
+      ),
       sel.uploadError && React.createElement("div", { className: "we-picker__error" }, sel.uploadError),
       sel.uploadNote && React.createElement("div", { className: "we-picker__note" }, sel.uploadNote),
+      sel.urlError && React.createElement("div", { className: "we-picker__error" }, sel.urlError),
+      sel.urlNote && React.createElement("div", { className: "we-picker__note" }, sel.urlNote),
       React.createElement("div", { className: "we-picker__row" },
         React.createElement("span", { className: "we-picker__hint" }, weT("已上传 {count} 个", { count: uploadedList.length })),
-        React.createElement("span", { className: "we-picker__hint" }, weT("支持 JPG / PNG / MP4，及含 project.json 的 WE 壁纸目录")),
+        React.createElement("span", { className: "we-picker__hint" }, weT("支持 JPG / PNG / WebP / MP4，及含 project.json 的 WE 壁纸目录")),
       ),
       uploadedList.length > 0 && React.createElement("div", { className: "we-picker__uploads-list" },
         uploadedList.map((w) => React.createElement(React.Fragment, { key: w.id },
           React.createElement("div", { className: "we-picker__uploads-item" },
           React.createElement("span", { className: "we-picker__uploads-name", title: w.title }, w.title),
           React.createElement("span", { className: "we-picker__hint" }, w.type === "video" ? "MP4" : weT("图片")),
+          w.urlSource && React.createElement("span", {
+            className: "we-picker__hint",
+            title: w.urlSource.lastError || w.urlSource.attribution || "",
+          }, w.urlSource.kind === "bing" ? weT("Bing 每日") : weT("URL 源")),
+          w.urlSource && React.createElement("button", {
+            className: "we-picker__btn", type: "button",
+            disabled: sel.uploading || sel.urlBusy,
+            onClick: () => refreshUrlWallpaper(w.id),
+          }, weT("刷新")),
           React.createElement("button", {
             className: "we-picker__btn", type: "button",
             // **会删本地文件** ⇒ 这一处最需要两下：第一下只置令牌。

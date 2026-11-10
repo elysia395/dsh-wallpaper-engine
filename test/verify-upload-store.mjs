@@ -360,7 +360,7 @@ await pair(
   'C1 legacy 字符串形态 ⇒ {title, sha256:null, contentrating:null}',
   judgeLegacyEntry,
   'legacy-branch-gone',
-  [[`    if (typeof v === 'string') return { title: v, sha256: null, contentrating: null };\n`, '']],
+  [[`    if (typeof v === 'string') return { title: v, sha256: null, contentrating: null, source: null };\n`, '']],
 );
 await pair(
   'C2 对象形态逐字段透传：title 原样、空白 title 回落 id、非法 sha256/rating ⇒ null、缺键回落 id',
@@ -387,7 +387,7 @@ await pair(
   'D 往返：写侧空 title 的回落（title || id）',
   judgeRoundTrip,
   'write-title-no-fallback',
-  [[`        m[id] = { title: title || id, sha256: sha256 || null };`, `        m[id] = { title, sha256 };`]],
+  [[`          title: title || prev.title || id,`, `          title,`]],
 );
 
 section('E. 写必须过注入的串行队列（不变量 1：读整份 → 改一条 → 原子写回）');

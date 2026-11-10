@@ -140,7 +140,7 @@ const WE_I18N_EN_EXT = {
   "📖 项目简介": "📖 About the project",
   "🖼️ 壁纸引擎 · 让 DSH 的背后动起来": "🖼️ Wallpaper Engine · bring the space behind DSH to life",
   "把 Wallpaper Engine 的壁纸搬到 DSH 界面后面：视频直接播放，场景（Scene）与网页（Web）壁纸由内置的 WebWallGL 引擎实时渲染，再配上一整套液态玻璃界面改造 —— 你桌面上那张会动的画，现在就在对话背后放着。🎬✨": "Puts your Wallpaper Engine wallpapers behind the DSH interface: videos play directly, Scene and Web wallpapers are rendered live by the bundled WebWallGL engine, and the whole UI gets a liquid-glass makeover — the moving picture from your desktop now hangs behind the chat. 🎬✨",
-  "壁纸全部来自你自己的机器（本机库 / WE 工程目录 / 手动上传），插件不联网也能用，更不会把它们传到任何地方。🔒": "Every wallpaper comes from your own machine (local library / WE project folders / manual uploads); the plugin works offline and never sends them anywhere. 🔒",
+  "壁纸默认全部来自你自己的机器（本机库 / WE 工程目录 / 手动上传），插件不联网也能用；只有你主动添加图片 URL / Bing 每日一图时才会联网下载，不会上传你的任何文件。🔒": "Wallpapers normally come from your own machine (local library / WE project folders / manual uploads), and the plugin works offline; it only goes online when you explicitly add an image URL / the Bing daily image, and it never uploads your files. 🔒",
   "🙏 贡献者致谢": "🙏 Contributors",
   "这个插件是许多人一起做出来的成果，谢谢他们：❤️": "This plugin is the work of many hands — thank you all: ❤️",
   "🧩 oneincase —— 内置 WebWallGL 实时渲染引擎与 media-bridge 媒体中间件的作者：场景 / 网页壁纸的实时渲染，以及 Windows / macOS / Linux 三平台的原生媒体链路，都建立在它们之上": "🧩 oneincase — author of the bundled WebWallGL live-rendering engine and the media-bridge media middleware: live rendering for Scene / Web wallpapers and the native media pipeline on Windows / macOS / Linux are both built on them",

@@ -54,6 +54,7 @@ const {
   groupWallpapers, startCreateGroup, startEditGroup, saveEditingGroup, cancelEditGroup,
   importPlaylistIntoDraft, Toggle, rotationIntervalDefault,
   changeUploadDir, changeWeAssetsDir, uploadWallpaperFile, removeUploadWallpaper, renderConfirmRow,
+  onUrlDraft, addUrlWallpaper, addBingWallpaper, refreshUrlWallpaper,
   registerPanelSection,
 } = host;
 

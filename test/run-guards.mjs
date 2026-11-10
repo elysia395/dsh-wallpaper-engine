@@ -194,6 +194,8 @@ const VERIFY_STEPS = [
   step('test/verify-child-kill.mjs'),
   step('test/verify-host-diag.mjs'),
   step('test/verify-upload-store.mjs'),
+  // 图片 URL / Bing 每日一图源（#320）：SSRF 拒绝面、图片嗅探、每日到期、meta source 往返、WebP 枚举。
+  step('test/verify-url-source.mjs'),
   step('test/verify-video-preview.mjs'),
   step('test/verify-asset-paths.mjs'),
   step('test/verify-settings-schema-exports.mjs'),

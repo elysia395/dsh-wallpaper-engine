@@ -442,6 +442,11 @@ const selection = {
   uploading: false,
   uploadError: "",
   uploadNote: "",
+  // URL 源导入（transient）：草稿直链 / 在途标志 / 最后错误 / 成功提示。
+  urlDraft: "",
+  urlBusy: false,
+  urlError: "",
+  urlNote: "",
   // 自定义会话头像（「扩展」页签第一个模块）的导入态（transient）：在途的那一方
   // （"" = 空闲，值是 'user' | 'ai'）与最后一条错误。与上面两枚同口径 —— 只活在内存里，
   // 设置白名单没有它们（serialize 时被 schema 过滤掉）。
@@ -1563,7 +1568,8 @@ function restoreWallpapers(ids) {
 // client only POSTs the file, then refreshes the (already-merged) inventory.
 const UPLOAD_URL = "/wallpaper-engine/upload";
 const REMOVE_URL = "/wallpaper-engine/remove";
-const UPLOAD_TYPES = ["image/jpeg", "image/png", "video/mp4"];
+const URL_IMPORT_URL = "/wallpaper-engine/url-import";
+const UPLOAD_TYPES = ["image/jpeg", "image/png", "image/webp", "video/mp4"];
 
 // `isUploadedWallpaper(w)` / `isDirWallpaper(w)`（id 前缀判定）住在
 // **src/picker-model.js** —— ratingOf 的宽松分级与上传管理列表共用同一对判定。
@@ -1571,12 +1577,12 @@ const UPLOAD_TYPES = ["image/jpeg", "image/png", "video/mp4"];
 async function uploadWallpaperFile(file) {
   const ctype = (file.type || "").toLowerCase();
   if (!UPLOAD_TYPES.includes(ctype)) {
-    setTransient("uploadError", weT("仅支持 JPG / PNG 图片与 MP4 视频"));
+    setTransient("uploadError", weT("仅支持 JPG / PNG / WebP 图片与 MP4 视频"));
     emit();
     return;
   }
-  if (!/\.(jpe?g|png|mp4)$/i.test(file.name)) {
-    setTransient("uploadError", weT("文件扩展名需为 .jpg / .png / .mp4"));
+  if (!/\.(jpe?g|png|webp|mp4)$/i.test(file.name)) {
+    setTransient("uploadError", weT("文件扩展名需为 .jpg / .png / .webp / .mp4"));
     emit();
     return;
   }
@@ -1624,6 +1630,65 @@ async function removeUploadWallpaper(id) {
   setTransient("uploading", false);
   emit();
 }
+
+// ── 图片 URL 源（Bing 每日一图 / 用户直链）────────────────────────────────────
+// 宿主负责下载与落盘；成功后它就是一张普通自定义壁纸（筛选 / 轮播 / 玻璃照常）。
+// 失败时宿主保留旧图，这里只把原因显示出来。
+function onUrlDraft(e) {
+  setTransient("urlDraft", e.target.value);
+  emit();
+}
+
+async function importUrlWallpaper(kind) {
+  const isBing = kind === "bing";
+  const url = String(selection.urlDraft || "").trim();
+  if (!isBing && !url) {
+    setTransient("urlError", weT("请输入图片 URL"));
+    emit();
+    return;
+  }
+  setTransient("urlBusy", true);
+  setTransient("urlError", "");
+  setTransient("urlNote", "");
+  emit();
+  try {
+    const payload = isBing ? { action: "add", kind: "bing" } : { action: "add", kind: "url", url };
+    const res = await apiPostJson(URL_IMPORT_URL, payload, { parse: "always" });
+    if (!res.ok) throw new Error(hostFailureReason(res));
+    const data = res.data || {};
+    setTransient("urlNote", data.duplicate
+      ? weT("已更新这张 URL 壁纸")
+      : weT(isBing ? "已添加 Bing 每日一图" : "已从 URL 添加壁纸"));
+    if (!isBing) setTransient("urlDraft", "");
+    await loadInventory();
+    applySelection(data.id);
+  } catch (err) {
+    setTransient("urlError", weT("URL 导入失败：{error}", { error: weT(err && err.message ? err.message : err) }));
+  }
+  setTransient("urlBusy", false);
+  emit();
+}
+
+async function refreshUrlWallpaper(id) {
+  if (!id) return;
+  setTransient("urlBusy", true);
+  setTransient("urlError", "");
+  setTransient("urlNote", "");
+  emit();
+  try {
+    const res = await apiPostJson(URL_IMPORT_URL, { action: "refresh", id }, { parse: "always" });
+    if (!res.ok) throw new Error(hostFailureReason(res));
+    setTransient("urlNote", weT("已刷新这张 URL 壁纸"));
+    await loadInventory();
+  } catch (err) {
+    setTransient("urlError", weT("刷新失败：{error}", { error: weT(err && err.message ? err.message : err) }));
+  }
+  setTransient("urlBusy", false);
+  emit();
+}
+
+function addUrlWallpaper() { return importUrlWallpaper("url"); }
+function addBingWallpaper() { return importUrlWallpaper("bing"); }
 
 const UPLOAD_DIR_URL = "/wallpaper-engine/upload-dir";
 
@@ -2072,6 +2137,10 @@ function occlusionActive() {
  * 又不至于让省电白做"的折中（复核只在判定变化时 emit）。
  */
 const OCCLUSION_RECHECK_MS = 3000;
+
+/** URL 源（Bing 每日一图）的清单复核周期：宿主每天换图，客户端半小时看一眼即可。 */
+const URL_SOURCE_POLL_MS = 30 * 60 * 1000;
+
 // 「live 渲染页为什么没在出帧」的一句话原因：用户暂停与遮挡都算 —— 两者都会让
 // applyLiveControls 把渲染页 pause() 掉，而暂停中的渲染页 __wpStats.frame()
 // 恒为 {fps:0, running:false}（渲染器实现：paused → running:false）。
@@ -4955,7 +5024,7 @@ function WallpaperPicker() {
     );
     return renderWallpaperTab({
       setSetting, setTransient,
-      INTERVALS, armedConfirm: sel.armedConfirm, cdMode, current, editing, editorPageView, group, groups, isLiveScene, onArmConfirm: armConfirm, onArmDeleteGroup, onCancelEditUploadDir, onCancelEditWeAssetsDir, onClear, onDeleteGroup, onDisarmConfirm: disarmConfirm, onEditInterval, onEditName, onEditOrder, onEditTrigger, onGroupChange, onGroupInterval, onGroupTrigger, onPictureSlideSeconds, onOpenPicker, onOpenPickerDraft, onRefresh, onStartEditUploadDir, onStartEditWeAssetsDir, onSwitchTransition, onSwitchTransitionDir, onSwitchTransitionSpeed, onToggleAudio, onTogglePlay, onTogglePropsPanel, onToggleRotation, onUploadDirDraft, onWeAssetsDirDraft, pagerRow, playableCount, playableList, playbackLive, propsPanelOpen, renderUserPropsPanel, sel, setPickerOpener, uploadedList,
+      INTERVALS, armedConfirm: sel.armedConfirm, cdMode, current, editing, editorPageView, group, groups, isLiveScene, onArmConfirm: armConfirm, onArmDeleteGroup, onCancelEditUploadDir, onCancelEditWeAssetsDir, onClear, onDeleteGroup, onDisarmConfirm: disarmConfirm, onEditInterval, onEditName, onEditOrder, onEditTrigger, onGroupChange, onGroupInterval, onGroupTrigger, onPictureSlideSeconds, onOpenPicker, onOpenPickerDraft, onRefresh, onStartEditUploadDir, onStartEditWeAssetsDir, onSwitchTransition, onSwitchTransitionDir, onSwitchTransitionSpeed, onToggleAudio, onTogglePlay, onTogglePropsPanel, onToggleRotation, onUploadDirDraft, onUrlDraft, addUrlWallpaper, addBingWallpaper, refreshUrlWallpaper, onWeAssetsDirDraft, pagerRow, playableCount, playableList, playbackLive, propsPanelOpen, renderUserPropsPanel, sel, setPickerOpener, uploadedList,
     });
   };
   const tabIdx = Math.max(0, visibleTabs.findIndex((t) => t.id === activeTab));
@@ -5722,6 +5791,19 @@ function apply(ctx) {
           emit();
         }, OCCLUSION_RECHECK_MS);
       }
+      // 图片 URL 源（Bing 每日一图）由宿主每天换图：客户端在**存在这类源**时低频重拉清单，
+      // 让正在显示的壁纸跟着换（宿主把 lastFetchedAt 带进 media URL 当版本号 ⇒ 层键变化）。
+      // 没有 URL 源时这个定时器什么都不做，常态零代价。
+      let urlWatch = 0;
+      if (typeof setInterval === "function") {
+        urlWatch = setInterval(() => {
+          if (disposed) return;
+          if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+          const list = selection.inventory.wallpapers || [];
+          if (!list.some((w) => w && w.urlSource)) return;
+          loadInventory().catch(() => { /* 失败保持现状，下一次再试 */ });
+        }, URL_SOURCE_POLL_MS);
+      }
       // 持久化监听器: pagehide → 立即 flush 未落盘的设置; visibilitychange →
       // 页面回到前台时重试失败过的 PUT。注册在这里 (而不是模块作用域) 才能随
       // fiber 注销 — 否则每次插件重载/HMR 都会在同一页面再叠一对, 永不释放。
@@ -5776,6 +5858,7 @@ function apply(ctx) {
         for (const [, unsubLayer] of layerUnsubs) unsubLayer();
         layerUnsubs.clear();
         if (ocWatch) { try { clearInterval(ocWatch); } catch { /* ignore */ } ocWatch = 0; }
+        if (urlWatch) { try { clearInterval(urlWatch); } catch { /* ignore */ } urlWatch = 0; }
         if (typeof window !== "undefined" && typeof window.removeEventListener === "function") {
           for (const t of ocListeners) window.removeEventListener(t, onOcclusionChange);
           if (pageShowBound) window.removeEventListener("pageshow", onBackVisible);

@@ -393,7 +393,7 @@ function weComponentVisibleOf(components, name) {
           React.createElement("p", { className: "we-about__p" },
             weT("把 Wallpaper Engine 的壁纸搬到 DSH 界面后面：视频直接播放，场景（Scene）与网页（Web）壁纸由内置的 WebWallGL 引擎实时渲染，再配上一整套液态玻璃界面改造 —— 你桌面上那张会动的画，现在就在对话背后放着。🎬✨")),
           React.createElement("p", { className: "we-about__p" },
-            weT("壁纸全部来自你自己的机器（本机库 / WE 工程目录 / 手动上传），插件不联网也能用，更不会把它们传到任何地方。🔒")),
+            weT("壁纸默认全部来自你自己的机器（本机库 / WE 工程目录 / 手动上传），插件不联网也能用；只有你主动添加图片 URL / Bing 每日一图时才会联网下载，不会上传你的任何文件。🔒")),
         ),
       ),
       // ── ② 仓库与 Star ──

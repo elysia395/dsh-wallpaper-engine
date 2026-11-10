@@ -569,6 +569,14 @@
         {
           "kind": "guard",
           "npm": null,
+          "file": "test/verify-url-source.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
           "file": "test/verify-video-preview.mjs",
           "args": [],
           "tier": "hard",
@@ -1519,6 +1527,14 @@
           "kind": "guard",
           "npm": null,
           "file": "test/verify-upload-store.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-url-source.mjs",
           "args": [],
           "tier": "hard",
           "probe": false

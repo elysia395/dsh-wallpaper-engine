@@ -428,7 +428,7 @@ function teardownViolations(cleanupBody) {
     petLink: { dispose() {} },
     unsub() {}, unsubEffects() {},
     weSetLayerAttacher() {}, weSetRegistryListener() {},
-    layerUnsubs: new Map(), ocWatch: 0, ocListeners: [],
+    layerUnsubs: new Map(), ocWatch: 0, urlWatch: 0, ocListeners: [],
     pageShowBound: false, pageHideBound: false, fontPageHideBound: false,
     backVisBound: false, warmBound: false, visBound: false, fontVisBound: false,
     onOcclusionChange() {}, onBackVisible() {}, onClientError() {}, onPageHideFlush() {},

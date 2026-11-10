@@ -2,7 +2,7 @@
  * dsh-wallpaper-engine — host half type surface.
  *
  * The host plugin contributes no public Cordis services and registers no model
- * tool. It serves 51 same-origin HTTP routes through `ctx.webServer` and unwinds
+ * tool. It serves 52 same-origin HTTP routes through `ctx.webServer` and unwinds
  * them on unload; `docs/ROUTE-INDEX.md` is the generated table of those routes
  * and stays authoritative for their paths and handlers.
  *
@@ -20,9 +20,26 @@
 
 import type { Context } from '@deepseek-ai/cordis';
 
+/** URL-source bookkeeping for an imported image wallpaper (`up-*` single-file upload). */
+export interface WallpaperUrlSource {
+  /** `bing` = built-in daily source; `url` = user-pasted direct image URL. */
+  kind: 'bing' | 'url';
+  /** Original URL for `url`; today's image URL for `bing`. */
+  url: string;
+  /** Bing market (`zh-CN`, ...); empty for plain URLs. */
+  market: string;
+  /** Last successful fetch (ISO 8601), or empty. */
+  lastFetchedAt: string;
+  /** Last attempt, successful or not (ISO 8601), or empty. */
+  lastAttemptAt: string;
+  /** Last failure reason kept for the panel; empty on success. */
+  lastError: string;
+  /** Bing copyright / attribution text; empty for plain URLs. */
+  attribution: string;
+}
+
 /** One normalized Wallpaper Engine project (or upload) as served in the inventory. */
-export interface WallpaperDescriptor {
-  /** Entry id: Workshop id, project folder name, or `up-*` / `up-dir-*` for uploads. */
+export interface WallpaperDescriptor {  /** Entry id: Workshop id, project folder name, or `up-*` / `up-dir-*` for uploads. */
   id: string;
   /** Display title: project.json title, uploads/.meta.json title, or the id as fallback. */
   title: string;
@@ -31,6 +48,10 @@ export interface WallpaperDescriptor {
   type: string;
   /** Wallpaper Engine content rating from project.json (or uploads/.meta.json), or null. */
   contentrating: string | null;
+  /** Image URL import record (Bing daily / user-pasted URL), or null for local entries.
+   *  The image itself is a regular custom upload; this record only drives the badge,
+   *  manual refresh and the once-a-day Bing refresh. */
+  urlSource: WallpaperUrlSource | null;
   /** Whether the entry has playable media (video/web/image, or any single-file upload). */
   playable: boolean;
   /** Served media URL (`/wallpaper-engine/media/<token>`), or null. */
