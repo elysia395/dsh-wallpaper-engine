@@ -895,9 +895,12 @@ function hostFailureReason(res) {
 }
 let inventorySeq = 0;
 /**
- * 启动预取：`/inventory` 与设置无关，启动链却把它排在 settings → fontsets → fontsets/<id>
- * 之后（见 apply 末尾的链）。apply 一开始就发出这一次请求，等链走到 inventory 时通常已经回来
- * （trace 2026-10-30：inventory 请求 971→1036ms，纯串行浪费）。
+ * 库存预取：`/inventory` 与设置无关，启动链却把它排在 settings → fontsets → fontsets/<id>
+ * 之后（见 apply 末尾的链）。链走到 inventory 前发出这一次请求，好让扫描和字体集那几步
+ * 并行（trace 2026-10-30：inventory 请求 971→1036ms，纯串行浪费）。
+ *
+ * ⚠️ **发起时机在首帧之后**（#158）：插件激活期就发会让大库的整轮扫描和宿主启动抢 I/O；
+ * 现在由启动链在 `afterFirstPaint()` 放行后调用，见 apply 末尾。
  * 只预取一次；`loadInventory` 消费后清空，手动刷新 / 轮播补拉仍走自己的请求。
  *
  * **预取只加速成功路径**：`apiFetch` 不抛错，网络瞬断会以 `{ ok:false, status:0 }` 的
@@ -5399,16 +5402,43 @@ function useLegacySaturateCoupling() {
 weRegisterExtensionModule("avatar", AVATAR_EXTENSION_MODULE);
 weRegisterLayerHooks("avatar", { sync: syncAvatarLayer, dispose: disposeAvatarLayer });
 
+// ── 首帧后空闲门（#158）────────────────────────────────────────────────────────
+// 口径：宿主 `ClientEntries.start()` 对**每个**插件都 `create` + `loader.await()`，
+// 插件没法把自己摘出启动关键路径（审计 docs/archive/wip/ISSUE-AUDIT-148PLUS.md 的更正 ①）；
+// 能减的只有"启动期别让宿主干重活"。inventory 的冷路径在大库上要等整轮扫描
+// （实测总延迟 1.6–2.0 s），而**首帧之前没有任何界面在等它** —— 所以这一腿排到首帧画完后
+// 的空闲时段：双 rAF 保证已经上屏，再 requestIdleCallback（1 s 兜底，躲开长任务）。
+// 没有浏览器 API（vm 测试台 / 非浏览器宿主）时立即放行，行为与本改动之前一致。
+function afterFirstPaint() {
+  return new Promise((resolve) => {
+    const w = typeof window !== "undefined" ? window : null;
+    if (!w || typeof w.requestAnimationFrame !== "function") { resolve(); return; }
+    let settled = false;
+    const done = () => { if (settled) return; settled = true; resolve(); };
+    const idle = () => {
+      try {
+        if (typeof w.requestIdleCallback === "function") w.requestIdleCallback(() => done(), { timeout: 1000 });
+        else if (typeof w.setTimeout === "function") w.setTimeout(done, 150);
+        else done();
+      } catch { done(); }
+    };
+    try { w.requestAnimationFrame(() => w.requestAnimationFrame(idle)); } catch { done(); }
+  });
+}
+
 function apply(ctx) {
   // 0. i18n：把插件文案接上宿主的 locale 服务（`ctx.get("locale")`，可选服务 + 短轮询 ——
   //    缺服务时静默停在默认语言，见 src/i18n/i18n.js）。放在最前面：界面首次渲染就要按当前
   //    语言取词；服务通常已在（dsh-web-app 的 base bundle 自带），轮询只是兜底。
   if (ctx.effect) ctx.effect(() => weI18nAttach(ctx) || undefined);
 
-  // 0b. 启动预取：inventory / 字体集清单与设置无关，启动链却要等 settings 之后才发。
-  //     在这里先发出去，链走到它们时通常已经回来（只预取一次；失败不影响启动链）。
+  // 0b. 启动预取（字体集清单）：与设置无关，启动链却要等 settings 之后才发 —— 这里先发，
+  //     链走到它时通常已经回来（只预取一次；失败不影响启动链）。
+  //     ⚠️ **inventory 不在这里预取**（#158）：大库（2600 项目 / 13,941 文件）上
+  //     `/inventory` 冷调用要等整轮扫描，实测总延迟 1.6–2.0 s。插件激活期就发，等于让
+  //     宿主的启动和这轮全盘扫描抢同一段 I/O；而首帧之前没有任何界面在等它。改为首帧后
+  //     空闲时再发（见 apply 末尾启动链里的 `afterFirstPaint`）。
   try {
-    prefetchInventoryOnce();
     prefetchFontSetList();
   } catch { /* 预取失败走原路径（启动链各步自己会发请求） */ }
 
@@ -5854,7 +5884,15 @@ function apply(ctx) {
   // ⚠️ 终止 `.catch` 是**必须**的：这条链上任何一步 reject，后面的 `loadInventory` 就永不执行 ——
   // 选择器永久停在「扫描 Wallpaper Engine…」，一次性提示也不收敛（用户只能靠刷新或禁用插件自救）。
   // 各步内部已各自消化可预期的失败（宿主不可达 / 存储被拒 / 坏 JSON），这一条兜的是"没预料到的那次抛"。
-  loadPersisted().then(loadFontSet).then(loadInventory).then(loadGlassPresets).catch((err) => {
+  // #158：库存这一腿排在**首帧之后**再跑（`afterFirstPaint` 见上）。大库上它要等一轮全盘
+  // 扫描，而首帧之前没有任何界面等它 ⇒ 没必要在宿主启动那几百毫秒里跟它抢 I/O。
+  // 与 settings / fontset 分离不影响正确性：链尾的 `revalidateSelection()` 只依赖库存本身。
+  loadPersisted()
+    .then(loadFontSet)
+    .then(afterFirstPaint)
+    .then(() => { prefetchInventoryOnce(); return loadInventory(); })
+    .then(loadGlassPresets)
+    .catch((err) => {
     // 链断在任何一步都可能留下没被消费的启动预取；它们属于**这一次**启动链，
     // 不能留到用户后来的手动刷新 / 切字体集时冒充新响应（陈旧库存/清单）。
     inventoryBootPrefetch = null;
