@@ -5793,14 +5793,18 @@ function apply(ctx) {
       }
       // 图片 URL 源（Bing 每日一图）由宿主每天换图：客户端在**存在这类源**时低频重拉清单，
       // 让正在显示的壁纸跟着换（宿主把 lastFetchedAt 带进 media URL 当版本号 ⇒ 层键变化）。
-      // 没有 URL 源时这个定时器什么都不做，常态零代价。
+      // ⚠️ 只有**正在显示**的那张是 URL 源时才重拉：轮询只为拿到版本号，不该让大库每半小时
+      // 做一次整库重建，更不能在轮播过场准备期间把 applySelection 的 cancelRotationPrepare
+      // 撞进来（那会跳一张 / 卡顿）。
       let urlWatch = 0;
       if (typeof setInterval === "function") {
         urlWatch = setInterval(() => {
           if (disposed) return;
           if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
           const list = selection.inventory.wallpapers || [];
-          if (!list.some((w) => w && w.urlSource)) return;
+          const current = list.find((w) => w && w.id === selection.id);
+          if (!current || !current.urlSource) return;
+          if (selection.rotationTimer) return;   // 过场准备中：下一拍再说
           loadInventory().catch(() => { /* 失败保持现状，下一次再试 */ });
         }, URL_SOURCE_POLL_MS);
       }

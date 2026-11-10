@@ -14,12 +14,13 @@
  */
 
 import { existsSync, mkdtempSync, rmSync, writeFileSync } from 'node:fs';
+import { createServer } from 'node:http';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { createUploadStoreKit } from '../lib/upload-store.js';
 import { createUploadDirKit } from '../lib/upload-dir.js';
 import {
-  isBlockedHostname, isPrivateAddress, localDateKey, parseBingArchive, sniffImage,
+  isBlockedHostname, isPrivateAddress, localDateKey, parseBingArchive, requestPinnedOnce, sniffImage,
   sourceDue, titleFromUrl, validateSourceUrl,
 } from '../packages/media-bridge/lib/url-source.js';
 
@@ -50,6 +51,15 @@ check('链路本地 IPv6 被拒', isPrivateAddress('fe80::1'));
 check('ULA IPv6 被拒', isPrivateAddress('fd00::1'));
 check('公网 IPv4 放行', !isPrivateAddress('8.8.8.8'));
 check('公网 IPv6 放行', !isPrivateAddress('2606:4700:4700::1111'));
+check('6to4 内嵌回环被拒', isPrivateAddress('2002:7f00:0001::'));
+check('6to4 内嵌私网被拒', isPrivateAddress('2002:c0a8:0101::'));
+check('NAT64 内嵌回环被拒', isPrivateAddress('64:ff9b::7f00:1'));
+check('NAT64 内嵌私网被拒', isPrivateAddress('64:ff9b::c0a8:101'));
+check('Teredo 2001::/32 被拒', isPrivateAddress('2001::1'));
+check('IPv6 组播被拒', isPrivateAddress('ff02::1'));
+check('IPv6 文档段 2001:db8::/32 被拒', isPrivateAddress('2001:db8::1'));
+check('IPv6 discard 100::/64 被拒', isPrivateAddress('100::1'));
+check('IPv4-compatible 回环被拒', isPrivateAddress('::7f00:1'));
 check('localhost 主机名被拒', isBlockedHostname('localhost'));
 check('.local 主机名被拒', isBlockedHostname('printer.local'));
 check('普通域名放行', !isBlockedHostname('www.bing.com'));
@@ -104,6 +114,34 @@ section('D. 每日刷新到期判断');
   check('十分钟前失败过 → 退避', !sourceDue({ kind: 'bing', lastFetchedAt: yesterday, lastAttemptAt: tenMinutesAgo }, now));
   check('两小时前失败过 → 可重试', sourceDue({ kind: 'bing', lastFetchedAt: yesterday, lastAttemptAt: twoHoursAgo }, now));
   check('本地日期键稳定', localDateKey(now) === '2026-11-10', localDateKey(now));
+}
+
+section('D2. 慢速滴灌：绝对 deadline 覆盖读取阶段');
+{
+  // 每 120 ms 滴 1 字节：socket 空闲超时永远不会触发（每块都重置），只有绝对 deadline 能停。
+  const server = createServer((req, res) => {
+    res.writeHead(200, { 'Content-Type': 'image/jpeg' });
+    const iv = setInterval(() => res.write(Buffer.from([0xff])), 120);
+    req.on('close', () => clearInterval(iv));
+  });
+  await new Promise((r) => { server.listen(0, '127.0.0.1', r); });
+  const port = server.address().port;
+  const started = Date.now();
+  let message = '';
+  try {
+    await requestPinnedOnce(new URL(`http://127.0.0.1:${port}/drip.jpg`), { address: '127.0.0.1', family: 4 }, {
+      deadline: Date.now() + 600,
+      timeoutMs: 600,
+      maxBytes: 1024,
+    });
+  } catch (error) {
+    message = String(error && error.message);
+  }
+  const elapsed = Date.now() - started;
+  server.closeAllConnections?.();
+  server.close();
+  check('滴灌响应在 deadline 内被中断（不是等 socket 空闲）', elapsed < 3000 && message === '请求超时',
+    elapsed + 'ms / ' + message);
 }
 
 section('E. uploads/.meta.json 的 source 往返');
@@ -173,6 +211,23 @@ section('H. 旧 setUploadMeta 形状不变');
   await kit.setUploadMeta('k', 'T', 'S');
   const raw = kit.readUploadMeta().k;
   check('新条目只有 title / sha256', JSON.stringify(raw) === JSON.stringify({ title: 'T', sha256: 'S' }), JSON.stringify(raw));
+}
+
+section('I. 长 URL 不被截断（否则刷新必失败）');
+{
+  const dir = freshDir('longurl');
+  const kit = createUploadStoreKit({
+    getUploadDir: () => dir,
+    ensureDirOnce: () => dir,
+    enqueueConfigWrite: (fn) => Promise.resolve(fn()),
+    atomicWriteFileSync: (file, data) => writeFileSync(file, data),
+  });
+  const longUrl = 'https://example.com/' + 'a'.repeat(4096) + '.jpg';
+  await kit.setUploadMeta('up-long', 'Long', 'sha', {
+    source: { kind: 'url', url: longUrl, market: '', lastFetchedAt: '', lastAttemptAt: '', lastError: '', attribution: '' },
+  });
+  const stored = kit.metaEntry(kit.readUploadMeta(), 'up-long').source.url;
+  check('超长直链原样保存（不截断）', stored === longUrl, 'len=' + stored.length);
 }
 
 for (const dir of tmpDirs) {

@@ -37,6 +37,43 @@ function stripBrackets(hostname) {
   return String(hostname || '').replace(/^\[|\]$/g, '');
 }
 
+/** Expand an IPv6 literal into its 8 hextets, or null when it is not one. */
+function ipv6Hextets(address) {
+  const raw = String(address || '').toLowerCase().split('%')[0];
+  if (net.isIP(raw) !== 6) return null;
+  const [headPart, tailPart] = raw.split('::');
+  const toNums = (part) => (part ? part.split(':').filter((s) => s !== '') : []);
+  let head = toNums(headPart);
+  let tail = toNums(tailPart === undefined ? '' : tailPart);
+  // 末尾的点分 IPv4（`::ffff:127.0.0.1`）折成两个 hextet。
+  const foldV4 = (arr) => {
+    if (!arr.length) return arr;
+    const last = arr[arr.length - 1];
+    if (!last.includes('.')) return arr;
+    const p = last.split('.').map(Number);
+    if (p.length !== 4 || p.some((n) => !Number.isInteger(n) || n < 0 || n > 255)) return null;
+    return [...arr.slice(0, -1), ((p[0] << 8) | p[1]).toString(16), ((p[2] << 8) | p[3]).toString(16)];
+  };
+  head = foldV4(head);
+  tail = foldV4(tail);
+  if (!head || !tail) return null;
+  const fill = 8 - head.length - tail.length;
+  if (tailPart === undefined) {
+    if (head.length !== 8) return null;
+    return head.map((h) => parseInt(h, 16));
+  }
+  if (fill < 0) return null;
+  const all = [...head, ...Array(fill).fill('0'), ...tail];
+  if (all.length !== 8) return null;
+  const nums = all.map((h) => parseInt(h, 16));
+  return nums.every((n) => Number.isInteger(n) && n >= 0 && n <= 0xffff) ? nums : null;
+}
+
+/** Rebuild a dotted IPv4 from two hextets (embedded-IPv4 forms). */
+function v4FromHextets(hi, lo) {
+  return [(hi >> 8) & 0xff, hi & 0xff, (lo >> 8) & 0xff, lo & 0xff].join('.');
+}
+
 /**
  * Whether an IP literal points at a loopback / private / link-local / reserved range.
  * Non-IP strings are treated as blocked (callers resolve hostnames separately).
@@ -61,21 +98,23 @@ export function isPrivateAddress(address) {
     if (a >= 224) return true;                                // multicast / reserved
     return false;
   }
-  const ip = raw.toLowerCase().split('%')[0];
-  if (ip === '::' || ip === '::1') return true;
-  if (/^fe[89ab]/.test(ip)) return true;                     // fe80::/10 link-local
-  if (/^f[cd]/.test(ip)) return true;                        // fc00::/7 unique-local
-  if (ip.startsWith('::ffff:')) {
-    const tail = ip.slice(7);
-    if (net.isIPv4(tail)) return isPrivateAddress(tail);
-    // hex 形式（::ffff:7f00:1）：按最后 32 位还原成 IPv4 再判。
-    const m = /^([0-9a-f]{1,4}):([0-9a-f]{1,4})$/.exec(tail);
-    if (!m) return true;
-    const hi = parseInt(m[1], 16);
-    const lo = parseInt(m[2], 16);
-    return isPrivateAddress(`${hi >> 8}.${hi & 255}.${lo >> 8}.${lo & 255}`);
+  const h = ipv6Hextets(raw);
+  if (!h) return true;
+  const allZero = h.every((n) => n === 0);
+  if (allZero) return true;                                   // ::
+  if (h.slice(0, 7).every((n) => n === 0) && h[7] === 1) return true;   // ::1
+  if ((h[0] & 0xffc0) === 0xfe80) return true;                // fe80::/10 link-local
+  if ((h[0] & 0xfe00) === 0xfc00) return true;                // fc00::/7 unique-local
+  if ((h[0] & 0xff00) === 0xff00) return true;                // ff00::/8 multicast
+  if (h[0] === 0x2001 && h[1] === 0x0db8) return true;        // 2001:db8::/32 documentation
+  if (h[0] === 0x0100 && h[1] === 0 && h[2] === 0 && h[3] === 0) return true; // 100::/64 discard
+  if (h[0] === 0x2002) return isPrivateAddress(v4FromHextets(h[1], h[2]));  // 6to4
+  if (h[0] === 0x0064 && h[1] === 0xff9b) return isPrivateAddress(v4FromHextets(h[6], h[7])); // NAT64
+  if (h[0] === 0x2001 && h[1] === 0) return true;              // Teredo 2001::/32
+  // IPv4-mapped (::ffff:0:0/96) 与 IPv4-compatible (::/96)：都取末尾 32 位递归判定。
+  if (h.slice(0, 5).every((n) => n === 0) && (h[5] === 0xffff || h[5] === 0)) {
+    return isPrivateAddress(v4FromHextets(h[6], h[7]));
   }
-  if (ip.startsWith('::') && net.isIPv4(ip.slice(2))) return isPrivateAddress(ip.slice(2));
   return false;
 }
 
@@ -102,11 +141,31 @@ export function validateSourceUrl(raw) {
   return url;
 }
 
-/** Resolve a hostname and reject if **any** answer is private. */
-export async function resolvePublicAddresses(hostname) {
+/**
+ * Resolve a hostname and reject if **any** answer is private.
+ * `timeoutMs` bounds the lookup itself: a resolver that never answers must not
+ * outlive the fetch deadline (the caller passes what is left of its budget).
+ */
+export async function resolvePublicAddresses(hostname, timeoutMs) {
   const host = stripBrackets(hostname);
   let list;
-  try { list = await dns.lookup(host, { all: true, verbatim: true }); } catch { throw new Error('域名解析失败'); }
+  const lookup = dns.lookup(host, { all: true, verbatim: true });
+  const budget = Number(timeoutMs) > 0 ? Number(timeoutMs) : 0;
+  try {
+    if (budget) {
+      let timer = null;
+      const timeout = new Promise((_, reject) => {
+        timer = setTimeout(() => reject(new Error('域名解析超时')), budget);
+        if (typeof timer.unref === 'function') timer.unref();
+      });
+      list = await Promise.race([lookup, timeout]);
+      clearTimeout(timer);
+    } else {
+      list = await lookup;
+    }
+  } catch (error) {
+    throw new Error(error && error.message === '域名解析超时' ? '域名解析超时' : '域名解析失败');
+  }
   if (!Array.isArray(list) || !list.length) throw new Error('域名解析失败');
   for (const item of list) {
     if (isPrivateAddress(item.address)) throw new Error('拒绝访问私网地址');
@@ -117,12 +176,33 @@ export async function resolvePublicAddresses(hostname) {
 /**
  * One HTTP request pinned to an already-validated address. Redirects are
  * returned to the caller (never followed here) so every hop is re-validated.
+ *
+ * `opts.deadline` 是**绝对**时间戳（毫秒）：DNS / 建连 / 读取全程共用同一个预算。
+ * 不能只靠 socket `timeout`（那是空闲超时，每收到一个字节就重置）—— 慢速滴灌的对端
+ * 能让一次抓取无限挂住，并占住 `inflight` 把后续刷新全部堵死。
+ *
+ * 导出是给守卫用的接缝（`verify-url-source` 直接对着本机滴灌服务器验预算），
+ * 业务调用点一律经 `fetchBuffer`（它先做逐跳 SSRF 校验再调这里）。
  */
-function requestOnce(urlObj, address, opts) {
+export function requestPinnedOnce(urlObj, address, opts) {
   return new Promise((resolve, reject) => {
     const isHttps = urlObj.protocol === 'https:';
     const mod = isHttps ? https : http;
     const hostname = stripBrackets(urlObj.hostname);
+    const deadline = Number(opts.deadline) > 0 ? Number(opts.deadline) : Date.now() + opts.timeoutMs;
+    const remaining = () => Math.max(1, deadline - Date.now());
+    let settled = false;
+    const fail = (error) => {
+      if (settled) return;
+      settled = true;
+      clearTimeout(guard);
+      reject(error);
+    };
+    const guard = setTimeout(() => {
+      try { req.destroy(new Error('请求超时')); } catch { /* ignore */ }
+      fail(new Error('请求超时'));
+    }, remaining());
+    if (typeof guard.unref === 'function') guard.unref();
     const req = mod.request({
       protocol: urlObj.protocol,
       host: address.address,
@@ -137,44 +217,54 @@ function requestOnce(urlObj, address, opts) {
         'Accept-Encoding': 'identity',
       },
       ...(isHttps ? { servername: hostname, rejectUnauthorized: true } : {}),
-      timeout: opts.timeoutMs,
+      timeout: remaining(),
     }, (res) => {
       const status = res.statusCode || 0;
       if (status >= 300 && status < 400 && res.headers.location) {
         res.resume();
-        resolve({ status, location: String(res.headers.location) });
+        if (!settled) { settled = true; clearTimeout(guard); resolve({ status, location: String(res.headers.location) }); }
         return;
       }
       if (status !== 200) {
         res.resume();
-        resolve({ status });
+        if (!settled) { settled = true; clearTimeout(guard); resolve({ status }); }
         return;
       }
       const chunks = [];
       let size = 0;
       let aborted = false;
       res.on('data', (chunk) => {
-        if (aborted) return;
+        if (aborted || settled) return;
+        // 滴灌防线：每收到一块都核对绝对 deadline，而不是等 socket 空闲超时。
+        if (Date.now() >= deadline) {
+          aborted = true;
+          try { req.destroy(new Error('请求超时')); } catch { /* ignore */ }
+          fail(new Error('请求超时'));
+          return;
+        }
         size += chunk.length;
         if (size > opts.maxBytes) {
           aborted = true;
-          req.destroy(new Error('响应过大'));
+          try { req.destroy(new Error('响应过大')); } catch { /* ignore */ }
+          fail(new Error('响应过大'));
           return;
         }
         chunks.push(chunk);
       });
       res.on('end', () => {
-        if (aborted) return;
+        if (aborted || settled) return;
+        settled = true;
+        clearTimeout(guard);
         resolve({
           status,
           body: Buffer.concat(chunks),
           contentType: String(res.headers['content-type'] || ''),
         });
       });
-      res.on('error', (err) => { if (!aborted) reject(err); });
+      res.on('error', (err) => { if (!aborted) fail(err); });
     });
-    req.on('timeout', () => req.destroy(new Error('请求超时')));
-    req.on('error', reject);
+    req.on('timeout', () => { try { req.destroy(new Error('请求超时')); } catch { /* ignore */ } fail(new Error('请求超时')); });
+    req.on('error', (err) => fail(err));
     req.end();
   });
 }
@@ -184,16 +274,18 @@ async function fetchBuffer(rawUrl, opts = {}) {
   const timeoutMs = Number(opts.timeoutMs) > 0 ? Number(opts.timeoutMs) : FETCH_TIMEOUT_MS;
   const maxBytes = Number(opts.maxBytes) > 0 ? Number(opts.maxBytes) : MAX_IMAGE_BYTES;
   const maxRedirects = Number.isInteger(opts.maxRedirects) ? opts.maxRedirects : MAX_REDIRECTS;
+  // 绝对 deadline 覆盖 DNS / 建连 / 读取**全过程**（跳与跳之间也只花剩下的预算）。
   const deadline = Date.now() + timeoutMs;
   let current = validateSourceUrl(rawUrl);
   for (let hop = 0; hop <= maxRedirects; hop += 1) {
     const remaining = deadline - Date.now();
     if (remaining <= 0) throw new Error('请求超时');
-    const addresses = await resolvePublicAddresses(current.hostname);
-    const res = await requestOnce(current, addresses[0], {
+    const addresses = await resolvePublicAddresses(current.hostname, remaining);
+    const res = await requestPinnedOnce(current, addresses[0], {
       ...opts,
       maxBytes,
-      timeoutMs: Math.min(remaining, timeoutMs),
+      timeoutMs: Math.max(1, deadline - Date.now()),
+      deadline,
     });
     if (res.location) {
       const next = new URL(res.location, current).toString();

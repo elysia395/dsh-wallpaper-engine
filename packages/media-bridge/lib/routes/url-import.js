@@ -27,6 +27,13 @@ export const DEPS = [
   'http', 'log',
 ];
 
+/**
+ * 允许缺席的注入键：下载器。生产调用点**不传** ⇒ 用本包 `../url-source.js` 的真实现；
+ * 守卫（`test/verify-url-import-route.mjs`）注入本地 mock 图片站，因为真实现会（正确地）
+ * 拒绝指向回环的 mock 主机，没法在本机跑通端到端。
+ */
+export const OPTIONAL_DEPS = ['fetchImageFromUrl', 'fetchBingDaily'];
+
 /** 定时器节奏：启动后稍等一次，之后每半小时看一遍（真正到期判断在 sourceDue）。 */
 const FIRST_CHECK_DELAY_MS = 20 * 1000;
 const CHECK_EVERY_MS = 30 * 60 * 1000;
@@ -47,17 +54,34 @@ function newUploadId(meta) {
   }
 }
 
-/** 原子覆盖同一 id 的图片；扩展名变化时清掉旧扩展名文件（id 不变 ⇒ 选择/轮播引用不失效）。 */
+/**
+ * 原子覆盖同一 id 的图片；扩展名变化时清掉旧扩展名文件（id 不变 ⇒ 选择/轮播引用不失效）。
+ *
+ * 覆盖走「旧图改名 .bak → 新图 rename 到位 → 删 .bak」：Windows 上 rename 到已存在的
+ * 目标可能因杀软 / 索引器占用失败，**绝不能先删旧图**——那样第二次仍失败就只剩 tmp，
+ * 而 meta 还引用这个 id，等于把用户唯一的好文件弄丢。
+ */
 function writeImage(dir, id, ext, buffer) {
   const target = join(dir, id + '.' + ext);
   const tmp = target + '.tmp' + process.pid;
+  const bak = target + '.bak' + process.pid;
   writeFileSync(tmp, buffer);
+  let movedOld = false;
   try {
+    if (existsSync(target)) {
+      renameSync(target, bak);
+      movedOld = true;
+    }
     renameSync(tmp, target);
-  } catch {
-    try { unlinkSync(target); } catch { /* ignore */ }
-    renameSync(tmp, target);
+  } catch (error) {
+    // 回滚：旧图还在 .bak 上就搬回去，保证「失败保留旧图」。
+    if (movedOld && !existsSync(target)) {
+      try { renameSync(bak, target); } catch { /* 实在搬不回也不能删 .bak */ }
+    }
+    try { unlinkSync(tmp); } catch { /* ignore */ }
+    throw error;
   }
+  if (movedOld) { try { unlinkSync(bak); } catch { /* 下次刷新再清 */ } }
   for (const oldExt of IMAGE_EXTENSIONS) {
     if (oldExt === ext) continue;
     const old = join(dir, id + '.' + oldExt);
@@ -73,6 +97,9 @@ export function registerUrlImportRoutes(webServer, c) {
     http, log,
   } = c;
   const inflight = new Set();
+  // 下载器：生产用真实现（含 SSRF 校验）；守卫可注入本地 mock。
+  const doFetchImage = typeof c.fetchImageFromUrl === 'function' ? c.fetchImageFromUrl : fetchImageFromUrl;
+  const doFetchBing = typeof c.fetchBingDaily === 'function' ? c.fetchBingDaily : fetchBingDaily;
 
   /** 读一个小 JSON 控制面请求体（上限 + 一次性解码，与 upload 族同一口径）。 */
   function readJsonBody(req, res, onDone) {
@@ -123,7 +150,7 @@ export function registerUrlImportRoutes(webServer, c) {
 
   async function download(kind, url, market) {
     if (kind === 'bing') {
-      const bing = await fetchBingDaily({ market: market || 'zh-CN' });
+      const bing = await doFetchBing({ market: market || 'zh-CN' });
       return {
         image: bing,
         title: bing.bingTitle || 'Bing 每日一图',
@@ -135,7 +162,7 @@ export function registerUrlImportRoutes(webServer, c) {
         },
       };
     }
-    const image = await fetchImageFromUrl(url);
+    const image = await doFetchImage(url);
     return {
       image,
       title: titleFromUrl(url) || 'URL 壁纸',
@@ -183,37 +210,53 @@ export function registerUrlImportRoutes(webServer, c) {
   }
 
   async function addEntry(kind, url, requestedTitle) {
-    const meta = readUploadMeta();
-    const dir = ensureUploadDir();
-    const existing = findExisting(meta, kind, url);
-    if (existing) {
-      if (resolveUploadFile(dir, existing.id)) {
-        const result = await refreshOnce(existing.id);
+    // 同一 URL 的并发 add：进入时先占位，下载完再查一次既有条目 —— 否则两个请求都看不到
+    // 对方（快照都在 await 之前），同一 URL 会落成两条壁纸。
+    const addKey = 'add:' + kind + ':' + (kind === 'url' ? url : '');
+    if (inflight.has(addKey)) throw fail('这张壁纸正在添加，请稍候', 409);
+    inflight.add(addKey);
+    try {
+      const meta = readUploadMeta();
+      const dir = ensureUploadDir();
+      const existing = findExisting(meta, kind, url);
+      if (existing) {
+        if (resolveUploadFile(dir, existing.id)) {
+          const result = await refreshOnce(existing.id);
+          return { ...result, duplicate: true };
+        }
+        // 文件被用户手动删掉了：先清掉坏记录，再按新条目重新下载（否则每次添加都命中坏记录）。
+        await removeUploadMeta(existing.id);
+      }
+      let picked;
+      if (kind === 'bing') {
+        picked = await download('bing', '');
+      } else {
+        validateSourceUrl(url);   // 早失败：协议 / 主机不合法直接 400
+        picked = await download('url', url);
+      }
+      // 下载期间可能有另一个 add 刚落地：重新读一次 meta，命中就复用它（幂等）。
+      const latest = readUploadMeta();
+      const raced = findExisting(latest, kind, url);
+      if (raced && resolveUploadFile(dir, raced.id)) {
+        const result = await refreshOnce(raced.id);
         return { ...result, duplicate: true };
       }
-      // 文件被用户手动删掉了：先清掉坏记录，再按新条目重新下载（否则每次添加都命中坏记录）。
-      await removeUploadMeta(existing.id);
+      const id = newUploadId(latest);
+      const title = (requestedTitle || picked.title || id).slice(0, 80);
+      const now = new Date().toISOString();
+      writeImage(dir, id, picked.image.ext, picked.image.buffer);
+      const sha = createHash('sha256').update(picked.image.buffer).digest('hex');
+      const source = {
+        ...picked.source,
+        lastAttemptAt: now,
+        lastFetchedAt: now,
+        lastError: '',
+      };
+      await setUploadMeta(id, title, sha, { source });
+      return { ...publicEntry(id, title, source), duplicate: false };
+    } finally {
+      inflight.delete(addKey);
     }
-    let picked;
-    if (kind === 'bing') {
-      picked = await download('bing', '');
-    } else {
-      validateSourceUrl(url);   // 早失败：协议 / 主机不合法直接 400
-      picked = await download('url', url);
-    }
-    const id = newUploadId(meta);
-    const title = (requestedTitle || picked.title || id).slice(0, 80);
-    const now = new Date().toISOString();
-    writeImage(dir, id, picked.image.ext, picked.image.buffer);
-    const sha = createHash('sha256').update(picked.image.buffer).digest('hex');
-    const source = {
-      ...picked.source,
-      lastAttemptAt: now,
-      lastFetchedAt: now,
-      lastError: '',
-    };
-    await setUploadMeta(id, title, sha, { source });
-    return { ...publicEntry(id, title, source), duplicate: false };
   }
 
   disposers.push(webServer.register({

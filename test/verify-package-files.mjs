@@ -510,8 +510,9 @@ async function main() {
     //     `test/verify-slideshow-client.mjs`（#223 图集清单路由与客户端过场层两条硬档）。
     // 再：verify 102→103 / all 115→116 —— 新增 `test/verify-pet-link.mjs`（performer T4 收口：
     //     面板旋钮真消费 + 双 provider 离线夹具 + 引导图路由冒烟，四条旧豁免改由本汇总入口在链上跑）。
-    // 再：verify 103→104 / all 116→117 —— 新增 `test/verify-we-folders.mjs`（#264 WE「已安装」文件夹）。
-    const CHAIN_FLOOR = { verify: 104, docs: 6, smoke: 6, all: 117 };
+    // 再：verify 104→105 / all 117→118 —— 新增 `test/verify-we-folders.mjs`（#264 WE「已安装」文件夹）。
+    // 再：verify 105→106 / all 118→119 —— 新增 `test/verify-url-import-route.mjs`（#320 URL 导入路由守卫）。
+    const CHAIN_FLOOR = { verify: 106, docs: 6, smoke: 6, all: 119 };
     /** 地板表与 GROUPS 的对齐体检：键名必须与**组名**逐一对齐（纯函数 ⇒ 负对照可直接喂）。 */
     const floorGaps = (groups, floors) => groups.map(([, g]) => g).filter((g) => !Number.isInteger(floors[g]));
     const problems = floorGaps(GROUPS, CHAIN_FLOOR).map((g) => '地板表缺组 ' + g
