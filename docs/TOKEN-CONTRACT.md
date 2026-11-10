@@ -10,8 +10,8 @@
 > **无门控** = 两者都不挂（共存审计 M1 的全部暴露面 —— 白名单见下表，新增一条守卫即红）。
 > JS 侧的令牌写入（`src/font/apply.js` 的 label 族等）不在本契约口径内，见 `docs/CODE-STRUCTURE.md` §13。
 
-共 **189** 条声明 / **60** 个不同令牌。门控归属：
-玻璃 **156** 条 · UI 配色 **11** 条 · 壁纸 **3** 条 · 无门控 **19** 条。
+共 **195** 条声明 / **60** 个不同令牌。门控归属：
+玻璃 **162** 条 · UI 配色 **11** 条 · 壁纸 **3** 条 · 无门控 **19** 条。
 
 ## 无门控声明（白名单 —— M1 的全部暴露面）
 
@@ -48,9 +48,9 @@
 | 令牌 | 条数 | 门控 | 行号 | 消费者注记 |
 |---|---|---|---|---|
 | `--dsw-alias-bg-base` | 2 | 壁纸(2) | src/styles/base.js:210, src/styles/base.js:213 | 页面基底 —— 壁纸可见性的关键前提（transparent） |
-| `--dsw-alias-bg-layer-1` | 15 | 玻璃(14) + 无门控(1) | src/styles/base.js:61, src/styles/panel.js:384, src/styles/panel.js:397, packages/glass/src/glass-css.js:136, packages/glass/src/glass-css.js:237, packages/glass/src/glass-css.js:331, packages/glass/src/glass-css.js:1435, packages/glass/src/glass-css.js:1506, packages/glass/src/glass-css.js:1517, packages/glass/src/glass-css.js:1542, packages/glass/src/glass-css.js:1547, packages/glass/src/glass-css.js:1556, packages/glass/src/glass-css.js:1669, packages/glass/src/glass-css.js:1678, packages/glass/src/glass-css.js:1689 | 面板层次 1（宿主对话框/侧栏底）；better-sidebar 亦按它上色 |
-| `--dsw-alias-bg-layer-2` | 15 | 玻璃(15) | src/styles/panel.js:387, src/styles/panel.js:400, packages/glass/src/glass-css.js:139, packages/glass/src/glass-css.js:240, packages/glass/src/glass-css.js:332, packages/glass/src/glass-css.js:752, packages/glass/src/glass-css.js:1438, packages/glass/src/glass-css.js:1507, packages/glass/src/glass-css.js:1520, packages/glass/src/glass-css.js:1543, packages/glass/src/glass-css.js:1548, packages/glass/src/glass-css.js:1557, packages/glass/src/glass-css.js:1670, packages/glass/src/glass-css.js:1679, packages/glass/src/glass-css.js:1690 | 面板层次 2 |
-| `--dsw-alias-bg-layer-3` | 13 | 玻璃(13) | src/styles/panel.js:390, src/styles/panel.js:403, packages/glass/src/glass-css.js:142, packages/glass/src/glass-css.js:243, packages/glass/src/glass-css.js:1441, packages/glass/src/glass-css.js:1508, packages/glass/src/glass-css.js:1523, packages/glass/src/glass-css.js:1544, packages/glass/src/glass-css.js:1549, packages/glass/src/glass-css.js:1558, packages/glass/src/glass-css.js:1671, packages/glass/src/glass-css.js:1680, packages/glass/src/glass-css.js:1691 | 面板层次 3 |
+| `--dsw-alias-bg-layer-1` | 17 | 玻璃(16) + 无门控(1) | src/styles/base.js:61, src/styles/panel.js:384, src/styles/panel.js:397, packages/glass/src/glass-css.js:136, packages/glass/src/glass-css.js:237, packages/glass/src/glass-css.js:331, packages/glass/src/glass-css.js:1435, packages/glass/src/glass-css.js:1506, packages/glass/src/glass-css.js:1517, packages/glass/src/glass-css.js:1542, packages/glass/src/glass-css.js:1547, packages/glass/src/glass-css.js:1556, packages/glass/src/glass-css.js:1669, packages/glass/src/glass-css.js:1678, packages/glass/src/glass-css.js:1689, packages/glass/src/glass-css.js:1861, packages/glass/src/glass-css.js:1866 | 面板层次 1（宿主对话框/侧栏底）；better-sidebar 亦按它上色 |
+| `--dsw-alias-bg-layer-2` | 17 | 玻璃(17) | src/styles/panel.js:387, src/styles/panel.js:400, packages/glass/src/glass-css.js:139, packages/glass/src/glass-css.js:240, packages/glass/src/glass-css.js:332, packages/glass/src/glass-css.js:752, packages/glass/src/glass-css.js:1438, packages/glass/src/glass-css.js:1507, packages/glass/src/glass-css.js:1520, packages/glass/src/glass-css.js:1543, packages/glass/src/glass-css.js:1548, packages/glass/src/glass-css.js:1557, packages/glass/src/glass-css.js:1670, packages/glass/src/glass-css.js:1679, packages/glass/src/glass-css.js:1690, packages/glass/src/glass-css.js:1862, packages/glass/src/glass-css.js:1867 | 面板层次 2 |
+| `--dsw-alias-bg-layer-3` | 15 | 玻璃(15) | src/styles/panel.js:390, src/styles/panel.js:403, packages/glass/src/glass-css.js:142, packages/glass/src/glass-css.js:243, packages/glass/src/glass-css.js:1441, packages/glass/src/glass-css.js:1508, packages/glass/src/glass-css.js:1523, packages/glass/src/glass-css.js:1544, packages/glass/src/glass-css.js:1549, packages/glass/src/glass-css.js:1558, packages/glass/src/glass-css.js:1671, packages/glass/src/glass-css.js:1680, packages/glass/src/glass-css.js:1691, packages/glass/src/glass-css.js:1863, packages/glass/src/glass-css.js:1868 | 面板层次 3 |
 | `--dsw-alias-bg-module-platform` | 2 | 玻璃(2) | packages/glass/src/glass-css.js:157, packages/glass/src/glass-css.js:253 |  |
 | `--dsw-alias-bg-multi-select` | 2 | 玻璃(2) | packages/glass/src/glass-css.js:160, packages/glass/src/glass-css.js:256 |  |
 | `--dsw-alias-bg-overlay` | 2 | 玻璃(2) | packages/glass/src/glass-css.js:154, packages/glass/src/glass-css.js:250 | 弹层/浮出层底（issue #71 全表面玻璃） |
