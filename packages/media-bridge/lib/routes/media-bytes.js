@@ -48,7 +48,7 @@ export function registerMediaBytesRoutes(webServer, c) {
           res.end('method not allowed');
           return;
         }
-        const pathname = new URL(req.url || '/', 'http://x').pathname;
+        const { pathname, searchParams } = new URL(req.url || '/', 'http://x');
         const token = decodeURIComponent(pathname.slice(prefix.length));
         const abs = mediaMap.get(token);
         // faststart 虚拟布局（moov 在尾部的源）：有就按段表发 —— 播放器第一段就能拿到 moov，
@@ -58,6 +58,11 @@ export function registerMediaBytesRoutes(webServer, c) {
         const pick = seg === 'media' ? pinnedFaststartVariant(abs, token, log) : null;
         if (pick) { serveLayout(pick.layout, pick.abs, req, res, method === 'HEAD'); return; }
         if (seg !== 'preview') { serveFile(abs, req, res, method === 'HEAD'); return; }
+        // 场景全屏占位需要原图。无参请求继续走卡片缩略图。
+        if (searchParams.get('full') === '1') {
+          serveFile(abs, req, res, method === 'HEAD', { revalidate: true });
+          return;
+        }
         // ── /preview（issue #240）：**图片走缩略图**，缺失/生成失败回落原图 ──────────
         // 卡片只有 92px 高，此前让浏览器下载并解码整张原图（8064×5376 = 43 MP × 24 张/页）
         // ⇒ 整个渲染进程被解码/内存带宽拖住（翻页卡死数秒）。这里按需把源图缩到 320px 再发；

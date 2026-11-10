@@ -272,6 +272,13 @@ const videoSrc = read('src/video-layer.js');
       const cold = await inventory();
       const coldInventory = cold.response.status === 200 && cold.item.preview === expectedPreview
         && cold.item.media === expectedMedia && !existsSync(thumb) && inputs.length === 0;
+      const fullUrl = `${cold.item.preview}?full=1`;
+      const full = await send(origin, fullUrl);
+      const fullHead = await send(origin, fullUrl, 'HEAD');
+      const fullPreview = full.status === 200 && full.body.equals(original)
+        && fullHead.status === 200 && fullHead.body.length === 0
+        && Number(fullHead.headers['content-length']) === original.length
+        && !existsSync(thumb) && resolutions === 0 && inputs.length === 0;
       const first = await Promise.all([send(origin, cold.item.preview), send(origin, cold.item.preview)]);
       const generated = first.every((r) => r.status === 200 && r.body.equals(thumbnail))
         && inputs.length === 1 && inputs[0].source === source
@@ -343,7 +350,7 @@ const videoSrc = read('src/video-layer.js');
       const cacheKeys = key1 !== key2 && key2 !== key3
         && readdirSync(kit.imageThumbDir()).every((n) => !n.includes('.tmp'));
       return {
-        coldInventory, generated, stableInventory, cached, revalidate, evicted, regenerated,
+        coldInventory, fullPreview, generated, stableInventory, cached, revalidate, evicted, regenerated,
         stableAfterPrune, missingFfmpeg, mediaUnchanged, noNestedThumbnail, routeSemantics, cacheKeys,
         detail: `before=${before.status} evicted=${evicted} after=${after.status} fallback=${fallback.status} source=${existsSync(source)}`,
       };
@@ -371,6 +378,7 @@ const videoSrc = read('src/video-layer.js');
     const actual = await judgePreview();
     for (const [key, label] of Object.entries({
       coldInventory: '冷清单发布原图 token，枚举不生成缩略图',
+      fullPreview: '全屏预览 GET 和 HEAD 直出原图且不生成缩略图',
       generated: '真实 HTTP 冷取图合流生成一次，输入原图且按 kit 宽度缩放',
       stableInventory: '已有缓存的清单仍发布原图 token，不注册缓存绝对路径',
       cached: '淘汰前 HTTP 200 返回缓存字节且不重复生成',

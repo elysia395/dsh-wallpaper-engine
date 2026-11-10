@@ -125,6 +125,7 @@ const CSS_BASE = `
      transition 写在**这条规则里**：状态翻转时按上式延迟快收，翻回（降级）时规则
      连同 transition 一起消失、立即恢复垫底；live 生效期间这里的 opacity 是字面量 0，
      与「壁纸透明度」滑块无关 —— 不会拖慢滑块手感。 */
+  .we-layer:has(.we-live-iframe.we-live-fallback-ready) .we-live-poster,
   .we-layer:has(.we-live-iframe.we-live-on) .we-live-poster {
     opacity: 0;
     transition: opacity 0.3s ease 1.8s;
@@ -136,6 +137,7 @@ const CSS_BASE = `
     transition: opacity 1.8s ease;
   }
   .we-layer .we-live-iframe.we-live-on { --we-live-fade: 1; }
+  .we-layer .we-live-iframe.we-live-fallback-ready { --we-live-fade: 1; }
 
   /* 切换过场（手动点选与自动轮播共用）：
      - staging：live 渲染页预载驻留层 —— opacity 0 但 in-DOM 且几何满视口，

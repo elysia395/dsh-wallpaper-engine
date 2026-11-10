@@ -204,6 +204,7 @@ function rebuildLiveFrame(frame, watch) {
       try { fresh.setAttribute(a.name, a.value); } catch { /* ignore */ }
     }
     fresh.classList.remove("we-live-on"); // 场景活着再由首帧门点亮，杜绝白闪
+    fresh.classList.remove("we-live-fallback-ready");
     fresh.dataset.weRebuilt = "1";
     if (frame.parentNode) frame.parentNode.replaceChild(fresh, frame);
     else if (frame.isConnected) frame.replaceWith(fresh);
@@ -268,6 +269,9 @@ function startLiveWatch(frame, wid) {
       + " load=" + watch.loadingTicks + " served=" + (watch.payload ? watch.payload.served : "?"))
       , "info", true);
     if (!watch.firstFrame) {
+      if (liveFrameHasContent(frame)) {
+        noteLayerContent(frame.parentNode?.querySelector("div.we-live-poster"));
+      }
       if (alive) {
         watch.firstFrame = true;
         selection.sceneLiveActive = true;
