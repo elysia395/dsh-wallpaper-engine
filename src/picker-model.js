@@ -132,6 +132,23 @@ function matchesTypeFilter(w, allow) {
 }
 
 /**
+ * 壁纸方向：'landscape' / 'portrait' / ''（正方形或尺寸未知）。
+ * 尺寸由宿主从图片文件头 / MP4 tkhd 读出；scene/web 没有"原生方向" ⇒ 空串。
+ */
+function orientationOf(w) {
+  const width = Number(w && w.width);
+  const height = Number(w && w.height);
+  if (!(width > 0) || !(height > 0) || width === height) return "";
+  return width > height ? "landscape" : "portrait";
+}
+
+/** 'all'（或非法值）放行所有条目；横/竖档只放行**能确定且匹配**的方向。 */
+function matchesOrientationFilter(w, filter) {
+  if (filter !== "landscape" && filter !== "portrait") return true;
+  return orientationOf(w) === filter;
+}
+
+/**
  * 「文件夹」筛选：`folderFilter` 是 Wallpaper Engine 某个「已安装」文件夹的 id，
  * `"all"`（或缺省）= 不筛。成员集合由**调用点**从宿主清单的 `folders` 树里取
  * （`folderWallpaperIds`）—— 本层只收一份 id 数组，不读清单、不读 `selection`。
@@ -204,6 +221,7 @@ function pickerModel(input) {
   const hiddenIds = input.hiddenIds || [];
   const ratingFilter = input.ratingFilter;
   const typeFilter = input.typeFilter;
+  const orientationFilter = input.orientationFilter;
   // 标题搜索（选择器模态框）：在两级过滤之上再收窄可播放网格。大小写不敏感的**子串**匹配。
   const query = (input.search || "").trim().toLowerCase();
   // 只有可播放的 Video/Web/Image 才进网格 —— Scene/Application 不能嵌进 web UI，
@@ -211,16 +229,19 @@ function pickerModel(input) {
   const playableList = list.filter((w) =>
     isRotatableWallpaper(w, ratingFilter, typeFilter) && !isHiddenWallpaper(w.id, hiddenIds)
     && matchesFolderFilter(w, input.folderFilter, input.folderWallpaperIds)
+    && matchesOrientationFilter(w, orientationFilter)
     && (!query || String(w.title || "").toLowerCase().indexOf(query) !== -1));
   // 两个过滤下拉的分档计数（可播放、未隐藏）：反映实际可用量，与当前生效的过滤无关。
   const basePlayable = list.filter((w) => isPlayableType(w) && !isHiddenWallpaper(w.id, hiddenIds));
   // 单遍聚合 —— 分档计数各刷一遍 basePlayable 是 10 次 O(n)（5 个分级档 + 5 个类型档）。
   const ratingCounts = { everyone: 0, pg13: 0, mature: 0, unrated: 0 };
   const typeCounts = { video: 0, web: 0, image: 0, scene: 0 };
+  const orientationCounts = { landscape: 0, portrait: 0, unknown: 0 };
   for (const w of basePlayable) {
     const r = ratingOf(w);
     ratingCounts[r] = (ratingCounts[r] || 0) + 1;
     typeCounts[w.type] = (typeCounts[w.type] || 0) + 1;
+    orientationCounts[orientationOf(w) || "unknown"] += 1;
   }
   const editorList = playableWallpapers(list, ratingFilter, typeFilter, hiddenIds);
   const hiddenList = hiddenWallpapers(list, hiddenIds);
@@ -230,6 +251,7 @@ function pickerModel(input) {
     basePlayable,
     ratingCounts,
     typeCounts,
+    orientationCounts,
     editorList,
     hiddenList,
     normalPage: pageSlice(playableList, input.page),
@@ -244,6 +266,7 @@ export {
   ratingOf,
   matchesRatingFilter,
   matchesTypeFilter,
+  matchesOrientationFilter,
   isPlayableType,
   isRotatableWallpaper,
   keepPlayingWallpaper,

@@ -44,6 +44,7 @@ const callsTo = (fn, args, want) => fn(...args) === want;
 
 /** 判据：模型 API 是否齐全（防切出来的段落是空的 ⇒ 下面每条都在空跑）。 */
 const hasModelApi = (M) => ['ratingOf', 'matchesRatingFilter', 'matchesTypeFilter',
+  'matchesOrientationFilter',
   'isPlayableType', 'isRotatableWallpaper', 'keepPlayingWallpaper', 'isHiddenWallpaper',
   'isUploadedWallpaper', 'isDirWallpaper', 'playableWallpapers', 'hiddenWallpapers',
   'pageSlice', 'pickerModel']
@@ -144,7 +145,7 @@ function inlinedSection(bundle, file, markers = SECTION_MARKERS) {
 // 变异测试钩子：默认读构建产物，DSH_MUT_LIB 指向变异副本时读它。
 const code = readFileSync(process.env.DSH_MUT_LIB || new URL('../lib/client.js', import.meta.url), 'utf8');
 
-const MODEL_API_NAMES = '{ ratingOf, matchesRatingFilter, matchesTypeFilter, isPlayableType,'
+const MODEL_API_NAMES = '{ ratingOf, matchesRatingFilter, matchesTypeFilter, matchesOrientationFilter, isPlayableType,'
   + ' isRotatableWallpaper, keepPlayingWallpaper, isRotationEligible, isHiddenWallpaper, isUploadedWallpaper,'
   + ' isDirWallpaper, playableWallpapers, hiddenWallpapers, pageSlice, pickerModel,'
   + ' PICKER_PAGE_SIZE }';
@@ -157,7 +158,7 @@ const MODEL_API_NAMES = '{ ratingOf, matchesRatingFilter, matchesTypeFilter, isP
  *    `hiddenWallpapers` 因零跨模块按名引用被移出 `export { … }`，故这里同步移除；
  *    判据形状不变（导出名集合必须与钉住的清单逐字相等，
  *    多一枚少一枚都判红）。 */
-const MODEL_EXPORTS = ['ratingOf', 'matchesRatingFilter', 'matchesTypeFilter', 'isPlayableType',
+const MODEL_EXPORTS = ['ratingOf', 'matchesRatingFilter', 'matchesTypeFilter', 'matchesOrientationFilter', 'isPlayableType',
   'isRotatableWallpaper', 'keepPlayingWallpaper', 'isRotationEligible', 'isHiddenWallpaper', 'isUploadedWallpaper',
   'isDirWallpaper', 'playableWallpapers', 'pageSlice', 'pickerModel',
   'PICKER_PAGE_SIZE'];
@@ -175,16 +176,16 @@ const M = modelSection ? evaluateModelSection(modelSection) : null;
 // 十张覆盖六种形态的库存：三种分级 + 未分级、有/无 frameUrl 的场景、playable:false、
 // 带/不带分级的自上传、以及 up-dir- 目录项目。
 const W = [
-  { id: 'v1', title: 'Alpha Video', type: 'video', playable: true, contentrating: 'Everyone' },
-  { id: 'v2', title: 'beta video', type: 'video', playable: true, contentrating: 'PG13' },
-  { id: 'v3', title: 'Gamma Video', type: 'video', playable: true, contentrating: 'Mature' },
+  { id: 'v1', title: 'Alpha Video', type: 'video', playable: true, contentrating: 'Everyone', width: 1920, height: 1080 },
+  { id: 'v2', title: 'beta video', type: 'video', playable: true, contentrating: 'PG13', width: 1080, height: 1920 },
+  { id: 'v3', title: 'Gamma Video', type: 'video', playable: true, contentrating: 'Mature', width: 1000, height: 1000 },
   { id: 'w1', title: 'WEB One', type: 'web', playable: true, contentrating: null },
-  { id: 'i1', title: 'Image One', type: 'image', playable: true, contentrating: 'G' },
+  { id: 'i1', title: 'Image One', type: 'image', playable: true, contentrating: 'G', width: 3840, height: 2160 },
   { id: 's1', title: 'Scene With Frame', type: 'scene', playable: false, frameUrl: '/frame/s1', contentrating: 'Everyone' },
   { id: 's2', title: 'Scene No Frame', type: 'scene', playable: false, frameUrl: null, contentrating: 'Everyone' },
   { id: 'v4', title: 'Video Four', type: 'video', playable: false, contentrating: 'Everyone' },
-  { id: 'up-1', title: 'Upload One', type: 'image', playable: true },
-  { id: 'up-dir-2', title: 'Upload Dir', type: 'image', playable: true, contentrating: 'Everyone' },
+  { id: 'up-1', title: 'Upload One', type: 'image', playable: true, width: 720, height: 1280 },
+  { id: 'up-dir-2', title: 'Upload Dir', type: 'image', playable: true, contentrating: 'Everyone', width: 2560, height: 1440 },
 ];
 // 30 张额外的可播放视频：把列表推过一页（24）⇒ 分页与页号 clamp 才有得判。
 const EXTRA = Array.from({ length: 30 }, (_, i) => ({
@@ -197,7 +198,7 @@ const RATING_ALL = ['everyone', 'pg13', 'mature', 'unrated'];
 const TYPE_ALL = ['video', 'web', 'image', 'scene'];
 const modelInput = (over) => Object.assign({
   wallpapers: W, hiddenIds: [], search: '', ratingFilter: RATING_ALL, typeFilter: TYPE_ALL,
-  page: 0, hiddenPage: 0, editorPage: 0,
+  orientationFilter: 'all', page: 0, hiddenPage: 0, editorPage: 0,
 }, over);
 
 // 投影：只挑模型输出的**一部分**来比 —— 投影函数本身也是正负共用的那一份。
@@ -207,6 +208,7 @@ const P = {
   editorIds: (m) => m.editorList.map((w) => w.id),
   query: (m) => m.query,
   counts: (m) => [m.basePlayable.length, m.ratingCounts, m.typeCounts],
+  orientations: (m) => m.orientationCounts,
   sizes: (m) => [m.playableList.length, m.basePlayable.length, m.editorList.length, m.hiddenList.length],
   layout: (m) => [m.normalPage.items.length, m.normalPage.page, m.normalPage.pages],
   hiddenLayout: (m) => [m.hiddenPageView.items.length, m.hiddenPageView.page, m.hiddenPageView.pages],
@@ -254,6 +256,21 @@ const CASES = [
   { name: '自上传：没写分级 ⇒ 按 Everyone（不会被默认勾选挡掉）',
     over: { ratingFilter: ['everyone'] }, project: (m) => m.playableList.map((w) => w.id).filter((id) => id.startsWith('up-')),
     want: ['up-1', 'up-dir-2'], breakOver: { ratingFilter: ['unrated'] } },
+  { name: '方向筛选：横屏只留宽 > 高（正方形 / 未知方向不出现）',
+    over: { orientationFilter: 'landscape' }, project: P.playableIds,
+    want: ['v1', 'i1', 'up-dir-2'], breakOver: { orientationFilter: 'portrait' } },
+  { name: '方向筛选：竖屏只留高 > 宽',
+    over: { orientationFilter: 'portrait' }, project: P.playableIds,
+    want: ['v2', 'up-1'], breakOver: { orientationFilter: 'landscape' } },
+  { name: '方向筛选：全部方向不受影响',
+    over: { orientationFilter: 'all' }, project: P.playableIds, want: ALL_PLAYABLE,
+    breakOver: { orientationFilter: 'landscape' } },
+  { name: '方向筛选只筛可见列表：轮换编辑器成员不变',
+    over: { orientationFilter: 'portrait' }, project: P.editorIds, want: ALL_PLAYABLE,
+    breakOver: { orientationFilter: 'portrait', typeFilter: ['image'] } },
+  { name: '方向计数：横 / 竖 / 未知（正方形与无尺寸都算未知）',
+    over: {}, project: P.orientations,
+    want: { landscape: 3, portrait: 2, unknown: 3 }, breakOver: { hiddenIds: ['v1'] } },
   { name: '分档计数：与勾选组合无关（底数是可播放 ∧ 未隐藏，按精确档分桶）',
     over: { ratingFilter: RATING_ALL }, project: P.counts,
     want: [8, { everyone: 5, pg13: 1, mature: 1, unrated: 1 }, { video: 3, web: 1, image: 3, scene: 1 }],

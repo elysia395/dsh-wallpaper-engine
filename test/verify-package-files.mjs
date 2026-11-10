@@ -512,8 +512,9 @@ async function main() {
     //     面板旋钮真消费 + 双 provider 离线夹具 + 引导图路由冒烟，四条旧豁免改由本汇总入口在链上跑）。
     // 再：verify 104→105 / all 117→118 —— 新增 `test/verify-we-folders.mjs`（#264 WE「已安装」文件夹）。
     // 再：verify 105→106 / all 118→119 —— 新增 `test/verify-url-import-route.mjs`（#320 URL 导入路由守卫）。
-    const CHAIN_FLOOR = { verify: 106, docs: 6, smoke: 6, all: 119 };
-    /** 地板表与 GROUPS 的对齐体检：键名必须与**组名**逐一对齐（纯函数 ⇒ 负对照可直接喂）。 */
+    // 再：verify 106→107 / all 119→120 —— 新增 `test/verify-media-size.mjs`（#304 方向筛选的
+    //     图片文件头 / MP4 tkhd 宽高解析）。
+    const CHAIN_FLOOR = { verify: 107, docs: 6, smoke: 6, all: 120 };    /** 地板表与 GROUPS 的对齐体检：键名必须与**组名**逐一对齐（纯函数 ⇒ 负对照可直接喂）。 */
     const floorGaps = (groups, floors) => groups.map(([, g]) => g).filter((g) => !Number.isInteger(floors[g]));
     const problems = floorGaps(GROUPS, CHAIN_FLOOR).map((g) => '地板表缺组 ' + g
       + '（键名要写**组名**：`verify`/`docs`/`smoke`/`all`，不是脚本键名 `verify:docs`/`verify:all`）');

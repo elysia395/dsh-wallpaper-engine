@@ -376,8 +376,8 @@
 
   function renderPickerFilterRow(ctx) {
     const {
-      sel, basePlayable, ratingCounts, typeCounts, onSearchInput, onRatingToggle, onTypeToggle,
-      folderOptions, folderFilter, onFolderFilterChange,
+      sel, basePlayable, ratingCounts, typeCounts, orientationCounts, onSearchInput, onRatingToggle, onTypeToggle,
+      folderOptions, folderFilter, onFolderFilterChange, onOrientationChange,
     } = ctx;
     // 分级是**多档勾选**（用户口径 2026-10-30，像 WE 本身那样自由组合）：勾上的档才允许
     // 出现在列表、轮播与播放里；计数用各档精确张数（不是累加，勾选本身就是自由组合）。
@@ -512,6 +512,38 @@
         "aria-label": weT("类型（{name}）", { name: typeLabelOf[tier]() }),
       }),
       React.createElement("span", null, typeLabelOf[tier]()),
+      )),
+      ),
+      ),
+      // 方向筛选：单档枚举（全部 / 横屏 / 竖屏）。只筛可见列表 —— 不改变轮播成员与
+      // 「下一张」候选；正方形 / 尺寸未知（scene / web / 探测失败）只在「全部方向」里出现。
+      React.createElement("details", { className: "we-picker__orientation-menu we-picker__type-menu" },
+      React.createElement("summary", {
+        className: "we-picker__type-btn",
+        "aria-label": weT("壁纸方向"),
+        title: weT("按壁纸宽高过滤列表（横屏 / 竖屏）；正方形或无法确定方向的壁纸只在「全部方向」里出现。只筛列表，不影响当前播放与轮播"),
+      },
+      React.createElement("span", { className: "we-picker__rating-text" }, weT("壁纸方向")),
+      React.createElement("span", { className: "we-picker__rating-caret", "aria-hidden": "true" }, "▾"),
+      ),
+      React.createElement("div", { className: "we-picker__rating-list" },
+      [
+        { id: "all", label: () => weT("全部方向（{n}）", { n: (orientationCounts.landscape || 0) + (orientationCounts.portrait || 0) + (orientationCounts.unknown || 0) }) },
+        { id: "landscape", label: () => weT("横屏（{n}）", { n: orientationCounts.landscape || 0 }) },
+        { id: "portrait", label: () => weT("竖屏（{n}）", { n: orientationCounts.portrait || 0 }) },
+      ].map((option) => React.createElement("label", {
+        key: option.id,
+        className: "we-picker__rating-toggle" + ((sel.orientationFilter || "all") === option.id ? " we-picker__rating-toggle--on" : ""),
+      },
+      React.createElement("input", {
+        type: "radio", className: "we-picker__rating-check",
+        name: "we-orientation-filter",
+        value: option.id,
+        checked: (sel.orientationFilter || "all") === option.id,
+        onChange: () => onOrientationChange(option.id),
+        "aria-label": weT("壁纸方向（{name}）", { name: option.label() }),
+      }),
+      React.createElement("span", null, option.label()),
       )),
       ),
       ),

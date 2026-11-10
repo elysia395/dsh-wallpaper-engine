@@ -39,7 +39,8 @@ export interface WallpaperUrlSource {
 }
 
 /** One normalized Wallpaper Engine project (or upload) as served in the inventory. */
-export interface WallpaperDescriptor {  /** Entry id: Workshop id, project folder name, or `up-*` / `up-dir-*` for uploads. */
+export interface WallpaperDescriptor {
+  /** Entry id: Workshop id, project folder name, or `up-*` / `up-dir-*` for uploads. */
   id: string;
   /** Display title: project.json title, uploads/.meta.json title, or the id as fallback. */
   title: string;
@@ -52,6 +53,12 @@ export interface WallpaperDescriptor {  /** Entry id: Workshop id, project folde
    *  The image itself is a regular custom upload; this record only drives the badge,
    *  manual refresh and the once-a-day Bing refresh. */
   urlSource: WallpaperUrlSource | null;
+  /** Real pixel width for image / video entries (read from the file header / MP4
+   *  tkhd), or null when the format has no fixed size (scene / web) or the probe
+   *  failed. The orientation filter compares width with height. */
+  width: number | null;
+  /** Real pixel height for image / video entries, or null (see width). */
+  height: number | null;
   /** Whether the entry has playable media (video/web/image, or any single-file upload). */
   playable: boolean;
   /** Served media URL (`/wallpaper-engine/media/<token>`), or null. */
