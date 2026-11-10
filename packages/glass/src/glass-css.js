@@ -685,36 +685,65 @@ const CSS_GLASS = `
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
   }
-  /* Inline capsules: ten-percent white mist and independent 8px frost.
-     Host padding/radius and text colour stay intact; fences are excluded. */
+  /* 行内胶囊：十成白雾，**不带自己的霜**。
+     宿主的内边距 / 圆角 / 文字颜色原样保留；围栏（pre > code）不在范围内。
+
+     霜是被有意去掉的：backdrop-filter 载体会把胶囊背后的壁纸**重新采样并
+     重绘** —— 采样区越大、重绘结果被降采样得越厉害，壁纸自己的细节（终端
+     文字、细线）就变成横贯胶囊的糊条，读起来像「代码文字被模糊了」。载体
+     跨行盒时还会断裂（宿主的 compact 变体把 chip 渲染成 display:inline），
+     画出的区域是所有行盒的外接矩形、糊成一条盖住同行普通文字的横板 ——
+     那正是 #197 记下的症状。没有载体，胶囊就是一层薄雾铺在下面那层**已经
+     糊过**的表面上：代码文字保持清晰，壁纸也不会被采样两次。
+
+     雾底与边框都留着；saturate / brightness 带不出来 —— 它们是
+     backdrop-filter 的函数，没有载体就没有可滤的背景。 */
   body[data-we-glass-page][data-we-thinking-glass] [data-chat-flow] :not(pre) > code,
   body[data-we-glass-page][data-we-thinking-glass] [data-vcp-rawhtml] :not(pre) > code {
     background: var(--dsw-alias-markdown-inline-code) !important;
     background-image: none !important;
-    -webkit-backdrop-filter: blur(var(--we-inline-code-blur, 8px)) saturate(var(--we-saturate, 1.3)) brightness(var(--we-glass-brightness, 1.04));
-    backdrop-filter: blur(var(--we-inline-code-blur, 8px)) saturate(var(--we-saturate, 1.3)) brightness(var(--we-glass-brightness, 1.04));
-    border-color: var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.14)) !important;
-  }
-  /* #197: the host renders the reasoning body with Markdown's compact variant,
-     where the inline-code chip is display:inline. A backdrop-filter carrier that
-     breaks across line boxes paints the union of every line box, so the capsule
-     frost grows into one full-column bar over the plain text sharing those lines.
-     Drop only the blur here — the host's box-decoration-break: clone keeps the
-     fill sliced per line box, and fences stay excluded by :not(pre).
-     Two anchors carry this: the semantic data-variant="think" the host writes on
-     the reasoning root, and the _thinkBody class suffix. The suffix is a build
-     hash half — docs/CODE-STRUCTURE.md §13 rates it low-stability and forbids hanging
-     user-visible behaviour on it alone — so the semantic attribute is the load
-     bearing one and the suffix is the fallback. The old data-vcp-* names stay
-     for older host lines.
-     [data-chat-flow] is carried too: it puts this rule at 0-4-3 against the
-     0-3-3 original, so the order of the two blocks stops being load bearing
-     (both are !important and equally specific without it). Coverage does not
-     shrink: the only host element with data-variant="think" is the reasoning row
-     inside the chat flow column. */
-  body[data-we-glass-page][data-we-thinking-glass] [data-chat-flow] :is([data-variant="think"], [class*="_thinkBody"], [data-vcp-reasoning-body], [data-vcp-reasoning]) :not(pre) > code {
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
+    border-color: var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.14)) !important;
+  }
+  /* ── Markdown 表格 ───────────────────────────────────────────────────────
+     两个各自的毛病，在纯色背景上都看不出来：
+       ① 表格是承载文字的面，自己却没有面 —— 壁纸直接透过单元格画出来，
+          于是单元格文字的对比度跟着那一行背后的壁纸亮度起伏；
+       ② 宿主用 .5px 发丝线（--dsw-alias-border-l2/l3）画网格，表头行也没有
+          任何强调 ⇒ 整张表读起来像一堆悬空的字。
+     修法：表格拿到代码块同款的可读性下限底面（单元格文字不再随壁纸起
+     伏），表头给一条中性灰的抬起带，两级边框都抬到 1px 并落在插件自己的边框
+     族上（「边框」滑杆继续管 alpha；中性灰在浅色 / 深色两个主题下都读得出；
+     封顶 0.8 是为了不让滑杆拉满时变成一条全不透明的硬线）。
+     底面**直接写配方**而不读 --dsw-alias-markdown-code-block：那条令牌会被
+     工具结果面的清底规则置成 transparent（那里不该叠第二层面），表格要是
+     读了它，在工具结果体内就会退化成一张没有底的网格。
+     锚点只用语义元素（table / th / td）+ 宿主写死的 [data-chat-flow] /
+     [data-vcp-rawhtml]：宿主的表格类名带构建哈希，docs/CODE-STRUCTURE.md §13
+     判其稳定性为低，不许把用户可见行为挂在它上面。
+     这条规则不加霜 ⇒ 不需要 glass-fallback 的孪生规则（回退模式要同一张网格）。 */
+  body[data-we-glass-page][data-we-thinking-glass] [data-chat-flow] table,
+  body[data-we-glass-page][data-we-thinking-glass] [data-vcp-rawhtml] table {
+    background: color-mix(in srgb,
+      var(--we-readability-base) calc(var(--we-readability-floor) * 100%),
+      color-mix(in srgb, var(--we-surface-tint-light, #ffffff) calc(var(--we-glass-alpha, 0.15) * 0.8 * 100%), transparent) calc((1 - var(--we-readability-floor)) * 100%)) !important;
+  }
+  body[data-ds-dark-theme][data-we-glass-page][data-we-thinking-glass] [data-chat-flow] table,
+  body[data-ds-dark-theme][data-we-glass-page][data-we-thinking-glass] [data-vcp-rawhtml] table {
+    background: color-mix(in srgb,
+      var(--we-readability-base) calc(var(--we-readability-floor) * 100%),
+      color-mix(in srgb, var(--we-surface-tint-dark, #0d1524) calc(var(--we-glass-alpha, 0.15) * 0.8 * 100%), transparent) calc((1 - var(--we-readability-floor)) * 100%)) !important;
+  }
+  body[data-we-glass-page][data-we-thinking-glass] [data-chat-flow] table th,
+  body[data-we-glass-page][data-we-thinking-glass] [data-vcp-rawhtml] table th {
+    background-color: rgba(180, 180, 180, calc(var(--we-border-alpha, 0.35) * 0.45)) !important;
+    border-bottom: 1px solid rgba(180, 180, 180, min(0.8, calc(var(--we-border-alpha, 0.35) * 1.7))) !important;
+    color: var(--dsw-alias-label-primary) !important;
+  }
+  body[data-we-glass-page][data-we-thinking-glass] [data-chat-flow] table td,
+  body[data-we-glass-page][data-we-thinking-glass] [data-vcp-rawhtml] table td {
+    border-bottom: 1px solid rgba(180, 180, 180, calc(var(--we-border-alpha, 0.35) * 0.9)) !important;
   }
   /* The two chat navigation buttons reuse capsule mist and frost.
      Local fill tokens preserve native hover/disabled states and hit areas. */
@@ -739,8 +768,6 @@ const CSS_GLASS = `
     background: color-mix(in srgb, var(--we-capsule-glass-fill) 96%, white) !important;
   }
   body[data-we-glass-fallback][data-we-glass-page][data-we-thinking-glass] [data-slot="sidebar"] :not([class*="_collapsed"]) > button[class*="_newSession"],
-  body[data-we-glass-fallback][data-we-glass-page][data-we-thinking-glass] [data-chat-flow] :not(pre) > code,
-  body[data-we-glass-fallback][data-we-glass-page][data-we-thinking-glass] [data-vcp-rawhtml] :not(pre) > code,
   body[data-we-glass-fallback][data-we-glass-page][data-we-thinking-glass] [data-dsh-navbar] > button[data-vlln-load-older],
   body[data-we-glass-fallback][data-we-glass-page][data-we-thinking-glass] [data-slot="conversation.view"] button[class*="_toBottom"] {
     -webkit-backdrop-filter: none !important;

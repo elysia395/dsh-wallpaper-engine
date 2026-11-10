@@ -242,7 +242,7 @@ function applyGlassLayer() {
   // 构建哈希 —— 探针判据与理由见本文件 findTitlebarFrame 的注释。关掉标题栏玻璃 / 皮肤让路
   // = 这一面整组不生效，标记也一并摘掉（`&& !skinYield` 正是让路早退路径的摘锚点）。
   syncTitlebarAnchor(selection.titlebarGlass === true && !skinYield);
-  // 文字胶囊一族的雾化（行内代码 / 新会话 / 「加载更早历史」「回到底部」）：
+  // 文字胶囊一族的雾化（新会话 / 「加载更早历史」「回到底部」；行内代码胶囊已不带霜）：
   // #134 落地时是写死的 8px CSS 兜底（--we-inline-code-blur 无生产者 ⇒ 用户实测"调不了"），
   // 现在接成旋钮（capsuleBlur，默认 8 = 原观感）。与上面的门控属性同处声明 ——
   // 这族变量只被 data-we-thinking-glass 门下的规则消费（样式表 ⑥ 条）。
