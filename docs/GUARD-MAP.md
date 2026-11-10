@@ -5,7 +5,7 @@
 > 口径：只统计守卫**代码**里真正碰到的模块（先剥注释），并区分"直接读源文件"与"隔着产物 `lib/client.js`"。
 > 写法：字面量路径 / `join(...)` 拼接 / 唯一 basename / 产物配方 / **前缀族读法** `scopeFiles|scopeText(<前缀>)` / **经共享族助手读**（`import { panelText } from './tools/src-scope.mjs'` + 真调用；族口径封在那个库里，见 `docs/CODE-STRUCTURE.md` §12「同时是守卫的库」）/ **真源定位读**（`locate('符号')` / `locateFile('文件名')`，`test/tools/source-locator.mjs`：符号唯一声明在哪就是读了哪个模块）。
 
-模块面 212 个 · 守卫 130 个
+模块面 213 个 · 守卫 130 个
 
 ## 守卫 → 模块
 
@@ -120,7 +120,7 @@
 | `verify-slideshow-client.mjs` | `packages/media-bridge/src/wallpaper-rotation-section.js` `src/client.js` `src/i18n/i18n-copy-panel.js` `src/media-prep.js` `src/styles/base.js` | ✅ |
 | `verify-softrender.mjs` | — | ✅ |
 | `verify-static.mjs` | — |  |
-| `verify-steam-discovery.mjs` | `lib/kernel/host-kernel.js` `lib/steam-discovery.js` |  |
+| `verify-steam-discovery.mjs` | `lib/kernel/host-kernel.js` `lib/steam-discovery.js` `packages/media-bridge/lib/we-wproperties.js` |  |
 | `verify-subpackage-boot.mjs` | `lib/index.js` `lib/subpackage-boot.js` |  |
 | `verify-subpackage-client-half.mjs` | `src/client.js` `src/host-bridge.js` | ✅ |
 | `verify-subpackage-manifests.mjs` | `lib/kernel/component-session.js` `lib/subpackage-boot.js` |  |
@@ -249,6 +249,7 @@
 | `packages/media-bridge/lib/routes/we-assets.js` | 1 | `verify-scene-live` |
 | `packages/media-bridge/lib/supervisor-protocol.js` | 3 | `verify-contracts` `verify-media-bridge` `verify-scene-live` |
 | `packages/media-bridge/lib/supervisor.js` | 4 | `verify-contracts` `verify-host-teardown` `verify-media-bridge` `verify-scene-live` |
+| `packages/media-bridge/lib/we-wproperties.js` | 1 | `verify-steam-discovery` |
 | `packages/media-bridge/src/client.js` | 0 | **（无）** |
 | `packages/media-bridge/src/playback-rate-section.js` | 3 | `verify-client` `verify-fontset` `verify-scene-live` |
 | `packages/media-bridge/src/wallpaper-current-section.js` | 3 | `e2e-web-media-origin` `verify-client` `verify-scene-live` |

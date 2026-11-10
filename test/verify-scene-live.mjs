@@ -688,6 +688,18 @@ writeFileSync(join(webDir, 'index.html'), [
 writeFileSync(join(webDir, 'style.css'), '#app{color:#fff}');
 writeFileSync(join(webDir, 'app.js'), 'window.__fixtureWeb=true;');
 writeFileSync(join(webDir, 'preview.jpg'), Buffer.from([0xff, 0xd8, 0xff, 0xd9]));
+// issue #341：WE 安装根 `config.json` 里这张壁纸的**用户当前值**（只读导入的夹具）。
+// 键故意写成大写 + 反斜杠形态（Windows 上 toUpperCase 保留 `\`）：宿主侧必须归一化才认得。
+// env `DSH_WE_STEAM_ROOT` 已在下面设为 fixtureRoot，所以候选第一条就是它。
+writeFileSync(join(fixtureRoot, 'config.json'), JSON.stringify({
+  'fixture-profile': {
+    general: {
+      wproperties: {
+        [webDir.toUpperCase()]: { Monitor0: { color0: '0 0 1', fpslock: 'false', size: 1.75 } },
+      },
+    },
+  },
+}), 'utf8');
 // A TRUE loose-directory scene fixture (WebWallGL 2.1.0 松散目录形态)：project.json
 // 声明 .json 入口，入口 json 与同级素材**散放在盘上** —— 整个目录没有任何 scene.pkg。
 // 渲染器 auto 档按 project.json.file 后缀判 loose、拉入口与同级素材；宿主必须给它
@@ -1069,12 +1081,24 @@ console.log('Level C5 — 壁纸属性解析 / 覆盖值 → HTML 种子');
   const pdata = JSON.parse(pres.__state.body.toString('utf8') || '{}');
   const byName = Object.fromEntries((pdata.props || []).map((p) => [p.name, p]));
   check('属性面板数据可取（含全部类型）',
-    pres.__state.status === 200 && pdata.ok === true && (pdata.props || []).length === 6,
+    pres.__state.status === 200 && pdata.ok === true && (pdata.props || []).length === 7,
     'count=' + ((pdata.props || []).length) + ' status=' + pres.__state.status);
-  check('editable:false 从面板隐藏（值照常下发）', !byName.internal);
-  check('order 按浮点排序（2.5 落在 2 与 3 之间）',
-    (pdata.props || []).map((p) => p.name).join(',') === 'color0,fpslock,size,mode,tip,extra',
+  // issue #341 顺带修：`editable:false` 不再整条丢弃 —— 留在回包里标 `hidden`（面板隐藏、
+  // 值照常下发，与 WE 语义一致；seed 断言见下面「覆盖值并进 HTML 种子」之后那条）。
+  check('editable:false 从面板隐藏：留在回包里带 `hidden:true`（值照常下发）',
+    Boolean(byName.internal) && byName.internal.hidden === true && byName.internal.value === 1,
+    byName.internal ? JSON.stringify({ hidden: byName.internal.hidden, value: byName.internal.value }) : 'missing');
+  check('order 按浮点排序（2.5 落在 2 与 3 之间；隐藏项按自己的 order 排在最后）',
+    (pdata.props || []).map((p) => p.name).join(',') === 'color0,fpslock,size,mode,tip,extra,internal',
     (pdata.props || []).map((p) => p.name).join(','));
+  // issue #341：WE 安装根 `config.json` 的当前值只读带出（不参与默认值/覆盖值合并）。
+  check('`we`：只读带出 WE 里这张壁纸的用户当前值（键做过大小写/反斜杠归一）',
+    Boolean(pdata.we) && pdata.we.ok === true && pdata.we.monitor === 'Monitor0'
+    && pdata.we.values.color0 === '0 0 1' && pdata.we.values.fpslock === 'false' && pdata.we.values.size === 1.75,
+    pdata.we ? JSON.stringify(pdata.we.values) : 'missing');
+  check('`we` 不参与默认值/覆盖值合并（覆盖表仍然为空，面板值仍是 project.json 默认值）',
+    Object.keys(pdata.overrides || {}).length === 0 && byName.color0.value === '1 0 0',
+    'overrides=' + JSON.stringify(pdata.overrides || {}));
   check('slider 带 min/max/step/precision',
     byName.size && byName.size.min === 0 && byName.size.max === 2 && byName.size.step === 0.05 && byName.size.precision === 2);
   check('combo 选项保留声明类型（数字 / 字符串混用）',
@@ -1098,6 +1122,10 @@ console.log('Level C5 — 壁纸属性解析 / 覆盖值 → HTML 种子');
   check('覆盖值并进 HTML 种子（host 侧合并，网页壁纸不闪默认值）',
     html2.includes('__weSeedProps') && html2.includes('0 1 0') && html2.includes('1.25'),
     'seed=' + html2.includes('__weSeedProps'));
+  // issue #341：`editable:false` 改 hidden 后，值必须照常下发（WE 语义=面板隐藏但仍生效）。
+  check('hidden 项的值也进种子（面板隐藏 ≠ 不下发）',
+    html2.includes('"internal":{"value":1}'),
+    'seed has internal=' + html2.includes('"internal"'));
   const pdata2 = JSON.parse((await runHandler(propsRoute, `/wallpaper-engine/props/${encodeURIComponent(token)}`)).__state.body.toString('utf8'));
   const byName2 = Object.fromEntries((pdata2.props || []).map((p) => [p.name, p]));
   check('覆盖值在面板数据里标记为 overridden',

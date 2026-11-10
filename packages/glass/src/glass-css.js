@@ -317,7 +317,11 @@ const CSS_GLASS = `
      只是令牌在它上面被重声明，只有它真拿该令牌当底才有观感差异。
      底色取 --we-panel-color（主题感知），一条规则同时覆盖深浅两主题，且与浮层文字
      （宿主与第三方都读 --dsw-alias-label-primary）维持原生配对。不要改借宿主 Tooltip
-     那对专用令牌 —— 那是「深底 + 固定近白字」，浅色主题下浮层会变成黑底黑字。 */
+     那对专用令牌 —— 那是「深底 + 固定近白字」，浅色主题下浮层会变成黑底黑字。
+     三层都要给（#354）：设置窗那组规则会把 layer-3 重声明成读 --we-settings-window-alpha
+     的玻璃配方，于是拿 layer-3 当底色的第三方 tooltip（dsh-im 的 .dim-presetTooltip 等）
+     在设置页里仍是半透明、提示文字与下面的正文叠字；豁免声明写在浮层元素自己身上，
+     直接声明压过从对话框继承来的值，这是用户实测有效的口径。 */
   body[data-we-glass-page] [role="tooltip"],
   body[data-we-glass-page] [role="menu"],
   body[data-we-glass-page] [role="listbox"],
@@ -330,6 +334,7 @@ const CSS_GLASS = `
   body[data-we-glass-page] [class*="popup" i] {
     --dsw-alias-bg-layer-1: color-mix(in srgb, var(--we-panel-color, #1e1f26) 96%, transparent);
     --dsw-alias-bg-layer-2: color-mix(in srgb, var(--we-panel-color, #1e1f26) 96%, transparent);
+    --dsw-alias-bg-layer-3: color-mix(in srgb, var(--we-panel-color, #1e1f26) 96%, transparent);
   }
   /* 第二类漏网：既没有 role、类名也不含浮层约定词的面板浮层（dsh-market 的 .opPanel、
      @linxin666 插件管理器的更新面板）。判据取源码级属性优先（[data-update-panel]），
@@ -1766,9 +1771,14 @@ const CSS_GLASS = `
        · 右栏第二条与左列第三条是**显式接管**：玻璃关着时右栏兜底读插件面板色、左列
          的浅深与兜底写死 92% 釉色（都不走上面的变量）⇒ 把这两处的底色与釉光直接画
          透。落盘位置晚于全部既有侧栏规则 ⇒ 同特异度后写者赢（含软件渲染深色那档）。
-     保留：backdrop-filter 照旧 —— 模糊 / 饱和仍由侧栏模糊与全局雾化旋钮管（要彻底
-     清晰就把模糊调 0）；内容面（编辑器 / 终端底板）不归本开关管，仍有自己的透明度
-     旋钮。只在壁纸下生效：无壁纸时侧栏压着的是聊天界面，全透不可读。 */
+     模糊：本组末尾那条规则把两片装饰叶的 backdrop-filter 显式关掉（issue #329）——
+     1.4.2 起模糊已从面板搬到装饰叶（#291），装饰叶挂在 body > [data-we-surface-root]
+     下、不在面板子树里，也不读上面归零的那七个变量（它读 --we-sidebar-blur /
+     --we-sidebar-saturate / --we-glass-brightness，与归零集无交集）⇒ 旧口径「模糊
+     仍由旋钮管」会让面板全透、壁纸仍被装饰叶糊着；「侧栏玻璃跟随全局」下侧栏模糊
+     又被全局模糊覆盖、没法单独调 0，所以只能随本开关一起关。
+     内容面（编辑器 / 终端底板）不归本开关管，仍有自己的透明度旋钮。只在壁纸下生效：
+     无壁纸时侧栏压着的是聊天界面，全透不可读。 */
   body[data-we-wallpaper][data-we-sidebar-fullclear] [data-dsh-better-sidebar],
   body[data-we-wallpaper][data-we-sidebar-fullclear] [data-sidebar-right-panel][data-sidebar-right-open]:where([data-we-surface-runtime="right-sidebar"]) {
     --we-readability-floor: 0;
@@ -1787,6 +1797,14 @@ const CSS_GLASS = `
   body[data-ds-dark-theme][data-we-wallpaper][data-we-sidebar-fullclear][data-we-left-sidebar] div:has(> [data-slot="sidebar"]) {
     background-color: transparent !important;
     background-image: none !important;
+  }
+  /* #329：装饰叶的模糊随开关一起撤。门与上面两条装饰叶模糊规则（左 [data-we-left-sidebar]
+     / 右 [data-we-sidebar-glass]）对齐，再叠壁纸门与全透明门；装饰叶不在面板子树里，
+     只能按这个锚点清。 */
+  body[data-we-wallpaper][data-we-sidebar-fullclear][data-we-glass-page][data-we-left-sidebar] [data-we-surface-plate="left-sidebar"],
+  body[data-we-wallpaper][data-we-sidebar-fullclear][data-we-glass-page][data-we-sidebar-glass] [data-we-surface-plate="right-sidebar"] {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
   }
 
   /* ── 第三方插件表面的实底底板（issue #277）──────────────────────────────────

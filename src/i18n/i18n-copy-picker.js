@@ -74,6 +74,9 @@ const WE_I18N_EN_PICKER = {
   "这张壁纸没有用户属性（project.json 的 general.properties）": "This wallpaper has no user properties (general.properties in project.json)",
   "实时渲染当前未接管（静态帧 / 兼容模式），改动会在下次实时渲染时生效。": "Live rendering is not active right now (static frame / compatibility mode); changes take effect on the next live rendering.",
   "已改（点「恢复默认」还原）": "Modified (click \"Restore defaults\" to revert)",
+  "从 WE 导入（{count}）": "Import from WE ({count})",
+  "将导入：{list}": "Will import: {list}",
+  "将导入：{list} 等 {count} 项": "Will import {count} items: {list}",
   "（默认）": "(Default)",
 
   // ── src/quick-panel.js ──

@@ -5,6 +5,11 @@
  * `general.properties`），当前生效值是多少（默认值 ⊎ 本机覆盖值），以及
  * `file` / `directory` 类属性可选的候选文件。
  *
+ * 另带一份**只读**的 `we`（issue #341）：WE 安装根 `config.json` 里这张壁纸的用户
+ * 当前值（`wproperties.<路径>.<MonitorN>.*`），供面板「从 WE 导入当前值」。它**不参与**
+ * 上面的默认值/覆盖值合并 —— 导入是用户的显式动作，落进 `userProps` 后才生效。
+ * 读不到（没装 WE / 没这张壁纸 / 坏 JSON）就给 `{ ok:false, reason }`，不影响本族其余部分。
+ *
  * **写入不在这一族** —— 覆盖值随设置一起 `PUT /settings`（`userProps` 键，按 token 存标量），
  * 与其它设置共用同一套持久化与白名单校验；刷新 / 重启后依旧生效。把这层"读在这里、写在那里"
  * 的关系放在文件头，是因为它是本族最容易看漏的一半（改本族时别顺手加一条 PUT）。
@@ -29,6 +34,7 @@
 
 import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
+import { readWeConfigValues } from '../we-wproperties.js';
 
 /** 注入契约（P2-7A / ADR-0013 D12）：本族从 `c` 消费的**必需**键 —— 门面/组件行调用点必须逐键给到（判据 test/verify-inject-contracts.mjs 双向对账）。 */
 export const DEPS = ['disposers', 'base', 'mediaMap', 'userPropsFor', 'parseUserPropDefs', 'entryDirPrefix', 'filterKnownOverrides', 'http'];
@@ -75,7 +81,11 @@ export function registerPropsRoutes(webServer, c) {
         filePrefix: entryDirPrefix(String((pj && pj.file) || '')),
         listFiles: files,
       }).map((d) => ((d.ptype === 'directory' && dirs.length) ? { ...d, files: dirs } : d));
-      json(200, { ok: true, token, props, overrides, hasProject: Boolean(pj) });
+      // issue #341：WE 安装根 config.json 里这张壁纸的用户当前值（只读导入用）。
+      // 读不到只是这一项缺席：绝不因此让面板/路由失败。
+      let we;
+      try { we = readWeConfigValues(dir); } catch { we = { ok: false, reason: 'unexpected' }; }
+      json(200, { ok: true, token, props, overrides, hasProject: Boolean(pj), we });
     },
   }));
 }

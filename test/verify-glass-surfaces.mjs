@@ -2753,6 +2753,28 @@ console.log('\n⑲ 标记值跟走 resolver（t9-001 运行级断言：真跑 we
     trackRules.length === 1 && !/--dsw-alias-border-l[0-9]/.test(trackRules[0].body));
   check('㉓c 轨道由文字三档色稀释而来（与进度弧同源、恒比它淡）', trackRules.length === 1
     && /--dsw-alias-label-tertiary/.test(trackRules[0].body) && /color-mix\(/.test(trackRules[0].body));
+
+  // ── ㉔ 浮层令牌豁免三层齐全（#354）──────────────────────────────────────────
+  // 症状：设置 → IM机器人页里第三人插件 tooltip（dsh-im 的 .dim-presetTooltip）几乎全透明，
+  // 下面那行正文透上来叠字；把「玻璃透明度」滑杆拉满也不动。
+  // 根因：设置窗那组规则把 --dsw-alias-bg-layer-3 也重声明成读 --we-settings-window-alpha
+  // 的玻璃配方，而浮层令牌豁免规则只回填了 layer-1/2 —— 拿 layer-3 当底色的第三方 tooltip
+  // 命中不了豁免，仍吃对话框继承下来的半透明配方。
+  // 判据：豁免规则（[role="tooltip"] 与 [class*="popup" i] 在同一条选择器列表里）三层令牌
+  // 都重声明成 --we-panel-color 96% 的实底配方；负对照只留两层必须判红。
+  console.log('\n㉔ 浮层令牌豁免三层齐全（#354：拿 layer-3 当底色的 tooltip 也要实底）');
+  const floaterTokenRules = rulesOf(CSS).filter((r) => /\[role="tooltip"\]/.test(r.header)
+    && /\[class\*="popup" i\]/.test(r.header));
+  const SOLID_LAYER = (k) => new RegExp(k + '\\s*:\\s*color-mix\\(in srgb, var\\(--we-panel-color, #1e1f26\\) 96%, transparent\\)');
+  const floaterLayersOf = (r) => ['--dsw-alias-bg-layer-1', '--dsw-alias-bg-layer-2', '--dsw-alias-bg-layer-3']
+    .filter((k) => SOLID_LAYER(k).test(r.body));
+  check('㉔a 浮层令牌豁免规则存在（role=tooltip 与 class*=popup 同一条规则）',
+    floaterTokenRules.length === 1, '实际=' + floaterTokenRules.length);
+  check('㉔b 三层 bg-layer 令牌都重声明成 --we-panel-color 96%（#354）',
+    floaterTokenRules.length === 1 && floaterLayersOf(floaterTokenRules[0]).length === 3,
+    '实际=' + (floaterTokenRules.length === 1 ? floaterLayersOf(floaterTokenRules[0]).join(',') : '无规则'));
+  check('negative control: 只回填两层时 ㉔b 会判红（判据不是恒真）',
+    floaterLayersOf({ body: '--dsw-alias-bg-layer-1: color-mix(in srgb, var(--we-panel-color, #1e1f26) 96%, transparent); --dsw-alias-bg-layer-2: color-mix(in srgb, var(--we-panel-color, #1e1f26) 96%, transparent);' }).length === 2);
 }
 
 console.log('');

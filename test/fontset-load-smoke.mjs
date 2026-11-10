@@ -212,7 +212,7 @@ const waitBoot = () => new Promise((r) => { setTimeout(r, 50); });
 
 (async () => {
   // ── 场景 A：正常宿主 —— 值被整套采用，顺序正确 ──────────────────────────────
-  console.log('A. 正常宿主：settings → 字体集(list → 活动那份) → 库存（inventory/清单在 apply 入口已预取）');
+  console.log('A. 正常宿主：settings → 字体集(list → 活动那份) → 库存（字体集清单在 apply 入口预取；库存排在首帧后）');
   const shared = {}; // 跨场景共享的 localStorage（第二个场景要看得见第一个写下的缓存）
   const a = mount({ fetchImpl: goodHost, store: shared });
   await waitBoot();
@@ -222,13 +222,16 @@ const waitBoot = () => new Promise((r) => { setTimeout(r, 50); });
   const iOne = order.findIndex((x) => x.includes('/fontsets/compact'));
   const iInv = order.findIndex((x) => x.includes('/inventory'));
   check('启动链取了 /fontsets 与活动那份', iList >= 0 && iOne >= 0, order.join(' | '));
-  // 2026-10-30 启动性能：inventory 与字体集清单在 apply 入口先发（`prefetchInventoryOnce` /
-  // `prefetchFontSetList`）。所以**网络发起顺序**不再以 settings 打头，但应用顺序不变。
-  check('预取：inventory 与字体集清单在 settings 之前发出（启动链不再串行等它们）',
-    iInv >= 0 && iList >= 0 && iSettings >= 0 && iInv < iSettings && iList < iSettings,
+  // 2026-10-30 启动性能：字体集清单在 apply 入口先发（`prefetchFontSetList`）。
+  // #158（2026-11-10）：库存冷扫改到**首帧之后**（`afterFirstPaint`）—— 大库上它要等整轮
+  // 扫描，插件激活期就发会跟宿主启动抢 I/O。这台 vm 没有 requestAnimationFrame ⇒ 门立即放行，
+  // 于是顺序回到「settings → 清单 → 活动那份 → inventory」，但**关键不变量**是：
+  // 清单仍早于 settings，库存仍不挡活动字体集。
+  check('预取：字体集清单在 settings 之前发出；库存冷扫排在 settings 之后（#158 首帧后）',
+    iInv >= 0 && iList >= 0 && iSettings >= 0 && iList < iSettings && iInv > iSettings,
     'idx=' + [iSettings, iList, iOne, iInv].join(','));
-  check('应用顺序：清单 → 活动那份；活动那份在 settings 之后（inventory 预取不挡它）',
-    iList < iOne && iSettings < iOne && iInv < iOne, 'idx=' + [iSettings, iList, iOne, iInv].join(','));
+  check('应用顺序：清单 → 活动那份；活动那份在 settings 之后（库存冷扫不挡它）',
+    iList < iOne && iSettings < iOne, 'idx=' + [iSettings, iList, iOne, iInv].join(','));
   const cacheA = JSON.parse(shared[CACHE_KEY] || 'null');
   check('宿主那份被整套采用（本地缓存 = 活动 id + 全部字体键，与宿主逐键相同）',
     cacheA && cacheA.id === 'compact'

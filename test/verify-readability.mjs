@@ -1030,6 +1030,17 @@ function main() {
       sets >= 1 && paired && rems >= 2, 'set=' + sets + ' rem=' + rems + ' paired=' + paired);
     check('F7g UI 行存在且文案过 weT（新中文必须进 weT + 词表；UI 行在玻璃包产物里，ADR-0016）',
       /weT\("侧栏全透明"\)/.test(PANEL_SRC_ALL) && /"侧栏全透明":\s*"/.test(SRC));
+    // #329：装饰叶的模糊也必须随开关撤。装饰叶挂在 body > [data-we-surface-root] 下、
+    // 不在面板子树里，归零那七个变量摸不到它（它读 --we-sidebar-blur 等）⇒ 必须有
+    // 独立的 none !important 规则，且左右两片同一条、壁纸门与全透明门都在。
+    const plateRule = fcRules.find((r) => r.header.includes('[data-we-surface-plate="left-sidebar"]')
+      && r.header.includes('[data-we-surface-plate="right-sidebar"]'));
+    const plateOk = (r) => !!r && r.header.includes('data-we-wallpaper')
+      && r.header.includes('data-we-sidebar-fullclear')
+      && r.body.includes('-webkit-backdrop-filter: none !important')
+      && r.body.includes('backdrop-filter: none !important');
+    check('F7h 装饰叶的模糊随开关撤（左右两片 plate 一条规则，壁纸门 + 全透明门 + none !important）',
+      plateOk(plateRule), plateRule ? plateRule.header.slice(0, 120) : '规则缺失');
     // 负对照：把上面几条判据各自喂坏输入，必须判出（判据不是恒真）。
     const gateOk = (r) => r.header.includes('data-we-wallpaper');
     check('negative control F7-1: 缺壁纸门的全透明规则会被同一条判据判出',
@@ -1050,6 +1061,20 @@ function main() {
     check('negative control F7-4: 只挂不摘（漏 dispose 那次）会被同一条判据判出（挂/摘面 = 双工件，ADR-0016）',
       !unpairOk('setAttribute("data-we-sidebar-fullclear","on"); else document.body.removeAttribute("data-we-sidebar-fullclear")')
       && unpairOk(PANEL_SRC_ALL));
+    check('negative control F7-5: 装饰叶规则缺壁纸门 / 缺全透明门 / 只写 -webkit- 前缀都会被同一条判据判出（#329）',
+      !plateOk({
+        header: 'body[data-we-sidebar-fullclear][data-we-glass-page][data-we-left-sidebar] [data-we-surface-plate="left-sidebar"] [data-we-surface-plate="right-sidebar"]',
+        body: '-webkit-backdrop-filter: none !important; backdrop-filter: none !important',
+      })
+      && !plateOk({
+        header: 'body[data-we-wallpaper][data-we-glass-page][data-we-left-sidebar] [data-we-surface-plate="left-sidebar"] [data-we-surface-plate="right-sidebar"]',
+        body: '-webkit-backdrop-filter: none !important; backdrop-filter: none !important',
+      })
+      && !plateOk({
+        header: 'body[data-we-wallpaper][data-we-sidebar-fullclear] [data-we-surface-plate="left-sidebar"] [data-we-surface-plate="right-sidebar"]',
+        body: 'backdrop-filter: none',
+      })
+      && plateOk(plateRule));
   }
 
   // ── F8 (#164)：原生 select 弹层的选项行必须显式「不透明底 + 对比墨」──────────────────

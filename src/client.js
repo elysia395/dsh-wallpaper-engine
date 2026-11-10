@@ -895,9 +895,12 @@ function hostFailureReason(res) {
 }
 let inventorySeq = 0;
 /**
- * 启动预取：`/inventory` 与设置无关，启动链却把它排在 settings → fontsets → fontsets/<id>
- * 之后（见 apply 末尾的链）。apply 一开始就发出这一次请求，等链走到 inventory 时通常已经回来
- * （trace 2026-10-30：inventory 请求 971→1036ms，纯串行浪费）。
+ * 库存预取：`/inventory` 与设置无关，启动链却把它排在 settings → fontsets → fontsets/<id>
+ * 之后（见 apply 末尾的链）。链走到 inventory 前发出这一次请求，好让扫描和字体集那几步
+ * 并行（trace 2026-10-30：inventory 请求 971→1036ms，纯串行浪费）。
+ *
+ * ⚠️ **发起时机在首帧之后**（#158）：插件激活期就发会让大库的整轮扫描和宿主启动抢 I/O；
+ * 现在由启动链在 `afterFirstPaint()` 放行后调用，见 apply 末尾。
  * 只预取一次；`loadInventory` 消费后清空，手动刷新 / 轮播补拉仍走自己的请求。
  *
  * **预取只加速成功路径**：`apiFetch` 不抛错，网络瞬断会以 `{ ok:false, status:0 }` 的
@@ -1713,7 +1716,7 @@ const IS_EDGE = typeof navigator !== "undefined" && /Edg\//.test(navigator.userA
 
 // 面板状态：token 变了就重新拉一次（换壁纸/换目录）。
 let propsPanelOpen = false;
-let propsState = { token: "", loading: false, error: "", props: [], remote: false };
+let propsState = { token: "", loading: false, error: "", props: [], remote: false, we: null };
 
 
 /** 打开发送（侧栏下钻的入口）：先落状态再拉定义 —— 判据是"该有属性了"。 */
@@ -1775,7 +1778,7 @@ function loadUserPropDefs(token, force) {
   if (!token) return;
   if (!force && (propsState.token === token && (propsState.props.length || propsState.loading))) return;
   const url = PROPS_URL + "/" + encodeURIComponent(token);
-  propsState = { token, loading: true, error: "", props: propsState.token === token ? propsState.props : [], remote: true };
+  propsState = { token, loading: true, error: "", props: propsState.token === token ? propsState.props : [], remote: true, we: propsState.token === token ? propsState.we : null };
   apiJson(url)
     .then((res) => {
       const d = res.data;
@@ -1796,12 +1799,17 @@ function loadUserPropDefs(token, force) {
         if (!live || !(p.name in live)) return p;
         return { ...p, value: live[p.name], overridden: Boolean(d.overrides && p.name in d.overrides) };
       });
-      propsState = { token, loading: false, error: "", props, remote: false };
+      // issue #341：宿主只读带出的 WE 当前值（`wproperties`）。它**不参与**默认值合并，
+      // 只供面板「从 WE 导入」，所以这里单独存一份，进 UI 前剥掉宿主的绝对路径。
+      const we = d.we && d.we.ok && d.we.values && typeof d.we.values === "object"
+        ? { values: d.we.values, monitor: String(d.we.monitor || ""), profile: String(d.we.profile || "") }
+        : null;
+      propsState = { token, loading: false, error: "", props, remote: false, we };
       emit();
     })
     .catch((e) => {
       if (propsState.token !== token) return;
-      propsState = { token, loading: false, error: String((e && e.message) || e), props: [], remote: false };
+      propsState = { token, loading: false, error: String((e && e.message) || e), props: [], remote: false, we: null };
       emit();
     });
 }
@@ -1880,6 +1888,88 @@ function resetUserProps() {
   delete all[token];
   setSetting("userProps", all);
   emit();
+}
+
+/**
+ * WE 当前值 → 面板值的类型归位（WE `config.json` 存在以字符串存布尔/数字的机器）。
+ * 类型不对 ⇒ undefined（这项不导入，绝不把字符串塞进 slider）。
+ */
+function wePropValueOf(p, raw) {
+  if (raw === null || raw === undefined) return undefined;
+  if (p.ptype === "bool") {
+    if (typeof raw === "boolean") return raw;
+    if (typeof raw === "string") {
+      const s = raw.trim().toLowerCase();
+      if (s === "true" || s === "1") return true;
+      if (s === "false" || s === "0") return false;
+    }
+    return undefined;
+  }
+  if (p.ptype === "slider") {
+    const n = typeof raw === "number" ? raw : Number(raw);
+    return Number.isFinite(n) ? n : undefined;
+  }
+  if (p.ptype === "color" || p.ptype === "file" || p.ptype === "directory" || p.ptype === "textinput" || p.ptype === "other") {
+    return typeof raw === "string" ? raw : undefined;
+  }
+  return raw; // combo：保留声明类型（与 project.json 同一口径）
+}
+
+/** 「从 WE 导入」能带来的改动摘要（面板按钮的文案/可用态 + tooltip 用）。 */
+function userPropsWeImport() {
+  const we = propsState.we && propsState.we.values ? propsState.we.values : null;
+  if (!we) return null;
+  const labels = [];
+  for (const p of propsState.props) {
+    if (!p || p.hidden) continue;
+    if (!Object.prototype.hasOwnProperty.call(we, p.name)) continue;
+    const next = wePropValueOf(p, we[p.name]);
+    if (next === undefined || sameUserPropValue(next, p.value)) continue;
+    labels.push(p.text || p.name);
+  }
+  return { count: labels.length, labels };
+}
+
+/**
+ * 从 WE 当前值导入（issue #341）：把与面板当前显示不同的值写成用户覆盖值。
+ *
+ * 只做用户**显式**动作（面板按钮）：不自动应用 —— WE `config.json` 是外部状态，静默
+ * 覆盖会让"我在插件里调的值"凭空消失。导入后与手工改值同一条落盘路径
+ * （`settings.userProps`），所以刷新/重启后仍然生效。
+ */
+function importUserPropsFromWe() {
+  const token = propsState.token;
+  const we = propsState.we && propsState.we.values ? propsState.we.values : null;
+  if (!token || !we) return false;
+  cancelUserPropsCommit();
+  const wire = {};
+  let changed = 0;
+  for (const p of propsState.props) {
+    // hidden（project.json 里 editable:false）与按钮统计同一口径：只读导入不碰它们 ——
+    // 面板不显示这些项，写进去用户在界面上看不见、也没法单独撤销（只能整张恢复默认）。
+    if (!p || p.hidden || typeof p.name !== "string") continue;
+    if (!Object.prototype.hasOwnProperty.call(we, p.name)) continue;
+    const next = wePropValueOf(p, we[p.name]);
+    if (next === undefined || sameUserPropValue(next, p.value)) continue;
+    p.value = next;
+    p.overridden = !sameUserPropValue(next, p.default);
+    wire[p.name] = { value: next };
+    changed += 1;
+  }
+  if (changed === 0) { emit(); return false; }
+  applyUserProps(wire);
+  const all = { ...(selection.userProps || {}) };
+  const cur = { ...(all[token] || {}) };
+  for (const p of propsState.props) {
+    if (!p || !Object.prototype.hasOwnProperty.call(wire, p.name)) continue;
+    if (p.overridden) cur[p.name] = wire[p.name].value;
+    else delete cur[p.name];
+  }
+  if (Object.keys(cur).length) all[token] = cur;
+  else delete all[token];
+  setSetting("userProps", all);
+  emit();
+  return true;
 }
 
 /** 就绪后回放覆盖值：网页壁纸由 host 并进 HTML 种子，场景壁纸没有种子通道。 */
@@ -5399,16 +5489,47 @@ function useLegacySaturateCoupling() {
 weRegisterExtensionModule("avatar", AVATAR_EXTENSION_MODULE);
 weRegisterLayerHooks("avatar", { sync: syncAvatarLayer, dispose: disposeAvatarLayer });
 
+// ── 首帧后空闲门（#158）────────────────────────────────────────────────────────
+// 口径：宿主 `ClientEntries.start()` 对**每个**插件都 `create` + `loader.await()`，
+// 插件没法把自己摘出启动关键路径（审计 docs/archive/wip/ISSUE-AUDIT-148PLUS.md 的更正 ①）；
+// 能减的只有"启动期别让宿主干重活"。inventory 的冷路径在大库上要等整轮扫描
+// （实测总延迟 1.6–2.0 s），而**首帧之前没有任何界面在等它** —— 所以这一腿排到首帧画完后
+// 的空闲时段：双 rAF 保证已经上屏，再 requestIdleCallback（1 s 兜底，躲开长任务）。
+// 没有浏览器 API（vm 测试台 / 非浏览器宿主）时立即放行，行为与本改动之前一致。
+function afterFirstPaint() {
+  return new Promise((resolve) => {
+    const w = typeof window !== "undefined" ? window : null;
+    if (!w || typeof w.requestAnimationFrame !== "function") { resolve(); return; }
+    let settled = false;
+    const done = () => { if (settled) return; settled = true; resolve(); };
+    // 绝对兜底：页面不可见 / 最小化 / 托盘启动时 Chromium 会冻结 rAF（本文件 :2052 同一结论），
+    // 只靠双 rAF 可能永不回调 ⇒ inventory 一直不加载、列表停在"扫描 Wallpaper Engine…"。
+    // idle 的 timeout 只管 idle 阶段，管不到 rAF；这里给整条门加 1 s 上限（与 idle 兜底同口径）。
+    try { w.setTimeout(done, 1000); } catch { done(); return; }
+    const idle = () => {
+      try {
+        if (typeof w.requestIdleCallback === "function") w.requestIdleCallback(() => done(), { timeout: 1000 });
+        else if (typeof w.setTimeout === "function") w.setTimeout(done, 150);
+        else done();
+      } catch { done(); }
+    };
+    try { w.requestAnimationFrame(() => w.requestAnimationFrame(idle)); } catch { done(); }
+  });
+}
+
 function apply(ctx) {
   // 0. i18n：把插件文案接上宿主的 locale 服务（`ctx.get("locale")`，可选服务 + 短轮询 ——
   //    缺服务时静默停在默认语言，见 src/i18n/i18n.js）。放在最前面：界面首次渲染就要按当前
   //    语言取词；服务通常已在（dsh-web-app 的 base bundle 自带），轮询只是兜底。
   if (ctx.effect) ctx.effect(() => weI18nAttach(ctx) || undefined);
 
-  // 0b. 启动预取：inventory / 字体集清单与设置无关，启动链却要等 settings 之后才发。
-  //     在这里先发出去，链走到它们时通常已经回来（只预取一次；失败不影响启动链）。
+  // 0b. 启动预取（字体集清单）：与设置无关，启动链却要等 settings 之后才发 —— 这里先发，
+  //     链走到它时通常已经回来（只预取一次；失败不影响启动链）。
+  //     ⚠️ **inventory 不在这里预取**（#158）：大库（2600 项目 / 13,941 文件）上
+  //     `/inventory` 冷调用要等整轮扫描，实测总延迟 1.6–2.0 s。插件激活期就发，等于让
+  //     宿主的启动和这轮全盘扫描抢同一段 I/O；而首帧之前没有任何界面在等它。改为首帧后
+  //     空闲时再发（见 apply 末尾启动链里的 `afterFirstPaint`）。
   try {
-    prefetchInventoryOnce();
     prefetchFontSetList();
   } catch { /* 预取失败走原路径（启动链各步自己会发请求） */ }
 
@@ -5854,7 +5975,15 @@ function apply(ctx) {
   // ⚠️ 终止 `.catch` 是**必须**的：这条链上任何一步 reject，后面的 `loadInventory` 就永不执行 ——
   // 选择器永久停在「扫描 Wallpaper Engine…」，一次性提示也不收敛（用户只能靠刷新或禁用插件自救）。
   // 各步内部已各自消化可预期的失败（宿主不可达 / 存储被拒 / 坏 JSON），这一条兜的是"没预料到的那次抛"。
-  loadPersisted().then(loadFontSet).then(loadInventory).then(loadGlassPresets).catch((err) => {
+  // #158：库存这一腿排在**首帧之后**再跑（`afterFirstPaint` 见上）。大库上它要等一轮全盘
+  // 扫描，而首帧之前没有任何界面等它 ⇒ 没必要在宿主启动那几百毫秒里跟它抢 I/O。
+  // 与 settings / fontset 分离不影响正确性：链尾的 `revalidateSelection()` 只依赖库存本身。
+  loadPersisted()
+    .then(loadFontSet)
+    .then(afterFirstPaint)
+    .then(() => { prefetchInventoryOnce(); return loadInventory(); })
+    .then(loadGlassPresets)
+    .catch((err) => {
     // 链断在任何一步都可能留下没被消费的启动预取；它们属于**这一次**启动链，
     // 不能留到用户后来的手动刷新 / 切字体集时冒充新响应（陈旧库存/清单）。
     inventoryBootPrefetch = null;

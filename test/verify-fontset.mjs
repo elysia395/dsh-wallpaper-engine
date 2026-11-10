@@ -881,10 +881,12 @@ section('⑦ 客户端通道（静态契约：字体值不再经 settings 出去
   // 7b. **启动链顺序**就是"迁移前不丢老值"的客户端那一半：先设置、再字体集、最后库存。
   //     反过来的话，第一次 settings 写入发生在字体集建立之前 —— 那时宿主靠护栏兜着，
   //     但客户端没必要把自己放到需要护栏的位置上。
-  check('启动链顺序 = loadPersisted → loadFontSet → loadInventory',
-    /loadPersisted\(\)\s*\.then\(loadFontSet\)\s*\.then\(loadInventory\)/.test(clientCode));
-  check('负对照：少了 loadFontSet 的启动链会被同一判据点名',
-    !/loadPersisted\(\)\s*\.then\(loadFontSet\)\s*\.then\(loadInventory\)/.test('loadPersisted().then(loadInventory);'));
+  //     #158 起库存那一腿排在 `afterFirstPaint` 门之后（大库冷扫不与宿主启动抢 I/O），
+  //     所以判据同时钉住"门在 loadFontSet 之后、loadInventory 在门之后"。
+  const bootChainRe = /loadPersisted\(\)\s*\.then\(loadFontSet\)\s*\.then\(afterFirstPaint\)[\s\S]{0,240}?loadInventory\(\)/;
+  check('启动链顺序 = loadPersisted → loadFontSet → afterFirstPaint → loadInventory', bootChainRe.test(clientCode));
+  check('负对照：少了 afterFirstPaint 的门会被同一判据点名',
+    !bootChainRe.test('loadPersisted().then(loadFontSet).then(loadInventory).then(loadGlassPresets);'));
   check('selection 初始化合并了本地缓存那份（首帧即用户字体，不出现默认值→用户值跳变）',
     /\.\.\.readCachedFontSetValues\(\),/.test(clientCode));
 
