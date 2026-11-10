@@ -506,16 +506,18 @@ const CSS_GLASS = `
      --plan-card-fill = 深色 --dsw-static-neutral-850），与旁边的玻璃气泡不是同一种材质。
      锚点取宿主源码级属性 [data-plan-card]（PlanCard.js 的 PlanCards：data-plan-artifacts
      容器 + 每个按钮 data-plan-card=callId，全 asar 只有它用）。
-     配方 = 对话卡那档 chat 底 + 镜面釉 + 霜（与工具结果卡同族）。原生态
-     （data-we-thinking-native）不匹配 ⇒ 卡片保持宿主实色，正是该挡的定义。
+     配方 = 交付卡那档平铺 chat 底（与 [data-presented-file] 那条逐字同形）：
+     只上底色，不加釉、不加霜 —— 加霜会在大面积卡片上把整卡洗白（用户对照：同一主题
+     下交付卡正确、计划卡错误）。原生态（data-we-thinking-native）不匹配 ⇒ 卡片保持
+     宿主实色，正是该挡的定义。
      宿主 hover 档（--plan-card-hover）会被 !important 底压住 —— 与上面
      [data-presented-file] 同一取舍：底色正确优先，悬停反馈由边框/光标承担。
      ⚠️ 本段不许出现反引号：整套样式文本是模板字符串（构建期拼接）。 */
   body[data-we-glass-chat][data-we-glass-page]:not([data-we-thinking-native]) [data-plan-card] {
     background-color: var(--we-chat-glass-fill) !important;
-    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.05) 38%, rgba(255, 255, 255, 0.02));
-    -webkit-backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
-    backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
+    background-image: none !important;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
   }
   /* ── 改动文件卡片（ui-deliverables 的 ChangedFiles）→ 同一种玻璃 ─────────────
      用户截图：「已编辑 N 个文件」卡片的 60px 标题行读宿主 --changes-fill
@@ -524,11 +526,11 @@ const CSS_GLASS = `
      自身的玻璃透上来（hover 换成 chat 底掺白，保留反馈）。 */
   body[data-we-glass-chat][data-we-glass-page]:not([data-we-thinking-native]) [data-changed-files] {
     --changes-fill: transparent;
-    --changes-hover: color-mix(in srgb, var(--we-chat-glass-fill) 88%, white);
+    --changes-hover: transparent;
     background-color: var(--we-chat-glass-fill) !important;
-    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.05) 38%, rgba(255, 255, 255, 0.02));
-    -webkit-backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
-    backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
+    background-image: none !important;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
   }
   /* ── 变更请求面板（forge panel）的实色状态条 → 让右栏玻璃透出来 ───────────────
      用户截图：「无法读取 Git 信息」、分支条（checkout）与登录提示都读宿主
@@ -1779,17 +1781,6 @@ const CSS_GLASS = `
   body[data-we-glass-fallback][data-we-glass-page][data-we-thinking-glass] [data-presented-file],
   body[data-we-glass-fallback][data-we-glass-page][data-we-thinking-glass] [data-chat-flow] .md-code-block,
   body[data-we-glass-fallback][data-we-glass-page][data-we-thinking-glass] [data-vcp-rawhtml] > div > div:has(> pre > code):has(> div > button[title="复制代码"]) {
-    -webkit-backdrop-filter: none !important;
-    backdrop-filter: none !important;
-  }
-  /* 计划卡片在软渲染回退档同样只留底色（--we-chat-glass-fill 此时已被上面那条
-     92% 近不透明配方顶掉）⇒ 关霜，别让无效的 backdrop-filter 白算一遍。 */
-  body[data-we-glass-fallback][data-we-glass-chat][data-we-glass-page] [data-plan-card] {
-    -webkit-backdrop-filter: none !important;
-    backdrop-filter: none !important;
-  }
-  /* 改动文件卡片在软渲染回退档同样只留底色 ⇒ 关霜。 */
-  body[data-we-glass-fallback][data-we-glass-chat][data-we-glass-page] [data-changed-files] {
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
   }

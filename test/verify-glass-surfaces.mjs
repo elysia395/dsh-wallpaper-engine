@@ -2775,41 +2775,36 @@ console.log('\n⑲ 标记值跟走 resolver（t9-001 运行级断言：真跑 we
     '实际=' + (floaterTokenRules.length === 1 ? floaterLayersOf(floaterTokenRules[0]).join(',') : '无规则'));
   check('negative control: 只回填两层时 ㉔b 会判红（判据不是恒真）',
     floaterLayersOf({ body: '--dsw-alias-bg-layer-1: color-mix(in srgb, var(--we-panel-color, #1e1f26) 96%, transparent); --dsw-alias-bg-layer-2: color-mix(in srgb, var(--we-panel-color, #1e1f26) 96%, transparent);' }).length === 2);
-  // ── ㉔ 计划卡片（ui-plan 的 PlanCards）与对话卡片同一种玻璃 ──────────────────
-  // 用户截图：对话结尾的计划卡片是一整块实心深色卡（宿主 --plan-card-fill），与旁边的
-  // 玻璃气泡不是同一种材质。锚点是宿主源码级 [data-plan-card]（PlanCard.js，全 asar 唯一）。
-  console.log('\n㉔ 计划卡片吃对话玻璃（并保留软渲染回退档的无霜底色）');
+  // ── ㉔ 计划卡片（ui-plan 的 PlanCards）与交付卡同一种平铺玻璃 ────────────────
+  // 用户对照：同一主题下交付卡（[data-presented-file]）正确、计划卡被洗白。
+  // 两者必须逐字同形：只上 --we-chat-glass-fill，不加釉、不加霜。
+  console.log('\n㉔ 计划卡片吃平铺对话底（与交付卡同档）');
   const planRules = rulesOf(CSS).filter((r) => /\[data-plan-card\]/.test(r.header));
   const planMain = planRules.filter((r) => /data-we-glass-chat/.test(r.header) && !/data-we-glass-fallback/.test(r.header));
-  const planFallback = planRules.filter((r) => /data-we-glass-fallback/.test(r.header));
-  const planFormOf = (rule) => ({
-    chat: /--we-chat-glass-fill/.test(rule.body),
-    blur: /backdrop-filter: blur\(/.test(rule.body),
+  const flatFormOf = (rule) => ({
+    chat: /background-color:\s*var\(--we-chat-glass-fill\)/.test(rule.body),
+    flat: /background-image:\s*none/.test(rule.body),
+    noFrost: /backdrop-filter:\s*none/.test(rule.body),
   });
-  const planForms = planMain.map(planFormOf);
-  check('㉔a 主规则带对话玻璃门并读 chat 底 + 霜', planMain.length === 1
-    && planForms.every((f) => f.chat && f.blur));
+  const planForms = planMain.map(flatFormOf);
+  check('㉔a 主规则带对话玻璃门并读 chat 平铺底（不加釉不加霜）', planMain.length === 1
+    && planForms.every((f) => f.chat && f.flat && f.noFrost));
   check('㉔b 主规则排除原生挡（原生 = 宿主实色）', planMain.length === 1
     && /:not\(\[data-we-thinking-native\]\)/.test(planMain[0].header));
-  check('㉔c 软渲染回退档关霜（与主规则同锚点）', planFallback.length === 1
-    && /backdrop-filter: none/.test(planFallback[0].body));
-  const syntheticNoBlur = planFormOf({ body: 'background-color: var(--we-chat-glass-fill) !important;' });
-  check('negative control: “只有底色没有霜”的合成规则会被 ㉔a 判红',
-    !(syntheticNoBlur.chat && syntheticNoBlur.blur));
+  const syntheticSheen = flatFormOf({ body: 'background-color: var(--we-chat-glass-fill) !important; background-image: linear-gradient(#fff, #fff); backdrop-filter: blur(16px);' });
+  check('negative control: 加了釉/霜的合成规则会被 ㉔a 判红', !(syntheticSheen.flat && syntheticSheen.noFrost));
 
   // ── ㉕ 改动文件卡片 / 变更请求面板：补掉宿主实色底 ───────────────────────────
   // 用户截图：「已编辑 N 个文件」卡片与「无法读取 Git 信息」条都是宿主实色底。
   console.log('\n㉕ 改动文件卡片与变更请求面板不再有实色死底');
   const changedRules = rulesOf(CSS).filter((r) => /\[data-changed-files\]/.test(r.header));
   const changedMain = changedRules.filter((r) => /data-we-glass-chat/.test(r.header) && !/data-we-glass-fallback/.test(r.header));
-  const changedFallback = changedRules.filter((r) => /data-we-glass-fallback/.test(r.header) && /data-we-glass-chat/.test(r.header));
-  check('㉕a 改动文件卡片带对话玻璃门、清掉 --changes-fill 并读 chat 底 + 霜', changedMain.length === 1
+  const changedForms = changedMain.map(flatFormOf);
+  check('㉕a 改动文件卡片带对话玻璃门、清掉 --changes-fill 并读 chat 平铺底', changedMain.length === 1
     && /--changes-fill:\s*transparent/.test(changedMain[0].body)
-    && /--we-chat-glass-fill/.test(changedMain[0].body) && /backdrop-filter: blur\(/.test(changedMain[0].body));
-  check('㉕b 改动文件卡片的软渲染回退档关霜', changedFallback.length === 1
-    && /backdrop-filter: none/.test(changedFallback[0].body));
+    && changedForms.every((f) => f.chat && f.flat && f.noFrost));
   const forgeRules = rulesOf(CSS).filter((r) => /\[data-forge-panel\]/.test(r.header));
-  check('㉕c 变更请求面板清掉 --forge-fill 实色（背景归右栏玻璃）', forgeRules.length === 1
+  check('㉕b 变更请求面板清掉 --forge-fill 实色（背景归右栏玻璃）', forgeRules.length === 1
     && /--forge-fill:\s*transparent/.test(forgeRules[0].body));
   const syntheticSolidHeader = { body: 'background: var(--changes-fill);' };
   check('negative control: 没清 --changes-fill 的合成规则会被 ㉕a 判红',
