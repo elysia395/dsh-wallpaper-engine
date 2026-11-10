@@ -147,6 +147,7 @@ const INVENTORY_REQUIRED = [
   { name: 'portableCount', why: 'playable count shown in the picker (buildInventory payload)' },
   { name: 'wallpapers', why: 'the entry list itself (payload shorthand)' },
   { name: 'playlists', why: 'scoped-rotation source (payload shorthand)' },
+  { name: 'folders', why: 'Wallpaper Engine "Installed" folder tree; the picker mirrors it as a filter (readFoldersP → foldersWithIds → assembleInventory)' },
 ];
 
 /** inventory 构造代码 = 基础条目 + 两个字段提供者（它们经 spread 进入每条）。

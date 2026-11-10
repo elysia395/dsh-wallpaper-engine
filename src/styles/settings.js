@@ -92,8 +92,8 @@ const CSS_SETTINGS = `  /* ── 预设方案：两行四列的圆角表格（�
   /* 内容分级：下拉 + 多档勾选（v7 起 contentRatingFilter 是数组）。2026-10-30 用户口径：
      四枚胶囊铺在筛选行里观感差 ⇒ 收进下拉。summary 去掉原生三角；勾选行复用「弹层行」
      的两枚令牌（--we-popup-row-bg / -ink，深色档由 effects.js 按主题挑）。 */
-  .we-picker__rating-menu, .we-picker__type-menu { position: relative; flex: 0 1 auto; min-width: 0; }
-  .we-picker__rating-btn, .we-picker__type-btn {
+  .we-picker__rating-menu, .we-picker__type-menu, .we-picker__folder-menu { position: relative; flex: 0 1 auto; min-width: 0; }
+  .we-picker__rating-btn, .we-picker__type-btn, .we-picker__folder-btn {
     list-style: none; cursor: pointer; display: inline-flex; align-items: center;
     justify-content: space-between; gap: 6px;
     height: var(--we-ui-h, 30px); padding: 0 10px; border-radius: 8px;
@@ -104,19 +104,23 @@ const CSS_SETTINGS = `  /* ── 预设方案：两行四列的圆角表格（�
     color: var(--we-popup-row-ink, #1f2328);
   }
   .we-picker__rating-btn::-webkit-details-marker,
-  .we-picker__type-btn::-webkit-details-marker { display: none; }
+  .we-picker__type-btn::-webkit-details-marker,
+  .we-picker__folder-btn::-webkit-details-marker { display: none; }
   /* 类型下拉比内容分级窄一档（摘要只有两字）。 */
   .we-picker__type-btn { width: 96px; }
+  /* 文件夹：摘要显示夹子名，比档名长 ⇒ 宽一档。 */
+  .we-picker__folder-btn { width: 150px; }
   /* 摘要文字是 flex 项：必须给 min-width:0 + 省略号，否则长档名会把按钮撑宽
      （用户口径 2026-10-30：候选框限宽 + 文字省略）。 */
-  .we-picker__rating-text {
+  .we-picker__rating-text, .we-picker__folder-text {
     flex: 1 1 auto; min-width: 0; overflow: hidden;
     text-overflow: ellipsis; white-space: nowrap;
   }
   .we-picker__rating-menu[open] > .we-picker__rating-btn,
-  .we-picker__type-menu[open] > .we-picker__type-btn { border-color: var(--we-accent-src, #4f8cff); }
-  .we-picker__rating-caret { font-size: 10px; opacity: 0.7; flex: none; }
-  .we-picker__rating-list {
+  .we-picker__type-menu[open] > .we-picker__type-btn,
+  .we-picker__folder-menu[open] > .we-picker__folder-btn { border-color: var(--we-accent-src, #4f8cff); }
+  .we-picker__rating-caret, .we-picker__folder-caret { font-size: 10px; opacity: 0.7; flex: none; }
+  .we-picker__rating-list, .we-picker__folder-list {
     position: absolute; z-index: 6; top: calc(100% + 4px); left: 0;
     min-width: 208px; max-width: min(268px, 70vw);
     padding: 6px; border-radius: 10px; box-sizing: border-box;

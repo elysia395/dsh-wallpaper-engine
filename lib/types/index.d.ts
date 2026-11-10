@@ -102,6 +102,30 @@ export interface PlaylistDescriptor {
   unresolvedCount: number;
 }
 
+/** One folder from Wallpaper Engine's own "Installed" tree (`config.json` `general.browser.folders`). */
+export interface WallpaperFolderDescriptor {
+  /** Stable identifier derived from the Steam profile and the folder's name trail. */
+  id: string;
+  /** Folder title as shown in Wallpaper Engine. */
+  name: string;
+  /** Inventory ids that belong directly to this folder. */
+  wallpaperIds: string[];
+  /** Number of resolved entries in the folder. */
+  total: number;
+  /** Number of entries WE still lists but the inventory could not resolve (uninstalled / unsubscribed). */
+  unresolvedCount: number;
+  /**
+   * Resolved ids of this folder **including every subfolder** (deduped). Selecting a parent
+   * folder in the picker filters by this union: Wallpaper Engine's tree is "parent contains
+   * children", so a parent that only holds subfolders must not come out empty.
+   */
+  deepWallpaperIds: string[];
+  /** Unresolved entries of this folder **plus every subfolder**. */
+  deepUnresolvedCount: number;
+  /** Nested folders (Wallpaper Engine allows subfolders). */
+  subfolders: WallpaperFolderDescriptor[];
+}
+
 /** Shape returned by GET /wallpaper-engine/inventory. */
 export interface Inventory {
   /**
@@ -140,6 +164,11 @@ export interface Inventory {
   wallpapers: WallpaperDescriptor[];
   /** Saved Wallpaper Engine playlists available for scoped rotation. */
   playlists: PlaylistDescriptor[];
+  /**
+   * Wallpaper Engine's own "Installed" folders (read-only mirror of `config.json`
+   * `general.browser.folders`). Empty array when the user never created a folder.
+   */
+  folders: WallpaperFolderDescriptor[];
 }
 
 /** The host plugin hard-depends on the webserver service (`webServer`). */

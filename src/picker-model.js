@@ -131,6 +131,20 @@ function matchesTypeFilter(w, allow) {
   return set.has(w.type);
 }
 
+/**
+ * 「文件夹」筛选：`folderFilter` 是 Wallpaper Engine 某个「已安装」文件夹的 id，
+ * `"all"`（或缺省）= 不筛。成员集合由**调用点**从宿主清单的 `folders` 树里取
+ * （`folderWallpaperIds`）—— 本层只收一份 id 数组，不读清单、不读 `selection`。
+ *
+ * 效力与 rating/type **不同**：它只收窄选择器网格（用户在看什么），不写进轮播候选
+ * 与播放闸门 —— 换一个文件夹看一眼，不应该把正在播的壁纸或自动轮播改掉。
+ */
+function matchesFolderFilter(w, folderFilter, folderWallpaperIds) {
+  if (!folderFilter || folderFilter === "all") return true;
+  if (!Array.isArray(folderWallpaperIds)) return false;
+  return folderWallpaperIds.indexOf(w.id) >= 0;
+}
+
 function isPlayableType(w) {
   // "image" = user-uploaded still image (custom uploads, id prefix "up-").
   // "scene" = WE scene wallpaper — usable as a still image when the host served
@@ -196,6 +210,7 @@ function pickerModel(input) {
   // 隐掉它们网格才有用。已隐藏（软删除）的壁纸离开这里去「已隐藏」区；两级过滤再收窄。
   const playableList = list.filter((w) =>
     isRotatableWallpaper(w, ratingFilter, typeFilter) && !isHiddenWallpaper(w.id, hiddenIds)
+    && matchesFolderFilter(w, input.folderFilter, input.folderWallpaperIds)
     && (!query || String(w.title || "").toLowerCase().indexOf(query) !== -1));
   // 两个过滤下拉的分档计数（可播放、未隐藏）：反映实际可用量，与当前生效的过滤无关。
   const basePlayable = list.filter((w) => isPlayableType(w) && !isHiddenWallpaper(w.id, hiddenIds));

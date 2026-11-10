@@ -102,6 +102,8 @@ function makeBuilder() {
     metaEntry: () => null,
     readPlaylistsP: async () => [],
     playlistItemId: () => null,
+    readFoldersP: async () => [],
+    foldersWithIds: () => [],
     weAssetsAvailable: () => false,
     sceneVideoProbeKey: (abs, m) => abs + '@' + m,
     sceneVideoProbeGet: () => undefined,

@@ -171,6 +171,7 @@ const VERIFY_STEPS = [
   // 图集清单路由（`GET ${BASE}/slides/<token>`）：真路由 + 真 listImages，自然序 / 同源 URL /
   // 四种失败口径 / 越界反解。硬档依据：token 解析到目录外即越界读盘；顺序漂移则过场与 WE 不一致。
   step('test/verify-slides.mjs'),
+  step('test/verify-we-folders.mjs'),
   step('test/verify-inventory-index.mjs'),
   step('test/verify-mp4-vfs.mjs'),
   step('test/verify-theme-layer.mjs'),

@@ -164,7 +164,8 @@
         "glassSurfacePolicy": {},
         "sceneAutoQuality": true,
         "floaterSolidBase": true,
-        "pictureSlideSeconds": 0
+        "pictureSlideSeconds": 0,
+        "folderFilter": "all"
       },
       "host": {
         "id": "",
@@ -320,7 +321,8 @@
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
         "floaterSolidBase": true,
-        "pictureSlideSeconds": 0
+        "pictureSlideSeconds": 0,
+        "folderFilter": "all"
       }
     },
     {
@@ -494,7 +496,8 @@
         "glassSurfacePolicy": {},
         "sceneAutoQuality": true,
         "floaterSolidBase": true,
-        "pictureSlideSeconds": 0
+        "pictureSlideSeconds": 0,
+        "folderFilter": "all"
       },
       "host": "__null__"
     },
@@ -669,7 +672,8 @@
         "glassSurfacePolicy": {},
         "sceneAutoQuality": true,
         "floaterSolidBase": true,
-        "pictureSlideSeconds": 0
+        "pictureSlideSeconds": 0,
+        "folderFilter": "all"
       },
       "host": "__null__"
     },
@@ -844,7 +848,8 @@
         "glassSurfacePolicy": {},
         "sceneAutoQuality": true,
         "floaterSolidBase": true,
-        "pictureSlideSeconds": 0
+        "pictureSlideSeconds": 0,
+        "folderFilter": "all"
       },
       "host": "__null__"
     },
@@ -1011,7 +1016,8 @@
         "glassSurfacePolicy": {},
         "sceneAutoQuality": true,
         "floaterSolidBase": true,
-        "pictureSlideSeconds": 0
+        "pictureSlideSeconds": 0,
+        "folderFilter": "all"
       },
       "host": {
         "id": "",
@@ -1167,7 +1173,8 @@
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
         "floaterSolidBase": true,
-        "pictureSlideSeconds": 0
+        "pictureSlideSeconds": 0,
+        "folderFilter": "all"
       }
     },
     {
@@ -1390,7 +1397,8 @@
         "glassSurfacePolicy": {},
         "sceneAutoQuality": true,
         "floaterSolidBase": true,
-        "pictureSlideSeconds": 0
+        "pictureSlideSeconds": 0,
+        "folderFilter": "all"
       },
       "host": {
         "id": "",
@@ -1546,7 +1554,8 @@
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
         "floaterSolidBase": true,
-        "pictureSlideSeconds": 0
+        "pictureSlideSeconds": 0,
+        "folderFilter": "all"
       }
     },
     {
@@ -1814,7 +1823,8 @@
         "glassSurfacePolicy": {},
         "sceneAutoQuality": true,
         "floaterSolidBase": true,
-        "pictureSlideSeconds": 0
+        "pictureSlideSeconds": 0,
+        "folderFilter": "all"
       },
       "host": {
         "id": "",
@@ -1970,7 +1980,8 @@
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
         "floaterSolidBase": true,
-        "pictureSlideSeconds": 0
+        "pictureSlideSeconds": 0,
+        "folderFilter": "all"
       }
     },
     {
@@ -2137,7 +2148,8 @@
         "glassSurfacePolicy": {},
         "sceneAutoQuality": true,
         "floaterSolidBase": true,
-        "pictureSlideSeconds": 0
+        "pictureSlideSeconds": 0,
+        "folderFilter": "all"
       },
       "host": {
         "id": "",
@@ -2293,7 +2305,8 @@
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
         "floaterSolidBase": true,
-        "pictureSlideSeconds": 0
+        "pictureSlideSeconds": 0,
+        "folderFilter": "all"
       }
     },
     {
@@ -2474,7 +2487,8 @@
         "glassSurfacePolicy": {},
         "sceneAutoQuality": true,
         "floaterSolidBase": true,
-        "pictureSlideSeconds": 0
+        "pictureSlideSeconds": 0,
+        "folderFilter": "all"
       },
       "host": {
         "id": "",
@@ -2630,7 +2644,8 @@
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
         "floaterSolidBase": true,
-        "pictureSlideSeconds": 0
+        "pictureSlideSeconds": 0,
+        "folderFilter": "all"
       }
     },
     {
@@ -2811,7 +2826,8 @@
         "glassSurfacePolicy": {},
         "sceneAutoQuality": true,
         "floaterSolidBase": true,
-        "pictureSlideSeconds": 0
+        "pictureSlideSeconds": 0,
+        "folderFilter": "all"
       },
       "host": {
         "id": "",
@@ -2967,7 +2983,8 @@
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
         "floaterSolidBase": true,
-        "pictureSlideSeconds": 0
+        "pictureSlideSeconds": 0,
+        "folderFilter": "all"
       }
     },
     {
@@ -3135,7 +3152,8 @@
         "glassSurfacePolicy": {},
         "sceneAutoQuality": true,
         "floaterSolidBase": true,
-        "pictureSlideSeconds": 0
+        "pictureSlideSeconds": 0,
+        "folderFilter": "all"
       },
       "host": {
         "id": "",
@@ -3291,7 +3309,8 @@
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
         "floaterSolidBase": true,
-        "pictureSlideSeconds": 0
+        "pictureSlideSeconds": 0,
+        "folderFilter": "all"
       }
     },
     {
@@ -3464,7 +3483,8 @@
         "glassSurfacePolicy": {},
         "sceneAutoQuality": true,
         "floaterSolidBase": true,
-        "pictureSlideSeconds": 0
+        "pictureSlideSeconds": 0,
+        "folderFilter": "all"
       },
       "host": {
         "id": "",
@@ -3620,7 +3640,8 @@
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
         "floaterSolidBase": true,
-        "pictureSlideSeconds": 0
+        "pictureSlideSeconds": 0,
+        "folderFilter": "all"
       }
     },
     {
@@ -3790,7 +3811,8 @@
         "glassSurfacePolicy": {},
         "sceneAutoQuality": true,
         "floaterSolidBase": true,
-        "pictureSlideSeconds": 0
+        "pictureSlideSeconds": 0,
+        "folderFilter": "all"
       },
       "host": {
         "id": "",
@@ -3946,7 +3968,8 @@
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
         "floaterSolidBase": true,
-        "pictureSlideSeconds": 0
+        "pictureSlideSeconds": 0,
+        "folderFilter": "all"
       }
     },
     {
@@ -4123,7 +4146,8 @@
         "glassSurfacePolicy": {},
         "sceneAutoQuality": true,
         "floaterSolidBase": true,
-        "pictureSlideSeconds": 0
+        "pictureSlideSeconds": 0,
+        "folderFilter": "all"
       },
       "host": {
         "id": "",
@@ -4279,7 +4303,8 @@
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
         "floaterSolidBase": true,
-        "pictureSlideSeconds": 0
+        "pictureSlideSeconds": 0,
+        "folderFilter": "all"
       }
     },
     {
@@ -4521,7 +4546,8 @@
         "glassSurfacePolicy": {},
         "sceneAutoQuality": true,
         "floaterSolidBase": true,
-        "pictureSlideSeconds": 0
+        "pictureSlideSeconds": 0,
+        "folderFilter": "all"
       },
       "host": {
         "id": "",
@@ -4702,7 +4728,8 @@
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
         "floaterSolidBase": true,
-        "pictureSlideSeconds": 0
+        "pictureSlideSeconds": 0,
+        "folderFilter": "all"
       }
     },
     {
@@ -4868,7 +4895,8 @@
         "glassSurfacePolicy": {},
         "sceneAutoQuality": true,
         "floaterSolidBase": true,
-        "pictureSlideSeconds": 0
+        "pictureSlideSeconds": 0,
+        "folderFilter": "all"
       },
       "host": {
         "id": "",
@@ -5024,7 +5052,8 @@
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
         "floaterSolidBase": true,
-        "pictureSlideSeconds": 0
+        "pictureSlideSeconds": 0,
+        "folderFilter": "all"
       }
     },
     {
@@ -5190,7 +5219,8 @@
         "glassSurfacePolicy": {},
         "sceneAutoQuality": true,
         "floaterSolidBase": true,
-        "pictureSlideSeconds": 0
+        "pictureSlideSeconds": 0,
+        "folderFilter": "all"
       },
       "host": {
         "id": "wallpaper-42",
@@ -5346,7 +5376,8 @@
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
         "floaterSolidBase": true,
-        "pictureSlideSeconds": 0
+        "pictureSlideSeconds": 0,
+        "folderFilter": "all"
       }
     },
     {
@@ -5513,7 +5544,8 @@
         "glassSurfacePolicy": {},
         "sceneAutoQuality": true,
         "floaterSolidBase": true,
-        "pictureSlideSeconds": 0
+        "pictureSlideSeconds": 0,
+        "folderFilter": "all"
       },
       "host": {
         "id": "",
@@ -5669,7 +5701,8 @@
         "extraGlassSelectors": "",
         "glassSurfacePolicy": {},
         "floaterSolidBase": true,
-        "pictureSlideSeconds": 0
+        "pictureSlideSeconds": 0,
+        "folderFilter": "all"
       }
     }
   ]
