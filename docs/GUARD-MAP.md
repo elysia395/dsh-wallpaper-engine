@@ -5,7 +5,7 @@
 > 口径：只统计守卫**代码**里真正碰到的模块（先剥注释），并区分"直接读源文件"与"隔着产物 `lib/client.js`"。
 > 写法：字面量路径 / `join(...)` 拼接 / 唯一 basename / 产物配方 / **前缀族读法** `scopeFiles|scopeText(<前缀>)` / **经共享族助手读**（`import { panelText } from './tools/src-scope.mjs'` + 真调用；族口径封在那个库里，见 `docs/CODE-STRUCTURE.md` §12「同时是守卫的库」）/ **真源定位读**（`locate('符号')` / `locateFile('文件名')`，`test/tools/source-locator.mjs`：符号唯一声明在哪就是读了哪个模块）。
 
-模块面 215 个 · 守卫 133 个
+模块面 216 个 · 守卫 134 个
 
 ## 守卫 → 模块
 
@@ -25,7 +25,7 @@
 | `verify-adapter.mjs` | `lib/index.js` `lib/settings-schema.js` `packages/glass/src/glass-css.js` `src/adapter.js` `src/client.js` `src/effects.js` `src/panel-tabs.js` `src/panel-tabs/advanced.js` `src/panel-tabs/appearance.js` `src/panel-tabs/effects.js` `src/panel-tabs/mascot.js` `src/persistence.js` `src/styles.js` `src/styles/base.js` `src/styles/chrome.js` `src/styles/ext.js` `src/styles/panel.js` `src/styles/quick.js` `src/styles/settings.js` `src/styles/shell.js` |  |
 | `verify-api-client.mjs` | `src/api-client.js` `src/client.js` `src/panel-tabs.js` | ✅ |
 | `verify-asset-paths.mjs` | `lib/media/media-dirs.js` `lib/upload-dir.js` `lib/we-assets.js` |  |
-| `verify-avatar-interval-and-rotation.mjs` | `lib/fs-paths.js` `lib/inventory.js` `lib/media/image-preview.js` `lib/serve.js` `lib/settings-schema.js` `lib/upload-dir.js` `lib/upload-store.js` `packages/media-bridge/lib/routes/inventory.js` `packages/media-bridge/lib/routes/media-bytes.js` `packages/media-bridge/src/wallpaper-rotation-section.js` `src/avatar-layer.js` `src/client.js` `src/ext-avatar.js` `src/video-layer.js` |  |
+| `verify-avatar-interval-and-rotation.mjs` | `lib/fs-paths.js` `lib/inventory.js` `lib/media/image-preview.js` `lib/media/media-size.js` `lib/serve.js` `lib/settings-schema.js` `lib/upload-dir.js` `lib/upload-store.js` `packages/media-bridge/lib/routes/inventory.js` `packages/media-bridge/lib/routes/media-bytes.js` `packages/media-bridge/src/wallpaper-rotation-section.js` `src/avatar-layer.js` `src/client.js` `src/ext-avatar.js` `src/video-layer.js` |  |
 | `verify-body-caps.mjs` | `lib/http-body.js` `packages/media-bridge/lib/routes/upload.js` | ✅ |
 | `verify-bridge-ci.mjs` | — |  |
 | `verify-bundle-rows.mjs` | `lib/host-boot.js` `lib/index.js` `lib/kernel/component-session.js` `lib/kernel/host-kernel.js` `lib/subpackage-boot.js` |  |
@@ -67,6 +67,7 @@
 | `verify-logging.mjs` | `lib/host-boot.js` `lib/index.js` `lib/kernel/host-kernel.js` `lib/kernel/host-session.js` `lib/log.js` `lib/notice.js` `lib/routes/diag.js` `lib/serve.js` `lib/webwallgl/renderer.js` `packages/media-bridge/lib/routes/scene-serve.js` `src/live-layer.js` `src/live-layer/diag.js` `src/live-layer/gate.js` `src/live-layer/pointer.js` `src/live-layer/probe.js` `src/live-layer/underlay.js` `src/live-layer/watch.js` |  |
 | `verify-media-bridge.mjs` | `packages/media-bridge/lib/backend.js` `packages/media-bridge/lib/provision.js` `packages/media-bridge/lib/supervisor-protocol.js` `packages/media-bridge/lib/supervisor.js` |  |
 | `verify-media-probe.mjs` | `lib/media/mp4-probe.js` |  |
+| `verify-media-size.mjs` | `lib/media/media-size.js` |  |
 | `verify-module-layout.mjs` | `lib/index.js` `lib/settings-schema.js` `src/client.js` | ✅ |
 | `verify-mp4-vfs.mjs` | `lib/faststart.js` `lib/host-boot.js` `lib/kernel/host-session.js` `lib/mp4-vfs.js` |  |
 | `verify-notice-routing.mjs` | `lib/index.js` `src/client.js` |  |
@@ -173,6 +174,7 @@
 | `lib/media/frame-store.js` | 3 | `verify-cache-dir` `verify-cache-keys` `verify-scene` |
 | `lib/media/image-preview.js` | 1 | `verify-avatar-interval-and-rotation` |
 | `lib/media/media-dirs.js` | 4 | `verify-asset-paths` `verify-cache-dir` `verify-contracts` `verify-presets` |
+| `lib/media/media-size.js` | 2 | `verify-avatar-interval-and-rotation` `verify-media-size` |
 | `lib/media/mp4-probe.js` | 1 | `verify-media-probe` |
 | `lib/media/scene-probe.js` | 2 | `verify-cache-keys` `verify-scene-probe` |
 | `lib/media/transcode.js` | 5 | `verify-cache-dir` `verify-cache-prune` `verify-child-kill` `verify-config-store` `verify-transcode-state` |
