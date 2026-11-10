@@ -317,7 +317,11 @@ const CSS_GLASS = `
      只是令牌在它上面被重声明，只有它真拿该令牌当底才有观感差异。
      底色取 --we-panel-color（主题感知），一条规则同时覆盖深浅两主题，且与浮层文字
      （宿主与第三方都读 --dsw-alias-label-primary）维持原生配对。不要改借宿主 Tooltip
-     那对专用令牌 —— 那是「深底 + 固定近白字」，浅色主题下浮层会变成黑底黑字。 */
+     那对专用令牌 —— 那是「深底 + 固定近白字」，浅色主题下浮层会变成黑底黑字。
+     三层都要给（#354）：设置窗那组规则会把 layer-3 重声明成读 --we-settings-window-alpha
+     的玻璃配方，于是拿 layer-3 当底色的第三方 tooltip（dsh-im 的 .dim-presetTooltip 等）
+     在设置页里仍是半透明、提示文字与下面的正文叠字；豁免声明写在浮层元素自己身上，
+     直接声明压过从对话框继承来的值，这是用户实测有效的口径。 */
   body[data-we-glass-page] [role="tooltip"],
   body[data-we-glass-page] [role="menu"],
   body[data-we-glass-page] [role="listbox"],
@@ -330,6 +334,7 @@ const CSS_GLASS = `
   body[data-we-glass-page] [class*="popup" i] {
     --dsw-alias-bg-layer-1: color-mix(in srgb, var(--we-panel-color, #1e1f26) 96%, transparent);
     --dsw-alias-bg-layer-2: color-mix(in srgb, var(--we-panel-color, #1e1f26) 96%, transparent);
+    --dsw-alias-bg-layer-3: color-mix(in srgb, var(--we-panel-color, #1e1f26) 96%, transparent);
   }
   /* 第二类漏网：既没有 role、类名也不含浮层约定词的面板浮层（dsh-market 的 .opPanel、
      @linxin666 插件管理器的更新面板）。判据取源码级属性优先（[data-update-panel]），
