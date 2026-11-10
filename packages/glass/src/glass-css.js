@@ -501,6 +501,22 @@ const CSS_GLASS = `
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
   }
+  /* ── 计划卡片（ui-plan 的 PlanCards）：与对话卡片同一种玻璃 ───────────────────
+     用户截图：对话结尾「已读取文件」下面的计划卡片是一整块实心深色卡（宿主
+     --plan-card-fill = 深色 --dsw-static-neutral-850），与旁边的玻璃气泡不是同一种材质。
+     锚点取宿主源码级属性 [data-plan-card]（PlanCard.js 的 PlanCards：data-plan-artifacts
+     容器 + 每个按钮 data-plan-card=callId，全 asar 只有它用）。
+     配方 = 对话卡那档 chat 底 + 镜面釉 + 霜（与工具结果卡同族）。原生态
+     （data-we-thinking-native）不匹配 ⇒ 卡片保持宿主实色，正是该挡的定义。
+     宿主 hover 档（--plan-card-hover）会被 !important 底压住 —— 与上面
+     [data-presented-file] 同一取舍：底色正确优先，悬停反馈由边框/光标承担。
+     ⚠️ 本段不许出现反引号：整套样式文本是模板字符串（构建期拼接）。 */
+  body[data-we-glass-chat][data-we-glass-page]:not([data-we-thinking-native]) [data-plan-card] {
+    background-color: var(--we-chat-glass-fill) !important;
+    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.05) 38%, rgba(255, 255, 255, 0.02));
+    -webkit-backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
+    backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
+  }
   /* ⚠️ 正文原生挡（data-we-thinking-native，见文件下方「正文原生挡」块）：只有**气泡**
      这一条带 :not() —— 原生挡下气泡退出霜釉（正文原生 = 无玻璃装饰）；**输入卡与工具
      弹卡不豁免**（用户口径：输入对话框保留玻璃），照旧吃霜/釉。
@@ -1740,6 +1756,12 @@ const CSS_GLASS = `
   body[data-we-glass-fallback][data-we-glass-page][data-we-thinking-glass] [data-presented-file],
   body[data-we-glass-fallback][data-we-glass-page][data-we-thinking-glass] [data-chat-flow] .md-code-block,
   body[data-we-glass-fallback][data-we-glass-page][data-we-thinking-glass] [data-vcp-rawhtml] > div > div:has(> pre > code):has(> div > button[title="复制代码"]) {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+  /* 计划卡片在软渲染回退档同样只留底色（--we-chat-glass-fill 此时已被上面那条
+     92% 近不透明配方顶掉）⇒ 关霜，别让无效的 backdrop-filter 白算一遍。 */
+  body[data-we-glass-fallback][data-we-glass-chat][data-we-glass-page] [data-plan-card] {
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
   }

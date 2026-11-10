@@ -184,7 +184,7 @@ const SURFACES = [
     // ⚠️ 合并 #134（扩展思考玻璃）：新增一批只在 `[data-we-thinking-glass]` 下生效的宿主锚点
     //（思考区/文件卡/工具结果/代码块/导航按钮…）—— 全部归本面认领；锚点清单取自
     // 合并后物化 CSS 的枚举输出（认领判据会双向核对）。
-    anchors: ['[data-vcp-reasoning]', '[data-vcp-reasoning-body]', '[data-changed-files]', '[data-presented-file]', '[data-chat-flow]', '[data-chat-flow-kind="context"]', '[data-vcp-rawhtml]', '[data-code-block-banner]', '[data-context-injection-body]', '[data-diff]', '[data-dsh-navbar]', '[data-vlln-load-older]', '[data-vlln-preview]', '[data-read]', '[data-terminal]', '[data-sample="bash"]', '[data-search="matches"]', '[data-search="paths"]', '[data-slot="conversation.view"]', '[data-slot="tool.call.toolview"]', '[data-tool="glob"]', '[data-tool="grep"]', '[data-tool="read"]', '[data-tool="write"]', '[data-variant="others"]'], tier: 'global',
+    anchors: ['[data-vcp-reasoning]', '[data-vcp-reasoning-body]', '[data-changed-files]', '[data-presented-file]', '[data-plan-card]', '[data-chat-flow]', '[data-chat-flow-kind="context"]', '[data-vcp-rawhtml]', '[data-code-block-banner]', '[data-context-injection-body]', '[data-diff]', '[data-dsh-navbar]', '[data-vlln-load-older]', '[data-vlln-preview]', '[data-read]', '[data-terminal]', '[data-sample="bash"]', '[data-search="matches"]', '[data-search="paths"]', '[data-slot="conversation.view"]', '[data-slot="tool.call.toolview"]', '[data-tool="glob"]', '[data-tool="grep"]', '[data-tool="read"]', '[data-tool="write"]', '[data-variant="others"]'], tier: 'global',
     // PR #130 的面：门是 `data-we-thinking-glass`（默认关）。⚠️ v1.3.0 追版收敛后它**不再**
     // 认领 `[data-turn-trigger]`（那一条改由上面的 conversation-thinking-trigger 认领 ——
     // 触发条吃玻璃，本面只管推理区/文件卡/工具结果等的清底与玻璃）。
@@ -1326,7 +1326,7 @@ console.log('\n⑨ W5：各面的锚点门控覆盖率（防"关掉后还剩一�
     // ⚠️ 合并 #134：思考玻璃一族在对话面新增了「+」白釉 / 气泡清底等规则，它们的门是
     //    `data-we-thinking-glass`（默认关）—— 与 chat 门同样满足"关 ⇒ 整组不生效"，
     //    并入本面的合法锚点集合（回退干净的性质不变）。
-    { id: 'glass-child-conversation', member: /data-(composer-card|question-key|plan-review-key|approval-key)|_bubble|data-code-block-banner/, anchor: /data-we-glass-fallback|data-we-glass-chat|data-we-thinking-glass/, done: true },
+    { id: 'glass-child-conversation', member: /data-(composer-card|question-key|plan-review-key|approval-key|plan-card)|_bubble|data-code-block-banner/, anchor: /data-we-glass-fallback|data-we-glass-chat|data-we-thinking-glass/, done: true },
     // ⚠️ 新登记面必须同步进 member：`[data-install-registry]`（#156② 注册表浮层的霜）当年
     //    只进了 SURFACES 的锚点清单、没进这里，于是"删掉效果规则"在这条棘轮上无感
     //    （§11 A1-2）。member 与 SURFACES[].anchors 是**两套**登记，新增面时两处都要动。
@@ -2775,6 +2775,28 @@ console.log('\n⑲ 标记值跟走 resolver（t9-001 运行级断言：真跑 we
     '实际=' + (floaterTokenRules.length === 1 ? floaterLayersOf(floaterTokenRules[0]).join(',') : '无规则'));
   check('negative control: 只回填两层时 ㉔b 会判红（判据不是恒真）',
     floaterLayersOf({ body: '--dsw-alias-bg-layer-1: color-mix(in srgb, var(--we-panel-color, #1e1f26) 96%, transparent); --dsw-alias-bg-layer-2: color-mix(in srgb, var(--we-panel-color, #1e1f26) 96%, transparent);' }).length === 2);
+  // ── ㉔ 计划卡片（ui-plan 的 PlanCards）与对话卡片同一种玻璃 ──────────────────
+  // 用户截图：对话结尾的计划卡片是一整块实心深色卡（宿主 --plan-card-fill），与旁边的
+  // 玻璃气泡不是同一种材质。锚点是宿主源码级 [data-plan-card]（PlanCard.js，全 asar 唯一）。
+  console.log('\n㉔ 计划卡片吃对话玻璃（并保留软渲染回退档的无霜底色）');
+  const planRules = rulesOf(CSS).filter((r) => /\[data-plan-card\]/.test(r.header));
+  const planMain = planRules.filter((r) => /data-we-glass-chat/.test(r.header) && !/data-we-glass-fallback/.test(r.header));
+  const planFallback = planRules.filter((r) => /data-we-glass-fallback/.test(r.header));
+  const planFormOf = (rule) => ({
+    chat: /--we-chat-glass-fill/.test(rule.body),
+    blur: /backdrop-filter: blur\(/.test(rule.body),
+  });
+  const planForms = planMain.map(planFormOf);
+  check('㉔a 主规则带对话玻璃门并读 chat 底 + 霜', planMain.length === 1
+    && planForms.every((f) => f.chat && f.blur));
+  check('㉔b 主规则排除原生挡（原生 = 宿主实色）', planMain.length === 1
+    && /:not\(\[data-we-thinking-native\]\)/.test(planMain[0].header));
+  check('㉔c 软渲染回退档关霜（与主规则同锚点）', planFallback.length === 1
+    && /backdrop-filter: none/.test(planFallback[0].body));
+  const syntheticNoBlur = planFormOf({ body: 'background-color: var(--we-chat-glass-fill) !important;' });
+  check('negative control: “只有底色没有霜”的合成规则会被 ㉔a 判红',
+    !(syntheticNoBlur.chat && syntheticNoBlur.blur));
+
 }
 
 console.log('');
