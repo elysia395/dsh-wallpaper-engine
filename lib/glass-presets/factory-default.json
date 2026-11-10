@@ -46,6 +46,7 @@
       "image",
       "scene"
     ],
+    "orientationFilter": "all",
     "pickerLayout": "fixed",
     "edgeCompat": true,
     "accent": "#00c800",

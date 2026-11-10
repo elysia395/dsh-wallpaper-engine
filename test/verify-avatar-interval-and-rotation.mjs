@@ -371,6 +371,10 @@ const videoSrc = read('src/video-layer.js');
 
   async function loadMutant(name, source) {
     const file = join(iso, `${name}.mjs`);
+    // inventory.js 现在有同目录相对 import（media/media-size.js）；变异体住 .test-cache，
+    // 必须把这棵依赖一起放进去，否则 import 阶段就 ERR_MODULE_NOT_FOUND。
+    mkdirSync(join(iso, 'media'), { recursive: true });
+    writeFileSync(join(iso, 'media', 'media-size.js'), read('lib/media/media-size.js'));
     writeFileSync(file, source);
     return import(pathToFileURL(file).href);
   }

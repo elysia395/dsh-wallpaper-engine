@@ -627,6 +627,37 @@
       )),
       ),
       ),
+      // 方向筛选：单档枚举（全部 / 横屏 / 竖屏），与设置页同一个键。
+      React.createElement("details", { className: "we-qp__orientation-menu we-qp__type-menu we-picker__type-menu" },
+      React.createElement("summary", {
+        className: "we-qp__type-btn we-picker__type-btn",
+        "aria-label": weT("壁纸方向"),
+        title: weT("按壁纸宽高过滤列表（横屏 / 竖屏）；正方形或无法确定方向的壁纸只在「全部方向」里出现。只筛列表，不影响当前播放与轮播"),
+      },
+      React.createElement("span", { className: "we-picker__rating-text" }, weT("壁纸方向")),
+      React.createElement("span", { className: "we-picker__rating-caret", "aria-hidden": "true" }, "▾"),
+      ),
+      React.createElement("div", { className: "we-picker__rating-list" },
+      [
+        { id: "all", label: () => weT("全部方向") },
+        { id: "landscape", label: () => weT("横屏") },
+        { id: "portrait", label: () => weT("竖屏") },
+      ].map((option) => React.createElement("label", {
+        key: option.id,
+        className: "we-picker__rating-toggle" + ((sel.orientationFilter || "all") === option.id ? " we-picker__rating-toggle--on" : ""),
+      },
+      React.createElement("input", {
+        type: "radio", className: "we-picker__rating-check",
+        name: "we-qp-orientation-filter",
+        value: option.id,
+        checked: (sel.orientationFilter || "all") === option.id,
+        onChange: () => { setSetting("orientationFilter", option.id); emit(); },
+        "aria-label": weT("壁纸方向（{name}）", { name: option.label() }),
+      }),
+      React.createElement("span", null, option.label()),
+      )),
+      ),
+      ),
       // 列表 / 卡片：标签式切换（滑动胶囊做激活指示、无分段底 —— 样式见
       // .we-qp__viewtabs），偏好记 localStorage（QP_VIEW_KEY），两个壳共用一份。
       // 语义仍是开关（role=group + aria-pressed），只是外观走标签形态。
@@ -834,9 +865,13 @@
     const ratingAllow = Array.isArray(sel.contentRatingFilter)
       ? sel.contentRatingFilter.filter((t) => qpRatings().some((r) => r.id === t))
       : qpRatings().map((r) => r.id);
+    // 方向筛选：与设置页同一个键 `orientationFilter`（单档枚举）。只筛可见列表 ——
+    // 不改变轮播成员 / 「下一张」候选，也不拦正在应用的壁纸。
+    const orientationFilter = sel.orientationFilter || "all";
     const playable = playableInventory();
     const filtered = playable.filter((w) => {
       if (typeAllow.indexOf(w.type) === -1) return false;
+      if (!matchesOrientationFilter(w, orientationFilter)) return false;
       if (q && String(w.title || "").toLowerCase().indexOf(q) === -1) return false;
       return true;
     });

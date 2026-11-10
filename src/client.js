@@ -4332,6 +4332,13 @@ const onFolderFilterChange = (value) => {
   setSetting("folderFilter", value || "all");
   emit();
 };
+// 方向筛选：单档枚举，只筛**可见列表** —— 不改变轮播成员 / 「下一张」候选，
+// 也不拦正在应用的壁纸（尺寸未知 / 正方形的条目只在「全部方向」里出现）。
+const onOrientationFilterChange = (value) => {
+  if (value !== "all" && value !== "landscape" && value !== "portrait") return;
+  setSetting("orientationFilter", value);
+  emit();
+};
 // Card style: classic (CD-rack) vs fixed (overlap-proof).
 const onLayoutChange = (value) => {
   setSetting("pickerLayout", value);
@@ -4894,7 +4901,7 @@ function WallpaperPicker() {
   // 标题子串匹配（空查询 = 不过滤），每页 24 张，页号越界自动 clamp。这里只把状态喂
   // 进去、把结果取出来 —— 组件体不再就地算这些（分级/类型/隐藏的判定也在那边）。
   const {
-    query, playableList, basePlayable, ratingCounts, typeCounts, hiddenList,
+    query, playableList, basePlayable, ratingCounts, typeCounts, orientationCounts, hiddenList,
     editorPageView,
   } = pickerModel({
     wallpapers: list,
@@ -4904,6 +4911,7 @@ function WallpaperPicker() {
     typeFilter: sel.typeFilter,
     folderFilter,
     folderWallpaperIds,
+    orientationFilter: sel.orientationFilter,
     editorPage: sel.editorPage,
   });
   // CD-rack mode: compact one-page grid (no pagination, no virtualization —
@@ -5063,11 +5071,11 @@ function WallpaperPicker() {
       // 壁纸网格，ESC / 顶部「返回」退出，切页签也会退出（见 switchTab）。
       sel.pickerOpen ? renderPickerModal({
         sel, closePicker, current, playbackLive, playableList, hiddenList,
-        cdMode, query, basePlayable, ratingCounts, typeCounts,
-        folderOptions, folderFilter, onFolderFilterChange,
-        gridRef: pickerGridRef, vwin: pickerVwin,
+        cdMode, query, basePlayable, ratingCounts, typeCounts, orientationCounts,
+        folderOptions, folderFilter, onFolderFilterChange,        gridRef: pickerGridRef, vwin: pickerVwin,
         armedConfirm: sel.armedConfirm, onArmConfirm: armConfirm, onDisarmConfirm: disarmConfirm,
         onClear, onTogglePlay, onRatingToggle: onRatingFilterToggle, onTypeToggle: onTypeFilterToggle,
+        onOrientationChange: onOrientationFilterChange,
         onShowNormalView, onShowHiddenView,
         onToggleBatchMode, onArmBatchHide, onBatchHide, onBatchCancel, onSearchInput, onPickCard,
       }) : React.createElement(React.Fragment, null,
