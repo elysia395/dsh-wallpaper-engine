@@ -2641,7 +2641,7 @@ function onCancelEditWeAssetsDir() {
 function onLeftSidebarGlass(e) { setSetting("leftSidebarGlass", e.target.checked); emit(); }
 
 // ── 侧边栏四角圆角 / 直角（外观 → 侧边栏圆角）────────────────────────────────
-// 键名表**只此一份**：面板按 (side, corner) 调，批量化也读它 —— 手抄第二份必然漂。
+// 键名表**只此一份**：面板按 (side, corner) 调 —— 手抄第二份必然漂。
 const SIDEBAR_CORNER_KEYS = {
   left: { tl: "leftSidebarSquareTL", tr: "leftSidebarSquareTR", br: "leftSidebarSquareBR", bl: "leftSidebarSquareBL" },
   right: { tl: "rightSidebarSquareTL", tr: "rightSidebarSquareTR", br: "rightSidebarSquareBR", bl: "rightSidebarSquareBL" },
@@ -2657,12 +2657,6 @@ function onSidebarCornerRadius(side, value) {
 function onSidebarCornerSquare(side, corner, square) {
   const key = SIDEBAR_CORNER_KEYS[side] && SIDEBAR_CORNER_KEYS[side][corner];
   if (key) setSetting(key, square === true);
-  emit();
-}
-/** 批量：四角一起直角 / 一起回到统一档（只 emit 一次，别让四个键各刷一遍）。 */
-function onSidebarAllCorners(side, square) {
-  const table = SIDEBAR_CORNER_KEYS[side];
-  if (table) for (const key of Object.values(table)) setSetting(key, square === true);
   emit();
 }
 // 标题栏液态玻璃（titlebarGlass）：与左侧栏同一形状的**乙类**总开关 —— 门控属性挂在
@@ -4776,7 +4770,7 @@ function WallpaperPicker() {
       uiColorOpen: pickerUiColorOpen, onToggleUiColorSection: togglePickerUiColorSection,
       onToggleUiColorCustom, onUiColorElement,
       onGlassSurfacePolicy, surfaceStatus: weGlassSurfaceStatus(),
-      officialColorOf, onAccent, onCapsuleBlur, onCapsuleColor, onBlur, onBorder, onCaretColor, onChatGlassFidelity, onComponentFamily, onComponentFont, onExtraGlassSelectors, onFontAdvanced, onFontResetAll, onGlassAlpha, onGlassColor, onGlassDarkSeparate, onGlassFidelity, onGlobalFamily, onLeftSidebarGlass, onTitlebarGlass, onRefreshSystemFonts, onSidebarAllCorners, onSidebarAlpha, onSidebarBlur, onSidebarColor, onSidebarContentAlpha, onSidebarContentColor, onSidebarCornerRadius, onSidebarCornerSquare, onSidebarFollowGlobal, onSidebarGlass, onSidebarFullClear, onFloaterSolidBase, onThemeColor, onThemeColorClear, onThemeDarkSeparate, onThemeFamily, onThemeSize, onThemeTypeOnly, onThemeWeight, onThinkingMode, onToggleFontCustom, onToggleThemeFollow, sel,
+      officialColorOf, onAccent, onCapsuleBlur, onCapsuleColor, onBlur, onBorder, onCaretColor, onChatGlassFidelity, onComponentFamily, onComponentFont, onExtraGlassSelectors, onFontAdvanced, onFontResetAll, onGlassAlpha, onGlassColor, onGlassDarkSeparate, onGlassFidelity, onGlobalFamily, onLeftSidebarGlass, onTitlebarGlass, onRefreshSystemFonts, onSidebarAlpha, onSidebarBlur, onSidebarColor, onSidebarContentAlpha, onSidebarContentColor, onSidebarCornerRadius, onSidebarCornerSquare, onSidebarFollowGlobal, onSidebarGlass, onSidebarFullClear, onFloaterSolidBase, onThemeColor, onThemeColorClear, onThemeDarkSeparate, onThemeFamily, onThemeSize, onThemeTypeOnly, onThemeWeight, onThinkingMode, onToggleFontCustom, onToggleThemeFollow, sel,
       // 玻璃 UI 子项开关 + 独立配置 + 独立参数（见 onToggleChildIndependent 那段注释）
       onToggleChildIndependent, onGlassChildParam, childIndependentOn,
       // 二次修订：设置页也**支持隐藏**这几节（默认全展开）——

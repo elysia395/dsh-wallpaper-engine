@@ -370,6 +370,15 @@ const CSS_SETTINGS = `  /* ── 预设方案：两行四列的圆角表格（�
   .we-picker__ctl--wrap > .we-picker__seg.we-picker__seg--chips > .we-picker__rate {
     flex: 0 0 auto; max-width: 176px;
   }
+  /* 「侧边栏圆角」节（设置页）：两行各四枚按钮**等宽**。上面 1fr 列的下限是 auto（即
+     min-content）—— 标签长短不一（「跟随原生」/「大 20px」，英文「Top-left corner: Round」
+     更长）时列宽就跟着内容参差；minmax(max-content, 1fr) 让四列都取最宽标签的宽度，
+     既真等宽、又不裁文案，也不用钉魔法像素宽。
+     ⚠️ 只作用于设置页（--corners-eq 由 appearance.js 按 ctx.surface 决定是否加）：
+     侧栏档壳窄，仍走上面的「按内容宽」口径，免得四列挤到互相压字。 */
+  .we-picker__ctl--wrap > .we-picker__seg.we-picker__seg--corners-eq {
+    grid-auto-columns: minmax(max-content, 1fr);
+  }
   /* 色板行独占整行、行内左对齐（#253）：与说明同排时短说明会把色板推到右端、长说明又把它
      挤到下一行；右侧「自定义」在 564px 内容宽下会顶出面板。 */
   .we-picker__ctl--wrap > .we-picker__swatches { flex: 1 0 100%; }

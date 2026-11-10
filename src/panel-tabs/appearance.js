@@ -59,15 +59,23 @@
   // ⚠️ 宿主原生左栏与右栏面板**都不带圆角** ⇒「圆角」要靠统一档选 6 / 12 / 20px 才看得见，
   //    「直角」是把某一角按回 0 的覆盖档；默认「跟随原生」= 一个属性都不挂（逐字节现状）。
   // 四角按几何排（左上 / 右上 / 右下 / 左下），与用户看到的形状同构。
-  function sidebarCornerGroup(side, sideLabel, sel, onSidebarCornerRadius, onSidebarCornerSquare, onSidebarAllCorners) {
+  function sidebarCornerGroup(side, sideLabel, sel, onSidebarCornerRadius, onSidebarCornerSquare, equalWidth) {
+    // 设置页面板宽：两行各四枚按钮钉**等宽**（CSS 见 styles.js 的 `--corners-eq` 规则）。
+    // 侧栏档（ctx.surface === "sidebar"）壳窄，仍走「按内容宽」的旧口径 —— 英文标签
+    // （`Top-left corner: Round`）若也钉等宽会把四列撑出容器。
+    const segClass = "we-picker__seg" + (equalWidth === true ? " we-picker__seg--corners-eq" : "");
     const radiusLabels = { native: weT("跟随原生"), 6: weT("小 6px"), 12: weT("中 12px"), 20: weT("大 20px") };
     const corners = [["tl", weT("左上")], ["tr", weT("右上")], ["br", weT("右下")], ["bl", weT("左下")]];
     const radiusKey = side + "SidebarCornerRadius";
     const isSquare = (c) => sel[side + "SidebarSquare" + c.toUpperCase()] === true;
+    // ⚠️ 四角单独开关的**视觉口径** = 「实色/深色底 = 这一角是圆角（跟随统一档），
+    //    透明/描边 = 这一角被按成直角（0px 覆盖）」。与全仓「实色 = 开/被选中」一致；
+    //    此前反着画（实色 = 直角），2026-11-10 用户指正是反的。
+    const isRound = (c) => !isSquare(c);
     return React.createElement(React.Fragment, null,
       React.createElement("div", { className: "we-picker__ctl we-picker__ctl--wrap" },
-        ctlText(weT("{side} · 统一圆角", { side: sideLabel }), weT("四角都按这个值；单独标「直角」的角覆盖它")),
-        React.createElement("div", { className: "we-picker__seg" },
+        ctlText(weT("{side} · 统一圆角", { side: sideLabel })),
+        React.createElement("div", { className: segClass },
           SIDEBAR_CORNER_RADIUS_VALUES.map((v) =>
             React.createElement("button", {
               key: v,
@@ -79,36 +87,32 @@
         ),
       ),
       React.createElement("div", { className: "we-picker__ctl we-picker__ctl--wrap" },
-        ctlText(weT("{side} · 四角单独", { side: sideLabel }), weT("点一下就切换：圆角（用统一值）/ 直角（0px）")),
-        React.createElement("div", { className: "we-picker__seg" },
+        ctlText(weT("{side} · 四角单独", { side: sideLabel })),
+        React.createElement("div", { className: segClass },
           corners.map(([c, cornerLabel]) =>
             React.createElement("button", {
               key: c,
-              className: "we-picker__btn we-picker__rate" + (isSquare(c) ? " we-picker__rate--active" : ""),
+              className: "we-picker__btn we-picker__rate" + (isRound(c) ? " we-picker__rate--active" : ""),
               type: "button",
-              onClick: () => onSidebarCornerSquare(side, c, !isSquare(c)), "aria-pressed": isSquare(c) ? "true" : "false", "aria-label": weT("{side}{corner}：{state}", { side: sideLabel, corner: cornerLabel, state: weT(isSquare(c) ? "直角" : "圆角") }),
+              onClick: () => onSidebarCornerSquare(side, c, isRound(c)), "aria-pressed": isRound(c) ? "true" : "false", "aria-label": weT("{side}{corner}：{state}", { side: sideLabel, corner: cornerLabel, state: weT(isSquare(c) ? "直角" : "圆角") }),
             }, weT("{corner}角 {state}", { corner: cornerLabel, state: weT(isSquare(c) ? "直角" : "圆角") })),
           ),
-        ),
-      ),
-      React.createElement("div", { className: "we-picker__ctl we-picker__ctl--wrap" },
-        React.createElement("div", { className: "we-picker__seg" },
-          React.createElement("button", { className: "we-picker__btn", type: "button", onClick: () => onSidebarAllCorners(side, true) }, weT("四角全直角")),
-          React.createElement("button", { className: "we-picker__btn", type: "button", onClick: () => onSidebarAllCorners(side, false) }, weT("四角全圆角")),
         ),
       ),
     );
   }
 
   function renderAppearanceSidebarCornersSection(ctx) {
-    const { onResetModule, onSidebarAllCorners, onSidebarCornerRadius, onSidebarCornerSquare, sel, cornersOpen, onToggleCornersSection } = ctx;
+    const { onResetModule, onSidebarCornerRadius, onSidebarCornerSquare, sel, cornersOpen, onToggleCornersSection } = ctx;
     // ⚠️ 折叠门同「细节」节（二次修订）：两档都支持隐藏，差别只在默认值。
     const open = cornersOpen === true;
+    // 设置页面板宽：四枚按钮钉等宽；侧栏档（surface === "sidebar"）壳窄，保持按内容宽。
+    const equalWidth = ctx.surface !== "sidebar";
     return React.createElement(React.Fragment, null,
       React.createElement("div", { className: "we-picker__section" },
         sectionHead(weT("侧边栏圆角"), open, onToggleCornersSection, moduleResetButton("corners", onResetModule)),
-        open && sidebarCornerGroup("left", weT("左侧栏"), sel, onSidebarCornerRadius, onSidebarCornerSquare, onSidebarAllCorners),
-        open && sidebarCornerGroup("right", weT("右侧栏"), sel, onSidebarCornerRadius, onSidebarCornerSquare, onSidebarAllCorners),
+        open && sidebarCornerGroup("left", weT("左侧栏"), sel, onSidebarCornerRadius, onSidebarCornerSquare, equalWidth),
+        open && sidebarCornerGroup("right", weT("右侧栏"), sel, onSidebarCornerRadius, onSidebarCornerSquare, equalWidth),
       ),
     );
   }

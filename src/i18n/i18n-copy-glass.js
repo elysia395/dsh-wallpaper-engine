@@ -172,13 +172,11 @@ const WE_I18N_EN_GLASS = {
   "左侧栏": "Left sidebar",
   "右侧栏": "Right sidebar",
   "{side} · 统一圆角": "{side} - uniform radius",
-  "四角都按这个值；单独标「直角」的角覆盖它": "All four corners use this value; a corner marked Square overrides it",
   "跟随原生": "Native",
   "小 6px": "S 6px",
   "中 12px": "M 12px",
   "大 20px": "L 20px",
   "{side} · 四角单独": "{side} - per-corner",
-  "点一下就切换：圆角（用统一值）/ 直角（0px）": "Click to toggle: Round (uses the uniform value) / Square (0px)",
   "左上": "Top-left",
   "右上": "Top-right",
   "右下": "Bottom-right",
@@ -188,8 +186,6 @@ const WE_I18N_EN_GLASS = {
   "{corner}角 {state}": "{corner} corner: {state}",
   "{side}{corner}：{state}": "{side} {corner}: {state}",
   "{side}统一圆角 {value}": "{side} uniform radius {value}",
-  "四角全直角": "All corners square",
-  "四角全圆角": "All corners round",
 };
 
 export { WE_I18N_EN_GLASS };
