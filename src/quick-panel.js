@@ -64,7 +64,8 @@
       滚动事件 rAF 合并；窗口没变不触发重渲染；官方档在 deps 变化（换视图 / 条数变化）
       时 scrollTop 归零 —— 旧行距下的位置在新几何里指向别处，还会先被临时高度钳一把，
       不如回顶重测，语义可预期（抽屉档是祖先在滚，不动它）。meta 走 ref 进闭包，
-      滚动重测不因一次输入而重挂监听。 */
+      滚动重测不因一次输入而重挂监听。滚动容器是每次 measure 现解析的：隐藏子树里预挂的
+      会话 tab 身体挂载时还量不到 sc，等它显示出来再补挂监听 / 观察器（见下方 bindScroller）。 */
   function qpVirtWindow(ref, count, itemH, gap, cards, tag) {
     const [win, setWin] = React.useState(() => ({ start: 0, end: QP_VP_FIRST, cols: 0, cards: false, tag }));
     const metaRef = React.useRef(null);
@@ -73,6 +74,23 @@
       const el = ref.current;
       if (!el) return undefined;
       let raf = 0;
+      // 滚动容器可能**挂载时还解析不到**（官方档 tab 身体在非活动会话的 hidden 子树里预挂，
+      // 那时 display:none ⇒ scrollHeight/clientHeight 都是 0，qpFindScroller 返回 null），
+      // 之后会话显示才出现。监听不能只在 effect 顶部挂一次，否则 sc 迟到就永远没人挂
+      // （滚动不重测、窗口停在首次测量值，看起来"壁纸只显示一部分"）。这里改成：
+      // 每次 measure 重新解析 sc，发现新容器就补挂 scroll / RO / MO，换容器时先摘旧的。
+      let boundSc = null;
+      const schedule = () => { if (!raf) raf = requestAnimationFrame(measure); };
+      const ro = typeof ResizeObserver === "function" ? new ResizeObserver(schedule) : null;
+      const mo = typeof MutationObserver === "function" ? new MutationObserver(schedule) : null;
+      const bindScroller = (sc) => {
+        if (!sc || sc === boundSc) return;
+        if (boundSc) boundSc.removeEventListener("scroll", schedule);
+        sc.addEventListener("scroll", schedule, { passive: true });
+        boundSc = sc;
+        if (ro && sc !== el) ro.observe(sc);
+        if (mo) mo.observe(sc, { attributes: true, attributeFilter: ["class", "style"] });
+      };
       const measure = () => {
         raf = 0;
         const meta = metaRef.current || { count: 0, itemH: QP_ROW_H, gap: QP_ROW_GAP, cards: false };
@@ -89,6 +107,7 @@
             : Math.max(1, Math.floor((W + meta.gap) / (QP_CARD_MIN + meta.gap)));
         }
         const sc = qpFindScroller(el);
+        bindScroller(sc);
         let hidden = 0; let view = Infinity;
         if (sc === el) { hidden = el.scrollTop; view = el.clientHeight; }
         else if (sc) {
@@ -107,26 +126,17 @@
         setWin((w) => (w.start === start && w.end === end && w.cols === cols && w.cards === meta.cards && w.tag === tag
           ? w : { start, end, cols, cards: meta.cards, tag }));
       };
-      const schedule = () => { if (!raf) raf = requestAnimationFrame(measure); };
       el.scrollTop = 0;
       measure();
-      const sc = qpFindScroller(el);
-      if (sc) sc.addEventListener("scroll", schedule, { passive: true });
       // 尺寸变化（窗口缩放 / 页签换档 / 列表换视图 / 列数增减）都从 el 的尺寸兜一道；
       // 再补 window resize 覆盖"滚动容器变高但列表没变"的形态。
       // issue #340：设置页库视图里 sc 是**祖先**滚动容器，网格随内容生长（max-height:none）
-      // ⇒ 容器变高不会改 el 的尺寸、el 的 RO 不响；必须同时观察 sc 本身。
-      const ro = typeof ResizeObserver === "function" ? new ResizeObserver(schedule) : null;
-      if (ro) { ro.observe(el); if (sc && sc !== el) ro.observe(sc); }
-      // 宿主换会话 / 切页签时，sc 可能只改 class/style（尺寸不变、相对位置变）⇒ RO 不响；
-      // 属性变化再兜一道。只看属性、不看子树 —— 子树里就是本列表自己的渲染结果，会自激。
-      const mo = typeof MutationObserver === "function" && sc
-        ? new MutationObserver(schedule) : null;
-      if (mo) mo.observe(sc, { attributes: true, attributeFilter: ["class", "style"] });
+      // ⇒ 容器变高不会改 el 的尺寸、el 的 RO 不响；sc 的观察由 bindScroller 补上。
+      if (ro) ro.observe(el);
       window.addEventListener("resize", schedule);
       return () => {
         if (raf) cancelAnimationFrame(raf);
-        if (sc) sc.removeEventListener("scroll", schedule);
+        if (boundSc) boundSc.removeEventListener("scroll", schedule);
         if (ro) ro.disconnect();
         if (mo) mo.disconnect();
         window.removeEventListener("resize", schedule);

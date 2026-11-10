@@ -4822,6 +4822,120 @@ setTimeout(async () => {
   assert.equal((sc.listeners.scroll && sc.listeners.scroll.size) || 0, 0, '卸载时必须移除 scroll 监听');
 }
 
+// ── B4-b2b：滚动容器**迟到**时也必须补挂监听（隐藏子树里预挂的会话 tab 身体）──────────
+// 官方档 tab 身体在非活动会话的 hidden 子树里预挂（keepMounted）：加载时 display:none ⇒
+// scrollHeight/clientHeight 都是 0，qpFindScroller 返回 null。会话切过来（hidden 去掉）
+// 容器才出现。老实现只在 effect 挂载时挂一次 scroll 监听，sc 迟到 ⇒ 永远没人挂，RO 触发的
+// 那次 measure 把窗口收成一小段后就再也不重测（"新会话只显示一部分壁纸、滚到底没有更多"）。
+// 判据：显示后窗口必须重测，且**迟到的 sc 也补挂了 scroll 监听**，真滚动能继续翻。
+{
+  const src = readFileSync(new URL('../src/quick-panel.js', import.meta.url), 'utf8');
+  const constOf = (name) => {
+    const m = new RegExp('const ' + name + ' = [^;]+;').exec(src);
+    assert.ok(m, '找不到虚拟滚动常量 ' + name + '（判据不得空转）');
+    return m[0];
+  };
+  const codeText = [
+    ...[ 'QP_ROW_H', 'QP_ROW_GAP', 'QP_CARD_H', 'QP_CARD_GAP', 'QP_CARD_MIN', 'QP_VP_OVERSCAN', 'QP_VP_FIRST'
+    ].map(constOf),
+    'function qpFindScroller(el) {' + braceBody(src, 'qpFindScroller') + '}',
+    'function qpVirtWindow(ref, count, itemH, gap, cards, tag) {' + braceBody(src, 'qpVirtWindow') + '}',
+    'globalThis.__qpVirt = { qpFindScroller, qpVirtWindow };',
+  ].join('\n');
+
+  const makeNode = (tag) => ({
+    tagName: String(tag).toUpperCase(),
+    parentElement: null,
+    clientWidth: 0, clientHeight: 0, scrollTop: 0, scrollHeight: 0, offsetWidth: 0,
+    overflowY: 'visible',
+    rect: { top: 0, height: 0 },
+    listeners: {},
+    querySelector: () => null,
+    getBoundingClientRect() { return { top: this.rect.top, height: this.rect.height, width: this.clientWidth }; },
+    addEventListener(ev, fn) { (this.listeners[ev] ||= new Set()).add(fn); },
+    removeEventListener(ev, fn) { if (this.listeners[ev]) this.listeners[ev].delete(fn); },
+  });
+  const body = makeNode('body');
+  const sc = makeNode('div');            // 会话可见后才出现的滚动容器（挂载时量不到）
+  const el = makeNode('div');            // 虚拟网格
+  el.parentElement = sc; sc.parentElement = body;
+
+  const ros = []; const mos = [];
+  class FakeRO {
+    constructor(cb) { this.cb = cb; this.targets = []; this.disconnected = false; ros.push(this); }
+    observe(t) { this.targets.push(t); }
+    disconnect() { this.disconnected = true; }
+  }
+  class FakeMO {
+    constructor(cb) { this.cb = cb; this.targets = []; this.options = null; this.disconnected = false; mos.push(this); }
+    observe(t, o) { this.targets.push(t); this.options = o; }
+    disconnect() { this.disconnected = true; }
+  }
+  const qpWinState = { box: null };
+  const qpCleanups = [];
+  const ReactStub = {
+    useState(init) {
+      const box = { value: typeof init === 'function' ? init() : init };
+      qpWinState.box = box;
+      return [box.value, (u) => { box.value = typeof u === 'function' ? u(box.value) : u; }];
+    },
+    useRef: (v) => ({ current: v }),
+    useEffect(fn) { const cleanup = fn(); if (typeof cleanup === 'function') qpCleanups.push(cleanup); },
+  };
+  const rafQueue = [];
+  const ctx = {
+    React: ReactStub,
+    document: { body },
+    window: { addEventListener() {}, removeEventListener() {} },
+    getComputedStyle: (n) => ({ overflowY: n.overflowY }),
+    requestAnimationFrame: (fn) => { rafQueue.push(fn); return rafQueue.length; },
+    cancelAnimationFrame() {},
+    ResizeObserver: FakeRO,
+    MutationObserver: FakeMO,
+  };
+  vm.createContext(ctx);
+  new vm.Script(codeText, { filename: 'quick-panel-virt-late-sc.js' }).runInContext(ctx);
+  const { qpVirtWindow } = ctx.__qpVirt;
+  const flushRaf = () => { const q = rafQueue.splice(0); q.forEach((fn) => fn()); };
+  const fire = (insts) => insts.forEach((i) => i.cb());
+
+  // 隐藏态挂载：没有任何可滚祖先 ⇒ 量不到 sc
+  qpVirtWindow({ current: el }, 200, 92, 8, true, 'normal');
+  assert.equal((sc.listeners.scroll && sc.listeners.scroll.size) || 0, 0,
+    '前提自检：隐藏子树里挂载时解析不到 sc，此刻不可能有 scroll 监听');
+  assert.equal(qpWinState.box.value.end, 200,
+    '量不到视口 ⇒ 先按全量兜底（不要臆断列表只有一小段）');
+
+  // 会话切过来：容器出现且可滚，网格拿到尺寸 ⇒ el 的 RO 触发一次 measure
+  sc.overflowY = 'auto'; sc.scrollHeight = 2000; sc.clientHeight = 300;
+  sc.rect = { top: 0, height: 300 };
+  el.clientWidth = 746; el.clientHeight = 300; el.rect = { top: 0, height: 300 };
+  const elRo = ros.filter((r) => r.targets.includes(el));
+  assert.ok(elRo.length >= 1, 'el 的 ResizeObserver 必须一直观察（隐藏态挂载也要挂）');
+  fire(elRo);
+  flushRaf();
+  assert.equal(qpWinState.box.value.end, 45,
+    'sc 迟到出现后必须重测窗口（300px / 5 列 = 45 条）');
+  assert.equal((sc.listeners.scroll && sc.listeners.scroll.size) || 0, 1,
+    '迟到的 sc 必须补挂 scroll 监听（本次 bug 的根因）');
+  assert.ok(mos.some((m) => m.targets.includes(sc)),
+    '迟到的 sc 也要挂 MutationObserver（尺寸不变、只改 class/style 的布局切换）');
+
+  // 真滚动必须继续重测（老实现这里没有监听 ⇒ 永远停在 45 条）
+  el.rect.top = -400;
+  sc.listeners.scroll.forEach((fn) => fn());
+  flushRaf();
+  assert.equal(qpWinState.box.value.end, 65,
+    '补挂的 scroll 监听必须生效（滚出 400px ⇒ 13 行 = 65 条）');
+
+  // 卸载：迟挂的监听与观察器都要解绑
+  qpCleanups.forEach((fn) => fn());
+  assert.equal((sc.listeners.scroll && sc.listeners.scroll.size) || 0, 0,
+    '卸载时必须移除补挂的 scroll 监听');
+  assert.ok(ros.every((r) => r.disconnected) && mos.every((m) => m.disconnected),
+    '卸载时必须断开 ResizeObserver / MutationObserver');
+}
+
 // ── B4-c：设置页「外观 / 播放」两节也已拆成"派生 + 装配"，标记移进了子渲染器 ──────────
 // `renderAppearanceFontSection` / `renderMascotTab` / `renderEffectsPlaybackSection` 不再内联
 // 那几棵子树（字体角色 / 组件表、吉祥物卡片一排、转码进度条）的标记。判据盯**代码**：
