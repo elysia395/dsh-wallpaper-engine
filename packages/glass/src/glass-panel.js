@@ -445,8 +445,8 @@ function renderAppearanceGlassSection(ctx) {
       // 的一极，本开关在两个状态都要可达（issue 里用户正是在玻璃关着的档位打的补丁）。
       sel.sidebarPresent && switchRow(weT("侧栏全透明"), sel.sidebarFullClear === true, onSidebarFullClear, {
         key: "sidebar-fullclear",
-        hint: weT("壁纸下撤掉侧栏的可读性底与色染"),
-        tooltip: weT("打开：壁纸激活时侧栏的可读性下限、色染与釉光整块撤掉，壁纸原样透出（文字直接压在壁纸上）；模糊仍由侧栏模糊/全局雾化旋钮管。关闭（默认）：保留可读性下限，最坏壁纸下正文仍 ≥4.5:1"),
+        hint: weT("壁纸下撤掉侧栏的可读性底、色染与模糊"),
+        tooltip: weT("打开：壁纸激活时侧栏的可读性下限、色染与釉光整块撤掉，壁纸原样透出（文字直接压在壁纸上）；左右栏装饰叶的模糊也一起关掉（全透明档下侧栏模糊不再跟随全局雾化旋钮）。关闭（默认）：保留可读性下限，最坏壁纸下正文仍 ≥4.5:1"),
       }),
       // #277：第三方插件浮层的实底底板（默认开）。玻璃把宿主层令牌改成半透明之后，
       // 第三方写的弹窗（role=dialog / alertdialog，没有本仓认得的锚点）会变成
