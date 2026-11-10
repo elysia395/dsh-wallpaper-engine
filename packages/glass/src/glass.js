@@ -320,6 +320,19 @@ function applyGlass(selection, s) {
       String(glassValue("floaters", "blur", selection.floatersBlur, selection.blur)) + "px");
     s.setProperty("--we-floaters-alpha", String(Math.max(0.10, 0.25 - pct / 100 * 0.15)));
   }
+
+  // ── 文件预览浮层（编辑文件悬停的改动预览）按面釉层变量 ─────────────────────
+  // 默认跟随全局：alpha 直接取全局玻璃透明度（0–100 ⇒ 0–1，80 ≈ 0.8，可读）；
+  // 打开「独立配置」后，滑杆语义与其它面一致（越大越透）⇒ alpha = 1 − pct/100。
+  // 模糊照常走 glassValue，默认值 24px（比全局更糊一档，保证预览里的等宽文字可读）。
+  {
+    const custom = glassModeOn("filePreview");
+    const pct = Number(glassValue("filePreview", "transparency", selection.filePreviewTransparency, selection.glassAlpha)) || 0;
+    const globalAlpha = Math.min(1, Math.max(0.25, (Number(selection.glassAlpha) || 0) / 100 || 0.8));
+    s.setProperty("--we-file-preview-alpha", String(custom ? Math.max(0.25, 1 - pct / 100) : globalAlpha));
+    s.setProperty("--we-file-preview-blur",
+      String(Number(glassValue("filePreview", "blur", selection.filePreviewBlur, selection.blur)) || 24) + "px");
+  }
   // 内容面（编辑器/终端）近不透明玻璃底：透明度滑块 **0–100** → 不透明度 100%–20%
   // （越大越透，与玻璃透明度同语义；低于 ~40% 不透明度注释可读性会再次变差，
   // 留给用户自行权衡）；底色空 = 跟随主题面板色，选定后自定义。
@@ -334,6 +347,8 @@ function applyGlass(selection, s) {
   const contentColor = glassValue("sidebarContent", "color", selection.sidebarContentColor, "");
   if (contentColor) s.setProperty("--we-content-surface-color", contentColor);
   else s.removeProperty("--we-content-surface-color");
+
+
 }
 
 export { applyGlass, toRgbTriple };

@@ -1644,6 +1644,59 @@ const CSS_GLASS = `
     backdrop-filter: none !important;
   }
 
+  /* ── 文件预览浮层（编辑文件悬停时的改动预览，[data-changes-hover-preview]）──────
+     症状：HoverCard 的 portal 读 --dsw-alias-bg-base，而本插件把页底设成透明 ⇒ 预览
+     全透明、文字直接压在下面的正文上（用户口径「可读性极差」）；卡片内边距 / 底部
+     留白尤其明显，因为代码区自己有底色、边距没有。
+     锚点取 ui-deliverables 源码属性 data-changes-hover-preview（FileDiff 预览根，
+     全 asar 唯一）。底色**不依赖 color-mix / 可读性地板**：直接用按面 alpha 的
+     固定黑白底（--we-file-preview-alpha / -blur，面板「文件预览玻璃」两项独立控制；
+     默认跟随全局）。这样即使某个主题变量没解析，卡片也一定有一层实底。
+     顶部再叠一层更深的渐变（上深下浅；浅色档减半），并给 HoverCard 的 portal 垫
+     同一层底（它包住预览、自身透明，是边缘漏光的来源）。圆角钉在预览根并裁剪 ——
+     宿主把圆角写在内部滚动容器上，边缘会露出直角（用户口径：上圆下方）。
+     ⚠️ 本段不许出现反引号：整套样式文本是模板字符串（构建期拼接）。 */
+  body[data-we-glass-page] [data-changes-hover-preview],
+  body[data-we-glass-page] [class*="_root"][class*="_preview"]:has([data-changes-preview-path]) {
+    border-radius: var(--dsw-radius-lg);
+    overflow: clip;
+    background-color: rgb(13 21 36 / var(--we-file-preview-alpha, 0.9)) !important;
+    background-image: none !important;
+    -webkit-backdrop-filter: blur(var(--we-file-preview-blur, 24px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
+    backdrop-filter: blur(var(--we-file-preview-blur, 24px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
+  }
+  body:not([data-ds-dark-theme])[data-we-glass-page] [data-changes-hover-preview],
+  body:not([data-ds-dark-theme])[data-we-glass-page] [class*="_root"][class*="_preview"]:has([data-changes-preview-path]) {
+    background-color: rgb(255 255 255 / var(--we-file-preview-alpha, 0.9)) !important;
+    background-image: none !important;
+  }
+  /* 「上深下浅」画在**外层卡片**（HoverCard 的 .card.preview，portal 的直接子 div）：
+     内层是内容本体，渐变会被 header / 代码行盖住，用户看不到。 */
+  body[data-we-glass-page] span[class*="_portal"] > div:has([data-changes-preview-path]),
+  body[data-we-glass-page] span[class*="_portal"] > div[data-changes-hover-preview] {
+    background-image: linear-gradient(180deg, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.20) 32%, rgba(0, 0, 0, 0) 70%) !important;
+  }
+  body:not([data-ds-dark-theme])[data-we-glass-page] span[class*="_portal"] > div:has([data-changes-preview-path]),
+  body:not([data-ds-dark-theme])[data-we-glass-page] span[class*="_portal"] > div[data-changes-hover-preview] {
+    background-image: linear-gradient(180deg, rgba(0, 0, 0, 0.25), rgba(0, 0, 0, 0.08) 32%, rgba(0, 0, 0, 0) 70%) !important;
+  }
+  /* HoverCard 的 portal 包住预览卡、自身读透明的页底 ⇒ 给同一层垫底并裁圆角，
+     否则卡片外圈 / 内边距处还会透出正文。 */
+  body[data-we-glass-page] span[class*="_portal"]:has(> [data-changes-hover-preview]),
+  body[data-we-glass-page] span[class*="_portal"]:has([data-changes-preview-path]) {
+    border-radius: var(--dsw-radius-lg);
+    background-color: rgb(13 21 36 / var(--we-file-preview-alpha, 0.9)) !important;
+    /* 可见表面是 HoverCard 生成的 .card.preview（外层），它自己读
+       --dsw-alias-bg-layer-1 画底；插件把这枚令牌改成了半透明配方，所以只给
+       子元素铺底时外层卡片仍是透的。在该 portal 作用域内把令牌换成同一层实底，
+       宿主自己画的那一层就实了（只作用于本浮层，不动全局）。 */
+    --dsw-alias-bg-layer-1: rgb(13 21 36 / var(--we-file-preview-alpha, 0.9)) !important;
+  }
+  body:not([data-ds-dark-theme])[data-we-glass-page] span[class*="_portal"]:has(> [data-changes-hover-preview]),
+  body:not([data-ds-dark-theme])[data-we-glass-page] span[class*="_portal"]:has([data-changes-preview-path]) {
+    background-color: rgb(255 255 255 / var(--we-file-preview-alpha, 0.9)) !important;
+    --dsw-alias-bg-layer-1: rgb(255 255 255 / var(--we-file-preview-alpha, 0.9)) !important;
+  }
   /* 配色 swatches: circular preset buttons + native color picker. The active
      swatch gets an accent ring so the current choice is obvious at a glance. */
   /* ── 软件渲染回退（upstream #95，运行时探测）───────────────────────────────

@@ -184,7 +184,7 @@ const SURFACES = [
     // ⚠️ 合并 #134（扩展思考玻璃）：新增一批只在 `[data-we-thinking-glass]` 下生效的宿主锚点
     //（思考区/文件卡/工具结果/代码块/导航按钮…）—— 全部归本面认领；锚点清单取自
     // 合并后物化 CSS 的枚举输出（认领判据会双向核对）。
-    anchors: ['[data-vcp-reasoning]', '[data-vcp-reasoning-body]', '[data-changed-files]', '[data-presented-file]', '[data-plan-card]', '[data-chat-flow]', '[data-chat-flow-kind="context"]', '[data-vcp-rawhtml]', '[data-code-block-banner]', '[data-context-injection-body]', '[data-diff]', '[data-dsh-navbar]', '[data-vlln-load-older]', '[data-vlln-preview]', '[data-read]', '[data-terminal]', '[data-sample="bash"]', '[data-search="matches"]', '[data-search="paths"]', '[data-slot="conversation.view"]', '[data-slot="tool.call.toolview"]', '[data-tool="glob"]', '[data-tool="grep"]', '[data-tool="read"]', '[data-tool="write"]', '[data-variant="others"]'], tier: 'global',
+    anchors: ['[data-vcp-reasoning]', '[data-vcp-reasoning-body]', '[data-changed-files]', '[data-presented-file]', '[data-plan-card]', '[data-changes-hover-preview]', '[data-changes-preview-path]', '[data-chat-flow]', '[data-chat-flow-kind="context"]', '[data-vcp-rawhtml]', '[data-code-block-banner]', '[data-context-injection-body]', '[data-diff]', '[data-dsh-navbar]', '[data-vlln-load-older]', '[data-vlln-preview]', '[data-read]', '[data-terminal]', '[data-sample="bash"]', '[data-search="matches"]', '[data-search="paths"]', '[data-slot="conversation.view"]', '[data-slot="tool.call.toolview"]', '[data-tool="glob"]', '[data-tool="grep"]', '[data-tool="read"]', '[data-tool="write"]', '[data-variant="others"]'], tier: 'global',
     // PR #130 的面：门是 `data-we-thinking-glass`（默认关）。⚠️ v1.3.0 追版收敛后它**不再**
     // 认领 `[data-turn-trigger]`（那一条改由上面的 conversation-thinking-trigger 认领 ——
     // 触发条吃玻璃，本面只管推理区/文件卡/工具结果等的清底与玻璃）。
@@ -2809,6 +2809,23 @@ console.log('\n⑲ 标记值跟走 resolver（t9-001 运行级断言：真跑 we
   const syntheticSolidHeader = { body: 'background: var(--changes-fill);' };
   check('negative control: 没清 --changes-fill 的合成规则会被 ㉕a 判红',
     !/--changes-fill:\s*transparent/.test(syntheticSolidHeader.body));
+
+  // ── ㉖ 文件预览浮层（编辑文件悬停的改动预览）有实底与上深下浅 ────────────────
+  console.log('\n㉖ 文件预览浮层有实底、顶部更深、portal 也垫底');
+  const previewRules = rulesOf(CSS).filter((r) => /\[data-changes-hover-preview\]/.test(r.header));
+  const previewRoot = previewRules.filter((r) => !/span\[/.test(r.header));
+  const previewPortal = previewRules.filter((r) => /span\[/.test(r.header) && /--dsw-alias-bg-layer-1:/.test(r.body));
+  check('㉖a 预览根铺固定 rgb 底（不依赖 color-mix，变量没解析也一定有底）', previewRoot.length === 2
+    && previewRoot.every((r) => /background-color:\s*rgb\(/.test(r.body) && !/color-mix/.test(r.body)));
+  check('㉖b 外层卡片画上深下浅（深色 55% → 透明；浅色 25% → 透明）',
+    previewRules.some((r) => /linear-gradient\(180deg, rgba\(0, 0, 0, 0\.55\)/.test(r.body))
+    && previewRules.some((r) => /linear-gradient\(180deg, rgba\(0, 0, 0, 0\.25\)/.test(r.body)));
+  check('㉖c portal 垫底并把宿主 --dsw-alias-bg-layer-1 换成本层实底（外层卡片自己画的那层也实）',
+    previewPortal.length === 2
+    && previewPortal.every((r) => /background-color:\s*rgb\(/.test(r.body)
+      && /--dsw-alias-bg-layer-1:/.test(r.body)));
+  const synthPlain = { body: 'background-color: transparent;' };
+  check('negative control: 透明底的合成规则会被 ㉖a 判红', !/background-color:\s*rgb\(/.test(synthPlain.body));
 
 }
 
