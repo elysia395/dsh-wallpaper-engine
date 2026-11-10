@@ -488,7 +488,7 @@
       onResetModule,
       onAccent, onBlur, onBorder, onChatGlassFidelity, onExtraGlassSelectors, onGlassAlpha, onGlassColor, onGlassFidelity, onLeftSidebarGlass, onTitlebarGlass, onSidebarGlass, onSidebarFullClear, onFloaterSolidBase, onToggleThemeFollow,
       // 侧边栏圆角（外观 → 侧边栏圆角）：侧栏档也画这一节 ⇒ 处理器走真值（不是占位器）
-      onSidebarAllCorners, onSidebarCornerRadius, onSidebarCornerSquare,
+      onSidebarCornerRadius, onSidebarCornerSquare,
       onCaretColor, onSidebarFollowGlobal, onThinkingMode,
       // ── 全局 UI 配色节（本档默认收起；处理器与设置页同一批模块级函数）──
       uiColorOpen: ui.uiColorOpen, onToggleUiColorSection: ui.onToggleUiColorSection,

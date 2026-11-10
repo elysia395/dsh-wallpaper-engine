@@ -3866,7 +3866,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     // 与 QP_CTX_SETTINGS_ONLY 的分工：**侧栏档真的会画到的**由这里给真值（替身），
     // 设置页专属的（如 onFpsCap —— 帧率上限那行带 `!sidebarSurface` 门）才进占位器名单。
     'onLeftSidebarGlass', 'onTitlebarGlass', 'onSidebarGlass',
-    'onSidebarAllCorners', 'onSidebarCornerRadius', 'onSidebarCornerSquare', 'onSidebarFullClear',
+    'onSidebarCornerRadius', 'onSidebarCornerSquare', 'onSidebarFullClear',
     // #277：第三方表面实底底板（默认开）。侧栏「外观」档也画到这一行 ⇒ 它是 quick-panel
     // 的自由变量 ⇒ 必须在这里当形参给（漏一个就是 vm 求值 ReferenceError —— 这条判据
     // 在 #277 第一次交付时就抓到了这次遗漏）。
