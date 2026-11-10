@@ -192,7 +192,7 @@ async function judgeDerivedDirs(make) {
 async function judgeConstants(make) {
   const { kit } = makeKit({ dirRef: { value: freshDir('c') }, factory: make.factory });
   const eq = (a, b) => JSON.stringify(a) === JSON.stringify(b);
-  const ok = eq(kit.UPLOAD_EXT, { 'video/mp4': 'mp4', 'image/jpeg': 'jpg', 'image/png': 'png' })
+  const ok = eq(kit.UPLOAD_EXT, { 'video/mp4': 'mp4', 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' })
     && eq(kit.CUSTOM_FRAME_EXT, { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' })
     && kit.CUSTOM_FRAME_MAX_BYTES === 30 * 1024 * 1024
     && eq(kit.AVATAR_EXT, { 'image/jpeg': 'jpg', 'image/png': 'png', 'image/webp': 'webp' })

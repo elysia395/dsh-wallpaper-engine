@@ -406,8 +406,8 @@ const videoSrc = read('src/video-layer.js');
     return w.previewAbs;
   }`);
     oldInventory = replaceOnce(oldInventory,
-      '        preview: hasPreview\n          ? `${BASE}/preview/${tokenFor(w.previewAbs)}`',
-      '        preview: hasPreview\n          ? `${BASE}/preview/${tokenFor(previewSourceAbs(w))}`');
+      '        preview: hasPreview\n          ? `${BASE}/preview/${tokenFor(w.previewAbs)}${mediaVersion}`',
+      '        preview: hasPreview\n          ? `${BASE}/preview/${tokenFor(previewSourceAbs(w))}${mediaVersion}`');
     const old = await loadMutant('old-inventory', oldInventory);
     const broken = await judgePreview(old.createInventoryBuilder);
     check('负对照：恢复旧清单行为，同一个 LRU + HTTP 判据必须红（200 → 404，源图仍在）',

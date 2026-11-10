@@ -53,6 +53,7 @@ import { registerWeAssetsRoutes } from './routes/we-assets.js';
 import { registerInventoryRoutes } from './routes/inventory.js';
 import { registerSlidesRoutes } from './routes/slides.js';
 import { registerUploadRoutes } from './routes/upload.js';
+import { registerUrlImportRoutes } from './routes/url-import.js';
 import { registerPropsRoutes } from './routes/props.js';
 import { registerMediaBytesRoutes } from './routes/media-bytes.js';
 import { registerMediaDerivedRoutes } from './routes/media-derived.js';
@@ -138,8 +139,8 @@ export function applyImpl(root, _rawConfig, c) {
   disposers.push(() => occlusionHub.dispose());
   occlusionHub.start().catch(() => { /* hub.start 不外抛；兜底防 unhandled（主包原实现同款） */ });
 
-  // ⚠️ **注册期必须包 try**（P2-4）：本组件一次性注册**二十九条**路由（媒体状态 5 + WE 素材源 2
-  // + S5c 刀2 的 9 族 21 条 + S5d 刀3 的遮挡 1 条），
+  // ⚠️ **注册期必须包 try**（P2-4）：本组件一次性注册**三十一条**路由（媒体状态 / WE 素材源 /
+  // 清单 / 上传与 URL 导入 / 场景 / 遮挡等族），
   // 中途抛错时已经推进 `disposers` 的那几条会留下（`mediaBackend.stop()` 也在同一个 disposer 列表里，一并丢）
   // ⇒ 下一次启用撞 `webserver: duplicate … route`，且桥的子进程无人收。`teardown()` 自己吞异常，
   // 原错照抛（装载失败必须仍然是红的）。
@@ -217,6 +218,12 @@ export function applyImpl(root, _rawConfig, c) {
 
     // 4/5/6. 上传资产族（导入 / 删除 / 切换上传目录）→ 本包 `./routes/upload.js`。
     registerUploadRoutes(webServer, {
+      ...keys, disposers, http: keys.http,
+    });
+
+    // 6b. 图片 URL 导入 / 刷新（Bing 每日一图内置源）→ 本包 `./routes/url-import.js`。
+    //     下载后仍是普通自定义壁纸；只有用户主动添加的源才会联网。
+    registerUrlImportRoutes(webServer, {
       ...keys, disposers, http: keys.http,
     });
 

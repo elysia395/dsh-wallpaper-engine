@@ -86,7 +86,7 @@ export function registerUploadRoutes(webServer, c) {
         res.statusCode = 415;
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
         res.end(JSON.stringify({
-          error: '不支持的格式：' + ctype + '（仅支持 JPG / PNG / MP4）',
+          error: '不支持的格式：' + ctype + '（仅支持 JPG / PNG / WebP / MP4）',
         }));
         return;
       }

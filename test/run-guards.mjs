@@ -194,6 +194,10 @@ const VERIFY_STEPS = [
   step('test/verify-child-kill.mjs'),
   step('test/verify-host-diag.mjs'),
   step('test/verify-upload-store.mjs'),
+  // 图片 URL / Bing 每日一图源（#320）：SSRF 拒绝面、图片嗅探、每日到期、meta source 往返、WebP 枚举。
+  step('test/verify-url-source.mjs'),
+  // 同上的路由级守卫：add / 去重 / 重定向 / 失败保留旧图 / 并发 409 / 拒绝非图片（真路由 + 本地 mock）。
+  step('test/verify-url-import-route.mjs'),
   step('test/verify-video-preview.mjs'),
   step('test/verify-asset-paths.mjs'),
   step('test/verify-settings-schema-exports.mjs'),

@@ -115,6 +115,7 @@ const WALLPAPER_REQUIRED = [
   { name: 'title', why: 'picker label; both construction sites assign it (buildInventory)' },
   { name: 'type', why: 'drives every capability branch (buildInventory)' },
   { name: 'contentrating', why: 'rating filter input; readProjectP / metaEntry always produce it' },
+  { name: 'urlSource', why: 'image URL import record (Bing daily / pasted URL) or null; inventory attaches it to upload entries and the panel uses it for the badge / refresh button' },
   { name: 'playable', why: 'portableCount and rotation filter read it (buildInventory)' },
   { name: 'media', why: 'the video/web media URL the browser half plays (buildInventory)' },
   { name: 'mediaExt', why: 'real container suffix of that media file: the token-shaped URL carries no extension, so the client\'s "browser can play it natively" decision has no other source (buildInventory)' },
