@@ -517,6 +517,29 @@ const CSS_GLASS = `
     -webkit-backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
     backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
   }
+  /* ── 改动文件卡片（ui-deliverables 的 ChangedFiles）→ 同一种玻璃 ─────────────
+     用户截图：「已编辑 N 个文件」卡片的 60px 标题行读宿主 --changes-fill
+     （深色 --dsw-static-neutral-850）实色，把整卡压成实心。锚点 [data-changed-files]
+     （ChangedFiles.js，全 asar 唯一）。清掉标题行的 --changes-fill / -hover 让卡片
+     自身的玻璃透上来（hover 换成 chat 底掺白，保留反馈）。 */
+  body[data-we-glass-chat][data-we-glass-page]:not([data-we-thinking-native]) [data-changed-files] {
+    --changes-fill: transparent;
+    --changes-hover: color-mix(in srgb, var(--we-chat-glass-fill) 88%, white);
+    background-color: var(--we-chat-glass-fill) !important;
+    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.16), rgba(255, 255, 255, 0.05) 38%, rgba(255, 255, 255, 0.02));
+    -webkit-backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
+    backdrop-filter: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
+  }
+  /* ── 变更请求面板（forge panel）的实色状态条 → 让右栏玻璃透出来 ───────────────
+     用户截图：「无法读取 Git 信息」、分支条（checkout）与登录提示都读宿主
+     --forge-fill（深色 --dsw-static-neutral-850）实色，压在右栏玻璃上就是一块死底。
+     锚点取宿主源码级属性：面板根 [data-forge-panel]（ForgeTab.js）与改动视图根
+     [data-forge-changes=local]（ChangesTab.js 的 source.kind）—— 后者会在自己身上
+     重新声明 --forge-fill，必须在同一元素上压回透明，只清祖先不够。
+     只清这枚令牌，背景归右栏已有的玻璃底板，不另铺底色。 */
+  body[data-we-glass-page] :is([data-forge-panel], [data-forge-changes]) {
+    --forge-fill: transparent;
+  }
   /* ⚠️ 正文原生挡（data-we-thinking-native，见文件下方「正文原生挡」块）：只有**气泡**
      这一条带 :not() —— 原生挡下气泡退出霜釉（正文原生 = 无玻璃装饰）；**输入卡与工具
      弹卡不豁免**（用户口径：输入对话框保留玻璃），照旧吃霜/釉。
@@ -1762,6 +1785,11 @@ const CSS_GLASS = `
   /* 计划卡片在软渲染回退档同样只留底色（--we-chat-glass-fill 此时已被上面那条
      92% 近不透明配方顶掉）⇒ 关霜，别让无效的 backdrop-filter 白算一遍。 */
   body[data-we-glass-fallback][data-we-glass-chat][data-we-glass-page] [data-plan-card] {
+    -webkit-backdrop-filter: none !important;
+    backdrop-filter: none !important;
+  }
+  /* 改动文件卡片在软渲染回退档同样只留底色 ⇒ 关霜。 */
+  body[data-we-glass-fallback][data-we-glass-chat][data-we-glass-page] [data-changed-files] {
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
   }

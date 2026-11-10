@@ -24,56 +24,56 @@
 | 令牌 | 行 | 选择器链 | 归属 |
 |---|---|---|---|
 | `--dsw-alias-bg-layer-1` | src/styles/base.js:61 | `.we-layer` | .we-layer（插件自有元素，卸载即消失） |
-| `--dsw-specific-bubble` | packages/glass/src/glass-css.js:940 | `body[data-we-thinking-native] [data-chat-flow], body[data-we-thinking-native] [data-vcp-rawhtml]` | thinking-native（思考块自带开关） |
-| `--dsw-alias-markdown-code-block` | packages/glass/src/glass-css.js:941 | `body[data-we-thinking-native] [data-chat-flow], body[data-we-thinking-native] [data-vcp-rawhtml]` | thinking-native（思考块自带开关） |
-| `--dsw-alias-markdown-code-block-banner` | packages/glass/src/glass-css.js:942 | `body[data-we-thinking-native] [data-chat-flow], body[data-we-thinking-native] [data-vcp-rawhtml]` | thinking-native（思考块自带开关） |
-| `--dsw-alias-markdown-inline-code` | packages/glass/src/glass-css.js:943 | `body[data-we-thinking-native] [data-chat-flow], body[data-we-thinking-native] [data-vcp-rawhtml]` | thinking-native（思考块自带开关） |
-| `--dsw-alias-markdown-tag` | packages/glass/src/glass-css.js:944 | `body[data-we-thinking-native] [data-chat-flow], body[data-we-thinking-native] [data-vcp-rawhtml]` | thinking-native（思考块自带开关） |
-| `--dsw-alias-markdown-code-segment-unselected` | packages/glass/src/glass-css.js:945 | `body[data-we-thinking-native] [data-chat-flow], body[data-we-thinking-native] [data-vcp-rawhtml]` | thinking-native（思考块自带开关） |
-| `--dsw-alias-markdown-code-segment-selected` | packages/glass/src/glass-css.js:946 | `body[data-we-thinking-native] [data-chat-flow], body[data-we-thinking-native] [data-vcp-rawhtml]` | thinking-native（思考块自带开关） |
-| `--dsw-alias-markdown-citation` | packages/glass/src/glass-css.js:947 | `body[data-we-thinking-native] [data-chat-flow], body[data-we-thinking-native] [data-vcp-rawhtml]` | thinking-native（思考块自带开关） |
-| `--dsw-alias-markdown-placeholder` | packages/glass/src/glass-css.js:948 | `body[data-we-thinking-native] [data-chat-flow], body[data-we-thinking-native] [data-vcp-rawhtml]` | thinking-native（思考块自带开关） |
-| `--dsw-specific-bubble` | packages/glass/src/glass-css.js:954 | `body[data-ds-dark-theme][data-we-thinking-native] [data-chat-flow], body[data-ds-dark-theme][data-we-thinking-native] [data-vcp-rawhtml]` | thinking-native（思考块自带开关） |
-| `--dsw-alias-markdown-code-block` | packages/glass/src/glass-css.js:955 | `body[data-ds-dark-theme][data-we-thinking-native] [data-chat-flow], body[data-ds-dark-theme][data-we-thinking-native] [data-vcp-rawhtml]` | thinking-native（思考块自带开关） |
-| `--dsw-alias-markdown-code-block-banner` | packages/glass/src/glass-css.js:956 | `body[data-ds-dark-theme][data-we-thinking-native] [data-chat-flow], body[data-ds-dark-theme][data-we-thinking-native] [data-vcp-rawhtml]` | thinking-native（思考块自带开关） |
-| `--dsw-alias-markdown-inline-code` | packages/glass/src/glass-css.js:957 | `body[data-ds-dark-theme][data-we-thinking-native] [data-chat-flow], body[data-ds-dark-theme][data-we-thinking-native] [data-vcp-rawhtml]` | thinking-native（思考块自带开关） |
-| `--dsw-alias-markdown-tag` | packages/glass/src/glass-css.js:958 | `body[data-ds-dark-theme][data-we-thinking-native] [data-chat-flow], body[data-ds-dark-theme][data-we-thinking-native] [data-vcp-rawhtml]` | thinking-native（思考块自带开关） |
-| `--dsw-alias-markdown-code-segment-unselected` | packages/glass/src/glass-css.js:959 | `body[data-ds-dark-theme][data-we-thinking-native] [data-chat-flow], body[data-ds-dark-theme][data-we-thinking-native] [data-vcp-rawhtml]` | thinking-native（思考块自带开关） |
-| `--dsw-alias-markdown-code-segment-selected` | packages/glass/src/glass-css.js:960 | `body[data-ds-dark-theme][data-we-thinking-native] [data-chat-flow], body[data-ds-dark-theme][data-we-thinking-native] [data-vcp-rawhtml]` | thinking-native（思考块自带开关） |
-| `--dsw-alias-markdown-citation` | packages/glass/src/glass-css.js:961 | `body[data-ds-dark-theme][data-we-thinking-native] [data-chat-flow], body[data-ds-dark-theme][data-we-thinking-native] [data-vcp-rawhtml]` | thinking-native（思考块自带开关） |
-| `--dsw-alias-markdown-placeholder` | packages/glass/src/glass-css.js:962 | `body[data-ds-dark-theme][data-we-thinking-native] [data-chat-flow], body[data-ds-dark-theme][data-we-thinking-native] [data-vcp-rawhtml]` | thinking-native（思考块自带开关） |
+| `--dsw-specific-bubble` | packages/glass/src/glass-css.js:963 | `body[data-we-thinking-native] [data-chat-flow], body[data-we-thinking-native] [data-vcp-rawhtml]` | thinking-native（思考块自带开关） |
+| `--dsw-alias-markdown-code-block` | packages/glass/src/glass-css.js:964 | `body[data-we-thinking-native] [data-chat-flow], body[data-we-thinking-native] [data-vcp-rawhtml]` | thinking-native（思考块自带开关） |
+| `--dsw-alias-markdown-code-block-banner` | packages/glass/src/glass-css.js:965 | `body[data-we-thinking-native] [data-chat-flow], body[data-we-thinking-native] [data-vcp-rawhtml]` | thinking-native（思考块自带开关） |
+| `--dsw-alias-markdown-inline-code` | packages/glass/src/glass-css.js:966 | `body[data-we-thinking-native] [data-chat-flow], body[data-we-thinking-native] [data-vcp-rawhtml]` | thinking-native（思考块自带开关） |
+| `--dsw-alias-markdown-tag` | packages/glass/src/glass-css.js:967 | `body[data-we-thinking-native] [data-chat-flow], body[data-we-thinking-native] [data-vcp-rawhtml]` | thinking-native（思考块自带开关） |
+| `--dsw-alias-markdown-code-segment-unselected` | packages/glass/src/glass-css.js:968 | `body[data-we-thinking-native] [data-chat-flow], body[data-we-thinking-native] [data-vcp-rawhtml]` | thinking-native（思考块自带开关） |
+| `--dsw-alias-markdown-code-segment-selected` | packages/glass/src/glass-css.js:969 | `body[data-we-thinking-native] [data-chat-flow], body[data-we-thinking-native] [data-vcp-rawhtml]` | thinking-native（思考块自带开关） |
+| `--dsw-alias-markdown-citation` | packages/glass/src/glass-css.js:970 | `body[data-we-thinking-native] [data-chat-flow], body[data-we-thinking-native] [data-vcp-rawhtml]` | thinking-native（思考块自带开关） |
+| `--dsw-alias-markdown-placeholder` | packages/glass/src/glass-css.js:971 | `body[data-we-thinking-native] [data-chat-flow], body[data-we-thinking-native] [data-vcp-rawhtml]` | thinking-native（思考块自带开关） |
+| `--dsw-specific-bubble` | packages/glass/src/glass-css.js:977 | `body[data-ds-dark-theme][data-we-thinking-native] [data-chat-flow], body[data-ds-dark-theme][data-we-thinking-native] [data-vcp-rawhtml]` | thinking-native（思考块自带开关） |
+| `--dsw-alias-markdown-code-block` | packages/glass/src/glass-css.js:978 | `body[data-ds-dark-theme][data-we-thinking-native] [data-chat-flow], body[data-ds-dark-theme][data-we-thinking-native] [data-vcp-rawhtml]` | thinking-native（思考块自带开关） |
+| `--dsw-alias-markdown-code-block-banner` | packages/glass/src/glass-css.js:979 | `body[data-ds-dark-theme][data-we-thinking-native] [data-chat-flow], body[data-ds-dark-theme][data-we-thinking-native] [data-vcp-rawhtml]` | thinking-native（思考块自带开关） |
+| `--dsw-alias-markdown-inline-code` | packages/glass/src/glass-css.js:980 | `body[data-ds-dark-theme][data-we-thinking-native] [data-chat-flow], body[data-ds-dark-theme][data-we-thinking-native] [data-vcp-rawhtml]` | thinking-native（思考块自带开关） |
+| `--dsw-alias-markdown-tag` | packages/glass/src/glass-css.js:981 | `body[data-ds-dark-theme][data-we-thinking-native] [data-chat-flow], body[data-ds-dark-theme][data-we-thinking-native] [data-vcp-rawhtml]` | thinking-native（思考块自带开关） |
+| `--dsw-alias-markdown-code-segment-unselected` | packages/glass/src/glass-css.js:982 | `body[data-ds-dark-theme][data-we-thinking-native] [data-chat-flow], body[data-ds-dark-theme][data-we-thinking-native] [data-vcp-rawhtml]` | thinking-native（思考块自带开关） |
+| `--dsw-alias-markdown-code-segment-selected` | packages/glass/src/glass-css.js:983 | `body[data-ds-dark-theme][data-we-thinking-native] [data-chat-flow], body[data-ds-dark-theme][data-we-thinking-native] [data-vcp-rawhtml]` | thinking-native（思考块自带开关） |
+| `--dsw-alias-markdown-citation` | packages/glass/src/glass-css.js:984 | `body[data-ds-dark-theme][data-we-thinking-native] [data-chat-flow], body[data-ds-dark-theme][data-we-thinking-native] [data-vcp-rawhtml]` | thinking-native（思考块自带开关） |
+| `--dsw-alias-markdown-placeholder` | packages/glass/src/glass-css.js:985 | `body[data-ds-dark-theme][data-we-thinking-native] [data-chat-flow], body[data-ds-dark-theme][data-we-thinking-native] [data-vcp-rawhtml]` | thinking-native（思考块自带开关） |
 
 ## 全量令牌表
 
 | 令牌 | 条数 | 门控 | 行号 | 消费者注记 |
 |---|---|---|---|---|
 | `--dsw-alias-bg-base` | 2 | 壁纸(2) | src/styles/base.js:212, src/styles/base.js:215 | 页面基底 —— 壁纸可见性的关键前提（transparent） |
-| `--dsw-alias-bg-layer-1` | 17 | 玻璃(16) + 无门控(1) | src/styles/base.js:61, src/styles/panel.js:384, src/styles/panel.js:397, packages/glass/src/glass-css.js:136, packages/glass/src/glass-css.js:237, packages/glass/src/glass-css.js:335, packages/glass/src/glass-css.js:1456, packages/glass/src/glass-css.js:1527, packages/glass/src/glass-css.js:1538, packages/glass/src/glass-css.js:1563, packages/glass/src/glass-css.js:1568, packages/glass/src/glass-css.js:1577, packages/glass/src/glass-css.js:1690, packages/glass/src/glass-css.js:1699, packages/glass/src/glass-css.js:1710, packages/glass/src/glass-css.js:1901, packages/glass/src/glass-css.js:1906 | 面板层次 1（宿主对话框/侧栏底）；better-sidebar 亦按它上色 |
-| `--dsw-alias-bg-layer-2` | 17 | 玻璃(17) | src/styles/panel.js:387, src/styles/panel.js:400, packages/glass/src/glass-css.js:139, packages/glass/src/glass-css.js:240, packages/glass/src/glass-css.js:336, packages/glass/src/glass-css.js:773, packages/glass/src/glass-css.js:1459, packages/glass/src/glass-css.js:1528, packages/glass/src/glass-css.js:1541, packages/glass/src/glass-css.js:1564, packages/glass/src/glass-css.js:1569, packages/glass/src/glass-css.js:1578, packages/glass/src/glass-css.js:1691, packages/glass/src/glass-css.js:1700, packages/glass/src/glass-css.js:1711, packages/glass/src/glass-css.js:1902, packages/glass/src/glass-css.js:1907 | 面板层次 2 |
-| `--dsw-alias-bg-layer-3` | 16 | 玻璃(16) | src/styles/panel.js:390, src/styles/panel.js:403, packages/glass/src/glass-css.js:142, packages/glass/src/glass-css.js:243, packages/glass/src/glass-css.js:337, packages/glass/src/glass-css.js:1462, packages/glass/src/glass-css.js:1529, packages/glass/src/glass-css.js:1544, packages/glass/src/glass-css.js:1565, packages/glass/src/glass-css.js:1570, packages/glass/src/glass-css.js:1579, packages/glass/src/glass-css.js:1692, packages/glass/src/glass-css.js:1701, packages/glass/src/glass-css.js:1712, packages/glass/src/glass-css.js:1903, packages/glass/src/glass-css.js:1908 | 面板层次 3 |
+| `--dsw-alias-bg-layer-1` | 17 | 玻璃(16) + 无门控(1) | src/styles/base.js:61, src/styles/panel.js:384, src/styles/panel.js:397, packages/glass/src/glass-css.js:136, packages/glass/src/glass-css.js:237, packages/glass/src/glass-css.js:335, packages/glass/src/glass-css.js:1479, packages/glass/src/glass-css.js:1550, packages/glass/src/glass-css.js:1561, packages/glass/src/glass-css.js:1586, packages/glass/src/glass-css.js:1591, packages/glass/src/glass-css.js:1600, packages/glass/src/glass-css.js:1713, packages/glass/src/glass-css.js:1722, packages/glass/src/glass-css.js:1733, packages/glass/src/glass-css.js:1929, packages/glass/src/glass-css.js:1934 | 面板层次 1（宿主对话框/侧栏底）；better-sidebar 亦按它上色 |
+| `--dsw-alias-bg-layer-2` | 17 | 玻璃(17) | src/styles/panel.js:387, src/styles/panel.js:400, packages/glass/src/glass-css.js:139, packages/glass/src/glass-css.js:240, packages/glass/src/glass-css.js:336, packages/glass/src/glass-css.js:796, packages/glass/src/glass-css.js:1482, packages/glass/src/glass-css.js:1551, packages/glass/src/glass-css.js:1564, packages/glass/src/glass-css.js:1587, packages/glass/src/glass-css.js:1592, packages/glass/src/glass-css.js:1601, packages/glass/src/glass-css.js:1714, packages/glass/src/glass-css.js:1723, packages/glass/src/glass-css.js:1734, packages/glass/src/glass-css.js:1930, packages/glass/src/glass-css.js:1935 | 面板层次 2 |
+| `--dsw-alias-bg-layer-3` | 16 | 玻璃(16) | src/styles/panel.js:390, src/styles/panel.js:403, packages/glass/src/glass-css.js:142, packages/glass/src/glass-css.js:243, packages/glass/src/glass-css.js:337, packages/glass/src/glass-css.js:1485, packages/glass/src/glass-css.js:1552, packages/glass/src/glass-css.js:1567, packages/glass/src/glass-css.js:1588, packages/glass/src/glass-css.js:1593, packages/glass/src/glass-css.js:1602, packages/glass/src/glass-css.js:1715, packages/glass/src/glass-css.js:1724, packages/glass/src/glass-css.js:1735, packages/glass/src/glass-css.js:1931, packages/glass/src/glass-css.js:1936 | 面板层次 3 |
 | `--dsw-alias-bg-module-platform` | 2 | 玻璃(2) | packages/glass/src/glass-css.js:157, packages/glass/src/glass-css.js:253 |  |
 | `--dsw-alias-bg-multi-select` | 2 | 玻璃(2) | packages/glass/src/glass-css.js:160, packages/glass/src/glass-css.js:256 |  |
 | `--dsw-alias-bg-overlay` | 2 | 玻璃(2) | packages/glass/src/glass-css.js:154, packages/glass/src/glass-css.js:250 | 弹层/浮出层底（issue #71 全表面玻璃） |
 | `--dsw-alias-border-l1` | 2 | 玻璃(2) | packages/glass/src/glass-css.js:218, packages/glass/src/glass-css.js:302 | 边框强调 L1（「边框」滑条） |
 | `--dsw-alias-border-l2` | 2 | 玻璃(2) | packages/glass/src/glass-css.js:219, packages/glass/src/glass-css.js:303 | 边框强调 L2 |
 | `--dsw-alias-border-l2-darkmode-thin` | 2 | 玻璃(2) | packages/glass/src/glass-css.js:220, packages/glass/src/glass-css.js:304 | 深色细边框 |
-| `--dsw-alias-border-l3` | 3 | 玻璃(3) | packages/glass/src/glass-css.js:222, packages/glass/src/glass-css.js:306, packages/glass/src/glass-css.js:1005 |  |
+| `--dsw-alias-border-l3` | 3 | 玻璃(3) | packages/glass/src/glass-css.js:222, packages/glass/src/glass-css.js:306, packages/glass/src/glass-css.js:1028 |  |
 | `--dsw-alias-border-l4` | 2 | 玻璃(2) | packages/glass/src/glass-css.js:223, packages/glass/src/glass-css.js:307 |  |
-| `--dsw-alias-brand-primary` | 3 | 玻璃(3) | packages/glass/src/glass-css.js:1013, packages/glass/src/glass-css.js:1197, packages/glass/src/glass-css.js:1475 |  |
-| `--dsw-alias-brand-text` | 3 | 玻璃(3) | packages/glass/src/glass-css.js:1014, packages/glass/src/glass-css.js:1198, packages/glass/src/glass-css.js:1476 |  |
-| `--dsw-alias-button-elevated-fill` | 5 | 玻璃(5) | packages/glass/src/glass-css.js:145, packages/glass/src/glass-css.js:246, packages/glass/src/glass-css.js:1530, packages/glass/src/glass-css.js:1580, packages/glass/src/glass-css.js:1713 | 抬高按钮实色（侧栏「新建会话」等） |
-| `--dsw-alias-button-floating-fill` | 3 | 玻璃(3) | packages/glass/src/glass-css.js:163, packages/glass/src/glass-css.js:259, packages/glass/src/glass-css.js:775 |  |
-| `--dsw-alias-button-floating-hover` | 1 | 玻璃(1) | packages/glass/src/glass-css.js:776 |  |
+| `--dsw-alias-brand-primary` | 3 | 玻璃(3) | packages/glass/src/glass-css.js:1036, packages/glass/src/glass-css.js:1220, packages/glass/src/glass-css.js:1498 |  |
+| `--dsw-alias-brand-text` | 3 | 玻璃(3) | packages/glass/src/glass-css.js:1037, packages/glass/src/glass-css.js:1221, packages/glass/src/glass-css.js:1499 |  |
+| `--dsw-alias-button-elevated-fill` | 5 | 玻璃(5) | packages/glass/src/glass-css.js:145, packages/glass/src/glass-css.js:246, packages/glass/src/glass-css.js:1553, packages/glass/src/glass-css.js:1603, packages/glass/src/glass-css.js:1736 | 抬高按钮实色（侧栏「新建会话」等） |
+| `--dsw-alias-button-floating-fill` | 3 | 玻璃(3) | packages/glass/src/glass-css.js:163, packages/glass/src/glass-css.js:259, packages/glass/src/glass-css.js:798 |  |
+| `--dsw-alias-button-floating-hover` | 1 | 玻璃(1) | packages/glass/src/glass-css.js:799 |  |
 | `--dsw-alias-button-ghost-active-fill` | 2 | 玻璃(2) | packages/glass/src/glass-css.js:166, packages/glass/src/glass-css.js:262 |  |
 | `--dsw-alias-button-info-fill` | 1 | UI 配色(1) | src/styles/base.js:381 |  |
 | `--dsw-alias-button-info-hover` | 1 | UI 配色(1) | src/styles/base.js:382 |  |
-| `--dsw-alias-button-primary-dimmed` | 1 | 玻璃(1) | packages/glass/src/glass-css.js:1479 |  |
-| `--dsw-alias-button-primary-fill` | 1 | 玻璃(1) | packages/glass/src/glass-css.js:1477 |  |
-| `--dsw-alias-button-primary-hover` | 1 | 玻璃(1) | packages/glass/src/glass-css.js:1478 |  |
+| `--dsw-alias-button-primary-dimmed` | 1 | 玻璃(1) | packages/glass/src/glass-css.js:1502 |  |
+| `--dsw-alias-button-primary-fill` | 1 | 玻璃(1) | packages/glass/src/glass-css.js:1500 |  |
+| `--dsw-alias-button-primary-hover` | 1 | 玻璃(1) | packages/glass/src/glass-css.js:1501 |  |
 | `--dsw-alias-button-tool-bar-fill` | 2 | 玻璃(2) | packages/glass/src/glass-css.js:169, packages/glass/src/glass-css.js:265 |  |
 | `--dsw-alias-interactive-bg-active` | 2 | 玻璃(2) | packages/glass/src/glass-css.js:172, packages/glass/src/glass-css.js:268 |  |
-| `--dsw-alias-interactive-bg-hover` | 6 | 玻璃(6) | packages/glass/src/glass-css.js:774, packages/glass/src/glass-css.js:1010, packages/glass/src/glass-css.js:1045, packages/glass/src/glass-css.js:1194, packages/glass/src/glass-css.js:1232, packages/glass/src/glass-css.js:1468 |  |
-| `--dsw-alias-interactive-bg-hover-accent` | 3 | 玻璃(3) | packages/glass/src/glass-css.js:1011, packages/glass/src/glass-css.js:1195, packages/glass/src/glass-css.js:1469 |  |
+| `--dsw-alias-interactive-bg-hover` | 6 | 玻璃(6) | packages/glass/src/glass-css.js:797, packages/glass/src/glass-css.js:1033, packages/glass/src/glass-css.js:1068, packages/glass/src/glass-css.js:1217, packages/glass/src/glass-css.js:1255, packages/glass/src/glass-css.js:1491 |  |
+| `--dsw-alias-interactive-bg-hover-accent` | 3 | 玻璃(3) | packages/glass/src/glass-css.js:1034, packages/glass/src/glass-css.js:1218, packages/glass/src/glass-css.js:1492 |  |
 | `--dsw-alias-interactive-bg-hover-solid` | 2 | 玻璃(2) | packages/glass/src/glass-css.js:175, packages/glass/src/glass-css.js:271 |  |
 | `--dsw-alias-label-caption` | 1 | 玻璃(1) | src/styles/base.js:313 |  |
 | `--dsw-alias-label-deep-diving` | 2 | UI 配色(2) | src/styles/base.js:350, src/styles/base.js:368 |  |
@@ -81,29 +81,29 @@
 | `--dsw-alias-label-dimmed` | 1 | 玻璃(1) | src/styles/base.js:314 |  |
 | `--dsw-alias-label-primary` | 1 | 玻璃(1) | src/styles/base.js:309 | 正文灰阶（壁纸激活时压暗提对比） |
 | `--dsw-alias-label-primary-dimmed` | 1 | 玻璃(1) | src/styles/base.js:310 |  |
-| `--dsw-alias-label-primary-foreground` | 1 | 玻璃(1) | packages/glass/src/glass-css.js:1486 |  |
+| `--dsw-alias-label-primary-foreground` | 1 | 玻璃(1) | packages/glass/src/glass-css.js:1509 |  |
 | `--dsw-alias-label-secondary` | 1 | 玻璃(1) | src/styles/base.js:311 | 次要文字灰阶 |
 | `--dsw-alias-label-tertiary` | 1 | 玻璃(1) | src/styles/base.js:312 |  |
 | `--dsw-alias-link` | 3 | UI 配色(3) | src/styles/base.js:349, src/styles/base.js:367, src/styles/base.js:387 |  |
-| `--dsw-alias-markdown-citation` | 4 | 玻璃(2) + 无门控(2) | packages/glass/src/glass-css.js:178, packages/glass/src/glass-css.js:274, packages/glass/src/glass-css.js:947, packages/glass/src/glass-css.js:961 |  |
-| `--dsw-alias-markdown-code-block` | 6 | 玻璃(4) + 无门控(2) | packages/glass/src/glass-css.js:196, packages/glass/src/glass-css.js:284, packages/glass/src/glass-css.js:807, packages/glass/src/glass-css.js:941, packages/glass/src/glass-css.js:955, packages/glass/src/glass-css.js:1583 | markdown 代码块底 |
-| `--dsw-alias-markdown-code-block-banner` | 6 | 玻璃(4) + 无门控(2) | packages/glass/src/glass-css.js:199, packages/glass/src/glass-css.js:287, packages/glass/src/glass-css.js:808, packages/glass/src/glass-css.js:942, packages/glass/src/glass-css.js:956, packages/glass/src/glass-css.js:1584 | markdown 代码条幅底 |
-| `--dsw-alias-markdown-code-segment-selected` | 5 | 玻璃(3) + 无门控(2) | packages/glass/src/glass-css.js:213, packages/glass/src/glass-css.js:299, packages/glass/src/glass-css.js:946, packages/glass/src/glass-css.js:960, packages/glass/src/glass-css.js:1588 | 代码卡分段（选中） |
-| `--dsw-alias-markdown-code-segment-unselected` | 5 | 玻璃(3) + 无门控(2) | packages/glass/src/glass-css.js:208, packages/glass/src/glass-css.js:296, packages/glass/src/glass-css.js:945, packages/glass/src/glass-css.js:959, packages/glass/src/glass-css.js:1587 | 代码卡分段（未选中） |
-| `--dsw-alias-markdown-inline-code` | 6 | 玻璃(4) + 无门控(2) | packages/glass/src/glass-css.js:202, packages/glass/src/glass-css.js:290, packages/glass/src/glass-css.js:686, packages/glass/src/glass-css.js:943, packages/glass/src/glass-css.js:957, packages/glass/src/glass-css.js:1585 | 行内代码底 |
-| `--dsw-alias-markdown-placeholder` | 4 | 玻璃(2) + 无门控(2) | packages/glass/src/glass-css.js:181, packages/glass/src/glass-css.js:277, packages/glass/src/glass-css.js:948, packages/glass/src/glass-css.js:962 |  |
-| `--dsw-alias-markdown-tag` | 5 | 玻璃(3) + 无门控(2) | packages/glass/src/glass-css.js:205, packages/glass/src/glass-css.js:293, packages/glass/src/glass-css.js:944, packages/glass/src/glass-css.js:958, packages/glass/src/glass-css.js:1586 | markdown 标签底 |
+| `--dsw-alias-markdown-citation` | 4 | 玻璃(2) + 无门控(2) | packages/glass/src/glass-css.js:178, packages/glass/src/glass-css.js:274, packages/glass/src/glass-css.js:970, packages/glass/src/glass-css.js:984 |  |
+| `--dsw-alias-markdown-code-block` | 6 | 玻璃(4) + 无门控(2) | packages/glass/src/glass-css.js:196, packages/glass/src/glass-css.js:284, packages/glass/src/glass-css.js:830, packages/glass/src/glass-css.js:964, packages/glass/src/glass-css.js:978, packages/glass/src/glass-css.js:1606 | markdown 代码块底 |
+| `--dsw-alias-markdown-code-block-banner` | 6 | 玻璃(4) + 无门控(2) | packages/glass/src/glass-css.js:199, packages/glass/src/glass-css.js:287, packages/glass/src/glass-css.js:831, packages/glass/src/glass-css.js:965, packages/glass/src/glass-css.js:979, packages/glass/src/glass-css.js:1607 | markdown 代码条幅底 |
+| `--dsw-alias-markdown-code-segment-selected` | 5 | 玻璃(3) + 无门控(2) | packages/glass/src/glass-css.js:213, packages/glass/src/glass-css.js:299, packages/glass/src/glass-css.js:969, packages/glass/src/glass-css.js:983, packages/glass/src/glass-css.js:1611 | 代码卡分段（选中） |
+| `--dsw-alias-markdown-code-segment-unselected` | 5 | 玻璃(3) + 无门控(2) | packages/glass/src/glass-css.js:208, packages/glass/src/glass-css.js:296, packages/glass/src/glass-css.js:968, packages/glass/src/glass-css.js:982, packages/glass/src/glass-css.js:1610 | 代码卡分段（未选中） |
+| `--dsw-alias-markdown-inline-code` | 6 | 玻璃(4) + 无门控(2) | packages/glass/src/glass-css.js:202, packages/glass/src/glass-css.js:290, packages/glass/src/glass-css.js:709, packages/glass/src/glass-css.js:966, packages/glass/src/glass-css.js:980, packages/glass/src/glass-css.js:1608 | 行内代码底 |
+| `--dsw-alias-markdown-placeholder` | 4 | 玻璃(2) + 无门控(2) | packages/glass/src/glass-css.js:181, packages/glass/src/glass-css.js:277, packages/glass/src/glass-css.js:971, packages/glass/src/glass-css.js:985 |  |
+| `--dsw-alias-markdown-tag` | 5 | 玻璃(3) + 无门控(2) | packages/glass/src/glass-css.js:205, packages/glass/src/glass-css.js:293, packages/glass/src/glass-css.js:967, packages/glass/src/glass-css.js:981, packages/glass/src/glass-css.js:1609 | markdown 标签底 |
 | `--dsw-alias-scrollbar-bg-l1` | 2 | 玻璃(2) | packages/glass/src/glass-css.js:447, packages/glass/src/glass-css.js:458 |  |
 | `--dsw-alias-scrollbar-bg-l2` | 2 | 玻璃(2) | packages/glass/src/glass-css.js:448, packages/glass/src/glass-css.js:459 |  |
 | `--dsw-alias-scrollbar-hover-l1` | 2 | 玻璃(2) | packages/glass/src/glass-css.js:449, packages/glass/src/glass-css.js:460 |  |
 | `--dsw-alias-scrollbar-hover-l2` | 2 | 玻璃(2) | packages/glass/src/glass-css.js:450, packages/glass/src/glass-css.js:461 |  |
-| `--dsw-alias-state-business-primary` | 5 | 玻璃(3) + UI 配色(2) | src/styles/base.js:353, src/styles/base.js:370, packages/glass/src/glass-css.js:1012, packages/glass/src/glass-css.js:1196, packages/glass/src/glass-css.js:1480 |  |
-| `--dsw-alias-turn-trigger-bg` | 3 | 玻璃(3) | packages/glass/src/glass-css.js:568, packages/glass/src/glass-css.js:578, packages/glass/src/glass-css.js:1724 |  |
-| `--dsw-alias-turn-trigger-bg-hover` | 3 | 玻璃(3) | packages/glass/src/glass-css.js:571, packages/glass/src/glass-css.js:581, packages/glass/src/glass-css.js:1725 |  |
+| `--dsw-alias-state-business-primary` | 5 | 玻璃(3) + UI 配色(2) | src/styles/base.js:353, src/styles/base.js:370, packages/glass/src/glass-css.js:1035, packages/glass/src/glass-css.js:1219, packages/glass/src/glass-css.js:1503 |  |
+| `--dsw-alias-turn-trigger-bg` | 3 | 玻璃(3) | packages/glass/src/glass-css.js:591, packages/glass/src/glass-css.js:601, packages/glass/src/glass-css.js:1747 |  |
+| `--dsw-alias-turn-trigger-bg-hover` | 3 | 玻璃(3) | packages/glass/src/glass-css.js:594, packages/glass/src/glass-css.js:604, packages/glass/src/glass-css.js:1748 |  |
 | `--dsw-mask-blur` | 1 | 玻璃(1) | packages/glass/src/glass-css.js:434 |  |
-| `--dsw-specific-bubble` | 4 | 玻璃(2) + 无门控(2) | packages/glass/src/glass-css.js:405, packages/glass/src/glass-css.js:415, packages/glass/src/glass-css.js:940, packages/glass/src/glass-css.js:954 |  |
+| `--dsw-specific-bubble` | 4 | 玻璃(2) + 无门控(2) | packages/glass/src/glass-css.js:405, packages/glass/src/glass-css.js:415, packages/glass/src/glass-css.js:963, packages/glass/src/glass-css.js:977 |  |
 | `--dsw-specific-input-major` | 2 | 玻璃(2) | packages/glass/src/glass-css.js:402, packages/glass/src/glass-css.js:412 |  |
-| `--dsw-specific-selector` | 1 | 玻璃(1) | packages/glass/src/glass-css.js:1714 |  |
+| `--dsw-specific-selector` | 1 | 玻璃(1) | packages/glass/src/glass-css.js:1737 |  |
 | `--dsw-specific-sidebar-fill` | 4 | 玻璃(3) + 壁纸(1) | src/styles/base.js:218, src/styles/base.js:221, src/styles/shell.js:40, packages/glass/src/glass-css.js:370 | 侧栏填充（宿主 Mica/深色主题各有一份） |
-| `--dsw-specific-sidebar-nav-item-active` | 2 | 玻璃(2) | packages/glass/src/glass-css.js:1466, packages/glass/src/glass-css.js:1547 |  |
-| `--dsw-specific-sidebar-nav-item-hover` | 2 | 玻璃(2) | packages/glass/src/glass-css.js:1467, packages/glass/src/glass-css.js:1548 |  |
+| `--dsw-specific-sidebar-nav-item-active` | 2 | 玻璃(2) | packages/glass/src/glass-css.js:1489, packages/glass/src/glass-css.js:1570 |  |
+| `--dsw-specific-sidebar-nav-item-hover` | 2 | 玻璃(2) | packages/glass/src/glass-css.js:1490, packages/glass/src/glass-css.js:1571 |  |

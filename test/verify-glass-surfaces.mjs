@@ -2797,6 +2797,24 @@ console.log('\n⑲ 标记值跟走 resolver（t9-001 运行级断言：真跑 we
   check('negative control: “只有底色没有霜”的合成规则会被 ㉔a 判红',
     !(syntheticNoBlur.chat && syntheticNoBlur.blur));
 
+  // ── ㉕ 改动文件卡片 / 变更请求面板：补掉宿主实色底 ───────────────────────────
+  // 用户截图：「已编辑 N 个文件」卡片与「无法读取 Git 信息」条都是宿主实色底。
+  console.log('\n㉕ 改动文件卡片与变更请求面板不再有实色死底');
+  const changedRules = rulesOf(CSS).filter((r) => /\[data-changed-files\]/.test(r.header));
+  const changedMain = changedRules.filter((r) => /data-we-glass-chat/.test(r.header) && !/data-we-glass-fallback/.test(r.header));
+  const changedFallback = changedRules.filter((r) => /data-we-glass-fallback/.test(r.header) && /data-we-glass-chat/.test(r.header));
+  check('㉕a 改动文件卡片带对话玻璃门、清掉 --changes-fill 并读 chat 底 + 霜', changedMain.length === 1
+    && /--changes-fill:\s*transparent/.test(changedMain[0].body)
+    && /--we-chat-glass-fill/.test(changedMain[0].body) && /backdrop-filter: blur\(/.test(changedMain[0].body));
+  check('㉕b 改动文件卡片的软渲染回退档关霜', changedFallback.length === 1
+    && /backdrop-filter: none/.test(changedFallback[0].body));
+  const forgeRules = rulesOf(CSS).filter((r) => /\[data-forge-panel\]/.test(r.header));
+  check('㉕c 变更请求面板清掉 --forge-fill 实色（背景归右栏玻璃）', forgeRules.length === 1
+    && /--forge-fill:\s*transparent/.test(forgeRules[0].body));
+  const syntheticSolidHeader = { body: 'background: var(--changes-fill);' };
+  check('negative control: 没清 --changes-fill 的合成规则会被 ㉕a 判红',
+    !/--changes-fill:\s*transparent/.test(syntheticSolidHeader.body));
+
 }
 
 console.log('');
