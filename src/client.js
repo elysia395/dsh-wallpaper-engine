@@ -1945,7 +1945,9 @@ function importUserPropsFromWe() {
   const wire = {};
   let changed = 0;
   for (const p of propsState.props) {
-    if (!p || typeof p.name !== "string") continue;
+    // hidden（project.json 里 editable:false）与按钮统计同一口径：只读导入不碰它们 ——
+    // 面板不显示这些项，写进去用户在界面上看不见、也没法单独撤销（只能整张恢复默认）。
+    if (!p || p.hidden || typeof p.name !== "string") continue;
     if (!Object.prototype.hasOwnProperty.call(we, p.name)) continue;
     const next = wePropValueOf(p, we[p.name]);
     if (next === undefined || sameUserPropValue(next, p.value)) continue;
@@ -5500,6 +5502,10 @@ function afterFirstPaint() {
     if (!w || typeof w.requestAnimationFrame !== "function") { resolve(); return; }
     let settled = false;
     const done = () => { if (settled) return; settled = true; resolve(); };
+    // 绝对兜底：页面不可见 / 最小化 / 托盘启动时 Chromium 会冻结 rAF（本文件 :2052 同一结论），
+    // 只靠双 rAF 可能永不回调 ⇒ inventory 一直不加载、列表停在"扫描 Wallpaper Engine…"。
+    // idle 的 timeout 只管 idle 阶段，管不到 rAF；这里给整条门加 1 s 上限（与 idle 兜底同口径）。
+    try { w.setTimeout(done, 1000); } catch { done(); return; }
     const idle = () => {
       try {
         if (typeof w.requestIdleCallback === "function") w.requestIdleCallback(() => done(), { timeout: 1000 });

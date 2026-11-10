@@ -4863,12 +4863,14 @@ setTimeout(async () => {
   const ros = []; const mos = [];
   class FakeRO {
     constructor(cb) { this.cb = cb; this.targets = []; this.disconnected = false; ros.push(this); }
-    observe(t) { this.targets.push(t); }
+    observe(t) { if (!this.targets.includes(t)) this.targets.push(t); }
+    unobserve(t) { this.targets = this.targets.filter((x) => x !== t); }
     disconnect() { this.disconnected = true; }
   }
   class FakeMO {
     constructor(cb) { this.cb = cb; this.targets = []; this.options = null; this.disconnected = false; mos.push(this); }
-    observe(t, o) { this.targets.push(t); this.options = o; }
+    observe(t, o) { if (!this.targets.includes(t)) this.targets.push(t); this.options = o; }
+    unobserve(t) { this.targets = this.targets.filter((x) => x !== t); }
     disconnect() { this.disconnected = true; }
   }
   const qpWinState = { box: null };
@@ -4927,6 +4929,24 @@ setTimeout(async () => {
   flushRaf();
   assert.equal(qpWinState.box.value.end, 65,
     '补挂的 scroll 监听必须生效（滚出 400px ⇒ 13 行 = 65 条）');
+
+  // 换容器（同一组件换壳 / 祖先滚动容器被替换）：旧容器必须摘监听并 unobserve，
+  // 新容器补挂 —— 只在卸载时 disconnect 会随换壳次数累积被观察目标。
+  const sc2 = makeNode('div');
+  el.parentElement = sc2; sc2.parentElement = body;
+  sc.overflowY = 'visible';
+  sc2.overflowY = 'auto'; sc2.scrollHeight = 3000; sc2.clientHeight = 300; sc2.rect = { top: 0, height: 300 };
+  el.rect = { top: 0, height: 300 };
+  fire(ros.filter((r) => r.targets.includes(el)));
+  flushRaf();
+  assert.equal((sc.listeners.scroll && sc.listeners.scroll.size) || 0, 0,
+    '换容器后旧容器必须摘掉 scroll 监听');
+  assert.equal((sc2.listeners.scroll && sc2.listeners.scroll.size) || 0, 1,
+    '换容器后新容器必须挂上 scroll 监听');
+  assert.ok(ros.every((r) => !r.targets.includes(sc)) && mos.every((m) => !m.targets.includes(sc)),
+    '换容器后旧容器必须从 ResizeObserver / MutationObserver 上 unobserve');
+  assert.ok(ros.some((r) => r.targets.includes(sc2)) && mos.some((m) => m.targets.includes(sc2)),
+    '换容器后新容器必须被 RO / MO 观察');
 
   // 卸载：迟挂的监听与观察器都要解绑
   qpCleanups.forEach((fn) => fn());

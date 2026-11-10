@@ -931,7 +931,9 @@ console.log('\n9. WE 当前值只读导入（issue #341）');
   ];
   propsBody = {
     ok: true, token: PROPS_TOKEN, props: IMPORT_DEFS, overrides: {}, hasProject: true,
-    we: { ok: true, values: { bgcolor: '0 0 1', speed: '2.5', glow: 'false', mode: 1 }, monitor: 'Monitor0', profile: 'fixture' },
+    // hiddenInternal 的 WE 值是 9（与面板值 1 不同）：它不得计入按钮的 N，也不得落盘 ——
+    // 面板看不见的项写进 userProps 后用户无法单独撤销（Fish-under-sea 审阅指出的漏做）。
+    we: { ok: true, values: { bgcolor: '0 0 1', speed: '2.5', glow: 'false', mode: 1, hiddenInternal: 9 }, monitor: 'Monitor0', profile: 'fixture' },
   };
   toggle(); toggle();   // 关再开 = 强制重拉
   await sleep(0);
@@ -949,6 +951,8 @@ console.log('\n9. WE 当前值只读导入（issue #341）');
   check('导入后落盘：偏离默认的值写进 userProps（slider 字符串→数字），与默认同值的不写（combo=1 是默认）',
     saved.bgcolor === '0 0 1' && saved.speed === 2.5 && !('mode' in saved) && !('glow' in saved),
     JSON.stringify(saved));
+  check('导入不碰 hidden 项（按钮说 3 项就只落 3 项；hiddenInternal 在面板不可见、无法单独撤销）',
+    !('hiddenInternal' in saved), JSON.stringify(saved));
   check('导入后按钮消失（已无差异），可见行数不变',
     !importButton(tree) && propRows(tree).length === 4);
 
@@ -969,8 +973,6 @@ console.log('\n9. WE 当前值只读导入（issue #341）');
   tree = render();
   check('负对照：WE 值与面板一致 ⇒ 不出按钮', !importButton(tree));
 }
-
-console.log('\n10. 清掉壁纸 ⇒ 面板收起（不留一个挂在开关上的空面板）');
 
 console.log('\n10. 清掉壁纸 ⇒ 面板收起（不留一个挂在开关上的空面板）');
 {

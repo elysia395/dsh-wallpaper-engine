@@ -85,7 +85,14 @@
       const mo = typeof MutationObserver === "function" ? new MutationObserver(schedule) : null;
       const bindScroller = (sc) => {
         if (!sc || sc === boundSc) return;
-        if (boundSc) boundSc.removeEventListener("scroll", schedule);
+        const prev = boundSc;
+        if (prev) {
+          prev.removeEventListener("scroll", schedule);
+          // 换容器时也要把观察器从旧容器上摘掉：disconnect 只在卸载时发生，
+          // 否则每换一次容器就多挂一个被观察目标（长期多次换壳会累积）。
+          if (ro) ro.unobserve(prev);
+          if (mo) mo.unobserve(prev);
+        }
         sc.addEventListener("scroll", schedule, { passive: true });
         boundSc = sc;
         if (ro && sc !== el) ro.observe(sc);
