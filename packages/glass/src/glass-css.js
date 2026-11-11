@@ -468,17 +468,24 @@ const CSS_GLASS = `
      守卫：verify-glass-surfaces「思考玻璃门下不得出现 data-composer-card」。
      ⚠️ **宿主 Tooltip 也是 *_bubble**（issue #161）：宿主把悬浮提示的元素类名编译成
      _bubble_ + 哈希 + 序号（dsh-client-ui-primitives 的 Tooltip），与对话气泡共享
-     [class*="_bubble"] 这个后缀约定，但它是**独立浮层**：底色读 --dsw-alias-tooltip-bg
+     [class*="_bubble_"] 这个后缀约定，但它是**独立浮层**：底色读 --dsw-alias-tooltip-bg
      （浅色 #2c2c2e 实色，深色 #43454a），文字固定 --dsw-static-neutral-bluish-00（近白），
      且**位置不受 [data-chat-flow] 约束**（可能渲染在触发元素旁）。这层 fill 覆盖上去后
      深底变浅底、白字不变 ⇒ 白字压浅底（实测 1.07–1.13:1，见 #161）。
      判据取宿主自己写在气泡上的 role="tooltip"（全 asar 仅出现一次，就是这一处），
      它同时免疫类名哈希漂移与浮层 DOM 位置，比 [data-chat-flow] 作用域更可靠。
-     ⇒ **本文件所有 [class*="_bubble"] 规则都必须带这道豁免**，
+     ⇒ **本文件所有 [class*="_bubble_"] 规则都必须带这道豁免**，
      守卫：verify-readability「F2dN 每条 _bubble 规则都必须带 role="tooltip" 豁免」——
      这条判据以前还接受"头里有 [data-chat-flow] 就放行"，于是把某条的 :not(...) 摘掉仍全绿；
-     作用域（在对话流里）与豁免（不是宿主 Tooltip 那个 _bubble）是两件事，现在分别钉住。 */
-  body[data-we-glass-page][data-we-thinking-glass] [class*="_bubble"]:not([role="tooltip"]) {
+     作用域（在对话流里）与豁免（不是宿主 Tooltip 那个 _bubble）是两件事，现在分别钉住。
+     ⚠️ **第二颗雷是同族的无圆角 wrapper**（抓到的实例：0.2.2-rc.1 的 QuestionReplyView，
+     也就是「AI 提问框」）：宿主给气泡又包了一层 「Xxxxxx_bubbleWidth」（「_bubble」+ 大写 W，
+     没有 border-radius、盒子与气泡完全重合）。裸「[class*="_bubble"]」会把它一起画成
+     方形玻璃，于是气泡圆角之外露出四个方角 —— 用户看到的就是「圆角文本框的四角方形残留」。
+     ⇒ 族锚点取宿主 CSS 模块的哈希形态「[class*="_bubble_"]」（「_bubble_<hash>_<n>」）：它天然
+     不命中 camelCase 的「*_bubbleWidth」，而新气泡本体仍带共享原语类「_bubble_<hash>」。
+     守卫：F2dN（role 豁免）+ F2dN2（禁止裸「_bubble」，必须哈希形态，带 wrapper 命名的负对照）。 */
+  body[data-we-glass-page][data-we-thinking-glass] [class*="_bubble_"]:not([role="tooltip"]) {
     background-color: var(--we-chat-glass-fill) !important;
   }
   /* ── 三挡的一半：「关」挡的交付物文件卡是**半透明**（用户实测回归）─────────────
@@ -507,7 +514,7 @@ const CSS_GLASS = `
      气泡这条还带第二道 :not([role="tooltip"])：这一组是**恒挂**的（默认就生效），
      不加豁免就会给宿主 Tooltip 抹上白釉 + 模糊（#161），详见上面那条注释。 */
   body[data-we-glass-chat][data-we-glass-page] [data-composer-card],
-  body[data-we-glass-chat][data-we-glass-page]:not([data-we-thinking-native]) [class*="_bubble"]:not([role="tooltip"]),
+  body[data-we-glass-chat][data-we-glass-page]:not([data-we-thinking-native]) [class*="_bubble_"]:not([role="tooltip"]),
   /* Interactive tool popup cards read the SAME --dsw-specific-input-major
      token as the composer (question / plan-review / approval), so they turn
      translucent along with it — but unlike the composer they had NO
@@ -639,7 +646,7 @@ const CSS_GLASS = `
      越叠越不透明 —— 那正好把这次想要的那点通透又收回去。
      选择器只用**轨迹模块独有**的类名子串（实测 _tablePane / _overviewPreview / _programPanel
      全宿主只有轨迹模块在用；_details / _split 别的模块也有 ⇒ 不碰：宁可少盖一层，也不误伤别处）。
-     CSS 模块哈希是构建产物，稳定的是 "_<类名>" 这半边（与 [class*="_bubble"] / [class*="_panel"]
+     CSS 模块哈希是构建产物，稳定的是 "_<类名>" 这半边（与 [class*="_bubble_"] / [class*="_panel"]
      同一手法）。
      ⚠️ 实测该模块里没有 position:fixed ⇒ 在这些元素上加 backdrop-filter 不会让 fixed 后代改锚
      （#89 那类问题）；模糊挂在滚动区上与侧栏面板同一条政策。回退档不需要额外处理：那一条
@@ -878,7 +885,7 @@ const CSS_GLASS = `
     backdrop-filter: none !important;
   }
   /* A user bubble already supplies the single glass plate and frost. */
-  body[data-we-glass-page][data-we-thinking-glass] [data-chat-flow] [class*="_bubble"]:not([role="tooltip"]) .md-code-block {
+  body[data-we-glass-page][data-we-thinking-glass] [data-chat-flow] [class*="_bubble_"]:not([role="tooltip"]) .md-code-block {
     background: transparent !important;
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
@@ -1730,7 +1737,7 @@ const CSS_GLASS = `
      fallback 模式也会被摘掉气泡的 backdrop-filter。
      带 :not([role="tooltip"]) 与上面三条同办（#161）：宿主 Tooltip 从来不吃插件霜釉，
      清它不是修 bug 而是保持「一条规则只谈气泡」的可读性 + 让守卫按同一判据数。 */
-  body[data-we-glass-fallback][data-we-glass-page][data-we-thinking-glass] [class*="_bubble"]:not([role="tooltip"]) {
+  body[data-we-glass-fallback][data-we-glass-page][data-we-thinking-glass] [class*="_bubble_"]:not([role="tooltip"]) {
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
   }

@@ -19,7 +19,7 @@
 //   G1  the carrier inventory is derived from the stylesheet itself: every rule
 //       declaring a non-none `backdrop-filter` names a glass carrier, and the
 //       required carriers ([data-composer-card] incl. its ::before,
-//       [class*="_bubble"], and the plugin's own glass panels) are all present.
+//       [class*="_bubble_"], and the plugin's own glass panels) are all present.
 //   G2  no rule introduces `mix-blend-mode` (other than `normal`),
 //       `isolation: isolate`, `filter:` / `-webkit-filter:` (other than `none`),
 //       or `opacity:` < 1 ON a glass carrier or on one of its pseudo-elements.
@@ -306,7 +306,7 @@ function main() {
   // ── G1: carrier inventory, derived from the stylesheet ───────────────────
   const REQUIRED = [
     { label: 'composer card / its ::before', token: '[data-composer-card]' },
-    { label: 'message bubble', token: '[class*="_bubble"]' },
+    { label: 'message bubble', token: '[class*="_bubble_"]' },
     // 轨迹（trajectory）视图的内容区：模块自带零 backdrop-filter（实测 289 条规则里没有一条），
     // 它的容器只有 --dsw-alias-bg-layer-1 给的**半透明底** ⇒ 在壁纸上是一层平涂的纱。
     // 这三条选择器是给它补霜的那条规则（用户口径："轨迹内容区域也同样做玻璃化"）。
@@ -346,7 +346,7 @@ function main() {
 
   // ── G5: the two required carriers keep their blur (default build) ────────
   const composer = blurCarrierRule(rules, '[data-composer-card]', '::before');
-  const bubble = blurCarrierRule(rules, '[class*="_bubble"]', '');
+  const bubble = blurCarrierRule(rules, '[class*="_bubble_"]', '');
   const readsBoth = (bf) => /var\(--we-blur\b/.test(bf) && /var\(--we-saturate\b/.test(bf);
   check('G5 composer ::before and message-bubble blur expressions are present, non-none and read --we-blur AND --we-saturate in the no-flag build',
     !!composer && !!bubble && readsBoth(composer.blur) && readsBoth(bubble.blur),
