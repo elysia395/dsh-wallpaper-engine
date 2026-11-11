@@ -3552,7 +3552,7 @@ setTimeout(async () => {
       localStorage.setItem('dsh-wallpaper-engine:picker-tab', 'advanced');
       const adv = JSON.stringify(renderPicker());
       assert.ok(adv.includes('省电') && adv.includes('最小化/切页时暂停')
-        && adv.includes('窗口失焦时暂停') && adv.includes('使用电池时暂停'),
+        && adv.includes('窗口失焦时暂停') && adv.includes('使用电池时暂停') && adv.includes('启动时暂停'),
         '高级 must host the 省电 group');
       assert.ok(adv.includes('实时渲染诊断'), '高级 must host the live 诊断 group');
       localStorage.setItem('dsh-wallpaper-engine:picker-tab', 'effects');

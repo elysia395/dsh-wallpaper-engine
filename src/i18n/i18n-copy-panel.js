@@ -350,6 +350,8 @@ const WE_I18N_EN_PANEL = {
   "「窗口失焦时暂停」只在原生浏览器目标下提供 —— 桌面壳失焦时壁纸仍可见，暂停会定格可见画面{note}": "\"Pause when the window loses focus\" is only offered for the plain browser target — in a desktop shell the wallpaper stays visible when the window is unfocused, so pausing would freeze a visible frame{note}",
   "（当前已开启，本目标下不生效，切到浏览器目标后恢复）": "(currently enabled, but has no effect for this target; it takes effect again on the browser target)",
   "使用电池时暂停": "Pause on battery",
+  "启动时暂停": "Start paused",
+  "开启后每次重启都从暂停开始；点击播放后本次会话照常播放。": "When enabled, every restart starts paused; pressing play resumes for that session.",
   "实时渲染诊断": "Live rendering diagnostics",
   "live 诊断日志": "Live diagnostic log",
   "本会话有效 · 逐秒心跳读数": "This session only · per-second heartbeat readings",

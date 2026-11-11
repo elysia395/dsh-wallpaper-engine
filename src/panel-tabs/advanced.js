@@ -78,7 +78,7 @@
   }
 
   function renderAdvancedPowerSection(ctx) {
-    const { onPauseOnBattery, onPauseOnBlur, onPauseOnHidden, sel } = ctx;
+    const { onPauseOnBattery, onPauseOnBlur, onPauseOnHidden, onStartPaused, sel } = ctx;
     return React.createElement(React.Fragment, null,
     // ── 省电：遮挡暂停（借鉴 Wallpaper Engine 的「被遮挡时暂停」）──
     React.createElement("div", { className: "we-picker__section" },
@@ -98,6 +98,9 @@
           note: sel.pauseOnBlur ? weT("（当前已开启，本目标下不生效，切到浏览器目标后恢复）") : "",
         })),
       switchRow(weT("使用电池时暂停"), sel.pauseOnBattery, onPauseOnBattery, { key: "pause-battery" }),
+      switchRow(weT("启动时暂停"), sel.startPaused, onStartPaused, { key: "pause-start" }),
+      React.createElement("div", { className: "we-picker__hint", key: "pause-start-note" },
+        weT("开启后每次重启都从暂停开始；点击播放后本次会话照常播放。")),
     ),
     );
   }
