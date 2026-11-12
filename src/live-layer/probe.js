@@ -212,6 +212,10 @@ function liveStateOf(frame) {
 let uiFpsFrames = 0;
 let uiFpsRaf = 0;
 let uiFpsSince = 0;
+// #263：帧间隔（毫秒）缓冲 —— 每 tick 由 reportPerfFrameTick 取走上报（见下）。
+// 只存「这一秒」的样本：watch tick 每秒一次，长期留存没有意义。
+let uiFrameIntervals = [];
+let uiFpsLast = 0;
 // 计时全局按环境取：UI fps 是诊断探针，不该因为宿主没有 performance / rAF
 // 就抛异常、打断实时渲染链（真浏览器恒有这两者，测试宿主可能只给部分 DOM）。
 const uiNow = () => (typeof performance !== "undefined" && performance && typeof performance.now === "function")
@@ -220,7 +224,15 @@ function startUiFpsProbe() {
   if (uiFpsRaf || typeof requestAnimationFrame !== "function") return;
   uiFpsFrames = 0;
   uiFpsSince = uiNow();
-  const tick = () => { uiFpsFrames += 1; uiFpsRaf = requestAnimationFrame(tick); };
+  uiFrameIntervals = [];
+  uiFpsLast = uiNow();
+  const tick = () => {
+    uiFpsFrames += 1;
+    const now = uiNow();
+    if (uiFpsLast > 0 && now > uiFpsLast) uiFrameIntervals.push(now - uiFpsLast);
+    uiFpsLast = now;
+    uiFpsRaf = requestAnimationFrame(tick);
+  };
   uiFpsRaf = requestAnimationFrame(tick);
 }
 function stopUiFpsProbe() {
@@ -228,6 +240,8 @@ function stopUiFpsProbe() {
   uiFpsRaf = 0;
   uiFpsFrames = 0;
   uiFpsSince = 0;
+  uiFrameIntervals = [];
+  uiFpsLast = 0;
 }
 function takeUiFps() {
   const now = uiNow();
@@ -236,6 +250,16 @@ function takeUiFps() {
   uiFpsFrames = 0;
   uiFpsSince = now;
   return seconds > 0.2 ? Math.round(frames / seconds) : -1;
+}
+
+// #263「更小的第一步」：把刚量到的帧间隔交给上报函数（src/client/media-frame.js
+// 的 reportPerfFrame → 既有 /client-diag 通道 → 主机 lib/perf-metrics.js 聚合）。
+// 取走即清空：watch tick 每秒一次，缓冲只是「这一秒的样本」。
+function reportPerfFrameTick() {
+  if (!uiFrameIntervals.length) return;
+  const batch = uiFrameIntervals;
+  uiFrameIntervals = [];
+  reportPerfFrame(batch);
 }
 
 // 运行时帧率上报：每 5 秒一条，落进 host 的 diag 文件（DSH Desktop 拿不到

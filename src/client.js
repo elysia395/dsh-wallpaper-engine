@@ -1823,11 +1823,41 @@ const IS_EDGE = typeof navigator !== "undefined" && /Edg\//.test(navigator.userA
 let propsPanelOpen = false;
 let propsState = { token: "", loading: false, error: "", props: [], remote: false, we: null };
 
+// #263「更小的第一步」：本进程性能指标快照（FPS / 平均帧时间 / 掉帧 / CPU）。
+// 面板开着时按 1 秒轮询 host 的 /diag-log?perf=<token>；关掉即停。
+let perfSnapshot = null;
+let perfPollTimer = 0;
+let perfPollToken = "";
+
+/** 开始/继续轮询性能指标（换 token 只换目标，不重开 timer）。 */
+function startPerfPoll(token) {
+  perfPollToken = String(token || "");
+  if (perfPollTimer) return;
+  perfPollTimer = setInterval(() => {
+    if (!perfPollToken) return;
+    apiJson("/diag-log?perf=" + encodeURIComponent(perfPollToken))
+      .then((res) => {
+        const d = res && res.data;
+        perfSnapshot = d && d.perf ? d.perf : null;
+        emit();
+      })
+      .catch(() => { /* 忽略：下一次轮询再试 */ });
+  }, 1000);
+}
+
+/** 停止轮询并清空快照（面板关闭 / 清空选中）。 */
+function stopPerfPoll() {
+  if (perfPollTimer) { clearInterval(perfPollTimer); perfPollTimer = 0; }
+  perfPollToken = "";
+  perfSnapshot = null;
+}
+
 
 /** 打开发送（侧栏下钻的入口）：先落状态再拉定义 —— 判据是"该有属性了"。 */
 function openUserPropsPanel() {
   propsPanelOpen = true;
   loadUserPropDefs(propTokenOf(selection), true);
+  startPerfPoll(propTokenOf(selection));
   emit();
 }
 
@@ -1835,6 +1865,7 @@ function openUserPropsPanel() {
 function closeUserPropsPanel() {
   propsPanelOpen = false;
   cancelUserPropsCommit(); // 面板关了：拖动期剩下的那次提交不再有意义
+  stopPerfPoll();
   emit();
 }
 
@@ -2701,7 +2732,12 @@ function markGpuFrameProbed(wid, pinned) {
 function setPickerOpener(el) { pickerOpener = el; }
 function onTogglePropsPanel() {
   propsPanelOpen = !propsPanelOpen;
-  if (propsPanelOpen) loadUserPropDefs(propTokenOf(selection), true);
+  if (propsPanelOpen) {
+    loadUserPropDefs(propTokenOf(selection), true);
+    startPerfPoll(propTokenOf(selection));
+  } else {
+    stopPerfPoll();
+  }
   emit();
 }
 /** 两个「选择壁纸」入口只差草稿标志：普通下钻（点卡片即应用）与轮播编辑器的草稿下钻。 */
@@ -3658,6 +3694,7 @@ function onClear() {
   // 清掉壁纸 = 这张的属性面板也失去对象：顺手把「壁纸属性」收起来。不收的话开关会
   // 「挂着」，下次随便选一张带属性的壁纸时面板会**自动弹开**（用户没点过它）。
   propsPanelOpen = false;
+  stopPerfPoll();
   applySelection("");
 }
 // 手动点开一张壁纸 = 明确想看它：作废它的 live 失败记忆（sceneLiveFailures，持久
