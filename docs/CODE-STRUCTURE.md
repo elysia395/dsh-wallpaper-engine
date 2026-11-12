@@ -1367,7 +1367,7 @@ DSH 桌面端把整份客户端 + node 宿主打进 `resources/app.asar`（Elect
 
 | 本插件用的后缀 | 在 DSH 里 | 说明 |
 |---|---|---|
-| `_bubble` / `_card` / `_panel` / `_editorHeader` | ✅ 存在 | 会话 / 卡片族用得上。**但 `_bubble` 不是"聊天气泡专属后缀"** —— 见下面那条 |
+| `_bubble_` / `_card` / `_panel` / `_editorHeader` | ✅ 存在 | 会话 / 卡片族用得上。**但 `_bubble` 不是"聊天气泡专属后缀"** —— 见下面那条 |
 | `_boundaryError` / `_browserBar` / `_explorerHeader` / `_gitHeader` / `_pane` / `_paneCard` / `_tabBar` / `_terminalWrap` | ❌ 不存在 | 这些是 **dsh-better-sidebar 的类名**（第三方）⇒ 只能随该插件漂移 |
 | `pI_x6G`（写成 `div[class*="pI_x6G_frame"]`） | ✅ **完整哈希子串**（实测命中） | 不是后缀 —— 见下面那条 |
 
@@ -1382,9 +1382,17 @@ DSH 桌面端把整份客户端 + node 宿主打进 `resources/app.asar`（Elect
 `Tooltip.module.css`，编译名 `_bubble_<hash>`）。Tooltip 是 `position:fixed` + portal 到 body 的
 浮层、**不在 `[data-chat-flow]` 里**，于是任何"按 `_bubble` 后缀刷气泡玻璃"的规则都会顺手把它刷成
 半透明浅底 —— 而它的文字是近白色 ⇒ 几乎不可读（#161 的根因）。
-⇒ 认气泡**不能只看类名后缀**，必须带一个与 DOM 位置无关的排除式：`[class*="_bubble"]:not([role="tooltip"])`
+⇒ 认气泡**不能只看类名后缀**，必须带一个与 DOM 位置无关的排除式：`[class*="_bubble_"]:not([role="tooltip"])`
 （`role="tooltip"` 是该气泡元素上宿主写死的 ARIA 属性；用 `[data-chat-flow]` 作用域也行，但那条依赖
 "tooltip 一定在流外"这个未被产物证实的假设）。语义化锚点（`data-chat-flow-kind`）是更稳的第一选择。
+
+**⚠️ 撞车之二：`_bubble` 还会命中同族的无圆角 wrapper**（实测 0.2.2-rc.1）：新组件
+`QuestionReplyView`（AI 提问框）把气泡包在 `Xxx_bubbleWidth` 里 —— 该 wrapper 没有 `border-radius`、
+与气泡同盒，裸 `[class*="_bubble"]` 会把它也刷成方形玻璃，于是圆角气泡外侧露出四个方角
+（用户可见的「四角方形残留」）。⇒ 气泡族锚点改用**哈希形态** `[class*="_bubble_"]`
+（`_bubble_<hash>_<n>`）：不命中 camelCase 的 `*_bubbleWidth`，而气泡本体（共享原语
+`_bubble_<hash>`）照样命中。判据：`verify-readability` 的 F2dN（role 豁免）+ F2dN2
+（禁止裸 `_bubble`，附 wrapper 类名负对照）。
 
 **稳定性判定：低。** 即使后缀存在，哈希前缀每次宿主重建都会变；后缀本身也不是契约（宿主可以把 `_panel` 改名），
 **而且后缀不是唯一的**（上面那条撞车就是后果）。

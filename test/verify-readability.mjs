@@ -458,7 +458,7 @@ function main() {
       fills.length === 2 && !fill(fills[0].replace(/var\(--we-glass-alpha, [^)]+\)/, '0.88')));
     //  用户口径：输入框退出思考玻璃作用域 ⇒ fill 接管的名单只剩
     // 气泡与两类代码围栏；输入卡在挂门规则里出现一次就算红（双向判据）。
-    const roots = ['[class*="_bubble"]',
+    const roots = ['[class*="_bubble_"]',
       '[data-chat-flow] .md-code-block', ':has(> pre > code)'];
     check('F2d bubble and message fences retain their slider fill; composer stays outside the thinking-glass scope',
       roots.every((anchor) => normal.some((r) => r.header.includes(anchor)
@@ -471,23 +471,39 @@ function main() {
     // 判据取宿主写在气泡元素上的 role="tooltip"（全 asar 唯一一处），它同时免疫类名
     // 哈希漂移与浮层 DOM 位置 ⇒ 每一条 _bubble 规则要么 chat-flow 作用域、要么带豁免。
     // 数下界 4 = 现有四条（fill / 霜釉 / 气泡内代码块清底 / fallback 摘霜），少一条即红。
-    const bubbleRules = all.filter((r) => r.header.includes('[class*="_bubble"]')
+    // ⚠️ 第二颗雷（0.2.2-rc.1 的 QuestionReplyView，即「AI 提问框」）：宿主给气泡又包了一层
+    //    无 border-radius 的 `Xxx_bubbleWidth` wrapper，裸 `_bubble` 会把它一起刷成方形玻璃，
+    //    气泡圆角外露出四个方角。⇒ 族锚点用哈希形态 `_bubble_`（宿主 CSS Module 形如
+    //    `_bubble_<hash>_<n>`，camelCase 的 `*_bubbleWidth` 不含它），F2dN2 钉住这条。
+    const bubbleRules = all.filter((r) => r.header.includes('[class*="_bubble_"]')
       && !r.header.includes('@supports'));
     // ⚠️ §11 A1-4：这里原先允许"头里有 [data-chat-flow] 就放行"，于是把
-    //    `… [data-chat-flow] [class*="_bubble"]:not([role="tooltip"]) .md-code-block`（当前
+    //    `… [data-chat-flow] [class*="_bubble_"]:not([role="tooltip"]) .md-code-block`（当前
     //    `src/styles/shell.js` 里那一条）的 `:not(...)` 摘掉仍全绿。作用域与豁免是**两件事**：
     //    `[data-chat-flow]` 只说"在对话流里"，不说"不是宿主 Tooltip 那个 _bubble"。
     //    今天四条 `_bubble` 规则（三条在 `src/styles/shell.js`、一条在 `src/styles/ext.js`）都同时有两者
     //    ⇒ 收紧成"每条都必须带 role 豁免"：语义不放松，判据才有牙。
     const bubbleExempt = (r) => (r.header || '').includes(':not([role="tooltip"])');
-    check('F2dN every [class*="_bubble"] rule excludes the host Tooltip (role="tooltip")',
+    check('F2dN every [class*="_bubble_"] rule excludes the host Tooltip (role="tooltip")',
       bubbleRules.length >= 4
       && bubbleRules.every(bubbleExempt),
       bubbleRules.filter((r) => !bubbleExempt(r)).map((r) => r.header).join(' | ')
         || bubbleRules.length + ' 条 _bubble 规则全部带 role 豁免');
     check('negative control: chat-flow 作用域不能代替 role="tooltip" 豁免（A1-4）',
-      bubbleExempt({ header: 'body[data-we-glass-page] [data-chat-flow] [class*="_bubble"] .md-code-block' }) === false
-        && bubbleExempt({ header: 'body[data-we-glass-page] [class*="_bubble"]:not([role="tooltip"]) .md-code-block' }) === true);
+      bubbleExempt({ header: 'body[data-we-glass-page] [data-chat-flow] [class*="_bubble_"] .md-code-block' }) === false
+        && bubbleExempt({ header: 'body[data-we-glass-page] [class*="_bubble_"]:not([role="tooltip"]) .md-code-block' }) === true);
+    // ⚠️ 0.2.2-rc.1：裸 `_bubble` 还会命中无圆角的同族 wrapper（`Xxx_bubbleWidth`）——它把
+    //    气泡包了一层、与气泡同盒，被刷上方形的釉/霜/阴影后，圆角外侧就露出四个方角。
+    //    族锚点必须是宿主 CSS Module 的哈希形态 `_bubble_<hash>_<n>`。
+    const bareBubble = all.filter((r) => r.header.includes('[class*="_bubble"]')
+      && !r.header.includes('@supports'));
+    check('F2dN2 bubble anchors use the hashed form _bubble_ (bare _bubble also matches unrounded wrappers)',
+      bareBubble.length === 0 && bubbleRules.length >= 4,
+      bareBubble.map((r) => r.header).join(' | ')
+        || bubbleRules.length + ' 条使用 _bubble_ 形态（裸 _bubble 会误伤 bubbleWidth wrapper）');
+    check('negative control: a *_bubbleWidth wrapper is only matched by the bare anchor',
+      'BfLV8a_bubbleWidth'.includes('_bubble') && !'BfLV8a_bubbleWidth'.includes('_bubble_')
+        && '_bubble_1sgyj_1'.includes('_bubble_'));
     const clear = (body) => /background: transparent !important/.test(body)
       && /(?:^|[;\s])backdrop-filter: none !important/.test(body)
       && /-webkit-backdrop-filter: none !important/.test(body)

@@ -14,6 +14,10 @@
 > 完整逐提交历史见 GitHub Commits / Releases；升级前置条件见 [`UPGRADING.md`](./UPGRADING.md)。
 > `test/verify-scene-live.mjs` 这一类判据条数**只记该条写作当时的实测总数**（如 466 / 465），不是现在的总数 —— 后续条目会往上加（现为 502）；照原文保留，好让它与当次提交对得上。
 
+### 未发布（气泡族选择器，2026-11-11）
+
+- **修复：0.2.2-rc.1 新增的「AI 提问框」在玻璃化后四角露出方形残留**：宿主新组件 `QuestionReplyView` 把圆角气泡（共享原语 `_bubble_<hash>`、`border-radius: var(--dsw-radius-xl)`、`padding: 10px 16px`）又包了一层 `Xxx_bubbleWidth` wrapper —— 该 wrapper **没有 border-radius**、盒子与气泡完全重合。插件的玻璃规则按 `[class*="_bubble"]` 认气泡族，于是把 wrapper 也刷上了镜面釉 + `backdrop-filter`（模糊/饱和/亮度/对比）+ 外阴影；wrapper 的方形绘制从气泡圆角外侧露出来，看起来就是「圆角文本框、方形的四角」，模糊与外阴影也变成方形光晕。修法：四条气泡族规则（思考档 fill / 对话玻璃组 / 气泡内代码块清底 / fallback 摘霜）的锚点从裸 `_bubble` 收紧成宿主 CSS Module 的**哈希形态** `[class*="_bubble_"]`（`_bubble_<hash>_<n>`）——它天然不命中 camelCase 的 `*_bubbleWidth`，而气泡本体（共享原语类）照常命中，`role="tooltip"` 的 Tooltip 豁免保留。守卫：`verify-readability` 的 F2dN 改用哈希形态，并新增 F2dN2（任何裸 `[class*="_bubble"]` 规则立即判红 + 「`*_bubbleWidth` 只被裸锚点命中」的负对照）；台账 `docs/CODE-STRUCTURE.md` §2.3 同步记下这次撞车。纯 CSS，刷新页面生效。
+
 ### 未发布（壁纸库文件夹，#264，2026-11-10）
 
 - **壁纸库：选择器复刻 Wallpaper Engine 的「已安装」文件夹（#264）**：宿主读 `<WE 安装根>/config.json` 的 `general.browser.folders`（兼容旧布局 `general.folders`），清单多一个只读的 `folders` 树；选择器筛选行里多一个「文件夹」下拉（**仅当用户真的建过夹子时**才渲染，单选，与 v8 的多档筛选行同款 `<details>` 形态）。语义：只筛当前列表与网格、**不改轮播也不拦正在播的壁纸**；成员键（裸工坊 id / 本地项目路径）走与播放列表同一条路径解析，映射不上的成员丢弃；选中父夹按「含子夹的并集」过滤，夹子名后显示 `n/m`（m 含 WE 里记着但本机清单没有的残留）。`folderFilter` 随设置持久化，但**排除出「整机配置预设」**（夹子 id 由 Steam profile + 名称路径生成，只在本机成立）。新增 `test/verify-we-folders.mjs`（读取 / 映射 / 并集 / 设置键四段判据 + 负对照）。
