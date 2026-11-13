@@ -6844,7 +6844,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       label: '（视频壁纸：诊断节按门不画）',
       mk: () => st,
       want: ['省电', '缓存位置'],
-      wantLabels: ['紧凑布局', 'Edge 兼容', '适配目标', '最小化/切页时暂停', '使用电池时暂停'],
+      wantLabels: ['紧凑布局', 'Edge 兼容', '适配目标', '最小化/切页时暂停', '使用电池时暂停', '启动时暂停'],
       adv: true,
     },
     {
@@ -6853,13 +6853,13 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       label: '（场景壁纸：诊断节出现且在最后）',
       mk: () => Object.assign({}, st, { type: 'scene', sceneLive: true, sceneLiveSrc: '/x' }),
       want: ['省电', '缓存位置', '实时渲染诊断'],
-      wantLabels: ['紧凑布局', 'Edge 兼容', '适配目标', '最小化/切页时暂停', '使用电池时暂停', 'live 诊断日志'],
+      wantLabels: ['紧凑布局', 'Edge 兼容', '适配目标', '最小化/切页时暂停', '使用电池时暂停', '启动时暂停', 'live 诊断日志'],
       adv: true,
     },
   ];
   const advCtx = (sel) => Object.assign({ setSetting: noop, setTransient: noop, sel },
     withHandlers(['onAdapterTarget', 'onEdgeCompatChange', 'onLayoutChange', 'onPauseOnBattery',
-      'onPauseOnBlur', 'onPauseOnHidden', 'onToggleLiveDiag']));
+      'onPauseOnBlur', 'onPauseOnHidden', 'onStartPaused', 'onToggleLiveDiag']));
   for (const t of CASES) {
     const sel = t.mk();
     let tree = null;
@@ -7808,7 +7808,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       'pagerRow', 'playableCount', 'playableList', 'playbackLive', 'propsPanelOpen',
       'renderUserPropsPanel', 'sel', 'setPickerOpener', 'uploadedList'],
     renderAdvancedTab: ['setSetting', 'onAdapterTarget', 'onEdgeCompatChange', 'onLayoutChange',
-      'onPauseOnBattery', 'onPauseOnBlur', 'onPauseOnHidden', 'onToggleLiveDiag', 'sel'],
+      'onPauseOnBattery', 'onPauseOnBlur', 'onPauseOnHidden', 'onStartPaused', 'onToggleLiveDiag', 'sel'],
     renderAppearanceTab: ['setSetting', 'officialColorOf', 'onAccent', 'onBlur', 'onBorder',
       'onCaretColor', 'onChatGlassFidelity', 'onComponentFamily', 'onComponentFont', 'onExtraGlassSelectors', 'onFontAdvanced', 'onFontResetAll',
       'onGlassAlpha', 'onGlassColor', 'onGlassFidelity', 'onThinkingMode', 'onLeftSidebarGlass', 'onTitlebarGlass', 'onSidebarAlpha',

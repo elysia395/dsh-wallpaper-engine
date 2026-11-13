@@ -3552,7 +3552,7 @@ setTimeout(async () => {
       localStorage.setItem('dsh-wallpaper-engine:picker-tab', 'advanced');
       const adv = JSON.stringify(renderPicker());
       assert.ok(adv.includes('省电') && adv.includes('最小化/切页时暂停')
-        && adv.includes('窗口失焦时暂停') && adv.includes('使用电池时暂停'),
+        && adv.includes('窗口失焦时暂停') && adv.includes('使用电池时暂停') && adv.includes('启动时暂停'),
         '高级 must host the 省电 group');
       assert.ok(adv.includes('实时渲染诊断'), '高级 must host the live 诊断 group');
       localStorage.setItem('dsh-wallpaper-engine:picker-tab', 'effects');
@@ -3560,6 +3560,24 @@ setTimeout(async () => {
       assert.ok(!eff.includes('最小化/切页时暂停'), '省电 must not stay in 效果');
       assert.ok(!eff.includes('实时渲染诊断'), '实时渲染诊断 must not stay in 效果');
       console.log('省电 / live 诊断已迁到高级（效果里不再有）: ok');
+    }
+    // ── 接线判据（#349「启动时暂停」）────────────────────────────────────────
+    //    ⚠️ 上面那条只证明**渲染器**画得出开关 —— 隔离测试证明不了"线接上了"：
+    //    处理器漏进 ctx 时开关照渲染、点了没反应（`onChange` 收到的是 undefined），
+    //    而所有渲染判据照样全绿。所以这里直接读源码核对这条线（与 paneWidth 同款防线）。
+    {
+      const cliSrc = readFileSync(new URL('../src/client.js', import.meta.url), 'utf8');
+      const call = cliSrc.match(/renderAdvancedTab\(\{([\s\S]*?)\}\)/);
+      assert.ok(call, '（前置）找不到 renderAdvancedTab 的调用点');
+      assert.ok(/\bonStartPaused\b/.test(call[1]),
+        '★ `renderAdvancedTab` 的 ctx 必须带 `onStartPaused` —— 漏了它，开关点了没反应（处理器是 undefined）');
+      assert.ok(/function onStartPaused\(e\) \{ setSetting\("startPaused", e\.target\.checked\)/.test(cliSrc),
+        '★ onStartPaused 必须把开关写进 `startPaused` 设置（不是瞬态、不是别的键）');
+      // 启动语义：宿主设置落地后（loadPersisted 之后）把播放意图置为暂停，且只在开关为真时动手 ——
+      // 少了这条，"开关存下来了但重启照样自动播放"会静默成立。
+      assert.ok(/function applyStartPaused\(\) \{[\s\S]{0,400}?selection\.startPaused === true[\s\S]{0,200}?setTransient\("playing", false\)/.test(cliSrc),
+        '★ applyStartPaused 必须在 `startPaused === true` 时把播放意图置为暂停');
+      console.log('「启动时暂停」接线（ctx 处理器 + 启动语义）: ok');
     }
     const clearBtn = findBtn(tree3, '清除 GPU 帧');
     assert.ok(clearBtn, 'HEAD 报 X-WE-GPU=1 时面板必须给出「清除 GPU 帧」入口');

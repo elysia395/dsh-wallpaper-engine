@@ -883,10 +883,15 @@ section('⑦ 客户端通道（静态契约：字体值不再经 settings 出去
   //     但客户端没必要把自己放到需要护栏的位置上。
   //     #158 起库存那一腿排在 `afterFirstPaint` 门之后（大库冷扫不与宿主启动抢 I/O），
   //     所以判据同时钉住"门在 loadFontSet 之后、loadInventory 在门之后"。
-  const bootChainRe = /loadPersisted\(\)\s*\.then\(loadFontSet\)\s*\.then\(afterFirstPaint\)[\s\S]{0,240}?loadInventory\(\)/;
-  check('启动链顺序 = loadPersisted → loadFontSet → afterFirstPaint → loadInventory', bootChainRe.test(clientCode));
+  //     #349 起 `loadPersisted` 之后先落一次「启动时暂停」意图（`applyStartPaused`）——
+  //     它必须在库存恢复之前，否则壁纸会先自动播放再被暂停（闪一帧）。判据照旧钉**每一步的
+  //     名字与次序**（不是可选通配），这样新插一步会被点名、不会被静默吞掉。
+  const bootChainRe = /loadPersisted\(\)\s*\.then\(applyStartPaused\)\s*\.then\(loadFontSet\)\s*\.then\(afterFirstPaint\)[\s\S]{0,240}?loadInventory\(\)/;
+  check('启动链顺序 = loadPersisted → applyStartPaused → loadFontSet → afterFirstPaint → loadInventory', bootChainRe.test(clientCode));
   check('负对照：少了 afterFirstPaint 的门会被同一判据点名',
     !bootChainRe.test('loadPersisted().then(loadFontSet).then(loadInventory).then(loadGlassPresets);'));
+  check('负对照：少了 #349 的 applyStartPaused 步同样被点名（新步不是可选通配）',
+    !bootChainRe.test('loadPersisted().then(loadFontSet).then(afterFirstPaint).then(loadInventory);'));
   check('selection 初始化合并了本地缓存那份（首帧即用户字体，不出现默认值→用户值跳变）',
     /\.\.\.readCachedFontSetValues\(\),/.test(clientCode));
 

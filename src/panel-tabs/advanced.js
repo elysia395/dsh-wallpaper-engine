@@ -78,7 +78,7 @@
   }
 
   function renderAdvancedPowerSection(ctx) {
-    const { onPauseOnBattery, onPauseOnBlur, onPauseOnHidden, sel } = ctx;
+    const { onPauseOnBattery, onPauseOnBlur, onPauseOnHidden, onStartPaused, sel } = ctx;
     return React.createElement(React.Fragment, null,
     // ── 省电：遮挡暂停（借鉴 Wallpaper Engine 的「被遮挡时暂停」）──
     React.createElement("div", { className: "we-picker__section" },
@@ -98,6 +98,13 @@
           note: sel.pauseOnBlur ? weT("（当前已开启，本目标下不生效，切到浏览器目标后恢复）") : "",
         })),
       switchRow(weT("使用电池时暂停"), sel.pauseOnBattery, onPauseOnBattery, { key: "pause-battery" }),
+      // 启动时暂停（#349）：每次重启都先停住，不动已选壁纸 —— 与上面的遮挡暂停不同，
+      // 它只在**启动**那一刻决定播放意图，运行中不停不碰（点「播放」本次会话照常播）。
+      switchRow(weT("启动时暂停"), sel.startPaused, onStartPaused, {
+        key: "start-paused",
+        hint: weT("重启后从暂停开始"),
+        tooltip: weT("开启后每次重启 DSH 都从暂停状态开始（即使退出前正在播放）；已选壁纸与其他设置保留，点「播放」即可继续。关闭则维持启动即播放。"),
+      }),
     ),
     );
   }

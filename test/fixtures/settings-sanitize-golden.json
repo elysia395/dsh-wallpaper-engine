@@ -166,7 +166,8 @@
         "floaterSolidBase": true,
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
-        "orientationFilter": "all"
+        "orientationFilter": "all",
+        "startPaused": false
       },
       "host": {
         "id": "",
@@ -324,7 +325,8 @@
         "floaterSolidBase": true,
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
-        "orientationFilter": "all"
+        "orientationFilter": "all",
+        "startPaused": false
       }
     },
     {
@@ -500,7 +502,8 @@
         "floaterSolidBase": true,
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
-        "orientationFilter": "all"
+        "orientationFilter": "all",
+        "startPaused": false
       },
       "host": "__null__"
     },
@@ -677,7 +680,8 @@
         "floaterSolidBase": true,
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
-        "orientationFilter": "all"
+        "orientationFilter": "all",
+        "startPaused": false
       },
       "host": "__null__"
     },
@@ -854,7 +858,8 @@
         "floaterSolidBase": true,
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
-        "orientationFilter": "all"
+        "orientationFilter": "all",
+        "startPaused": false
       },
       "host": "__null__"
     },
@@ -1023,7 +1028,8 @@
         "floaterSolidBase": true,
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
-        "orientationFilter": "all"
+        "orientationFilter": "all",
+        "startPaused": false
       },
       "host": {
         "id": "",
@@ -1181,7 +1187,8 @@
         "floaterSolidBase": true,
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
-        "orientationFilter": "all"
+        "orientationFilter": "all",
+        "startPaused": false
       }
     },
     {
@@ -1406,7 +1413,8 @@
         "floaterSolidBase": true,
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
-        "orientationFilter": "all"
+        "orientationFilter": "all",
+        "startPaused": false
       },
       "host": {
         "id": "",
@@ -1564,7 +1572,8 @@
         "floaterSolidBase": true,
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
-        "orientationFilter": "all"
+        "orientationFilter": "all",
+        "startPaused": false
       }
     },
     {
@@ -1834,7 +1843,8 @@
         "floaterSolidBase": true,
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
-        "orientationFilter": "all"
+        "orientationFilter": "all",
+        "startPaused": false
       },
       "host": {
         "id": "",
@@ -1992,7 +2002,8 @@
         "floaterSolidBase": true,
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
-        "orientationFilter": "all"
+        "orientationFilter": "all",
+        "startPaused": false
       }
     },
     {
@@ -2161,7 +2172,8 @@
         "floaterSolidBase": true,
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
-        "orientationFilter": "all"
+        "orientationFilter": "all",
+        "startPaused": false
       },
       "host": {
         "id": "",
@@ -2319,7 +2331,8 @@
         "floaterSolidBase": true,
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
-        "orientationFilter": "all"
+        "orientationFilter": "all",
+        "startPaused": false
       }
     },
     {
@@ -2502,7 +2515,8 @@
         "floaterSolidBase": true,
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
-        "orientationFilter": "all"
+        "orientationFilter": "all",
+        "startPaused": false
       },
       "host": {
         "id": "",
@@ -2660,7 +2674,8 @@
         "floaterSolidBase": true,
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
-        "orientationFilter": "all"
+        "orientationFilter": "all",
+        "startPaused": false
       }
     },
     {
@@ -2843,7 +2858,8 @@
         "floaterSolidBase": true,
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
-        "orientationFilter": "all"
+        "orientationFilter": "all",
+        "startPaused": false
       },
       "host": {
         "id": "",
@@ -3001,7 +3017,8 @@
         "floaterSolidBase": true,
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
-        "orientationFilter": "all"
+        "orientationFilter": "all",
+        "startPaused": false
       }
     },
     {
@@ -3171,7 +3188,8 @@
         "floaterSolidBase": true,
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
-        "orientationFilter": "all"
+        "orientationFilter": "all",
+        "startPaused": false
       },
       "host": {
         "id": "",
@@ -3329,7 +3347,8 @@
         "floaterSolidBase": true,
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
-        "orientationFilter": "all"
+        "orientationFilter": "all",
+        "startPaused": false
       }
     },
     {
@@ -3504,7 +3523,8 @@
         "floaterSolidBase": true,
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
-        "orientationFilter": "all"
+        "orientationFilter": "all",
+        "startPaused": false
       },
       "host": {
         "id": "",
@@ -3662,7 +3682,8 @@
         "floaterSolidBase": true,
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
-        "orientationFilter": "all"
+        "orientationFilter": "all",
+        "startPaused": false
       }
     },
     {
@@ -3834,7 +3855,8 @@
         "floaterSolidBase": true,
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
-        "orientationFilter": "all"
+        "orientationFilter": "all",
+        "startPaused": false
       },
       "host": {
         "id": "",
@@ -3992,7 +4014,8 @@
         "floaterSolidBase": true,
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
-        "orientationFilter": "all"
+        "orientationFilter": "all",
+        "startPaused": false
       }
     },
     {
@@ -4171,7 +4194,8 @@
         "floaterSolidBase": true,
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
-        "orientationFilter": "all"
+        "orientationFilter": "all",
+        "startPaused": false
       },
       "host": {
         "id": "",
@@ -4329,7 +4353,8 @@
         "floaterSolidBase": true,
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
-        "orientationFilter": "all"
+        "orientationFilter": "all",
+        "startPaused": false
       }
     },
     {
@@ -4573,7 +4598,8 @@
         "floaterSolidBase": true,
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
-        "orientationFilter": "all"
+        "orientationFilter": "all",
+        "startPaused": false
       },
       "host": {
         "id": "",
@@ -4756,7 +4782,8 @@
         "floaterSolidBase": true,
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
-        "orientationFilter": "all"
+        "orientationFilter": "all",
+        "startPaused": false
       }
     },
     {
@@ -4924,7 +4951,8 @@
         "floaterSolidBase": true,
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
-        "orientationFilter": "all"
+        "orientationFilter": "all",
+        "startPaused": false
       },
       "host": {
         "id": "",
@@ -5082,7 +5110,8 @@
         "floaterSolidBase": true,
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
-        "orientationFilter": "all"
+        "orientationFilter": "all",
+        "startPaused": false
       }
     },
     {
@@ -5250,7 +5279,8 @@
         "floaterSolidBase": true,
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
-        "orientationFilter": "all"
+        "orientationFilter": "all",
+        "startPaused": false
       },
       "host": {
         "id": "wallpaper-42",
@@ -5408,7 +5438,8 @@
         "floaterSolidBase": true,
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
-        "orientationFilter": "all"
+        "orientationFilter": "all",
+        "startPaused": false
       }
     },
     {
@@ -5577,7 +5608,8 @@
         "floaterSolidBase": true,
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
-        "orientationFilter": "all"
+        "orientationFilter": "all",
+        "startPaused": false
       },
       "host": {
         "id": "",
@@ -5735,7 +5767,8 @@
         "floaterSolidBase": true,
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
-        "orientationFilter": "all"
+        "orientationFilter": "all",
+        "startPaused": false
       }
     }
   ]
