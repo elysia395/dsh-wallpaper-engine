@@ -94,7 +94,7 @@ function prepareWallpaper(w, prep, onReady, onFail) {
       objectFit: selection.objectFit,
       sceneLiveFps: selection.sceneLiveFps,
       sceneLive: selection.sceneLive,
-      sceneLiveFailures: selection.sceneLiveFailures,
+      sceneLiveFailures: selection.sceneLiveFailures, sceneAutoQuality: selection.sceneAutoQuality,
     };
     if (liveRenderEnabled(liveSel) && !prepareLiveExhausted(w.id)) {
       prepareSceneLiveStage(w, prep, onReady, () => {
@@ -125,7 +125,7 @@ function prepareWallpaper(w, prep, onReady, onFail) {
     objectFit: selection.objectFit,
     sceneLiveFps: selection.sceneLiveFps,
     sceneLive: selection.sceneLive,
-    sceneLiveFailures: selection.sceneLiveFailures,
+    sceneLiveFailures: selection.sceneLiveFailures, sceneAutoQuality: selection.sceneAutoQuality,
   };
   if (liveRenderEnabled(webLiveSel) && !prepareLiveExhausted(w.id)) {
     prepareSceneLiveStage(w, prep, onReady, () => prepareWebProbe(w, prep, onReady));

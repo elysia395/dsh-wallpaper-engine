@@ -96,7 +96,7 @@ const SURFACES = [
       + ' `--we-floaters-blur` ⇒ 与上面两个自有浮层同档，故并进本行而不是新开一条。',
   },
   {
-    id: 'conversation-bubbles', label: '消息气泡', anchors: ['[class*="_bubble"]'], tier: 'private',
+    id: 'conversation-bubbles', label: '消息气泡', anchors: ['[class*="_bubble_"]'], tier: 'private',
     why: '上游为「对话栏框架」单独拆了一把保真度尺（--we-chat-*），作用点是**令牌**（气泡 / 输入卡的'
       + '--dsw-specific-* 声明）而不是元素规则，因此它的消费点按令牌归属，见 PRIVATE_VARS 的注释。'
       + '这是既有事实，重构时按 P2 迁移。',

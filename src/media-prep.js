@@ -64,7 +64,7 @@ function prepareSceneLiveStage(w, prep, onReady, onFail) {
     objectFit: selection.objectFit,
     sceneLiveFps: selection.sceneLiveFps,
     sceneLive: selection.sceneLive,
-    sceneLiveFailures: selection.sceneLiveFailures,
+    sceneLiveFailures: selection.sceneLiveFailures, sceneAutoQuality: selection.sceneAutoQuality,
   };
   if (!liveRenderEnabled(probeSel)) { onFail(); return; }
   const div = document.createElement("div");
