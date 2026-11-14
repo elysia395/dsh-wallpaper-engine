@@ -150,19 +150,27 @@ function layerKeyDiff(oldKey, nextKey) {
   }
   return out.join(" | ") || weT("(同 key)");
 }
-function switchTransitionOf(selLike) {
-  const id = selLike && SWITCH_TRANSITION_VALUES.includes(selLike.switchTransition)
+function switchTransitionOf(selLike, draw) {
+  // #254：draw === true 是**真正换层**那一跳 —— 'random' 在这里才抽成具体值；面板侧
+  // 不抽（否则每次 emit 都变），返回代表值：方向行照常显示、时长取池内最长。
+  const pick = (list) => list[Math.floor(Math.random() * list.length)];
+  const want = selLike && SWITCH_TRANSITION_VALUES.includes(selLike.switchTransition)
     ? selLike.switchTransition : DEFAULTS.switchTransition;
-  const def = SWITCH_TRANSITIONS.find((t) => t.id === id) || SWITCH_TRANSITIONS[0];
+  const pool = SWITCH_TRANSITIONS.filter((t) => t.id !== "cut" && t.id !== "random");
+  const drawn = draw === true && want === "random" ? pick(pool) : null;
+  const id = drawn ? drawn.id : want;
+  const def = drawn || SWITCH_TRANSITIONS.find((t) => t.id === id) || SWITCH_TRANSITIONS[0];
   const speed = SWITCH_SPEEDS.find((s) => s.id === (selLike && selLike.switchTransitionSpeed))
     || SWITCH_SPEEDS[1];
-  const dir = selLike && SWITCH_DIRS.includes(selLike.switchTransitionDir)
+  const dirWant = selLike && SWITCH_DIRS.includes(selLike.switchTransitionDir)
     ? selLike.switchTransitionDir : DEFAULTS.switchTransitionDir;
+  const dir = draw === true && dirWant === "random" ? pick(SWITCH_DIRS.filter((d) => d !== "random")) : dirWant;
+  const msOf = (t) => (t.ms > 0 ? Math.max(60, Math.round(t.ms * speed.factor)) : 0);
   return {
     id,
     dir,
-    directional: SWITCH_DIRECTIONAL.includes(id),
-    ms: def.ms > 0 ? Math.max(60, Math.round(def.ms * speed.factor)) : 0,
+    directional: id === "random" ? true : SWITCH_DIRECTIONAL.includes(id),
+    ms: id === "random" ? Math.max(...pool.map(msOf)) : msOf(def),
   };
 }
 function releaseLayerMedia(node) {

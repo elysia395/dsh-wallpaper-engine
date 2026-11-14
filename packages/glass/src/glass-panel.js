@@ -37,7 +37,7 @@ function renderGlassSurfaceControls(ctx) {
 
 function renderAppearanceGlassSection(ctx) {
   const {
-    onBlur, onGlassAlpha, onGlassChildParam, onGlassColor, onGlassDarkSeparate, onExtraGlassSelectors, onGlassFidelity,
+    onBlur, onGlassAlpha, onGlassMaskStrength, onGlassChildParam, onGlassColor, onGlassDarkSeparate, onExtraGlassSelectors, onGlassFidelity,
     onToggleChildIndependent, childIndependentOn, sel, surface, onResetModule,
     onCapsuleBlur, onCapsuleColor,
     onLeftSidebarGlass, onTitlebarGlass, onSidebarAlpha, onSidebarBlur, onSidebarColor,
@@ -371,6 +371,10 @@ function renderAppearanceGlassSection(ctx) {
       //    （由「侧栏模糊」管）—— 那才是唯一不吃本项的面。
       SliderRow(weT("雾化"), 0, 60, 1, sel.blur, onBlur, "px", "glass-frost", {
         tooltip: weT("玻璃面板（对话栏卡片、左侧栏、设置窗口、插件浮层）的模糊半径 —— 越大越像磨砂玻璃；色彩饱和度不随本滑块变化。侧栏有自己的「侧栏模糊」，不受本项影响"),
+      }),
+      // #254 遮罩浓度：只改宿主 Modal 遮罩 token 的 alpha（100 = 宿主原值）。侧栏档不画。
+      !sidebarSurface && SliderRow(weT("遮罩浓度"), 0, 100, 5, sel.settingsMaskStrength, onGlassMaskStrength, "%", "glass-mask-strength", {
+        tooltip: weT("宿主弹窗（设置对话框、图片灯箱等）背后那层遮罩的浓度：100 = 宿主原值；0 = 完全不遮。只改遮罩深浅，不影响玻璃模糊。"),
       }),
       // ── 额外补雾化的选择器（上游 #200）────────────────────────────────────────
       // 为什么在这里、以及为什么**不是滑杆**：本插件的静态样式表只认得宿主与自己接管的

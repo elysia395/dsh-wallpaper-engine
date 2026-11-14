@@ -234,6 +234,8 @@ const CSS_GLASS = `
   /* 深色档的**页面玻璃**映射：与上面那块逐条同形（同一张配方表、同一组层权重），
      只有玻璃色的**缺省值**不同：深色玻璃底色是深海军蓝。 */
   body[data-ds-dark-theme][data-we-glass-page] {
+    /* #254 与浅色孪生同口径（宿主深色原值 50%）。 */
+    --dsw-alias-bg-mask-1: rgba(0, 0, 0, calc(0.5 * var(--we-mask-strength, 1)));
     --dsw-alias-bg-layer-1: color-mix(in srgb,
       var(--we-readability-base) calc(var(--we-readability-floor) * 100%),
       color-mix(in srgb, var(--we-surface-tint-dark, #0d1524) calc(var(--we-glass-alpha, 0.5) * 0.9 * 100%), transparent) calc((1 - var(--we-readability-floor)) * 100%));
@@ -431,6 +433,9 @@ const CSS_GLASS = `
        宿主自己的遮罩规则就会取到插件的霜 —— 一次覆盖该通道上的**所有**宿主浮层
        （设置对话框、图片灯箱、各类 role=dialog 面板），不必逐个选择器补。
        这是宿主**自有**的模糊通道，不是去猜它的 CSS 模块哈希。 */
+    /* #254 宿主 Modal 遮罩浓度：100% = 宿主原值（浅色 0.24）；0% = 完全不遮。
+       与 --dsw-mask-blur 同一通道：只改遮罩的黑度，不动宿主其他令牌。 */
+    --dsw-alias-bg-mask-1: rgba(0, 0, 0, calc(0.24 * var(--we-mask-strength, 1)));
     --dsw-mask-blur: blur(var(--we-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
     /* #157 滚动条拇指并入插件取色：宿主把拇指色写成四个**静态中性色**
        （浅色 neutral-200/300、深色 neutral-700/600/550），与插件的玻璃色相无关，
