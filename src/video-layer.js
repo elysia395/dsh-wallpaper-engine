@@ -209,6 +209,20 @@ function layerStillPending() {
  * 返回 `media`；Edge 那条腿（镜像画布）返回 `[media, canvas]`，由调用点用 `Array.isArray`
  * 识别。`fitClass` 是调用点所在函数的局部量 ⇒ 作为参数传入。
  */
+// #363：<video> 上的右键菜单是浏览器原生命令（画中画 / 另存为 / 投屏…）。壁纸层不是
+// 文档内容，右键落在壁纸上不该弹出任何菜单。preventDefault 只作用于这个元素、不
+// stopPropagation —— 宿主 / 插件上层照常收到事件。prepared / warmed 元素会被复用，
+// 所以用元素上的标记保证只挂一次监听（重复 addEventListener 会让同一个事件跑 N 次）。
+function suppressVideoContextMenu(media) {
+  if (!media || media.__weNoContextMenu) return media;
+  media.__weNoContextMenu = true;
+  try {
+    media.addEventListener("contextmenu", (e) => {
+      if (e && typeof e.preventDefault === "function") e.preventDefault();
+    });
+  } catch { /* 守卫沙箱里 EventTarget 可能被裁掉：不影响媒体构建 */ }
+  return media;
+}
 function buildVideoMedia(sel, fitClass) {
   // 轮换领养：就绪元素（已 canplay/预播中）直接进层；已匹配的转码元素不重赋 src，
   // 只有仍在原片且目标抽帧版已就绪时，才在建层阶段换源。
@@ -216,6 +230,9 @@ function buildVideoMedia(sel, fitClass) {
   // 预热元素（见 VIDEO_WARM_TTL_MS 那段）：领养它 ⇒ 建层那一刻解复用器已经在位。
   const warmed = prepared ? null : consumeWarmVideo(sel.url);
   const media = prepared || warmed || document.createElement("video");
+  // 右键菜单抑制挂在**元素创建之后、分支之前**：原生 <video> 腿与 Edge 的屏外解码腿
+  // 共用同一个元素，一处挂上两条腿都生效（Edge 的可见面是 canvas，本来就没有视频菜单）。
+  suppressVideoContextMenu(media);
   const tok = String(sel.url || "").split("/").pop();
   const rc = selection.transcodeReady;
   const useCached = Boolean(rc && rc.url && rc.fps === selection.fpsCap && rc.token === tok);
