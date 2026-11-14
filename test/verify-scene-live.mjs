@@ -2153,6 +2153,15 @@ const hostLib = hostLibComposed;
     check('③ 视频档两条腿都挂了类名（we-media--canvas + fitClass / we-media + fitClass）',
       videoFn.includes('canvas.className = \"we-media we-media--canvas\" + fitClass;')
       && videoFn.includes('media.className = \"we-media\" + fitClass;'));
+    // #363：Firefox 会把 <video> 的浏览器原生菜单（画中画 / 另存为 / 投屏）弹在壁纸上。
+    // 判据两半同时在场：抑制函数自己真的挂 contextmenu → preventDefault，且 buildVideoMedia
+    // 在**建层时**对两条腿共用的那个 media 调用一次（Edge 的屏外解码腿也是同一个元素）。
+    const videoCtxGuard = (text) => /function suppressVideoContextMenu\(media\)[\s\S]*?addEventListener\("contextmenu"/.test(text)
+      && /suppressVideoContextMenu\(media\);/.test(text);
+    check('③ 视频壁纸抑制浏览器原生右键菜单（#363），且建层时挂上',
+      videoCtxGuard(videoSrc) && videoFn.includes("suppressVideoContextMenu(media);"));
+    check('③ 负对照：监听事件名被改掉（等于没抑制）时同一条判据必须判红',
+      videoCtxGuard(videoSrc.replace('addEventListener("contextmenu"', 'addEventListener("we-noop"')) === false);
     // ⚠️ 实测回归（Edge 里「视频壁纸切换无反应」）：切层闸门的镜像画布分支被写成
     // "有画布 ⇒ 判否"，本意是"等 weDrawFrame 画上第一笔" —— 但画笔的留痕（canvas.dataset.weDrawn）
     // 从来没被读，首笔落下时回调的 recheck 又撞回同一条判据 ⇒ Edge 腿的放行条件**永远不成立**，
