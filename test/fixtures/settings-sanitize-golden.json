@@ -170,7 +170,9 @@
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
         "filePreviewBlur": 24,
-        "startPaused": false
+        "startPaused": false,
+        "rotationLiveInterval": 0,
+        "settingsMaskStrength": 100
       },
       "host": {
         "id": "",
@@ -332,7 +334,9 @@
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
         "filePreviewBlur": 24,
-        "startPaused": false
+        "startPaused": false,
+        "rotationLiveInterval": 0,
+        "settingsMaskStrength": 100
       }
     },
     {
@@ -512,7 +516,9 @@
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
         "filePreviewBlur": 24,
-        "startPaused": false
+        "startPaused": false,
+        "rotationLiveInterval": 0,
+        "settingsMaskStrength": 100
       },
       "host": "__null__"
     },
@@ -693,7 +699,9 @@
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
         "filePreviewBlur": 24,
-        "startPaused": false
+        "startPaused": false,
+        "rotationLiveInterval": 0,
+        "settingsMaskStrength": 100
       },
       "host": "__null__"
     },
@@ -874,7 +882,9 @@
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
         "filePreviewBlur": 24,
-        "startPaused": false
+        "startPaused": false,
+        "rotationLiveInterval": 0,
+        "settingsMaskStrength": 100
       },
       "host": "__null__"
     },
@@ -1047,7 +1057,9 @@
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
         "filePreviewBlur": 24,
-        "startPaused": false
+        "startPaused": false,
+        "rotationLiveInterval": 0,
+        "settingsMaskStrength": 100
       },
       "host": {
         "id": "",
@@ -1209,7 +1221,9 @@
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
         "filePreviewBlur": 24,
-        "startPaused": false
+        "startPaused": false,
+        "rotationLiveInterval": 0,
+        "settingsMaskStrength": 100
       }
     },
     {
@@ -1438,7 +1452,9 @@
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
         "filePreviewBlur": 24,
-        "startPaused": false
+        "startPaused": false,
+        "rotationLiveInterval": 0,
+        "settingsMaskStrength": 100
       },
       "host": {
         "id": "",
@@ -1600,7 +1616,9 @@
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
         "filePreviewBlur": 24,
-        "startPaused": false
+        "startPaused": false,
+        "rotationLiveInterval": 0,
+        "settingsMaskStrength": 100
       }
     },
     {
@@ -1874,7 +1892,9 @@
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
         "filePreviewBlur": 24,
-        "startPaused": false
+        "startPaused": false,
+        "rotationLiveInterval": 0,
+        "settingsMaskStrength": 100
       },
       "host": {
         "id": "",
@@ -2036,7 +2056,9 @@
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
         "filePreviewBlur": 24,
-        "startPaused": false
+        "startPaused": false,
+        "rotationLiveInterval": 0,
+        "settingsMaskStrength": 100
       }
     },
     {
@@ -2209,7 +2231,9 @@
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
         "filePreviewBlur": 24,
-        "startPaused": false
+        "startPaused": false,
+        "rotationLiveInterval": 0,
+        "settingsMaskStrength": 100
       },
       "host": {
         "id": "",
@@ -2371,7 +2395,9 @@
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
         "filePreviewBlur": 24,
-        "startPaused": false
+        "startPaused": false,
+        "rotationLiveInterval": 0,
+        "settingsMaskStrength": 100
       }
     },
     {
@@ -2558,7 +2584,9 @@
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
         "filePreviewBlur": 24,
-        "startPaused": false
+        "startPaused": false,
+        "rotationLiveInterval": 0,
+        "settingsMaskStrength": 100
       },
       "host": {
         "id": "",
@@ -2720,7 +2748,9 @@
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
         "filePreviewBlur": 24,
-        "startPaused": false
+        "startPaused": false,
+        "rotationLiveInterval": 0,
+        "settingsMaskStrength": 100
       }
     },
     {
@@ -2907,7 +2937,9 @@
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
         "filePreviewBlur": 24,
-        "startPaused": false
+        "startPaused": false,
+        "rotationLiveInterval": 0,
+        "settingsMaskStrength": 100
       },
       "host": {
         "id": "",
@@ -3069,7 +3101,9 @@
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
         "filePreviewBlur": 24,
-        "startPaused": false
+        "startPaused": false,
+        "rotationLiveInterval": 0,
+        "settingsMaskStrength": 100
       }
     },
     {
@@ -3243,7 +3277,9 @@
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
         "filePreviewBlur": 24,
-        "startPaused": false
+        "startPaused": false,
+        "rotationLiveInterval": 0,
+        "settingsMaskStrength": 100
       },
       "host": {
         "id": "",
@@ -3405,7 +3441,9 @@
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
         "filePreviewBlur": 24,
-        "startPaused": false
+        "startPaused": false,
+        "rotationLiveInterval": 0,
+        "settingsMaskStrength": 100
       }
     },
     {
@@ -3584,7 +3622,9 @@
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
         "filePreviewBlur": 24,
-        "startPaused": false
+        "startPaused": false,
+        "rotationLiveInterval": 0,
+        "settingsMaskStrength": 100
       },
       "host": {
         "id": "",
@@ -3746,7 +3786,9 @@
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
         "filePreviewBlur": 24,
-        "startPaused": false
+        "startPaused": false,
+        "rotationLiveInterval": 0,
+        "settingsMaskStrength": 100
       }
     },
     {
@@ -3922,7 +3964,9 @@
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
         "filePreviewBlur": 24,
-        "startPaused": false
+        "startPaused": false,
+        "rotationLiveInterval": 0,
+        "settingsMaskStrength": 100
       },
       "host": {
         "id": "",
@@ -4084,7 +4128,9 @@
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
         "filePreviewBlur": 24,
-        "startPaused": false
+        "startPaused": false,
+        "rotationLiveInterval": 0,
+        "settingsMaskStrength": 100
       }
     },
     {
@@ -4267,7 +4313,9 @@
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
         "filePreviewBlur": 24,
-        "startPaused": false
+        "startPaused": false,
+        "rotationLiveInterval": 0,
+        "settingsMaskStrength": 100
       },
       "host": {
         "id": "",
@@ -4429,7 +4477,9 @@
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
         "filePreviewBlur": 24,
-        "startPaused": false
+        "startPaused": false,
+        "rotationLiveInterval": 0,
+        "settingsMaskStrength": 100
       }
     },
     {
@@ -4677,7 +4727,9 @@
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
         "filePreviewBlur": 24,
-        "startPaused": false
+        "startPaused": false,
+        "rotationLiveInterval": 0,
+        "settingsMaskStrength": 100
       },
       "host": {
         "id": "",
@@ -4864,7 +4916,9 @@
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
         "filePreviewBlur": 24,
-        "startPaused": false
+        "startPaused": false,
+        "rotationLiveInterval": 0,
+        "settingsMaskStrength": 100
       }
     },
     {
@@ -5036,7 +5090,9 @@
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
         "filePreviewBlur": 24,
-        "startPaused": false
+        "startPaused": false,
+        "rotationLiveInterval": 0,
+        "settingsMaskStrength": 100
       },
       "host": {
         "id": "",
@@ -5198,7 +5254,9 @@
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
         "filePreviewBlur": 24,
-        "startPaused": false
+        "startPaused": false,
+        "rotationLiveInterval": 0,
+        "settingsMaskStrength": 100
       }
     },
     {
@@ -5370,7 +5428,9 @@
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
         "filePreviewBlur": 24,
-        "startPaused": false
+        "startPaused": false,
+        "rotationLiveInterval": 0,
+        "settingsMaskStrength": 100
       },
       "host": {
         "id": "wallpaper-42",
@@ -5532,7 +5592,9 @@
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
         "filePreviewBlur": 24,
-        "startPaused": false
+        "startPaused": false,
+        "rotationLiveInterval": 0,
+        "settingsMaskStrength": 100
       }
     },
     {
@@ -5705,7 +5767,9 @@
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
         "filePreviewBlur": 24,
-        "startPaused": false
+        "startPaused": false,
+        "rotationLiveInterval": 0,
+        "settingsMaskStrength": 100
       },
       "host": {
         "id": "",
@@ -5867,7 +5931,9 @@
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
         "filePreviewBlur": 24,
-        "startPaused": false
+        "startPaused": false,
+        "rotationLiveInterval": 0,
+        "settingsMaskStrength": 100
       }
     }
   ]

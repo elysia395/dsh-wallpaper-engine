@@ -210,6 +210,8 @@ function applyLiveControls(frame) {
     liveApplied.fit = null;
   }
   try {
+    // 软渲染兜底（#270）：探测到软后端且用户没关开关时，把播放意图钉在暂停，
+    // 只用最后一帧当静态画面。用户关掉开关后这里自然恢复 resume。
     const playing = isEffectivelyPlaying();
     if (liveApplied.playing !== playing) {
       if (playing) wp.resume(); else wp.pause();
@@ -390,7 +392,8 @@ function syncLayers() {
     // live 是否生效只需算一次：它同时决定「media 种类看不看 sceneVideo」与 live 段本身。
     const layerLive = (selection.type === "scene" || selection.type === "web") && liveRenderEnabled(selection);
     // 本次切换用的过场（类型 + 方向 + 毫秒）也只算一次：startFade 判定与两处调用点共用。
-    const switchTr = switchTransitionOf(selection);
+    // #254：真正换层那一跳才抽随机过场（同一次 emit 里类型/方向/时长只算这一次）。
+    const switchTr = switchTransitionOf(selection, true);
     const wantKey = layerWantKey(layerLive);
     let gotKey = existing && existing.dataset.weKey;
     // 上一跳停在"等新层画面"上、而这一跳要换层：LAYER_ID 在**还没有画面**的那个层手里，

@@ -17,6 +17,8 @@
     "switchTransitionDir": "left",
     "switchTransitionSpeed": "normal",
     "rotationEnabled": false,
+  "rotationLiveInterval": 0,
+  "settingsMaskStrength": 100,
     "pictureSlideSeconds": 0,
     "playbackRate": 1,
     "videoVolume": 0,

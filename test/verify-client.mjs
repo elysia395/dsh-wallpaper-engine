@@ -754,7 +754,7 @@ setTimeout(async () => {
   };
   // 过场动画是**下拉菜单**（过场会持续增加，平铺按钮迟早挤爆）——
   // 断言集中在「选项集合 + 选中值驱动」两件事上，新增过场只需扩这张表。
-  const TRANSITION_IDS = { 硬切: 'cut', 交叉淡化: 'fade', 推移: 'push', 擦除: 'wipe', 光圈: 'iris', 缩放: 'zoom', 条带: 'bars' };
+  const TRANSITION_IDS = { 硬切: 'cut', 交叉淡化: 'fade', 推移: 'push', 擦除: 'wipe', 光圈: 'iris', 缩放: 'zoom', 条带: 'bars', 随机: 'random' };
   const findTransitionSelect = () => findAriaBtn('过场动画');
   const pickTransition = (label) => {
     const el = findTransitionSelect();
@@ -768,7 +768,7 @@ setTimeout(async () => {
   const preLayer = document.getElementById('dsh-wallpaper-engine-layer');
   const rotTimer = findRotTimer();
   rotCheck('rotation timer scheduled (5min)', !!rotTimer);
-  rotCheck('切换过场 renders a dropdown with all seven transitions',
+  rotCheck('切换过场 renders a dropdown with all eight transitions',
     (() => {
       const el = findTransitionSelect();
       if (!el || el.type !== 'select' || !Array.isArray(el.children)) return false;
@@ -3161,15 +3161,24 @@ setTimeout(async () => {
       .map((o) => textOf(o)).join(' | ');
     assert.ok(groupOptionText(groupSel).includes('My list（2 可播放 · 5 分钟）'),
       '每个列表的选项文案 = 名称（可播放数 · 间隔分钟）：' + groupOptionText(groupSel));
-    // 改间隔：写进**当前活动列表**（无 confirm）
-    const intervalSel = findByProp(tree, 'aria-label', '轮转间隔');
-    assert.ok(intervalSel && typeof intervalSel.props.onChange === 'function', '轮转间隔下拉必须存在');
-    intervalSel.props.onChange({ target: { value: '30' } });
+    // 改间隔：主行现在写**实时覆盖**（#254：不写回列表预设，预设仍由列表编辑器维护）
+    const liveIntervalSel = findByProp(tree, 'aria-label', '实时轮转间隔');
+    assert.ok(liveIntervalSel && typeof liveIntervalSel.props.onChange === 'function', '实时轮转间隔下拉必须存在');
+    liveIntervalSel.props.onChange({ target: { value: '30' } });
     tree = renderPicker();
     flushPersistTimers();
     const activeGroup = () => persisted().rotationGroups.find((x) => x.id === persisted().rotationGroupId);
-    assert.equal(activeGroup().interval, 30, '改间隔 ⇒ 写进活动列表（并落盘）');
-    assert.equal(findByProp(tree, 'aria-label', '轮转间隔').props.value, '30', '下拉回读新间隔');
+    assert.equal(persisted().rotationLiveInterval, 30, '实时改间隔 ⇒ 写进 rotationLiveInterval（并落盘）');
+    assert.equal(activeGroup().interval, 5, '实时覆盖不得改写列表预设');
+    assert.equal(findByProp(tree, 'aria-label', '实时轮转间隔').props.value, '30', '下拉回读实时值');
+    assert.ok(textOf(tree).includes('当前覆盖：每 30 分钟（列表预设 5 分钟）'),
+      '说明行必须写明覆盖值与原预设');
+    // 「跟随列表预设」仍可回退
+    findByProp(tree, 'aria-label', '实时轮转间隔').props.onChange({ target: { value: '0' } });
+    tree = renderPicker();
+    flushPersistTimers();
+    assert.equal(persisted().rotationLiveInterval, 0, '选「跟随列表预设」⇒ 实时覆盖归零');
+    assert.ok(textOf(tree).includes('每 5 分钟切换一次'), '回退后说明行回到列表预设');
     // 删除列表：**面板内两下**。第一下只置令牌（不删、且出现问句行），问句行的「确认」才删；
     // 「取消」把令牌清掉。三步都读**渲染出的**证据。
     const groupsBefore = persisted().rotationGroups.length;

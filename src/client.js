@@ -1292,7 +1292,9 @@ function syncRotationTimer() {
     return;
   }
   if (typeof window === "undefined" || typeof window.setTimeout !== "function") return;
-  const minutes = group ? group.interval : DEFAULTS.rotationInterval;
+  // #254：实时覆盖只改这一次运行的节奏（不写回 group.interval / 列表预设）。
+  const liveInterval = clampNum(Number(selection.rotationLiveInterval), ...schemaRange("rotationLiveInterval"), DEFAULTS.rotationLiveInterval);
+  const minutes = liveInterval > 0 ? liveInterval : (group ? group.interval : DEFAULTS.rotationInterval);
   // 开发/测试覆盖钩子：localStorage.weRotationTestSec（秒）可临时缩短轮换
   // 间隔（冒烟测试与手动预览用）；未设置时按组间隔正常运转（缺省值见 lib/settings-schema.js
   // 的 rotationInterval —— 本行不复述那个数，避免与真源漂成两份）。
@@ -1349,6 +1351,8 @@ const SWITCH_TRANSITIONS = [
   { id: "iris", get label() { return weT("光圈"); }, ms: 800 },
   { id: "zoom", get label() { return weT("缩放"); }, ms: 900 },
   { id: "bars", get label() { return weT("条带"); }, ms: 800 },
+  // 随机（#254）：真正换层那一刻才从非硬切池里抽一个；ms 只是面板代表值（按池内最长算）。
+  { id: "random", get label() { return weT("随机"); }, ms: 0 },
 ];
 const SWITCH_SPEEDS = [
   { id: "fast", get label() { return weT("快"); }, factor: 0.6 },
@@ -1360,6 +1364,7 @@ const SWITCH_DIR_LABELS = {
   get right() { return weT("右"); },
   get up() { return weT("上"); },
   get down() { return weT("下"); },
+  get random() { return weT("随机"); },
 };
 // 只有方向型过场听 switchTransitionDir（条带用它决定竖条 / 横条）。
 const SWITCH_DIRECTIONAL = ["push", "wipe", "bars"];
@@ -3868,6 +3873,9 @@ const onGlassDarkSeparate = (v) => {
 };
 const onGlassAlpha = (pct, live) =>
   commitLiveSetting("glassAlpha", clampNum(pct, ...schemaRange("glassAlpha"), DEFAULTS.glassAlpha), live);
+// 遮罩浓度（#254）：只折算宿主 Modal 遮罩 token 的 alpha（玻璃层写 --we-mask-strength）。
+const onGlassMaskStrength = (pct, live) =>
+  commitLiveSetting("settingsMaskStrength", clampNum(pct, ...schemaRange("settingsMaskStrength"), DEFAULTS.settingsMaskStrength), live);
 // 玻璃保真度（默认 100 = 完整可读性红线）：唯一的「颜色 vs 可读」权衡旋钮，
 // 数学入口在 effects.js 的 weClampSurfaceColor 第三参 + --we-glass-fidelity。
 const onGlassFidelity = (pct, live) =>
@@ -4351,13 +4359,9 @@ const onEdgeCompatChange = (checked) => {
   setSetting("edgeCompat", checked);
   emit();
 };
-// Per-group interval: writes straight into the active group so each rotation
-// list keeps its own switch cadence.
-function onGroupInterval(e) {
-  const group = activeRotationGroup();
-  if (!group) return;
-  group.interval = clampNum(Number(e.target.value), ROTATION_INTERVAL_MIN, ROTATION_INTERVAL_MAX, DEFAULTS.rotationInterval);
-  persistSelection();
+// 轮播实时覆盖（#254）：0 = 跟随列表预设；> 0 只改本次运行的间隔，**不写回列表**。
+function onRotationLiveInterval(e) {
+  setSetting("rotationLiveInterval", clampNum(Number(e.target.value), ...schemaRange("rotationLiveInterval"), DEFAULTS.rotationLiveInterval));
   syncRotationTimer();
   emit();
 };
@@ -4988,7 +4992,7 @@ function WallpaperPicker() {
       uiColorOpen: pickerUiColorOpen, onToggleUiColorSection: togglePickerUiColorSection,
       onToggleUiColorCustom, onUiColorElement,
       onGlassSurfacePolicy, surfaceStatus: weGlassSurfaceStatus(),
-      officialColorOf, onAccent, onCapsuleBlur, onCapsuleColor, onBlur, onBorder, onCaretColor, onChatGlassFidelity, onComponentFamily, onComponentFont, onExtraGlassSelectors, onFontAdvanced, onFontResetAll, onGlassAlpha, onGlassColor, onGlassDarkSeparate, onGlassFidelity, onGlobalFamily, onLeftSidebarGlass, onTitlebarGlass, onRefreshSystemFonts, onSidebarAlpha, onSidebarBlur, onSidebarColor, onSidebarContentAlpha, onSidebarContentColor, onSidebarCornerRadius, onSidebarCornerSquare, onSidebarFollowGlobal, onSidebarGlass, onSidebarFullClear, onFloaterSolidBase, onThemeColor, onThemeColorClear, onThemeDarkSeparate, onThemeFamily, onThemeSize, onThemeTypeOnly, onThemeWeight, onThinkingMode, onToggleFontCustom, onToggleThemeFollow, sel,
+      officialColorOf, onAccent, onCapsuleBlur, onCapsuleColor, onBlur, onBorder, onCaretColor, onChatGlassFidelity, onComponentFamily, onComponentFont, onExtraGlassSelectors, onFontAdvanced, onFontResetAll, onGlassAlpha, onGlassMaskStrength, onGlassColor, onGlassDarkSeparate, onGlassFidelity, onGlobalFamily, onLeftSidebarGlass, onTitlebarGlass, onRefreshSystemFonts, onSidebarAlpha, onSidebarBlur, onSidebarColor, onSidebarContentAlpha, onSidebarContentColor, onSidebarCornerRadius, onSidebarCornerSquare, onSidebarFollowGlobal, onSidebarGlass, onSidebarFullClear, onFloaterSolidBase, onThemeColor, onThemeColorClear, onThemeDarkSeparate, onThemeFamily, onThemeSize, onThemeTypeOnly, onThemeWeight, onThinkingMode, onToggleFontCustom, onToggleThemeFollow, sel,
       // 玻璃 UI 子项开关 + 独立配置 + 独立参数（见 onToggleChildIndependent 那段注释）
       onToggleChildIndependent, onGlassChildParam, childIndependentOn,
       // 二次修订：设置页也**支持隐藏**这几节（默认全展开）——
@@ -5033,7 +5037,7 @@ function WallpaperPicker() {
     );
     return renderWallpaperTab({
       setSetting, setTransient,
-      INTERVALS, armedConfirm: sel.armedConfirm, cdMode, current, editing, editorPageView, group, groups, isLiveScene, onArmConfirm: armConfirm, onArmDeleteGroup, onCancelEditUploadDir, onCancelEditWeAssetsDir, onClear, onDeleteGroup, onDisarmConfirm: disarmConfirm, onEditInterval, onEditName, onEditOrder, onEditTrigger, onGroupChange, onGroupInterval, onGroupTrigger, onPictureSlideSeconds, onOpenPicker, onOpenPickerDraft, onRefresh, onStartEditUploadDir, onStartEditWeAssetsDir, onSwitchTransition, onSwitchTransitionDir, onSwitchTransitionSpeed, onToggleAudio, onTogglePlay, onTogglePropsPanel, onToggleRotation, onUploadDirDraft, onUrlDraft, addUrlWallpaper, addBingWallpaper, refreshUrlWallpaper, onWeAssetsDirDraft, pagerRow, playableCount, playableList, playbackLive, propsPanelOpen, renderUserPropsPanel, sel, setPickerOpener, uploadedList,
+      INTERVALS, armedConfirm: sel.armedConfirm, cdMode, current, editing, editorPageView, group, groups, isLiveScene, onArmConfirm: armConfirm, onArmDeleteGroup, onCancelEditUploadDir, onCancelEditWeAssetsDir, onClear, onDeleteGroup, onDisarmConfirm: disarmConfirm, onEditInterval, onEditName, onEditOrder, onEditTrigger, onGroupChange, onGroupTrigger, onRotationLiveInterval, onPictureSlideSeconds, onOpenPicker, onOpenPickerDraft, onRefresh, onStartEditUploadDir, onStartEditWeAssetsDir, onSwitchTransition, onSwitchTransitionDir, onSwitchTransitionSpeed, onToggleAudio, onTogglePlay, onTogglePropsPanel, onToggleRotation, onUploadDirDraft, onUrlDraft, addUrlWallpaper, addBingWallpaper, refreshUrlWallpaper, onWeAssetsDirDraft, pagerRow, playableCount, playableList, playbackLive, propsPanelOpen, renderUserPropsPanel, sel, setPickerOpener, uploadedList,
     });
   };
   const tabIdx = Math.max(0, visibleTabs.findIndex((t) => t.id === activeTab));

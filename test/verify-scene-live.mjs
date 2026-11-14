@@ -3605,7 +3605,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
   // ⚠️ 例外（**必须留组件内**，故意不进名单）：`group` / `candidates` 是读**可变** store 算出的
   //    派生值 —— 提到模块级会退化成"只在模块初始化时算一次"的冻结快照。下面那条负对照钉住它。
   const PROMOTED_HANDLERS = ['onRefresh', 'onRatingFilterToggle', 'onTypeFilterToggle',
-    'onLayoutChange', 'onEdgeCompatChange', 'onGroupInterval', 'onArmDeleteGroup', 'onDeleteGroup',
+    'onLayoutChange', 'onEdgeCompatChange', 'onRotationLiveInterval', 'onArmDeleteGroup', 'onDeleteGroup',
     'onSwitchTransition', 'onSwitchTransitionDir', 'onSwitchTransitionSpeed',
     'onRopeVisibilityChange', 'onRopeFormChange', 'onRopeScaleChange',
     'currentLiveFrame', 'setCustomFrameLocal', 'closePicker',
@@ -3883,7 +3883,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     'emit', 'setTransient', 'setSetting', 'onTogglePlay', 'onClear', 'onGroupChange', 'onNextWallpaper',
     'onToggleRotation', 'onToggleAudio', 'onVideoVolume', 'loadInventory', 'openSettingsSection',
     'renderAppearanceTab', 'renderEffectsTab', 'renderAudioTab',
-    'onAccent', 'onBlur', 'onBorder', 'onGlassAlpha', 'onGlassColor', 'onGlassFidelity', 'onChatGlassFidelity', 'onExtraGlassSelectors', 'onToggleThemeFollow',
+    'onAccent', 'onBlur', 'onBorder', 'onGlassAlpha', 'onGlassMaskStrength', 'onGlassColor', 'onGlassFidelity', 'onChatGlassFidelity', 'onExtraGlassSelectors', 'onToggleThemeFollow',
     'onScrim', 'onWallpaperBlur', 'onWallpaperOpacity',
     'onBackgroundBrightness', 'onBackgroundContrast', 'onBackgroundSaturate',
     // 壁纸层取景（位置 / 缩放）：侧栏「播放」档同样画这三行 ⇒ 它们也是 quick-panel.js 的
@@ -3963,7 +3963,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       loadInventory: noop, openSettingsSection: noop,
       renderAppearanceTab: panelMod.renderAppearanceTab, renderEffectsTab: panelMod.renderEffectsTab,
       renderAudioTab: panelMod.renderAudioTab,
-      onAccent: noop, onBlur: noop, onBorder: noop, onGlassAlpha: noop, onGlassColor: noop, onGlassFidelity: noop, onChatGlassFidelity: noop,
+      onAccent: noop, onBlur: noop, onBorder: noop, onGlassAlpha: noop, onGlassMaskStrength: noop, onGlassColor: noop, onGlassFidelity: noop, onChatGlassFidelity: noop,
       onExtraGlassSelectors: noop,
       onToggleThemeFollow: noop, onScrim: noop, onWallpaperBlur: noop, onWallpaperOpacity: noop,
       onBackgroundBrightness: noop, onBackgroundContrast: noop, onBackgroundSaturate: noop,
@@ -6779,7 +6779,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
         propsPanelOpen: false, renderUserPropsPanel: () => null, sel, uploadedList: [],
       }, withHandlers(['onArmConfirm', 'onArmDeleteGroup', 'onCancelEditUploadDir',
         'onCancelEditWeAssetsDir', 'onClear', 'onDeleteGroup', 'onDisarmConfirm', 'onEditInterval',
-        'onEditName', 'onEditOrder', 'onGroupChange', 'onGroupInterval', 'onOpenPicker',
+        'onEditName', 'onEditOrder', 'onGroupChange', 'onRotationLiveInterval', 'onOpenPicker',
         'onOpenPickerDraft', 'onRefresh', 'onStartEditUploadDir', 'onStartEditWeAssetsDir',
         'onSwitchTransition', 'onSwitchTransitionDir', 'onSwitchTransitionSpeed', 'onToggleAudio',
         'onTogglePlay', 'onTogglePropsPanel', 'onToggleRotation', 'onUploadDirDraft',
@@ -7009,7 +7009,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
   {
     const S3B_CALLBACKS = ['onSwitchTransition', 'onSwitchTransitionDir', 'onSwitchTransitionSpeed',
       'onArmDeleteGroup', 'onDeleteGroup', 'onDisarmConfirm', 'onEditInterval', 'onEditName',
-      'onEditOrder', 'onGroupChange', 'onGroupInterval', 'onOpenPickerDraft', 'onToggleRotation'];
+      'onEditOrder', 'onGroupChange', 'onRotationLiveInterval', 'onOpenPickerDraft', 'onToggleRotation'];
     const firedOf = (stubs) => {
       const fired = [];
       const sel = Object.assign({}, st, {
@@ -7090,6 +7090,76 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     check('P-D S3b：switchTransitionOf 替身的方向集合与 src/client.js 的 SWITCH_DIRECTIONAL 同源',
       realDirectional.join(',') === stubDirectional.slice().sort().join(','),
       '真=[' + realDirectional.join(',') + '] 替身=[' + stubDirectional.join(',') + ']');
+  }
+
+  // ── #254 随机过场 / 随机方向：只在换层那一跳抽，池里排除硬切 ─────────────────
+  // issue 的验收是统计性的（6000 次里 6 种非硬切过场各约 1000、从不含 cut、时长恒 > 0；
+  // 方向 4000 次四向均匀）。这里用**真源码**装出 switchTransitionOf：常量块取自
+  // src/client.js（与界面同源），函数体取自 src/layer-core.js；再把 Math.random 换成
+  // 常量跑一遍，证明同一判据会判红（负对照）。
+  {
+    const src = clientText();
+    const grab = (start, end) => {
+      const i = src.indexOf(start);
+      const j = i < 0 ? -1 : src.indexOf(end, i);
+      return i < 0 || j < 0 ? '' : src.slice(i, j + end.length);
+    };
+    const blockT = grab('const SWITCH_TRANSITIONS = [', '\n];');
+    const blockS = grab('const SWITCH_SPEEDS = [', '\n];');
+    const blockL = grab('const SWITCH_DIR_LABELS = {', '\n};');
+    const lineD = (/const SWITCH_DIRECTIONAL = \[[^\]]*\];/.exec(src) || [''])[0];
+    const ids = [...blockT.matchAll(/\{ id: "([a-z]+)"/g)].map((m) => m[1]);
+    const dirs = [...blockL.matchAll(/get ([a-z]+)\(\)/g)].map((m) => m[1]);
+    check('#254 随机过场源码可装配（8 个过场 / 5 个方向）',
+      ids.length === 8 && ids.includes('random') && dirs.length === 5 && dirs.includes('random'),
+      '过场=[' + ids.join(',') + '] 方向=[' + dirs.join(',') + ']');
+    const coreSrc = readFileSync(new URL('../src/layer-core.js', import.meta.url), 'utf8');
+    const fnSrc = fnBody(coreSrc, 'switchTransitionOf') + '\n}'; // fnBody 切到 '\n}' 之前，补回闭合括号
+    const factory = new Function('DEFAULTS', [
+      'const weT = (s) => s;',
+      'const ROTATION_FADE_MS = 1800;',
+      'const SWITCH_TRANSITION_VALUES = ' + JSON.stringify(ids) + ';',
+      'const SWITCH_DIRS = ' + JSON.stringify(dirs) + ';',
+      blockT, blockS, blockL, lineD, fnSrc,
+      'return switchTransitionOf;',
+    ].join('\n'));
+    const fn = factory({ switchTransition: 'cut', switchTransitionDir: 'left' });
+    const drawMany = (n, sel, rnd) => {
+      const prev = Math.random;
+      Math.random = rnd || prev;
+      try {
+        const out = [];
+        for (let i = 0; i < n; i++) out.push(fn(sel, true));
+        return out;
+      } finally { Math.random = prev; }
+    };
+    const spreadOk = (rows, key, n, expect, tol) => {
+      const counts = {};
+      for (const r of rows) counts[r[key]] = (counts[r[key]] || 0) + 1;
+      const keys = Object.keys(counts);
+      return keys.length === expect && keys.every((k) => Math.abs(counts[k] - n / expect) <= n * tol)
+        ? counts : null;
+    };
+    const trans = drawMany(6000, { switchTransition: 'random', switchTransitionDir: 'left', switchTransitionSpeed: 'normal' });
+    const tCounts = spreadOk(trans, 'id', 6000, 6, 0.15);
+    check('#254 随机过场：6000 次抽满 6 种非硬切、每种约 1000、从不含 cut',
+      !!tCounts && !('cut' in tCounts) && !('random' in tCounts) && trans.every((r) => r.ms > 0),
+      tCounts ? JSON.stringify(tCounts) : '分布不合格');
+    const dirRows = drawMany(4000, { switchTransition: 'fade', switchTransitionDir: 'random', switchTransitionSpeed: 'normal' });
+    const dCounts = spreadOk(dirRows, 'dir', 4000, 4, 0.2);
+    check('#254 随机方向：4000 次四向均匀、不出现 random',
+      !!dCounts && !('random' in dCounts), dCounts ? JSON.stringify(dCounts) : '分布不合格');
+    const rep = fn({ switchTransition: 'random', switchTransitionDir: 'random', switchTransitionSpeed: 'normal' });
+    check('#254 面板代表值：不抽，id/dir 仍是 random，时长取池内最长（1800ms）',
+      rep.id === 'random' && rep.dir === 'random' && rep.directional === true && rep.ms === 1800,
+      JSON.stringify(rep));
+    check('#254 真换层那一跳才抽（src/live-layer.js 传 draw=true）',
+      /switchTransitionOf\(selection,\s*true\)/.test(liveText()),
+      'live-layer 调用点=' + (/switchTransitionOf\([^)]*\)/.exec(liveText()) || [''])[0]);
+    // 负对照：Math.random 恒 0 ⇒ 每次抽到同一个，同一分布判据必须判红。
+    const stuck = drawMany(6000, { switchTransition: 'random', switchTransitionDir: 'left', switchTransitionSpeed: 'normal' }, () => 0);
+    check('#254 negative control：随机源被钉死时同一分布判据判红',
+      spreadOk(stuck, 'id', 6000, 6, 0.15) === null, '唯一 id=' + stuck[0].id);
   }
 
   // ── P-D S3c：搬出去的「当前壁纸」节：可见状态快照 + 属性面板入口纪律 ─────────────
@@ -7323,7 +7393,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       // ⚠️ 本档打开 `thinkingGlass`（上游 #134 的「思考块液态玻璃」，默认关）：原属本档的
       //    「胶囊雾化」与「思考触发条玻璃·独立配置」都迁进侧栏折叠块了（本档不再画它们 ——
       //    这正是"真迁移"的字面含义；侧栏展开档在下面钉它们）。
-      wantLabels: ['主题随壁纸', '边框', '预设方案', '深色单独设置', '玻璃透明度', '雾化', '额外补雾化的选择器', '玻璃保真度', '思考块液态玻璃', '左侧栏液态玻璃', '标题栏液态玻璃', '侧栏液态玻璃', '侧栏全透明', '第三方弹窗不透明底', '侧栏玻璃跟随全局', '内容面玻璃·独立配置', '左侧栏 · 统一圆角', '左侧栏 · 四角单独', '右侧栏 · 统一圆角', '右侧栏 · 四角单独'] },
+      wantLabels: ['主题随壁纸', '边框', '预设方案', '深色单独设置', '玻璃透明度', '雾化', '遮罩浓度', '额外补雾化的选择器', '玻璃保真度', '思考块液态玻璃', '左侧栏液态玻璃', '标题栏液态玻璃', '侧栏液态玻璃', '侧栏全透明', '第三方弹窗不透明底', '侧栏玻璃跟随全局', '内容面玻璃·独立配置', '左侧栏 · 统一圆角', '左侧栏 · 四角单独', '右侧栏 · 统一圆角', '右侧栏 · 四角单独'] },
     // 设置页 · 主题预设**收起**档：不给 `presetsOpen`（ctxFrom 填 noop ⇒ 被当成收起）。
     // 节头必须仍在（它是重新展开的唯一入口），预设网格一行都不画 —— 判据形状与「全局 UI 配色」
     // 收起档同款（verify-client 里那条"存 0 ⇒ 色板不进树、节头仍在"的渲染侧镜像）。
@@ -7331,7 +7401,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       selOver: { sidebarPresent: true, sidebarGlass: true, thinkingGlass: true },
       ctxOver: { glassPresets: { presets: [] }, detailOpen: true, glassUiOpen: true, cornersOpen: true },
       want: ['主题', '细节', '主题预设', '玻璃 UI', '侧边栏圆角', '全局 UI 配色', '全局字体'],
-      wantLabels: ['主题随壁纸', '边框', '深色单独设置', '玻璃透明度', '雾化', '额外补雾化的选择器', '玻璃保真度', '思考块液态玻璃', '左侧栏液态玻璃', '标题栏液态玻璃', '侧栏液态玻璃', '侧栏全透明', '第三方弹窗不透明底', '侧栏玻璃跟随全局', '内容面玻璃·独立配置', '左侧栏 · 统一圆角', '左侧栏 · 四角单独', '右侧栏 · 统一圆角', '右侧栏 · 四角单独'] },
+      wantLabels: ['主题随壁纸', '边框', '深色单独设置', '玻璃透明度', '雾化', '遮罩浓度', '额外补雾化的选择器', '玻璃保真度', '思考块液态玻璃', '左侧栏液态玻璃', '标题栏液态玻璃', '侧栏液态玻璃', '侧栏全透明', '第三方弹窗不透明底', '侧栏玻璃跟随全局', '内容面玻璃·独立配置', '左侧栏 · 统一圆角', '左侧栏 · 四角单独', '右侧栏 · 统一圆角', '右侧栏 · 四角单独'] },
     // 侧栏档（默认收起）：**简化配置 + 两块折叠块的头**（ADR-0008 D4）——
     // 「详细玻璃调节」开关在（收起 ⇒ 它后面的独立配置层一行都不画）；「全局字体」节头在
     // （收起 ⇒ 字体内容不画）。`selOver` 与设置页用例同位 ⇒ 侧栏家族开关同样画得出来。
@@ -7350,13 +7420,13 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       selOver: { sidebarPresent: false, sidebarGlass: true },
       ctxOver: { glassPresets: { presets: [] }, presetsOpen: true, detailOpen: true, glassUiOpen: true, cornersOpen: true },
       want: ['主题', '细节', '主题预设', '玻璃 UI', '侧边栏圆角', '全局 UI 配色', '全局字体'],
-      wantLabels: ['主题随壁纸', '边框', '预设方案', '深色单独设置', '玻璃透明度', '雾化', '额外补雾化的选择器', '玻璃保真度', '思考块液态玻璃', '左侧栏液态玻璃', '标题栏液态玻璃', '第三方弹窗不透明底', '内容面玻璃·独立配置', '左侧栏 · 统一圆角', '左侧栏 · 四角单独', '右侧栏 · 统一圆角', '右侧栏 · 四角单独'] },
+      wantLabels: ['主题随壁纸', '边框', '预设方案', '深色单独设置', '玻璃透明度', '雾化', '遮罩浓度', '额外补雾化的选择器', '玻璃保真度', '思考块液态玻璃', '左侧栏液态玻璃', '标题栏液态玻璃', '第三方弹窗不透明底', '内容面玻璃·独立配置', '左侧栏 · 统一圆角', '左侧栏 · 四角单独', '右侧栏 · 统一圆角', '右侧栏 · 四角单独'] },
     // 同一条的另一半：`sidebarGlass` 关掉（侧栏玻璃总开关）⇒ 内容面那组也收（它的 CSS 门同源）。
     { fn: 'renderAppearanceTab', label: '（设置页 · 侧栏玻璃总开关关：内容面那组跟着收）', surface: 'settings',
       selOver: { sidebarPresent: false, sidebarGlass: false },
       ctxOver: { glassPresets: { presets: [] }, presetsOpen: true, detailOpen: true, glassUiOpen: true, cornersOpen: true },
       want: ['主题', '细节', '主题预设', '玻璃 UI', '侧边栏圆角', '全局 UI 配色', '全局字体'],
-      wantLabels: ['主题随壁纸', '边框', '预设方案', '深色单独设置', '玻璃透明度', '雾化', '额外补雾化的选择器', '玻璃保真度', '思考块液态玻璃', '左侧栏液态玻璃', '标题栏液态玻璃', '第三方弹窗不透明底', '左侧栏 · 统一圆角', '左侧栏 · 四角单独', '右侧栏 · 统一圆角', '右侧栏 · 四角单独'] },
+      wantLabels: ['主题随壁纸', '边框', '预设方案', '深色单独设置', '玻璃透明度', '雾化', '遮罩浓度', '额外补雾化的选择器', '玻璃保真度', '思考块液态玻璃', '左侧栏液态玻璃', '标题栏液态玻璃', '第三方弹窗不透明底', '左侧栏 · 统一圆角', '左侧栏 · 四角单独', '右侧栏 · 统一圆角', '右侧栏 · 四角单独'] },
     // 侧栏档 · 三节**默认收敛**（一个门都不给 = 全收起）：这是用户口径要的新行为 ——
     // 侧栏外观页打开时只剩六行节头，一屏放得下（此前「细节 + 玻璃 UI + 侧边栏圆角」要滚好几屏）。
     { fn: 'renderAppearanceTab', label: '（侧栏档 · 三节默认收敛：只画节头）', surface: 'sidebar',
@@ -7410,7 +7480,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       // ⚠️ 这条序列 = 上面设置档（收起）那 17 项玻璃标签 + 侧栏字体展开那 14 项字体标签，
       //    **按序拼接** —— 两个来源各自都被别的用例钉住了，这里是它们的交叉验证：拼接后
       //    逐字相等 ⇒ 设置页的字体节渲染的就是侧栏那一份同一渲染器的产物（无 surface 分支残留）。
-      wantLabels: ['主题随壁纸', '边框', '预设方案', '深色单独设置', '玻璃透明度', '雾化', '额外补雾化的选择器', '玻璃保真度', '思考块液态玻璃', '左侧栏液态玻璃', '标题栏液态玻璃', '侧栏液态玻璃', '侧栏全透明', '第三方弹窗不透明底', '侧栏玻璃跟随全局',
+      wantLabels: ['主题随壁纸', '边框', '预设方案', '深色单独设置', '玻璃透明度', '雾化', '遮罩浓度', '额外补雾化的选择器', '玻璃保真度', '思考块液态玻璃', '左侧栏液态玻璃', '标题栏液态玻璃', '侧栏液态玻璃', '侧栏全透明', '第三方弹窗不透明底', '侧栏玻璃跟随全局',
         '内容面玻璃·独立配置',
         '左侧栏 · 统一圆角', '左侧栏 · 四角单独', '右侧栏 · 统一圆角', '右侧栏 · 四角单独',
         '字体自定义', '默认字体', '终端字体', '文字颜色角色', '深色单独设置', '正文', '次要文字', '弱化说明', '极小说明', '禁用 / 更弱',
@@ -7801,7 +7871,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     renderWallpaperTab: ['setSetting', 'setTransient', 'INTERVALS', 'armedConfirm', 'cdMode', 'current',
       'editing', 'editorPageView', 'group', 'groups', 'isLiveScene', 'onArmConfirm', 'onArmDeleteGroup',
       'onCancelEditUploadDir', 'onCancelEditWeAssetsDir', 'onClear', 'onDeleteGroup', 'onDisarmConfirm',
-      'onEditInterval', 'onEditName', 'onEditOrder', 'onGroupChange', 'onGroupInterval', 'onOpenPicker',
+      'onEditInterval', 'onEditName', 'onEditOrder', 'onGroupChange', 'onRotationLiveInterval', 'onOpenPicker',
       'onOpenPickerDraft', 'onRefresh', 'onStartEditUploadDir', 'onStartEditWeAssetsDir',
       'onSwitchTransition', 'onSwitchTransitionDir', 'onSwitchTransitionSpeed', 'onToggleAudio',
       'onTogglePlay', 'onTogglePropsPanel', 'onToggleRotation', 'onUploadDirDraft', 'onWeAssetsDirDraft',

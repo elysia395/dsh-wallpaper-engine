@@ -95,8 +95,10 @@ const videoSrc = read('src/video-layer.js');
   check('修复：src/** 里**零处**再对 rotationInterval 调 schemaRange',
     !stripComments(clientSrc).includes('schemaRange("rotationInterval")'));
   const clamps = [...clientSrc.matchAll(/clampNum\(\s*[^;]*?DEFAULTS\.rotationInterval\s*\)/g)].map((m) => m[0]);
+  // #254 之后主行下拉改走实时覆盖（rotationLiveInterval，不写回列表），直接写 group.interval 的
+  // onGroupInterval 已删除 ⇒ 列表间隔的钳制点剩 2 处（草稿保存 + 编辑器输入）。
   check('修复：所有轮播间隔钳制点都用 ROTATION_INTERVAL_MIN/MAX（' + clamps.length + ' 处）',
-    clamps.length >= 3 && clamps.every((c) => c.includes('ROTATION_INTERVAL_MIN, ROTATION_INTERVAL_MAX')),
+    clamps.length >= 2 && clamps.every((c) => c.includes('ROTATION_INTERVAL_MIN, ROTATION_INTERVAL_MAX')),
     clamps.join(' | '));
   check('真源：schema 导出那对常量，且 readRotationGroups 用它（宿主与客户端同一域）',
     schemaSrc.includes('const ROTATION_INTERVAL_MIN = 1, ROTATION_INTERVAL_MAX = 1440;')
@@ -157,7 +159,7 @@ const videoSrc = read('src/video-layer.js');
     && tabsSrc.includes('weT("轮播推进方式")')
     && clientSrc.includes('function onEditTrigger(e)')
     && clientSrc.includes('const onGroupTrigger = (e) =>')
-    && clientSrc.includes('onEditTrigger, onGroupChange, onGroupInterval, onGroupTrigger'));
+    && clientSrc.includes('onEditTrigger, onGroupChange, onGroupTrigger'));
   // 选中视频结束档时，已经上屏的那层要立刻换 loop 语义（否则要等下一次换壁纸才生效）
   check('切换推进方式会立刻改已上屏视频的 loop（不只影响下一次建层）',
     clientSrc.includes('media.loop = group.trigger !== "videoEnd"'));

@@ -53,7 +53,9 @@
       ),
       // 时长档：只影响速度乘子，基准时长写在各过场里（见 SWITCH_TRANSITIONS）。
       switchTr.ms > 0 && React.createElement("div", { className: "we-picker__ctl we-picker__ctl--wrap" },
-        ctlText(weT("时长"), weT("当前约 {ms} ms", { ms: switchTr.ms })),
+        ctlText(weT("时长"), switchTr.id === "random"
+          ? weT("最长约 {ms} ms", { ms: switchTr.ms })
+          : weT("当前约 {ms} ms", { ms: switchTr.ms })),
         React.createElement("div", { className: "we-picker__seg" },
           SWITCH_SPEEDS.map((s) =>
             React.createElement("button", {

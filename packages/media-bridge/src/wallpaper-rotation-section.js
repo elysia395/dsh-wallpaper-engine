@@ -16,7 +16,7 @@
  */
 
   function renderWallpaperRotationSection(ctx) {
-    const { INTERVALS, armedConfirm, editing, group, groups, onArmDeleteGroup, onDeleteGroup, onDisarmConfirm, onEditInterval, onEditName, onEditOrder, onEditTrigger, onGroupChange, onGroupInterval, onGroupTrigger, onOpenPickerDraft, onPictureSlideSeconds, onToggleRotation, playableCount, sel } = ctx;
+    const { INTERVALS, armedConfirm, editing, group, groups, onArmDeleteGroup, onDeleteGroup, onDisarmConfirm, onEditInterval, onEditName, onEditOrder, onEditTrigger, onGroupChange, onRotationLiveInterval, onGroupTrigger, onOpenPickerDraft, onPictureSlideSeconds, onToggleRotation, playableCount, sel } = ctx;
     // 图内过场的可选项（秒）。与主包 KINDS.pictureSlideSeconds 的 0..3600 上界一致：
     // 这里只是**常用档**；用户在别处写入的秒数若不在档上，补一条同值 option 回显
     //（否则 select 会因找不到匹配值显示空白，看起来像"设置丢了"）。
@@ -25,6 +25,15 @@
     const pictureSlideOptions = PICTURE_SLIDE_INTERVALS.includes(rawPictureSlideSeconds)
       ? PICTURE_SLIDE_INTERVALS
       : PICTURE_SLIDE_INTERVALS.concat([rawPictureSlideSeconds]).sort((a, b) => a - b);
+    // #254：实时覆盖（0 = 跟随列表预设）。只写这一次运行的节奏，不写回 group.interval；
+    // 下拉只显示实时值，列表预设值仍由列表编辑器维护。
+    const rawLiveInterval = Math.max(0, Math.min(1440, Math.round(Number(sel.rotationLiveInterval) || 0)));
+    const liveInterval = rawLiveInterval > 0 ? rawLiveInterval : 0;
+    const groupInterval = group ? group.interval : rotationIntervalDefault;
+    // 回显：实时值不在常用档上时补一条同值 option（否则 select 显示空白，像"设置丢了"）。
+    const liveIntervalOptions = liveInterval > 0 && !INTERVALS.includes(liveInterval)
+      ? INTERVALS.concat([liveInterval]).sort((a, b) => a - b)
+      : INTERVALS;
     const groupToken = group ? "group:" + group.id : "";
     return React.createElement(React.Fragment, null,
     // ── 自动轮播: user-defined carousel lists, each with its own
@@ -185,17 +194,20 @@
           ? weT("当前列表至少需要 2 个可播放壁纸")
           : (group && group.trigger === "videoEnd")
             ? weT("当前视频播完就换下一张（不看间隔）")
-            : weT("每 {min} 分钟切换一次", { min: group ? group.interval : rotationIntervalDefault })),
+            : liveInterval > 0
+              ? weT("当前覆盖：每 {x} 分钟（列表预设 {y} 分钟）", { x: liveInterval, y: groupInterval })
+              : weT("每 {min} 分钟切换一次", { min: groupInterval })),
       React.createElement("div", { className: "we-picker__ctl-side" },
         React.createElement("select", {
           className: "we-picker__rotation-interval",
-          value: String(group ? group.interval : rotationIntervalDefault),
-          onChange: onGroupInterval,
+          value: String(liveInterval),
+          onChange: onRotationLiveInterval,
           disabled: !sel.rotationEnabled || !sel.rotationGroupId || playableCount < 2
             || (group && group.trigger === "videoEnd"),
-          "aria-label": weT("轮转间隔"),
+          "aria-label": weT("实时轮转间隔"),
         },
-        ...INTERVALS.map((minutes) =>
+        React.createElement("option", { key: "follow", value: "0" }, weT("跟随列表预设（{min} 分钟）", { min: groupInterval })),
+        ...liveIntervalOptions.map((minutes) =>
           React.createElement("option", { key: minutes, value: String(minutes) }, weT("{min} 分钟", { min: minutes })),
         )),
         // 推进方式：按间隔 / 视频播完就换。常驻行直接可改（不必进「编辑」），

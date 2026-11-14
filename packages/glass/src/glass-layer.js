@@ -204,6 +204,11 @@ function applyGlassLayer() {
   const fidNum = Number(selection.glassFidelity);
   const glassFidelity = Number.isFinite(fidNum) ? Math.min(1, Math.max(0, fidNum / 100)) : 1;
   s.setProperty("--we-glass-fidelity", String(glassFidelity));
+  // 宿主 Modal 遮罩浓度（#254）：0–100 ⇒ 0–1；CSS 侧按主题把 --dsw-alias-bg-mask-1
+  // 的 alpha 乘上它（100 = 宿主原值浅 0.24 / 深 0.50，0 = 完全不遮）。
+  const maskNum = Number(selection.settingsMaskStrength);
+  const maskStrength = Number.isFinite(maskNum) ? Math.min(1, Math.max(0, maskNum / 100)) : 1;
+  s.setProperty("--we-mask-strength", String(maskStrength));
   // - 染色地板：按主题把玻璃色钳制进可读亮度带，供样式表的
   //   --we-readability-base（地板层）与全部 frost 槽位消费 —— 对话框/侧栏等
   //   宿主表面由此拿到**用户的色相**而非主题白/黑，正文对比度判据不变。
@@ -294,6 +299,7 @@ function disposeGlassLayer() {
   s.removeProperty("--we-glass-brightness");
   s.removeProperty("--we-glass-alpha");
   s.removeProperty("--we-glass-color");
+  s.removeProperty("--we-mask-strength");
   s.removeProperty("--we-surface-tint-light");
   s.removeProperty("--we-surface-tint-dark");
   s.removeProperty("--we-surface-tint-rgb-light");
