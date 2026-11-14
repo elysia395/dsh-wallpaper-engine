@@ -58,6 +58,10 @@ const WE_I18N_EN_GLASS = {
   "浮层玻璃·玻璃透明度": "Popover glass · glass opacity",
   "浮层玻璃·雾化": "Popover glass · blur",
   "浮层玻璃·玻璃保真度": "Popover glass · glass fidelity",
+  "编辑文件悬停时的改动预览浮层": "The change preview shown while hovering an edited file",
+  "文件预览玻璃·独立配置": "File preview glass · independent config",
+  "文件预览玻璃·玻璃透明度": "File preview glass · glass opacity",
+  "文件预览玻璃·雾化": "File preview glass · blur",
   // ── #277：第三方插件浮层的实底底板（射程只到 ARIA 浮层）──
   "第三方弹窗不透明底": "Opaque base for third-party dialogs",
   "给第三方插件的弹窗补实底": "Give third-party plugin dialogs a solid base",

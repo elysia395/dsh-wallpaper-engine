@@ -508,6 +508,47 @@ const CSS_GLASS = `
     -webkit-backdrop-filter: none;
     backdrop-filter: none;
   }
+  /* ── 计划卡片（ui-plan 的 PlanCards）：与对话卡片同一种玻璃 ───────────────────
+     用户截图：对话结尾「已读取文件」下面的计划卡片是一整块实心深色卡（宿主
+     --plan-card-fill = 深色 --dsw-static-neutral-850），与旁边的玻璃气泡不是同一种材质。
+     锚点取宿主源码级属性 [data-plan-card]（PlanCard.js 的 PlanCards：data-plan-artifacts
+     容器 + 每个按钮 data-plan-card=callId，全 asar 只有它用）。
+     配方 = 交付卡那档平铺 chat 底（与 [data-presented-file] 那条逐字同形）：
+     只上底色，不加釉、不加霜 —— 加霜会在大面积卡片上把整卡洗白（用户对照：同一主题
+     下交付卡正确、计划卡错误）。原生态（data-we-thinking-native）不匹配 ⇒ 卡片保持
+     宿主实色，正是该挡的定义。
+     宿主 hover 档（--plan-card-hover）会被 !important 底压住 —— 与上面
+     [data-presented-file] 同一取舍：底色正确优先，悬停反馈由边框/光标承担。
+     ⚠️ 本段不许出现反引号：整套样式文本是模板字符串（构建期拼接）。 */
+  body[data-we-glass-chat][data-we-glass-page]:not([data-we-thinking-native]) [data-plan-card] {
+    background-color: var(--we-chat-glass-fill) !important;
+    background-image: none !important;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  /* ── 改动文件卡片（ui-deliverables 的 ChangedFiles）→ 同一种玻璃 ─────────────
+     用户截图：「已编辑 N 个文件」卡片的 60px 标题行读宿主 --changes-fill
+     （深色 --dsw-static-neutral-850）实色，把整卡压成实心。锚点 [data-changed-files]
+     （ChangedFiles.js，全 asar 唯一）。清掉标题行的 --changes-fill / -hover 让卡片
+     自身的玻璃透上来（hover 换成 chat 底掺白，保留反馈）。 */
+  body[data-we-glass-chat][data-we-glass-page]:not([data-we-thinking-native]) [data-changed-files] {
+    --changes-fill: transparent;
+    --changes-hover: transparent;
+    background-color: var(--we-chat-glass-fill) !important;
+    background-image: none !important;
+    -webkit-backdrop-filter: none;
+    backdrop-filter: none;
+  }
+  /* ── 变更请求面板（forge panel）的实色状态条 → 让右栏玻璃透出来 ───────────────
+     用户截图：「无法读取 Git 信息」、分支条（checkout）与登录提示都读宿主
+     --forge-fill（深色 --dsw-static-neutral-850）实色，压在右栏玻璃上就是一块死底。
+     锚点取宿主源码级属性：面板根 [data-forge-panel]（ForgeTab.js）与改动视图根
+     [data-forge-changes=local]（ChangesTab.js 的 source.kind）—— 后者会在自己身上
+     重新声明 --forge-fill，必须在同一元素上压回透明，只清祖先不够。
+     只清这枚令牌，背景归右栏已有的玻璃底板，不另铺底色。 */
+  body[data-we-glass-page] :is([data-forge-panel], [data-forge-changes]) {
+    --forge-fill: transparent;
+  }
   /* ⚠️ 正文原生挡（data-we-thinking-native，见文件下方「正文原生挡」块）：只有**气泡**
      这一条带 :not() —— 原生挡下气泡退出霜釉（正文原生 = 无玻璃装饰）；**输入卡与工具
      弹卡不豁免**（用户口径：输入对话框保留玻璃），照旧吃霜/釉。
@@ -1610,6 +1651,59 @@ const CSS_GLASS = `
     backdrop-filter: none !important;
   }
 
+  /* ── 文件预览浮层（编辑文件悬停时的改动预览，[data-changes-hover-preview]）──────
+     症状：HoverCard 的 portal 读 --dsw-alias-bg-base，而本插件把页底设成透明 ⇒ 预览
+     全透明、文字直接压在下面的正文上（用户口径「可读性极差」）；卡片内边距 / 底部
+     留白尤其明显，因为代码区自己有底色、边距没有。
+     锚点取 ui-deliverables 源码属性 data-changes-hover-preview（FileDiff 预览根，
+     全 asar 唯一）。底色**不依赖 color-mix / 可读性地板**：直接用按面 alpha 的
+     固定黑白底（--we-file-preview-alpha / -blur，面板「文件预览玻璃」两项独立控制；
+     默认跟随全局）。这样即使某个主题变量没解析，卡片也一定有一层实底。
+     顶部再叠一层更深的渐变（上深下浅；浅色档减半），并给 HoverCard 的 portal 垫
+     同一层底（它包住预览、自身透明，是边缘漏光的来源）。圆角钉在预览根并裁剪 ——
+     宿主把圆角写在内部滚动容器上，边缘会露出直角（用户口径：上圆下方）。
+     ⚠️ 本段不许出现反引号：整套样式文本是模板字符串（构建期拼接）。 */
+  body[data-we-glass-page] [data-changes-hover-preview],
+  body[data-we-glass-page] [class*="_root"][class*="_preview"]:has([data-changes-preview-path]) {
+    border-radius: var(--dsw-radius-lg);
+    overflow: clip;
+    background-color: rgb(13 21 36 / var(--we-file-preview-alpha, 0.9)) !important;
+    background-image: none !important;
+    -webkit-backdrop-filter: blur(var(--we-file-preview-blur, 24px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
+    backdrop-filter: blur(var(--we-file-preview-blur, 24px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
+  }
+  body:not([data-ds-dark-theme])[data-we-glass-page] [data-changes-hover-preview],
+  body:not([data-ds-dark-theme])[data-we-glass-page] [class*="_root"][class*="_preview"]:has([data-changes-preview-path]) {
+    background-color: rgb(255 255 255 / var(--we-file-preview-alpha, 0.9)) !important;
+    background-image: none !important;
+  }
+  /* 「上深下浅」画在**外层卡片**（HoverCard 的 .card.preview，portal 的直接子 div）：
+     内层是内容本体，渐变会被 header / 代码行盖住，用户看不到。 */
+  body[data-we-glass-page] span[class*="_portal"] > div:has([data-changes-preview-path]),
+  body[data-we-glass-page] span[class*="_portal"] > div[data-changes-hover-preview] {
+    background-image: linear-gradient(180deg, rgba(0, 0, 0, 0.55), rgba(0, 0, 0, 0.20) 32%, rgba(0, 0, 0, 0) 70%) !important;
+  }
+  body:not([data-ds-dark-theme])[data-we-glass-page] span[class*="_portal"] > div:has([data-changes-preview-path]),
+  body:not([data-ds-dark-theme])[data-we-glass-page] span[class*="_portal"] > div[data-changes-hover-preview] {
+    background-image: linear-gradient(180deg, rgba(0, 0, 0, 0.25), rgba(0, 0, 0, 0.08) 32%, rgba(0, 0, 0, 0) 70%) !important;
+  }
+  /* HoverCard 的 portal 包住预览卡、自身读透明的页底 ⇒ 给同一层垫底并裁圆角，
+     否则卡片外圈 / 内边距处还会透出正文。 */
+  body[data-we-glass-page] span[class*="_portal"]:has(> [data-changes-hover-preview]),
+  body[data-we-glass-page] span[class*="_portal"]:has([data-changes-preview-path]) {
+    border-radius: var(--dsw-radius-lg);
+    background-color: rgb(13 21 36 / var(--we-file-preview-alpha, 0.9)) !important;
+    /* 可见表面是 HoverCard 生成的 .card.preview（外层），它自己读
+       --dsw-alias-bg-layer-1 画底；插件把这枚令牌改成了半透明配方，所以只给
+       子元素铺底时外层卡片仍是透的。在该 portal 作用域内把令牌换成同一层实底，
+       宿主自己画的那一层就实了（只作用于本浮层，不动全局）。 */
+    --dsw-alias-bg-layer-1: rgb(13 21 36 / var(--we-file-preview-alpha, 0.9)) !important;
+  }
+  body:not([data-ds-dark-theme])[data-we-glass-page] span[class*="_portal"]:has(> [data-changes-hover-preview]),
+  body:not([data-ds-dark-theme])[data-we-glass-page] span[class*="_portal"]:has([data-changes-preview-path]) {
+    background-color: rgb(255 255 255 / var(--we-file-preview-alpha, 0.9)) !important;
+    --dsw-alias-bg-layer-1: rgb(255 255 255 / var(--we-file-preview-alpha, 0.9)) !important;
+  }
   /* 配色 swatches: circular preset buttons + native color picker. The active
      swatch gets an accent ring so the current choice is obvious at a glance. */
   /* ── 软件渲染回退（upstream #95，运行时探测）───────────────────────────────

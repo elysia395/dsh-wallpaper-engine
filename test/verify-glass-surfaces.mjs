@@ -184,7 +184,7 @@ const SURFACES = [
     // ⚠️ 合并 #134（扩展思考玻璃）：新增一批只在 `[data-we-thinking-glass]` 下生效的宿主锚点
     //（思考区/文件卡/工具结果/代码块/导航按钮…）—— 全部归本面认领；锚点清单取自
     // 合并后物化 CSS 的枚举输出（认领判据会双向核对）。
-    anchors: ['[data-vcp-reasoning]', '[data-vcp-reasoning-body]', '[data-changed-files]', '[data-presented-file]', '[data-chat-flow]', '[data-chat-flow-kind="context"]', '[data-vcp-rawhtml]', '[data-code-block-banner]', '[data-context-injection-body]', '[data-diff]', '[data-dsh-navbar]', '[data-vlln-load-older]', '[data-vlln-preview]', '[data-read]', '[data-terminal]', '[data-sample="bash"]', '[data-search="matches"]', '[data-search="paths"]', '[data-slot="conversation.view"]', '[data-slot="tool.call.toolview"]', '[data-tool="glob"]', '[data-tool="grep"]', '[data-tool="read"]', '[data-tool="write"]', '[data-variant="others"]'], tier: 'global',
+    anchors: ['[data-vcp-reasoning]', '[data-vcp-reasoning-body]', '[data-changed-files]', '[data-presented-file]', '[data-plan-card]', '[data-changes-hover-preview]', '[data-changes-preview-path]', '[data-chat-flow]', '[data-chat-flow-kind="context"]', '[data-vcp-rawhtml]', '[data-code-block-banner]', '[data-context-injection-body]', '[data-diff]', '[data-dsh-navbar]', '[data-vlln-load-older]', '[data-vlln-preview]', '[data-read]', '[data-terminal]', '[data-sample="bash"]', '[data-search="matches"]', '[data-search="paths"]', '[data-slot="conversation.view"]', '[data-slot="tool.call.toolview"]', '[data-tool="glob"]', '[data-tool="grep"]', '[data-tool="read"]', '[data-tool="write"]', '[data-variant="others"]'], tier: 'global',
     // PR #130 的面：门是 `data-we-thinking-glass`（默认关）。⚠️ v1.3.0 追版收敛后它**不再**
     // 认领 `[data-turn-trigger]`（那一条改由上面的 conversation-thinking-trigger 认领 ——
     // 触发条吃玻璃，本面只管推理区/文件卡/工具结果等的清底与玻璃）。
@@ -1326,7 +1326,7 @@ console.log('\n⑨ W5：各面的锚点门控覆盖率（防"关掉后还剩一�
     // ⚠️ 合并 #134：思考玻璃一族在对话面新增了「+」白釉 / 气泡清底等规则，它们的门是
     //    `data-we-thinking-glass`（默认关）—— 与 chat 门同样满足"关 ⇒ 整组不生效"，
     //    并入本面的合法锚点集合（回退干净的性质不变）。
-    { id: 'glass-child-conversation', member: /data-(composer-card|question-key|plan-review-key|approval-key)|_bubble|data-code-block-banner/, anchor: /data-we-glass-fallback|data-we-glass-chat|data-we-thinking-glass/, done: true },
+    { id: 'glass-child-conversation', member: /data-(composer-card|question-key|plan-review-key|approval-key|plan-card)|_bubble|data-code-block-banner/, anchor: /data-we-glass-fallback|data-we-glass-chat|data-we-thinking-glass/, done: true },
     // ⚠️ 新登记面必须同步进 member：`[data-install-registry]`（#156② 注册表浮层的霜）当年
     //    只进了 SURFACES 的锚点清单、没进这里，于是"删掉效果规则"在这条棘轮上无感
     //    （§11 A1-2）。member 与 SURFACES[].anchors 是**两套**登记，新增面时两处都要动。
@@ -2775,6 +2775,58 @@ console.log('\n⑲ 标记值跟走 resolver（t9-001 运行级断言：真跑 we
     '实际=' + (floaterTokenRules.length === 1 ? floaterLayersOf(floaterTokenRules[0]).join(',') : '无规则'));
   check('negative control: 只回填两层时 ㉔b 会判红（判据不是恒真）',
     floaterLayersOf({ body: '--dsw-alias-bg-layer-1: color-mix(in srgb, var(--we-panel-color, #1e1f26) 96%, transparent); --dsw-alias-bg-layer-2: color-mix(in srgb, var(--we-panel-color, #1e1f26) 96%, transparent);' }).length === 2);
+  // ── ㉔ 计划卡片（ui-plan 的 PlanCards）与交付卡同一种平铺玻璃 ────────────────
+  // 用户对照：同一主题下交付卡（[data-presented-file]）正确、计划卡被洗白。
+  // 两者必须逐字同形：只上 --we-chat-glass-fill，不加釉、不加霜。
+  console.log('\n㉔ 计划卡片吃平铺对话底（与交付卡同档）');
+  const planRules = rulesOf(CSS).filter((r) => /\[data-plan-card\]/.test(r.header));
+  const planMain = planRules.filter((r) => /data-we-glass-chat/.test(r.header) && !/data-we-glass-fallback/.test(r.header));
+  const flatFormOf = (rule) => ({
+    chat: /background-color:\s*var\(--we-chat-glass-fill\)/.test(rule.body),
+    flat: /background-image:\s*none/.test(rule.body),
+    noFrost: /backdrop-filter:\s*none/.test(rule.body),
+  });
+  const planForms = planMain.map(flatFormOf);
+  check('㉔a 主规则带对话玻璃门并读 chat 平铺底（不加釉不加霜）', planMain.length === 1
+    && planForms.every((f) => f.chat && f.flat && f.noFrost));
+  check('㉔b 主规则排除原生挡（原生 = 宿主实色）', planMain.length === 1
+    && /:not\(\[data-we-thinking-native\]\)/.test(planMain[0].header));
+  const syntheticSheen = flatFormOf({ body: 'background-color: var(--we-chat-glass-fill) !important; background-image: linear-gradient(#fff, #fff); backdrop-filter: blur(16px);' });
+  check('negative control: 加了釉/霜的合成规则会被 ㉔a 判红', !(syntheticSheen.flat && syntheticSheen.noFrost));
+
+  // ── ㉕ 改动文件卡片 / 变更请求面板：补掉宿主实色底 ───────────────────────────
+  // 用户截图：「已编辑 N 个文件」卡片与「无法读取 Git 信息」条都是宿主实色底。
+  console.log('\n㉕ 改动文件卡片与变更请求面板不再有实色死底');
+  const changedRules = rulesOf(CSS).filter((r) => /\[data-changed-files\]/.test(r.header));
+  const changedMain = changedRules.filter((r) => /data-we-glass-chat/.test(r.header) && !/data-we-glass-fallback/.test(r.header));
+  const changedForms = changedMain.map(flatFormOf);
+  check('㉕a 改动文件卡片带对话玻璃门、清掉 --changes-fill 并读 chat 平铺底', changedMain.length === 1
+    && /--changes-fill:\s*transparent/.test(changedMain[0].body)
+    && changedForms.every((f) => f.chat && f.flat && f.noFrost));
+  const forgeRules = rulesOf(CSS).filter((r) => /\[data-forge-panel\]/.test(r.header));
+  check('㉕b 变更请求面板清掉 --forge-fill 实色（背景归右栏玻璃）', forgeRules.length === 1
+    && /--forge-fill:\s*transparent/.test(forgeRules[0].body));
+  const syntheticSolidHeader = { body: 'background: var(--changes-fill);' };
+  check('negative control: 没清 --changes-fill 的合成规则会被 ㉕a 判红',
+    !/--changes-fill:\s*transparent/.test(syntheticSolidHeader.body));
+
+  // ── ㉖ 文件预览浮层（编辑文件悬停的改动预览）有实底与上深下浅 ────────────────
+  console.log('\n㉖ 文件预览浮层有实底、顶部更深、portal 也垫底');
+  const previewRules = rulesOf(CSS).filter((r) => /\[data-changes-hover-preview\]/.test(r.header));
+  const previewRoot = previewRules.filter((r) => !/span\[/.test(r.header));
+  const previewPortal = previewRules.filter((r) => /span\[/.test(r.header) && /--dsw-alias-bg-layer-1:/.test(r.body));
+  check('㉖a 预览根铺固定 rgb 底（不依赖 color-mix，变量没解析也一定有底）', previewRoot.length === 2
+    && previewRoot.every((r) => /background-color:\s*rgb\(/.test(r.body) && !/color-mix/.test(r.body)));
+  check('㉖b 外层卡片画上深下浅（深色 55% → 透明；浅色 25% → 透明）',
+    previewRules.some((r) => /linear-gradient\(180deg, rgba\(0, 0, 0, 0\.55\)/.test(r.body))
+    && previewRules.some((r) => /linear-gradient\(180deg, rgba\(0, 0, 0, 0\.25\)/.test(r.body)));
+  check('㉖c portal 垫底并把宿主 --dsw-alias-bg-layer-1 换成本层实底（外层卡片自己画的那层也实）',
+    previewPortal.length === 2
+    && previewPortal.every((r) => /background-color:\s*rgb\(/.test(r.body)
+      && /--dsw-alias-bg-layer-1:/.test(r.body)));
+  const synthPlain = { body: 'background-color: transparent;' };
+  check('negative control: 透明底的合成规则会被 ㉖a 判红', !/background-color:\s*rgb\(/.test(synthPlain.body));
+
 }
 
 console.log('');
