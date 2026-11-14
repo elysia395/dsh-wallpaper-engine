@@ -3925,7 +3925,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     // 子 UI 登记表：renderAppearanceGlassSection 按它逐项渲染。替身必须给**与 schema 同源**
     // 的那份（不能手抄），否则夹具渲染的项数与真实面板不同，等于假绿。
     'GLASS_CHILDREN', 'childGlassKey',
-    'onToggleSceneLive', 'onLiveBootDelay', 'onSceneLiveFps', 'onSceneAutoQuality',
+    'onToggleSceneLive', 'onLiveBootDelay', 'onSceneLiveFps', 'onSceneAutoQuality', 'onSceneSoftRenderPause',
     'onPlaybackRate', 'onObjectFit', 'onFlip', 'onOpenPicker', 'setPickerOpener',
     // 侧栏壁纸档的「壁纸属性」：开关读数 / 开关动作 / 面板渲染器**都是模块级的**
     //（client.js 里的函数声明），本台把它们当自由变量带传进来 —— 与内联后的真实形态一致。
@@ -3978,7 +3978,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       // 运行期：`fontSet.open` 若被读到就是布尔而不是 undefined 属性错）。
       fontSetCtx: () => ({ open: false, fontSets: [], activeId: '', loading: false, error: '' }),
       officialColorOf: () => '#ffffff',
-      onToggleSceneLive: noop, onLiveBootDelay: noop, onSceneLiveFps: noop, onSceneAutoQuality: noop,
+      onToggleSceneLive: noop, onLiveBootDelay: noop, onSceneLiveFps: noop, onSceneAutoQuality: noop, onSceneSoftRenderPause: noop,
       onPlaybackRate: noop, onObjectFit: noop, onFlip: noop, onOpenPicker: noop, setPickerOpener: noop,
       userPropsPanelOpen: () => SEL.userPropsPanelOpen === true,
       openUserPropsPanel: () => { OPEN_CALLS.push(1); SEL.userPropsPanelOpen = true; },
@@ -7162,6 +7162,40 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       spreadOk(stuck, 'id', 6000, 6, 0.15) === null, '唯一 id=' + stuck[0].id);
   }
 
+  // ── #270 软件渲染兜底：首帧出来后探测 GPU 后端，软渲染就暂停、留住最后一帧 ──
+  {
+    const liveSrc = liveText() + '\n' + clientText();
+    check('#270 软渲染探测：与玻璃包同口径的 renderer 正则 + 手动逃生舱 ?we-softrender=',
+      /LIVE_SOFT_RENDER_RE = \/swiftshader\|software\|llvmpipe/.test(liveSrc)
+      && /we-softrender/.test(liveSrc)
+      && /liveSoftRenderProbeNow\(\)/.test(liveSrc),
+      '探针=' + (/LIVE_SOFT_RENDER_RE[^\n]*/.exec(liveSrc) || [''])[0]);
+    check('#270 首帧后暂停：探测到软渲染 → liveLog + wp.pause()，且暂停期不计 stall',
+      /watch\.firstFrame && !watch\.softRender && liveSoftRenderProbeNow\(\)/.test(liveSrc)
+      && /liveLog\("soft-render-pause"/.test(liveSrc)
+      && /if \(wp\) wp\.pause\(\)/.test(liveSrc)
+      && /watch\.softRender && liveSoftRenderPauseOn\(\)\) \{ watch\.stall = 0; watch\.resumed = false; return; \}/.test(liveSrc),
+      '暂停点存在=' + /soft-render-pause/.test(liveSrc));
+    check('#270 播放意图门控：软渲染兜底开着时 applyLiveControls 不得 resume',
+      /const playing = isEffectivelyPlaying\(\) && !liveSoftRenderPauseOn\(\);/.test(liveSrc),
+      '门控行=' + (/const playing = [^\n]*/.exec(liveSrc) || [''])[0]);
+    const m = /function liveSoftRenderPauseOn\(\) \{([\s\S]*?)\n\}/.exec(liveSrc);
+    let guard = null;
+    try { guard = m ? new Function('liveSoftRenderProbe', 'selection', m[1]) : null; } catch { guard = null; }
+    check('#270 兜底判据：软渲染 + 开关开 ⇒ 暂停；开关关 / 非软渲染 / 无选择 ⇒ 不干预',
+      !!guard
+      && guard(true, { sceneSoftRenderPause: true }) === true
+      && guard(true, { sceneSoftRenderPause: false }) === false
+      && guard(false, { sceneSoftRenderPause: true }) === false
+      && guard(true, null) === false,
+      guard ? 'ok' : '判据提取失败');
+    // 负对照：把「开关关」也当成暂停，同一条判据必须判红。
+    const broken = m ? new Function('liveSoftRenderProbe', 'selection', m[1].replace('selection.sceneSoftRenderPause !== false', 'true')) : null;
+    check('#270 negative control：忽略用户开关时同一判据判红',
+      !!broken && broken(true, { sceneSoftRenderPause: false }) === true,
+      broken ? '变异生效' : '变异失败');
+  }
+
   // ── P-D S3c：搬出去的「当前壁纸」节：可见状态快照 + 属性面板入口纪律 ─────────────
   // 搬走的是**消费者**：包内源码里"那几行还在"只是必要条件，真正要钉的是"按 sel 的真值
   // 画对的那一行 / 画对的那个 playing"。做法：真渲染整页签（四节都经注册表），按节点类名 +
@@ -7499,12 +7533,12 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       // 实测：13 个标签 —— 比网页档多的两个（`出图来源` / `自定义画面`）正是**场景专属**那两行
       // （网页壁纸没有"出图来源"这一说）。标签锚是**精确序列**判定 ⇒ 两个方向都钉住了。
       wantLabels: ['壁纸模糊', '亮度', '对比度', '饱和度', '水平', '垂直', '缩放', '壁纸透明度', '暗化', '场景实时渲染',
-        '启动最长等待时间', '实时渲染帧率', '自动画质', '出图来源', '自定义画面', '适配', '水平翻转'] },
+        '启动最长等待时间', '实时渲染帧率', '自动画质', '软件渲染时暂停实时渲染', '出图来源', '自定义画面', '适配', '水平翻转'] },
     { fn: 'renderEffectsTab', label: '（画面 · 网页壁纸：实时渲染组出现）', surface: 'settings',
       selOver: { type: 'web', webLive: true, webLiveSrc: '/x' },
       want: ['画面'],
       wantLabels: ['壁纸模糊', '亮度', '对比度', '饱和度', '水平', '垂直', '缩放', '壁纸透明度', '暗化', '网页实时渲染',
-        '启动最长等待时间', '实时渲染帧率', '自动画质', '适配', '水平翻转'] },
+        '启动最长等待时间', '实时渲染帧率', '自动画质', '软件渲染时暂停实时渲染', '适配', '水平翻转'] },
     // 目标③ 余项 1：「实时帧」那一段（门 = gpuFrameUi.wid === sel.id && pinned —— 这一张壁纸的槽里真有帧）。
     // 它有几行随 w/h/error/recapturing/busy 显隐的分支，全在模块级替身里，故用 globals。
     { fn: 'renderEffectsTab', label: '（画面 · 场景壁纸 + 本壁纸已固定实时帧）', surface: 'settings',
@@ -7513,7 +7547,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       want: ['画面'],
       // 实测 14 个：门打开后多出 `实时帧`（正好夹在 `出图来源` 与 `自定义画面` 之间）。
       wantLabels: ['壁纸模糊', '亮度', '对比度', '饱和度', '水平', '垂直', '缩放', '壁纸透明度', '暗化', '场景实时渲染',
-        '启动最长等待时间', '实时渲染帧率', '自动画质', '出图来源', '实时帧', '自定义画面', '适配', '水平翻转'] },
+        '启动最长等待时间', '实时渲染帧率', '自动画质', '软件渲染时暂停实时渲染', '出图来源', '实时帧', '自定义画面', '适配', '水平翻转'] },
     // 目标③ 余项 2：转码进度行的 done 态（另一态由「进行中」覆盖）。
     { fn: 'renderEffectsTab', label: '（画面 · 转码进度 done）', surface: 'settings',
       selOver: { type: 'video', transcodeState: 'working', transcodeProgress: { phase: 'done', percent: 100 } },

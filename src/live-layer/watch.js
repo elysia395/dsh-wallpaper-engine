@@ -258,6 +258,19 @@ function startLiveWatch(frame, wid) {
     const isWeb = selection.type === "web";
     const wstate = isWeb ? liveStateOf(frame) : null;
     const alive = liveHeartbeatAlive(frame, stats, wstate, isWeb);
+    // 软渲染兜底（#270）：首帧出来后探测一次 GPU 后端。软渲染（SwiftShader /
+    // llvmpipe / 无 WebGL）撑不起实时 WebGL，继续跑会把整页拖死；这时 pause()
+    // 渲染页、留住最后一帧当静态画面。用户关掉「软件渲染时暂停」即恢复旧行为。
+    if (watch.firstFrame && !watch.softRender && liveSoftRenderProbeNow()
+      && selection.sceneSoftRenderPause !== false) {
+      watch.softRender = true;
+      watch.stall = 0;
+      liveLog("soft-render-pause", "wid=" + watch.wid + " 检测到软件渲染（"
+        + (liveSoftRenderName || weT("无 WebGL")) + "）→ 暂停实时渲染，保留最后一帧", "warn");
+      try { const wp = frame.contentWindow && frame.contentWindow.__wp; if (wp) wp.pause(); } catch { /* ignore */ }
+    }
+    // 兜底暂停期间：无帧是预期行为，不计 stall / 不判失联（与暂停期同一条纪律）。
+    if (watch.softRender && liveSoftRenderPauseOn()) { watch.stall = 0; watch.resumed = false; return; }
     // 渲染页明确记录了 iframe 加载错误 → 立即降级，不必等 15 秒超时。
     if (isWeb && wstate && wstate.iframeLoaded === false && wstate.webError) {
       liveFail("load");

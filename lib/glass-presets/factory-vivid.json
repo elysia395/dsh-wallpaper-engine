@@ -27,6 +27,7 @@
     "sceneLive": true,
     "sceneLiveFps": 30,
     "sceneAutoQuality": true,
+  "sceneSoftRenderPause": true,
     "liveBootDelay": 3,
     "audioSource": "auto",
     "adapterTarget": "auto",
