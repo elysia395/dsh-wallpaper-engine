@@ -212,7 +212,7 @@ function applyLiveControls(frame) {
   try {
     // 软渲染兜底（#270）：探测到软后端且用户没关开关时，把播放意图钉在暂停，
     // 只用最后一帧当静态画面。用户关掉开关后这里自然恢复 resume。
-    const playing = isEffectivelyPlaying();
+    const playing = isEffectivelyPlaying() && !liveSoftRenderPauseOn();
     if (liveApplied.playing !== playing) {
       if (playing) wp.resume(); else wp.pause();
       liveApplied.playing = playing;

@@ -29,6 +29,50 @@ const LIVE_PAYLOAD_FLOOR_BPS = 8000000;
 const LIVE_FIRST_FRAME_MAX_MS = 90000;
 // 账本 `served` 连续这么久没有增长 ⇒ 视为停摆（有在飞的连接但一个字节都没进）。
 const LIVE_PAYLOAD_STALL_MS = 10000;
+// ── 软件渲染探测（#270）──────────────────────────────────────────────
+// 无 GPU 加速时（SwiftShader / llvmpipe / 基本渲染），WebGL 场景会把 CPU 吃满，
+// 整页交互一起被拖死。首帧能出来就说明画面已经有了：这时暂停实时渲染，留住
+// 最后一帧当静态画面，比继续硬扛更合理（#270 的结论：宁可壁纸不动）。
+// 探测只在父页面做一次（与玻璃包的 detectSoftwareRender 同口径），不看
+// dsh-desktop-mode —— 那是窗口模式，不是 GPU 后端。
+// 手动逃生舱：?we-softrender=1 强制当作软渲染，?we-softrender=0 强制关闭。
+const LIVE_SOFT_RENDER_RE = /swiftshader|software|llvmpipe|softpipe|microsoft basic render|angle \(software|stack-gl/i;
+let liveSoftRenderProbe;      // undefined = 未探测 · true = 软件/无 WebGL · false = 硬件
+let liveSoftRenderName = "";  // 诊断用：UNMASKED_RENDERER_WEBGL / VENDOR
+function liveSoftRenderProbeNow() {
+  if (liveSoftRenderProbe !== undefined) return liveSoftRenderProbe;
+  liveSoftRenderProbe = false;
+  try {
+    const q = (typeof location !== "undefined" && location.search) || "";
+    const flag = new URLSearchParams(q).get("we-softrender");
+    if (flag === "on" || flag === "1") return (liveSoftRenderProbe = true);
+    if (flag === "off" || flag === "0") return (liveSoftRenderProbe = false);
+    if (typeof document === "undefined" || typeof document.createElement !== "function") return liveSoftRenderProbe;
+    const canvas = document.createElement("canvas");
+    if (!canvas || typeof canvas.getContext !== "function") return (liveSoftRenderProbe = true);
+    const gl = canvas.getContext("webgl2") || canvas.getContext("webgl") || canvas.getContext("experimental-webgl");
+    if (!gl) return (liveSoftRenderProbe = true);
+    let renderer = "";
+    let vendor = "";
+    try {
+      const ext = gl.getExtension("WEBGL_debug_renderer_info");
+      if (ext) {
+        renderer = gl.getParameter(ext.UNMASKED_RENDERER_WEBGL);
+        vendor = gl.getParameter(ext.UNMASKED_VENDOR_WEBGL);
+      }
+    } catch { /* 扩展被禁用：退回普通参数 */ }
+    if (!renderer) renderer = gl.getParameter(gl.RENDERER);
+    if (!vendor) vendor = gl.getParameter(gl.VENDOR);
+    liveSoftRenderName = String(renderer || "") + " / " + String(vendor || "");
+    liveSoftRenderProbe = LIVE_SOFT_RENDER_RE.test(liveSoftRenderName);
+    try { const lose = gl.getExtension("WEBGL_lose_context"); if (lose) lose.loseContext(); } catch { /* ignore */ }
+  } catch { liveSoftRenderProbe = false; }
+  return liveSoftRenderProbe;
+}
+// 本拍该不该把实时渲染钉在暂停：探测到软渲染 + 用户没关兜底开关。
+function liveSoftRenderPauseOn() {
+  return liveSoftRenderProbe === true && Boolean(selection) && selection.sceneSoftRenderPause !== false;
+}
 function liveStats(frame) {
   try {
     const st = frame.contentWindow && frame.contentWindow.__wpStats;

@@ -44,7 +44,7 @@
   }
 
   function renderEffectsLiveSection(ctx) {
-    const { onLiveBootDelay, onSceneAutoQuality, onSceneLiveFps, onToggleSceneLive, sel } = ctx;
+    const { onLiveBootDelay, onSceneAutoQuality, onSceneLiveFps, onSceneSoftRenderPause, onToggleSceneLive, sel } = ctx;
     return React.createElement(React.Fragment, null,
       // ── 场景实时渲染（WebWallGL）：scene.pkg 壁纸的实时 WebGL 形态，默认
       // 开启。失败（首帧超时/运行失联）按壁纸记忆并自动降级回内嵌 MP4 →
@@ -98,6 +98,15 @@
         key: "scene-auto-quality",
         hint: weT("帧率不足时自动降画质"),
         tooltip: weT("帧率达不到上限的 85% 时，引擎会逐级降低后处理（发光 / 音频可视化 / 光晕）与粒子、关掉抗锯齿来保帧率 —— 弱 GPU 或高分辨率下可能一路降到「后处理全关」，看起来就像动态效果消失了。关掉本开关则保留全部效果、接受可能掉帧；默认开启"),
+      }),
+      // ── 软件渲染兜底（#270）：无 GPU 加速时实时 WebGL 会把 CPU 吃满、整页卡死。
+      //    首帧出来即暂停渲染，留住最后一帧当静态画面；关掉则恢复旧行为。──
+      (sel.type === "scene" || sel.type === "web") && sel.sceneLive !== false
+        && (sel.sceneLiveSrc || sel.webLiveSrc)
+        && switchRow(weT("软件渲染时暂停实时渲染"), sel.sceneSoftRenderPause !== false, onSceneSoftRenderPause, {
+        key: "scene-soft-render-pause",
+        hint: weT("无 GPU 加速时留住最后一帧"),
+        tooltip: weT("检测到系统在用软件渲染（SwiftShader / llvmpipe / 无 WebGL）时，首帧出来后暂停实时渲染，只留最后一帧当静态画面 —— 无 GPU 时继续实时渲染会把整页一起拖死。关掉则恢复旧行为（软渲染也照跑）；手动覆盖：地址加 ?we-softrender=0/1"),
       }),
     );
   }
