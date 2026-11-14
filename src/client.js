@@ -343,6 +343,12 @@ const selection = {
   glassPresetSaveTarget: "",
   glassPresetTargetId: "",
   glassPresetAssetChecks: { font: true, mascot: true, avatar: false, fontAvailable: false, mascotAvailable: false, avatarAvailable: false },
+  // #219 首用引导：清单是否已真正从宿主加载成功（初始 false —— 判据不能把"还没加载"
+  // 误当成"用户没存过"），以及引导当前挂着的目标 id（空串 = 不显示引导）。
+  glassPresetsLoaded: false,
+  glassPresetGuideTargetId: "",
+  // 「已隐藏的出厂预设」清单（#219）：随包层被墓碑遮蔽的那些，供面板画恢复区。
+  glassPresetHidden: [],
   url: null,
   type: null,
   previewUrl: null,
@@ -4059,10 +4065,61 @@ function glassPresetCtx() {
       setTransient("glassPresetAssetChecks", next);
       emit();
     },
+    // #219 首次应用的引导：**只在"清单已加载 + 还没存过自己的预设 + 没点过不再提示"**
+    // 三条同时成立时拦一次。自动路径（firstRunAdopt 直接调 applyPreset）不经过这里，
+    // 所以首装自动采用不受影响。
+    guideTargetId: selection.glassPresetGuideTargetId,
+    hiddenBuiltin: selection.glassPresetHidden,
     onApply: (id) => {
       disarmConfirm();
+      const rows = Array.isArray(selection.glassPresets) ? selection.glassPresets : [];
+      // 清单没加载成功 ⇒ 判不了就不拦（应用本身马上会把宿主错误给出来）。
+      const neverSaved = selection.glassPresetsLoaded === true
+        && selection.presetGuideDismissed !== "1"
+        && !rows.some((r) => r && r.origin === "user");
+      if (neverSaved) {
+        setTransient("glassPresetGuideTargetId", id);
+        emit();
+        return;
+      }
+      setTransient("glassPresetGuideTargetId", "");
       busy(applyPreset(id));
     },
+    // 引导里的「先存一份再继续」：数据层直调 saveGlassPreset（不弹对话框），
+    // 保存成功才应用原目标；保存失败留在引导行（用户仍可「仍然应用」）。
+    onGuideSaveAndApply: () => {
+      const target = selection.glassPresetGuideTargetId;
+      const checks = presetAssetChecksNow();
+      const embeds = ["font", "mascot", "avatar"].filter((k) => checks[k] === true);
+      const stamp = new Date().toLocaleString();
+      setTransient("glassPresetAssetChecks", checks);
+      setTransient("glassPresetGuideTargetId", "");
+      emit();
+      busy(saveGlassPreset(weT("当前配置 {time}", { time: stamp }), embeds).then((savedId) => {
+        if (savedId && target) return applyPreset(target);
+        if (!savedId && target) {
+          setTransient("glassPresetGuideTargetId", target);
+          emit();
+        }
+        return false;
+      }));
+    },
+    onGuideApplyAnyway: () => {
+      const target = selection.glassPresetGuideTargetId;
+      setTransient("glassPresetGuideTargetId", "");
+      emit();
+      if (target) busy(applyPreset(target));
+    },
+    // 「不再提示」= 永久关掉引导（设置键，宿主文件、与端口无关），并照常应用 ——
+    // 用户点的是应用，不该被这个确认取消掉。
+    onGuideDismiss: () => {
+      setSetting("presetGuideDismissed", "1");
+      const target = selection.glassPresetGuideTargetId;
+      setTransient("glassPresetGuideTargetId", "");
+      emit();
+      if (target) busy(applyPreset(target));
+    },
+    onRestoreHidden: (id) => { disarmConfirm(); busy(restoreGlassPreset(id)); },
     onOpenSave: () => {
       setTransient("glassPresetSaving", true);
       setTransient("glassPresetSaveTarget", "save");

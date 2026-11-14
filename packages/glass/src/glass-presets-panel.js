@@ -37,7 +37,8 @@
  *   · **出厂预设的名字走词表**（`FACTORY_PRESET_CN` 就地包 weT ⇒ 文本扫描看得见），
  *     用户预设显示原名 —— 随包文件里的 name 是数据，扫描看不见，所以映射表必须是字面量；
  *   · **破坏性动作两步确认**且不用原生对话框（复用 client.js 的 armConfirm / renderConfirmRow）；
- *   · **出厂预设的删除 = 永久删除**（两步确认点明不可恢复；宿主落墓碑遮蔽，无恢复通道）；
+ *   · **出厂预设的删除 = 隐藏**（两步确认；宿主落墓碑遮蔽，可从「已隐藏的出厂预设」区
+ *     `restore` 回来 —— #219 改写了初版的「永久删除」口径）；用户预设的删除仍是真删；
  *   · **读不懂的预设禁用但保留删除**（删掉坏文件是唯一出路）：「禁用」指**应用键**
  *     （`disabled: Boolean(broken)`）；「保留删除」指删除键与**两步确认行对坏行照常渲染**
  *     （此前的 `!armedRow.broken` 把确认行挡掉 ⇒ 坏行点了 `×` 没反应、永远删不掉，t7 配套修复）。
@@ -71,6 +72,9 @@ function renderGlassPresetsBlock(gp) {
     onApply, onOpenSave, onOpenExport, onExportTargetChange, onDraftName, onSaveCommit, onCancelSave,
     onArmDelete, onDisarm, onDelete,
     onImportFile,
+    // #219：首次应用引导 + 出厂预设的「已隐藏」恢复区（都是真值门控，默认 ctx 缺席不渲染）。
+    guideTargetId, hiddenBuiltin, onGuideSaveAndApply, onGuideApplyAnyway, onGuideDismiss,
+    onRestoreHidden,
   } = gp || {};
   if (!presets) return null; // ctx 缺席时不画（渲染器不抛，也不画半个块）
   const rows = Array.isArray(presets) ? presets : [];
@@ -158,13 +162,19 @@ function renderGlassPresetsBlock(gp) {
       weT("数值配置（开关 / 尺寸 / 圆角 / 颜色等）总是完整保存，不受勾选影响 —— 勾选只决定图片与字体要不要一并带走；不勾的那一族一个字都不动对方，勾了而本机没有 = 声明「无」（对方回到内置）。")),
   );
   // 两行四列的圆角表格（用户口径）：每格 = 预设名（点击应用，占满）
-  // + 右侧固定删除键；不足 8 个的格子画虚框空位 —— 上限 8 直接看得见。
+  // + 右侧固定删除键；出厂行在前（不占用户名额），用户槽固定 8 个、空位画虚框 ——
+  // 「你自己最多 8 套」直接看得见（#219 把这条上限从"总量 8"拆成"用户 8"）。
   // ⚠️ armedId 是 **裸 id**（armedIdOf("gpreset") 已把族前缀剥掉，与 fontset-editor
   //    同一口径）—— 拿它和带前缀的令牌串比较永远不等 ⇒ 确认行永远不渲染
   //    （实测："点删除没反应"就是这个）。行为守卫：verify-presets ④。
+  // #219：槽位 = **出厂行（实际几套画几格，不占名额）** + **固定 8 个用户槽**（空位画虚框）。
+  // 上限由宿主按用户层单独计（PRESET_USER_MAX），所以格数不再写死 8。
+  const builtinRows = rows.filter((r) => r.origin === "builtin");
+  const userRows = rows.filter((r) => r.origin !== "builtin");
+  const slots = builtinRows.concat(Array.from({ length: 8 }, (_, i) => userRows[i] || null));
   const cells = [];
-  for (let i = 0; i < 8; i++) {
-    const row = rows[i];
+  for (let i = 0; i < slots.length; i++) {
+    const row = slots[i];
     if (!row) {
       cells.push(React.createElement("div", {
         key: "empty-" + i, className: "we-picker__preset-cell we-picker__preset-cell--empty",
@@ -197,8 +207,9 @@ function renderGlassPresetsBlock(gp) {
       // ⚠️ 这里**没有**导出的格子键（用户口径）：导出已独立成网格下方的
       //    「导出预设…」入口 —— 导出是**对"哪一份"**的动作，逐格挂一排同名键既挤格子
       //    又和"导出自己想要的那份"重复；独立入口 + 对话框里选目标，一处就够。
-      // ⚠️ 删除键对**所有格**都有（用户口径：出厂预设可删，删除即永久、
-      //    不可恢复），统一固定在每格最右侧；文案按 origin 分。
+      // ⚠️ 删除键对**所有格**都有（用户口径：用户预设真删；出厂预设的删除 =
+      //    **隐藏**，可从下面的「已隐藏的出厂预设」区恢复 —— #219），统一固定在每格
+      //    最右侧；文案按 origin 分。
       React.createElement("button", {
         className: "we-picker__btn we-picker__preset-del", type: "button",
         disabled: loading === true,
@@ -206,14 +217,14 @@ function renderGlassPresetsBlock(gp) {
           ? weT("已经问过你了 —— 在下面那一行选「确认」或「取消」")
           : (isUser
             ? weT("删除这个预设（会再问一次）")
-            : weT("删除这个出厂预设（不可恢复）")),
+            : weT("隐藏这个出厂预设（可恢复：之后从「已隐藏」区放回来）")),
         onClick: () => { if (!armed) onArmDelete(row.id); },
       }, "×"),
     ));
   }
   const chipRow = React.createElement("div", { className: "we-picker__preset-grid", key: "gp-grid" }, cells);
   // 网格下方的**动作行**（不在格子里 —— 格子属于预设本身）：保存 / 导出 / 导入。
-  //   · 保存：满 8 个禁用并指路（删除腾位）；
+  //   · 保存：**你自己的**预设满 8 个才禁用并指路（出厂七套不占名额 —— #219）；
   //   · 导出：**独立入口**（用户口径）—— 对话框里再选"导出哪一份"；
   //   · 导入：隐藏 file input + 按钮。
   const openSaveRow = saving
@@ -221,9 +232,9 @@ function renderGlassPresetsBlock(gp) {
     : React.createElement("div", { className: "we-picker__ctl we-picker__ctl--wrap", key: "gp-save-open" },
       React.createElement("button", {
         className: "we-picker__btn", type: "button",
-        disabled: loading === true || rows.length >= 8,
-        title: rows.length >= 8
-          ? weT("已达预设上限（8 个）—— 删除不需要的预设后再存")
+        disabled: loading === true || userRows.length >= 8,
+        title: userRows.length >= 8
+          ? weT("你自己的预设已达上限（8 个）—— 删除或隐藏一份之后再存")
           : weT("把当前这套整机配置存成一份你自己的预设（之后从预设行一键取回）"),
         onClick: () => onOpenSave(),
       }, weT("保存当前为预设…")),
@@ -263,11 +274,53 @@ function renderGlassPresetsBlock(gp) {
   //    删除键与确认行对所有行（含 broken）同形。令牌判据仍由 renderConfirmRow 自己守
   //   （armedId 找不到对应行 ⇒ armedRow 为 null ⇒ 不渲染）。
   const armedRow = armedId ? rows.find((r) => r.id === armedId) : null;
+  // 出厂 = **隐藏**（可恢复，#219）：问句要说清"它会从预设栏消失、之后能放回来"，
+  //    不能再说"不可恢复"（那是旧口径）。
   const armedQuestion = armedRow && (armedRow.origin === "user"
     ? weT("删除预设「{name}」？此操作不可恢复。", { name: labelOf(armedRow) })
-    : weT("删除出厂预设「{name}」？此操作不可恢复。", { name: labelOf(armedRow) }));
+    : weT("隐藏出厂预设「{name}」？它会从预设栏消失 —— 之后可从「已隐藏的出厂预设」区放回来。", { name: labelOf(armedRow) }));
   const confirmRow = armedRow
     ? renderConfirmRow(armedId, armedId, armedQuestion, () => onDelete(armedRow.id), () => onDisarm())
+    : null;
+  // ── #219 首次应用的引导（独立行，**不复用** renderConfirmRow 的 gpreset 令牌）────
+  // 触发在 client.js 的 onApply：清单已加载 + 你还没存过自己的预设 + 没点过「不再提示」。
+  // 它只是"先备份再动整机配置"的提醒：三个出口都通，不挡路。
+  const guideTarget = guideTargetId ? (rows.find((r) => r.id === guideTargetId) || null) : null;
+  const guideRow = guideTarget
+    ? React.createElement("div", { className: "we-picker__ctl we-picker__ctl--wrap", key: "gp-guide" },
+      React.createElement("div", { className: "we-picker__hint" },
+        weT("你还没存过自己的预设 —— 应用「{name}」会把这台机器的整套配置覆盖掉，而且没有撤销。先把当前配置存一份，之后还能回到现在的样子。", { name: labelOf(guideTarget) })),
+      React.createElement("button", {
+        className: "we-picker__btn", type: "button", disabled: loading === true,
+        title: weT("按当前配置 + 默认勾选（字体 / 立绘）存一份，存好就应用「{name}」", { name: labelOf(guideTarget) }),
+        onClick: () => onGuideSaveAndApply(),
+      }, weT("先存一份再继续")),
+      React.createElement("button", {
+        className: "we-picker__btn", type: "button", disabled: loading === true,
+        title: weT("不保存，直接应用「{name}」", { name: labelOf(guideTarget) }),
+        onClick: () => onGuideApplyAnyway(),
+      }, weT("仍然应用")),
+      React.createElement("button", {
+        className: "we-picker__btn", type: "button", disabled: loading === true,
+        title: weT("以后不再提醒，并照样应用「{name}」", { name: labelOf(guideTarget) }),
+        onClick: () => onGuideDismiss(),
+      }, weT("不再提示")),
+    )
+    : null;
+  // ── 「已隐藏的出厂预设」恢复区（#219）：删除 = 隐藏之后，这条路把它放回来 ────────
+  // 只在确实有隐藏项时出现（hiddenBuiltin 默认空/缺席 ⇒ 整行不渲染）。
+  const hiddenRows = Array.isArray(hiddenBuiltin) ? hiddenBuiltin : [];
+  const hiddenRow = hiddenRows.length
+    ? React.createElement("div", { className: "we-picker__ctl we-picker__ctl--wrap", key: "gp-hidden" },
+      React.createElement("div", { className: "we-picker__hint" },
+        weT("已隐藏的出厂预设（删除出厂预设 = 隐藏，随时可以放回来）")),
+      ...hiddenRows.map((row) => React.createElement("button", {
+        className: "we-picker__btn", type: "button", key: "gp-restore-" + row.id,
+        disabled: loading === true,
+        title: weT("把「{name}」放回预设栏", { name: labelOf(row) }),
+        onClick: () => onRestoreHidden(row.id),
+      }, weT("恢复「{name}」", { name: labelOf(row) }))),
+    )
     : null;
   // ── 保存 / 导出对话框（非模态，同一组资产勾选项；ADR 修订版第③条：两处都先问）────
   //   · saveTarget === "save"   → 名字行 + 勾选 + 「保存预设」（真正落盘）；
@@ -340,7 +393,7 @@ function renderGlassPresetsBlock(gp) {
     : null;
   return React.createElement(React.Fragment, null,
     React.createElement("div", { className: "we-picker__ctl we-picker__ctl--wrap" },
-      ctlText(weT("预设方案"), weT("一键套用整套配置（出厂七套 + 你自己存的，上限 8 个）：观感、行为与勾选的字体 / 立绘 / 头像一起生效，应用后可继续微调")),
+      ctlText(weT("预设方案"), weT("一键套用整套配置（出厂七套不占名额 + 你自己最多 8 套）：观感、行为与勾选的字体 / 立绘 / 头像一起生效，应用后可继续微调")),
     ),
     loading ? React.createElement("div", { className: "we-picker__hint" }, weT("正在处理…")) : null,
     // ⚠️ reason 必须再过一次 weT：它可能来自宿主回包（lib/routes/presets.js 的中文 error），
@@ -352,6 +405,8 @@ function renderGlassPresetsBlock(gp) {
       : null,
     chipRow,
     confirmRow,
+    guideRow,
+    hiddenRow,
     openSaveRow,
     saveRow,
     exportRow,

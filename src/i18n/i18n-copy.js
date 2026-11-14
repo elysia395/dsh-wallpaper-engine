@@ -67,7 +67,8 @@ const WE_I18N_HOST_EN = {
   "body 必须是 { name, values }": "Body must be { name, values }",
   "预设数量已达上限": "Preset limit reached",
   "已存在同名的预设（换个名字再存）": "A preset with the same name already exists (choose another name)",
-  "预设数量已达上限（最多 8 个 —— 删除不需要的预设腾位）": "Preset limit reached (8 max — delete presets you no longer need to free a slot)",
+  "你自己的预设已达上限（最多 8 个 —— 删除或隐藏不需要的预设腾位）": "You already have the maximum number of your own presets (8 — delete or hide one to free a slot)",
+  "这份出厂预设没有被隐藏，无需恢复": "This factory preset is not hidden, so there is nothing to restore",
 
 };
 

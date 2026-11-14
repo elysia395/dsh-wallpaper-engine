@@ -537,39 +537,92 @@ const OLD_TAG = 'dsh-we/glass-preset@1';
     [dup.__state.status, dupVariant.__state.status, dupBuiltin.__state.status].join('/'));
   check('409 带 error 信封（客户端显示处要原话）', typeof (bodyJson(dup) || {}).error === 'string');
 
-  // 上限 8：现在 8 个活跃（7 出厂 + 1 用户）⇒ 第 9 个 409
-  const overCap = await create('超出上限的预设');
-  check('上限 8：第 9 个活跃预设 409（错误文案点明可删除腾位）',
-    overCap.__state.status === 409 && /8/.test((bodyJson(overCap) || {}).error || ''),
-    (bodyJson(overCap) || {}).error);
+  // #219：上限只按**用户层**算 —— 七套出厂预设不占名额，清单也不再被截到 8 行。
+  // 此时用户层 1 个（preset-test-1）；把它和后面造的填充预设一起算。
+  const userCountOf = async () => ((await getList()).presets || []).filter((r) => r.origin === 'user').length;
+  check('上限拆分：7 套出厂 + 1 个用户都在清单里（用户名额 = 8，不是 8 - 7）',
+    (await userCountOf()) === 1 && (await getList()).presets.length === 8,
+    'users=' + (await userCountOf()));
+  const fillerIds = [];
+  for (let i = 2; i <= 8; i++) {
+    const id = 'preset-fill-' + i;
+    const r = await create('填充预设 ' + i, {}, id);
+    if (r.__state.status === 200) fillerIds.push(id);
+  }
+  list = await getList();
+  const userRowsFull = (list.presets || []).filter((r) => r.origin === 'user');
+  check('前置：用户层填满 8 个，清单 15 行（7 出厂 + 8 用户；出厂行不再挤占/触发截断）',
+    userRowsFull.length === 8 && list.presets.length === 15,
+    'users=' + userRowsFull.length + ' presets=' + list.presets.length);
 
-  // 删除一个出厂 ⇒ 腾出一格 ⇒ 创建放行（已删除的不占位）
+  // 第 9 个用户预设 ⇒ 409（文案点明"你自己的"，且不再叫"预设数量已达上限"）。
+  const overCap = await create('超出上限的预设');
+  const overCapErr = (bodyJson(overCap) || {}).error || '';
+  check('第 9 个用户预设 409（错误文案点明「你自己的预设」+ 8 个，并给出删除/隐藏两条出路）',
+    overCap.__state.status === 409 && /你自己的预设/.test(overCapErr) && /8/.test(overCapErr)
+    && /删除或隐藏/.test(overCapErr),
+    overCapErr);
+
+  // 出厂删除 = **隐藏**：清单少一行、用户层落墓碑、包内字节不变；`?hidden=1` 能看见它。
   const hide = await del('factory-frosted');
   list = await getList();
-  check('出厂删除 200（清单少一行、无 hidden 形态；包内字节不变）',
-    hide.__state.status === 200 && bodyJson(hide).origin === 'builtin'
-    && list.presets.length === 7 && !list.presets.some((r) => r.id === 'factory-frosted')
+  const hiddenRes = await callRoute(route, fakeReq('/wallpaper-engine/glass-presets?hidden=1', 'GET'));
+  const hiddenBody = bodyJson(hiddenRes) || {};
+  check('出厂删除 200 ⇒ 隐藏：清单少一行、默认响应仍无 hidden 字段、`?hidden=1` 列出它、包内字节不变',
+    hide.__state.status === 200 && (bodyJson(hide) || {}).origin === 'builtin'
+    && list.presets.length === 14 && !list.presets.some((r) => r.id === 'factory-frosted')
     && !('hidden' in list)
+    && Array.isArray(hiddenBody.hidden) && hiddenBody.hidden.some((r) => r.id === 'factory-frosted')
     && dirDigest(BUILTIN) === digestBefore,
-    'presets=' + list.presets.length);
-  const freed = await create('腾位后的新预设', {}, 'preset-freed-1');
-  check('删除腾位后创建放行（已删除的不占上限）', freed.__state.status === 200, 'status=' + freed.__state.status);
-  await del('preset-test-1'); // 释放旧位：腾位 + 同名测试要在 8 个活跃内完成
+    'presets=' + list.presets.length + ' hidden=' + ((hiddenBody.hidden || []).map((r) => r.id).join(',')));
 
-  // 删除期间名字放开：可以存一份叫「重磨砂」的（名字对比域只含活跃清单）
-  const nameFreed = await create('重磨砂', { glassAlpha: 50 }, 'preset-rename-1');
-  check('删除后出厂名字放开（同名创建 200）', nameFreed.__state.status === 200);
-  await del('preset-rename-1');
-  await del('preset-freed-1');
+  // 隐藏出厂**不**腾出用户名额（这正是 #219 的第一条诉求：两件事分开算）。
+  const stillFull = await create('隐藏出厂后仍然满额');
+  check('隐藏一套出厂**不**腾出用户名额（上限只按用户层算，与出厂几套无关）',
+    stillFull.__state.status === 409, 'status=' + stillFull.__state.status);
 
-  // 不可恢复（口径）：删墓碑 = 复活的那条通道已封 —— 再删一次 404，
-  // 清单依旧没有它；就算那个名字已经空出来，出厂预设也不会回来。
-  const restoreAttempt = await del('factory-frosted');
+  // 恢复：POST <id>/restore ⇒ 200 + 清单回来 + 墓碑文件消失。
+  const restored = await callRoute(route, fakeReq('/wallpaper-engine/glass-presets/factory-frosted/restore', 'POST'));
+  const restoredBody = bodyJson(restored) || {};
   list = await getList();
-  check('出厂删除即永久：再删一次 404、不复活（清单仍没有它）',
-    restoreAttempt.__state.status === 404
-    && list.presets.length === 6 && !list.presets.some((r) => r.id === 'factory-frosted'),
-    'status=' + restoreAttempt.__state.status + ' presets=' + list.presets.length);
+  const hiddenAfter = bodyJson(await callRoute(route, fakeReq('/wallpaper-engine/glass-presets?hidden=1', 'GET'))) || {};
+  check('restore 200：{ ok, restored, origin=builtin }，清单回到 15 行，墓碑文件被删、hidden 清空',
+    restored.__state.status === 200 && restoredBody.ok === true
+    && restoredBody.restored === 'factory-frosted' && restoredBody.origin === 'builtin'
+    && list.presets.some((r) => r.id === 'factory-frosted') && list.presets.length === 15
+    && !existsSync(userFilePath('factory-frosted'))
+    && !(hiddenAfter.hidden || []).some((r) => r.id === 'factory-frosted'),
+    'status=' + restored.__state.status);
+
+  // 负对照：没隐藏过的出厂 restore ⇒ 409 reason=not-hidden（不是笼统 404/500）。
+  const restoreNoop = await callRoute(route, fakeReq('/wallpaper-engine/glass-presets/factory-night/restore', 'POST'));
+  check('未隐藏时 restore ⇒ 409 且 reason=not-hidden（客户端能区分"本来就没隐藏"）',
+    restoreNoop.__state.status === 409 && (bodyJson(restoreNoop) || {}).reason === 'not-hidden',
+    'status=' + restoreNoop.__state.status + ' reason=' + ((bodyJson(restoreNoop) || {}).reason || '-'));
+
+  // 删一个用户预设 ⇒ 腾出一格 ⇒ 创建放行（用户层计数真的减了）。
+  await del('preset-test-1');
+  const freed = await create('腾位后的新预设', {}, 'preset-freed-1');
+  check('删除用户预设腾位后创建放行（用户层 8 → 7 → 8）',
+    freed.__state.status === 200, 'status=' + freed.__state.status);
+
+  // 删除期间名字放开：先腾一格，再存一份叫「重磨砂」的（名字对比域只含活跃清单；
+  // 隐藏的出厂不在活跃清单里 ⇒ 名字也放开）。
+  await del('preset-freed-1');
+  const hideForName = await del('factory-frosted');
+  const nameFreed = await create('重磨砂', { glassAlpha: 50 }, 'preset-rename-1');
+  check('隐藏一出厂后它的名字放开（同名创建 200）',
+    hideForName.__state.status === 200 && nameFreed.__state.status === 200,
+    'hide=' + hideForName.__state.status + ' create=' + nameFreed.__state.status);
+  await del('preset-rename-1');
+
+  // 不可恢复的旧口径已作废：隐藏之后再删同一份 ⇒ 404，且 restore 能把它放回来（上面已测）。
+  const hideAgain = await del('factory-frosted');
+  list = await getList();
+  check('同一份出厂二次删除 ⇒ 404（已是墓碑），清单仍没有它',
+    hideAgain.__state.status === 404
+    && list.presets.length === 13 && !list.presets.some((r) => r.id === 'factory-frosted'),
+    'status=' + hideAgain.__state.status + ' presets=' + list.presets.length);
   // 墓碑的 tag 值永不许改（改了会让删过的出厂预设复活）—— 值 + 落盘文件双向核对。
   check('墓碑 tag 值原样不动（D6 连带约束）',
     schema.GLASS_PRESET_TOMBSTONE_TAG === 'dsh-we/glass-preset-tombstone@1'
@@ -577,14 +630,14 @@ const OLD_TAG = 'dsh-we/glass-preset@1';
     schema.GLASS_PRESET_TOMBSTONE_TAG);
 
   // 用户预设删除 / 404 / 路径安全（形状不变）
-  await del('factory-night');           // 删除腾位（不影响包内字节）
+  await del('factory-night');           // 再隐藏一套（不影响包内字节）
   const mk2 = await create('删除语义用的预设', {}, 'preset-test-2');
   const delUser = await del('preset-test-2');
   const delGone = await del('preset-test-2');
   const missing = await get1('preset-nope');
   const escape = await callRoute(route, fakeReq('/wallpaper-engine/glass-presets/..%2F..%2Fconfig.json', 'GET'));
   const badId = await callRoute(route, fakeReq('/wallpaper-engine/glass-presets/not%20a%20valid%20id!', 'GET'));
-  const nightGone = await del('factory-night'); // 已删除的出厂：再删仍 404（不可恢复）
+  const nightGone = await del('factory-night'); // 已隐藏的出厂：再删仍 404
   check('用户删除 200；再删 404；unknown 404；穿越与非法 id 4xx；出厂二次删除仍 404',
     mk2.__state.status === 200 && delUser.__state.status === 200 && bodyJson(delUser).origin === 'user'
     && delGone.__state.status === 404 && missing.__state.status === 404
@@ -593,6 +646,11 @@ const OLD_TAG = 'dsh-we/glass-preset@1';
     [mk2.__state.status, delUser.__state.status, delGone.__state.status, missing.__state.status,
       escape.__state.status, badId.__state.status, nightGone.__state.status].join('/'));
   check('包内目录全程字节不变（删除只落用户层墓碑）', dirDigest(BUILTIN) === digestBefore);
+
+  // 清掉本段造的用户预设（③c 的前提是用户层空出来）。
+  for (const r of (await getList()).presets || []) {
+    if (r.origin === 'user') await del(r.id);
+  }
 }
 
 // ── ③b 旧 tag 一律作废（D6）══════════════════════════════════════════════════
@@ -660,16 +718,16 @@ section('③b 旧 tag 作废：422 + reason 点明版本作废、清单标 broke
 // ── ③c 坏预设必须可删（captain 实测出的阻断级缺陷）══════════════════════════
 section('③c 坏预设可删 + 坏行计入上限（既存得进也清得掉，不许死锁）');
 {
-  const countOf = async () => ((await getList()).presets || []).length;
+  const countOf = async () => ((await getList()).presets || []).filter((r) => r.origin === 'user').length;
   const countBefore = await countOf();
   writeUserFile('preset-stuck-old', { $schema: OLD_TAG, id: 'preset-stuck-old', name: '升级留下的坏行', values: {} });
   const withBad = await getList();
   const badRow = (withBad.presets || []).find((r) => r.id === 'preset-stuck-old');
-  check('坏行计入活跃清单（这就是死锁的来源，钉住"坏行占位"这个事实）',
+  check('坏行计入**用户层**上限（这就是死锁的来源，钉住"坏行占位"这个事实）',
     Boolean(badRow) && badRow.broken === 'version-obsolete'
-    && (withBad.presets || []).length === countBefore + 1,
-    '清单 ' + countBefore + ' → ' + (withBad.presets || []).length);
-  // 把现场推到边界：填到 8 个活跃（含那条坏行）。
+    && (withBad.presets || []).filter((r) => r.origin === 'user').length === countBefore + 1,
+    '用户层 ' + countBefore + ' → ' + (withBad.presets || []).filter((r) => r.origin === 'user').length);
+  // 把现场推到边界：用户层填到 8 个（含那条坏行）。
   let guard = 0;
   while ((await countOf()) < 8 && guard++ < 12) {
     const n = 'filler-' + (await countOf());
@@ -677,10 +735,10 @@ section('③c 坏预设可删 + 坏行计入上限（既存得进也清得掉，
     if (r.__state.status !== 200) break;
   }
   const fullList = await getList();
-  check('前置：清单已达上限 8（含那条坏行）', (fullList.presets || []).length === 8,
+  check('前置：用户层已达上限 8（含那条坏行）', (fullList.presets || []).filter((r) => r.origin === 'user').length === 8,
     (fullList.presets || []).filter((r) => r.broken).length + ' 条坏行');
   const blockedCreate = await create('坏行挡路的创建', {}, 'preset-blocked');
-  check('满额时创建 409（坏行占位 ⇒ 这正是缺陷的表现）',
+  check('用户层满额时创建 409（坏行占位 ⇒ 这正是缺陷的表现）',
     blockedCreate.__state.status === 409, 'status=' + blockedCreate.__state.status);
   // ★ 核心：坏行必须**删得掉**（缺陷版返回 404 unknown preset ⇒ 永远删不掉）。
   const delBad = await del('preset-stuck-old');
@@ -1439,8 +1497,8 @@ section('④ 客户端形态棘轮：新编排链（合并→落盘→reapplyAll
     const putCount = writeMethods.filter((m) => /PUT/.test(m)).length;
     const postCount = writeMethods.filter((m) => /POST/.test(m)).length;
     const delCount = writeMethods.filter((m) => /DELETE/.test(m)).length;
-    check('写请求只有 POST×3（create / install-assets / import）与 DELETE×1 —— 无 PUT、无 activate',
-      putCount === 0 && postCount === 3 && delCount === 1,
+    check('写请求只有 POST×4（create / install-assets / import / restore）与 DELETE×1 —— 无 PUT、无 activate',
+      putCount === 0 && postCount === 4 && delCount === 1,
       'POST=' + postCount + ' DELETE=' + delCount + ' PUT=' + putCount);
     // 负对照：同一条计数对"多一条 PUT"的合成源码必须判出（证明不是恒真）。
     const synth = 'a({ method: "POST" }) b({ method: "POST" }) c({ method: "DELETE" }) d({ method: "PUT" })';
@@ -1462,8 +1520,8 @@ section('④ 客户端形态棘轮：新编排链（合并→落盘→reapplyAll
     && /这不是预设文件/.test(storeCode) && /PROFILE_PRESET_SCHEMA_TAG/.test(storeCode));
   check('出厂预设名字走 weT 词表（就地字面量，不是数据直出）',
     /"factory-default": weT\("黑客绿\(Fish\)"\)/.test(panelSrc));
-  check('删除按钮文案按 origin 分语义（出厂=永久删除 / 用户=删除）',
-    /删除这个出厂预设（不可恢复）/.test(panelSrc) && /删除这个预设（会再问一次）/.test(panelSrc));
+  check('删除按钮文案按 origin 分语义（出厂=隐藏可恢复 / 用户=真删）',
+    /隐藏这个出厂预设（可恢复：之后从「已隐藏」区放回来）/.test(panelSrc) && /删除这个预设（会再问一次）/.test(panelSrc));
   // ADR-0011 D6 连带要求：broken 文案必须**点明版本作废**并给出重存出路，按 origin 分口径。
   check('broken 文案按 origin 分：出厂点名"版本已作废"+ 重存出路（不是笼统读不出来）',
     /这份出厂预设的版本已作废/.test(panelSrc) && /从预设栏重新保存一份/.test(panelSrc)
@@ -1704,8 +1762,8 @@ section('④b 行为判据：删除令牌链 + broken 行禁用与可删 + 勾�
   const tree1 = renderGlassPresetsBlock(baseCtx({ armedId: armed }));
   check('行为判据台架：渲染出删除按钮（出厂 + 用户 + 坏行）', findButtons(tree1).length >= 6,
     findButtons(tree1).length + ' 个按钮');
-  const delFactory = findButtons(tree1).find((b) => b.props.title && String(b.props.title).includes('删除这个出厂预设'));
-  check('出厂行的 × 在场（永久删除语义文案）', Boolean(delFactory));
+  const delFactory = findButtons(tree1).find((b) => b.props.title && String(b.props.title).includes('隐藏这个出厂预设'));
+  check('出厂行的 × 在场（**可恢复的隐藏**语义文案）', Boolean(delFactory));
   // ★ t8：坏行也有 ×（且 armed 后给确认行 —— 见下方 broken 判据组）。
   const delBroken = findButtons(tree1).find((b) => String(b.props.title || '').includes('删除这个预设'));
   check('坏行 / 用户行的 × 都在（删掉坏文件是唯一出路）', Boolean(delBroken));
@@ -1714,8 +1772,8 @@ section('④b 行为判据：删除令牌链 + broken 行禁用与可删 + 勾�
   check('点 × 走 onArmDelete 并记下**裸 id**（族前缀已剥）', armed === 'factory-a', armed);
   const tree2 = renderGlassPresetsBlock(baseCtx({ armedId: armed }));
   const confirm2 = findConfirm(tree2);
-  check('带令牌重渲染后确认行在场，且问句是**不可恢复**语义', Boolean(confirm2)
-    && String(confirm2.question).includes('删除出厂预设') && String(confirm2.question).includes('不可恢复'),
+  check('带令牌重渲染后确认行在场，且问句是**隐藏可恢复**语义（#219 改口径）', Boolean(confirm2)
+    && String(confirm2.question).includes('隐藏出厂预设') && String(confirm2.question).includes('放回来'),
     confirm2 && String(confirm2.question).slice(0, 40));
   const tree3 = renderGlassPresetsBlock(baseCtx({ armedId: 'user-1' }));
   const confirm3 = findConfirm(tree3);
