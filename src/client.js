@@ -2973,6 +2973,7 @@ function onAdapterTarget(e) { setSetting("adapterTarget", e.target.value); emit(
 function onPauseOnHidden(e) { setSetting("pauseOnHidden", e.target.checked); emit(); }
 function onPauseOnBlur(e) { setSetting("pauseOnBlur", e.target.checked); emit(); }
 function onPauseOnBattery(e) { setSetting("pauseOnBattery", e.target.checked); emit(); }
+function onStartPaused(e) { setSetting("startPaused", e.target.checked); emit(); }
 function onToggleLiveDiag() { toggleLiveDiag(); emit(); }
 // ── 「扩展」页签（一号模块：点击效果与拖尾效果）的处理器 ──────────────────────
 // 形状与上面一致：控件只报事件，写设置 + 重渲染都在这里。那一层没有网络往返、"点了就有反应"是
@@ -5025,7 +5026,7 @@ function WallpaperPicker() {
       }),
       renderAdvancedTab({
         setSetting, setTransient,
-        onAdapterTarget, onEdgeCompatChange, onLayoutChange, onPauseOnBattery, onPauseOnBlur, onPauseOnHidden, onToggleLiveDiag, sel,
+        onAdapterTarget, onEdgeCompatChange, onLayoutChange, onPauseOnBattery, onPauseOnBlur, onPauseOnHidden, onToggleLiveDiag, onStartPaused, sel,
         onStartEditCacheDir, onCancelEditCacheDir, onCacheDirDraft,
         onCacheDirBrowseInput, onCacheDirBrowseGo, onCacheDirBrowseEnter, onCacheDirBrowseUp, onPickCacheDir, onCloseCacheDirBrowse,
       }),
@@ -6113,6 +6114,19 @@ function apply(ctx) {
     });
   }
 
+  // 启动时暂停（#349）：宿主设置落地后（`loadPersisted` 末尾置 `hostLoaded`）统一在这里
+  // 把播放意图置为暂停。位置在库存恢复**之前**（`loadInventory → revalidateSelection →
+  // applySelection`），于是壁纸以暂停态挂载，而不是"先自动播放、随后才被暂停"（会闪一帧）。
+  // 两个瞬态都置位：`playing` 是用户意图（面板按钮/出图闸门读它），`videoPlaying` 是元素
+  // 真实态，启动时元素尚未挂载 ⇒ 不置位的话视频卡会在首帧前谎报「播放中」。
+  // 只改瞬态、不落盘；手动点「播放」后本次会话照常播放。
+  function applyStartPaused() {
+    if (selection.startPaused === true && selection.playing) {
+      setTransient("playing", false);
+      setTransient("videoPlaying", false);
+    }
+  }
+
   // Settings first (host file, port-independent), then the ACTIVE FONTSET (its values live in
   // fontsets/<id>.json — a different store on the same host), then inventory — so the
   // selection restore inside loadInventory()'s revalidateSelection() sees the persisted id
@@ -6125,6 +6139,7 @@ function apply(ctx) {
   // 扫描，而首帧之前没有任何界面等它 ⇒ 没必要在宿主启动那几百毫秒里跟它抢 I/O。
   // 与 settings / fontset 分离不影响正确性：链尾的 `revalidateSelection()` 只依赖库存本身。
   loadPersisted()
+    .then(applyStartPaused)
     .then(loadFontSet)
     .then(afterFirstPaint)
     .then(() => { prefetchInventoryOnce(); return loadInventory(); })

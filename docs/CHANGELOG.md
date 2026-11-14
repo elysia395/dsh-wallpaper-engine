@@ -14,6 +14,10 @@
 > 完整逐提交历史见 GitHub Commits / Releases；升级前置条件见 [`UPGRADING.md`](./UPGRADING.md)。
 > `test/verify-scene-live.mjs` 这一类判据条数**只记该条写作当时的实测总数**（如 466 / 465），不是现在的总数 —— 后续条目会往上加（现为 502）；照原文保留，好让它与当次提交对得上。
 
+### 未发布（启动时暂停，#349，2026-11-14）
+
+- **新增：设置「省电」一节加「启动时暂停」，每次重启 DSH 后壁纸先停在原处，点播放才动（#349）**。开关默认关，持久化在宿主设置里；启动链在 `loadPersisted()` 之后、库存建层之前把播放意图置为暂停（同时清 `videoPlaying`，视频卡的播放按钮不会谎报「播放中」），**播放态本身不落盘** —— 已选壁纸、其它设置与暂停帧都不变，关掉开关即恢复原行为。场景 / 网页壁纸走 `isEffectivelyPlaying()`，暂停后渲染页 `wp.pause()`，不会在后台空转。守卫：`verify-client` 补 ctx 接线与语义判据，`verify-fontset` 的启动链顺序、`verify-scene-live` 的 handler 表各补一条，均带负对照；sanitize 金标按 `host.startPaused` / `client.startPaused` 重录。
+
 ### 未发布（气泡族选择器，2026-11-11）
 
 - **修复：0.2.2-rc.1 新增的「AI 提问框」在玻璃化后四角露出方形残留**：宿主新组件 `QuestionReplyView` 把圆角气泡（共享原语 `_bubble_<hash>`、`border-radius: var(--dsw-radius-xl)`、`padding: 10px 16px`）又包了一层 `Xxx_bubbleWidth` wrapper —— 该 wrapper **没有 border-radius**、盒子与气泡完全重合。插件的玻璃规则按 `[class*="_bubble"]` 认气泡族，于是把 wrapper 也刷上了镜面釉 + `backdrop-filter`（模糊/饱和/亮度/对比）+ 外阴影；wrapper 的方形绘制从气泡圆角外侧露出来，看起来就是「圆角文本框、方形的四角」，模糊与外阴影也变成方形光晕。修法：四条气泡族规则（思考档 fill / 对话玻璃组 / 气泡内代码块清底 / fallback 摘霜）的锚点从裸 `_bubble` 收紧成宿主 CSS Module 的**哈希形态** `[class*="_bubble_"]`（`_bubble_<hash>_<n>`）——它天然不命中 camelCase 的 `*_bubbleWidth`，而气泡本体（共享原语类）照常命中，`role="tooltip"` 的 Tooltip 豁免保留。守卫：`verify-readability` 的 F2dN 改用哈希形态，并新增 F2dN2（任何裸 `[class*="_bubble"]` 规则立即判红 + 「`*_bubbleWidth` 只被裸锚点命中」的负对照）；台账 `docs/CODE-STRUCTURE.md` §2.3 同步记下这次撞车。纯 CSS，刷新页面生效。

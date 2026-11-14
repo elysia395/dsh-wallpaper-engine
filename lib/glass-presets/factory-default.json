@@ -32,6 +32,7 @@
     "pauseOnHidden": false,
     "pauseOnBlur": false,
     "pauseOnBattery": false,
+    "startPaused": false,
     "flip": false,
     "objectFit": "cover",
     "contentRatingFilter": [

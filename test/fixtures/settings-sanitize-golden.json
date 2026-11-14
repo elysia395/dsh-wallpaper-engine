@@ -169,7 +169,8 @@
         "folderFilter": "all",
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
-        "filePreviewBlur": 24
+        "filePreviewBlur": 24,
+        "startPaused": false
       },
       "host": {
         "id": "",
@@ -330,7 +331,8 @@
         "folderFilter": "all",
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
-        "filePreviewBlur": 24
+        "filePreviewBlur": 24,
+        "startPaused": false
       }
     },
     {
@@ -509,7 +511,8 @@
         "folderFilter": "all",
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
-        "filePreviewBlur": 24
+        "filePreviewBlur": 24,
+        "startPaused": false
       },
       "host": "__null__"
     },
@@ -689,7 +692,8 @@
         "folderFilter": "all",
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
-        "filePreviewBlur": 24
+        "filePreviewBlur": 24,
+        "startPaused": false
       },
       "host": "__null__"
     },
@@ -869,7 +873,8 @@
         "folderFilter": "all",
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
-        "filePreviewBlur": 24
+        "filePreviewBlur": 24,
+        "startPaused": false
       },
       "host": "__null__"
     },
@@ -1041,7 +1046,8 @@
         "folderFilter": "all",
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
-        "filePreviewBlur": 24
+        "filePreviewBlur": 24,
+        "startPaused": false
       },
       "host": {
         "id": "",
@@ -1202,7 +1208,8 @@
         "folderFilter": "all",
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
-        "filePreviewBlur": 24
+        "filePreviewBlur": 24,
+        "startPaused": false
       }
     },
     {
@@ -1430,7 +1437,8 @@
         "folderFilter": "all",
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
-        "filePreviewBlur": 24
+        "filePreviewBlur": 24,
+        "startPaused": false
       },
       "host": {
         "id": "",
@@ -1591,7 +1599,8 @@
         "folderFilter": "all",
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
-        "filePreviewBlur": 24
+        "filePreviewBlur": 24,
+        "startPaused": false
       }
     },
     {
@@ -1864,7 +1873,8 @@
         "folderFilter": "all",
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
-        "filePreviewBlur": 24
+        "filePreviewBlur": 24,
+        "startPaused": false
       },
       "host": {
         "id": "",
@@ -2025,7 +2035,8 @@
         "folderFilter": "all",
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
-        "filePreviewBlur": 24
+        "filePreviewBlur": 24,
+        "startPaused": false
       }
     },
     {
@@ -2197,7 +2208,8 @@
         "folderFilter": "all",
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
-        "filePreviewBlur": 24
+        "filePreviewBlur": 24,
+        "startPaused": false
       },
       "host": {
         "id": "",
@@ -2358,7 +2370,8 @@
         "folderFilter": "all",
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
-        "filePreviewBlur": 24
+        "filePreviewBlur": 24,
+        "startPaused": false
       }
     },
     {
@@ -2544,7 +2557,8 @@
         "folderFilter": "all",
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
-        "filePreviewBlur": 24
+        "filePreviewBlur": 24,
+        "startPaused": false
       },
       "host": {
         "id": "",
@@ -2705,7 +2719,8 @@
         "folderFilter": "all",
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
-        "filePreviewBlur": 24
+        "filePreviewBlur": 24,
+        "startPaused": false
       }
     },
     {
@@ -2891,7 +2906,8 @@
         "folderFilter": "all",
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
-        "filePreviewBlur": 24
+        "filePreviewBlur": 24,
+        "startPaused": false
       },
       "host": {
         "id": "",
@@ -3052,7 +3068,8 @@
         "folderFilter": "all",
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
-        "filePreviewBlur": 24
+        "filePreviewBlur": 24,
+        "startPaused": false
       }
     },
     {
@@ -3225,7 +3242,8 @@
         "folderFilter": "all",
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
-        "filePreviewBlur": 24
+        "filePreviewBlur": 24,
+        "startPaused": false
       },
       "host": {
         "id": "",
@@ -3386,7 +3404,8 @@
         "folderFilter": "all",
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
-        "filePreviewBlur": 24
+        "filePreviewBlur": 24,
+        "startPaused": false
       }
     },
     {
@@ -3564,7 +3583,8 @@
         "folderFilter": "all",
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
-        "filePreviewBlur": 24
+        "filePreviewBlur": 24,
+        "startPaused": false
       },
       "host": {
         "id": "",
@@ -3725,7 +3745,8 @@
         "folderFilter": "all",
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
-        "filePreviewBlur": 24
+        "filePreviewBlur": 24,
+        "startPaused": false
       }
     },
     {
@@ -3900,7 +3921,8 @@
         "folderFilter": "all",
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
-        "filePreviewBlur": 24
+        "filePreviewBlur": 24,
+        "startPaused": false
       },
       "host": {
         "id": "",
@@ -4061,7 +4083,8 @@
         "folderFilter": "all",
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
-        "filePreviewBlur": 24
+        "filePreviewBlur": 24,
+        "startPaused": false
       }
     },
     {
@@ -4243,7 +4266,8 @@
         "folderFilter": "all",
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
-        "filePreviewBlur": 24
+        "filePreviewBlur": 24,
+        "startPaused": false
       },
       "host": {
         "id": "",
@@ -4404,7 +4428,8 @@
         "folderFilter": "all",
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
-        "filePreviewBlur": 24
+        "filePreviewBlur": 24,
+        "startPaused": false
       }
     },
     {
@@ -4651,7 +4676,8 @@
         "folderFilter": "all",
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
-        "filePreviewBlur": 24
+        "filePreviewBlur": 24,
+        "startPaused": false
       },
       "host": {
         "id": "",
@@ -4837,7 +4863,8 @@
         "folderFilter": "all",
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
-        "filePreviewBlur": 24
+        "filePreviewBlur": 24,
+        "startPaused": false
       }
     },
     {
@@ -5008,7 +5035,8 @@
         "folderFilter": "all",
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
-        "filePreviewBlur": 24
+        "filePreviewBlur": 24,
+        "startPaused": false
       },
       "host": {
         "id": "",
@@ -5169,7 +5197,8 @@
         "folderFilter": "all",
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
-        "filePreviewBlur": 24
+        "filePreviewBlur": 24,
+        "startPaused": false
       }
     },
     {
@@ -5340,7 +5369,8 @@
         "folderFilter": "all",
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
-        "filePreviewBlur": 24
+        "filePreviewBlur": 24,
+        "startPaused": false
       },
       "host": {
         "id": "wallpaper-42",
@@ -5501,7 +5531,8 @@
         "folderFilter": "all",
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
-        "filePreviewBlur": 24
+        "filePreviewBlur": 24,
+        "startPaused": false
       }
     },
     {
@@ -5673,7 +5704,8 @@
         "folderFilter": "all",
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
-        "filePreviewBlur": 24
+        "filePreviewBlur": 24,
+        "startPaused": false
       },
       "host": {
         "id": "",
@@ -5834,7 +5866,8 @@
         "folderFilter": "all",
         "orientationFilter": "all",
         "filePreviewTransparency": 10,
-        "filePreviewBlur": 24
+        "filePreviewBlur": 24,
+        "startPaused": false
       }
     }
   ]
