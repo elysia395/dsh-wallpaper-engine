@@ -262,6 +262,11 @@ function layerWantKey(layerLive) {
         //（可能晚于本实例启动，见 client 的 loadInventory），这一格变化即触发
         // 一次重建 —— 否则旧渲染页会一直用着 URL 里那份陈旧的 mediaBase。
         ? "live\u0000" + (selection.sceneLiveSrc || selection.webLiveSrc) + "\u0000" + selection.sceneLiveFps
+          // **sceneAutoQuality 也进 key**：它决定渲染页 URL 里的 `autoq=0`，
+          // 与帧率档 / localAssets / sceneMediaBase 同一类（都改 iframe query）。
+          // 少了这一格 ⇒ 切换「自动画质」时 wantKey 不变 ⇒ syncLayers 判定「不重建」
+          // ⇒ 旧渲染页继续按默认（自动画质开）跑，开关看起来完全失效（#358）。
+          + "\u0000" + (selection.sceneAutoQuality === false ? "aq0" : "aq1")
           + "\u0000" + (selection.inventory && selection.inventory.weAssetsAvailable ? "la1" : "")
           + "\u0000" + ((selection.inventory && selection.inventory.sceneMediaBase) || "")
         : "nolive")

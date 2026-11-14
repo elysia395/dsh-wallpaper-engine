@@ -75,7 +75,8 @@
           "settingsWindow": "inherit",
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
-          "floaters": "inherit"
+          "floaters": "inherit",
+          "filePreview": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -167,6 +168,8 @@
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
         "orientationFilter": "all",
+        "filePreviewTransparency": 10,
+        "filePreviewBlur": 24,
         "startPaused": false
       },
       "host": {
@@ -237,7 +240,8 @@
           "settingsWindow": "inherit",
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
-          "floaters": "inherit"
+          "floaters": "inherit",
+          "filePreview": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -326,6 +330,8 @@
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
         "orientationFilter": "all",
+        "filePreviewTransparency": 10,
+        "filePreviewBlur": 24,
         "startPaused": false
       }
     },
@@ -398,7 +404,8 @@
           "settingsWindow": "inherit",
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
-          "floaters": "inherit"
+          "floaters": "inherit",
+          "filePreview": "inherit"
         },
         "settingsVersion": 8,
         "settingsWindowTransparency": 100,
@@ -503,6 +510,8 @@
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
         "orientationFilter": "all",
+        "filePreviewTransparency": 10,
+        "filePreviewBlur": 24,
         "startPaused": false
       },
       "host": "__null__"
@@ -576,7 +585,8 @@
           "settingsWindow": "inherit",
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
-          "floaters": "inherit"
+          "floaters": "inherit",
+          "filePreview": "inherit"
         },
         "settingsVersion": 8,
         "settingsWindowTransparency": 100,
@@ -681,6 +691,8 @@
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
         "orientationFilter": "all",
+        "filePreviewTransparency": 10,
+        "filePreviewBlur": 24,
         "startPaused": false
       },
       "host": "__null__"
@@ -754,7 +766,8 @@
           "settingsWindow": "inherit",
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
-          "floaters": "inherit"
+          "floaters": "inherit",
+          "filePreview": "inherit"
         },
         "settingsVersion": 8,
         "settingsWindowTransparency": 100,
@@ -859,6 +872,8 @@
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
         "orientationFilter": "all",
+        "filePreviewTransparency": 10,
+        "filePreviewBlur": 24,
         "startPaused": false
       },
       "host": "__null__"
@@ -937,7 +952,8 @@
           "settingsWindow": "inherit",
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
-          "floaters": "inherit"
+          "floaters": "inherit",
+          "filePreview": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -1029,6 +1045,8 @@
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
         "orientationFilter": "all",
+        "filePreviewTransparency": 10,
+        "filePreviewBlur": 24,
         "startPaused": false
       },
       "host": {
@@ -1099,7 +1117,8 @@
           "settingsWindow": "inherit",
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
-          "floaters": "inherit"
+          "floaters": "inherit",
+          "filePreview": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -1188,6 +1207,8 @@
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
         "orientationFilter": "all",
+        "filePreviewTransparency": 10,
+        "filePreviewBlur": 24,
         "startPaused": false
       }
     },
@@ -1322,7 +1343,8 @@
           "settingsWindow": "inherit",
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
-          "floaters": "inherit"
+          "floaters": "inherit",
+          "filePreview": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -1414,6 +1436,8 @@
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
         "orientationFilter": "all",
+        "filePreviewTransparency": 10,
+        "filePreviewBlur": 24,
         "startPaused": false
       },
       "host": {
@@ -1484,7 +1508,8 @@
           "settingsWindow": "inherit",
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
-          "floaters": "inherit"
+          "floaters": "inherit",
+          "filePreview": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -1573,6 +1598,8 @@
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
         "orientationFilter": "all",
+        "filePreviewTransparency": 10,
+        "filePreviewBlur": 24,
         "startPaused": false
       }
     },
@@ -1752,7 +1779,8 @@
           "settingsWindow": "inherit",
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
-          "floaters": "inherit"
+          "floaters": "inherit",
+          "filePreview": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -1844,6 +1872,8 @@
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
         "orientationFilter": "all",
+        "filePreviewTransparency": 10,
+        "filePreviewBlur": 24,
         "startPaused": false
       },
       "host": {
@@ -1914,7 +1944,8 @@
           "settingsWindow": "inherit",
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
-          "floaters": "inherit"
+          "floaters": "inherit",
+          "filePreview": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -2003,6 +2034,8 @@
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
         "orientationFilter": "all",
+        "filePreviewTransparency": 10,
+        "filePreviewBlur": 24,
         "startPaused": false
       }
     },
@@ -2081,7 +2114,8 @@
           "settingsWindow": "inherit",
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
-          "floaters": "inherit"
+          "floaters": "inherit",
+          "filePreview": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -2173,6 +2207,8 @@
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
         "orientationFilter": "all",
+        "filePreviewTransparency": 10,
+        "filePreviewBlur": 24,
         "startPaused": false
       },
       "host": {
@@ -2243,7 +2279,8 @@
           "settingsWindow": "inherit",
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
-          "floaters": "inherit"
+          "floaters": "inherit",
+          "filePreview": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -2332,6 +2369,8 @@
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
         "orientationFilter": "all",
+        "filePreviewTransparency": 10,
+        "filePreviewBlur": 24,
         "startPaused": false
       }
     },
@@ -2424,7 +2463,8 @@
           "settingsWindow": "inherit",
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
-          "floaters": "inherit"
+          "floaters": "inherit",
+          "filePreview": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -2516,6 +2556,8 @@
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
         "orientationFilter": "all",
+        "filePreviewTransparency": 10,
+        "filePreviewBlur": 24,
         "startPaused": false
       },
       "host": {
@@ -2586,7 +2628,8 @@
           "settingsWindow": "inherit",
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
-          "floaters": "inherit"
+          "floaters": "inherit",
+          "filePreview": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -2675,6 +2718,8 @@
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
         "orientationFilter": "all",
+        "filePreviewTransparency": 10,
+        "filePreviewBlur": 24,
         "startPaused": false
       }
     },
@@ -2767,7 +2812,8 @@
           "settingsWindow": "inherit",
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
-          "floaters": "inherit"
+          "floaters": "inherit",
+          "filePreview": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -2859,6 +2905,8 @@
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
         "orientationFilter": "all",
+        "filePreviewTransparency": 10,
+        "filePreviewBlur": 24,
         "startPaused": false
       },
       "host": {
@@ -2929,7 +2977,8 @@
           "settingsWindow": "inherit",
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
-          "floaters": "inherit"
+          "floaters": "inherit",
+          "filePreview": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -3018,6 +3067,8 @@
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
         "orientationFilter": "all",
+        "filePreviewTransparency": 10,
+        "filePreviewBlur": 24,
         "startPaused": false
       }
     },
@@ -3097,7 +3148,8 @@
           "settingsWindow": "inherit",
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
-          "floaters": "inherit"
+          "floaters": "inherit",
+          "filePreview": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -3189,6 +3241,8 @@
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
         "orientationFilter": "all",
+        "filePreviewTransparency": 10,
+        "filePreviewBlur": 24,
         "startPaused": false
       },
       "host": {
@@ -3259,7 +3313,8 @@
           "settingsWindow": "inherit",
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
-          "floaters": "inherit"
+          "floaters": "inherit",
+          "filePreview": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -3348,6 +3403,8 @@
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
         "orientationFilter": "all",
+        "filePreviewTransparency": 10,
+        "filePreviewBlur": 24,
         "startPaused": false
       }
     },
@@ -3432,7 +3489,8 @@
           "settingsWindow": "inherit",
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
-          "floaters": "inherit"
+          "floaters": "inherit",
+          "filePreview": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -3524,6 +3582,8 @@
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
         "orientationFilter": "all",
+        "filePreviewTransparency": 10,
+        "filePreviewBlur": 24,
         "startPaused": false
       },
       "host": {
@@ -3594,7 +3654,8 @@
           "settingsWindow": "inherit",
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
-          "floaters": "inherit"
+          "floaters": "inherit",
+          "filePreview": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -3683,6 +3744,8 @@
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
         "orientationFilter": "all",
+        "filePreviewTransparency": 10,
+        "filePreviewBlur": 24,
         "startPaused": false
       }
     },
@@ -3764,7 +3827,8 @@
           "settingsWindow": "inherit",
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
-          "floaters": "inherit"
+          "floaters": "inherit",
+          "filePreview": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -3856,6 +3920,8 @@
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
         "orientationFilter": "all",
+        "filePreviewTransparency": 10,
+        "filePreviewBlur": 24,
         "startPaused": false
       },
       "host": {
@@ -3926,7 +3992,8 @@
           "settingsWindow": "inherit",
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
-          "floaters": "inherit"
+          "floaters": "inherit",
+          "filePreview": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -4015,6 +4082,8 @@
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
         "orientationFilter": "all",
+        "filePreviewTransparency": 10,
+        "filePreviewBlur": 24,
         "startPaused": false
       }
     },
@@ -4103,7 +4172,8 @@
           "settingsWindow": "inherit",
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
-          "floaters": "inherit"
+          "floaters": "inherit",
+          "filePreview": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -4195,6 +4265,8 @@
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
         "orientationFilter": "all",
+        "filePreviewTransparency": 10,
+        "filePreviewBlur": 24,
         "startPaused": false
       },
       "host": {
@@ -4265,7 +4337,8 @@
           "settingsWindow": "inherit",
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
-          "floaters": "inherit"
+          "floaters": "inherit",
+          "filePreview": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -4354,6 +4427,8 @@
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
         "orientationFilter": "all",
+        "filePreviewTransparency": 10,
+        "filePreviewBlur": 24,
         "startPaused": false
       }
     },
@@ -4499,7 +4574,8 @@
           "settingsWindow": "inherit",
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
-          "floaters": "inherit"
+          "floaters": "inherit",
+          "filePreview": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -4599,6 +4675,8 @@
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
         "orientationFilter": "all",
+        "filePreviewTransparency": 10,
+        "filePreviewBlur": 24,
         "startPaused": false
       },
       "host": {
@@ -4690,7 +4768,8 @@
           "settingsWindow": "inherit",
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
-          "floaters": "inherit"
+          "floaters": "inherit",
+          "filePreview": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -4783,6 +4862,8 @@
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
         "orientationFilter": "all",
+        "filePreviewTransparency": 10,
+        "filePreviewBlur": 24,
         "startPaused": false
       }
     },
@@ -4860,7 +4941,8 @@
           "settingsWindow": "inherit",
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
-          "floaters": "inherit"
+          "floaters": "inherit",
+          "filePreview": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -4952,6 +5034,8 @@
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
         "orientationFilter": "all",
+        "filePreviewTransparency": 10,
+        "filePreviewBlur": 24,
         "startPaused": false
       },
       "host": {
@@ -5022,7 +5106,8 @@
           "settingsWindow": "inherit",
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
-          "floaters": "inherit"
+          "floaters": "inherit",
+          "filePreview": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -5111,6 +5196,8 @@
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
         "orientationFilter": "all",
+        "filePreviewTransparency": 10,
+        "filePreviewBlur": 24,
         "startPaused": false
       }
     },
@@ -5188,7 +5275,8 @@
           "settingsWindow": "inherit",
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
-          "floaters": "inherit"
+          "floaters": "inherit",
+          "filePreview": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -5280,6 +5368,8 @@
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
         "orientationFilter": "all",
+        "filePreviewTransparency": 10,
+        "filePreviewBlur": 24,
         "startPaused": false
       },
       "host": {
@@ -5350,7 +5440,8 @@
           "settingsWindow": "inherit",
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
-          "floaters": "inherit"
+          "floaters": "inherit",
+          "filePreview": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -5439,6 +5530,8 @@
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
         "orientationFilter": "all",
+        "filePreviewTransparency": 10,
+        "filePreviewBlur": 24,
         "startPaused": false
       }
     },
@@ -5517,7 +5610,8 @@
           "settingsWindow": "inherit",
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
-          "floaters": "inherit"
+          "floaters": "inherit",
+          "filePreview": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -5609,6 +5703,8 @@
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
         "orientationFilter": "all",
+        "filePreviewTransparency": 10,
+        "filePreviewBlur": 24,
         "startPaused": false
       },
       "host": {
@@ -5679,7 +5775,8 @@
           "settingsWindow": "inherit",
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
-          "floaters": "inherit"
+          "floaters": "inherit",
+          "filePreview": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -5768,6 +5865,8 @@
         "pictureSlideSeconds": 0,
         "folderFilter": "all",
         "orientationFilter": "all",
+        "filePreviewTransparency": 10,
+        "filePreviewBlur": 24,
         "startPaused": false
       }
     }

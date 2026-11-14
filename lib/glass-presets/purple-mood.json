@@ -82,7 +82,8 @@
       "settingsWindow": "inherit",
       "conversation": "custom",
       "thinkingTrigger": "inherit",
-      "floaters": "inherit"
+      "floaters": "inherit",
+      "filePreview": "inherit"
     },
     "settingsWindowTransparency": 90,
     "settingsWindowBlur": 8,
@@ -145,7 +146,9 @@
     "avatarEnabled": false,
     "avatarSize": 40,
     "avatarRadius": 100,
-    "avatarAiRepeatRows": 6
+    "avatarAiRepeatRows": 6,
+    "filePreviewTransparency": 10,
+    "filePreviewBlur": 24
   },
   "assets": {
     "font": {
