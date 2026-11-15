@@ -48,8 +48,8 @@
  *                                  无"，**不拦** —— 见本函数注释）
  *   exportGlassPresetUrl(id, embeds) 导出链接（普通 <a> 导航；宿主带附件头）
  *   importGlassPreset(file)        导入一份导出文件（成功后回读清单，**不自动应用**）
- *   deleteGlassPreset(id)          删预设（出厂或用户皆可；出厂删了即永久 ——
- *                                  墓碑遮蔽，没有恢复通道）
+ *   deleteGlassPreset(id)          删预设（用户层 = 真删；出厂 = 写墓碑**隐藏**，
+ *                                  可从面板「已隐藏」区恢复 —— #219）
  *
  * 不变量：
  *   · **整套采用或整套不动**：应用预设只有拿到宿主那份完整正文（消毒产物）才写进
@@ -158,7 +158,11 @@ async function loadGlassPresets() {
     }
     const data = res.data || {};
     selection.glassPresets = Array.isArray(data.presets) ? data.presets : [];
+    // #219：清单**真正**从宿主读成功过 ⇒ 首次应用引导的判据才可信。
+    // 失败分支不置回 false（旧清单仍在用，重读失败不该让引导复活）。
+    setTransient("glassPresetsLoaded", true);
     setPresetError("");
+    await loadHiddenBuiltin();
     return true;
   } catch {
     setPresetError(weT("宿主不可达（请求未完成）"));
@@ -166,8 +170,47 @@ async function loadGlassPresets() {
   }
 }
 
-/** 重读清单（保存 / 删除 / 导入后调用）。失败保留上一次清单并写原因 —— 不静默清空。 */
+/** 重读清单（保存 / 删除 / 导入 / 恢复后调用）。失败保留上一次清单并写原因 —— 不静默清空。 */
 async function refreshGlassPresets() { return loadGlassPresets(); }
+
+/**
+ * 「已隐藏的出厂预设」清单（#219）：`GET /glass-presets?hidden=1`。
+ * 它是**补充信息**，失败不写错误行（清单本身还可能好用，不该被这条腿拖成"预设不可用"）；
+ * 结果经 setTransient 写 `glassPresetHidden`，面板据此画恢复区。
+ */
+async function loadHiddenBuiltin() {
+  try {
+    const res = await gpJson(glassPresetsUrl() + "?hidden=1");
+    const rows = res.ok && !res.error && Array.isArray(res.data && res.data.hidden) ? res.data.hidden : [];
+    setTransient("glassPresetHidden", rows);
+  } catch {
+    setTransient("glassPresetHidden", []);
+  }
+}
+
+/**
+ * 恢复一套被隐藏的出厂预设（#219）：`POST /glass-presets/<id>/restore`。
+ * 宿主删掉用户层那份墓碑，随包层那套重新出现在清单里（成功回 `{ ok, restored }`）。
+ * 失败原因走统一出口：`not-hidden`（本来就没隐藏）与 `missing`（这套出厂已被包移除）可区分。
+ */
+async function restoreGlassPreset(id) {
+  if (!isGlassPresetId(id)) return false;
+  try {
+    const res = await gpFetch(glassPresetUrl(id) + "/restore", { method: "POST" });
+    if (!res.ok || res.error) {
+      setPresetError(glassPresetFailureReason(res));
+      return false;
+    }
+    setPresetError("");
+    await refreshGlassPresets();
+    setTransient("glassPresetNote", weT("已恢复「{name}」", { name: id }));
+    emit();
+    return true;
+  } catch {
+    setPresetError(weT("宿主不可达（请求未完成）"));
+    return false;
+  }
+}
 
 /**
  * 把宿主 `install-assets` 回的 `applied` 合并进 selection（ADR-0011 D4 的"应用半边"）。
@@ -505,7 +548,7 @@ function gpReadFileText(file) {
   });
 }
 
-/** 删预设：出厂或用户皆可（出厂 = 宿主落墓碑永久遮蔽，不可恢复；界面上两步确认）。 */
+/** 删预设：用户层 = 真删；出厂 = 宿主落墓碑**隐藏**（可从「已隐藏」区恢复，#219）；界面上两步确认。 */
 async function deleteGlassPreset(id) {
   if (!isGlassPresetId(id)) return false;
   try {
