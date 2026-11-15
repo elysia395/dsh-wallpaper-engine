@@ -255,6 +255,9 @@ function startLiveWatch(frame, wid) {
     const stats = liveStats(frame);
     applyLiveControls(frame);
     liveGuardTick(frame);
+    // #263「更小的第一步」：每 tick 把渲染页这一秒的帧率上报主机（属性面板读它）。
+    // 放在控制下发之后、与 live-fps 的 5 秒节奏无关 —— 这条是 1 秒粒度。
+    reportPerfFrameTick(stats);
     const isWeb = selection.type === "web";
     const wstate = isWeb ? liveStateOf(frame) : null;
     const alive = liveHeartbeatAlive(frame, stats, wstate, isWeb);

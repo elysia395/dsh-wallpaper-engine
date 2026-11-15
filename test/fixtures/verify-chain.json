@@ -821,6 +821,14 @@
         {
           "kind": "guard",
           "npm": null,
+          "file": "test/verify-perf-metrics.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
           "file": "test/verify-guard-chain.mjs",
           "args": [],
           "tier": "hard",
@@ -1796,6 +1804,14 @@
           "args": [
             "selftest"
           ],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-perf-metrics.mjs",
+          "args": [],
           "tier": "hard",
           "probe": false
         },

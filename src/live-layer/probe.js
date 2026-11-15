@@ -212,6 +212,7 @@ function liveStateOf(frame) {
 let uiFpsFrames = 0;
 let uiFpsRaf = 0;
 let uiFpsSince = 0;
+let uiFpsLast = 0;
 // 计时全局按环境取：UI fps 是诊断探针，不该因为宿主没有 performance / rAF
 // 就抛异常、打断实时渲染链（真浏览器恒有这两者，测试宿主可能只给部分 DOM）。
 const uiNow = () => (typeof performance !== "undefined" && performance && typeof performance.now === "function")
@@ -220,7 +221,13 @@ function startUiFpsProbe() {
   if (uiFpsRaf || typeof requestAnimationFrame !== "function") return;
   uiFpsFrames = 0;
   uiFpsSince = uiNow();
-  const tick = () => { uiFpsFrames += 1; uiFpsRaf = requestAnimationFrame(tick); };
+  uiFpsLast = uiNow();
+  const tick = () => {
+    uiFpsFrames += 1;
+    const now = uiNow();
+    uiFpsLast = now;
+    uiFpsRaf = requestAnimationFrame(tick);
+  };
   uiFpsRaf = requestAnimationFrame(tick);
 }
 function stopUiFpsProbe() {
@@ -228,6 +235,7 @@ function stopUiFpsProbe() {
   uiFpsRaf = 0;
   uiFpsFrames = 0;
   uiFpsSince = 0;
+  uiFpsLast = 0;
 }
 function takeUiFps() {
   const now = uiNow();
@@ -236,6 +244,19 @@ function takeUiFps() {
   uiFpsFrames = 0;
   uiFpsSince = now;
   return seconds > 0.2 ? Math.round(frames / seconds) : -1;
+}
+
+// #263「更小的第一步」：把渲染页自己的帧率交给上报函数（src/client/media-frame.js
+// 的 reportPerfFrame → 既有 /client-diag 通道 → 主机 lib/perf-metrics.js 聚合）。
+// 口径必须是壁纸渲染侧（__wpStats.frame().fps），不是宿主页面 rAF —— 后者在
+// 壁纸暂停/软渲染暂停时仍然满帧，会把「—」显示成 60/120。
+// watch tick 每秒一次，只上报这一秒的一个间隔样本。`stats.running === false`
+//（暂停/首帧未出）或 fps 不可用时**不报**，让主机侧样本按 STALE_MS 过期。
+function reportPerfFrameTick(stats) {
+  if (!stats || stats.running === false) return;
+  const fps = Number(stats.fps);
+  if (!Number.isFinite(fps) || fps <= 0) return;
+  reportPerfFrame([1000 / fps]);
 }
 
 // 运行时帧率上报：每 5 秒一条，落进 host 的 diag 文件（DSH Desktop 拿不到

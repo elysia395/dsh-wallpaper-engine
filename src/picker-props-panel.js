@@ -30,7 +30,7 @@
  */
 
   function renderPickerPropsPanel(ctx) {
-    const { open, token, loading, error, props, sceneLiveActive, source, we, ensureDefs, onPropInput, onReset, onImportWe } = ctx;
+    const { open, token, loading, error, props, sceneLiveActive, source, we, ensureDefs, onPropInput, onReset, onImportWe, perf } = ctx;
     if (!open) return null;
     // 没有 token ⇒ 不画。两个壳都不存在"开关开着却没有 token"的常态：侧栏那支由调用点的
     // 门保证（`userPropsPanelOpen() && propsAvailable`），而清掉壁纸时 `onClear` 会把开关
@@ -94,6 +94,23 @@
       !sceneLiveActive && React.createElement("div", { className: "we-picker__props-hint" },
         weT("实时渲染当前未接管（静态帧 / 兼容模式），改动会在下次实时渲染时生效。")),
       rows,
+      // #263「更小的第一步」：性能指标（FPS / 平均帧时间 / 本进程 CPU）。
+      // **只在 perf 非空时出现** —— 既有 golden 的 ctx 不带 perf，必须逐字不变。
+      perf && React.createElement("div", { className: "we-picker__props-perf" },
+        React.createElement("span", { className: "we-picker__props-perf-title" }, weT("性能")),
+        React.createElement("span", { className: "we-picker__props-perf-item" },
+          React.createElement("span", { className: "we-picker__props-perf-label" }, weT("FPS")),
+          React.createElement("span", { className: "we-picker__props-perf-value" },
+            perf.fps > 0 ? String(perf.fps) : "—")),
+        React.createElement("span", { className: "we-picker__props-perf-item" },
+          React.createElement("span", { className: "we-picker__props-perf-label" }, weT("平均帧时间")),
+          React.createElement("span", { className: "we-picker__props-perf-value" },
+            perf.averageFrameTimeMs > 0 ? perf.averageFrameTimeMs.toFixed(1) + " ms" : "—")),
+        React.createElement("span", { className: "we-picker__props-perf-item" },
+          React.createElement("span", { className: "we-picker__props-perf-label" }, weT("本进程 CPU")),
+          React.createElement("span", { className: "we-picker__props-perf-value" },
+            perf.cpu > 0 ? perf.cpu.toFixed(1) + "%" : "—")),
+      ),
     );
   }
 
