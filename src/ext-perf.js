@@ -88,7 +88,7 @@ function perfMetric(label, value) {
 }
 
 // ── 共享采样器：岛与悬浮窗共用，引用计数到 0 就停表 ─────────────────────────
-let perfSampleSubs = new Set();
+const perfSampleSubs = new Set();
 let perfSampleLatest = null;
 let perfTimer = 0;
 let perfRaf = 0;
@@ -155,7 +155,7 @@ function perfSampleTick() {
   if (!perfTimer) return;
   const kind = perfKindOf(perfSel);
   let wallFps = 0;
-  let note = "";
+  let note;
   if (kind === "live") {
     const r = perfLiveSample(liveFrameEl());
     wallFps = r.fps;

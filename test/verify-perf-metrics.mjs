@@ -185,7 +185,7 @@ check('/diag-log 用 searchParams.has(perf) 而不是取具体 token',
 
 // ── 5. 共享采样器：单例、引用计数、岛与浮窗共用 ────────────────────────────
 check('岛与浮窗共用模块级采样器（Set 订阅 + 单 timer/rAF + 最后一人走才停表）',
-  /let perfSampleSubs = new Set\(\)/.test(extPerf)
+  /(?:let|const) perfSampleSubs = new Set\(\)/.test(extPerf)
   && /function perfSubscribe\(/.test(extPerf)
   && /if \(!perfTimer\) \{/.test(extPerf)
   && /perfSampleSubs\.size === 0\) perfStop\(\)/.test(extPerf)
@@ -262,7 +262,7 @@ check('perfEnabled / perfFloat 默认关 + boolFalse + 归 RESET_MODULES.perf',
   && /perfFloat:\s*false/.test(schema)
   && /perfEnabled:\s*\{\s*kind:\s*'boolFalse'\s*\}/.test(schema)
   && /perfFloat:\s*\{\s*kind:\s*'boolFalse'\s*\}/.test(schema)
-  && /RESET_MODULES[\s\S]{0,800}\n  perf:/.test(schema)
+  && /RESET_MODULES[\s\S]{0,800}\n {2}perf:/.test(schema)
   && /extensions: Object\.keys\(KINDS\)\.filter[\s\S]{0,300}indexOf\('perf'\)/.test(schema));
 check('perfFloat 进核心设置命名空间（会落盘 / 会随预设走）',
   /'presetGuideDismissed', 'perfEnabled', 'perfFloat'/.test(schema));

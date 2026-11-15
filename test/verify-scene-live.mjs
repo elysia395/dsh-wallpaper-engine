@@ -7197,7 +7197,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       /const playing = isEffectivelyPlaying\(\) && !liveSoftRenderPauseOn\(\);/.test(liveSrc),
       '门控行=' + (/const playing = [^\n]*/.exec(liveSrc) || [''])[0]);
     const m = /function liveSoftRenderPauseOn\(\) \{([\s\S]*?)\n\}/.exec(liveSrc);
-    let guard = null;
+    let guard;
     try { guard = m ? new Function('liveSoftRenderProbe', 'selection', m[1]) : null; } catch { guard = null; }
     check('#270 兜底判据：软渲染 + 开关开 ⇒ 暂停；开关关 / 非软渲染 / 无选择 ⇒ 不干预',
       !!guard
