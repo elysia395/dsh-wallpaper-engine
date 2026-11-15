@@ -80,6 +80,7 @@
     "lib/cache-dir.js",
     "lib/upload-store.js",
     "lib/diag-trace.js",
+    "lib/perf-metrics.js",
     "lib/http-lifecycle.js",
     "lib/mp4-vfs.js",
     "lib/startup-sweep.js",

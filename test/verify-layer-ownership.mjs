@@ -191,7 +191,7 @@ check('P1.6 子包源码面零引用 LAYER_ID / SCRIM_ID（层引用不外流）
  *   · 壁纸层 / scrim：层生命周期的唯一所有者是主包实时渲染内核（live-layer.js）；
  *   · 轮换 staging 容器：轮换准备期把"未提交的层"提前挂进 DOM（media-prep.js），commit 时整体
  *     转为新层 —— 它也是层生命周期的一部分，同样归主包；
- *   · 场景音轨 <audio> / 一次性 <input type=file> / 下载 <a> / rope dock 宿主：与壁纸层无关的
+ *   · 场景音轨 <audio> / 一次性 <input type=file> / 下载 <a> / rope dock 宿主 / 性能悬浮窗宿主：与壁纸层无关的
  *     主包界面/音频宿主，各自成对拆除；
  *   · 子包自有宿主（fx 特效 overlay、pet-link 调参面板）：**不是**壁纸层，条件是 id/类名自持、
  *     不碰 we-layer / we-live-iframe / we-scrim，且同包内有成对拆除。
@@ -201,7 +201,7 @@ const BODY_MOUNT_WHITELIST = Object.freeze({
   'src/media-prep.js': { count: 1, owner: 'rotation-staging' },
   'src/media-prep/probe.js': { count: 1, owner: 'rotation-staging' },
   'src/client/audio-playback.js': { count: 1, owner: 'scene-audio' },
-  'src/client.js': { count: 3, owner: 'transient-input|download-anchor|rope-dock' },
+  'src/client.js': { count: 4, owner: 'transient-input|download-anchor|rope-dock|perf-float' },
   'packages/fx/src/fx-layer.js': { count: 1, owner: 'pkg-own-host(fx overlay)' },
 });
 

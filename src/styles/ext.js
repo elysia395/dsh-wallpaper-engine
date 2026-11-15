@@ -108,6 +108,67 @@ const CSS_EXT = `
     font-size: 0.85em; font-weight: 600; color: var(--we-ink, inherit);
   }
 
+  /* ── 「扩展」页签 · 性能监控（we-perf，src/ext-perf.js）──────────────────
+     四项读数两列网格：窄壳（抽屉）自动变一列。数值用等宽数字位，避免每秒刷新
+     时整行宽度跳动；标签与数值的主次靠字号而不是新颜色（与设置行同一口径）。
+     ⚠️ 本段注释不许出现反引号：整套样式文本是模板字符串，一个反引号就拼断 JS。 */
+  .we-perf { display: flex; flex-direction: column; gap: 6px; margin-top: 2px; }
+  .we-perf__grid {
+    display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 6px 12px;
+  }
+  @media (max-width: 420px) { .we-perf__grid { grid-template-columns: minmax(0, 1fr); } }
+  .we-perf__item { display: flex; align-items: baseline; justify-content: space-between; gap: 8px; }
+  .we-perf__label { font-size: 0.78em; color: var(--we-ink-2, rgba(128, 128, 128, 0.9)); }
+  .we-perf__value {
+    font-size: 0.85em; font-weight: 600; color: var(--we-ink, inherit);
+    font-variant-numeric: tabular-nums;
+  }
+  .we-perf__note { font-size: 0.72em; color: var(--we-ink-3, rgba(128, 128, 128, 0.65)); }
+
+  /* ── 性能监控悬浮窗（PerfFloat，挂在 body 下的独立 root）────────────────────
+     浮在对话之上，标题栏可拖；不做左吸附翻转。背景用面板色（不透明度足够，
+     壁纸再花也读得清），层级低于 RopeDock 996 与模态遮罩，不抢它们的输入。
+     唯一例外：玻璃仓库这种整屏模态打开时随 modal-blocked 一起让路。 */
+  .we-perf-float {
+    position: fixed; z-index: 990; width: 244px; box-sizing: border-box;
+    display: flex; flex-direction: column; gap: 7px;
+    padding: 9px 11px 10px; border-radius: 12px;
+    background-color: var(--we-panel-color, #fff);
+    border: 1px solid rgba(128, 128, 128, 0.28);
+    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.22);
+    color: var(--we-ink, inherit);
+    user-select: none; -webkit-user-select: none;
+  }
+  .we-perf-float__head {
+    display: flex; align-items: center; justify-content: space-between; gap: 8px;
+    cursor: grab; touch-action: none;
+  }
+  .we-perf-float__head:active { cursor: grabbing; }
+  .we-perf-float__title { font-size: 0.82em; font-weight: 600; }
+  .we-perf-float__close {
+    width: 22px; height: 22px; padding: 0; line-height: 20px;
+    border: 0; border-radius: 6px; background: transparent; cursor: pointer;
+    color: var(--we-ink-2, rgba(128, 128, 128, 0.9)); font-size: 1em;
+  }
+  .we-perf-float__close:hover { background: var(--dsw-alias-bg-layer-1, rgba(128, 128, 128, 0.12)); }
+  /* 玻璃皮（data-we-glass-floaters 门内）：小浮窗盖在对话/壁纸上方，不能直接
+     抄大面板的 accent 底 —— 那层 readability-base 在彩色主题下会变成一块实色，
+     读数反而糊掉。这里用面板色做中性霜面：基础 62% 不透明度，并跟着「浮层
+     玻璃」滑块抬到最多 80%；再叠一条很薄的白色釉光。玻璃行停用 ⇒ 门失效
+     ⇒ 上面基础层的面板色兜住。 */
+  body[data-we-glass-floaters] .we-perf-float {
+    background-color: color-mix(in srgb, var(--we-panel-color, #ffffff) calc(50% + var(--we-floaters-alpha) * 120%), transparent);
+    background-image: linear-gradient(180deg, rgba(255, 255, 255, 0.22), rgba(255, 255, 255, 0.04) 45%, rgba(255, 255, 255, 0.01));
+    -webkit-backdrop-filter: blur(calc(var(--we-floaters-blur) * 1.6)) saturate(1.25);
+    backdrop-filter: blur(calc(var(--we-floaters-blur) * 1.6)) saturate(1.25);
+    border-color: var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.22));
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.18), 0 10px 30px rgba(0, 0, 0, 0.22);
+  }
+  .we-perf-float .we-perf__grid { gap: 5px 10px; }
+  .we-perf-float .we-perf__label { font-size: 0.72em; }
+  .we-perf-float .we-perf__value { font-size: 0.8em; }
+  .we-perf-float .we-perf__note { padding-top: 1px; }
+
   /* ── 「扩展」页签 · 桌宠联动卡片（we-pet-link，包 pet-link/src/pet-link/extension-card.js）──
      分层口径：标题行 → 状态 → 模式 → 共存提示 → 进度条 → 失败块 → 主按钮 → 次按钮组
      → 分步进度 → 折叠诊断。容器 .we-ext__module 已给外框与 6px 行距，这里只管

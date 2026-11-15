@@ -22,6 +22,8 @@ const WE_I18N_EN_PANEL = {
   "选择壁纸": "Choose wallpaper",
   "壁纸作者提供的可调属性（改动立即生效）": "Adjustable properties provided by the wallpaper author (changes apply immediately)",
   "壁纸属性": "Wallpaper properties",
+  "平均帧时间": "Average frame time",
+  "本进程 CPU": "This process CPU",
   "暂停": "Pause",
   "开启壁纸音轨（音量为 0 时自动设为 50%）": "Turn on the wallpaper audio track (sets volume to 50% if it is 0)",
   "关闭壁纸音轨（画面继续播放）": "Turn off the wallpaper audio track (playback continues)",

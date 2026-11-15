@@ -274,6 +274,10 @@ const VERIFY_STEPS = [
   // ← 还原（旧链最末一步）：`js-text` 的**自检**（字符串感知的剥注释/作用域/函数体提取，
   // 是上面一批"文本判据"的共同底座 ⇒ 它自己坏了会连带整批判据失真）。
   step('test/tools/js-text.mjs', ['selftest']),
+  // #263「更小的第一步」：逐壁纸性能指标（FPS / 平均帧时间 / 本进程 CPU）。
+  // 纯函数口径（lib/perf-metrics.js 的环形缓冲 / 掉帧判据 / process.cpuUsage 增量）
+  // 与接线（探针采集 → /client-diag → 主机聚合 → /diag-log?perf= → 属性面板）一起钉。
+  step('test/verify-perf-metrics.mjs'),
   // ⑧ 链的**形状自检**（R-4 收口：由 docs 软档升 hard）。它把 MANIFEST 与
   //    `test/fixtures/verify-chain.json` 逐条对账（顺序 / 档位 / 参数 / 文件名），另判每组硬档地板、
   //    每个 file 真实存在、`all` = build + 三组有序拼接，以及 ⑤「守卫面上脱链者必须有代码内理由」。

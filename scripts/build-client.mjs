@@ -310,6 +310,11 @@ const INLINE_MODULES = [
     markers: ['const AVATAR_EXTENSION_MODULE = {', 'function renderAvatarIsland(ctx)'],
   },
   {
+    file: 'src/ext-perf.js',
+    why: '「扩展」页签第四个模块：性能监控岛（场景/网页读渲染页帧率、视频读解码帧、静态图说明没有渲染帧，界面帧率与 CPU 另采）',
+    markers: ['const PERF_EXTENSION_MODULE = {', 'function renderPerfIsland(ctx)'],
+  },
+  {
     file: 'src/system-fonts.js',
     why: '本机字体清单的客户端通道：宿主那次进程扫描的唯一读者（清单 / 缓存 / 失败文案 / 本浏览器能否匹配的探针），与字体集通道同形',
     markers: ['const SYSTEM_FONTS_CACHE_KEY = ', 'function readCachedSystemFonts()',

@@ -212,6 +212,7 @@ function liveStateOf(frame) {
 let uiFpsFrames = 0;
 let uiFpsRaf = 0;
 let uiFpsSince = 0;
+let uiFpsLast = 0;
 // 计时全局按环境取：UI fps 是诊断探针，不该因为宿主没有 performance / rAF
 // 就抛异常、打断实时渲染链（真浏览器恒有这两者，测试宿主可能只给部分 DOM）。
 const uiNow = () => (typeof performance !== "undefined" && performance && typeof performance.now === "function")
@@ -220,7 +221,13 @@ function startUiFpsProbe() {
   if (uiFpsRaf || typeof requestAnimationFrame !== "function") return;
   uiFpsFrames = 0;
   uiFpsSince = uiNow();
-  const tick = () => { uiFpsFrames += 1; uiFpsRaf = requestAnimationFrame(tick); };
+  uiFpsLast = uiNow();
+  const tick = () => {
+    uiFpsFrames += 1;
+    const now = uiNow();
+    uiFpsLast = now;
+    uiFpsRaf = requestAnimationFrame(tick);
+  };
   uiFpsRaf = requestAnimationFrame(tick);
 }
 function stopUiFpsProbe() {
@@ -228,6 +235,7 @@ function stopUiFpsProbe() {
   uiFpsRaf = 0;
   uiFpsFrames = 0;
   uiFpsSince = 0;
+  uiFpsLast = 0;
 }
 function takeUiFps() {
   const now = uiNow();
