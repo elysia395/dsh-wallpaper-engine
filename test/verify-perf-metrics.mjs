@@ -56,7 +56,7 @@ check('掉帧率 = 掉帧数 / 样本数',
 resetPerfMetrics();
 recordBatch(new Array(500).fill(16.7), 'w1');
 const bounded = snapshot('w1');
-check('样本环形缓冲有上界（≤120）', bounded.samples <= 120, 'samples=' + bounded.samples);
+check('样本环形缓冲有上界（≤5）', bounded.samples <= 5, 'samples=' + bounded.samples);
 
 resetPerfMetrics();
 recordBatch([16.7, 16.7], 'w1');
@@ -65,6 +65,13 @@ const switched = snapshot('w2');
 check('换 token ⇒ 旧样本清零', switched.samples === 2, 'samples=' + switched.samples);
 check('空样本 ⇒ fps 有限且非负',
   Number.isFinite(switched.fps) && switched.fps >= 0, 'fps=' + switched.fps);
+
+resetPerfMetrics();
+recordBatch([16.7, 16.7, 16.7], 'wallpaper-A');
+const foreign = snapshot('hash-of-B');
+check('快照拒绝别的 token 的样本（A 的数字不能显示给 B）',
+  foreign.samples === 0 && foreign.fps === 0,
+  'samples=' + foreign.samples + ' fps=' + foreign.fps);
 
 resetPerfMetrics();
 recordBatch(['x', NaN, 0, -5, 16.7], 'w1');
@@ -89,9 +96,10 @@ const panelText = read('src/picker-props-panel.js');
 const diagText = read('lib/routes/diag.js');
 const i18nPanelText = read('src/i18n/i18n-copy-panel.js');
 
-check('探针维护帧间隔缓冲并逐 tick 上报',
-  /uiFrameIntervals/.test(probeText) && /reportPerfFrameTick/.test(probeText));
-check('watch 每 tick 调用一次上报', /reportPerfFrameTick\s*\(\s*\)/.test(watchText));
+check('探针从渲染侧 stats.fps 取样本并逐 tick 上报',
+  /reportPerfFrameTick\s*\(\s*stats\s*\)/.test(probeText) && /1000\s*\/\s*fps/.test(probeText)
+  && !/uiFrameIntervals/.test(probeText));
+check('watch 每 tick 调用一次上报', /reportPerfFrameTick\s*\(\s*stats\s*\)/.test(watchText));
 check('上报走既有 client-diag 通道',
   /function reportPerfFrame\s*\(/.test(mediaFrameText)
   && mediaFrameText.includes('perf-frame')

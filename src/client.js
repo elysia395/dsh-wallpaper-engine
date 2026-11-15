@@ -1857,7 +1857,7 @@ function stopPerfPoll() {
 function openUserPropsPanel() {
   propsPanelOpen = true;
   loadUserPropDefs(propTokenOf(selection), true);
-  startPerfPoll(propTokenOf(selection));
+  startPerfPoll(selection.id);
   emit();
 }
 
@@ -2734,7 +2734,7 @@ function onTogglePropsPanel() {
   propsPanelOpen = !propsPanelOpen;
   if (propsPanelOpen) {
     loadUserPropDefs(propTokenOf(selection), true);
-    startPerfPoll(propTokenOf(selection));
+    startPerfPoll(selection.id);
   } else {
     stopPerfPoll();
   }
