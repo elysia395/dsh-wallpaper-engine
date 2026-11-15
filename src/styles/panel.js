@@ -271,17 +271,6 @@ const CSS_PANEL = `  /* ── 吉祥物形态**3D 圆环转盘**（四次返工
   }
   .we-picker__props-dot { margin-left: 4px; color: #2ea043; font-weight: 700; }
   .we-picker__props-value { flex: 0 0 auto; min-width: 3.2em; text-align: right; font-size: 0.75em; opacity: 0.7; }
-  /* #263 性能区：此前**没有**任何规则 ⇒ 继承卡片基础字号，比上方属性行（0.8em）明显大一圈。
-     这里把字号 / 字重 / 对齐全部对齐 we-picker__props-* 的既有词汇。 */
-  .we-picker__props-perf {
-    display: flex; align-items: baseline; flex-wrap: wrap; gap: 2px 10px;
-    margin-top: 2px; padding-top: 6px;
-    border-top: 1px dashed var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.28));
-  }
-  .we-picker__props-perf-title { font-size: 0.85em; font-weight: 600; }
-  .we-picker__props-perf-item { display: inline-flex; align-items: baseline; gap: 4px; }
-  .we-picker__props-perf-label { font-size: 0.8em; opacity: 0.6; }
-  .we-picker__props-perf-value { font-size: 0.8em; font-weight: 600; font-variant-numeric: tabular-nums; }
   .we-picker__props-check { flex: 0 0 auto; }
   .we-picker__props-color {
     flex: 0 0 auto; width: 46px; height: 22px; padding: 0; cursor: pointer;

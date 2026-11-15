@@ -27,7 +27,7 @@ const CSS_QUICK = `  /* ── Rope dock: chibi pull-cord + glass repo drawer �
      out the repo panel, which descends from the top like a drawer. Z-order:
      repo panel 995 < rope 996 (the rope stays grabbable/clickable as the
      panel's handle while it is out). ── */
-  body[data-we-modal-blocked] :is(.we-rope,.we-repo-panel,.we-update-notice) {
+  body[data-we-modal-blocked] :is(.we-rope,.we-repo-panel,.we-update-notice,.we-perf-float) {
     visibility: hidden !important; pointer-events: none !important;
   }
   .we-rope {

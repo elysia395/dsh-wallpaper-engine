@@ -18,9 +18,9 @@
 | # | 路径 | 来源 | 形态 | 依赖（闭包状态 / `c` 字段） | 守卫提及 |
 |---|---|---|---|---|---|
 | 1 | `/client-diag` | lib/routes/diag.js:86 | 箭头 | disposers appendDiagLine notice base | 7 |
-| 2 | `/diag` | lib/routes/diag.js:157 | 箭头 | disposers | 13 |
-| 3 | `/diag` | lib/routes/diag.js:158 | 箭头 | disposers base | 13 |
-| 4 | `/diag-log` | lib/routes/diag.js:159 | 箭头 | disposers log base componentsProbe | 5 |
+| 2 | `/diag` | lib/routes/diag.js:151 | 箭头 | disposers | 13 |
+| 3 | `/diag` | lib/routes/diag.js:152 | 箭头 | disposers base | 13 |
+| 4 | `/diag-log` | lib/routes/diag.js:153 | 箭头 | disposers log base componentsProbe | 5 |
 | 5 | `/glass-presets` | lib/routes/presets.js:153 | async 箭头 | disposers base | 1 |
 | 6 | `/settings` | lib/routes/settings.js:158 | 箭头 | disposers base ctx mediaOriginApi readSettings isBetterSidebarLoaded …(+3) | 21 |
 | 7 | `/cache-dir` | lib/routes/cache-dir.js:47 | 箭头 | disposers base CONTROL_JSON_MAX_BYTES normalizeUserDir cacheBaseDir setCacheDir …(+1) | 1 |

@@ -96,6 +96,24 @@ const WE_I18N_EN_EXT = {
   "缓动平滑": "Easing smoothness",
   "0 = 立刻跟手，越大越柔和（跟得越慢、停下后还会飘一小段才归位）": "0 = follows the cursor instantly; higher values are softer (it trails behind and keeps drifting a little after the cursor stops)",
 
+  // ── src/ext-perf.js · 「扩展」页签四号模块（性能监控，#263 重做版）──
+  //    四项读数的标签里，`平均帧时间` / `本进程 CPU` 与属性面板旧版共用，登记在
+  //    i18n-copy-panel.js 那一段；`视频` / `实时渲染` 也是既有词条。这里只登记新键。
+  "性能监控": "Performance monitor",
+  "查看当前壁纸的渲染帧率、界面帧率与本进程 CPU；静态图没有渲染帧（默认关）": "Shows the wallpaper's render frame rate, the interface frame rate and this process's CPU; still images have no render frames (off by default)",
+  "启用性能监控": "Enable performance monitor",
+  "显示当前壁纸的渲染帧率、界面帧率与本进程 CPU；每秒采样一次，离开这个页签就停止": "Show the wallpaper's render frame rate, the interface frame rate and this process's CPU; sampled once a second and stopped when you leave this tab",
+  "壁纸帧率": "Wallpaper frame rate",
+  "界面帧率": "Interface frame rate",
+  "网页自身帧率": "Web page's own frame rate",
+  "等待画面": "Waiting for the picture",
+  "已暂停": "Paused",
+  "静态壁纸没有渲染帧": "Still wallpapers have no render frames",
+  "等待视频": "Waiting for the video",
+  "等待采样": "Waiting for a sample",
+  "显示悬浮窗": "Show floating window",
+  "关闭悬浮窗": "Close floating window",
+
   // ── src/ext-avatar.js · 「扩展」页签**第一个**模块（自定义会话头像）──
   //    范围/默认值不在这里写死：真源是 lib/settings-schema.js 的五个 `avatar*` 键。
   //    与别的模块共用的键（清除那种）**不重复登记** —— 上面已经有的直接复用。

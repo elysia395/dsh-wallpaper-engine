@@ -524,21 +524,6 @@ function reportClientDiag(event, detail) {
   } catch { /* 忽略 */ }
 }
 
-// #263「更小的第一步」：帧间隔上报（每秒一条，走**同一条** /client-diag 通道）。
-// 与 reportClientDiag 分开：那条会 slice(0,300) 且落诊断档案；这条是逐壁纸性能数据，
-// 主机侧 lib/perf-metrics.js 特判 event='perf-frame' 直接聚合、**不落档案**。
-function reportPerfFrame(intervals) {
-  try {
-    apiPostJson("/client-diag", {
-      event: "perf-frame",
-      type: selection.type || "",
-      id: selection.id || "",
-      detail: intervals.join(","),
-      src: "",
-    }, { keepalive: true }).catch(() => { /* 忽略 */ });
-  } catch { /* 忽略 */ }
-}
-
 /** 「壁纸属性」开关的**唯一**读数（两个壳共用这一份：设置页工具栏 + 侧栏壁纸档）。
  *  侧栏经 ctx 拿到本函数后再取当前值 —— 它若直接读 `propsPanelOpen` 这个 `let`，
  *  内联后的 `var` 提升会让它在赋值前读到 undefined（见 scripts/build-client.mjs 的
@@ -560,8 +545,6 @@ function userPropsStateOf() {
     heard: !propsState.loading && !propsState.remote,
     // issue #341：WE 里这张壁纸的当前值与本机覆盖值的差异摘要（null = 没有可导入项/没读到）。
     we: userPropsWeImport(),
-    // #263：本进程性能指标快照（null = 面板没开 / 还没拉到）。
-    perf: perfSnapshot,
   };
 }
 
@@ -593,7 +576,5 @@ function renderUserPropsPanel() {
     // issue #341：WE 当前值导入（只读；显式按钮触发）
     we: st.we,
     onImportWe: importUserPropsFromWe,
-    // #263：性能区**只在 perf 非空时出现**（见 picker-props-panel.js）
-    perf: st.perf,
   });
 }

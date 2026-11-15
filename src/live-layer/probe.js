@@ -246,19 +246,6 @@ function takeUiFps() {
   return seconds > 0.2 ? Math.round(frames / seconds) : -1;
 }
 
-// #263「更小的第一步」：把渲染页自己的帧率交给上报函数（src/client/media-frame.js
-// 的 reportPerfFrame → 既有 /client-diag 通道 → 主机 lib/perf-metrics.js 聚合）。
-// 口径必须是壁纸渲染侧（__wpStats.frame().fps），不是宿主页面 rAF —— 后者在
-// 壁纸暂停/软渲染暂停时仍然满帧，会把「—」显示成 60/120。
-// watch tick 每秒一次，只上报这一秒的一个间隔样本。`stats.running === false`
-//（暂停/首帧未出）或 fps 不可用时**不报**，让主机侧样本按 STALE_MS 过期。
-function reportPerfFrameTick(stats) {
-  if (!stats || stats.running === false) return;
-  const fps = Number(stats.fps);
-  if (!Number.isFinite(fps) || fps <= 0) return;
-  reportPerfFrame([1000 / fps]);
-}
-
 // 运行时帧率上报：每 5 秒一条，落进 host 的 diag 文件（DSH Desktop 拿不到
 // console，只能靠这条通道）。`cap` 是当前上限设置，`web` 是壁纸自身帧率
 //（-1 = 渲染页没给，例如纯 CSS 动画的壁纸不靠 rAF），`rnd` 是渲染页线程帧率。

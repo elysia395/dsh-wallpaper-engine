@@ -1829,41 +1829,10 @@ const IS_EDGE = typeof navigator !== "undefined" && /Edg\//.test(navigator.userA
 let propsPanelOpen = false;
 let propsState = { token: "", loading: false, error: "", props: [], remote: false, we: null };
 
-// #263「更小的第一步」：本进程性能指标快照（FPS / 平均帧时间 / 掉帧 / CPU）。
-// 面板开着时按 1 秒轮询 host 的 /diag-log?perf=<token>；关掉即停。
-let perfSnapshot = null;
-let perfPollTimer = 0;
-let perfPollToken = "";
-
-/** 开始/继续轮询性能指标（换 token 只换目标，不重开 timer）。 */
-function startPerfPoll(token) {
-  perfPollToken = String(token || "");
-  if (perfPollTimer) return;
-  perfPollTimer = setInterval(() => {
-    if (!perfPollToken) return;
-    apiJson("/diag-log?perf=" + encodeURIComponent(perfPollToken))
-      .then((res) => {
-        const d = res && res.data;
-        perfSnapshot = d && d.perf ? d.perf : null;
-        emit();
-      })
-      .catch(() => { /* 忽略：下一次轮询再试 */ });
-  }, 1000);
-}
-
-/** 停止轮询并清空快照（面板关闭 / 清空选中）。 */
-function stopPerfPoll() {
-  if (perfPollTimer) { clearInterval(perfPollTimer); perfPollTimer = 0; }
-  perfPollToken = "";
-  perfSnapshot = null;
-}
-
-
 /** 打开发送（侧栏下钻的入口）：先落状态再拉定义 —— 判据是"该有属性了"。 */
 function openUserPropsPanel() {
   propsPanelOpen = true;
   loadUserPropDefs(propTokenOf(selection), true);
-  startPerfPoll(selection.id);
   emit();
 }
 
@@ -1871,7 +1840,6 @@ function openUserPropsPanel() {
 function closeUserPropsPanel() {
   propsPanelOpen = false;
   cancelUserPropsCommit(); // 面板关了：拖动期剩下的那次提交不再有意义
-  stopPerfPoll();
   emit();
 }
 
@@ -2740,9 +2708,6 @@ function onTogglePropsPanel() {
   propsPanelOpen = !propsPanelOpen;
   if (propsPanelOpen) {
     loadUserPropDefs(propTokenOf(selection), true);
-    startPerfPoll(selection.id);
-  } else {
-    stopPerfPoll();
   }
   emit();
 }
@@ -3028,6 +2993,19 @@ function onToggleLiveDiag() { toggleLiveDiag(); emit(); }
 // 形状与上面一致：控件只报事件，写设置 + 重渲染都在这里。那一层没有网络往返、"点了就有反应"是
 // 每帧现读设置 ⇒ 开关与档位走 emit 的完整路径，滑块走 commitLiveSetting 的 live 档
 // （拖动时即时可见，抬手才落盘 + emit）。
+function onPerfEnabled(e) {
+  const on = e.target.checked;
+  setSetting("perfEnabled", on);
+  // 关掉监控就没有读数可显示，悬浮窗跟着关，免得留一块空壳。
+  if (!on) setSetting("perfFloat", false);
+  emit();
+}
+// 悬浮窗开关：浮窗本身订阅 store，写 perfFloat + emit 即可挂上 / 摘下。
+function onPerfFloatToggle() {
+  const next = !(selection.perfFloat === true);
+  setSetting("perfFloat", next);
+  emit();
+}
 function onFxEnabled(e) { setSetting("fxEnabled", e.target.checked); emit(); }
 function onFxClick(e) { setSetting("fxClick", e.target.checked); emit(); }
 function onFxTrail(e) { setSetting("fxTrail", e.target.checked); emit(); }
@@ -3700,7 +3678,6 @@ function onClear() {
   // 清掉壁纸 = 这张的属性面板也失去对象：顺手把「壁纸属性」收起来。不收的话开关会
   // 「挂着」，下次随便选一张带属性的壁纸时面板会**自动弹开**（用户没点过它）。
   propsPanelOpen = false;
-  stopPerfPoll();
   applySelection("");
 }
 // 手动点开一张壁纸 = 明确想看它：作废它的 live 失败记忆（sceneLiveFailures，持久
@@ -5043,6 +5020,7 @@ function WallpaperPicker() {
   const extensionCtx = () => ({
     components,
     sel: selection,
+    onPerfEnabled, onPerfFloatToggle,
     onFxEnabled, onFxClick, onFxClickStyle, onFxClickSize, onFxClickGlow,
     onFxTrail, onFxTrailStyle, onFxTrailLength, onFxTrailWidth, onFxTrailGlow,
     onFxOpacity, onFxBlend, onFxColorMode, onFxColor,
@@ -5717,6 +5695,7 @@ function useLegacySaturateCoupling() {
 //    让迟到的层立刻补接（见 ctx.effect 里的 weSetLayerAttacher）。
 weRegisterExtensionModule("avatar", AVATAR_EXTENSION_MODULE);
 weRegisterLayerHooks("avatar", { sync: syncAvatarLayer, dispose: disposeAvatarLayer });
+weRegisterExtensionModule("perf", PERF_EXTENSION_MODULE);
 
 // ── 首帧后空闲门（#158）────────────────────────────────────────────────────────
 // 口径：宿主 `ClientEntries.start()` 对**每个**插件都 `create` + `loader.await()`，
@@ -6207,6 +6186,28 @@ function apply(ctx) {
       if (!host) return undefined;
       const root = ReactDOM.createRoot(host);
       root.render(React.createElement(RopeDock, null));
+      return () => {
+        try { root.unmount(); } catch { /* already gone */ }
+        if (host.parentNode) host.parentNode.removeChild(host);
+      };
+    });
+  }
+
+  // 3c. 性能监控悬浮窗（issue #263）：同样是 body 下的独立 React root，浮在对话上。
+  //     RopeDock 是常驻入口，这里不同 —— 组件内部读 perfEnabled / perfFloat，关着就
+  //     return null，不会画任何东西；打开后关掉配置面板仍然常驻（这正是用户要的）。
+  if (ctx.effect && typeof document !== "undefined" &&
+      typeof ReactDOM !== "undefined" && typeof ReactDOM.createRoot === "function") {
+    ctx.effect(() => {
+      let host = document.getElementById(PERF_FLOAT_HOST_ID);
+      if (!host && document.body && typeof document.createElement === "function") {
+        host = document.createElement("div");
+        host.id = PERF_FLOAT_HOST_ID;
+        document.body.appendChild(host);
+      }
+      if (!host) return undefined;
+      const root = ReactDOM.createRoot(host);
+      root.render(React.createElement(PerfFloat, null));
       return () => {
         try { root.unmount(); } catch { /* already gone */ }
         if (host.parentNode) host.parentNode.removeChild(host);

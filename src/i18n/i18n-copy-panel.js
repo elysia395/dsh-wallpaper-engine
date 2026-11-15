@@ -22,7 +22,6 @@ const WE_I18N_EN_PANEL = {
   "选择壁纸": "Choose wallpaper",
   "壁纸作者提供的可调属性（改动立即生效）": "Adjustable properties provided by the wallpaper author (changes apply immediately)",
   "壁纸属性": "Wallpaper properties",
-  "性能": "Performance",
   "平均帧时间": "Average frame time",
   "本进程 CPU": "This process CPU",
   "暂停": "Pause",

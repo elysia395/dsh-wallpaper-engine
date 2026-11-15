@@ -174,7 +174,9 @@
         "rotationLiveInterval": 0,
         "settingsMaskStrength": 100,
         "sceneSoftRenderPause": true,
-        "presetGuideDismissed": ""
+        "presetGuideDismissed": "",
+        "perfEnabled": false,
+        "perfFloat": false
       },
       "host": {
         "id": "",
@@ -340,7 +342,9 @@
         "rotationLiveInterval": 0,
         "settingsMaskStrength": 100,
         "sceneSoftRenderPause": true,
-        "presetGuideDismissed": ""
+        "presetGuideDismissed": "",
+        "perfEnabled": false,
+        "perfFloat": false
       }
     },
     {
@@ -524,7 +528,9 @@
         "rotationLiveInterval": 0,
         "settingsMaskStrength": 100,
         "sceneSoftRenderPause": true,
-        "presetGuideDismissed": ""
+        "presetGuideDismissed": "",
+        "perfEnabled": false,
+        "perfFloat": false
       },
       "host": "__null__"
     },
@@ -709,7 +715,9 @@
         "rotationLiveInterval": 0,
         "settingsMaskStrength": 100,
         "sceneSoftRenderPause": true,
-        "presetGuideDismissed": ""
+        "presetGuideDismissed": "",
+        "perfEnabled": false,
+        "perfFloat": false
       },
       "host": "__null__"
     },
@@ -894,7 +902,9 @@
         "rotationLiveInterval": 0,
         "settingsMaskStrength": 100,
         "sceneSoftRenderPause": true,
-        "presetGuideDismissed": ""
+        "presetGuideDismissed": "",
+        "perfEnabled": false,
+        "perfFloat": false
       },
       "host": "__null__"
     },
@@ -1071,7 +1081,9 @@
         "rotationLiveInterval": 0,
         "settingsMaskStrength": 100,
         "sceneSoftRenderPause": true,
-        "presetGuideDismissed": ""
+        "presetGuideDismissed": "",
+        "perfEnabled": false,
+        "perfFloat": false
       },
       "host": {
         "id": "",
@@ -1237,7 +1249,9 @@
         "rotationLiveInterval": 0,
         "settingsMaskStrength": 100,
         "sceneSoftRenderPause": true,
-        "presetGuideDismissed": ""
+        "presetGuideDismissed": "",
+        "perfEnabled": false,
+        "perfFloat": false
       }
     },
     {
@@ -1470,7 +1484,9 @@
         "rotationLiveInterval": 0,
         "settingsMaskStrength": 100,
         "sceneSoftRenderPause": true,
-        "presetGuideDismissed": ""
+        "presetGuideDismissed": "",
+        "perfEnabled": false,
+        "perfFloat": false
       },
       "host": {
         "id": "",
@@ -1636,7 +1652,9 @@
         "rotationLiveInterval": 0,
         "settingsMaskStrength": 100,
         "sceneSoftRenderPause": true,
-        "presetGuideDismissed": ""
+        "presetGuideDismissed": "",
+        "perfEnabled": false,
+        "perfFloat": false
       }
     },
     {
@@ -1914,7 +1932,9 @@
         "rotationLiveInterval": 0,
         "settingsMaskStrength": 100,
         "sceneSoftRenderPause": true,
-        "presetGuideDismissed": ""
+        "presetGuideDismissed": "",
+        "perfEnabled": false,
+        "perfFloat": false
       },
       "host": {
         "id": "",
@@ -2080,7 +2100,9 @@
         "rotationLiveInterval": 0,
         "settingsMaskStrength": 100,
         "sceneSoftRenderPause": true,
-        "presetGuideDismissed": ""
+        "presetGuideDismissed": "",
+        "perfEnabled": false,
+        "perfFloat": false
       }
     },
     {
@@ -2257,7 +2279,9 @@
         "rotationLiveInterval": 0,
         "settingsMaskStrength": 100,
         "sceneSoftRenderPause": true,
-        "presetGuideDismissed": ""
+        "presetGuideDismissed": "",
+        "perfEnabled": false,
+        "perfFloat": false
       },
       "host": {
         "id": "",
@@ -2423,7 +2447,9 @@
         "rotationLiveInterval": 0,
         "settingsMaskStrength": 100,
         "sceneSoftRenderPause": true,
-        "presetGuideDismissed": ""
+        "presetGuideDismissed": "",
+        "perfEnabled": false,
+        "perfFloat": false
       }
     },
     {
@@ -2614,7 +2640,9 @@
         "rotationLiveInterval": 0,
         "settingsMaskStrength": 100,
         "sceneSoftRenderPause": true,
-        "presetGuideDismissed": ""
+        "presetGuideDismissed": "",
+        "perfEnabled": false,
+        "perfFloat": false
       },
       "host": {
         "id": "",
@@ -2780,7 +2808,9 @@
         "rotationLiveInterval": 0,
         "settingsMaskStrength": 100,
         "sceneSoftRenderPause": true,
-        "presetGuideDismissed": ""
+        "presetGuideDismissed": "",
+        "perfEnabled": false,
+        "perfFloat": false
       }
     },
     {
@@ -2971,7 +3001,9 @@
         "rotationLiveInterval": 0,
         "settingsMaskStrength": 100,
         "sceneSoftRenderPause": true,
-        "presetGuideDismissed": ""
+        "presetGuideDismissed": "",
+        "perfEnabled": false,
+        "perfFloat": false
       },
       "host": {
         "id": "",
@@ -3137,7 +3169,9 @@
         "rotationLiveInterval": 0,
         "settingsMaskStrength": 100,
         "sceneSoftRenderPause": true,
-        "presetGuideDismissed": ""
+        "presetGuideDismissed": "",
+        "perfEnabled": false,
+        "perfFloat": false
       }
     },
     {
@@ -3315,7 +3349,9 @@
         "rotationLiveInterval": 0,
         "settingsMaskStrength": 100,
         "sceneSoftRenderPause": true,
-        "presetGuideDismissed": ""
+        "presetGuideDismissed": "",
+        "perfEnabled": false,
+        "perfFloat": false
       },
       "host": {
         "id": "",
@@ -3481,7 +3517,9 @@
         "rotationLiveInterval": 0,
         "settingsMaskStrength": 100,
         "sceneSoftRenderPause": true,
-        "presetGuideDismissed": ""
+        "presetGuideDismissed": "",
+        "perfEnabled": false,
+        "perfFloat": false
       }
     },
     {
@@ -3664,7 +3702,9 @@
         "rotationLiveInterval": 0,
         "settingsMaskStrength": 100,
         "sceneSoftRenderPause": true,
-        "presetGuideDismissed": ""
+        "presetGuideDismissed": "",
+        "perfEnabled": false,
+        "perfFloat": false
       },
       "host": {
         "id": "",
@@ -3830,7 +3870,9 @@
         "rotationLiveInterval": 0,
         "settingsMaskStrength": 100,
         "sceneSoftRenderPause": true,
-        "presetGuideDismissed": ""
+        "presetGuideDismissed": "",
+        "perfEnabled": false,
+        "perfFloat": false
       }
     },
     {
@@ -4010,7 +4052,9 @@
         "rotationLiveInterval": 0,
         "settingsMaskStrength": 100,
         "sceneSoftRenderPause": true,
-        "presetGuideDismissed": ""
+        "presetGuideDismissed": "",
+        "perfEnabled": false,
+        "perfFloat": false
       },
       "host": {
         "id": "",
@@ -4176,7 +4220,9 @@
         "rotationLiveInterval": 0,
         "settingsMaskStrength": 100,
         "sceneSoftRenderPause": true,
-        "presetGuideDismissed": ""
+        "presetGuideDismissed": "",
+        "perfEnabled": false,
+        "perfFloat": false
       }
     },
     {
@@ -4363,7 +4409,9 @@
         "rotationLiveInterval": 0,
         "settingsMaskStrength": 100,
         "sceneSoftRenderPause": true,
-        "presetGuideDismissed": ""
+        "presetGuideDismissed": "",
+        "perfEnabled": false,
+        "perfFloat": false
       },
       "host": {
         "id": "",
@@ -4529,7 +4577,9 @@
         "rotationLiveInterval": 0,
         "settingsMaskStrength": 100,
         "sceneSoftRenderPause": true,
-        "presetGuideDismissed": ""
+        "presetGuideDismissed": "",
+        "perfEnabled": false,
+        "perfFloat": false
       }
     },
     {
@@ -4781,7 +4831,9 @@
         "rotationLiveInterval": 0,
         "settingsMaskStrength": 100,
         "sceneSoftRenderPause": true,
-        "presetGuideDismissed": ""
+        "presetGuideDismissed": "",
+        "perfEnabled": false,
+        "perfFloat": false
       },
       "host": {
         "id": "",
@@ -4972,7 +5024,9 @@
         "rotationLiveInterval": 0,
         "settingsMaskStrength": 100,
         "sceneSoftRenderPause": true,
-        "presetGuideDismissed": ""
+        "presetGuideDismissed": "",
+        "perfEnabled": false,
+        "perfFloat": false
       }
     },
     {
@@ -5148,7 +5202,9 @@
         "rotationLiveInterval": 0,
         "settingsMaskStrength": 100,
         "sceneSoftRenderPause": true,
-        "presetGuideDismissed": ""
+        "presetGuideDismissed": "",
+        "perfEnabled": false,
+        "perfFloat": false
       },
       "host": {
         "id": "",
@@ -5314,7 +5370,9 @@
         "rotationLiveInterval": 0,
         "settingsMaskStrength": 100,
         "sceneSoftRenderPause": true,
-        "presetGuideDismissed": ""
+        "presetGuideDismissed": "",
+        "perfEnabled": false,
+        "perfFloat": false
       }
     },
     {
@@ -5490,7 +5548,9 @@
         "rotationLiveInterval": 0,
         "settingsMaskStrength": 100,
         "sceneSoftRenderPause": true,
-        "presetGuideDismissed": ""
+        "presetGuideDismissed": "",
+        "perfEnabled": false,
+        "perfFloat": false
       },
       "host": {
         "id": "wallpaper-42",
@@ -5656,7 +5716,9 @@
         "rotationLiveInterval": 0,
         "settingsMaskStrength": 100,
         "sceneSoftRenderPause": true,
-        "presetGuideDismissed": ""
+        "presetGuideDismissed": "",
+        "perfEnabled": false,
+        "perfFloat": false
       }
     },
     {
@@ -5833,7 +5895,9 @@
         "rotationLiveInterval": 0,
         "settingsMaskStrength": 100,
         "sceneSoftRenderPause": true,
-        "presetGuideDismissed": ""
+        "presetGuideDismissed": "",
+        "perfEnabled": false,
+        "perfFloat": false
       },
       "host": {
         "id": "",
@@ -5999,7 +6063,9 @@
         "rotationLiveInterval": 0,
         "settingsMaskStrength": 100,
         "sceneSoftRenderPause": true,
-        "presetGuideDismissed": ""
+        "presetGuideDismissed": "",
+        "perfEnabled": false,
+        "perfFloat": false
       }
     }
   ]

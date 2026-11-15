@@ -2317,6 +2317,11 @@ const hostLib = hostLibComposed;
     // 补头像只有一条路径（行标记 + 节点填充都在它里），混回两份 = 一行补两个头。
     && (bundle.match(/function avatarDecorateRow\(/g) || []).length === 1
     && (bundle.match(/function avatarFillNode\(/g) || []).length === 1);
+  check('ext-perf.js 已登记进 INLINE_MODULES 且在产物里只有一份',
+    /file:\s*'src\/ext-perf\.js'/.test(build)
+    && (bundle.match(/function renderPerfIsland\(ctx\)/g) || []).length === 1
+    && bundle.includes('PERF_EXTENSION_MODULE')
+    && bundle.includes('weRegisterExtensionModule("perf", PERF_EXTENSION_MODULE)'));
   check('ext-avatar.js 已登记进 INLINE_MODULES 且在产物里只有一份',
     /file:\s*'src\/ext-avatar\.js'/.test(build)
     && (bundle.match(/function renderAvatarIsland\(ctx\)/g) || []).length === 1
@@ -2331,11 +2336,11 @@ const hostLib = hostLibComposed;
     // 两种拼写都要认：宿主注入的显式键是 registerExtensionModule（小写 r），
     // 包内的冻结表函数是 weRegisterExtensionModule（大写 R）—— 只认一种就会漏掉某一侧。
     .matchAll(/[Rr]egisterExtensionModule\(\s*['"]([\w-]+)['"]/g)).map((m) => m[1]);
-  const unionIsThree = (ids) => Array.from(new Set(ids)).sort().join(',') === 'avatar,fx,parallax';
-  check('扩展模块 id 三份产物并集恰好三项（avatar 主包 / fx · parallax 各自子包）',
-    unionIsThree(regIds), regIds.join(',') || '一处注册调用都没找到');
+  const unionIsFour = (ids) => Array.from(new Set(ids)).sort().join(',') === 'avatar,fx,parallax,perf';
+  check('扩展模块 id 三份产物并集恰好四项（avatar · perf 主包 / fx · parallax 各自子包）',
+    unionIsFour(regIds), regIds.join(',') || '一处注册调用都没找到');
   check('negative control: 并集少一项 / 多一项都判红（同一份判据函数）',
-    !unionIsThree(['fx', 'parallax']) && !unionIsThree(regIds.concat(['zzz'])));
+    !unionIsFour(['fx', 'parallax']) && !unionIsFour(regIds.concat(['zzz'])));
   check('panel-tabs 的 extensionModules() 只问注册表（不留静态清单 —— 跨包顺序不是契约）',
     /function extensionModules\(\) \{\s*\n?\s*return weExtensionModules\(\);/.test(tabsHubSrc));
   // 顺序的真源 = **描述符声明的 order**（avatar=1 / fx=2 / parallax=3），不是任何数组序。
@@ -2349,13 +2354,16 @@ const hostLib = hostLibComposed;
   const avatarExtSrc = readFileSync(join(root, 'src', 'ext-avatar.js'), 'utf8');
   const fxExtSrc = readFileSync(subFxFile('ext-fx.js'), 'utf8');
   const parExtSrc = readFileSync(subParallaxFile('ext-parallax.js'), 'utf8');
-  check('屏上顺序 = 描述符的 order（avatar 1 / fx 2 / parallax 3）· 不靠数组序',
+  const perfExtSrc = readFileSync(join(root, 'src', 'ext-perf.js'), 'utf8');
+  check('屏上顺序 = 描述符的 order（avatar 1 / fx 2 / parallax 3 / perf 4）· 不靠数组序',
     orderOfModule(avatarExtSrc, 'AVATAR_EXTENSION_MODULE') === 1
     && orderOfModule(fxExtSrc, 'FX_EXTENSION_MODULE') === 2
-    && orderOfModule(parExtSrc, 'PARALLAX_EXTENSION_MODULE') === 3,
+    && orderOfModule(parExtSrc, 'PARALLAX_EXTENSION_MODULE') === 3
+    && orderOfModule(perfExtSrc, 'PERF_EXTENSION_MODULE') === 4,
     [orderOfModule(avatarExtSrc, 'AVATAR_EXTENSION_MODULE'),
       orderOfModule(fxExtSrc, 'FX_EXTENSION_MODULE'),
-      orderOfModule(parExtSrc, 'PARALLAX_EXTENSION_MODULE')].join('/'));
+      orderOfModule(parExtSrc, 'PARALLAX_EXTENSION_MODULE'),
+      orderOfModule(perfExtSrc, 'PERF_EXTENSION_MODULE')].join('/'));
   // ── 面板页签（C）：渲染器只在 panel-tabs.js，且**只从一个参数取外界** ──
   const TAB_FNS = ['renderWallpaperTab', 'renderAppearanceTab', 'renderAudioTab',
     'renderMascotTab', 'renderEffectsTab', 'renderAdvancedTab', 'renderExtensionsTab',
@@ -4502,8 +4510,8 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     // `PROFILE_PRESET_KEYS` 当判据：头像文件名属预设的**资产段**、`parallaxPluginDepths`
     // 属排除段，但两者都该跟着模块一起重置（重置不该留着"上次导入的头像"）。
     const missingDefault = allKeys.filter((k) => !Object.prototype.hasOwnProperty.call(schemaMod.DEFAULTS, k));
-    check('#192 模块分组：扩展 3 + 外观 6 共九组、非空、两两不相交、每键都有默认值可回写',
-      names.length === 9
+    check('#192 模块分组：扩展 4 + 外观 6 共十组、非空、两两不相交、每键都有默认值可回写',
+      names.length === 10
       && names.every((n) => groups[n].length > 0)
       && uniq.size === allKeys.length
       && missingDefault.length === 0,
