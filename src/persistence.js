@@ -13,6 +13,7 @@
  *   SETTINGS_URL     ← 宿主设置路由（client.js 顶层 const）
  *   sanitizeSettings / serializeSettings / DEFAULTS ← lib/settings-schema.js（消毒 / 白名单 / 默认值）
  *   settingsNamespaceOf / KINDS / SETTINGS_META_NAMESPACE ← 同文件（差分按组件簇分组）
+ *   CLIENT_ONLY      ← 同文件（只住 localStorage、宿主不接收的键：设备本地的抽帧 / 自定义画面记忆）
  *   emit             ← 单向重渲染（启动加载完成后通知一次）
  *   applyEffects     ← src/effects.js（设置落地到 DOM）
  *   setAdapterFromHost ← src/adapter.js（宿主上报的适配目标观测值）
@@ -284,11 +285,13 @@ async function loadPersisted() {
       // CLIENT_ONLY 的键宿主**从来不收**（它们只住 localStorage：设备本地的抽帧 / 自定义画面记忆）。宿主 GET 回的是
       // 宿主快照，而 `sanitizeSettings()` 是客户端视角的消毒 —— 它会给这两个键补上**默认值**。整份 assign 下去 ⇒
       // 每次启动都把本地记忆清成默认值，随后 `writeLocalCache()` 再把清空结果写回缓存（真·数据丢失，且与"宿主不可达
-      // 就回落本地缓存"那条路径合并结果不同 —— #371 的附带发现，两条加载路径语义必须一致）。所以这两个键一律取本地缓存。
+      // 就回落本地缓存"那条路径合并结果不同 —— #371 的附带发现，两条加载路径语义必须一致）。所以这两个键一律取已有的本地值。
       const fromHost = sanitizeSettings(hostSettings);
-      const cachedLocal = readPersisted();
+      // 本地值取**内存里的 `selection`**：它初始化时就铺了 `readPersisted()`（client.js 的 store 初始化），
+      // 再读一遍 localStorage 既是重复的 parse + 消毒，也埋了一个边界 —— 启动瞬间 localStorage 不可用时
+      // `readPersisted()` 回落 `DEFAULTS`，反而把内存里已采纳的本地记忆清空。
       for (const key of CLIENT_ONLY) {
-        if (key in cachedLocal) fromHost[key] = cachedLocal[key];
+        if (key in selection) fromHost[key] = selection[key];
       }
       Object.assign(selection, fromHost);
       writeLocalCache();

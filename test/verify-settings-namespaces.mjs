@@ -521,7 +521,9 @@ console.log('\n⑦ 客户端差分：只发改动键、按 ns 分组、首启迁
     }
     globalThis.SETTINGS_KEY = CLIENT_KEY;
     globalThis.SETTINGS_URL = SETTINGS_URL;
-    globalThis.selection = clientSnap(hostSettings && typeof hostSettings === 'object' ? hostSettings : {});
+    // 照 client.js 的真实初始化：store 先铺本地缓存（`...readPersisted()`），宿主值由 loadPersisted() 合并进来。
+    // 原先这里用宿主快照当初始值，等于假设"内存里已经有宿主值" —— 会把「采纳宿主时保留本地记忆」这条判据测成恒假。
+    globalThis.selection = clientSnap(localRaw && typeof localRaw === 'object' ? localRaw : {});
     globalThis.DEFAULTS = schema.DEFAULTS;
     globalThis.KINDS = schema.KINDS;
     globalThis.serializeSettings = schema.serializeSettings;
@@ -630,11 +632,11 @@ console.log('\n⑦ 客户端差分：只发改动键、按 ns 分组、首启迁
     same(cacheB2.customFrames, localOnly.customFrames) && same(cacheB2.frameVariants, localOnly.frameVariants));
   // 负对照跑**去掉保留逻辑**的那份源码：同一判据必须判红，否则这条断言没有判别力。
   const dropKeep = (src) => src.replace(
-    /const cachedLocal = readPersisted\(\);[\s\S]{0,200}?Object\.assign\(selection, fromHost\);/,
-    'Object.assign(selection, sanitizeSettings(hostSettings));');
+    /for \(const key of CLIENT_ONLY\) \{[\s\S]{0,240}?\n {6}\}\n/,
+    '');
   const buggySrc = dropKeep(persistSrc);
   check('⑦ b2 负对照夹具：去掉保留逻辑后源码确实变了（不是空替换）',
-    buggySrc !== persistSrc && !buggySrc.includes('const cachedLocal = readPersisted();'));
+    buggySrc !== persistSrc && !buggySrc.includes('for (const key of CLIENT_ONLY)'));
   const b2bug = await loadPersist({ hostSettings: hostPayload, localRaw: localOnly, source: buggySrc });
   await b2bug.mod.loadPersisted();
   check('⑦ b2 负对照：缺了保留逻辑就把本地记忆清成默认值（同一条判据判红）',
