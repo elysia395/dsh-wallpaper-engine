@@ -281,7 +281,16 @@ async function loadPersisted() {
     // Host is the truth: apply it and refresh the local cache copy — unless the
     // user edited settings during the fetch (their write wins).
     if (!stale) {
-      Object.assign(selection, sanitizeSettings(hostSettings));
+      // CLIENT_ONLY 的键宿主**从来不收**（它们只住 localStorage：设备本地的抽帧 / 自定义画面记忆）。宿主 GET 回的是
+      // 宿主快照，而 `sanitizeSettings()` 是客户端视角的消毒 —— 它会给这两个键补上**默认值**。整份 assign 下去 ⇒
+      // 每次启动都把本地记忆清成默认值，随后 `writeLocalCache()` 再把清空结果写回缓存（真·数据丢失，且与"宿主不可达
+      // 就回落本地缓存"那条路径合并结果不同 —— #371 的附带发现，两条加载路径语义必须一致）。所以这两个键一律取本地缓存。
+      const fromHost = sanitizeSettings(hostSettings);
+      const cachedLocal = readPersisted();
+      for (const key of CLIENT_ONLY) {
+        if (key in cachedLocal) fromHost[key] = cachedLocal[key];
+      }
+      Object.assign(selection, fromHost);
       writeLocalCache();
       // 差分基线 = 宿主现在持有的那份（客户端形状）。⚠️ 只在真的采纳宿主值时推进：GET 在途时
       // 用户改过设置的话，他们那次整段 PUT 已经写进宿主，别拿过期应答当基线（会漏发后续改动）。

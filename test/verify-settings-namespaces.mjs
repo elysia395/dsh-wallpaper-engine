@@ -528,6 +528,7 @@ console.log('\n⑦ 客户端差分：只发改动键、按 ns 分组、首启迁
     globalThis.sanitizeSettings = clientSnap;
     globalThis.settingsNamespaceOf = schema.settingsNamespaceOf;
     globalThis.SETTINGS_META_NAMESPACE = schema.SETTINGS_META_NAMESPACE;
+    globalThis.CLIENT_ONLY = schema.CLIENT_ONLY;
     globalThis.emit = () => {};
     globalThis.applyEffects = () => {};
     globalThis.setAdapterFromHost = () => {};
@@ -615,6 +616,30 @@ console.log('\n⑦ 客户端差分：只发改动键、按 ns 分组、首启迁
   check('⑦ 本地缓存仍是整段快照（宿主键数 + CLIENT_ONLY），CLIENT_ONLY 值在里面',
     Object.keys(cache).length === HOST_KEY_COUNT + CLIENT_ONLY_COUNT && cache.frameVariants && cache.frameVariants.guard === 'local-only',
     Object.keys(cache).length + ' 键');
+
+  // ⑦ b2 采纳宿主快照时，设备本地键（CLIENT_ONLY）必须保留本地值 —— #371 的附带发现：
+  // 宿主从不收这两个键，而客户端视角消毒会给它们补默认值；整份 assign 会清空本地记忆、随后写回缓存 ⇒ 真·丢数据。
+  const localOnly = clientSnap({ customFrames: { guard: 'local-memory' }, frameVariants: { v1: { a: 1 } } });
+  const b2 = await loadPersist({ hostSettings: hostPayload, localRaw: localOnly });
+  await b2.mod.loadPersisted();
+  check('⑦ b2 采纳宿主快照后 CLIENT_ONLY 仍是本地缓存的值（不被宿主默认值清空 · #371）',
+    same(b2.selection.customFrames, localOnly.customFrames) && same(b2.selection.frameVariants, localOnly.frameVariants),
+    'customFrames=' + JSON.stringify(b2.selection.customFrames) + ' frameVariants=' + JSON.stringify(b2.selection.frameVariants));
+  const cacheB2 = JSON.parse(b2.store.get(CLIENT_KEY));
+  check('⑦ b2 写回的本地缓存也没被清空（数据丢失只在这一步留痕）',
+    same(cacheB2.customFrames, localOnly.customFrames) && same(cacheB2.frameVariants, localOnly.frameVariants));
+  // 负对照跑**去掉保留逻辑**的那份源码：同一判据必须判红，否则这条断言没有判别力。
+  const dropKeep = (src) => src.replace(
+    /const cachedLocal = readPersisted\(\);[\s\S]{0,200}?Object\.assign\(selection, fromHost\);/,
+    'Object.assign(selection, sanitizeSettings(hostSettings));');
+  const buggySrc = dropKeep(persistSrc);
+  check('⑦ b2 负对照夹具：去掉保留逻辑后源码确实变了（不是空替换）',
+    buggySrc !== persistSrc && !buggySrc.includes('const cachedLocal = readPersisted();'));
+  const b2bug = await loadPersist({ hostSettings: hostPayload, localRaw: localOnly, source: buggySrc });
+  await b2bug.mod.loadPersisted();
+  check('⑦ b2 负对照：缺了保留逻辑就把本地记忆清成默认值（同一条判据判红）',
+    same(b2bug.selection.customFrames, schema.DEFAULTS.customFrames) && !same(b2bug.selection.customFrames, localOnly.customFrames),
+    'customFrames=' + JSON.stringify(b2bug.selection.customFrames));
 
   // ⑦ c 失败 ⇒ 不推进基线 ⇒ 重发同一批键；成功后不再重发
   let failing = true;
