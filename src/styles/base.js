@@ -296,6 +296,30 @@ const CSS_BASE = `
 
 
 
+  /* ── #374：壁纸模式下会话滚动条与壁纸融合 ───────────────────────────────────
+     [data-conversation-scroll] 是宿主会话骨架里的滚动容器（_scrollBody，overflow-y:auto），
+     宿主给它配了 scrollbar-gutter: stable ⇒ 滚动条**常驻**窗口右缘那一条，正好压在壁纸上。
+     宿主滚动条走主题色（槽底近白、拇指主题蓝），与壁纸是两张皮 —— 用户看到的就是
+     「窗右缘一条贯穿全高的浅色竖条 + 突兀的滑块」。
+     壁纸在场即让位（与玻璃行无关，同上面几条），故这里挂**壁纸门**：槽底清透明（壁纸从
+     槽位透出来），拇指换中性半透明 —— 背衬是**任意壁纸**而不是主题面，故用中性半透明而非
+     主题令牌，深 / 浅壁纸都读得出。
+     玻璃行开着时 #157 已把四个 --dsw-alias-scrollbar-* 令牌接进插件取色，拇指那条再挂
+     :not([data-we-glass-page]) 免得与它打架；轨道透明两态都补（宿主各版本槽底不尽一致，
+     透明声明幂等、无副作用）。
+     ⚠️ ::-webkit-scrollbar-* 只在**滚动容器自身**生效、不继承 ⇒ 逐锚点声明；
+        只碰宿主自己的会话滚动容器，不碰插件面板（面板滚动条是设置页的一部分）。 */
+  body[data-we-wallpaper] [data-conversation-scroll]::-webkit-scrollbar-track {
+    background: transparent !important;
+  }
+  body[data-we-wallpaper]:not([data-we-glass-page]) [data-conversation-scroll]::-webkit-scrollbar-thumb {
+    background-color: rgba(128, 128, 128, 0.45) !important;
+  }
+  body[data-we-wallpaper]:not([data-we-glass-page]) [data-conversation-scroll]::-webkit-scrollbar-thumb:hover,
+  body[data-we-wallpaper]:not([data-we-glass-page]) [data-conversation-scroll]::-webkit-scrollbar-thumb:active {
+    background-color: rgba(128, 128, 128, 0.68) !important;
+  }
+
   /* ── Light-scheme text contrast boost ──────────────────────────────────────
      In light mode the grays (tertiary/caption/secondary) were tuned against a
      near-white page. Over a busy wallpaper + light scrim they lose contrast, so

@@ -298,6 +298,29 @@ assert.ok(bgLetThrough(wallpaperBlock),
 // sidebar-fill 额外挂玻璃门：玻璃行关掉后左右栏 / 顶栏回宿主原生（ADR-0010 D2）。
 assert.ok(fillLetThrough(glassPageLight) && fillLetThrough(glassPageDark),
   'sidebar-fill must be let through by wallpaper AND glass gates (glass row off ⇒ sidebars go native per ADR-0010 D2)');
+// ── #374 壁纸模式下会话滚动条与壁纸融合 ─────────────────────────────────────────
+// 症状：壁纸模式下窗口右缘那条常驻滚动条（宿主给它配了 scrollbar-gutter: stable，
+// 见 docs/CODE-STRUCTURE.md 的 [data-conversation-scroll] = _scrollBody）压着主题色的
+// 槽底 / 拇指，与壁纸两张皮。修法：壁纸门下把槽底清透明、拇指换中性半透明。
+// **拇指那条必须挂 :not([data-we-glass-page])** —— 玻璃行开着时 #157 已把四个
+// --dsw-alias-scrollbar-* 令牌接进插件取色，盖上去就等于把它打回中性色。
+const conversationScrollbarRules = (face) => ({
+  track: /body\[data-we-wallpaper\]\s*\[data-conversation-scroll\]::-webkit-scrollbar-track\s*\{[^}]*background:\s*transparent\s*!important/.test(face),
+  thumbGated: /body\[data-we-wallpaper\]:not\(\[data-we-glass-page\]\)\s*\[data-conversation-scroll\]::-webkit-scrollbar-thumb\s*\{[^}]*background-color:\s*rgba\(/.test(face),
+});
+const convScrollbar = conversationScrollbarRules(code);
+assert.ok(convScrollbar.track,
+  '#374：壁纸门下会话滚动容器的滚动条槽底必须清成 transparent（壁纸从槽位透出来）');
+assert.ok(convScrollbar.thumbGated,
+  '#374：拇指着色必须挂 :not([data-we-glass-page])（玻璃行开着时 #157 在管，别覆盖它）');
+// 负对照自证（牙）：同一个谓词喂「没清槽底 / 拇指没挂玻璃豁免」的合成形态必须判红 ——
+// 否则"没扫到规则"与"规则形态不对（比如漏了豁免、把 #157 打回去）"分不清。
+{
+  const noGate = conversationScrollbarRules(
+    'body[data-we-wallpaper] [data-conversation-scroll]::-webkit-scrollbar-thumb { background-color: rgba(128,128,128,.45) !important; }');
+  assert.ok(!noGate.track && !noGate.thumbGated,
+    '#374 负对照：漏了槽底透明 / 漏了玻璃豁免的形态必须判红（判据不是恒真）');
+}
 assert.ok(!fillLetThrough(wallpaperBlock),
   'sidebar-fill must NOT be let through by the wallpaper gate alone — that would keep sidebars translucent with the glass row off');
 // D2 的另一半：右栏没有自己的实底，玻璃行关掉时要补一块（否则跟着继承的 bg-base 一起透）。
