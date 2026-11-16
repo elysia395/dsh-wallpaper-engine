@@ -6179,6 +6179,24 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     else globalThis.PARALLAX_GROUP_DEPTH_MAX = PREV_DEPTH_MAX;
   }
 
+  // ── 场景开关键「勾了不生效」（#371）：开关行把事件交给具名处理器，处理器读 e.target.checked ──────
+  // 面板的 Toggle 把 switchRow 的 onChange 直接挂到 input[type=checkbox]，React 传进来的是合成
+  // 事件；处理器若写成布尔形参（v）再写 v === true，那个比较**恒为假** ⇒ 勾上写不回设置（只能写
+  // false，界面与存档就分叉了）。这两个键必须与 onTitlebarGlass / onPauseOnHidden 同一口径。
+  {
+    const toggleSrc = readFileSync(join(root, 'src', 'client.js'), 'utf8');
+    const SCENE_TOGGLES = [['onSceneAutoQuality', 'sceneAutoQuality'], ['onSceneSoftRenderPause', 'sceneSoftRenderPause']];
+    // 判据做成函数，负对照喂合成文本 —— 把 (e) 换回旧的 (v) 必须判红。
+    const eventShaped = (text) => SCENE_TOGGLES.every(([fn, key]) =>
+      text.includes('function ' + fn + '(e) { setSetting("' + key + '", e.target.checked === true); syncLayers(); emit(); }')
+      && !text.includes('function ' + fn + '(v)'));
+    check('场景开关的具名处理器吃事件（自动画质 / 软件渲染暂停 勾上要写回设置 · #371）',
+      eventShaped(toggleSrc),
+      'handlers=' + SCENE_TOGGLES.map(([fn]) => (toggleSrc.includes('function ' + fn + '(e)') ? '1' : '0')).join('/'));
+    check('negative control: 处理器退回布尔形参（v === true）会被同一条判据判出',
+      !eventShaped(toggleSrc.replace('function onSceneAutoQuality(e)', 'function onSceneAutoQuality(v)')));
+  }
+
   // ── 自定义会话头像（「扩展」页签一号模块）的两半：装饰层 + 扩展岛 ────────────────
   // 这一层的判据口径与视差层相反：它**要**建节点（往宿主的消息行里插），但无头沙箱里
   // 连 `document` 都没有 ⇒ 一半靠"零抛错零副作用"（开着也不许炸），一半靠**源码口径**
@@ -7197,7 +7215,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       /const playing = isEffectivelyPlaying\(\) && !liveSoftRenderPauseOn\(\);/.test(liveSrc),
       '门控行=' + (/const playing = [^\n]*/.exec(liveSrc) || [''])[0]);
     const m = /function liveSoftRenderPauseOn\(\) \{([\s\S]*?)\n\}/.exec(liveSrc);
-    let guard = null;
+    let guard;
     try { guard = m ? new Function('liveSoftRenderProbe', 'selection', m[1]) : null; } catch { guard = null; }
     check('#270 兜底判据：软渲染 + 开关开 ⇒ 暂停；开关关 / 非软渲染 / 无选择 ⇒ 不干预',
       !!guard
