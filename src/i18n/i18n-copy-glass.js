@@ -7,6 +7,8 @@
  * 只读不写：纯数据，不得有可执行语句。守卫判据见 `test/verify-i18n.mjs`（族读法 test/tools/src-scope.mjs）。
  */
 const WE_I18N_EN_GLASS = {
+  "透镜折射与追光（实验）": "Lens refraction and pointer light (experimental)",
+  "增强圆角折射、薄边高光与鼠标追光；增加合成开销，卡顿时关闭。换行代码保留原生样式，减少动态效果时关闭追光。": "Adds rounded refraction, rim highlights and pointer light. Uses additional compositing; turn off if scrolling slows down. Wrapped code stays native; reduced motion disables pointer light.",
   // ── 思考块液态玻璃（PR #130）──
   "思考块液态玻璃": "Thinking-block liquid glass",
 
