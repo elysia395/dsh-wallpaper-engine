@@ -321,6 +321,25 @@ function applyGlass(selection, s) {
     s.setProperty("--we-floaters-alpha", String(Math.max(0.10, 0.25 - pct / 100 * 0.15)));
   }
 
+  // ── 宿主悬停卡（HoverCard）按面釉层变量 ─────────────────────────────────────
+  // 面：宿主自己 portal 出来的信息卡（git 提交行的悬停详情等），真实 DOM 是
+  // `div[role="dialog"] > div`。它不属于 floaters 那两个插件自有浮层，但形态同族
+  // （宿主自己画、本身无霜）⇒ W4 先借了 `--we-floaters-blur`，结果「浮层玻璃·雾化」
+  // 一拖这根卡就跟着变、而且没有自己的透明度旋钮（画出来又不生效的死旋钮，本仓要防的）。
+  // 现在给它自己的两个变量，语义与 filePreview 同（"底有多实"），但**曲线不同**：
+  // 这是 280px 宽的多行文字卡，照搬浮层那条 0.10–0.25 的"壁纸透出多少"会把字压没。
+  //   · 跟随全局：全局玻璃透明度 0–100 在本面只撬动 0.65 → 0.45 一段（默认 20 ⇒ ≈0.61，
+  //     与用户实测认可的那版 62% 实底对齐）；
+  //   · 独立配置：与其余面同语义（越大越透）⇒ alpha = 1 − pct/100，下限 0.45。
+  {
+    const custom = glassModeOn("hoverCard");
+    const pct = Number(glassValue("hoverCard", "transparency", selection.hoverCardTransparency, selection.glassAlpha)) || 0;
+    const globalAlpha = Math.min(0.65, Math.max(0.45, 0.45 + (1 - (Number(selection.glassAlpha) || 0) / 100) * 0.2));
+    s.setProperty("--we-hovercard-alpha", String(custom ? Math.max(0.45, 1 - pct / 100) : globalAlpha));
+    s.setProperty("--we-hovercard-blur",
+      String(Number(glassValue("hoverCard", "blur", selection.hoverCardBlur, selection.blur)) || 16) + "px");
+  }
+
   // ── 文件预览浮层（编辑文件悬停的改动预览）按面釉层变量 ─────────────────────
   // 默认跟随全局：alpha 直接取全局玻璃透明度（0–100 ⇒ 0–1，80 ≈ 0.8，可读）；
   // 打开「独立配置」后，滑杆语义与其它面一致（越大越透）⇒ alpha = 1 − pct/100。

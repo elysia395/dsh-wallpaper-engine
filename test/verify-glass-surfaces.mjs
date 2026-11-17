@@ -96,6 +96,14 @@ const SURFACES = [
       + ' `--we-floaters-blur` ⇒ 与上面两个自有浮层同档，故并进本行而不是新开一条。',
   },
   {
+    id: 'hover-card', label: '悬停卡玻璃（子项）',
+    anchors: ['[role="dialog"]:not([class*="_dialog"])'], tier: 'private',
+    why: 'v1.4.x 新增面：宿主自己 portal 出来的 HoverCard（git 提交行悬停详情等）画在'
+      + ' `div[role="dialog"] > div` 上，底色读 `--dsw-alias-bg-overlay`、本身不带霜 ⇒ 之前只看到'
+      + '"随玻璃保真度变色的纯色板"。`glass.js` 写 `--we-hovercard-alpha` / `-blur`，样式表那条'
+      + '规则读同两个变量 ⇒ 与其余子项同档 private。',
+  },
+  {
     id: 'conversation-bubbles', label: '消息气泡', anchors: ['[class*="_bubble_"]'], tier: 'private',
     why: '上游为「对话栏框架」单独拆了一把保真度尺（--we-chat-*），作用点是**令牌**（气泡 / 输入卡的'
       + '--dsw-specific-* 声明）而不是元素规则，因此它的消费点按令牌归属，见 PRIVATE_VARS 的注释。'
@@ -220,6 +228,8 @@ const PRIVATE_VARS = {
   //    不得有私有前缀"）。本次一并纠正，并把反向那条补成判据（③ 组内的 (d)）。
   'glass-child-settings-window': ['--we-settings-window-blur', '--we-settings-window-alpha'],
   'glass-child-floaters': ['--we-floaters-blur', '--we-floaters-alpha'],
+  // 宿主悬停卡：W4 借过 floaters 的模糊，v1.4.x 单开一面（见 SURFACES 那行 why）。
+  'hover-card': ['--we-hovercard-blur', '--we-hovercard-alpha'],
   'left-sidebar-override': ['--we-left-sidebar-blur', '--we-left-sidebar-alpha'],
   // 标题栏：与左栏完全同构的一组按面变量（glass.js 写、CSS 读）。
   'titlebar-override': ['--we-titlebar-blur', '--we-titlebar-alpha'],
@@ -959,9 +969,9 @@ console.log('\n⑦ 量纲统一（一把刻度：模糊 0–60 · 透明度 0–
   const effectsSrc = uncommented(EFFECTS);
   /** 规范刻度：参数族 → 上界。**唯一真源**，下面几条都对照它。 */
   const CANON = { blur: 60, transparency: 100, fidelity: 100 };
-  const BLUR_KEYS = ['blur', 'sidebarBlur', 'settingsWindowBlur', 'leftSidebarBlur', 'floatersBlur'];
+  const BLUR_KEYS = ['blur', 'sidebarBlur', 'settingsWindowBlur', 'leftSidebarBlur', 'floatersBlur', 'hoverCardBlur'];
   const ALPHA_KEYS = ['glassAlpha', 'sidebarAlpha', 'sidebarContentAlpha',
-    'settingsWindowTransparency', 'leftSidebarTransparency', 'floatersTransparency'];
+    'settingsWindowTransparency', 'leftSidebarTransparency', 'floatersTransparency', 'hoverCardTransparency'];
   const FID_KEYS = ['glassFidelity', 'chatGlassFidelity'];
 
   /** 取 glassValue( 的实参（支持嵌套括号与字符串字面量）。纯函数，负对照喂它。 */
