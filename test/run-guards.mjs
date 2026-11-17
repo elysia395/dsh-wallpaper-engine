@@ -138,6 +138,8 @@ const VERIFY_STEPS = [
   step('test/verify-readability.mjs'),
   step('test/verify-glass-compositing.mjs'),
   step('test/verify-glass-surfaces.mjs'),
+  step('test/verify-glass-optics.mjs'),
+  step('test/verify-glass-optics-browser.mjs'),
   step('test/verify-glass-compat.mjs'),
   step('test/verify-glass-runtime.mjs'),
   step('test/verify-glass-runtime-browser.mjs'),
