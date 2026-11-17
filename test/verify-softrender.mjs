@@ -444,7 +444,16 @@ function main() {
     };
     const sidebarFamily = gatedFamily('[data-we-surface-runtime="right-sidebar"]', '[data-we-sidebar-glass]');
     const settingsFamily = gatedFamily('settings.section', '[data-we-glass-window]');
-    const dialogFamily = gatedFamily('[role="dialog"]', '[data-we-glass-window]');
+    // 悬停卡（提交 7289ddde 起）也是宿主 portal 出来的 role="dialog" 浮层，它的
+    // fallback 跟随所属的浮层族总闸 [data-we-glass-floaters]，而不是设置窗总闸。
+    // 判据不变：每条 dialog fallback 仍必须挂上某个总闸，只是允许两族各用各的。
+    const DIALOG_GATES = ['[data-we-glass-window]', '[data-we-glass-floaters]'];
+    const dialogRules = fbRules.filter((r) => r.header.includes('[role="dialog"]'));
+    const dialogFamily = {
+      needle: '[role="dialog"]（闸：' + DIALOG_GATES.join(' 或 ') + '）',
+      total: dialogRules.length,
+      ungated: dialogRules.filter((r) => !DIALOG_GATES.some((g) => r.header.includes(g))),
+    };
     const familyLine = (f) => f.needle + '=' + f.total
       + (f.ungated.length ? ' (ungated=' + f.ungated.length + ')' : '');
     check('E4 master switches preserved: sidebar fallback stays gated on data-we-sidebar-glass, dialog on data-we-glass-window',

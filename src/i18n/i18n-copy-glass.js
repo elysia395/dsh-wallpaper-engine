@@ -66,6 +66,18 @@ const WE_I18N_EN_GLASS = {
   "第三方弹窗不透明底": "Opaque base for third-party dialogs",
   "给第三方插件的弹窗补实底": "Give third-party plugin dialogs a solid base",
   "打开（默认）：第三方插件（任务看板等）的弹窗与确认框补一层不透明底，背后的页面内容与兄弟弹窗不再透上来；宿主自己的设置窗、输入卡与菜单保持原样，宿主的确认 / 审批卡会一并变实底（它们此前同样在漏）。关闭：恢复宿主原生的半透明观感": "On (default): dialogs and confirm boxes from third-party plugins (task boards and the like) get an opaque base, so the page behind them and sibling dialogs no longer bleed through; the host's own settings window, composer and menus stay as they are, while the host's own confirm / approval cards also become opaque (they were leaking too). Off: restore the host's native translucent look",
+  // ── 插件市场（dsh-market）吸顶条下的内容裁切（自带开关 + 渐隐宽度，与玻璃面注册表无关）──
+  // ── 宿主悬停信息卡（hoverCard 面，2026-11-17；补上上一版漏掉的英文词条）──
+  "悬停卡玻璃·独立配置": "Hover card glass · independent config",
+  "悬停卡玻璃·玻璃透明度": "Hover card glass · glass opacity",
+  "悬停卡玻璃·雾化": "Hover card glass · blur",
+  "鼠标悬停时宿主弹出的信息卡（提交行详情等）": "The info card the host pops up on hover (commit row details and the like)",
+  // ── 插件市场（dsh-market）吸顶条下的内容裁切（自带开关 + 渐隐宽度，与玻璃面注册表无关）──
+  "市场吸顶条裁掉下层内容": "Clip the content under the market\u2019s sticky row",
+  "吸顶的搜索/分类条下面不再透出卡片": "Cards no longer bleed through under the sticky search / category row",
+  "打开（默认）：插件市场里吸顶的搜索框与分类条保持半透明，但它下面滚过的卡片墙会在吸顶线下沿被裁掉（渐隐消失）—— 卡片文字不再压在半透明的搜索框上；关闭：恢复原样（卡片会从吸顶条底下透上来）": "On (default): in the plugin market, the sticky search box and category row stay translucent, but the card wall scrolling under them is clipped at the row\u2019s lower edge (fading out) \u2014 card text no longer sits on top of the translucent search box. Off: restore the original behaviour (cards bleed through under the sticky row).",
+  "市场吸顶条·渐隐宽度": "Market sticky row \u00b7 fade width",
+  "切口上方多少像素内淡出 —— 0 = 硬切口（一条直边），26 左右像溶进壁纸；调太大则吸顶条下面会空出一片": "How many pixels above the cut fades out \u2014 0 gives a hard edge (a straight line), around 26 looks like it melts into the wallpaper; too high leaves a visible gap under the sticky row",
   "思考触发条玻璃·独立配置": "Thinking trigger glass · independent config",
   "思考触发条玻璃·玻璃透明度": "Thinking trigger glass · glass opacity",
   "思考触发条玻璃·雾化": "Thinking trigger glass · blur",

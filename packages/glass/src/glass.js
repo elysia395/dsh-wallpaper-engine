@@ -33,7 +33,7 @@ function applyGlass(selection, s) {
   if (typeof skinYieldActive === "function" && skinYieldActive()) {
     for (const attr of ["data-we-glass-page", "data-we-glass-chat", "data-we-glass-window",
       "data-we-left-sidebar", "data-we-titlebar-glass", "data-we-sidebar-glass", "data-we-sidebar-fullclear", "data-we-glass-floaters",
-      "data-we-floater-solid"]) {
+      "data-we-floater-solid", "data-we-market-sticky"]) {
       document.body.removeAttribute(attr);
     }
     return;
@@ -303,6 +303,19 @@ function applyGlass(selection, s) {
   // 整组都挂在这个门上 ⇒ W5「关 ⇒ 回退干净」成立。
   if (selection.floaterSolidBase !== false) document.body.setAttribute("data-we-floater-solid", "on");
   else document.body.removeAttribute("data-we-floater-solid");
+
+  // ── 插件市场（dsh-market）吸顶条下的内容裁切（设置键 marketStickyClip / marketStickyFade）──
+  // 玻璃把层令牌换成半透明后，市场的吸顶行（搜索框 + 分类 pill）也是半透明的：卡片墙从
+  // 底下滚过时，卡片文字直接透上来压在搜索框上。给吸顶行补实底能修，但那行就不再是玻璃
+  // 了 ⇒ 换成"把吸顶行下面的那层内容裁掉"：吸顶行照旧半透明，下面没有东西可透。
+  // ⚠️ 门是**属性在不在**，属性值是渐隐带宽度 px：0 是有效值（= 硬切口），所以不能像
+  //    data-we-floater-solid="on" 那样拿值当门 —— 0 与"关"是两件不同的事。
+  // DOM 行为在 glass-market-sticky.js：它只读这个属性，不读 settings（"读谁"只在这里决定）。
+  // 配对撤除：disposeGlassLayer（属性）+ stopMarketStickyClip（宿主元素上的 mask）。
+  if (selection.marketStickyClip !== false) {
+    const fade = Number(selection.marketStickyFade);
+    document.body.setAttribute("data-we-market-sticky", String(Number.isFinite(fade) ? Math.max(0, fade) : 26));
+  } else document.body.removeAttribute("data-we-market-sticky");
 
   // ── 插件自身浮层的**按面**釉层变量 ───────────────────────────────────────────
   // 该面的 CSS 现在读 `var(--we-floaters-<x>, <原全局表达式>)`（src/styles/quick.js 的
