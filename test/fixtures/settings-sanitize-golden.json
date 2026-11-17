@@ -176,7 +176,8 @@
         "sceneSoftRenderPause": true,
         "presetGuideDismissed": "",
         "perfEnabled": false,
-        "perfFloat": false
+        "perfFloat": false,
+        "glassOptics": false
       },
       "host": {
         "id": "",
@@ -344,7 +345,8 @@
         "sceneSoftRenderPause": true,
         "presetGuideDismissed": "",
         "perfEnabled": false,
-        "perfFloat": false
+        "perfFloat": false,
+        "glassOptics": false
       }
     },
     {
@@ -530,7 +532,8 @@
         "sceneSoftRenderPause": true,
         "presetGuideDismissed": "",
         "perfEnabled": false,
-        "perfFloat": false
+        "perfFloat": false,
+        "glassOptics": false
       },
       "host": "__null__"
     },
@@ -717,7 +720,8 @@
         "sceneSoftRenderPause": true,
         "presetGuideDismissed": "",
         "perfEnabled": false,
-        "perfFloat": false
+        "perfFloat": false,
+        "glassOptics": false
       },
       "host": "__null__"
     },
@@ -904,7 +908,8 @@
         "sceneSoftRenderPause": true,
         "presetGuideDismissed": "",
         "perfEnabled": false,
-        "perfFloat": false
+        "perfFloat": false,
+        "glassOptics": false
       },
       "host": "__null__"
     },
@@ -1083,7 +1088,8 @@
         "sceneSoftRenderPause": true,
         "presetGuideDismissed": "",
         "perfEnabled": false,
-        "perfFloat": false
+        "perfFloat": false,
+        "glassOptics": false
       },
       "host": {
         "id": "",
@@ -1251,7 +1257,8 @@
         "sceneSoftRenderPause": true,
         "presetGuideDismissed": "",
         "perfEnabled": false,
-        "perfFloat": false
+        "perfFloat": false,
+        "glassOptics": false
       }
     },
     {
@@ -1486,7 +1493,8 @@
         "sceneSoftRenderPause": true,
         "presetGuideDismissed": "",
         "perfEnabled": false,
-        "perfFloat": false
+        "perfFloat": false,
+        "glassOptics": false
       },
       "host": {
         "id": "",
@@ -1654,7 +1662,8 @@
         "sceneSoftRenderPause": true,
         "presetGuideDismissed": "",
         "perfEnabled": false,
-        "perfFloat": false
+        "perfFloat": false,
+        "glassOptics": false
       }
     },
     {
@@ -1934,7 +1943,8 @@
         "sceneSoftRenderPause": true,
         "presetGuideDismissed": "",
         "perfEnabled": false,
-        "perfFloat": false
+        "perfFloat": false,
+        "glassOptics": false
       },
       "host": {
         "id": "",
@@ -2102,7 +2112,8 @@
         "sceneSoftRenderPause": true,
         "presetGuideDismissed": "",
         "perfEnabled": false,
-        "perfFloat": false
+        "perfFloat": false,
+        "glassOptics": false
       }
     },
     {
@@ -2281,7 +2292,8 @@
         "sceneSoftRenderPause": true,
         "presetGuideDismissed": "",
         "perfEnabled": false,
-        "perfFloat": false
+        "perfFloat": false,
+        "glassOptics": false
       },
       "host": {
         "id": "",
@@ -2449,7 +2461,8 @@
         "sceneSoftRenderPause": true,
         "presetGuideDismissed": "",
         "perfEnabled": false,
-        "perfFloat": false
+        "perfFloat": false,
+        "glassOptics": false
       }
     },
     {
@@ -2642,7 +2655,8 @@
         "sceneSoftRenderPause": true,
         "presetGuideDismissed": "",
         "perfEnabled": false,
-        "perfFloat": false
+        "perfFloat": false,
+        "glassOptics": false
       },
       "host": {
         "id": "",
@@ -2810,7 +2824,8 @@
         "sceneSoftRenderPause": true,
         "presetGuideDismissed": "",
         "perfEnabled": false,
-        "perfFloat": false
+        "perfFloat": false,
+        "glassOptics": false
       }
     },
     {
@@ -3003,7 +3018,8 @@
         "sceneSoftRenderPause": true,
         "presetGuideDismissed": "",
         "perfEnabled": false,
-        "perfFloat": false
+        "perfFloat": false,
+        "glassOptics": false
       },
       "host": {
         "id": "",
@@ -3171,7 +3187,8 @@
         "sceneSoftRenderPause": true,
         "presetGuideDismissed": "",
         "perfEnabled": false,
-        "perfFloat": false
+        "perfFloat": false,
+        "glassOptics": false
       }
     },
     {
@@ -3351,7 +3368,8 @@
         "sceneSoftRenderPause": true,
         "presetGuideDismissed": "",
         "perfEnabled": false,
-        "perfFloat": false
+        "perfFloat": false,
+        "glassOptics": false
       },
       "host": {
         "id": "",
@@ -3519,7 +3537,8 @@
         "sceneSoftRenderPause": true,
         "presetGuideDismissed": "",
         "perfEnabled": false,
-        "perfFloat": false
+        "perfFloat": false,
+        "glassOptics": false
       }
     },
     {
@@ -3704,7 +3723,8 @@
         "sceneSoftRenderPause": true,
         "presetGuideDismissed": "",
         "perfEnabled": false,
-        "perfFloat": false
+        "perfFloat": false,
+        "glassOptics": false
       },
       "host": {
         "id": "",
@@ -3872,7 +3892,8 @@
         "sceneSoftRenderPause": true,
         "presetGuideDismissed": "",
         "perfEnabled": false,
-        "perfFloat": false
+        "perfFloat": false,
+        "glassOptics": false
       }
     },
     {
@@ -4054,7 +4075,8 @@
         "sceneSoftRenderPause": true,
         "presetGuideDismissed": "",
         "perfEnabled": false,
-        "perfFloat": false
+        "perfFloat": false,
+        "glassOptics": false
       },
       "host": {
         "id": "",
@@ -4222,7 +4244,8 @@
         "sceneSoftRenderPause": true,
         "presetGuideDismissed": "",
         "perfEnabled": false,
-        "perfFloat": false
+        "perfFloat": false,
+        "glassOptics": false
       }
     },
     {
@@ -4411,7 +4434,8 @@
         "sceneSoftRenderPause": true,
         "presetGuideDismissed": "",
         "perfEnabled": false,
-        "perfFloat": false
+        "perfFloat": false,
+        "glassOptics": false
       },
       "host": {
         "id": "",
@@ -4579,7 +4603,8 @@
         "sceneSoftRenderPause": true,
         "presetGuideDismissed": "",
         "perfEnabled": false,
-        "perfFloat": false
+        "perfFloat": false,
+        "glassOptics": false
       }
     },
     {
@@ -4833,7 +4858,8 @@
         "sceneSoftRenderPause": true,
         "presetGuideDismissed": "",
         "perfEnabled": false,
-        "perfFloat": false
+        "perfFloat": false,
+        "glassOptics": false
       },
       "host": {
         "id": "",
@@ -5026,7 +5052,8 @@
         "sceneSoftRenderPause": true,
         "presetGuideDismissed": "",
         "perfEnabled": false,
-        "perfFloat": false
+        "perfFloat": false,
+        "glassOptics": false
       }
     },
     {
@@ -5204,7 +5231,8 @@
         "sceneSoftRenderPause": true,
         "presetGuideDismissed": "",
         "perfEnabled": false,
-        "perfFloat": false
+        "perfFloat": false,
+        "glassOptics": false
       },
       "host": {
         "id": "",
@@ -5372,7 +5400,8 @@
         "sceneSoftRenderPause": true,
         "presetGuideDismissed": "",
         "perfEnabled": false,
-        "perfFloat": false
+        "perfFloat": false,
+        "glassOptics": false
       }
     },
     {
@@ -5550,7 +5579,8 @@
         "sceneSoftRenderPause": true,
         "presetGuideDismissed": "",
         "perfEnabled": false,
-        "perfFloat": false
+        "perfFloat": false,
+        "glassOptics": false
       },
       "host": {
         "id": "wallpaper-42",
@@ -5718,7 +5748,8 @@
         "sceneSoftRenderPause": true,
         "presetGuideDismissed": "",
         "perfEnabled": false,
-        "perfFloat": false
+        "perfFloat": false,
+        "glassOptics": false
       }
     },
     {
@@ -5897,7 +5928,8 @@
         "sceneSoftRenderPause": true,
         "presetGuideDismissed": "",
         "perfEnabled": false,
-        "perfFloat": false
+        "perfFloat": false,
+        "glassOptics": false
       },
       "host": {
         "id": "",
@@ -6065,7 +6097,8 @@
         "sceneSoftRenderPause": true,
         "presetGuideDismissed": "",
         "perfEnabled": false,
-        "perfFloat": false
+        "perfFloat": false,
+        "glassOptics": false
       }
     }
   ]
