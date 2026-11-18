@@ -22,7 +22,7 @@
  * 市场根节点带稳定属性 data-dsh-market-root（跨构建不变）；里面的类名是 CSS Module 哈希
  * （实测 nUhMVa_stickyHead 这种，前缀随构建变）⇒ 只用**可读词**做 * 通配兜底：
  * 吸顶行 = _stickyHead / _head / _cats 里 position 为 sticky/fixed 的那些；
- * 要裁的层 = _masonry / _loadMore / _recentShow（且不在吸顶行子树里）。
+ * 要裁的层 = _masonry / _loadMore / _recentBlock / _recentRow（只裁最外层，且不在吸顶行子树里）。
  * ⚠️ _head 会同时匹配到 _stickyHead，所以「哪个才是吸顶层」必须由 position 判定，
  *    不能只靠类名（否则 band 会取到顶栏那行的 bottom，切口出现在页面最上面）。
  *
@@ -39,6 +39,15 @@
  * · 长列表上 mask 比 clip-path 多一次离屏合成；卡顿就说明该退回 clip-path（改这里的写法即可）。
  * · 渐隐带里滚过的文字会一路虚到 0，嫌虚就把 fade 调小（12–16 更接近硬切口的手感）。
  *
+ * ## 踩过的坑：还原判断不能用「我们写下去的原串」
+ * 第一版把 mask 原串记进 rec.written，还原时比对 el.style.getPropertyValue("mask-image")
+ * !== rec.written ⇒ 以为「别人改过这一格」，于是**永远不还原**。Chrome 会规范化：省掉
+ * "to bottom"、把 rgba(0,0,0,1) 写成 rgb(0,0,0)。用户实测：往下滚再滚回顶部后，卡片墙
+ * 顶部留了一条 73.5px 的渐隐带（探针里 mask 仍是 linear-gradient(rgba(0, 0, 0, 0) 73.5px,
+ * rgb(0, 0, 0) 99.5px)，而那一刻 band 只有 352、masonry 顶在 506 ⇒ 本该 cut<0 已还原 ——
+ * 它停在「最近收录」正下方，看起来就像「最近收录把下面挖掉一块」。
+ * 现在一律记录**读回来的序列化值**（marketStickyRead），比较也用读回值。
+ *
  * ## 刷新节拍
  * scroll（**capture**：scroll 不冒泡，只有捕获能收到内层滚动容器的滚动）+ resize 触发
  * rAF 合帧；另有 400ms 的兜底轮询，管「没有滚动但几何变了」的两种情形（切换市场页签、
@@ -52,10 +61,28 @@ const MARKET_STICKY_ATTR = "data-we-market-sticky";
 const MARKET_ROOT_SELECTOR = "[data-dsh-market-root]";
 /** 候选吸顶行：可读词兜底，真正的判定是 position: sticky / fixed。 */
 const MARKET_STICKY_SELECTOR = '[class*="_stickyHead"], [class*="_head"], [class*="_cats"]';
-/** 会被吸顶行盖住的层：卡片墙 / 加载更多 / 「显示最近收录」。 */
-const MARKET_SCROLL_SELECTOR = '[class*="_masonry"], [class*="_loadMore"], [class*="_recentShow"]';
+/** 会被吸顶行盖住的层：卡片墙 / 加载更多 / 「最近收录」那一块。 */
+const MARKET_SCROLL_SELECTOR = '[class*="_masonry"], [class*="_loadMore"], [class*="_recentBlock"], [class*="_recentRow"], [class*="_recentShow"]';
 /** 兜底轮询间隔（几何变化但没有滚动事件时的唯一发现途径）。 */
 const MARKET_STICKY_POLL_MS = 400;
+
+/**
+ * 读内联样式的安全壳：单测夹具里的假 style 可能只有 setProperty / removeProperty
+ * （verify-client 的假 DOM 就是这样），直接调 getPropertyValue 会当场 TypeError。
+ */
+function marketStickyRead(el, prop) {
+  try {
+    if (el.style && typeof el.style.getPropertyValue === "function") return el.style.getPropertyValue(prop);
+  } catch (err) { /* 读不到就当没有 */ }
+  return "";
+}
+
+function marketStickyPriority(el, prop) {
+  try {
+    if (el.style && typeof el.style.getPropertyPriority === "function") return el.style.getPropertyPriority(prop);
+  } catch (err) { /* 同上 */ }
+  return "";
+}
 
 let marketStickyRunning = false;
 let marketStickyTimer = 0;
@@ -92,7 +119,8 @@ function marketStickyRestoreOne(el) {
   marketStickyWritten.delete(el);
   marketStickyTargets.delete(el);
   // 别人在这期间改过这一格 ⇒ 不动（与 src/client/rope-dock.js 写宿主内联样式的收法同款）。
-  const cur = el.style.getPropertyValue("mask-image");
+  // ⚠️ 比较的是「浏览器读回来的值」，不是我们写下去的原串 —— 见 marketStickyPaint 里的注释。
+  const cur = marketStickyRead(el, "mask-image");
   if (cur !== "" && cur !== rec.written) return;
   el.style.removeProperty("mask-image");
   el.style.removeProperty("-webkit-mask-image");
@@ -123,10 +151,10 @@ function marketStickyPaint(el, cut, fade, height) {
   let rec = marketStickyWritten.get(el);
   if (rec === undefined) {
     rec = {
-      beforeMask: el.style.getPropertyValue("mask-image"),
-      beforeWebkit: el.style.getPropertyValue("-webkit-mask-image"),
-      beforeMaskPriority: el.style.getPropertyPriority("mask-image"),
-      beforeWebkitPriority: el.style.getPropertyPriority("-webkit-mask-image"),
+      beforeMask: marketStickyRead(el, "mask-image"),
+      beforeWebkit: marketStickyRead(el, "-webkit-mask-image"),
+      beforeMaskPriority: marketStickyPriority(el, "mask-image"),
+      beforeWebkitPriority: marketStickyPriority(el, "-webkit-mask-image"),
       written: "",
     };
     marketStickyWritten.set(el, rec);
@@ -135,7 +163,11 @@ function marketStickyPaint(el, cut, fade, height) {
   if (rec.written === mask) return;
   el.style.setProperty("-webkit-mask-image", mask);
   el.style.setProperty("mask-image", mask);
-  rec.written = mask;
+  // ⚠️ 记**读回来的序列化值**，不要记上面那个原串：Chrome 会把 "to bottom" 省掉、把
+  // rgba(0,0,0,1) 规范成 rgb(0,0,0)，于是 getPropertyValue 永远 !== 原串 ⇒ 还原判断
+  // 「别人改过这一格」恒成立，mask 永远撕不掉。后果是滚动回顶部后卡片墙顶部仍留一条
+  // 渐隐带（用户报的「最近收录下方一块缺失区域」就是这个：73.5px 的切口停在原地）。
+  rec.written = marketStickyRead(el, "mask-image") || mask;
 }
 
 /** 吸顶行的下沿（视口坐标里的 band）：取所有 sticky/fixed 候选里最靠下的那条。 */
@@ -176,6 +208,14 @@ function marketStickySync() {
   for (const el of root.querySelectorAll(MARKET_SCROLL_SELECTOR)) {
     // 吸顶行自己（或它的子树）永远不裁 —— 那正是要保住的那一层。
     if (el.closest(MARKET_STICKY_SELECTOR) !== null) continue;
+    // 只裁最外层：_masonryCol 的类名同样含 _masonry、_recentRow 含在 _recentBlock 里，
+    // 父元素已经 mask 过一遍，子元素再叠同位置的切口只会多一次离屏合成；更糟的是父元素
+    // 先被还原后，子元素会留下一个独立的洞（用户看到的「缺一块」也可能来自这里）。
+    let nested = false;
+    for (let up = el.parentElement; up !== null && up !== root; up = up.parentElement) {
+      if (typeof up.matches === "function" && up.matches(MARKET_SCROLL_SELECTOR)) { nested = true; break; }
+    }
+    if (nested) { marketStickyRestoreOne(el); continue; }
     seen.add(el);
     const rect = el.getBoundingClientRect();
     if (rect.height <= 0) { marketStickyRestoreOne(el); continue; }
