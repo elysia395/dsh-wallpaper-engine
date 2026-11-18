@@ -96,6 +96,14 @@ const SURFACES = [
       + ' `--we-floaters-blur` ⇒ 与上面两个自有浮层同档，故并进本行而不是新开一条。',
   },
   {
+    id: 'hover-card', label: '悬停卡玻璃（子项）',
+    anchors: ['[role="dialog"]:not([class*="_dialog"])'], tier: 'private',
+    why: 'v1.4.x 新增面：宿主自己 portal 出来的 HoverCard（git 提交行悬停详情等）画在'
+      + ' `div[role="dialog"] > div` 上，底色读 `--dsw-alias-bg-overlay`、本身不带霜 ⇒ 之前只看到'
+      + '"随玻璃保真度变色的纯色板"。`glass.js` 写 `--we-hovercard-alpha` / `-blur`，样式表那条'
+      + '规则读同两个变量 ⇒ 与其余子项同档 private。',
+  },
+  {
     id: 'conversation-bubbles', label: '消息气泡', anchors: ['[class*="_bubble_"]'], tier: 'private',
     why: '上游为「对话栏框架」单独拆了一把保真度尺（--we-chat-*），作用点是**令牌**（气泡 / 输入卡的'
       + '--dsw-specific-* 声明）而不是元素规则，因此它的消费点按令牌归属，见 PRIVATE_VARS 的注释。'
@@ -220,6 +228,8 @@ const PRIVATE_VARS = {
   //    不得有私有前缀"）。本次一并纠正，并把反向那条补成判据（③ 组内的 (d)）。
   'glass-child-settings-window': ['--we-settings-window-blur', '--we-settings-window-alpha'],
   'glass-child-floaters': ['--we-floaters-blur', '--we-floaters-alpha'],
+  // 宿主悬停卡：W4 借过 floaters 的模糊，v1.4.x 单开一面（见 SURFACES 那行 why）。
+  'hover-card': ['--we-hovercard-blur', '--we-hovercard-alpha'],
   'left-sidebar-override': ['--we-left-sidebar-blur', '--we-left-sidebar-alpha'],
   // 标题栏：与左栏完全同构的一组按面变量（glass.js 写、CSS 读）。
   'titlebar-override': ['--we-titlebar-blur', '--we-titlebar-alpha'],
@@ -301,13 +311,38 @@ const isGlassCarrier = (body) => /backdrop-filter\s*:/.test(body)
   || /var\(--dsw-alias-(?:bg-layer|markdown|button|interactive|turn-trigger)/.test(body);
 
 /**
+ * 去掉选择器里的 :not(...) 段。**排除项不是依赖**：一条规则写
+ * `[role="dialog"]:not([data-shortcut-modal]) > div` 不等于它依赖 data-shortcut-modal 这个面，
+ * 若把它当锚点收进来，② 组会把它报成"新增的未登记玻璃面"（实测：给宿主抽屉加排除后误报）。
+ * 正/负对照见 ② 组：正向出现的锚点仍必须被收进来。
+ */
+function withoutNegations(header) {
+  let out = '';
+  let i = 0;
+  while (i < header.length) {
+    const at = header.indexOf(':not(', i);
+    if (at < 0) { out += header.slice(i); break; }
+    out += header.slice(i, at);
+    let depth = 0;
+    let j = at + 4;
+    for (; j < header.length; j++) {
+      if (header[j] === '(') depth++;
+      else if (header[j] === ')') { depth--; if (depth === 0) { j++; break; } }
+    }
+    out += ' ';
+    i = j;
+  }
+  return out;
+}
+
+/**
  * 一条规则依赖的**宿主锚点**。值限定的锚点（`[data-slot="sidebar"]`）返回完整形态
  * `data-slot="sidebar"`；裸锚点返回 `data-slot`。这样"只靠裸锚点认领不了"的面
  * （左栏与设置窗口都靠 data-slot，但值不同）能在枚举里被分开认领。
  */
 function anchorsOf(header) {
   const out = new Set();
-  for (const m of header.matchAll(/\[(data-[a-z0-9-]+)(?:([~^$*|]?=)"([^"]*)")?/g)) {
+  for (const m of withoutNegations(header).matchAll(/\[(data-[a-z0-9-]+)(?:([~^$*|]?=)"([^"]*)")?/g)) {
     if (m[1].startsWith('data-we-') || MODE_MARKERS.has(m[1])) continue;
     out.add(m[3] !== undefined ? m[1] + '="' + m[3] + '"' : m[1]);
   }
@@ -596,6 +631,11 @@ console.log('\n② 没有未登记的玻璃面（防"新增锚点面无人知"�
     '报出=[' + synthUnregistered.join(', ') + ']');
   check('positive control: 不带玻璃声明的锚点不算玻璃面',
     enumerateGlassAnchors('body[data-we-wallpaper] [data-synthetic-plain] { color: red; }').size === 0);
+  // 排除项不得被算成"面"：给一个面写 :not([宿主标记]) 只是在缩小射程，不是依赖那个面。
+  // 负对照（:not 里的标记不被收集）+ 正对照（正向出现的锚点照样收集）都钉在同一条判据上。
+  check('positive control: :not(...) 里的排除项不算玻璃锚点，正向锚点照收',
+    !enumerateGlassAnchors('body[data-we-wallpaper] [role="dialog"]:not([data-synthetic-excluded]) > div { backdrop-filter: blur(4px); }').has('data-synthetic-excluded')
+      && enumerateGlassAnchors('body[data-we-wallpaper] [data-synthetic-included][role="dialog"] { backdrop-filter: blur(4px); }').has('data-synthetic-included'));
   // 状态标记不得被算成"面"（否则每次新增开关态都会假红）。
   check('positive control: 状态标记（data-sidebar-right-open）不被算成独立的面',
     !enumerateGlassAnchors(CSS).has('data-sidebar-right-open')
@@ -959,9 +999,9 @@ console.log('\n⑦ 量纲统一（一把刻度：模糊 0–60 · 透明度 0–
   const effectsSrc = uncommented(EFFECTS);
   /** 规范刻度：参数族 → 上界。**唯一真源**，下面几条都对照它。 */
   const CANON = { blur: 60, transparency: 100, fidelity: 100 };
-  const BLUR_KEYS = ['blur', 'sidebarBlur', 'settingsWindowBlur', 'leftSidebarBlur', 'floatersBlur'];
+  const BLUR_KEYS = ['blur', 'sidebarBlur', 'settingsWindowBlur', 'leftSidebarBlur', 'floatersBlur', 'hoverCardBlur'];
   const ALPHA_KEYS = ['glassAlpha', 'sidebarAlpha', 'sidebarContentAlpha',
-    'settingsWindowTransparency', 'leftSidebarTransparency', 'floatersTransparency'];
+    'settingsWindowTransparency', 'leftSidebarTransparency', 'floatersTransparency', 'hoverCardTransparency'];
   const FID_KEYS = ['glassFidelity', 'chatGlassFidelity'];
 
   /** 取 glassValue( 的实参（支持嵌套括号与字符串字面量）。纯函数，负对照喂它。 */

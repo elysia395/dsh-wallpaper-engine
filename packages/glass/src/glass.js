@@ -33,7 +33,7 @@ function applyGlass(selection, s) {
   if (typeof skinYieldActive === "function" && skinYieldActive()) {
     for (const attr of ["data-we-glass-page", "data-we-glass-chat", "data-we-glass-window",
       "data-we-left-sidebar", "data-we-titlebar-glass", "data-we-sidebar-glass", "data-we-sidebar-fullclear", "data-we-glass-floaters",
-      "data-we-floater-solid"]) {
+      "data-we-floater-solid", "data-we-market-sticky"]) {
       document.body.removeAttribute(attr);
     }
     return;
@@ -304,6 +304,19 @@ function applyGlass(selection, s) {
   if (selection.floaterSolidBase !== false) document.body.setAttribute("data-we-floater-solid", "on");
   else document.body.removeAttribute("data-we-floater-solid");
 
+  // ── 插件市场（dsh-market）吸顶条下的内容裁切（设置键 marketStickyClip / marketStickyFade）──
+  // 玻璃把层令牌换成半透明后，市场的吸顶行（搜索框 + 分类 pill）也是半透明的：卡片墙从
+  // 底下滚过时，卡片文字直接透上来压在搜索框上。给吸顶行补实底能修，但那行就不再是玻璃
+  // 了 ⇒ 换成"把吸顶行下面的那层内容裁掉"：吸顶行照旧半透明，下面没有东西可透。
+  // ⚠️ 门是**属性在不在**，属性值是渐隐带宽度 px：0 是有效值（= 硬切口），所以不能像
+  //    data-we-floater-solid="on" 那样拿值当门 —— 0 与"关"是两件不同的事。
+  // DOM 行为在 glass-market-sticky.js：它只读这个属性，不读 settings（"读谁"只在这里决定）。
+  // 配对撤除：disposeGlassLayer（属性）+ stopMarketStickyClip（宿主元素上的 mask）。
+  if (selection.marketStickyClip !== false) {
+    const fade = Number(selection.marketStickyFade);
+    document.body.setAttribute("data-we-market-sticky", String(Number.isFinite(fade) ? Math.max(0, fade) : 26));
+  } else document.body.removeAttribute("data-we-market-sticky");
+
   // ── 插件自身浮层的**按面**釉层变量 ───────────────────────────────────────────
   // 该面的 CSS 现在读 `var(--we-floaters-<x>, <原全局表达式>)`（src/styles/quick.js 的
   // `.we-update-notice` 与 `.we-repo-panel--open` 两条规则）⇒ 这一组变量就是它的来源。
@@ -321,6 +334,27 @@ function applyGlass(selection, s) {
     s.setProperty("--we-floaters-alpha", String(Math.max(0.10, 0.25 - pct / 100 * 0.15)));
   }
 
+  // ── 宿主悬停卡（HoverCard）按面釉层变量 ─────────────────────────────────────
+  // 面：宿主自己 portal 出来的信息卡（git 提交行的悬停详情等），真实 DOM 是
+  // `div[role="dialog"] > div`。它不属于 floaters 那两个插件自有浮层，但形态同族
+  // （宿主自己画、本身无霜）⇒ W4 先借了 `--we-floaters-blur`，结果「浮层玻璃·雾化」
+  // 一拖这根卡就跟着变、而且没有自己的透明度旋钮（画出来又不生效的死旋钮，本仓要防的）。
+  // 现在给它自己的两个变量，语义与 filePreview 同（"底有多实"），但**曲线不同**：
+  // 这是 280px 宽的多行文字卡，照搬浮层那条 0.10–0.25 的"壁纸透出多少"会把字压没。
+  //   · 跟随全局：全局玻璃透明度 0–100 在本面只撬动 0.65 → 0.45 一段（默认 20 ⇒ ≈0.61，
+  //     与用户实测认可的那版 62% 实底对齐）；
+  //   · 独立配置：与其余面同语义（越大越透）⇒ alpha = 1 − pct/100，下限 0.45。
+  {
+    const custom = glassModeOn("hoverCard");
+    const pct = Number(glassValue("hoverCard", "transparency", selection.hoverCardTransparency, selection.glassAlpha)) || 0;
+    const globalAlpha = Math.min(0.65, Math.max(0.45, 0.45 + (1 - (Number(selection.glassAlpha) || 0) / 100) * 0.2));
+    s.setProperty("--we-hovercard-alpha", String(custom ? Math.max(0.45, 1 - pct / 100) : globalAlpha));
+    // ⚠️ 不能写 `Number(...) || 16`：滑杆调 0（「完全不要模糊」）会被 `||` 咽回 16，#377 审查抓过。
+    const hcBlurRaw = glassValue("hoverCard", "blur", selection.hoverCardBlur, selection.blur);
+    const hcBlur = Number(hcBlurRaw);
+    s.setProperty("--we-hovercard-blur", String(Number.isFinite(hcBlur) && hcBlurRaw !== "" && hcBlurRaw !== null ? Math.max(0, hcBlur) : 16) + "px");
+  }
+
   // ── 文件预览浮层（编辑文件悬停的改动预览）按面釉层变量 ─────────────────────
   // 默认跟随全局：alpha 直接取全局玻璃透明度（0–100 ⇒ 0–1，80 ≈ 0.8，可读）；
   // 打开「独立配置」后，滑杆语义与其它面一致（越大越透）⇒ alpha = 1 − pct/100。
@@ -330,8 +364,10 @@ function applyGlass(selection, s) {
     const pct = Number(glassValue("filePreview", "transparency", selection.filePreviewTransparency, selection.glassAlpha)) || 0;
     const globalAlpha = Math.min(1, Math.max(0.25, (Number(selection.glassAlpha) || 0) / 100 || 0.8));
     s.setProperty("--we-file-preview-alpha", String(custom ? Math.max(0.25, 1 - pct / 100) : globalAlpha));
-    s.setProperty("--we-file-preview-blur",
-      String(Number(glassValue("filePreview", "blur", selection.filePreviewBlur, selection.blur)) || 24) + "px");
+    // 同上：`|| 24` 会让「调 0」失效（既有同类瑕疵，随 #377 一并收口）。读不到值才落回 24。
+    const fpBlurRaw = glassValue("filePreview", "blur", selection.filePreviewBlur, selection.blur);
+    const fpBlur = Number(fpBlurRaw);
+    s.setProperty("--we-file-preview-blur", String(Number.isFinite(fpBlur) && fpBlur >= 0 && fpBlurRaw !== "" && fpBlurRaw !== null ? fpBlur : 24) + "px");
   }
   // 内容面（编辑器/终端）近不透明玻璃底：透明度滑块 **0–100** → 不透明度 100%–20%
   // （越大越透，与玻璃透明度同语义；低于 ~40% 不透明度注释可读性会再次变差，
