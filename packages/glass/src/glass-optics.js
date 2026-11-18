@@ -308,9 +308,6 @@ function installGlassOptics() {
         -webkit-backdrop-filter:var(--we-optics-filter,) var(--we-optics-native,blur(1px))!important;
         backdrop-filter:var(--we-optics-filter,) var(--we-optics-native,blur(1px))!important;
       }
-      ${surfaceSelector}:is(.md-code-block,[class*="_bubble"],code,button[class*="_toBottom"],div:has(>button[aria-expanded],>[role="status"])):not(:focus-visible) {
-        outline:1px solid rgba(242,253,255,.42);outline-offset:-1px;
-      }
       ${surfaceSelector}[data-we-optics="compact"] {
         -webkit-backdrop-filter:none!important;backdrop-filter:none!important;
         background-image:radial-gradient(ellipse 180px 65px at var(--we-optics-x,-1000px) var(--we-optics-y,-1000px),rgba(235,253,255,.23),transparent 78%),linear-gradient(180deg,rgba(255,255,255,.14),transparent 36%,rgba(44,100,145,.07) 76%,rgba(255,255,255,.11)),var(--we-optics-bg,none)!important;
