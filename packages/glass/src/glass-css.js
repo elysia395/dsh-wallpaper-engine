@@ -386,10 +386,21 @@ const CSS_GLASS = `
         「浮层玻璃」的雾化旋钮顺手改了别人的卡（死旋钮的另一种形态），故单开一面。
      ⚠️ 底色只走 color-mix 降 alpha，别写死 #1e1f26 之类常量：色相要留在主题/保真度手里。
      ⚠️ 只挂在**卡片本身**上，别往外壳或更深的后代挂：backdrop-filter 会把元素背后的
-        一切（包括卡片自己的文字）一起糊掉。
+        一切（包括卡片自己的文字）一起糊掉。注意选择器是 > div（**所有**直接子 div），
+        不是「唯一的那一个」——宿主 HoverCard 只有一个，但别的 role="dialog" 未必。
+     ⚠️ 排除面（#377 审查第 1 条，2026-11-18）：:not([class*="_dialog"]) 只能排掉类名带
+        dialog 的宿主 Modal，排不掉宿主其余对话框与本插件自己的浮窗。已知会被误伤的三类：
+        · 本插件性能 HUD：src/ext-perf.js:399 we-perf-float + :401 role="dialog"，两个直接
+          子 div（__head / __grid）会各涂一层底 + 渐变 + 霜 ⇒ 用 :not(.we-perf-float) 排掉；
+        · 宿主图片灯箱：div[role="dialog"]._backdrop_… > div._stage_…，类名不含 _dialog，
+          带 aria-modal="true" ⇒ 用 :not([aria-modal="true"]) 排掉；
+        · 宿主窄窗侧栏抽屉：role: drawer ? "dialog" : undefined + data-shortcut-modal ⇒ 排掉。
+        （本段注释不能出现反引号：CSS_GLASS 是模板字符串，反引号会提前终止它。）
+        三者的属性/类名都是宿主与本仓的**既有稳定钩子**（docs/TROUBLESHOOTING.md 的 ARIA 面判据
+        同样用 aria-modal），不依赖哈希类名。
      ⚠️ 无模糊内核（data-we-glass-fallback）时不能只关霜：半透明无霜会把壁纸透上来压字，
        回退组把底退回不透明令牌色 + 去掉高光渐变（与 #156② 同政策）。 */
-  body[data-we-glass-floaters] [role="dialog"]:not([class*="_dialog"]):not([data-we-surface-runtime]):not([data-we-host-dialog]) > div {
+  body[data-we-glass-floaters] [role="dialog"]:not([class*="_dialog"]):not([data-we-surface-runtime]):not([data-we-host-dialog]):not([aria-modal="true"]):not([data-shortcut-modal]):not(.we-perf-float) > div {
     /* 宿主这张卡的实底必须降 alpha：实测（2026-11-17）是 rgb(72,154,161) 这类**不透明**实色，
        只补 blur 等于把霜压在实底下面，肉眼无感（前一版就是这么失败的）。色相仍取宿主浮层
        令牌 --dsw-alias-bg-overlay（受保真度映射），这里只把「实」改成按 --we-hovercard-alpha
@@ -399,7 +410,7 @@ const CSS_GLASS = `
     -webkit-backdrop-filter: blur(var(--we-hovercard-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
     backdrop-filter: blur(var(--we-hovercard-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
   }
-  body[data-we-glass-fallback][data-we-glass-floaters] [role="dialog"]:not([class*="_dialog"]):not([data-we-surface-runtime]):not([data-we-host-dialog]) > div {
+  body[data-we-glass-fallback][data-we-glass-floaters] [role="dialog"]:not([class*="_dialog"]):not([data-we-surface-runtime]):not([data-we-host-dialog]):not([aria-modal="true"]):not([data-shortcut-modal]):not(.we-perf-float) > div {
     /* 无模糊内核：半透明无霜会把壁纸直接透上来压字 ⇒ 底退回不透明令牌色、去掉高光渐变。 */
     background-color: var(--dsw-alias-bg-overlay, var(--we-panel-color, #1e1f26)) !important;
     background-image: none !important;

@@ -49,10 +49,11 @@
  * 现在一律记录**读回来的序列化值**（marketStickyRead），比较也用读回值。
  *
  * ## 刷新节拍
- * scroll（**capture**：scroll 不冒泡，只有捕获能收到内层滚动容器的滚动）+ resize 触发
- * rAF 合帧；另有 400ms 的兜底轮询，管「没有滚动但几何变了」的两种情形（切换市场页签、
- * 卡片/图片加载后长高）。刻意**不用**全局 MutationObserver：宿主页面在对话流式渲染时
- * 每帧都有大量 DOM 变更，全局 subtree observer 的回调开销远大于 4 次/秒的几何取样。
+ * scroll（**capture**：scroll 不冒泡，只有捕获能收到内层滚动容器的滚动）+ resize +
+ * pointerdown 触发 rAF 合帧；400ms 兜底轮询**只在市场挂着时开**（没有 market root 就
+ * 一个定时器都不留），管「没有滚动但几何变了」的两种情形（切换市场页签、卡片/图片加载
+ * 后长高）。刻意**不用**全局 MutationObserver：宿主页面在对话流式渲染时每帧都有大量 DOM
+ * 变更，全局 subtree observer 的回调开销远大于 4 次/秒的几何取样。
  */
 
 /** body 门控属性（glass.js 写、这里只读）。 */
@@ -107,7 +108,12 @@ function marketStickyEnabled() {
 
 /** 渐隐带宽（px）：属性值即像素数；读不到就给 26（与设置默认值一致）。 */
 function marketStickyFade() {
-  const raw = Number(document.body.getAttribute(MARKET_STICKY_ATTR));
+  const body = typeof document !== "undefined" ? document.body : null;
+  const value = body && typeof body.getAttribute === "function" ? body.getAttribute(MARKET_STICKY_ATTR) : null;
+  // ⚠️ 先判 null 再 Number：`Number(null) === 0` 且 isFinite(0) 为真，直接 Number 会让「读不到」
+  //    变成「渐隐 0px（硬切口）」，注释与实现不符（#377 审查第 6 条）。
+  if (value === null || value === "") return 26;
+  const raw = Number(value);
   if (!Number.isFinite(raw)) return 26;
   return Math.max(0, Math.min(60, raw));
 }
@@ -156,13 +162,17 @@ function marketStickyPaint(el, cut, fade, height) {
       beforeMaskPriority: marketStickyPriority(el, "mask-image"),
       beforeWebkitPriority: marketStickyPriority(el, "-webkit-mask-image"),
       written: "",
+      writtenRaw: "",
     };
     marketStickyWritten.set(el, rec);
     marketStickyTargets.add(el);
   }
-  if (rec.written === mask) return;
+  // 去重比的是**我们上次写下去的原串**：rec.written 存的是浏览器读回值（已规范化），
+  // 拿它跟原串比永远不等 ⇒ 每次 sync 都重写两个属性（#377 审查第 3 条）。
+  if (rec.writtenRaw === mask) return;
   el.style.setProperty("-webkit-mask-image", mask);
   el.style.setProperty("mask-image", mask);
+  rec.writtenRaw = mask;
   // ⚠️ 记**读回来的序列化值**，不要记上面那个原串：Chrome 会把 "to bottom" 省掉、把
   // rgba(0,0,0,1) 规范成 rgb(0,0,0)，于是 getPropertyValue 永远 !== 原串 ⇒ 还原判断
   // 「别人改过这一格」恒成立，mask 永远撕不掉。后果是滚动回顶部后卡片墙顶部仍留一条
@@ -195,9 +205,11 @@ function marketStickySync() {
   const root = active && typeof document.querySelector === "function"
     ? document.querySelector(MARKET_ROOT_SELECTOR) : null;
   if (root === null) {
+    marketStickyStopPoll();
     marketStickyRestoreAll();
     return;
   }
+  marketStickyStartPoll();
   const band = marketStickyBand(root);
   if (band === null) {
     marketStickyRestoreAll();
@@ -235,6 +247,27 @@ function marketStickyRequest() {
 }
 
 /**
+ * 轮询只在**市场挂着**的时候开：没有 market root 时一个定时器都不留。
+ * 这条纪律抄自 glass-surfaces.js 的「静止时不安排循环帧」—— 第一版不管市场开没开都常驻
+ * 400ms 定时器，还每次全文档 querySelector（#377 审查第 4 条）。
+ * 市场打开只可能来自用户操作 ⇒ 用 pointerdown（捕获）当「市场可能刚出现」的触发点，
+ * 配合 scroll / resize / visibilitychange，市场没开时零开销。
+ */
+function marketStickyStartPoll() {
+  if (marketStickyTimer) return;
+  if (typeof window === "undefined" || typeof window.setInterval !== "function") return;
+  marketStickyTimer = window.setInterval(marketStickyRequest, MARKET_STICKY_POLL_MS);
+}
+
+function marketStickyStopPoll() {
+  if (!marketStickyTimer) return;
+  if (typeof window !== "undefined" && typeof window.clearInterval === "function") {
+    window.clearInterval(marketStickyTimer);
+  }
+  marketStickyTimer = 0;
+}
+
+/**
  * 开（或续命）这份行为：applyGlassLayer 每次重跑都会调到这里 ⇒ 「开关打开」不需要额外的
  * 属性观察器，下一次 emit 就会把监听器装上。
  */
@@ -249,9 +282,9 @@ function syncMarketStickyClip() {
   window.addEventListener("scroll", marketStickyRequest, { capture: true, passive: true });
   window.addEventListener("resize", marketStickyRequest, { passive: true });
   document.addEventListener("visibilitychange", marketStickyRequest);
-  if (typeof window.setInterval === "function") {
-    marketStickyTimer = window.setInterval(marketStickyRequest, MARKET_STICKY_POLL_MS);
-  }
+  // 市场是点开的（页签 / 快捷键都绕不过 pointerdown）⇒ 用它补「市场刚出现、还没有滚动」的
+  // 那一段；真正的轮询由 marketStickySync 在发现 root 后才挂（见 marketStickyStartPoll）。
+  window.addEventListener("pointerdown", marketStickyRequest, { capture: true, passive: true });
   marketStickyRequest();
 }
 
@@ -262,9 +295,9 @@ function stopMarketStickyClip() {
   if (typeof window !== "undefined") {
     window.removeEventListener("scroll", marketStickyRequest, { capture: true });
     window.removeEventListener("resize", marketStickyRequest);
-    if (marketStickyTimer && typeof window.clearInterval === "function") window.clearInterval(marketStickyTimer);
+    window.removeEventListener("pointerdown", marketStickyRequest, { capture: true });
   }
-  if (marketStickyTimer) marketStickyTimer = 0;
+  marketStickyStopPoll();
   if (marketStickyRaf && typeof cancelAnimationFrame === "function") cancelAnimationFrame(marketStickyRaf);
   marketStickyRaf = 0;
   if (typeof document !== "undefined") document.removeEventListener("visibilitychange", marketStickyRequest);

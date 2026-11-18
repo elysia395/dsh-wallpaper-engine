@@ -349,8 +349,10 @@ function applyGlass(selection, s) {
     const pct = Number(glassValue("hoverCard", "transparency", selection.hoverCardTransparency, selection.glassAlpha)) || 0;
     const globalAlpha = Math.min(0.65, Math.max(0.45, 0.45 + (1 - (Number(selection.glassAlpha) || 0) / 100) * 0.2));
     s.setProperty("--we-hovercard-alpha", String(custom ? Math.max(0.45, 1 - pct / 100) : globalAlpha));
-    s.setProperty("--we-hovercard-blur",
-      String(Number(glassValue("hoverCard", "blur", selection.hoverCardBlur, selection.blur)) || 16) + "px");
+    // ⚠️ 不能写 `Number(...) || 16`：滑杆调 0（「完全不要模糊」）会被 `||` 咽回 16，#377 审查抓过。
+    const hcBlurRaw = glassValue("hoverCard", "blur", selection.hoverCardBlur, selection.blur);
+    const hcBlur = Number(hcBlurRaw);
+    s.setProperty("--we-hovercard-blur", String(Number.isFinite(hcBlur) && hcBlurRaw !== "" && hcBlurRaw !== null ? Math.max(0, hcBlur) : 16) + "px");
   }
 
   // ── 文件预览浮层（编辑文件悬停的改动预览）按面釉层变量 ─────────────────────
@@ -362,8 +364,10 @@ function applyGlass(selection, s) {
     const pct = Number(glassValue("filePreview", "transparency", selection.filePreviewTransparency, selection.glassAlpha)) || 0;
     const globalAlpha = Math.min(1, Math.max(0.25, (Number(selection.glassAlpha) || 0) / 100 || 0.8));
     s.setProperty("--we-file-preview-alpha", String(custom ? Math.max(0.25, 1 - pct / 100) : globalAlpha));
-    s.setProperty("--we-file-preview-blur",
-      String(Number(glassValue("filePreview", "blur", selection.filePreviewBlur, selection.blur)) || 24) + "px");
+    // 同上：`|| 24` 会让「调 0」失效（既有同类瑕疵，随 #377 一并收口）。读不到值才落回 24。
+    const fpBlurRaw = glassValue("filePreview", "blur", selection.filePreviewBlur, selection.blur);
+    const fpBlur = Number(fpBlurRaw);
+    s.setProperty("--we-file-preview-blur", String(Number.isFinite(fpBlur) && fpBlur >= 0 && fpBlurRaw !== "" && fpBlurRaw !== null ? fpBlur : 24) + "px");
   }
   // 内容面（编辑器/终端）近不透明玻璃底：透明度滑块 **0–100** → 不透明度 100%–20%
   // （越大越透，与玻璃透明度同语义；低于 ~40% 不透明度注释可读性会再次变差，
