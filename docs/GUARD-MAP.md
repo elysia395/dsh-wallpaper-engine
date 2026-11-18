@@ -5,7 +5,7 @@
 > 口径：只统计守卫**代码**里真正碰到的模块（先剥注释），并区分"直接读源文件"与"隔着产物 `lib/client.js`"。
 > 写法：字面量路径 / `join(...)` 拼接 / 唯一 basename / 产物配方 / **前缀族读法** `scopeFiles|scopeText(<前缀>)` / **经共享族助手读**（`import { panelText } from './tools/src-scope.mjs'` + 真调用；族口径封在那个库里，见 `docs/CODE-STRUCTURE.md` §12「同时是守卫的库」）/ **真源定位读**（`locate('符号')` / `locateFile('文件名')`，`test/tools/source-locator.mjs`：符号唯一声明在哪就是读了哪个模块）。
 
-模块面 219 个 · 守卫 137 个
+模块面 220 个 · 守卫 138 个
 
 ## 守卫 → 模块
 
@@ -67,6 +67,7 @@
 | `verify-layer-ownership.mjs` | `lib/routes/diag.js` `packages/fx/src/fx-layer.js` `src/client.js` `src/client/audio-playback.js` `src/layer-core.js` `src/live-layer.js` `src/live-layer/pointer.js` `src/live-layer/watch.js` `src/media-prep.js` `src/media-prep/probe.js` `src/video-layer.js` |  |
 | `verify-lazy-engine-dir.mjs` | `lib/host-boot.js` `lib/kernel/host-kernel.js` `lib/shim-seed.js` `lib/subpackage-boot.js` `packages/media-bridge/lib/routes/scene-serve.js` |  |
 | `verify-logging.mjs` | `lib/host-boot.js` `lib/index.js` `lib/kernel/host-kernel.js` `lib/kernel/host-session.js` `lib/log.js` `lib/notice.js` `lib/routes/diag.js` `lib/serve.js` `lib/webwallgl/renderer.js` `packages/media-bridge/lib/routes/scene-serve.js` `src/live-layer.js` `src/live-layer/diag.js` `src/live-layer/gate.js` `src/live-layer/pointer.js` `src/live-layer/probe.js` `src/live-layer/underlay.js` `src/live-layer/watch.js` |  |
+| `verify-market-sticky.mjs` | `packages/glass/src/glass-market-sticky.js` |  |
 | `verify-media-bridge.mjs` | `packages/media-bridge/lib/backend.js` `packages/media-bridge/lib/provision.js` `packages/media-bridge/lib/supervisor-protocol.js` `packages/media-bridge/lib/supervisor.js` |  |
 | `verify-media-probe.mjs` | `lib/media/mp4-probe.js` |  |
 | `verify-media-size.mjs` | `lib/media/media-size.js` |  |
@@ -230,6 +231,7 @@
 | `packages/glass/src/glass-css.js` | 5 | `verify-adapter` `verify-glass-surfaces` `verify-i18n` `verify-readability` `verify-titlebar-anchor` |
 | `packages/glass/src/glass-extra.js` | 1 | `verify-extra-glass` |
 | `packages/glass/src/glass-layer.js` | 4 | `verify-client` `verify-extra-glass` `verify-glass-surfaces` `verify-titlebar-anchor` |
+| `packages/glass/src/glass-market-sticky.js` | 1 | `verify-market-sticky` |
 | `packages/glass/src/glass-optics.js` | 2 | `verify-glass-optics-browser` `verify-glass-optics` |
 | `packages/glass/src/glass-panel.js` | 7 | `verify-client` `verify-extra-glass` `verify-fontset` `verify-glass-compat` `verify-glass-surfaces` `verify-presets` `verify-scene-live` |
 | `packages/glass/src/glass-presets-panel.js` | 6 | `verify-client` `verify-extra-glass` `verify-fontset` `verify-glass-surfaces` `verify-presets` `verify-scene-live` |
