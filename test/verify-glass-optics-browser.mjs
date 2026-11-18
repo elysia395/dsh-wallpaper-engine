@@ -45,6 +45,8 @@ try {
   const { targetId } = await send('Target.createTarget', { url: 'about:blank' });
   ({ sessionId } = await send('Target.attachToTarget', { targetId, flatten: true }));
   await send('Emulation.setDeviceMetricsOverride', { width: 1100, height: 900, deviceScaleFactor: 1, mobile: false });
+  // This fixture exercises pointer highlights, which honor the host's reduced-motion preference.
+  await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }] });
   await send('Page.navigate', { url: pathToFileURL(join(out, 'fixture.html')).href });
   let result;
   for (let i = 0; i < 150; i++) {
