@@ -31,6 +31,16 @@ const diagnostics=[];function reportClientDiag(event,detail){diagnostics.push({e
 /* OPTICS_SOURCE */
 const sleep=ms=>new Promise(r=>setTimeout(r,ms));
 const next=()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+async function waitFor(predicate) {
+ const deadline=performance.now()+5000;
+ while(!predicate() && performance.now()<deadline) await sleep(25);
+ return predicate();
+}
+async function movePointer(x,y) {
+ const optics=window.__weGlassOptics,previousWrites=optics.lightWrites;
+ document.dispatchEvent(new PointerEvent('pointermove',{clientX:x,clientY:y,pointerType:'mouse'}));
+ if(!await waitFor(()=>optics.lightWrites>previousWrites)) throw new Error(`No glass light update for pointer at (${x},${y})`);
+}
 const assertions=[];function check(value,message){if(!value)throw new Error(message);assertions.push(message)}
 (async()=>{
  const el=document.querySelector('[data-composer-card]'),picker=document.querySelector('.we-picker');
@@ -38,9 +48,12 @@ const assertions=[];function check(value,message){if(!value)throw new Error(mess
  const fence=document.getElementById('fence'),bubble=document.getElementById('bubble');
  const originalCode=fence.innerHTML;
  const native=getComputedStyle(el,'::before').backdropFilter;
- const release=installGlassOptics();await sleep(200);await next();
- check(window.__weGlassOptics.surfaces===10,'Composer, panel, fence, bubble, inline capsules and bottom button found');
- check(window.__weGlassOptics.maps===10,'All visible rounded displacement maps published');
+ const release=installGlassOptics();
+ // The compositor publishes visible maps over several frames.
+ await waitFor(()=>window.__weGlassOptics?.maps>=10);
+ const optics=window.__weGlassOptics;
+ check(optics?.surfaces===10,'Composer, panel, fence, bubble, inline capsules and bottom button found');
+ check(optics.maps===10,`All visible rounded displacement maps published (${optics.maps}/10)`);
  check(getComputedStyle(el,'::before').backdropFilter.includes('url('),'Pseudo-element carries refraction');
  check(getComputedStyle(picker).backdropFilter.includes('url('),'Direct glass carries refraction');
  check(getComputedStyle(fence).backdropFilter.includes('url(')&&getComputedStyle(bubble).backdropFilter.includes('url('),'Code fences and user bubbles carry actual refraction');
@@ -54,13 +67,13 @@ const assertions=[];function check(value,message){if(!value)throw new Error(mess
  check(window.__weGlassOptics.cacheHits>0,'Equal-sized capsules share a displacement filter');
  check(getComputedStyle(el).position===originalPosition && getComputedStyle(el).backdropFilter==='none','Composer containing block unchanged');
  check(getComputedStyle(el,'::before').backdropFilter.includes('saturate(1.5)'),'Native material filter retained');
- document.dispatchEvent(new PointerEvent('pointermove',{clientX:550,clientY:125,pointerType:'mouse'}));await next();
+ await movePointer(550,125);
  check(parseFloat(getComputedStyle(el).getPropertyValue('--we-optics-x'))>el.offsetWidth,'Pointer follows beyond card boundary');
  let observedStyleMutations=0;
  const styleObserver=new MutationObserver(records=>observedStyleMutations+=records.length);
  styleObserver.observe(document.body,{subtree:true,attributes:true,attributeFilter:['style']});
  const reads=window.__weGlassOptics.layoutReads,scans=window.__weGlassOptics.scans,updates=window.__weGlassOptics.updates;
- for(let i=0;i<6;i++){document.dispatchEvent(new PointerEvent('pointermove',{clientX:555+i,clientY:125,pointerType:'mouse'}));await next();}
+ for(let i=0;i<6;i++) await movePointer(555+i,125);
  check(window.__weGlassOptics.layoutReads===reads,'Steady pointer tracking performs zero layout reads');
  check(window.__weGlassOptics.scans===scans&&window.__weGlassOptics.updates===updates,'Pointer tracking performs no DOM discovery or map rebuild');
  check(observedStyleMutations===0,'CSSOM pointer updates do not trigger upstream style MutationObserver');styleObserver.disconnect();
