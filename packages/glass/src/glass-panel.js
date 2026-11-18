@@ -42,7 +42,7 @@ function renderAppearanceGlassSection(ctx) {
     onCapsuleBlur, onCapsuleColor,
     onLeftSidebarGlass, onTitlebarGlass, onSidebarAlpha, onSidebarBlur, onSidebarColor,
     onSidebarContentAlpha, onSidebarContentColor, onSidebarGlass,
-    onSidebarFollowGlobal, onSidebarFullClear, onFloaterSolidBase,
+    onSidebarFollowGlobal, onSidebarFullClear, onFloaterSolidBase, onMarketStickyClip, onMarketStickyFade,
     onThinkingMode, glassDetailOpen, onToggleGlassDetail, glassUiOpen, onToggleGlassUiSection,
     presetsOpen, onTogglePresetsSection,
   } = ctx;
@@ -103,6 +103,11 @@ function renderAppearanceGlassSection(ctx) {
       hint: weT("编辑文件悬停时的改动预览浮层"),
       indep: weT("文件预览玻璃·独立配置"),
       alpha: weT("文件预览玻璃·玻璃透明度"), blur: weT("文件预览玻璃·雾化"),
+    },
+    hoverCard: {
+      hint: weT("鼠标悬停时宿主弹出的信息卡（提交行详情等）"),
+      indep: weT("悬停卡玻璃·独立配置"),
+      alpha: weT("悬停卡玻璃·玻璃透明度"), blur: weT("悬停卡玻璃·雾化"),
     },
     // ⚠️ 这一面只登记了 `transparency` / `blur` 两个参数（无 color / fidelity：共享面纱
     //    ⇒ 保真度不可达；本面 CSS 也不消费颜色）⇒ 标签只给**真正会渲染**的那几个，
@@ -472,6 +477,21 @@ function renderAppearanceGlassSection(ctx) {
         key: "floater-solid-base",
         hint: weT("给第三方插件的弹窗补实底"),
         tooltip: weT("打开（默认）：第三方插件（任务看板等）的弹窗与确认框补一层不透明底，背后的页面内容与兄弟弹窗不再透上来；宿主自己的设置窗、输入卡与菜单保持原样，宿主的确认 / 审批卡会一并变实底（它们此前同样在漏）。关闭：恢复宿主原生的半透明观感"),
+      }),
+      // 插件市场（dsh-market）吸顶条下的内容裁切（默认开）。玻璃把层令牌换成半透明后，
+      // 市场那行吸顶的搜索 / 分类条也是半透明的 ⇒ 卡片墙滚过时文字压在搜索框上。
+      // 化解方式**不是**给吸顶条补实底（那样那行就不再是玻璃），而是把吸顶条下面的内容
+      // 裁掉（渐隐）—— 吸顶条照旧半透明，它下面没有东西可透。
+      // ⚠️ 门中门：渐隐滑杆只在开关打开时画 —— 关着时裁切行为整个不跑（属性都不挂），
+      //    画出来就是"画了不生效的旋钮"（本仓要防的那类）。
+      switchRow(weT("市场吸顶条裁掉下层内容"), sel.marketStickyClip !== false, onMarketStickyClip, {
+        key: "market-sticky-clip",
+        hint: weT("吸顶的搜索/分类条下面不再透出卡片"),
+        tooltip: weT("打开（默认）：插件市场里吸顶的搜索框与分类条保持半透明，但它下面滚过的卡片墙会在吸顶线下沿被裁掉（渐隐消失）—— 卡片文字不再压在半透明的搜索框上；关闭：恢复原样（卡片会从吸顶条底下透上来）"),
+      }),
+      sel.marketStickyClip !== false && SliderRow(weT("市场吸顶条·渐隐宽度"), 0, 60, 1,
+        sel.marketStickyFade, onMarketStickyFade, "px", "market-sticky-fade", {
+        tooltip: weT("切口上方多少像素内淡出 —— 0 = 硬切口（一条直边），26 左右像溶进壁纸；调太大则吸顶条下面会空出一片"),
       }),
       // 跟随全局（sidebarFollowGlobal，默认开，现场口径："我需要侧栏玻璃也跟随全局"）：
       // 开着 ⇒ 侧栏的釉变量直接指向全局三件套（effects 里写 var() 引用），并把下面

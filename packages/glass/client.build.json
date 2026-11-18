@@ -40,6 +40,15 @@
       ]
     },
     {
+      "file": "src/glass-market-sticky.js",
+      "why": "插件市场（dsh-market）吸顶条下的内容裁切：按 body 门控属性 data-we-market-sticky 给被吸顶行盖住的那几层（卡片墙 / 加载更多 / 最近收录）写 mask-image 渐隐，并在关掉 / 卸载时把宿主元素上的内联样式还回去；只读属性、不读 settings（读谁在 glass.js 决定）",
+      "markers": [
+        "const MARKET_STICKY_ATTR = \"data-we-market-sticky\";",
+        "function syncMarketStickyClip() {",
+        "function stopMarketStickyClip() {"
+      ]
+    },
+    {
       "file": "src/glass-optics.js",
       "why": "Optional visible-only lens refraction and pointer light; lifecycle owned by the glass layer.",
       "markers": [

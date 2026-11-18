@@ -76,7 +76,8 @@
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
           "floaters": "inherit",
-          "filePreview": "inherit"
+          "filePreview": "inherit",
+          "hoverCard": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -177,6 +178,10 @@
         "presetGuideDismissed": "",
         "perfEnabled": false,
         "perfFloat": false,
+        "hoverCardTransparency": 39,
+        "hoverCardBlur": 16,
+        "marketStickyClip": true,
+        "marketStickyFade": 26,
         "glassOptics": false
       },
       "host": {
@@ -248,7 +253,8 @@
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
           "floaters": "inherit",
-          "filePreview": "inherit"
+          "filePreview": "inherit",
+          "hoverCard": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -346,6 +352,10 @@
         "presetGuideDismissed": "",
         "perfEnabled": false,
         "perfFloat": false,
+        "hoverCardTransparency": 39,
+        "hoverCardBlur": 16,
+        "marketStickyClip": true,
+        "marketStickyFade": 26,
         "glassOptics": false
       }
     },
@@ -419,7 +429,8 @@
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
           "floaters": "inherit",
-          "filePreview": "inherit"
+          "filePreview": "inherit",
+          "hoverCard": "inherit"
         },
         "settingsVersion": 8,
         "settingsWindowTransparency": 100,
@@ -533,6 +544,10 @@
         "presetGuideDismissed": "",
         "perfEnabled": false,
         "perfFloat": false,
+        "hoverCardTransparency": 39,
+        "hoverCardBlur": 16,
+        "marketStickyClip": true,
+        "marketStickyFade": 26,
         "glassOptics": false
       },
       "host": "__null__"
@@ -607,7 +622,8 @@
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
           "floaters": "inherit",
-          "filePreview": "inherit"
+          "filePreview": "inherit",
+          "hoverCard": "inherit"
         },
         "settingsVersion": 8,
         "settingsWindowTransparency": 100,
@@ -721,6 +737,10 @@
         "presetGuideDismissed": "",
         "perfEnabled": false,
         "perfFloat": false,
+        "hoverCardTransparency": 39,
+        "hoverCardBlur": 16,
+        "marketStickyClip": true,
+        "marketStickyFade": 26,
         "glassOptics": false
       },
       "host": "__null__"
@@ -795,7 +815,8 @@
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
           "floaters": "inherit",
-          "filePreview": "inherit"
+          "filePreview": "inherit",
+          "hoverCard": "inherit"
         },
         "settingsVersion": 8,
         "settingsWindowTransparency": 100,
@@ -909,6 +930,10 @@
         "presetGuideDismissed": "",
         "perfEnabled": false,
         "perfFloat": false,
+        "hoverCardTransparency": 39,
+        "hoverCardBlur": 16,
+        "marketStickyClip": true,
+        "marketStickyFade": 26,
         "glassOptics": false
       },
       "host": "__null__"
@@ -988,7 +1013,8 @@
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
           "floaters": "inherit",
-          "filePreview": "inherit"
+          "filePreview": "inherit",
+          "hoverCard": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -1089,6 +1115,10 @@
         "presetGuideDismissed": "",
         "perfEnabled": false,
         "perfFloat": false,
+        "hoverCardTransparency": 39,
+        "hoverCardBlur": 16,
+        "marketStickyClip": true,
+        "marketStickyFade": 26,
         "glassOptics": false
       },
       "host": {
@@ -1160,7 +1190,8 @@
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
           "floaters": "inherit",
-          "filePreview": "inherit"
+          "filePreview": "inherit",
+          "hoverCard": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -1258,6 +1289,10 @@
         "presetGuideDismissed": "",
         "perfEnabled": false,
         "perfFloat": false,
+        "hoverCardTransparency": 39,
+        "hoverCardBlur": 16,
+        "marketStickyClip": true,
+        "marketStickyFade": 26,
         "glassOptics": false
       }
     },
@@ -1393,7 +1428,8 @@
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
           "floaters": "inherit",
-          "filePreview": "inherit"
+          "filePreview": "inherit",
+          "hoverCard": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -1494,6 +1530,10 @@
         "presetGuideDismissed": "",
         "perfEnabled": false,
         "perfFloat": false,
+        "hoverCardTransparency": 39,
+        "hoverCardBlur": 16,
+        "marketStickyClip": true,
+        "marketStickyFade": 26,
         "glassOptics": false
       },
       "host": {
@@ -1565,7 +1605,8 @@
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
           "floaters": "inherit",
-          "filePreview": "inherit"
+          "filePreview": "inherit",
+          "hoverCard": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -1663,6 +1704,10 @@
         "presetGuideDismissed": "",
         "perfEnabled": false,
         "perfFloat": false,
+        "hoverCardTransparency": 39,
+        "hoverCardBlur": 16,
+        "marketStickyClip": true,
+        "marketStickyFade": 26,
         "glassOptics": false
       }
     },
@@ -1843,7 +1888,8 @@
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
           "floaters": "inherit",
-          "filePreview": "inherit"
+          "filePreview": "inherit",
+          "hoverCard": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -1944,6 +1990,10 @@
         "presetGuideDismissed": "",
         "perfEnabled": false,
         "perfFloat": false,
+        "hoverCardTransparency": 39,
+        "hoverCardBlur": 16,
+        "marketStickyClip": true,
+        "marketStickyFade": 26,
         "glassOptics": false
       },
       "host": {
@@ -2015,7 +2065,8 @@
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
           "floaters": "inherit",
-          "filePreview": "inherit"
+          "filePreview": "inherit",
+          "hoverCard": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -2113,6 +2164,10 @@
         "presetGuideDismissed": "",
         "perfEnabled": false,
         "perfFloat": false,
+        "hoverCardTransparency": 39,
+        "hoverCardBlur": 16,
+        "marketStickyClip": true,
+        "marketStickyFade": 26,
         "glassOptics": false
       }
     },
@@ -2192,7 +2247,8 @@
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
           "floaters": "inherit",
-          "filePreview": "inherit"
+          "filePreview": "inherit",
+          "hoverCard": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -2293,6 +2349,10 @@
         "presetGuideDismissed": "",
         "perfEnabled": false,
         "perfFloat": false,
+        "hoverCardTransparency": 39,
+        "hoverCardBlur": 16,
+        "marketStickyClip": true,
+        "marketStickyFade": 26,
         "glassOptics": false
       },
       "host": {
@@ -2364,7 +2424,8 @@
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
           "floaters": "inherit",
-          "filePreview": "inherit"
+          "filePreview": "inherit",
+          "hoverCard": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -2462,6 +2523,10 @@
         "presetGuideDismissed": "",
         "perfEnabled": false,
         "perfFloat": false,
+        "hoverCardTransparency": 39,
+        "hoverCardBlur": 16,
+        "marketStickyClip": true,
+        "marketStickyFade": 26,
         "glassOptics": false
       }
     },
@@ -2555,7 +2620,8 @@
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
           "floaters": "inherit",
-          "filePreview": "inherit"
+          "filePreview": "inherit",
+          "hoverCard": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -2656,6 +2722,10 @@
         "presetGuideDismissed": "",
         "perfEnabled": false,
         "perfFloat": false,
+        "hoverCardTransparency": 39,
+        "hoverCardBlur": 16,
+        "marketStickyClip": true,
+        "marketStickyFade": 26,
         "glassOptics": false
       },
       "host": {
@@ -2727,7 +2797,8 @@
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
           "floaters": "inherit",
-          "filePreview": "inherit"
+          "filePreview": "inherit",
+          "hoverCard": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -2825,6 +2896,10 @@
         "presetGuideDismissed": "",
         "perfEnabled": false,
         "perfFloat": false,
+        "hoverCardTransparency": 39,
+        "hoverCardBlur": 16,
+        "marketStickyClip": true,
+        "marketStickyFade": 26,
         "glassOptics": false
       }
     },
@@ -2918,7 +2993,8 @@
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
           "floaters": "inherit",
-          "filePreview": "inherit"
+          "filePreview": "inherit",
+          "hoverCard": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -3019,6 +3095,10 @@
         "presetGuideDismissed": "",
         "perfEnabled": false,
         "perfFloat": false,
+        "hoverCardTransparency": 39,
+        "hoverCardBlur": 16,
+        "marketStickyClip": true,
+        "marketStickyFade": 26,
         "glassOptics": false
       },
       "host": {
@@ -3090,7 +3170,8 @@
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
           "floaters": "inherit",
-          "filePreview": "inherit"
+          "filePreview": "inherit",
+          "hoverCard": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -3188,6 +3269,10 @@
         "presetGuideDismissed": "",
         "perfEnabled": false,
         "perfFloat": false,
+        "hoverCardTransparency": 39,
+        "hoverCardBlur": 16,
+        "marketStickyClip": true,
+        "marketStickyFade": 26,
         "glassOptics": false
       }
     },
@@ -3268,7 +3353,8 @@
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
           "floaters": "inherit",
-          "filePreview": "inherit"
+          "filePreview": "inherit",
+          "hoverCard": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -3369,6 +3455,10 @@
         "presetGuideDismissed": "",
         "perfEnabled": false,
         "perfFloat": false,
+        "hoverCardTransparency": 39,
+        "hoverCardBlur": 16,
+        "marketStickyClip": true,
+        "marketStickyFade": 26,
         "glassOptics": false
       },
       "host": {
@@ -3440,7 +3530,8 @@
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
           "floaters": "inherit",
-          "filePreview": "inherit"
+          "filePreview": "inherit",
+          "hoverCard": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -3538,6 +3629,10 @@
         "presetGuideDismissed": "",
         "perfEnabled": false,
         "perfFloat": false,
+        "hoverCardTransparency": 39,
+        "hoverCardBlur": 16,
+        "marketStickyClip": true,
+        "marketStickyFade": 26,
         "glassOptics": false
       }
     },
@@ -3623,7 +3718,8 @@
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
           "floaters": "inherit",
-          "filePreview": "inherit"
+          "filePreview": "inherit",
+          "hoverCard": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -3724,6 +3820,10 @@
         "presetGuideDismissed": "",
         "perfEnabled": false,
         "perfFloat": false,
+        "hoverCardTransparency": 39,
+        "hoverCardBlur": 16,
+        "marketStickyClip": true,
+        "marketStickyFade": 26,
         "glassOptics": false
       },
       "host": {
@@ -3795,7 +3895,8 @@
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
           "floaters": "inherit",
-          "filePreview": "inherit"
+          "filePreview": "inherit",
+          "hoverCard": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -3893,6 +3994,10 @@
         "presetGuideDismissed": "",
         "perfEnabled": false,
         "perfFloat": false,
+        "hoverCardTransparency": 39,
+        "hoverCardBlur": 16,
+        "marketStickyClip": true,
+        "marketStickyFade": 26,
         "glassOptics": false
       }
     },
@@ -3975,7 +4080,8 @@
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
           "floaters": "inherit",
-          "filePreview": "inherit"
+          "filePreview": "inherit",
+          "hoverCard": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -4076,6 +4182,10 @@
         "presetGuideDismissed": "",
         "perfEnabled": false,
         "perfFloat": false,
+        "hoverCardTransparency": 39,
+        "hoverCardBlur": 16,
+        "marketStickyClip": true,
+        "marketStickyFade": 26,
         "glassOptics": false
       },
       "host": {
@@ -4147,7 +4257,8 @@
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
           "floaters": "inherit",
-          "filePreview": "inherit"
+          "filePreview": "inherit",
+          "hoverCard": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -4245,6 +4356,10 @@
         "presetGuideDismissed": "",
         "perfEnabled": false,
         "perfFloat": false,
+        "hoverCardTransparency": 39,
+        "hoverCardBlur": 16,
+        "marketStickyClip": true,
+        "marketStickyFade": 26,
         "glassOptics": false
       }
     },
@@ -4334,7 +4449,8 @@
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
           "floaters": "inherit",
-          "filePreview": "inherit"
+          "filePreview": "inherit",
+          "hoverCard": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -4435,6 +4551,10 @@
         "presetGuideDismissed": "",
         "perfEnabled": false,
         "perfFloat": false,
+        "hoverCardTransparency": 39,
+        "hoverCardBlur": 16,
+        "marketStickyClip": true,
+        "marketStickyFade": 26,
         "glassOptics": false
       },
       "host": {
@@ -4506,7 +4626,8 @@
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
           "floaters": "inherit",
-          "filePreview": "inherit"
+          "filePreview": "inherit",
+          "hoverCard": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -4604,6 +4725,10 @@
         "presetGuideDismissed": "",
         "perfEnabled": false,
         "perfFloat": false,
+        "hoverCardTransparency": 39,
+        "hoverCardBlur": 16,
+        "marketStickyClip": true,
+        "marketStickyFade": 26,
         "glassOptics": false
       }
     },
@@ -4750,7 +4875,8 @@
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
           "floaters": "inherit",
-          "filePreview": "inherit"
+          "filePreview": "inherit",
+          "hoverCard": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -4859,6 +4985,10 @@
         "presetGuideDismissed": "",
         "perfEnabled": false,
         "perfFloat": false,
+        "hoverCardTransparency": 39,
+        "hoverCardBlur": 16,
+        "marketStickyClip": true,
+        "marketStickyFade": 26,
         "glassOptics": false
       },
       "host": {
@@ -4951,7 +5081,8 @@
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
           "floaters": "inherit",
-          "filePreview": "inherit"
+          "filePreview": "inherit",
+          "hoverCard": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -5053,6 +5184,10 @@
         "presetGuideDismissed": "",
         "perfEnabled": false,
         "perfFloat": false,
+        "hoverCardTransparency": 39,
+        "hoverCardBlur": 16,
+        "marketStickyClip": true,
+        "marketStickyFade": 26,
         "glassOptics": false
       }
     },
@@ -5131,7 +5266,8 @@
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
           "floaters": "inherit",
-          "filePreview": "inherit"
+          "filePreview": "inherit",
+          "hoverCard": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -5232,6 +5368,10 @@
         "presetGuideDismissed": "",
         "perfEnabled": false,
         "perfFloat": false,
+        "hoverCardTransparency": 39,
+        "hoverCardBlur": 16,
+        "marketStickyClip": true,
+        "marketStickyFade": 26,
         "glassOptics": false
       },
       "host": {
@@ -5303,7 +5443,8 @@
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
           "floaters": "inherit",
-          "filePreview": "inherit"
+          "filePreview": "inherit",
+          "hoverCard": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -5401,6 +5542,10 @@
         "presetGuideDismissed": "",
         "perfEnabled": false,
         "perfFloat": false,
+        "hoverCardTransparency": 39,
+        "hoverCardBlur": 16,
+        "marketStickyClip": true,
+        "marketStickyFade": 26,
         "glassOptics": false
       }
     },
@@ -5479,7 +5624,8 @@
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
           "floaters": "inherit",
-          "filePreview": "inherit"
+          "filePreview": "inherit",
+          "hoverCard": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -5580,6 +5726,10 @@
         "presetGuideDismissed": "",
         "perfEnabled": false,
         "perfFloat": false,
+        "hoverCardTransparency": 39,
+        "hoverCardBlur": 16,
+        "marketStickyClip": true,
+        "marketStickyFade": 26,
         "glassOptics": false
       },
       "host": {
@@ -5651,7 +5801,8 @@
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
           "floaters": "inherit",
-          "filePreview": "inherit"
+          "filePreview": "inherit",
+          "hoverCard": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -5749,6 +5900,10 @@
         "presetGuideDismissed": "",
         "perfEnabled": false,
         "perfFloat": false,
+        "hoverCardTransparency": 39,
+        "hoverCardBlur": 16,
+        "marketStickyClip": true,
+        "marketStickyFade": 26,
         "glassOptics": false
       }
     },
@@ -5828,7 +5983,8 @@
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
           "floaters": "inherit",
-          "filePreview": "inherit"
+          "filePreview": "inherit",
+          "hoverCard": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -5929,6 +6085,10 @@
         "presetGuideDismissed": "",
         "perfEnabled": false,
         "perfFloat": false,
+        "hoverCardTransparency": 39,
+        "hoverCardBlur": 16,
+        "marketStickyClip": true,
+        "marketStickyFade": 26,
         "glassOptics": false
       },
       "host": {
@@ -6000,7 +6160,8 @@
           "conversation": "inherit",
           "thinkingTrigger": "inherit",
           "floaters": "inherit",
-          "filePreview": "inherit"
+          "filePreview": "inherit",
+          "hoverCard": "inherit"
         },
         "settingsWindowTransparency": 100,
         "settingsWindowBlur": 60,
@@ -6098,6 +6259,10 @@
         "presetGuideDismissed": "",
         "perfEnabled": false,
         "perfFloat": false,
+        "hoverCardTransparency": 39,
+        "hoverCardBlur": 16,
+        "marketStickyClip": true,
+        "marketStickyFade": 26,
         "glassOptics": false
       }
     }

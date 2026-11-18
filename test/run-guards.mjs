@@ -138,6 +138,10 @@ const VERIFY_STEPS = [
   step('test/verify-readability.mjs'),
   step('test/verify-glass-compositing.mjs'),
   step('test/verify-glass-surfaces.mjs'),
+  // 市场吸顶条裁切（glass-market-sticky.js）：直接改宿主内联样式，坏法都很安静 —— 还原误判（滚
+  // 回顶部留缺块，05046eae 修过）、去重失效（每次 sync 重写）、子元素叠 mask、市场没开还常驻
+  // 定时器。判据 = 写 → 读回（夹具复刻 Chrome 规范化）→ 还原 + 只裁最外层 + 节拍。
+  step('test/verify-market-sticky.mjs'),
   step('test/verify-glass-optics.mjs'),
   step('test/verify-glass-optics-browser.mjs'),
   step('test/verify-glass-compat.mjs'),

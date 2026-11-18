@@ -5,6 +5,8 @@
   "values": {
     "glassSurfacePolicy": {},
     "floaterSolidBase": true,
+    "marketStickyClip": true,
+    "marketStickyFade": 26,
     "scrim": 0.6,
     "border": 0.9,
     "blur": 9,
@@ -154,7 +156,9 @@
     "avatarRadius": 100,
     "avatarAiRepeatRows": 6,
     "filePreviewTransparency": 10,
-    "filePreviewBlur": 24
+    "filePreviewBlur": 24,
+    "hoverCardTransparency": 39,
+    "hoverCardBlur": 16
   },
   "assets": {
     "font": {

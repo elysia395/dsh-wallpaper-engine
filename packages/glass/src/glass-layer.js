@@ -229,6 +229,10 @@ function applyGlassLayer() {
   // 静态样式表是构建期常量（styles.js），而这份规则由设置拼出来 ⇒ 单独一个 <style>
   // 标签（见 glass-extra.js；空清单时它一条规则都不生成、标签也撤掉）。
   syncExtraGlassCss(selection);
+  // 插件市场（dsh-market）吸顶条下的内容裁切：门与渐隐宽度都由 applyGlass 写进 body 属性
+  // （data-we-market-sticky），这里只负责"按属性挂/摘 DOM 行为"。放在 applyGlass 之后 ——
+  // 它读的就是刚写出的那份属性。
+  syncMarketStickyClip();
   // 思考块液态玻璃：默认关，保持宿主黑底方便阅读。打开后 CSS 清掉思考条
   // 与推理面的实心底，切到会话同一套雾化。本门控仍在玻璃层就地写 ——
   // 它不是玻璃量，不进 applyGlass 的取值管线。
@@ -361,6 +365,7 @@ function disposeGlassLayer() {
     "--we-left-sidebar-blur", "--we-left-sidebar-alpha",
     "--we-titlebar-blur", "--we-titlebar-alpha",
     "--we-floaters-blur", "--we-floaters-alpha",
+    "--we-hovercard-blur", "--we-hovercard-alpha",
     // ⚠️ 对话栏那一族（`--we-chat-*`）**提交态就没在撤** —— 既有缺陷，本次一并补上：
     //    它们是对话栏专属釉层变量，卸载后残留同样会被那几条规则读到。
     //    （判据"清理对称性"把这一组和上面 6 个一起抓了出来。）
@@ -370,6 +375,9 @@ function disposeGlassLayer() {
   // 额外补雾化通道（#200）：这一份是**运行期生成的** <style>，不在静态样式表里 ⇒
   // 必须显式撤标签（与上面那批 body 属性 / 变量成对，理由同"清理对称性"）。
   disposeExtraGlassCss();
+  // 市场吸顶条裁切：摘监听 + 把写在宿主元素上的 mask 全部还回去（成对，理由同"清理对称性"）。
+  stopMarketStickyClip();
+  document.body.removeAttribute("data-we-market-sticky");
 }
 
 export { applyGlassLayer, disposeGlassLayer, detectSoftwareRender };
