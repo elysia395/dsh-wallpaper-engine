@@ -5,7 +5,7 @@
 > 本文件承接原先堆在 README 首页的**版本公告与功能清单**。门面（`../README.md` / `../README.en.md`）
 > 只保留与版本无关的亮点；带版本号、issue 号、性能数字的内容一律记在这里。
 >
-> **当前发布版本：`v1.4.2`**（1.4.1 已发；1.4.2 为紧急修复版）。
+> **当前发布版本：`v1.4.3`**（1.4.2 已发）。
 > **历史版本已分卷**：v1.3.x 及更早（v1.3.0 – v1.3.3、v1.2.0、v1.1.0、v1.0.1、v0.x）已按
 > minor 迁到 [`changelog/`](./changelog/)，索引见文末「旧版本（已分卷归档）」；本文件只保留 **未发布** 与 **v1.4.x**。
 >
@@ -14,19 +14,27 @@
 > 完整逐提交历史见 GitHub Commits / Releases；升级前置条件见 [`UPGRADING.md`](./UPGRADING.md)。
 > `test/verify-scene-live.mjs` 这一类判据条数**只记该条写作当时的实测总数**（如 466 / 465），不是现在的总数 —— 后续条目会往上加（现为 502）；照原文保留，好让它与当次提交对得上。
 
-### 未发布（启动时暂停，#349，2026-11-14）
+### v1.4.3（2026-11-19）
+
+- **新增：宿主悬停信息卡（`hoverCard`）玻璃与插件市场吸顶条下方卡片渐隐（#377）**。
+  - 宿主 portal 出来的悬停信息卡（`[role="dialog"] > div`，如 git 提交行详情）接入玻璃并支持独立调节透明度和雾化（`hoverCardTransparency` / `hoverCardBlur`，默认跟随全局），通过 `:not([aria-modal="true"]):not([data-shortcut-modal]):not(.we-perf-float)` 精确排除宿主图片灯箱、窄窗侧栏抽屉与插件性能悬浮窗；无模糊内核时回退实底。
+  - 新增 `marketStickyClip`（默认开）与 `marketStickyFade`（默认 26px）：插件市场（`dsh-market`）吸顶搜索/分类条下滚过的卡片墙、`最近收录` 块与加载更多区域改为平滑 `mask-image` 渐隐（仅裁最外层，滚动回到顶部后按浏览器规范化值准确还原；市场未挂载时不常驻轮询）。修复 `hoverCard` / `filePreview` 雾化设为 `0` 时被 `|| 默认值` 吞掉的缺陷；新增守卫 `test/verify-market-sticky.mjs`。
+- **修：壁纸模式下窗口右缘浅色竖条（#374）**。在壁纸门内将宿主会话滚动容器 `[data-conversation-scroll]` 的滚动条槽底设为透明，非玻璃模式下将滑块改为中性半透明 `rgba(128,128,128,.45)`（悬停/按下 `.68`），避免主题色竖条与壁纸割裂；开启玻璃行时继续让位给 `#157` 的滚动条令牌配色。
+- **修：胶囊开关「开」方向写不进设置与采纳宿主设置抹掉本地记忆（#371）**。修复 `onSceneAutoQuality` 与 `onSceneSoftRenderPause` 按布尔约定取 `v === true` 导致始终写入 `false` 的问题，统一对齐 `e.target.checked`；采纳宿主设置时直接使用内存 `selection` 并保留本机 `sceneFrameUrl` / `customFrameUrl` 等设备本地状态。
+- **新增：扩展页签通用性能监控与悬浮窗（#263）**。将性能监控升级为「扩展」页签通用模块（`perfEnabled` / `perfFloat`，默认关）：场景/网页读渲染页 FPS，视频读解码帧差值，静态明确显示「没有渲染帧」；界面 FPS 与壁纸帧率分离采样；可选开启可拖动且位置持久化的悬浮窗；宿主 `/diag-log?perf=` 仅返回本进程 CPU 快照，移除逐帧日志缓存。
+- **修：主题预设出厂七套不再占用用户上限，支持隐藏与恢复（#369，Fixes #219）**。用户自定义预设上限（8 套）与 7 套出厂预设分离；删除出厂预设改为写入墓碑隐藏，可从「已隐藏的出厂预设」区一键恢复（`POST <id>/restore`）；首次应用作者预设前若尚无个人预设会先提示保存。
+- **新增：无 GPU 时自动暂停实时渲染，视频壁纸禁用原生右键菜单（#270 / #363）**。新增「软件渲染时暂停实时渲染」（`sceneSoftRenderPause`，默认开），检测到 SwiftShader / llvmpipe / 基本渲染 / 无 WebGL 时暂停实时渲染并停在最后一帧（支持 `?we-softrender=0/1` 覆盖）；视频壁纸挂载防重复 `contextmenu` 拦截，右键不再弹出浏览器原生菜单。
+- **新增：壁纸过场/方向可随机、轮播可临时改间隔、玻璃可调遮罩浓度（#254）**。过场与方向新增「随机」选项（仅在换层时抽取且排除硬切）；「自动轮转」改为本次运行的临时覆盖间隔（`rotationLiveInterval`，0 为跟随列表预设）；「玻璃 UI」新增「遮罩浓度」滑杆（`settingsMaskStrength`，0–100）。
+- **修：「自动画质」开关关闭后真正传参到渲染路径（#358 / #360）**。补齐 `layerWantKey()` 与 `media-prep` 临时对象上的 `sceneAutoQuality` 字段，关闭后 `wantKey` 正确触发层重建并传递 `autoq=0`。
+- **新增：侧栏横屏/竖屏方向筛选（#304）**。宿主轻量解析图片文件头（PNG/JPEG/WebP/GIF）与 MP4 `tkhd` 宽高并写入清单，选择器新增「壁纸方向」（全部方向 / 横屏 / 竖屏，默认持久化，仅过滤可见列表、不影响轮播与正在播放壁纸）。
+- **新增：图片 URL 导入与 Bing 每日一图自动更新（#320）**。自定义壁纸支持仅 `http/https` 的 URL 导入（逐跳校验并防私网/回环/链路本地 SSRF，限制大小/时长/跳数并嗅探文件头）与内置 Bing 每日一图每日自动刷新；同时支持 WebP 上传。
+- **版本号 `1.4.3`（九包同号锁步）**：主包与 8 个子包版本统一升至 `1.4.3`，`package-lock.json` 同步重算，9 件套发布集自检通过。
+
+#### 此前合入的变更（原「未发布」条目归档至 `v1.4.3`）
 
 - **新增：设置「省电」一节加「启动时暂停」，每次重启 DSH 后壁纸先停在原处，点播放才动（#349）**。开关默认关，持久化在宿主设置里；启动链在 `loadPersisted()` 之后、库存建层之前把播放意图置为暂停（同时清 `videoPlaying`，视频卡的播放按钮不会谎报「播放中」），**播放态本身不落盘** —— 已选壁纸、其它设置与暂停帧都不变，关掉开关即恢复原行为。场景 / 网页壁纸走 `isEffectivelyPlaying()`，暂停后渲染页 `wp.pause()`，不会在后台空转。守卫：`verify-client` 补 ctx 接线与语义判据，`verify-fontset` 的启动链顺序、`verify-scene-live` 的 handler 表各补一条，均带负对照；sanitize 金标按 `host.startPaused` / `client.startPaused` 重录。
-
-### 未发布（气泡族选择器，2026-11-11）
-
 - **修复：0.2.2-rc.1 新增的「AI 提问框」在玻璃化后四角露出方形残留**：宿主新组件 `QuestionReplyView` 把圆角气泡（共享原语 `_bubble_<hash>`、`border-radius: var(--dsw-radius-xl)`、`padding: 10px 16px`）又包了一层 `Xxx_bubbleWidth` wrapper —— 该 wrapper **没有 border-radius**、盒子与气泡完全重合。插件的玻璃规则按 `[class*="_bubble"]` 认气泡族，于是把 wrapper 也刷上了镜面釉 + `backdrop-filter`（模糊/饱和/亮度/对比）+ 外阴影；wrapper 的方形绘制从气泡圆角外侧露出来，看起来就是「圆角文本框、方形的四角」，模糊与外阴影也变成方形光晕。修法：四条气泡族规则（思考档 fill / 对话玻璃组 / 气泡内代码块清底 / fallback 摘霜）的锚点从裸 `_bubble` 收紧成宿主 CSS Module 的**哈希形态** `[class*="_bubble_"]`（`_bubble_<hash>_<n>`）——它天然不命中 camelCase 的 `*_bubbleWidth`，而气泡本体（共享原语类）照常命中，`role="tooltip"` 的 Tooltip 豁免保留。守卫：`verify-readability` 的 F2dN 改用哈希形态，并新增 F2dN2（任何裸 `[class*="_bubble"]` 规则立即判红 + 「`*_bubbleWidth` 只被裸锚点命中」的负对照）；台账 `docs/CODE-STRUCTURE.md` §2.3 同步记下这次撞车。纯 CSS，刷新页面生效。
-
-### 未发布（壁纸库文件夹，#264，2026-11-10）
-
 - **壁纸库：选择器复刻 Wallpaper Engine 的「已安装」文件夹（#264）**：宿主读 `<WE 安装根>/config.json` 的 `general.browser.folders`（兼容旧布局 `general.folders`），清单多一个只读的 `folders` 树；选择器筛选行里多一个「文件夹」下拉（**仅当用户真的建过夹子时**才渲染，单选，与 v8 的多档筛选行同款 `<details>` 形态）。语义：只筛当前列表与网格、**不改轮播也不拦正在播的壁纸**；成员键（裸工坊 id / 本地项目路径）走与播放列表同一条路径解析，映射不上的成员丢弃；选中父夹按「含子夹的并集」过滤，夹子名后显示 `n/m`（m 含 WE 里记着但本机清单没有的残留）。`folderFilter` 随设置持久化，但**排除出「整机配置预设」**（夹子 id 由 Steam profile + 名称路径生成，只在本机成立）。新增 `test/verify-we-folders.mjs`（读取 / 映射 / 并集 / 设置键四段判据 + 负对照）。
-
-### 未发布（清理轮，2026-11-06）
 
 - **新增：文件预览浮层玻璃（编辑文件悬停时的改动预览）**。宿主 `[data-changes-hover-preview]` 的 HoverCard portal 读 `--dsw-alias-bg-base`（插件把页底设成透明的那个令牌）⇒ 预览全透明、文字压在正文上，顶部 / 底部边距尤其明显。修法：在「玻璃 UI」新增子项 **文件预览玻璃**（独立配置 / 玻璃透明度 / 雾化，默认跟随全局；独立配置默认 10% / 24px，可读优先），`glass.js` 写出 `--we-file-preview-alpha` / `-blur`；CSS 用固定黑白底（按面 alpha）+ 霜，不依赖 color-mix，保证一定有底，顶部叠一层更深的渐变（上深下浅：深色 55%→20%→0，浅色 25%→8%→0；画在外层卡片，避免被标题栏/代码行盖住），把 portal 作用域的 `--dsw-alias-bg-layer-1` 换成本层实底（外层 `.card.preview` 自己画的那层也实），并在预览根上钉 `border-radius` + `overflow: clip`（顺带修掉上圆下方的直角）。守卫：`verify-glass-surfaces` 登记新锚点、④ 组按注册表对账；token 契约重生成。
 - **修：改动文件卡片与变更请求面板的实色底也补上玻璃**。`[data-changed-files]`（`ui-deliverables` 的 ChangedFiles）的 60px 标题行读宿主 `--changes-fill`（深色 `--dsw-static-neutral-850`）实色，把整卡压成实心；现在把它并入对话卡玻璃：清掉 `--changes-fill` / `-hover` 让卡片自身吃 `--we-chat-glass-fill` 平铺底（与交付卡逐字同形，不加釉不加霜）。变更请求面板（`[data-forge-panel]` 与改动视图 `[data-forge-changes]`）的「无法读取 Git 信息」/ 分支条 / 登录提示读 `--forge-fill` 实色，压在右栏玻璃上是死底；只清这枚令牌，背景归右栏已有玻璃底板。守卫：`verify-glass-surfaces` 新增 ㉕ 组。
