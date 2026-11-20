@@ -323,9 +323,10 @@ function avatarMediaOf(row) {
  * 触发一次整页样式重算。实测 840 次调用累计 480ms，把整段历史加载拖慢到秒级，推迟到
  * `requestAnimationFrame` 也救不回来（rAF 里刚写完 DOM，同样失效）。
  *
- * 现在的顺序是「先便宜地判有没有文本，再只对**第一个**候选节点做一次可见性查询」：
+ * 现在的顺序是「先便宜地判有没有文本，再只对**可见的**候选做查询」：
  *   · 没有非空白文本 ⇒ 一次 `textContent` 判定即返回，零布局查询；
- *   · 有文本 ⇒ 只对第一个候选查一次，查完即回答。
+ *   · 有文本 ⇒ 从第一个候选开始查可见性：可见就停，被藏掉就继续看下一个。
+ *     不能因为第一个候选被藏就断定这行没有正文 —— 折叠的思考过程常排在正文前面。
  */
 function avatarHasVisibleText(row) {
   let root;
@@ -355,19 +356,22 @@ function avatarHasVisibleText(row) {
         if (p.closest && (p.closest('.' + AVATAR_NODE_CLASS) || p.closest('.' + AVATAR_MEDIA_CLASS)
           || p.closest('[aria-hidden="true"],button,[role="button"]'))) continue;
       } catch { /* ignore */ }
-      // 第一个非空白、且排除了装饰层/按钮的文本节点就是答案。
+      // 第一个**可见**的非空白文本节点才是答案：被藏起来的候选不算，但也别因为
+      // 第一个候选被藏就说整行没有正文（折叠的思考过程就排在正文前面）。
       if (typeof p.checkVisibility === 'function') {
         let vis = true;
         try { vis = p.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }); } catch { vis = true; }
-        return vis;
-      }
-      if (p.getClientRects) {
-        try { return p.getClientRects().length > 0; } catch { return true; }
+        if (!vis) continue;
+      } else if (p.getClientRects) {
+        let rects = 1;
+        try { rects = p.getClientRects().length; } catch { rects = 1; }
+        if (rects === 0) continue;
       }
       return true;
     }
-  } catch { /* fall through */ }
-  return true;
+    // 走完一圈都没有可见候选 ⇒ 确实没有可见正文。
+    return false;
+  } catch { return true; }
 }
 
 function avatarSyncNoText(row) {
