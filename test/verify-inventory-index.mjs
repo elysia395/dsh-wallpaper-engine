@@ -111,6 +111,8 @@ function makeBuilder() {
     customIdFromAbs: () => '',
     getUploadDir: () => UPLOADS,
     getWeAssetsDir: () => join(ISO, 'we-assets'),
+    adoptWeAssetsDir: () => {},
+    getWeAssetsSource: () => null,
     cacheBaseDir: () => CACHE,
   });
 }

@@ -486,7 +486,7 @@ const selection = {
   editingWeAssetsDir: false,
   weAssetsDirDraft: "",
   weAssetsError: "",
-  inventory: { installDir: null, uploadDir: null, cacheDir: null, weAssetsDir: null, weAssetsAvailable: false, sceneMediaBase: "", wallpapers: [], total: 0, portableCount: 0, playlists: [], error: null },
+  inventory: { installDir: null, uploadDir: null, cacheDir: null, weAssetsDir: null, weAssetsAvailable: false, weAssetsSource: null, sceneMediaBase: "", wallpapers: [], total: 0, portableCount: 0, playlists: [], error: null },
   loaded: false,
 };
 
@@ -945,6 +945,8 @@ async function loadInventory() {
       cacheDir: data.cacheDir || null,
       weAssetsDir: data.weAssetsDir || null,
       weAssetsAvailable: Boolean(data.weAssetsAvailable),
+      // 来源（#386）：'env' / 'config' / 'auto' / null —— 'auto' 表示从探测到的安装目录带出。
+      weAssetsSource: data.weAssetsSource || null,
       // 场景载荷的源（独立壁纸媒体源的 origin；空串 = 回落应用源，见 live-layer 的 liveRenderUrl）。
       sceneMediaBase: typeof data.sceneMediaBase === "string" ? data.sceneMediaBase : "",
       wallpapers: data.wallpapers || [],
@@ -980,6 +982,7 @@ async function loadInventory() {
         cacheDir: null,
         weAssetsDir: null,
         weAssetsAvailable: false,
+        weAssetsSource: null,
         sceneMediaBase: "",
         wallpapers: [],
         total: 0,

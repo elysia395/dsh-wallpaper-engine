@@ -78,6 +78,11 @@
         React.createElement("span", {
           className: "we-picker__uploads-path",
         }, sel.inventory.weAssetsDir || "—"),
+        // #386：自动从探测到的 WE 安装目录带出的值要标注，否则用户没填过却看到路径，
+        // 会误以为是插件写错 / 遗留配置。
+        sel.inventory.weAssetsSource === "auto" && React.createElement("span", {
+          className: "we-picker__hint",
+        }, weT("（自动探测）")),
         React.createElement("button", {
           className: "we-picker__btn", type: "button",
           onClick: onStartEditWeAssetsDir,
@@ -112,6 +117,12 @@
               : weT("未配置 · 场景实时渲染贴图走程序化复刻"))),
         React.createElement("span", { className: "we-picker__hint" },
           weT("指向 Wallpaper Engine 安装目录的 assets（或其拷贝）")),
+      ),
+      // #386：字体这一句必须可见 —— 只是贴图失真时用户以为是画质问题，文字变细体却容易被
+      // 当成"插件渲染有 bug"（issue 原话：更该提前说清的后置后果）。
+      !sel.inventory.weAssetsAvailable && React.createElement("div", { className: "we-picker__row" },
+        React.createElement("span", { className: "we-picker__hint" },
+          weT("未配置时场景壁纸的 WE 内置字体（fonts/ 等）也会回落系统字体，文字会变样")),
       ),
       sel.weAssetsError && React.createElement("div", { className: "we-picker__error" },
         sel.weAssetsError,

@@ -246,6 +246,9 @@ const videoSrc = read('src/video-layer.js');
       readPlaylistsP: async () => [], playlistItemId: () => null,
       readFoldersP: async () => [], foldersWithIds: () => [], weAssetsAvailable: () => false,
       getUploadDir: uploads.getUploadDir, getWeAssetsDir: () => '', cacheBaseDir: () => join(dir, 'cache'),
+      // #386：清单族新增的两个内核面（自动探测素材目录 / 值的来源）——本用例不关心探测，
+      // 给空桩即可；缺桩会让 assembleInventory 抛错、/inventory 退化成 500（判据会读不到 wallpapers）。
+      adoptWeAssetsDir: () => null, getWeAssetsSource: () => null,
       imageThumbPath: kit.imageThumbPath, // 仅为恢复旧行为的负对照提供原依赖。
     })();
     const activeStreams = new Set();
