@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import { spawn } from 'node:child_process';
+import { once } from 'node:events';
 import { readFileSync, writeFileSync, mkdirSync, existsSync, mkdtempSync } from 'node:fs';
 import { resolve, join } from 'node:path';
 import { tmpdir } from 'node:os';
@@ -18,14 +19,25 @@ const browser = process.env.WE_TEST_BROWSER || candidates.find(existsSync);
 assert.ok(browser, 'Set WE_TEST_BROWSER to a Chromium executable; this test does not skip.');
 const profile = mkdtempSync(join(tmpdir(), 'we-optics-'));
 const child = spawn(browser, ['--headless=new', '--no-first-run', '--no-sandbox', '--disable-dev-shm-usage', '--remote-debugging-pipe', '--user-data-dir=' + profile], { windowsHide: true, stdio: ['ignore', 'ignore', 'pipe', 'pipe', 'pipe'] });
-let counter = 0, sessionId, buffered = '', stderr = '';
+const [, , browserStderr, toBrowser, fromBrowser] = child.stdio;
+let counter = 0, sessionId, buffered = '', stderr = '', connectionError;
 const pending = new Map();
-child.stderr.on('data', data => { stderr = (stderr + data).slice(-2000); });
-const rejectAll = error => { for (const item of pending.values()) { clearTimeout(item.timer); item.reject(error); } pending.clear(); };
-child.on('error', rejectAll);
-child.on('exit', () => rejectAll(Error('Browser exited: ' + stderr)));
-child.stdio[3].on('error', rejectAll);
-child.stdio[4].on('data', data => {
+function failConnection(error) {
+  connectionError ??= error;
+  for (const item of pending.values()) {
+    clearTimeout(item.timer);
+    item.reject(connectionError);
+  }
+  pending.clear();
+}
+browserStderr.on('data', data => { stderr = (stderr + data).slice(-2000); });
+browserStderr.on('error', failConnection);
+child.on('error', failConnection);
+child.on('exit', () => failConnection(Error('Browser exited: ' + stderr)));
+toBrowser.on('error', failConnection);
+fromBrowser.on('error', failConnection);
+fromBrowser.on('end', () => failConnection(Error('Browser CDP pipe closed: ' + stderr)));
+fromBrowser.on('data', data => {
   buffered += data;
   let end;
   while ((end = buffered.indexOf('\0')) >= 0) {
@@ -37,10 +49,43 @@ child.stdio[4].on('data', data => {
   }
 });
 const send = (method, params = {}) => new Promise((resolveCall, reject) => {
+  if (connectionError) { reject(connectionError); return; }
   const id = ++counter, timer = setTimeout(() => { pending.delete(id); reject(Error('CDP timeout: ' + method + stderr)); }, 30000);
   pending.set(id, { resolve: resolveCall, reject, timer });
-  child.stdio[3].write(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }) + '\0');
+  toBrowser.write(JSON.stringify({ id, method, params, ...(sessionId ? { sessionId } : {}) }) + '\0');
 });
+
+async function waitForExit() {
+  if (child.exitCode !== null || child.signalCode !== null) return true;
+  try {
+    await once(child, 'exit', { signal: AbortSignal.timeout(3000) });
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+async function closeBrowser() {
+  try {
+    if (!child.pid || child.exitCode !== null || child.signalCode !== null) return;
+    // Browser.close is browser-scoped. Chromium may close the pipe without replying.
+    if (toBrowser.writable) {
+      toBrowser.write(JSON.stringify({ id: ++counter, method: 'Browser.close' }) + '\0');
+    }
+    if (await waitForExit()) return;
+    child.kill('SIGKILL');
+    if (!(await waitForExit())) throw Error('Browser did not exit after termination: ' + stderr);
+  } finally {
+    failConnection(Error('Test complete'));
+    // A descendant can keep inherited pipe handles open after the browser exits.
+    toBrowser.destroy();
+    fromBrowser.destroy();
+    browserStderr.destroy();
+    child.unref();
+  }
+}
+
+let result;
 try {
   const { targetId } = await send('Target.createTarget', { url: 'about:blank' });
   ({ sessionId } = await send('Target.attachToTarget', { targetId, flatten: true }));
@@ -48,7 +93,6 @@ try {
   // This fixture exercises pointer highlights, which honor the host's reduced-motion preference.
   await send('Emulation.setEmulatedMedia', { features: [{ name: 'prefers-reduced-motion', value: 'no-preference' }] });
   await send('Page.navigate', { url: pathToFileURL(join(out, 'fixture.html')).href });
-  let result;
   for (let i = 0; i < 150; i++) {
     await delay(100);
     const read = await send('Runtime.evaluate', { expression: 'document.getElementById("result")?.textContent', returnByValue: true });
@@ -57,6 +101,7 @@ try {
   }
   writeFileSync(join(out, 'results.json'), JSON.stringify(result || { ok: false, error: 'timeout' }, null, 2));
   assert.ok(result?.ok, result?.error || 'Browser fixture timed out');
-  console.log('PASS | glass optics browser: ' + result.assertions.length + ' assertions');
-  await send('Browser.close');
-} finally { child.kill(); rejectAll(Error('Test complete')); }
+} finally {
+  await closeBrowser();
+}
+console.log('PASS | glass optics browser: ' + result.assertions.length + ' assertions');
