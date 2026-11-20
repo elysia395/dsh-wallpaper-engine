@@ -964,27 +964,39 @@ async function loadInventory() {
     // 随后这次 render 才不会在"行已停用但玻璃还在"的中间态上画一帧。
     reclaimGlassResidue(data.components);
   } catch (err) {
-    next = {
-      installDir: null,
-      uploadDir: null,
-      cacheDir: null,
-      weAssetsDir: null,
-      weAssetsAvailable: false,
-      sceneMediaBase: "",
-      wallpapers: [],
-      total: 0,
-      portableCount: 0,
-      playlists: [],
-      folders: [],
-      error: String(err && err.message ? err.message : err),
-    };
+    // 失败分支**不许**用一份空库存顶掉手里那一份（#379）：请求失败只说明"这次没拿到新
+    // 数据"，不说明"用户的库空了"。这里一旦换成 `wallpapers: []`，后面任何一次
+    // revalidateSelection() 都会把当前选择判成"壁纸已被移除" → `setSetting("id", "")`
+    // 落盘 ⇒ 背景当场变黑、重启也回不来（用户视角就是数据丢失）。
+    // 所以：已经有一份（哪怕它自己也带着 error）就原样留着，只把本次的失败原因盖上去；
+    // 真正空库/首次加载失败才回落到空骨架 —— 那时没有任何东西可丢。
+    const message = String(err && err.message ? err.message : err);
+    const prev = selection.inventory;
+    next = prev && Array.isArray(prev.wallpapers) && prev.wallpapers.length
+      ? { ...prev, error: message }
+      : {
+        installDir: null,
+        uploadDir: null,
+        cacheDir: null,
+        weAssetsDir: null,
+        weAssetsAvailable: false,
+        sceneMediaBase: "",
+        wallpapers: [],
+        total: 0,
+        portableCount: 0,
+        playlists: [],
+        folders: [],
+        error: message,
+      };
   }
   if (seq !== inventorySeq) return; // superseded by a newer loadInventory()
   setTransient("inventory", next);
   setTransient("loading", false);
   setTransient("loaded", true);
   if (next.error) {
-    revalidateSelection();
+    // 失败时**不重算选择**（同上：#379 的落盘点就在 revalidateSelection 里）。校验"选中的
+    // id 还在不在库里"只在真拿到新库存时有意义 —— 拿不到库存时库里有什么我们并不知道。
+    // 背景保持现状，面板顶部照常显示 next.error。
     emit();
     return;
   }
