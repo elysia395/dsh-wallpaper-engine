@@ -26,7 +26,7 @@ const WE_I18N_EN_GLASS = {
   // ── 额外补雾化的选择器（上游 #200；控件在 packages/glass/src/glass-panel.js 外观·玻璃节）──
   "额外补雾化的选择器": "Extra frost targets",
   "给第三方插件自己的面板补上毛玻璃（它们自身没有模糊，全局「雾化」对它们无效）": "Give third-party plugin panels their own frost — they have no blur of their own, so the global Frost slider never reaches them",
-  "写这些面板的 CSS 选择器，逗号或换行分隔，最多 8 条、每条最多 120 字；超长的单条或超出 8 条的整条丢弃（不是截断，存活下来的前 8 条全量生效）。目标需已有定位和非 auto 层级，且 ::before 空闲；无法安全接管时保留原生。留空 = 关。": "CSS selectors for those panels, separated by commas or newlines — up to 8 entries, each at most 120 characters; an over-long entry or anything beyond the 8th is dropped whole (never truncated, and everything that survives applies). Targets need existing positioning, a non-auto z-index and an unused ::before. Unsafe targets keep their native appearance. Empty = off.",
+  "写这些面板的 CSS 选择器，逗号或换行分隔，最多 8 条、每条最多 120 字；超长的单条或超出 8 条的整条丢弃（不是截断，存活下来的前 8 条全量生效）。属性值可以带引号（如 [data-x=\"y\"]），引号必须成对且不能有反斜杠，否则该条作废。目标需已有定位和非 auto 层级，且 ::before 空闲；无法安全接管时保留原生。留空 = 关。": "CSS selectors for those panels, separated by commas or newlines — up to 8 entries, each at most 120 characters; an over-long entry or anything beyond the 8th is dropped whole (never truncated, and everything that survives applies). Attribute values may be quoted (e.g. [data-x=\"y\"]); quotes must pair up and backslashes are rejected, or that entry is dropped. Targets need existing positioning, a non-auto z-index and an unused ::before. Unsafe targets keep their native appearance. Empty = off.",
   "例如 .dsh-mobile-control__panel, .dim-jh-badgePop": "e.g. .dsh-mobile-control__panel, .dim-jh-badgePop",
   "用这一项自己的釉层参数覆盖全局": "Override the global glaze parameters with this item’s own",
   "整个设置窗口（含全部原生分区）": "The whole settings window (all native sections)",
