@@ -37,7 +37,7 @@ function renderGlassSurfaceControls(ctx) {
 
 function renderAppearanceGlassSection(ctx) {
   const {
-    onBlur, onGlassAlpha, onGlassMaskStrength, onGlassChildParam, onGlassColor, onGlassDarkSeparate, onExtraGlassSelectors, onGlassFidelity,
+    onBlur, onGlassAlpha, onGlassMaskStrength, onGlassChildParam, onGlassColor, onGlassDarkSeparate, onExtraGlassSelectors, onGlassFidelity, onGlassOptics,
     onToggleChildIndependent, childIndependentOn, sel, surface, onResetModule,
     onCapsuleBlur, onCapsuleColor,
     onLeftSidebarGlass, onTitlebarGlass, onSidebarAlpha, onSidebarBlur, onSidebarColor,
@@ -366,6 +366,10 @@ function renderAppearanceGlassSection(ctx) {
         (hex, live) => onGlassColor("light", hex, live), { key: "glass-color" }),
       !sidebarSurface && sel.glassDarkSeparate === true && swatchRow(weT("玻璃颜色 · 深色"), GLASS_COLOR_PRESETS, glassPair.dark,
         (hex, live) => onGlassColor("dark", hex, live), { key: "glass-color-dark" }),
+      !sidebarSurface && switchRow(weT("透镜折射与追光（实验）"), sel.glassOptics === true, onGlassOptics, {
+        key: "glass-optics",
+        tooltip: weT("增强圆角折射、薄边高光与鼠标追光；增加合成开销，卡顿时关闭。换行代码保留原生样式，减少动态效果时关闭追光。"),
+      }),
       SliderRow(weT("玻璃透明度"), 0, 100, 5, sel.glassAlpha, onGlassAlpha, "%"),
       // 「雾化」控制的只有**模糊半径**（雾面深度），饱和度是解耦的常量材料属性（见 GLASS_SATURATE）。
       // ⚠️ 覆盖面的实测口径（按规则头归面复算）：

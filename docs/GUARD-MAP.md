@@ -5,7 +5,7 @@
 > 口径：只统计守卫**代码**里真正碰到的模块（先剥注释），并区分"直接读源文件"与"隔着产物 `lib/client.js`"。
 > 写法：字面量路径 / `join(...)` 拼接 / 唯一 basename / 产物配方 / **前缀族读法** `scopeFiles|scopeText(<前缀>)` / **经共享族助手读**（`import { panelText } from './tools/src-scope.mjs'` + 真调用；族口径封在那个库里，见 `docs/CODE-STRUCTURE.md` §12「同时是守卫的库」）/ **真源定位读**（`locate('符号')` / `locateFile('文件名')`，`test/tools/source-locator.mjs`：符号唯一声明在哪就是读了哪个模块）。
 
-模块面 219 个 · 守卫 136 个
+模块面 220 个 · 守卫 138 个
 
 ## 守卫 → 模块
 
@@ -50,6 +50,8 @@
 | `verify-fontset.mjs` | `lib/index.js` `lib/settings-schema.js` `packages/fonts/lib/index.js` `packages/fonts/src/appearance-font-section.js` `packages/fonts/src/fontset-editor.js` `packages/glass/src/glass-panel.js` `packages/glass/src/glass-presets-panel.js` `packages/media-bridge/src/playback-rate-section.js` `packages/media-bridge/src/wallpaper-fit-section.js` `src/client.js` `src/extension-registry.js` `src/font/apply.js` `src/font/color-roles.js` `src/font/components.js` `src/font/typography.js` `src/fontset-store.js` `src/media-prep.js` `src/module-reset.js` `src/panel-tabs.js` `src/panel-tabs/advanced.js` `src/panel-tabs/appearance.js` `src/panel-tabs/effects.js` `src/panel-tabs/mascot.js` `src/picker-modal.js` `src/picker-props-panel.js` `src/section-head.js` `src/styles.js` `src/styles/base.js` `src/styles/chrome.js` `src/styles/ext.js` `src/styles/panel.js` `src/styles/quick.js` `src/styles/settings.js` `src/styles/shell.js` `src/system-fonts.js` `src/we-cond.js` | ✅ |
 | `verify-glass-compat.mjs` | `lib/settings-schema.js` `packages/glass/src/glass-panel.js` |  |
 | `verify-glass-compositing.mjs` | — | ✅ |
+| `verify-glass-optics-browser.mjs` | `packages/glass/src/glass-optics.js` |  |
+| `verify-glass-optics.mjs` | `lib/settings-schema.js` `packages/glass/src/glass-optics.js` |  |
 | `verify-glass-runtime-browser.mjs` | — | ✅ |
 | `verify-glass-runtime.mjs` | `packages/glass/src/client.js` `packages/glass/src/glass-surfaces.js` | ✅ |
 | `verify-glass-surfaces.mjs` | `lib/settings-schema.js` `packages/glass/src/glass-css.js` `packages/glass/src/glass-layer.js` `packages/glass/src/glass-panel.js` `packages/glass/src/glass-presets-panel.js` `packages/glass/src/glass-surfaces.js` `packages/glass/src/glass.js` `src/client.js` `src/effects.js` `src/live-layer.js` `src/live-layer/diag.js` `src/live-layer/gate.js` `src/live-layer/pointer.js` `src/live-layer/probe.js` `src/live-layer/underlay.js` `src/live-layer/watch.js` `src/panel-tabs.js` `src/panel-tabs/advanced.js` `src/panel-tabs/appearance.js` `src/panel-tabs/effects.js` `src/panel-tabs/mascot.js` `src/styles.js` `src/styles/base.js` `src/styles/chrome.js` `src/styles/ext.js` `src/styles/panel.js` `src/styles/quick.js` `src/styles/settings.js` `src/styles/shell.js` | ✅ |
@@ -194,7 +196,7 @@
 | `lib/routes/settings.js` | 2 | `verify-scene` `verify-settings-namespaces` |
 | `lib/scene-manifest.js` | 2 | `verify-scene-probe` `verify-scene` |
 | `lib/serve.js` | 3 | `verify-avatar-interval-and-rotation` `verify-logging` `verify-scene-live` |
-| `lib/settings-schema.js` | 19 | `verify-adapter` `verify-avatar-interval-and-rotation` `verify-client` `verify-component-fonts` `verify-contracts` `verify-extra-glass` `verify-fontset` `verify-glass-compat` `verify-glass-surfaces` `verify-module-layout` `verify-perf-metrics` `verify-picker-model` `verify-presets` `verify-scene-live` `verify-settings-namespaces` `verify-system-fonts` `verify-theme-follow` `verify-theme-layer` `verify-we-folders` |
+| `lib/settings-schema.js` | 20 | `verify-adapter` `verify-avatar-interval-and-rotation` `verify-client` `verify-component-fonts` `verify-contracts` `verify-extra-glass` `verify-fontset` `verify-glass-compat` `verify-glass-optics` `verify-glass-surfaces` `verify-module-layout` `verify-perf-metrics` `verify-picker-model` `verify-presets` `verify-scene-live` `verify-settings-namespaces` `verify-system-fonts` `verify-theme-follow` `verify-theme-layer` `verify-we-folders` |
 | `lib/shim-seed.js` | 2 | `verify-lazy-engine-dir` `verify-scene-live` |
 | `lib/startup-sweep.js` | 1 | `verify-scene-live` |
 | `lib/steam-discovery.js` | 2 | `verify-steam-discovery` `verify-we-install-probe` |
@@ -230,6 +232,7 @@
 | `packages/glass/src/glass-extra.js` | 1 | `verify-extra-glass` |
 | `packages/glass/src/glass-layer.js` | 4 | `verify-client` `verify-extra-glass` `verify-glass-surfaces` `verify-titlebar-anchor` |
 | `packages/glass/src/glass-market-sticky.js` | 1 | `verify-market-sticky` |
+| `packages/glass/src/glass-optics.js` | 2 | `verify-glass-optics-browser` `verify-glass-optics` |
 | `packages/glass/src/glass-panel.js` | 7 | `verify-client` `verify-extra-glass` `verify-fontset` `verify-glass-compat` `verify-glass-surfaces` `verify-presets` `verify-scene-live` |
 | `packages/glass/src/glass-presets-panel.js` | 6 | `verify-client` `verify-extra-glass` `verify-fontset` `verify-glass-surfaces` `verify-presets` `verify-scene-live` |
 | `packages/glass/src/glass-surfaces.js` | 3 | `verify-glass-runtime` `verify-glass-surfaces` `verify-pet-sidebar-glass` |

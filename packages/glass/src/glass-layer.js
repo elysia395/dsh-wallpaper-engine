@@ -290,6 +290,7 @@ function applyGlassLayer() {
   // 弹层改用与 @supports 回退完全相同的配方，并显式 backdrop-filter: none。
   if (detectSoftwareRender()) document.body.setAttribute("data-we-glass-fallback", "1");
   else document.body.removeAttribute("data-we-glass-fallback");
+  syncGlassOptics();
 }
 
 /**
@@ -297,6 +298,7 @@ function applyGlassLayer() {
  * 主包拆卸期对本层调用（attachLayer 的 unsubscribe 对面），卸载 / 禁用后 DOM 上不留玻璃态。
  */
 function disposeGlassLayer() {
+  disposeGlassOptics();
   const s = document.body.style;
   s.removeProperty("--we-blur");
   s.removeProperty("--we-saturate");
