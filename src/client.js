@@ -2166,6 +2166,12 @@ const OCCLUSION_RECHECK_MS = 3000;
 /** URL 源（Bing 每日一图）的清单复核周期：宿主每天换图，客户端半小时看一眼即可。 */
 const URL_SOURCE_POLL_MS = 30 * 60 * 1000;
 
+/** 壁纸库自动刷新周期（仅无 Steam 安装场景）：WallpaperMachine 等会自己把新壁纸下到库目录
+ *  （Library/<id>/），宿主每次 /inventory 都重新推导库根并看时间戳，所以客户端低频重拉
+ *  一次即可把它们带出来。Steam 侧大库（几百上千张）不该周期整库重建 —— 那里保持原
+ *  「手动刷新」语义不变。 */
+const INVENTORY_POLL_MS = 15 * 1000;
+
 // 「live 渲染页为什么没在出帧」的一句话原因：用户暂停与遮挡都算 —— 两者都会让
 // applyLiveControls 把渲染页 pause() 掉，而暂停中的渲染页 __wpStats.frame()
 // 恒为 {fps:0, running:false}（渲染器实现：paused → running:false）。
@@ -5919,6 +5925,21 @@ function apply(ctx) {
           loadInventory().catch(() => { /* 失败保持现状，下一次再试 */ });
         }, URL_SOURCE_POLL_MS);
       }
+      // 壁纸库自动刷新：WallpaperMachine 会自己把新壁纸下到库目录（Library/<id>/），
+      // Steam 侧大库（几百上千张）不该周期整库重建 —— 所以只在**没有 Steam 安装**
+      // （即 macOS 的 WallpaperMachine 等，库小）时才低频重拉；Steam 用户保持原
+      // 「手动刷新」语义不变。
+      let invWatch = 0;
+      if (typeof setInterval === "function") {
+        invWatch = setInterval(() => {
+          if (disposed) return;
+          if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+          if (selection.inventory.installDir) return;   // Steam 版已装：不周期重拉大库
+          if (selection.rotationTimer) return;   // 过场准备中：下一拍再说
+          loadInventory().catch(() => { /* 失败保持现状，下一次再试 */ });
+        }, INVENTORY_POLL_MS);
+      }
+
       // 持久化监听器: pagehide → 立即 flush 未落盘的设置; visibilitychange →
       // 页面回到前台时重试失败过的 PUT。注册在这里 (而不是模块作用域) 才能随
       // fiber 注销 — 否则每次插件重载/HMR 都会在同一页面再叠一对, 永不释放。
@@ -5973,7 +5994,7 @@ function apply(ctx) {
         for (const [, unsubLayer] of layerUnsubs) unsubLayer();
         layerUnsubs.clear();
         if (ocWatch) { try { clearInterval(ocWatch); } catch { /* ignore */ } ocWatch = 0; }
-        if (urlWatch) { try { clearInterval(urlWatch); } catch { /* ignore */ } urlWatch = 0; }
+        if (urlWatch) { try { clearInterval(urlWatch); } catch { /* ignore */ } urlWatch = 0; } if (invWatch) { try { clearInterval(invWatch); } catch { /* ignore */ } invWatch = 0; }
         if (typeof window !== "undefined" && typeof window.removeEventListener === "function") {
           for (const t of ocListeners) window.removeEventListener(t, onOcclusionChange);
           if (pageShowBound) window.removeEventListener("pageshow", onBackVisible);
