@@ -5994,7 +5994,8 @@ function apply(ctx) {
         for (const [, unsubLayer] of layerUnsubs) unsubLayer();
         layerUnsubs.clear();
         if (ocWatch) { try { clearInterval(ocWatch); } catch { /* ignore */ } ocWatch = 0; }
-        if (urlWatch) { try { clearInterval(urlWatch); } catch { /* ignore */ } urlWatch = 0; } if (invWatch) { try { clearInterval(invWatch); } catch { /* ignore */ } invWatch = 0; }
+        if (urlWatch) { try { clearInterval(urlWatch); } catch { /* ignore */ } urlWatch = 0; }
+        if (invWatch) { try { clearInterval(invWatch); } catch { /* ignore */ } invWatch = 0; }
         if (typeof window !== "undefined" && typeof window.removeEventListener === "function") {
           for (const t of ocListeners) window.removeEventListener(t, onOcclusionChange);
           if (pageShowBound) window.removeEventListener("pageshow", onBackVisible);
