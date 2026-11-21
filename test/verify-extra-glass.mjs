@@ -174,6 +174,40 @@ function selectorList(css) {
     css2.split('::before {').every((part, i) => i === 0 || part.split('}').length === 2));
 }
 
+// ── ②c 引号属性选择器（#381）───────────────────────────────────────────────────
+// `[data-sidebar-right-panel="fullscreen"]` 是真实面板的锚点形状；引号多一层危险：
+// **落单的引号**会让整条规则（连同逗号列表里别的选择器）一起非法 —— 整组静默失效，
+// 与 #381 里"整条被丢掉、没提示"是同一种坏法。口径：引号只能开在 `[ ]` 内、同字符
+// 闭合、内部不许有反斜杠/花括号/分号 ⇒ 否则**整条作废**（不替用户补引号或删引号）。
+{
+  const { mod } = await fresh();
+  const san = schema.sanitizeExtraGlassSelectors;
+  const quoted = '[data-sidebar-right-panel="fullscreen"]';
+  const css = mod.weExtraGlassCss({ extraGlassSelectors: quoted });
+  check('带引号的属性选择器保留（4 档规则，且选择器逐字进 CSS）',
+    (css.match(/::before \{/g) || []).length === 4
+      && css.includes(quoted + ':where([data-we-surface-runtime="extra"])::before'),
+    'n=' + (css.match(/::before \{/g) || []).length + ' · 含选择器=' + css.includes(quoted));
+  const okCases = ['[data-dsh-panel="right"]', "[data-dsh-panel='right']", "[title=\"it's fine\"]"];
+  const okOut = okCases.map((s) => san(s));
+  check('成对的单 / 双引号都保留（内含对方引号也当字面量）',
+    okOut.every((got, i) => got === okCases[i]), JSON.stringify(okOut));
+  const badCases = ['[a="x]', "[a='x\"]", '[a="x\\"]', '.a"b', '[a="x;"]', '[a="x}y"]',
+    '[a="x{y"]', '[a=', '[a="x"]"'];
+  const badOut = badCases.filter((s) => san(s) !== '');
+  check('落单 / 错配 / 反斜杠 / 引号在方括号外 / 方括号没配对 ⇒ 整条作废（一条都不补不删）',
+    badOut.length === 0, JSON.stringify(badOut));
+  const smuggle = mod.weExtraGlassCss({ extraGlassSelectors: '[a="x"], body { display: none }' });
+  check('引号不会变成注入通道：坏条被丢、好条只生成它自己的规则',
+    !smuggle.includes('display') && smuggle.includes('[a="x"]:where([data-we-surface-runtime="extra"])::before'));
+  // 负对照（证明这条判据有牙，不是空转）：旧白名单是"整串正则白名单"，字符类里没有 ' 和 "
+  // ⇒ 同一条真实锚点在 #381 之前必被判 false、整条被静默丢弃。改完后必须为 true。
+  const OLD_RE = new RegExp('^[A-Za-z0-9\\s.#_:*>()\\[\\]=+~|\\-]{1,120}$');
+  check('负对照：旧白名单对带引号的真实锚点判 false（#381 复现），新判据判 true',
+    !OLD_RE.test(quoted) && san(quoted) === quoted,
+    '旧=' + OLD_RE.test(quoted) + ' · 新=' + JSON.stringify(san(quoted)));
+}
+
 // ── ②b 总量上限（P1 复审：#204 原实现 slice(0,400) 会切出半截选择器）──────────────
 // 合法输入的极限是 8 条 × 单条 120 字 = 974 B（含 7 个 ", "）。旧版把总量上限写死 400 并对
 // 结果 `.slice(0, 400)` ⇒ 8 条满长输入只活下来 4 条、第 4 条被切成半截（能匹配到**别的**
