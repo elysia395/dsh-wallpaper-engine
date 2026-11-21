@@ -2867,6 +2867,24 @@ console.log('\n⑲ 标记值跟走 resolver（t9-001 运行级断言：真跑 we
   const synthPlain = { body: 'background-color: transparent;' };
   check('negative control: 透明底的合成规则会被 ㉖a 判红', !/background-color:\s*rgb\(/.test(synthPlain.body));
 
+  // ── ㉗ HoverCard 玻璃只认唯一的直接子 div ───────────────────────────────────
+  // 回归：> div 会把宿主 TurnUsagePanel（title / titleRule 两个 div）和第三方弹层
+  // （标题 / 摘要 / 影响清单等多个 div）的每个直接子 div 都涂上 HoverCard 的底、
+  // 渐变与霜，看起来是多条不同色的色带。真实 HoverCard 的外层只有一张卡片 div。
+  console.log('\n㉗ 悬停卡玻璃只涂唯一的直接子 div');
+  const hovercardRules = rulesOf(CSS).filter((r) => /data-we-glass-floaters/.test(r.header)
+    && /\[role="dialog"\]/.test(r.header)
+    && (/--we-hovercard-alpha/.test(r.body) || /data-we-glass-fallback/.test(r.header)));
+  check('㉗a 正常档与无霜回退档各一条', hovercardRules.length === 2,
+    hovercardRules.length + ' 条');
+  check('㉗b 两条都只认唯一的直接子 div（> div:only-of-type）',
+    hovercardRules.length === 2
+    && hovercardRules.every((r) => r.header.endsWith('> div:only-of-type')),
+    hovercardRules.map((r) => r.header.slice(-28)).join(' | '));
+  const strippedHovercard = hovercardRules.map((r) => r.header.replace(':only-of-type', ''));
+  check('negative control: 摘掉 :only-of-type 会被 ㉗b 判红',
+    !strippedHovercard.every((h) => h.endsWith('> div:only-of-type')));
+
 }
 
 console.log('');

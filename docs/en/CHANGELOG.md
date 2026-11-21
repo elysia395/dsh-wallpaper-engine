@@ -16,6 +16,10 @@
 >
 > Counts such as `test/verify-scene-live.mjs` `(466)` record the **total at the moment that entry was written**, not the current total (later entries push it up — it is 502 now); they are kept verbatim so each entry still matches its own commit.
 
+### Unreleased (hover-card single child, 2026-11-21)
+
+- **Fix: hover-card glass no longer paints every direct child div of multi-child dialogs.** `[role="dialog"] > div` is meant to hit only the host HoverCard's single card div; with a bare `> div`, the host turn-usage panel (`title` / `titleRule` are both divs) and third-party popovers (title / summary / impact, etc.) each got a fill, gradient and frost, producing multiple differently coloured bands. The selector is now `> div:only-of-type` in both the normal and no-blur fallback rules; `verify-glass-surfaces` gains group ㉗ (both rules + a negative control). CSS-only — refresh to apply.
+
 ### v1.4.3 (2026-11-19)
 
 - **New: host hover-card glass (`hoverCard`) and market sticky-bar card fade (`marketStickyClip`) (#377)**.
