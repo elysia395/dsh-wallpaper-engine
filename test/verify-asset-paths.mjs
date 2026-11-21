@@ -394,13 +394,20 @@ const M_MASCOT_ANY = [[
 ]];
 const M_PROBE_LOOSE = [[
   'weAssets',
-  `    try { return statSync(join(WE_ASSETS_DIR, 'materials')).isDirectory(); } catch { return false; }`,
-  `    try { statSync(join(WE_ASSETS_DIR, 'materials')); return true; } catch { return false; }`,
+  `    try { return statSync(join(dir, 'materials')).isDirectory(); } catch { return false; }`,
+  `    try { statSync(join(dir, 'materials')); return true; } catch { return false; }`,
 ]];
 const M_WE_ENV_IGNORED = [[
   'weAssets',
-  `    if (process.env.DSH_WE_ASSETS_DIR && process.env.DSH_WE_ASSETS_DIR.trim()) {`,
-  `    if (false) {`,
+  `    const env = envWeAssetsDir();`,
+  `    const env = null;`,
+]];
+// #386：自动带出的判据就是「assets 下真有 materials/」—— 去掉探测门，随便一个安装目录都会被当成
+// 素材目录（渲染端随后按名取贴图 → 静默空树）。
+const M_ADOPT_NO_PROBE = [[
+  'weAssets',
+  `    if (!hasMaterials(candidate)) return WE_ASSETS_DIR;`,
+  `    if (false) return WE_ASSETS_DIR;`,
 ]];
 const M_SET_NO_DELETE = [[
   'weAssets',
@@ -417,7 +424,7 @@ const M_READDIR_SYNC = [[
   `import { readdir } from 'node:fs/promises';`,
   `import { readdir } from 'node:fs';`,
 ]];
-const M_CACHE_NO_CLEAR = [['weAssets', `      weAssetsIndexCache.clear();\n`, ``]];
+const M_CACHE_NO_CLEAR = [['weAssets', `      WE_ASSETS_DIR = dir;\n      weAssetsIndexCache.clear();\n`, `      WE_ASSETS_DIR = dir;\n`]];
 const M_LIST_UNSORTED = [['weAssets', `    names.sort();\n`, ``]];
 
 // ───────────────────────── 判据 ─────────────────────────
@@ -441,6 +448,52 @@ await pair('E1 resolveWeAssetsDir：env（normalize，不剥尾斜杠）> config
 await pair('E2 探测门：未配置 / 无 materials / materials 是文件 ⇒ false，真目录 ⇒ true', judgeWeProbe, 'probe-loose', M_PROBE_LOOSE);
 await pair('E3 setWeAssetsDir：落 config、传 null 删字段、get 立刻反映', judgeWeSetter, 'set-no-delete', M_SET_NO_DELETE);
 await pair('E4 setWeAssetsDir 必须走串行队列（20 路并发全部入队、末值胜出）', judgeWeSetter, 'set-no-queue', M_SET_NO_QUEUE);
+
+// ───────────────────── E5. #386 自动带出：installDir/assets（显式来源优先、不落盘、可失效） ─────────────────────
+async function judgeWeAdopt(make) {
+  const dirRef = { value: freshDir('e-adopt') };
+  const mk = (cfg) => makeKit({ dirRef, cfg, factory: make.factory }).kit;
+  const weRoot = freshDir('e-adopt-we');
+  const assets = join(weRoot, 'assets');
+  mkdirSync(join(assets, 'materials'), { recursive: true });
+  const bareRoot = freshDir('e-adopt-bare'); // 有安装目录、但没有 assets/materials
+  const out = await withEnv('DSH_WE_ASSETS_DIR', undefined, async () => {
+    const auto = mk({});
+    const gotAuto = auto.adoptWeAssetsDir(weRoot);
+    const srcAuto = auto.getWeAssetsSource();
+    const availAuto = auto.weAssetsAvailable();
+    const bare = mk({});
+    const gotBare = bare.adoptWeAssetsDir(bareRoot);
+    const none = mk({});
+    const gotNoInstall = none.adoptWeAssetsDir(null);
+    const explicit = mk({ weAssetsDir: assets });
+    const gotExplicit = explicit.adoptWeAssetsDir(bareRoot);
+    const srcExplicit = explicit.getWeAssetsSource();
+    // 用户清除自己的手动值 ⇒ 下一次扫描可以重新自动带出（清除不等于"永远不用官方素材"）。
+    const cleared = mk({});
+    cleared.adoptWeAssetsDir(weRoot);
+    await cleared.setWeAssetsDir(null);
+    const srcCleared = cleared.getWeAssetsSource();
+    const afterClear = cleared.adoptWeAssetsDir(weRoot);
+    // 自动值失效：安装目录被挪走 / assets 被删 ⇒ 不能继续拿一棵空树冒充"已配置"。
+    const stale = mk({});
+    stale.adoptWeAssetsDir(weRoot);
+    rmSync(join(assets, 'materials'), { recursive: true, force: true });
+    const gotStale = stale.adoptWeAssetsDir(weRoot);
+    const srcStale = stale.getWeAssetsSource();
+    return { gotAuto, srcAuto, availAuto, gotBare, gotNoInstall, gotExplicit, srcExplicit, srcCleared, afterClear, gotStale, srcStale };
+  });
+  const ok = out.gotAuto === assets && out.srcAuto === 'auto' && out.availAuto === true
+    && out.gotBare === null && out.gotNoInstall === null
+    && out.gotExplicit === assets && out.srcExplicit === 'config'
+    && out.srcCleared === null && out.afterClear === assets
+    && out.gotStale === null && out.srcStale === null;
+  return {
+    ok,
+    detail: `安装目录⇒${out.gotAuto}（来源 ${out.srcAuto}，可用 ${out.availAuto}） · 无 assets/materials⇒${out.gotBare} · 没探测到⇒${out.gotNoInstall} · 显式 config 优先⇒${out.gotExplicit}（来源 ${out.srcExplicit}） · 清除后⇒来源 ${out.srcCleared} 再自动⇒${out.afterClear} · materials 被删后⇒${out.gotStale}（来源 ${out.srcStale}）`,
+  };
+}
+await pair('E5 探测到安装目录就自动带出 <installDir>/assets（显式优先、清除后回归、失效即退）', judgeWeAdopt, 'adopt-no-probe', M_ADOPT_NO_PROBE);
 
 section('F. 清单：materials/**/*.tex ⇒ posix 相对名去扩展名 + 排序 + 60s 缓存 + setter 清表');
 await pair('F1 扫描结果与排序（读目录用异步 API；非 .tex 忽略）', judgeWeAssetList, 'readdir-import', M_READDIR_SYNC);
