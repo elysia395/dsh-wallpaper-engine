@@ -428,10 +428,10 @@ const CSS_EXT = `
     box-shadow: 0 0 0 9999px rgba(0, 0, 0, 0.35);
   }
   .we-crop__actions { display: flex; gap: 8px; align-self: stretch; justify-content: flex-end; }
-  /* ⚠️ 这里曾有一条**未限定作用域**的 .we-picker__btn--primary 覆盖（PR #202 随裁切弹窗
-     加入）：本意应只服务弹窗按钮，实际把**全局**主按钮的文字色改写成 accent，与实心 accent
-     底逐像素同色 ⇒ v1.3.2 之后所有主按钮（选择壁纸 / 关于页 Star / 确认并导入…）文字隐形。
-     已移除 —— 裁切弹窗的「确认并导入」用标准主按钮款式（styles-panel.js 那条）。
+  /* ⚠️ **不要写未限定作用域的 .we-picker__btn--primary 覆盖**：本意应只服务弹窗按钮，
+     实际会把**全局**主按钮的文字色改写成 accent，与实心 accent 底逐像素同色 ⇒
+     所有主按钮（选择壁纸 / 关于页 Star / 确认并导入…）文字隐形。裁切弹窗的
+     「确认并导入」用标准主按钮款式（styles-panel.js 那条）。
      今后若确需按钮变体：必须带作用域前缀（如 .we-crop__actions 后代），且 background /
      color / border 三类属性写全 —— 只改 color/border 会留下"同色隐形"这种半截状态。 */
   /* 自定义立绘那一格（「系统」页签 · 聊天吉祥物）：与形态卡片同一个画框口径 ——

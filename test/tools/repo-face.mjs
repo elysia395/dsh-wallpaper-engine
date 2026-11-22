@@ -44,11 +44,13 @@ export const PLAIN_SKIP_DIRS = new Set([
  *   `.integration-notes`（`/.integration-notes/`：本地移交/取证笔记，**嵌着另一个 worktree**）、
  *   `_refs`（`/_refs/`）、`scripts/out|reverse|core|anim|lwe-ref`（`/scripts/out/` 等）、
  *   `.zcode` / `.v2c` / `.video_agent`（ZCode 本地文件）、`.git.bak-broken`、`.playwright-mcp`。
- *   `.artifacts`（`/.artifacts/`：隔离浏览器 profile、解包的上游原件与预览工具，均不是仓库消费者）。
+ *   `.artifacts`（`/.artifacts/`：隔离浏览器 profile、解包的上游原件与预览工具，均不是仓库消费者）、
+ *   `.review`（`/.review/`：本地 PR 评审临时区，装着 worktree 副本、浏览器 profile 与一次性评审脚本）。
  * ⚠️ 只有**确实可能装着代码副本**的才进这张表（文档/图片类目录本来就不在代码扩展名内）。
  */
 export const DEFAULT_SKIP = [
   '.integration-notes', '_refs', '.zcode', '.v2c', '.video_agent', '.git.bak-broken', '.playwright-mcp', '.artifacts',
+  '.review',
   'scripts/out', 'scripts/reverse', 'scripts/core', 'scripts/anim', 'scripts/lwe-ref',
 ];
 

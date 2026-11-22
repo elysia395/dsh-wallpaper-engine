@@ -59,7 +59,7 @@
 
 ## 浮层操控面板（`Ctrl+Shift+D`）
 
-约 50 个参数、13 个分组、缓动三选一，按四条逻辑各存一份覆盖；按钮：▶ 运行 / ■ 停止 / 重置当前逻辑 / 导出 JSON / 导入 JSON；可拖动、`Esc` 关闭；气泡时间节点可按动作开始/结束锚点 + 毫秒偏移编辑。参数清单唯一真源见 [`src/pet-link/panel-params.js`](src/pet-link/panel-params.js)，逐组参数说明见 [`docs/2026-10-30-M6-panel-params.md`](../../../docs/2026-10-30-M6-panel-params.md)。
+约 50 个参数、13 个分组、缓动三选一，按四条逻辑各存一份覆盖；按钮：▶ 运行 / ■ 停止 / 重置当前逻辑 / 导出 JSON / 导入 JSON；可拖动、`Esc` 关闭；气泡时间节点可按动作开始/结束锚点 + 毫秒偏移编辑。参数清单唯一真源见 [`src/pet-link/panel-params.js`](src/pet-link/panel-params.js)（分组、顺序、步长与逐组说明都在该文件头注释里）。
 
 **持久化口径（相对初始计划 §3.6 的一处降级，明确如实说明）**：参数覆盖层持久化在 WE 侧 `localStorage` 命名空间键 `dsh-we-pet-link-panel-v1`（记录 `{version, logic, target, tuning, bubbleTiming}`），刷新 / 重开页面可回读。
 

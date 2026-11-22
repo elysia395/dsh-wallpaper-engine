@@ -50,7 +50,7 @@
 任何**带版本号 / issue 号 / 性能数字 / 排障步骤 / 实现细节**的内容一律进上表或 `CHANGELOG.md`
 （起因：首页曾有一批 `localStorage` 陈述在某次持久化改造后**集体失真** —— 这正是 ADR-0017"文档不复制会漂的事实"的由来）。
 
-## 规范与参考（常青，中文）
+## 规范与参考（中文；维护者向，可能滞后，以代码为准）
 
 | 文档 | 内容 |
 |---|---|
@@ -61,6 +61,9 @@
 | [TOKEN-CONTRACT.md](./TOKEN-CONTRACT.md) | **`--dsw-*` 令牌契约的生成索引**（我们改写了哪些宿主设计令牌、各挂什么门控、无门控白名单）—— 由 `test/tools/token-contract.mjs` 重算并逐字节比对（`test/verify-token-contract.mjs` 守着，白名单封闭；生成物，不手改）—— 共存耦合面的账本，见 [`HOW-IT-WORKS.md`](./HOW-IT-WORKS.md) 的「共存」节 |
 
 > **上表的英文镜像已撤除**（维护者向文档只留中文，理由见 §语言结构；`ROUTE-INDEX.md` / `GUARD-MAP.md` / `TOKEN-CONTRACT.md` 是生成物，同样只出中文）；用户向文档仍中英成对。
+>
+> 本表里 `CODE-STRUCTURE.md` / `DEV-GUIDE.md` **不属于 [ADR-0017](./adr/0017-code-is-truth-docs-reference-source.md) D2 的三类**：它们是维护者规范，允许保留但**不承诺与代码同步**；
+> 与代码不符时以代码为准（D4），发现大段已是源码副本就按 D5 删减，而不是补维护。
 
 ## 决策记录（`adr/`）
 

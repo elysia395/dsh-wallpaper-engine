@@ -528,8 +528,10 @@ console.log('\n⑦ 接线：服务句柄 / 切换评估 / 面板开关 / 内联�
     prepSrc.includes('themeFollowOnWallpaper(selection, { fromSkinRestore: !!(opts && opts.fromSkinRestore) });'));
   check('清空/被过滤两条早退分支也把配色清掉（不留上一张的残值）',
     prepSrc.split('selection.schemeColor = null;').length - 1 >= 2);
-  check('面板开关有文案说明规则与让位条件（关 = 不自动跟随）',
-    tabsSrc.includes('主题随壁纸') && tabsSrc.includes('不按壁纸自动改深浅主题'));
+  // 开关的**措辞**不在这里钉（键 ⇄ 英文词表由 `test/verify-i18n.mjs` 对账，ADR-0007 第 4 问）；
+// 本条只钉「面板上确有一个绑到 selection.themeFollow 的开关、且回调是 themeFollow 那条」。
+check('面板开关绑定到 selection.themeFollow（关 = 不自动跟随）',
+    tabsSrc.includes('sel.themeFollow === true,') && tabsSrc.includes('onToggleThemeFollow(e.target.checked)'));
   check('模块已登记进内联清单（否则永远不进产物）',
     buildSrc.includes("file: 'src/theme-follow.js'"));
   check('产物里确实带上了判定常量（构建期内联生效）',

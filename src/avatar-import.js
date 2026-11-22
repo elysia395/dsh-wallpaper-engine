@@ -69,8 +69,8 @@ function readU32LE(b, at) {
 }
 /**
  * ── AVIF / ISOBMFF（issue #185 的 P1 收口）─────────────────────────────────────
- * `IMAGE_RASTER_ACCEPT` 里列着 `image/avif`，但探针**原先一个分支都没写**：AVIF 的宽高不在
- * 文件开头，而在 `ftyp` 之后的盒树 `meta → iprp → ipco → ispe` 里 ⇒ 旧实现恒返 null，
+ * `IMAGE_RASTER_ACCEPT` 里列着 `image/avif`，而 AVIF 的宽高不在文件开头，在 `ftyp` 之后的
+ * 盒树 `meta → iprp → ipco → ispe` 里 ⇒ **探针必须走这条盒树**，否则恒返 null，
  * `avatarImportLimit` 只剩体积闸 —— 一个 3 MiB 的 20000×20000 AVIF 能直接过闸，直到
  * `createImageBitmap` 才炸出约 1.6 GB 的像素内存。"先拒再解"的全部价值在这条格式上归零。
  *

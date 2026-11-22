@@ -366,7 +366,7 @@ const CSS_BASE = `
         状态标记），它们一起跟色才自洽 —— 面板里的标签如实写作「页签 / 焦点环」。
      ⚠️ 锚点一律取宿主自带的 data-* 属性；本仓纪律：**不猜 CSS 模块哈希**。
      ⚠️ 门控：本组映射挂 **data-we-ui-color**（主包 effects.js 恒挂；ADR-0016 第三刀勘误 ——
-        历史上借用玻璃的 data-we-glass-page 门，玻璃运行时出户后停玻璃行会连坐本功能）。
+        借用玻璃的 data-we-glass-page 门会让停玻璃行连坐本功能）。
      ⚠️ 本段在**模板字符串**里：注释内**不许出现反引号**（会把 CSS 字符串提前终止，
         build-client 报 "postfix operation" 一类的怪错）。示范令牌名时不加引号。 */
   body[data-we-ui-color] {
