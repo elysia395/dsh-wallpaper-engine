@@ -26,16 +26,17 @@
  *      共享内核必须显式改它，于是"多一个共享模块"永远会留下一次可见的改动。
  *      不变量：登记表中非 `src/` 的项 == 白名单；白名单每一项都真的在册（不许空转）。
  *
- *   ⑥ `src/` 子目录的**准入条件（门槛①）** —— 成员数达 `SRC_DIR_MIN_MEMBERS`。
+ *   ⑥ `src/` 子目录的**准入条件** —— 成员数达 `SRC_DIR_MIN_MEMBERS`。
  *      为什么：`src/` 模块之间没有 `import`、构建期被拍平 ⇒ 目录在这一侧**不承载机器含义**，
  *      唯一用处是"让人一眼看出这几块是一伙的"。1–2 个文件的目录做不到这件事（只多一层路径
  *      与一次搬动）。
- *      门槛① 写在 CODE-STRUCTURE §4 第 1 条；样本只有 `src/font/`（其权威文档是 CODE-STRUCTURE §3.3）。
+ *      写在 CODE-STRUCTURE §4 第 1 条；样本只有 `src/font/`（其权威文档是 CODE-STRUCTURE §3.3）。
  *      不变量：`thin == 0`。
- *      ⚠️ **门槛②（"被一份常青文档的一级标题点名"）已撤除**，不在本守卫内 —— 它守的是标题
- *      措辞，且空壳文档（标题对、正文空）照样通过 ⇒ 守形式不守实质。门槛② 改由约定承担，
- *      撤除理由见 `docs/adr/0007-machine-checks-target-code-not-prose.md`（正文 §⑥ 同记）。
- *      本行曾误写"不变量 `thin == 0` 且 `unnamed == 0`"，与正文自相矛盾 —— 已更正。
+ *      本节**只有这一条判据**。另外两条曾挂在这里的判据都已按 ADR-0007 撤除，改由约定承担：
+ *      · "子目录被一份常青文档的一级标题点名" —— 守标题措辞，空壳文档照样通过（守形式不守实质）；
+ *      · "`src/` 顶层 `.js` 数量上限"（`SRC_TOP_LEVEL_MAX`，软档）—— 它每次新增顶层模块都要
+ *        回填数字并写理由，失败动作是"改数字"，不是可机械执行的动作。撤除后本节只把顶层计数
+ *        **现算打印**出来，数字既不进代码也不进文档。
  *
  * 每条规则都配**负对照**：把合成输入喂给**同一个判据函数**，断言它给出"坏"的裁决。
  * 只断言"今天干净"是不够的 —— 解析器一旦静默返回空表，正断言会恒绿。
@@ -89,15 +90,6 @@ function findStaleWhitelistEntries(registeredFiles, whitelist) {
  * 判定逻辑在 `thinSrcDirs()`，正/负对照都走同一个函数。
  */
 const SRC_DIR_MIN_MEMBERS = 3;
-
-/**
- * 规则 ⑥ 的棘轮：`src/` 顶层 `.js` 数量上限（**只许缩小**）。
- *
- * 为什么需要：目录在浏览器半边**不承载机器含义**（§4 第 1 条），所以"拍平"永远是零成本的
- * 合法选择 —— 没人拦时，`src/styles/base.js` 很容易被某个 PR 顺手搬回顶层，几轮之后族又散开。
- * 这个数字不是目标值，是**当前事实**：新增顶层模块要么进已有族目录，要么先论证并显式改这里。
- */
-const SRC_TOP_LEVEL_MAX = 33;
 
 /**
  * 规则 ⑤ 的判据 (a)：成员数不足 `SRC_DIR_MIN_MEMBERS` 的 `src/` 子目录。
@@ -581,7 +573,7 @@ console.log('');
 //    它守的是"某份文档的标题怎么写、放在哪里"，而且**一份空壳文档（标题对、正文空）照样
 //    通过** ⇒ 守的是形式而非实质。"建 `src/` 子目录时同时建一份以它为标题的常青文档"
 //    改由约定承担（与 `docs/README.md` §写作纪律 3「能写在代码旁的规则不单写文档」同源）。
-console.log('⑥ `src/` 子目录成员数 ≥3 + 顶层文件数棘轮');
+console.log('⑥ `src/` 子目录成员数 ≥3（顶层计数只打印，无上限）');
 {
   const srcDirs = readdirSync(join(ROOT, 'src'), { withFileTypes: true })
     .filter((e) => e.isDirectory()).map((e) => e.name).sort();
@@ -597,12 +589,13 @@ console.log('⑥ `src/` 子目录成员数 ≥3 + 顶层文件数棘轮');
     thin.length ? '不足：' + thin.map((d) => d + '(' + counts[d] + ')').join(' ')
       : srcDirs.map((d) => d + '(' + counts[d] + ')').join(' '));
 
-  // 负对照：把合成输入喂给**同一个**判据函数，断言它给出"坏"的裁决。
+  // 顶层计数**只打印、不设上限**（原 `SRC_TOP_LEVEL_MAX` 已按 ADR-0007 撤除，见文件头 ⑥）：
+  // 现算的计数让人看到"族有没有被摊开"，但不产生"必须回填数字"的动作，也没有可漂的常量。
   const topLevel = readdirSync(join(ROOT, 'src'), { withFileTypes: true })
-    .filter((e) => e.isFile() && e.name.endsWith('.js')).map((e) => e.name);
-  check('`src/` 顶层 .js 数量不超过棘轮（上限 ' + SRC_TOP_LEVEL_MAX + '，只许缩小；新增模块先进族目录）',
-    topLevel.length <= SRC_TOP_LEVEL_MAX, topLevel.length + ' 个（上限 ' + SRC_TOP_LEVEL_MAX + '）');
+    .filter((e) => e.isFile() && e.name.endsWith('.js')).length;
+  console.log('  · 顶层 .js 计数（现算，无上限）— ' + topLevel + ' 个顶层模块 / ' + srcDirs.length + ' 个族目录');
 
+  // 负对照：把合成输入喂给**同一个**判据函数，断言它给出"坏"的裁决。
   check('负对照：成员 2 个的合成目录会被判出',
     thinSrcDirs({ 'src/two': 2, 'src/three': 3 }).join() === 'src/two',
     '报出=[' + thinSrcDirs({ 'src/two': 2, 'src/three': 3 }).join(',') + ']');
