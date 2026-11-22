@@ -8,8 +8,8 @@
  * 的 deriveHostRequiredTable），判据见 test/verify-subpackage-client-half.mjs 的 D-7。
  *
  * 为什么单独成文件：这张表是**跨包契约**，改一个键要同时对账 6 处解构名单，还要过
- * verify-client 的键面断言；它原先埋在 6,696 行的 src/client.js 正文最深处，改键的人
- * 先要翻过整页渲染逻辑。搬到独立模块后，主 bundle 的行为**逐字不变**：构建器把本文件
+ * verify-client 的键面断言；埋在 client.js 正文里改键得先翻过整页渲染逻辑。
+ * 独立成模块后主 bundle 的行为**逐字不变**：构建器把本文件
  * 内联在正文之前，与正文同处一个工厂作用域（`var exports = module.exports;` 已在
  * prelude 之前就位），所以下面这些 getter 仍指向正文里的活绑定。
  *

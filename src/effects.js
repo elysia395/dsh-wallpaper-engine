@@ -209,9 +209,9 @@ function weUiDarkShimmerKeep(hex) {
 // **恒优于**白字（两臂对比度的等点就是 L≈0.1791）。
 // 两支候选取**纯白 / 纯黑**并按**实算对比度取大**：两支的等点即 0.1791，也就是"更可读
 // 那支"在全体 accent 上的**最差点**（两支在该点各 4.58:1）⇒ 这条选择本身就带一个
-// ≥4.58:1 的全局下界，不需要再靠采样面兜。**深墨候选不再沿用 #0f1115**：它在同一个
-// 等点上只有 ≈4.35:1（`#de3c42` 实测 4.347:1、灰阶 `#797979` 4.353:1），旧版"白 vs
-// #0f1115 取大"因此过不了 4.5 红线 —— 视觉语言换来的是判据缺口，故改成纯黑。
+// ≥4.58:1 的全局下界，不需要再靠采样面兜。**深墨候选不能用 #0f1115**：它在同一个
+// 等点上只有 ≈4.35:1（`#de3c42` 实测 4.347:1、灰阶 `#797979` 4.353:1），"白 vs
+// #0f1115 取大"过不了 4.5 红线 —— 视觉语言换来的是判据缺口，故用纯黑。
 // 纯函数、无 DOM：verify-readability 从产物里抽出来复算连续网格（F10）。
 function weCheckedRowInk(hex) {
   const m = /^#?([0-9a-fA-F]{6})$/.exec(String(hex || ""));
@@ -487,8 +487,8 @@ function applyEffects(opts) {
   const uiColor = (key) => selection[key] || selection.accent;
   // 全局 UI 配色的**独立门**（ADR-0016 第三刀勘误）：样式表里那四个别名映射块
   // （--dsw-alias-link / label-deep-diving / state-business-primary / button-info-fill）
-  // 历史上挂在 data-we-glass-page 上 —— 玻璃运行时随包走之后，若继续借用玻璃的门，
-  // 停用玻璃行会**连坐**这个与玻璃无关的主包功能（UI 配色死了但用户没关它）。
+  // 挂在 data-we-glass-page 上会让停用玻璃行**连坐**这个与玻璃无关的主包功能
+  // （UI 配色死了但用户没关它），所以它用自己的门。
   // 本属性由主包恒挂（主行启用即挂，与玻璃行无关），停主行时随 clearEffects 摘。
   document.body.setAttribute("data-we-ui-color", "on");
   s.setProperty("--we-ui-send", uiColor("uiColorSend"));

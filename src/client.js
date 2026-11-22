@@ -3322,8 +3322,8 @@ async function openAvatarCrop(side, file) {
   }
   let url;
   // ⚠️ `w` / `h` 必须声明在 try **之外**：它们要在 catch 之后写进瞬态（`avatarCropW/H`）。
-  // 写进 try 内曾让这两行抛 `ReferenceError: w is not defined` —— 结果是裁切弹窗弹出但
-  // 几何恒为 0（图不可见）、且 `emit()` 永远到不了（首次选图界面毫无反应）。
+  // 写进 try 内会让 catch 里的赋值抛 `ReferenceError` —— 裁切弹窗照弹但几何恒为 0
+  // （图不可见），且 `emit()` 到不了（首次选图界面毫无反应）。
   let w;
   let h;
   try {
@@ -4056,7 +4056,7 @@ function presetAssetChecksNow() {
     // 用户上一轮的勾选保留（重开对话框不丢他的选择）；available 位每次现算，**只决定提示文案**。
     // ⚠️ 勾选**不再**被 available 钳住：勾上 = "按本机现状声明这一族" —— 本机没有
     //    图 ⇒ 宿主落 `null`（**显式声明「无」**，套用它的人回到内置），这是用户有权做的声明；
-    //    不勾 = 不动对方。旧版把勾选钳成 false + 行禁用 ⇒ 用户自存预设永远无法声明「无」。
+    //    不勾 = 不动对方。**别把勾选钳成 false 或禁用行**：那会让用户自存预设永远无法声明「无」。
     font: prev.font !== false,
     mascot: prev.mascot !== false,
     avatar: prev.avatar === true,
@@ -4537,8 +4537,8 @@ const onRopeFormChange = (form) => {
   if (!ROPE_FORM_VALUES.includes(form)) return;
   // ── 自定义立绘生效时不能直接改形态（用户口径：「按钮要可点击」）──────────
   // `ropeArtOf` 的优先序是「有自定义立绘就用它」⇒ 只写 ropeForm 对屏上那只**毫无影响**。
-  // 旧版因此把内置项与 ‹ › 全**禁用**了 —— 而用户实测的反馈正是"按钮都没办法点"，
-  // 所以那条路不能留。现在把它做成一条**真能生效**的动作：代价是清除那张自定义立绘，
+  // **禁用内置项与 ‹ › 这条路不能留**：用户实测的反馈正是"按钮都没办法点"。
+  // 现在把它做成一条**真能生效**的动作：代价是清除那张自定义立绘，
   // 而清除在宿主那边是 DELETE、**不可恢复** ⇒ 走两步确认（与本仓其它破坏性动作同一口径）。
   if (selection.mascotImage) {
     setTransient("mascotPendingForm", String(form));
@@ -5236,12 +5236,10 @@ function WallpaperPickerSection() {
 // portrait (aspect 2:3) than the chibi, so its base box below differs; the <img>
 // still fills .we-rope__art with object-fit: contain.
 //
-// 2026-10-30 启动性能：这 10 张 PNG 以前在构建期以 base64 内联进主产物，合计
-// 2,369,676 字符 = 4.2MB bundle 的 56%（trace：主产物下载 178ms / compile 25ms）。
-// 立绘不是启动必需的数据 —— 桌面只画**当前形态**一张，其余只在吉祥物面板里出现。
-// 现在字节仍住 `assets/rope/`（随 npm 包发布），由宿主 `/wallpaper-engine/rope-art/<name>.png`
-// 按需直出；客户端只拿 URL。`scripts/build-client.mjs` 保留"声明 ↔ 文件"的对账（防漏/改名），
-// 但不再把字节拼进 bundle。
+// 启动性能：立绘不是启动必需的数据 —— 桌面只画**当前形态**一张，其余只在吉祥物面板里出现。
+// 所以字节住 `assets/rope/`（随 npm 包发布），由宿主 `/wallpaper-engine/rope-art/<name>.png`
+// 按需直出，客户端只拿 URL；**不要再把字节 base64 内联进主产物**（那会让主产物多背几 MB）。
+// `scripts/build-client.mjs` 保留"声明 ↔ 文件"的对账（防漏/改名）。
 const ROPE_IMG_WHALE = BASE + "/rope-art/whale.png";
 // Third rope artwork: Phoebe Jiubi — the blonde chibi gripping the rope (source 1254×1254,
 // downscaled to 384×384, transparent) — square 1:1 like the chibi proportions; the
