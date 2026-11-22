@@ -443,7 +443,8 @@ try {
       await evaluate("document.querySelector('#left').style.width='25%'");
       await until('Math.abs(document.querySelector("[data-we-surface-plate=left-sidebar]").getBoundingClientRect().width-document.querySelector("#left").getBoundingClientRect().width)<1');
       // 多 right 节点（G1 历史栏位）：后台保留节点（无 open 属性）+ 活动节点。
-      // 可见但未展开的后台节点**不应**否定当前展开面板；只有两份都展开时才保守放弃。
+      // 可见但未展开的后台节点**不应**否定当前展开面板；两份都展开时按「前景优先」判定
+      // （fullscreen 优先，见下面 #382 段），同模式并存才保守放弃。
       await evaluate(`(() => {
         const dock=document.createElement('aside');
         dock.id='right-bg';dock.setAttribute('data-sidebar-right-panel','push');
@@ -459,6 +460,40 @@ try {
       await evaluate("document.querySelector('#right-bg').removeAttribute('data-sidebar-right-open')");
       await until('!!document.querySelector("[data-we-surface-plate=right-sidebar]")');
       check(tag + ' 多right：后台节点收起后唯一展开右栏恢复所有权（observer 自动）', await evaluate(`document.querySelector('#right').getAttribute('data-we-surface-runtime')==='right-sidebar'`));
+      // #382：fullscreen 与 push **同时展开**（宿主 fullscreen 模式会保留 push 面板）。
+      // 旧判据「恰好一份」两份都不认领 ⇒ fullscreen 面板无 plate/runtime、纯透明；
+      // 新判据按 fullscreen 优先认领前景那一份。
+      await evaluate(`(() => {
+        const bg = document.querySelector('#right-bg');
+        bg.setAttribute('data-sidebar-right-panel', 'fullscreen');
+        bg.setAttribute('data-sidebar-right-open', '');
+        __glass.sync(); return true;
+      })()`);
+      await until('document.querySelector("#right-bg").getAttribute("data-we-surface-runtime")==="right-sidebar"');
+      const fullPanel = await evaluate(`(() => {
+        const p = document.querySelector('#right-bg'), r = p.getBoundingClientRect();
+        const plate = document.querySelector('[data-we-surface-plate="right-sidebar"]');
+        const pr = plate && plate.getBoundingClientRect();
+        return { rt: p.getAttribute('data-we-surface-runtime'), back: document.querySelector('#right').getAttribute('data-we-surface-runtime'),
+          plates: document.querySelectorAll('[data-we-surface-plate="right-sidebar"]').length,
+          covers: !!pr && Math.abs(pr.left - r.left) < 1 && Math.abs(pr.top - r.top) < 1
+            && Math.abs(pr.width - r.width) < 1 && Math.abs(pr.height - r.height) < 1 };
+      })()`);
+      check(tag + ' fullscreen 与 push 同时展开：fullscreen 优先认领且底板跟住它',
+        fullPanel.rt === 'right-sidebar' && fullPanel.back === null && fullPanel.plates === 1 && fullPanel.covers, fullPanel);
+      // 负对照：两份**同模式**（都 fullscreen）同时展开 ⇒ 判不出前景，仍保守放弃。
+      await evaluate("document.querySelector('#right').setAttribute('data-sidebar-right-panel','fullscreen')");
+      await until('!document.querySelector("[data-we-surface-plate=right-sidebar]")');
+      check(tag + ' 两份 fullscreen 同时展开：保守放弃认领', await evaluate(`!document.querySelector('#right').hasAttribute('data-we-surface-runtime') && !document.querySelector('#right-bg').hasAttribute('data-we-surface-runtime') && !document.querySelector('[data-we-surface-plate=right-sidebar]')`));
+      // 回到 push：fullscreen 收起后，唯一展开的 push 面板恢复所有权。
+      await evaluate(`(() => {
+        document.querySelector('#right').setAttribute('data-sidebar-right-panel','push');
+        document.querySelector('#right-bg').setAttribute('data-sidebar-right-panel','push');
+        document.querySelector('#right-bg').removeAttribute('data-sidebar-right-open');
+        __glass.sync(); return true;
+      })()`);
+      await until('!!document.querySelector("[data-we-surface-plate=right-sidebar]")');
+      check(tag + ' fullscreen 收起后唯一 push 面板恢复所有权', await evaluate(`document.querySelector('#right').getAttribute('data-we-surface-runtime')==='right-sidebar'`));
       await evaluate("document.querySelector('#right-bg').remove()");
       await until('!!document.querySelector("[data-we-surface-plate=right-sidebar]")');
       await evaluate("document.querySelector('#right').removeAttribute('data-sidebar-right-open')");

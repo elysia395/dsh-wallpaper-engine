@@ -182,6 +182,20 @@ function weSurfaceGeometry(target, id, owned) {
   };
 }
 
+/**
+ * 从「在布局里且展开」的右栏面板中挑出**前景**那一份（#382）。
+ * fullscreen 与 push 并存是宿主 fullscreen 模式的常态：fullscreen 是宿主明确声明的前景
+ * dock 模式（glass-css 里有专门的抬升规则），优先认领它；没有 fullscreen 时才接受唯一
+ * 一份 push。多份同模式同时展开 ⇒ 判不出前景，返回 null 保守退回原生。
+ */
+function weSurfaceRightFront(open) {
+  if (!open.length) return null;
+  const fullscreen = open.filter((panel) => panel.getAttribute("data-sidebar-right-panel") === "fullscreen");
+  if (fullscreen.length === 1) return fullscreen[0];
+  if (!fullscreen.length && open.length === 1) return open[0];
+  return null;
+}
+
 function weSurfaceCandidates(state) {
   const entries = new Map(), doc = state.doc;
   const add = (target, id, enabled) => {
@@ -203,9 +217,14 @@ function weSurfaceCandidates(state) {
   // 但真正展开的只有一份：判据看「open 的面板恰好一份」，不要被另一份可见但收起的面板否掉
   // （旧写法数 rightLive.length===1 会整块退回原生纯色）。
   const rightOpen = rightLive.filter((panel) => panel.hasAttribute("data-sidebar-right-open"));
+  // #382：fullscreen 与 push **可能同时展开**（宿主在 fullscreen 下保留 push 面板，两份都带
+  // open）⇒ 旧判据「恰好一份」直接落空，fullscreen 面板一块玻璃都拿不到（plate/runtime 都
+  // 不生成）。改成「从展开的面板里挑出前景那一份」：fullscreen 优先，其次唯一 push；多份同
+  // 模式展开仍判不出前景 ⇒ 保守退回原生。认领后 CSS 侧的 [data-we-surface-runtime=
+  // right-sidebar] 规则照旧按被认领的那份生效。
+  const rightFront = weSurfaceRightFront(rightOpen);
   for (const target of right) {
-    const sole = rightOpen.length === 1 && rightOpen[0] === target;
-    add(target, "right-sidebar", sole && state.selection.sidebarGlass === true);
+    add(target, "right-sidebar", target === rightFront && state.selection.sidebarGlass === true);
   }
   for (const target of doc.querySelectorAll('[role="dialog"]:has([data-slot="settings.section"])')) {
     add(target, "settings-window", doc.body.hasAttribute("data-we-glass-window"));
