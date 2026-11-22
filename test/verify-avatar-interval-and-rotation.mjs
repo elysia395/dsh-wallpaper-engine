@@ -67,9 +67,10 @@ const videoSrc = read('src/video-layer.js');
     schemaMod.sanitizeFromSchema({ avatarAiRepeatRows: 0 }, 'client').avatarAiRepeatRows === 6
     && schemaMod.sanitizeFromSchema({ avatarAiRepeatRows: 999 }, 'client').avatarAiRepeatRows === 6
     && schemaMod.sanitizeFromSchema({ avatarAiRepeatRows: 'x' }, 'client').avatarAiRepeatRows === 6);
-  check('面板：扩展页签有「助手头像间隔」滑块，量程取 schema 常量（不手写数字）',
-    extAvatarSrc.includes('weT("助手头像间隔")')
-    && /AVATAR_AI_REPEAT_MIN,\s*AVATAR_AI_REPEAT_MAX/.test(extAvatarSrc)
+  // 滑块标签的措辞不在这里钉（`weT("助手头像间隔")` ⇄ 英文词表由 `test/verify-i18n.mjs` 对账，
+// ADR-0007 第 4 问）；本条只钉「滑块存在、量程取 schema 常量、接到回调」。
+check('面板：扩展页签有头像间隔滑块，量程取 schema 常量（不手写数字）',
+    /SliderRow\(weT\("[^"]+"\), AVATAR_AI_REPEAT_MIN, AVATAR_AI_REPEAT_MAX, 1,/.test(extAvatarSrc)
     && extAvatarSrc.includes('onAvatarAiRepeatRows'));
   check('装饰层：分组**现读设置**（avatarAiRepeatRows 读 selection），不是读死常量',
     avatarSrc.includes('function avatarAiRepeatRows(selLike)')
