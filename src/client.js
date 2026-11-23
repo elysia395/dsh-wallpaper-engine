@@ -486,7 +486,7 @@ const selection = {
   editingWeAssetsDir: false,
   weAssetsDirDraft: "",
   weAssetsError: "",
-  inventory: { installDir: null, uploadDir: null, cacheDir: null, weAssetsDir: null, weAssetsAvailable: false, weAssetsSource: null, sceneMediaBase: "", wallpapers: [], total: 0, portableCount: 0, playlists: [], error: null },
+  inventory: { installDir: null, uploadDir: null, cacheDir: null, weAssetsDir: null, weAssetsAvailable: false, weAssetsSource: null, sceneMediaBase: "", wallpapers: [], total: 0, portableCount: 0, playlists: [], wallpaperMachineRoots: 0, error: null },
   loaded: false,
 };
 
@@ -925,10 +925,16 @@ function prefetchInventoryOnce() {
   try { inventoryBootPrefetch = apiJson(INVENTORY_URL); } catch { inventoryBootPrefetch = null; }
   return inventoryBootPrefetch;
 }
-async function loadInventory() {
+async function loadInventory(opts) {
+  // silent = 后台轮询：不亮 loading、清单没变就一个 emit 都不发（见 invWatch 的调用点）。
+  // 手动刷新 / 上传完成 / 设置页重拉仍走默认路径，loading 与重渲染照旧。
+  const silent = Boolean(opts && opts.silent);
+  const prevInv = selection.inventory;   // 错误去重要比对"换掉之前"的那一份
   const seq = ++inventorySeq;
-  setTransient("loading", true);
-  emit();
+  if (!silent) {
+    setTransient("loading", true);
+    emit();
+  }
   let next;
   const prefetched = inventoryBootPrefetch;
   inventoryBootPrefetch = null;
@@ -949,6 +955,8 @@ async function loadInventory() {
       weAssetsSource: data.weAssetsSource || null,
       // 场景载荷的源（独立壁纸媒体源的 origin；空串 = 回落应用源，见 live-layer 的 liveRenderUrl）。
       sceneMediaBase: typeof data.sceneMediaBase === "string" ? data.sceneMediaBase : "",
+      // 本机真实存在的 WallpaperMachine 库根数（宿主实测）。0 = 不轮询 —— 见 invWatch 的门控。
+      wallpaperMachineRoots: Number(data.wallpaperMachineRoots) || 0,
       wallpapers: data.wallpapers || [],
       total: data.total || 0,
       portableCount: data.portableCount || 0,
@@ -989,6 +997,7 @@ async function loadInventory() {
         portableCount: 0,
         playlists: [],
         folders: [],
+        wallpaperMachineRoots: 0,
         error: message,
       };
   }
@@ -1000,7 +1009,8 @@ async function loadInventory() {
     // 失败时**不重算选择**（同上：#379 的落盘点就在 revalidateSelection 里）。校验"选中的
     // id 还在不在库里"只在真拿到新库存时有意义 —— 拿不到库存时库里有什么我们并不知道。
     // 背景保持现状，面板顶部照常显示 next.error。
-    emit();
+    // 静默轮询下同一个错误只报一次：每 30s 重刷一次错误横幅只是噪音（换一条错误要报）。
+    if (!silent || prevInv.error !== next.error) emit();
     return;
   }
   // 文件夹筛选的僵尸值：宿主的夹子表里已经找不到这个 id（用户在 WE 里删了/改名了）
@@ -1019,6 +1029,10 @@ async function loadInventory() {
     setTransient("_invIds", nextIds);
     setTransient("editorPage", 0);
   }
+  // 轮询（silent）且清单没变 ⇒ 到此为止：不重算选择、不 emit。
+  // revalidateSelection → applySelection 会 cancelRotationPrepare() + disposePreparedMedia()，
+  // 每 30s 一次会把正在准备的轮播过场掐掉；面板也会跟着重渲染（#396 评审）。
+  if (silent && prevIds === nextIds) return;
 
   // Rotation groups: validate the active one and seed a first group from a
   // playable Wallpaper Engine playlist when the user has none yet (so the
@@ -2165,6 +2179,12 @@ const OCCLUSION_RECHECK_MS = 3000;
 
 /** URL 源（Bing 每日一图）的清单复核周期：宿主每天换图，客户端半小时看一眼即可。 */
 const URL_SOURCE_POLL_MS = 30 * 60 * 1000;
+
+/** 壁纸库自动刷新周期（**仅本机真的存在 WallpaperMachine 库时才启用**，判据是 /inventory 的
+ *  wallpaperMachineRoots）：WallpaperMachine 自己把新壁纸下到库目录（Library/<id>/），宿主每次
+ *  /inventory 都重新推导库根并看时间戳，所以客户端低频重拉一次就能把它们带出来。Steam 侧大库
+ *  （几百上千张）不该周期整库重建 —— 那里保持原「手动刷新」语义不变。 */
+const INVENTORY_POLL_MS = 30 * 1000;
 
 // 「live 渲染页为什么没在出帧」的一句话原因：用户暂停与遮挡都算 —— 两者都会让
 // applyLiveControls 把渲染页 pause() 掉，而暂停中的渲染页 __wpStats.frame()
@@ -5919,6 +5939,31 @@ function apply(ctx) {
           loadInventory().catch(() => { /* 失败保持现状，下一次再试 */ });
         }, URL_SOURCE_POLL_MS);
       }
+      // 壁纸库自动刷新：WallpaperMachine 会自己把新壁纸下到库目录（Library/<id>/），
+      // 但它**只在宿主真的找到这个库**时才需要轮询。判据是 /inventory 回的
+      // wallpaperMachineRoots（宿主按磁盘实测报的数）—— 不用「installDir 为空」当
+      // 「没有 Steam」的代理：探测不到 Steam 的 Windows 用户会因此被拖进每 30s 一次
+      // 的大库重拉（#396 评审）。轮询走 silent：不亮 loading、清单没变不 emit、不重算选择。
+      let invWatch = 0, invPollFails = 0, invPollSkip = 0;
+      if (typeof setInterval === "function") {
+        invWatch = setInterval(() => {
+          if (disposed) return;
+          if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
+          if (!selection.inventory.wallpaperMachineRoots) return;
+          if (selection.rotationTimer) return;   // 过场准备中：下一拍再说
+          if (invPollSkip > 0) { invPollSkip -= 1; return; }
+          loadInventory({ silent: true }).then(() => {
+            // loadInventory 自己吞异常 ⇒ 失败只能从库存的 error 字段读。
+            if (selection.inventory && selection.inventory.error) {
+              invPollFails += 1;
+              if (invPollFails >= 3) { invPollFails = 0; invPollSkip = 6; }   // 连败 3 次 ⇒ 退避约 3 分钟
+            } else {
+              invPollFails = 0;
+            }
+          });
+        }, INVENTORY_POLL_MS);
+      }
+
       // 持久化监听器: pagehide → 立即 flush 未落盘的设置; visibilitychange →
       // 页面回到前台时重试失败过的 PUT。注册在这里 (而不是模块作用域) 才能随
       // fiber 注销 — 否则每次插件重载/HMR 都会在同一页面再叠一对, 永不释放。
@@ -5974,6 +6019,7 @@ function apply(ctx) {
         layerUnsubs.clear();
         if (ocWatch) { try { clearInterval(ocWatch); } catch { /* ignore */ } ocWatch = 0; }
         if (urlWatch) { try { clearInterval(urlWatch); } catch { /* ignore */ } urlWatch = 0; }
+        if (invWatch) { try { clearInterval(invWatch); } catch { /* ignore */ } invWatch = 0; }
         if (typeof window !== "undefined" && typeof window.removeEventListener === "function") {
           for (const t of ocListeners) window.removeEventListener(t, onOcclusionChange);
           if (pageShowBound) window.removeEventListener("pageshow", onBackVisible);
