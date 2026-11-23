@@ -16,8 +16,9 @@
 >
 > Counts such as `test/verify-scene-live.mjs` `(466)` record the **total at the moment that entry was written**, not the current total (later entries push it up — it is 502 now); they are kept verbatim so each entry still matches its own commit.
 
-### Unreleased (hover-card single child, 2026-11-21)
+### Unreleased (hover-card single child · dark twins, 2026-11-22)
 
+- **Fix: dark theme painted the composer card and repo drawer 92% white under software rendering (#398)**. The software-rasteriser fallback (`body[data-we-glass-fallback]`) carried only the light half of these two near-opaque recipes, so the dark theme resolved `--we-surface-tint-light` (#ffffff) and the composer card's `[data-composer-card]::before` plus `.we-repo-panel` became white plates inside dark panels. Both now get the dark twin this block already uses elsewhere (one extra `[data-ds-dark-theme]`, same recipe with `--we-surface-tint-dark`); `verify-softrender` gains E6 (every fallback rule reading `--we-surface-tint-light` must have a same-selector dark twin) and E6b, the negative control that deletes the composer twin. CSS-only — refresh to apply.
 - **Fix: hover-card glass no longer paints every direct child div of multi-child dialogs.** `[role="dialog"] > div` is meant to hit only the host HoverCard's single card div; with a bare `> div`, the host turn-usage panel (`title` / `titleRule` are both divs) and third-party popovers (title / summary / impact, etc.) each got a fill, gradient and frost, producing multiple differently coloured bands. The selector is now `> div:only-of-type` in both the normal and no-blur fallback rules; `verify-glass-surfaces` gains group ㉗ (both rules + a negative control). CSS-only — refresh to apply.
 
 ### v1.4.3 (2026-11-19)

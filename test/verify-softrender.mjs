@@ -42,6 +42,11 @@
 //      too — a data-we-glass-fallback rule matching ::before with BOTH "none"
 //      declarations AND a near-opaque recipe that the SIBLING fallback rules
 //      also quote (same string, no new token / mechanism).
+//   E6 daily-driver pairing (issue #398): every data-we-glass-fallback rule that
+//      paints from --we-surface-tint-light has a dark twin — same selector once
+//      [data-ds-dark-theme] is stripped, painting from --we-surface-tint-dark.
+//      Without it the dark theme paints a 92% white plate. E6b is the negative
+//      control: deleting the composer twin must be reported.
 //   F1 disposing the plugin (fiber cleanup) removes the hook.
 //   G1 the detection is cached: 3 applies → exactly 1 WebGL context created.
 //   H1 no WEBGL_debug_renderer_info → gl.getParameter(gl.RENDERER) is read and
@@ -320,6 +325,28 @@ function parseCssRules(css) {
   return rules;
 }
 
+// ── 深色孪生配对（issue #398）─────────────────────────────────────────────────
+// 软件渲染回退块里「近不透明配方」的既定写法是**浅色一条 + 深色孪生一条**（左栏 / 标题栏 /
+// 设置窗都是这一对一对的）。只写浅色那一条，深色主题 + data-we-glass-fallback 时该面就被刷成
+// 92% 纯白 —— 输入卡与仓库抽屉正是这样漏的。判据：读 --we-surface-tint-light 的 fallback 规则
+// 必须存在**同选择器**（剥掉 [data-ds-dark-theme] 之后逐字相等）的读 --we-surface-tint-dark 的孪生。
+function normalizeThemeSelector(header) {
+  return header
+    .split(',')
+    .map((sel) => sel.replace(/\[data-ds-dark-theme\]/g, '').replace(/\s+/g, ' ').trim())
+    .sort()
+    .join(' | ');
+}
+
+function unpairedFallbackTintRules(cssText) {
+  const fallbackRules = parseCssRules(cssText).filter((r) => r.header.includes('data-we-glass-fallback'));
+  const darkSelectors = new Set(fallbackRules
+    .filter((r) => r.body.includes('var(--we-surface-tint-dark'))
+    .map((r) => normalizeThemeSelector(r.header)));
+  return fallbackRules.filter((r) => r.body.includes('var(--we-surface-tint-light')
+    && !darkSelectors.has(normalizeThemeSelector(r.header)));
+}
+
 function main() {
   // ── S1: the required software-rasteriser patterns, matched case-insensitively
   {
@@ -484,6 +511,27 @@ function main() {
       '::before fallback rules=' + composerBefore.length + ' · with both "none"=' + composerNone.length
         + ' · recipe=' + JSON.stringify(composerRecipe || null)
         + ' · reused by a sibling fallback rule=' + composerRecipeShared);
+
+    // ── E6 (issue #398): 深色孪生。浅色那一条在深色主题下是错的材质（92% 纯白），
+    // 所以每一条读 --we-surface-tint-light 的 fallback 规则都要有同选择器的
+    // --we-surface-tint-dark 孪生；E6b 是负对照（把输入卡的孪生删掉必须被报出来）。
+    const unpaired = unpairedFallbackTintRules(css);
+    const darkTintRules = fbRules.filter((r) => r.body.includes('var(--we-surface-tint-dark'));
+    const withoutComposerTwin = rules
+      .filter((r) => !(r.header.includes('data-ds-dark-theme') && r.header.includes('[data-composer-card]')))
+      .map((r) => r.header + ' { ' + r.body + ' }')
+      .join('\n');
+    const mutatedUnpaired = unpairedFallbackTintRules(withoutComposerTwin);
+    check('E6 every fallback tint rule has a dark twin (same selector, --we-surface-tint-dark)',
+      unpaired.length === 0 && darkTintRules.length >= 4,
+      'unpaired=' + unpaired.length + (unpaired.length ? ' → ' + JSON.stringify(unpaired.map((r) => r.header.trim())) : '')
+        + ' · dark tint rules=' + darkTintRules.length);
+    // 同一个选择器在产物里出现多次（多条注入路径），删掉唯一那条深色孪生会让它们**一起**
+    // 变成未配对 ⇒ 判据只要求「报出来的都是输入卡那条」，不钉条数。
+    check('E6b negative control: deleting the composer dark twin is reported',
+      mutatedUnpaired.length >= 1 && mutatedUnpaired.every((r) => /\[data-composer-card\]/.test(r.header)),
+      'mutated unpaired=' + mutatedUnpaired.length
+        + (mutatedUnpaired.length ? ' → ' + JSON.stringify(mutatedUnpaired.map((r) => r.header.trim())) : ''));
 
     // ── F1: fiber disposal removes the hook ────────────────────────────────
     let disposeErr = null;

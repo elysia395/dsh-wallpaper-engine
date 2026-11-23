@@ -1886,6 +1886,13 @@ const CSS_GLASS = `
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
   }
+  /* issue #398：上一条只给了浅色釉色 —— 深色主题 + 软件渲染（data-we-glass-fallback）时，
+     输入卡 ::before 被刷成 92% 纯白，与周围的深色面板不是一种材质。深色孪生多一层
+     [data-ds-dark-theme]（特异性更高，不依赖书写顺序），与本块左栏 / 标题栏 / 设置窗
+     那三对同法，配方逐字相同、只换 --we-surface-tint-dark。 */
+  body[data-ds-dark-theme][data-we-glass-fallback][data-we-glass-page] [data-composer-card]::before {
+    background-color: color-mix(in srgb, var(--we-surface-tint-dark, #0d1524) 92%, transparent);
+  }
   /* A near-opaque canvas is only the no-frost fallback, never normal chat. */
   body[data-we-glass-fallback][data-we-glass-page],
   body[data-ds-dark-theme][data-we-glass-fallback][data-we-glass-page] {
@@ -1915,6 +1922,10 @@ const CSS_GLASS = `
     background-color: color-mix(in srgb, var(--we-surface-tint-light, #ffffff) 92%, transparent);
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
+  }
+  /* issue #398 同一条：仓库抽屉的 92% 配方也要深色孪生，否则深色主题下抽屉同样变白板。 */
+  body[data-ds-dark-theme][data-we-glass-fallback] .we-repo-panel {
+    background-color: color-mix(in srgb, var(--we-surface-tint-dark, #0d1524) 92%, transparent);
   }
   /* 一次性通知：底色本身已经接近不透明（82% 深色底衬），不需要换配方，
      只把永远不生效的 backdrop-filter 关掉。 */
