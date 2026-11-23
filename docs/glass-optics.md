@@ -6,7 +6,7 @@ The setting is `glassOptics`, owned by the shared settings schema and included i
 
 Existing material tint and blur remain in place on panels. Short, single-line code uses a clearer lens profile on an independent background leaf: glyphs are not filtered or duplicated. Wrapped inline code keeps the native line boxes and does not receive a rectangular backdrop over neighboring prose (see #197). Nested surfaces and explicit native-preserve regions are excluded.
 
-Maps are generated only for visible surfaces, shared by geometry, capped at 560 pixels per dimension and retained in a bounded unused cache. First appearances are spread over frames. Pointer-only frames update CSSOM properties using cached rectangles; they do not regenerate displacement images or mutate host style attributes. These reduce CPU work; they do not eliminate the GPU cost of backdrop compositing. Dense inline code and animated wallpaper still need device testing.
+Maps are shared by geometry, capped at 560 pixels per dimension and retained in a bounded unused cache. Surfaces near the vertical edge of a scrollport get their maps before entering view, with preparation spread across frames. On nested scroll, only the affected surfaces refresh their positions. Pointer-only frames use cached rectangles and update coordinates through CSSOM. Refraction stays enabled while scrolling. Dense inline code and animated wallpaper still incur backdrop compositing cost.
 
 Run:
 
@@ -17,7 +17,7 @@ node test/verify-glass-optics.mjs
 node test/verify-glass-optics-browser.mjs
 ```
 
-The browser test requires Chromium, Chrome or Edge; set `WE_TEST_BROWSER` if it is not in a standard location. It creates an isolated browser profile and synthetic content, with results in `.artifacts/glass-optics/`. It checks material carriers, wrapping fallback, native-preserve behavior, dynamic content, visibility, lifecycle cleanup, injected allocation failure, and zero geometry reads/map rebuilds during steady pointer movement. Visual inspection remains necessary: a computed filter URL alone does not prove visible refraction.
+The browser test requires Chromium, Chrome or Edge; set `WE_TEST_BROWSER` if it is not in a standard location. It creates an isolated browser profile and synthetic content, with results in `.artifacts/glass-optics/`. It checks material carriers, wrapping fallback, native-preserve behavior, dynamic content, visibility, lifecycle cleanup, injected allocation failure, steady pointer movement, and refraction layer alignment during nested scroll. Visual inspection remains necessary: a computed filter URL alone does not prove visible refraction.
 
 The accompanying synthetic comparison is between the earlier local lens profile and the new compact profile, not a comparison against an official release. It contains no user wallpaper or chat content.
 

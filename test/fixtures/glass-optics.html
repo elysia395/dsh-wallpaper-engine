@@ -104,6 +104,33 @@ const assertions=[];function check(value,message){if(!value)throw new Error(mess
  dynamic.style.top='120px';await sleep(200);await next();
  check(dynamic.hasAttribute('data-we-optics')&&getComputedStyle(dynamic).backdropFilter.includes('url('),'Returning surfaces restore refraction from cache');
  dynamic.remove();await sleep(150);await next();
+ const scroller=document.createElement('section');
+ scroller.style.cssText='position:fixed;left:560px;top:350px;width:340px;height:160px;overflow:auto';
+ scroller.innerHTML='<div data-chat-flow>'+
+   Array.from({length:14},(_,i)=>`<p style="margin:0;height:36px"><code class="capsule" id="scroll-${i}">appParam</code> <code class="capsule">LiveKernelReports</code></p>`).join('')+'</div>';
+ document.body.append(scroller);
+ const incoming=scroller.querySelector('#scroll-6');
+ const getLeaf=code=>document.querySelector(`[data-we-optics-root] [data-we-optics-seat="${code.getAttribute('data-we-optics-seat')}"]`);
+ const clipBottom=scroller.getBoundingClientRect().bottom;
+ check(incoming.getBoundingClientRect().top>clipBottom,'Scroll regression starts with a code capsule below the nested scrollport');
+ const incomingLeaf=await waitFor(()=>getLeaf(incoming))&&getLeaf(incoming);
+ check(incomingLeaf&&getComputedStyle(incomingLeaf).backdropFilter.includes('url('),'Approaching inline code has a refraction map before it enters the scrollport');
+ let unrelatedReads=0;
+ const pickerRect=picker.getBoundingClientRect.bind(picker);
+ picker.getBoundingClientRect=()=>{unrelatedReads++;return pickerRect()};
+ await sleep(100);
+ unrelatedReads=0;
+ const scrollUpdates=optics.updates;
+ for(let i=1;i<=10;i++) {
+   scroller.scrollTop=i*12;
+   await next();
+   check(getLeaf(incoming)===incomingLeaf&&Math.abs(incomingLeaf.getBoundingClientRect().top-incoming.getBoundingClientRect().top)<1,
+     `Inline refraction stays attached and follows continuous scroll at offset ${i*12}`);
+ }
+ check(optics.updates===scrollUpdates,'Scrolling past identical code capsules reuses displacement maps');
+ check(unrelatedReads===0,'Nested scrolling does not measure unrelated glass');
+ delete picker.getBoundingClientRect;
+ scroller.remove();
  release();check(!document.querySelector('[data-we-optics],style[data-dsh-local-lens]'),'Dispose removes optics');
  check(getComputedStyle(el,'::before').backdropFilter===native,'Original native material restored');
  document.body.setAttribute('data-we-glass-chat','');

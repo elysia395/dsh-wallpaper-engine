@@ -28,33 +28,39 @@ function installGlassOptics() {
     'body[data-we-glass-page] [data-plugin-versions] > div:has(> button[aria-expanded],> [role="status"])'
   ].join(',');
   const seats = new Map(), visible = new Set(), dirty = new Set(), cache = new Map(), cleanup = [];
-
+  const scrollTargets = new Set();
   const freeRules = [];
+  const leafProperties = ['--we-optics-left', '--we-optics-top', '--we-optics-width', '--we-optics-height'];
   const generation = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   let closed = false, scheduled = 0, serial = 0, assetSerial = 0, point = null, pointerReported = false;
-  let rectsDirty = true, lightsDirty = false, nextTimer = 0, lastFrame = 0;
+  let rectsDirty = true, lightsDirty = false, cachePixels = 0;
   const status = { generation, surfaces: 0, maps: 0, updates: 0, pointer: false, errors: 0,
     pixels: 0, buildMs: 0, cacheHits: 0, layoutReads: 0, lightWrites: 0, scans: 0 };
   let svg, defs, style, resize, intersection, mutation, compactRoot;
   const variableNames = ['--we-optics-filter', '--we-optics-native', '--we-optics-bg', '--we-optics-shadow', '--we-optics-x', '--we-optics-y'];
   function report(event, detail) { try { reportGlassOptics('local-lens-v2-' + event, detail); } catch {} }
-  function releaseAsset(seat) {
-    if (seat.asset) { seat.asset.refs--; seat.asset.used = win.performance.now(); seat.asset = null; }
-    seat.key = null;
-    // Keep a small reuse pool, evicting only filters that no visible surface uses.
-    let pixels = [...cache.values()].reduce((sum, asset) => sum + asset.pixels, 0);
+  function trimCache() {
+    // Keep small maps warm for reverse scrolling within the existing pixel budget.
+    if (cache.size <= 48 && cachePixels <= 1200000) return;
     for (const asset of [...cache.values()].sort((a, b) => a.used - b.used)) {
-      if (cache.size <= 24 && pixels <= 1200000) break;
+      if (cache.size <= 48 && cachePixels <= 1200000) break;
       if (asset.refs) continue;
-      asset.filter.remove(); cache.delete(asset.key); pixels -= asset.pixels;
+      asset.filter.remove(); cache.delete(asset.key); cachePixels -= asset.pixels;
     }
+  }
+  function releaseAsset(seat) {
+    if (seat.asset) {
+      seat.asset.refs--; seat.asset.used = win.performance.now(); seat.asset = null;
+      trimCache();
+    }
+    seat.key = null;
   }
   function deactivate(el, seat) {
     el.removeAttribute('data-we-optics');
     el.removeAttribute('data-we-optics-seat');
-    seat.leaf?.remove(); seat.leaf = null; seat.leafGeometry = null; seat.clipParents = null;
+    seat.leaf?.remove(); seat.leaf = null; seat.leafGeometry = null; seat.clipParents = null; seat.clip = null;
     if (seat.rule) { seat.rule.style.cssText = ''; seat.rule.selectorText = ':not(*)'; freeRules.push(seat.rule); seat.rule = null; seat.vars = null; }
-    releaseAsset(seat); seat.sampled = false; seat.lightOn = false; seat.rect = null;
+    releaseAsset(seat); seat.sampled = false; seat.lightX = null; seat.lightY = null; seat.rect = null;
   }
   function detach(el) {
     const seat = seats.get(el);
@@ -67,7 +73,6 @@ function installGlassOptics() {
     if (closed) return;
     closed = true;
     win.cancelAnimationFrame(scheduled);
-    win.clearTimeout(nextTimer);
     for (const release of cleanup.reverse()) { try { release(); } catch {} }
     for (const el of [...seats.keys()]) { try { detach(el); } catch {} }
     style?.remove(); svg?.remove(); compactRoot?.remove();
@@ -117,7 +122,6 @@ function installGlassOptics() {
         const parentCss = win.getComputedStyle(parent);
         if (/(auto|scroll|hidden|clip)/.test(parentCss.overflow + parentCss.overflowX + parentCss.overflowY)) seat.clipParents.push(parent);
       }
-      rectsDirty = true;
     }
     seat.vars.setProperty('--we-optics-native', native && native !== 'none' ? native : 'blur(1px)');
     seat.vars.setProperty('--we-optics-bg', decoration.backgroundImage || 'none');
@@ -126,10 +130,9 @@ function installGlassOptics() {
     el.setAttribute('data-we-optics', seat.mode);
     seat.sampled = true;
   }
-  function update(el, seat, w, h) {
+  function update(el, seat, w, h, fragments) {
     if (!w || !h) return;
     if (el.tagName === 'CODE') {
-      const fragments = el.getClientRects().length; status.layoutReads++;
       const mode = fragments > 1 ? 'fragmented' : h <= 48 ? 'compact' : 'direct';
       if (seat.mode !== mode) { deactivate(el, seat); seat.mode = mode; }
     }
@@ -193,83 +196,91 @@ function installGlassOptics() {
     );
     defs.append(filter);
     const asset = { id, key, filter, refs: 1, pixels: mw * mh, used: win.performance.now() };
-    cache.set(key, asset); seat.asset = asset;
+    cache.set(key, asset); cachePixels += asset.pixels; seat.asset = asset;
+    trimCache();
     // Publish only after the complete filter exists, so a failed map keeps native glass.
     seat.vars.setProperty('--we-optics-filter', `url("#${id}")`);
     seat.key = key; status.updates++;
     status.pixels += mw * mh; status.buildMs += win.performance.now() - started;
   }
   function frame() {
-    scheduled = 0; lastFrame = win.performance.now();
+    scheduled = 0;
     if (doc.hidden) return;
     const measured = [];
     // Read all pending geometry before writing filters or light coordinates.
+    let pixelsThisFrame = 0;
     for (const el of dirty) {
       if (!visible.has(el) || !el.isConnected) continue;
+      if (measured.length >= 12 || pixelsThisFrame >= 180000) break;
       status.layoutReads += 2;
-      measured.push([el, seats.get(el), el.offsetWidth, el.offsetHeight]);
-    }
-    if (rectsDirty) {
-      const clips = new Map();
-      for (const el of visible) {
-        const seat = seats.get(el); if (!seat || !el.isConnected) continue;
-        seat.rect = el.getBoundingClientRect(); status.layoutReads++;
-        if (seat.clipParents) {
-          const clip = { left: 0, top: 0, right: win.innerWidth, bottom: win.innerHeight };
-          for (const parent of seat.clipParents) {
-            if (!clips.has(parent)) { clips.set(parent, parent.getBoundingClientRect()); status.layoutReads++; }
-            const rect = clips.get(parent);
-            clip.left = Math.max(clip.left, rect.left); clip.top = Math.max(clip.top, rect.top);
-            clip.right = Math.min(clip.right, rect.right); clip.bottom = Math.min(clip.bottom, rect.bottom);
-          }
-          seat.clip = clip;
-        }
+      const w = el.offsetWidth, h = el.offsetHeight;
+      let fragments = 0;
+      if (w && h && el.tagName === 'CODE') {
+        fragments = el.getClientRects().length; status.layoutReads++;
       }
-      rectsDirty = false;
-    }
-    // Spread first appearances/streaming growth across frames; never build a whole page at once.
-    let pixelsThisFrame = 0;
-    for (const [el, seat, w, h] of measured) {
-      if (pixelsThisFrame >= 180000) break;
-      update(el, seat, w, h); dirty.delete(el);
+      measured.push([el, seats.get(el), w, h, fragments]);
       pixelsThisFrame += Math.min(w, 560) * Math.min(h, 560);
+    }
+    const clips = new Map();
+    const scrollers = [...scrollTargets];
+    for (const el of visible) {
+      const seat = seats.get(el);
+      if (!seat || !el.isConnected) continue;
+      const moved = rectsDirty || !seat.rect || scrollers.some(target => target.contains(el));
+      if (moved) { seat.rect = el.getBoundingClientRect(); status.layoutReads++; }
+      if (seat.clipParents && (moved || !seat.clip)) {
+        const clip = { left: 0, top: 0, right: win.innerWidth, bottom: win.innerHeight };
+        for (const parent of seat.clipParents) {
+          if (!clips.has(parent)) { clips.set(parent, parent.getBoundingClientRect()); status.layoutReads++; }
+          const rect = clips.get(parent);
+          clip.left = Math.max(clip.left, rect.left); clip.top = Math.max(clip.top, rect.top);
+          clip.right = Math.min(clip.right, rect.right); clip.bottom = Math.min(clip.bottom, rect.bottom);
+        }
+        seat.clip = clip;
+      }
+    }
+    rectsDirty = false;
+    scrollTargets.clear();
+    // Spread first appearances/streaming growth across frames; never build a whole page at once.
+    let newGeometry = false;
+    for (const [el, seat, w, h, fragments] of measured) {
+      update(el, seat, w, h, fragments); dirty.delete(el);
+      if (!seat.rect || (seat.leaf && !seat.clip)) newGeometry = true;
     }
     const writes = [];
     for (const el of visible) {
       const seat = seats.get(el);
       if (!seat || !el.isConnected) continue;
-      if (seat.leaf && seat.rect) {
-        const rect = seat.rect, clip = seat.clip || {left:0,top:0,right:win.innerWidth,bottom:win.innerHeight};
+      if (seat.leaf && seat.rect && seat.clip && seat.leafGeometry?.rect !== seat.rect) {
+        const { rect, clip, leafGeometry: previous } = seat;
         const geometry = [rect.left, rect.top, rect.width, rect.height].map(n => n.toFixed(2));
         const inset = [Math.max(0,clip.top-rect.top), Math.max(0,rect.right-clip.right), Math.max(0,rect.bottom-clip.bottom), Math.max(0,clip.left-rect.left)].map(n => n.toFixed(2)+'px').join(' ');
-        const key = [...geometry,inset].join(':');
-        if (key !== seat.leafGeometry) {
-          ['left','top','width','height'].forEach((name,index) => seat.vars.setProperty('--we-optics-'+name,geometry[index]+'px'));
-          seat.vars.setProperty('--we-optics-clip',`inset(${inset})`); seat.leafGeometry = key;
-        }
+        geometry.forEach((value, index) => {
+          if (value !== previous?.geometry[index]) seat.vars.setProperty(leafProperties[index], value+'px');
+        });
+        if (inset !== previous?.inset) seat.vars.setProperty('--we-optics-clip', `inset(${inset})`);
+        seat.leafGeometry = { rect, geometry, inset };
       }
-      if (point && lightsDirty && seat.sampled && seat.rect) {
+      if (point && (lightsDirty || measured.length) && seat.sampled && seat.rect) {
         const rect = seat.rect;
         if (!rect.width || !rect.height) continue;
         const x = (point[0] - rect.left) * seat.w / rect.width, y = (point[1] - rect.top) * seat.h / rect.height;
         const near = x > -230 && x < seat.w + 230 && y > -120 && y < seat.h + 120;
-        if (near) { writes.push([el, `${x.toFixed(1)}px`, `${y.toFixed(1)}px`]); seat.lightOn = true; }
-        else if (seat.lightOn) { writes.push([el, '-1000px', '-1000px']); seat.lightOn = false; }
+        const lightX = near ? `${x.toFixed(1)}px` : '-1000px';
+        const lightY = near ? `${y.toFixed(1)}px` : '-1000px';
+        if (near || seat.lightX) writes.push([seat, lightX, lightY]);
       }
     }
-    for (const [el, x, y] of writes) {
-      const vars = seats.get(el).vars;
-      vars.setProperty('--we-optics-x', x); vars.setProperty('--we-optics-y', y); status.lightWrites += 2;
+    for (const [seat, x, y] of writes) {
+      if (x !== seat.lightX) { seat.vars.setProperty('--we-optics-x', x); seat.lightX = x; status.lightWrites++; }
+      if (y !== seat.lightY) { seat.vars.setProperty('--we-optics-y', y); seat.lightY = y; status.lightWrites++; }
     }
-    lightsDirty = false;
+    lightsDirty = newGeometry;
     status.surfaces = seats.size; status.maps = visible.size ? [...visible].filter(el => seats.get(el)?.key).length : 0;
-    if (rectsDirty || [...dirty].some(el => visible.has(el))) schedule();
+    if (newGeometry || [...dirty].some(el => visible.has(el))) schedule();
   }
   function schedule() {
-    if (scheduled || nextTimer || closed || doc.hidden) return;
-    const delay = 16 - (win.performance.now() - lastFrame);
-    if (delay > 1) nextTimer = win.setTimeout(() => { nextTimer = 0; schedule(); }, delay);
-    else scheduled = win.requestAnimationFrame(guard(frame));
+    if (!scheduled && !closed && !doc.hidden) scheduled = win.requestAnimationFrame(guard(frame));
   }
   function discover(resample, roots = [doc.body]) {
     status.scans++;
@@ -328,9 +339,10 @@ function installGlassOptics() {
         if (entry.isIntersecting) { visible.add(entry.target); dirty.add(entry.target); }
         else { visible.delete(entry.target); const seat = seats.get(entry.target); if (seat?.sampled) deactivate(entry.target, seat); }
       }
-      rectsDirty = true; lightsDirty = true;
+      lightsDirty = true;
       schedule();
-    }), { rootMargin: '0px' }); cleanup.push(() => intersection.disconnect());
+      // Prepare the filter before the element crosses a nested scroller's clip.
+    }), { scrollMargin: '128px 0px' }); cleanup.push(() => intersection.disconnect());
     let mutationTimer = 0, pendingResample = false;
     const pendingRoots = new Set();
     mutation = new win.MutationObserver(guard(records => {
@@ -356,9 +368,15 @@ function installGlassOptics() {
       if (!pointerReported) { pointerReported = true; report('pointer', 'Global tracking active, including outside glass'); }
     });
     doc.addEventListener('pointermove', move, { passive: true }); cleanup.push(() => doc.removeEventListener('pointermove', move));
-    const scrolled = guard(() => { rectsDirty = true; lightsDirty = true; schedule(); });
+    const scrolled = guard(event => {
+      if (event.target instanceof win.Element) scrollTargets.add(event.target);
+      else rectsDirty = true;
+      lightsDirty = true;
+      schedule();
+    });
     win.addEventListener('scroll', scrolled, { passive: true, capture: true }); cleanup.push(() => win.removeEventListener('scroll', scrolled, true));
-    win.addEventListener('resize', scrolled, { passive: true }); cleanup.push(() => win.removeEventListener('resize', scrolled));
+    const resized = guard(() => { rectsDirty = true; lightsDirty = true; schedule(); });
+    win.addEventListener('resize', resized, { passive: true }); cleanup.push(() => win.removeEventListener('resize', resized));
     const resumed = guard(() => { if (!doc.hidden) { rectsDirty = true; lightsDirty = true; schedule(); } });
     doc.addEventListener('visibilitychange', resumed); cleanup.push(() => doc.removeEventListener('visibilitychange', resumed));
     win.__weGlassOptics = status;
