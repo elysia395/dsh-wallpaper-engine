@@ -43,7 +43,7 @@ function renderAppearanceGlassSection(ctx) {
     onLeftSidebarGlass, onTitlebarGlass, onSidebarAlpha, onSidebarBlur, onSidebarColor,
     onSidebarContentAlpha, onSidebarContentColor, onSidebarGlass,
     onSidebarFollowGlobal, onSidebarFullClear, onFloaterSolidBase, onMarketStickyClip, onMarketStickyFade,
-    onThinkingMode, glassDetailOpen, onToggleGlassDetail, glassUiOpen, onToggleGlassUiSection,
+    onThinkingMode, onTableReadability, glassDetailOpen, onToggleGlassDetail, glassUiOpen, onToggleGlassUiSection,
     presetsOpen, onTogglePresetsSection,
   } = ctx;
   // ── 简化配置 vs 高级配置（ADR-0008 **D4**，用户口径修订）────────────
@@ -424,6 +424,10 @@ function renderAppearanceGlassSection(ctx) {
           thinkGear("native", weT("原生"), weT("消息正文（气泡、代码块、思考区）恢复 DSH 原生不透明实色；输入框与对话画布保留玻璃透壁纸；胶囊与思考条的玻璃细调在本挡停用")),
         ),
       ),
+      thinkMode === "glass" ? switchRow(weT("表格可读底"), sel.tableReadability !== false, onTableReadability, {
+        key: "table-readability",
+        hint: weT("关闭后，表格恢复宿主样式，壁纸可透过表格。"),
+      }) : null,
       // ── 既有面的**显示开关**与它们的独立配置 ──
       // ⚠️ 门槛分两层：宿主能力位（`sidebarPresent` / `sidebarGlass`：装没装 dsh-better-sidebar、
       //    总开关开没开）**与**档位门 —— **总开关**两档都画；挂在它们下面的**独立配置层**

@@ -181,7 +181,8 @@
         "hoverCardTransparency": 39,
         "hoverCardBlur": 16,
         "marketStickyClip": true,
-        "marketStickyFade": 26
+        "marketStickyFade": 26,
+        "tableReadability": true
       },
       "host": {
         "id": "",
@@ -354,7 +355,8 @@
         "hoverCardTransparency": 39,
         "hoverCardBlur": 16,
         "marketStickyClip": true,
-        "marketStickyFade": 26
+        "marketStickyFade": 26,
+        "tableReadability": true
       }
     },
     {
@@ -545,7 +547,8 @@
         "hoverCardTransparency": 39,
         "hoverCardBlur": 16,
         "marketStickyClip": true,
-        "marketStickyFade": 26
+        "marketStickyFade": 26,
+        "tableReadability": true
       },
       "host": "__null__"
     },
@@ -737,7 +740,8 @@
         "hoverCardTransparency": 39,
         "hoverCardBlur": 16,
         "marketStickyClip": true,
-        "marketStickyFade": 26
+        "marketStickyFade": 26,
+        "tableReadability": true
       },
       "host": "__null__"
     },
@@ -929,7 +933,8 @@
         "hoverCardTransparency": 39,
         "hoverCardBlur": 16,
         "marketStickyClip": true,
-        "marketStickyFade": 26
+        "marketStickyFade": 26,
+        "tableReadability": true
       },
       "host": "__null__"
     },
@@ -1113,7 +1118,8 @@
         "hoverCardTransparency": 39,
         "hoverCardBlur": 16,
         "marketStickyClip": true,
-        "marketStickyFade": 26
+        "marketStickyFade": 26,
+        "tableReadability": true
       },
       "host": {
         "id": "",
@@ -1286,7 +1292,8 @@
         "hoverCardTransparency": 39,
         "hoverCardBlur": 16,
         "marketStickyClip": true,
-        "marketStickyFade": 26
+        "marketStickyFade": 26,
+        "tableReadability": true
       }
     },
     {
@@ -1526,7 +1533,8 @@
         "hoverCardTransparency": 39,
         "hoverCardBlur": 16,
         "marketStickyClip": true,
-        "marketStickyFade": 26
+        "marketStickyFade": 26,
+        "tableReadability": true
       },
       "host": {
         "id": "",
@@ -1699,7 +1707,8 @@
         "hoverCardTransparency": 39,
         "hoverCardBlur": 16,
         "marketStickyClip": true,
-        "marketStickyFade": 26
+        "marketStickyFade": 26,
+        "tableReadability": true
       }
     },
     {
@@ -1984,7 +1993,8 @@
         "hoverCardTransparency": 39,
         "hoverCardBlur": 16,
         "marketStickyClip": true,
-        "marketStickyFade": 26
+        "marketStickyFade": 26,
+        "tableReadability": true
       },
       "host": {
         "id": "",
@@ -2157,7 +2167,8 @@
         "hoverCardTransparency": 39,
         "hoverCardBlur": 16,
         "marketStickyClip": true,
-        "marketStickyFade": 26
+        "marketStickyFade": 26,
+        "tableReadability": true
       }
     },
     {
@@ -2341,7 +2352,8 @@
         "hoverCardTransparency": 39,
         "hoverCardBlur": 16,
         "marketStickyClip": true,
-        "marketStickyFade": 26
+        "marketStickyFade": 26,
+        "tableReadability": true
       },
       "host": {
         "id": "",
@@ -2514,7 +2526,8 @@
         "hoverCardTransparency": 39,
         "hoverCardBlur": 16,
         "marketStickyClip": true,
-        "marketStickyFade": 26
+        "marketStickyFade": 26,
+        "tableReadability": true
       }
     },
     {
@@ -2712,7 +2725,8 @@
         "hoverCardTransparency": 39,
         "hoverCardBlur": 16,
         "marketStickyClip": true,
-        "marketStickyFade": 26
+        "marketStickyFade": 26,
+        "tableReadability": true
       },
       "host": {
         "id": "",
@@ -2885,7 +2899,8 @@
         "hoverCardTransparency": 39,
         "hoverCardBlur": 16,
         "marketStickyClip": true,
-        "marketStickyFade": 26
+        "marketStickyFade": 26,
+        "tableReadability": true
       }
     },
     {
@@ -3083,7 +3098,8 @@
         "hoverCardTransparency": 39,
         "hoverCardBlur": 16,
         "marketStickyClip": true,
-        "marketStickyFade": 26
+        "marketStickyFade": 26,
+        "tableReadability": true
       },
       "host": {
         "id": "",
@@ -3256,7 +3272,8 @@
         "hoverCardTransparency": 39,
         "hoverCardBlur": 16,
         "marketStickyClip": true,
-        "marketStickyFade": 26
+        "marketStickyFade": 26,
+        "tableReadability": true
       }
     },
     {
@@ -3441,7 +3458,8 @@
         "hoverCardTransparency": 39,
         "hoverCardBlur": 16,
         "marketStickyClip": true,
-        "marketStickyFade": 26
+        "marketStickyFade": 26,
+        "tableReadability": true
       },
       "host": {
         "id": "",
@@ -3614,7 +3632,8 @@
         "hoverCardTransparency": 39,
         "hoverCardBlur": 16,
         "marketStickyClip": true,
-        "marketStickyFade": 26
+        "marketStickyFade": 26,
+        "tableReadability": true
       }
     },
     {
@@ -3804,7 +3823,8 @@
         "hoverCardTransparency": 39,
         "hoverCardBlur": 16,
         "marketStickyClip": true,
-        "marketStickyFade": 26
+        "marketStickyFade": 26,
+        "tableReadability": true
       },
       "host": {
         "id": "",
@@ -3977,7 +3997,8 @@
         "hoverCardTransparency": 39,
         "hoverCardBlur": 16,
         "marketStickyClip": true,
-        "marketStickyFade": 26
+        "marketStickyFade": 26,
+        "tableReadability": true
       }
     },
     {
@@ -4164,7 +4185,8 @@
         "hoverCardTransparency": 39,
         "hoverCardBlur": 16,
         "marketStickyClip": true,
-        "marketStickyFade": 26
+        "marketStickyFade": 26,
+        "tableReadability": true
       },
       "host": {
         "id": "",
@@ -4337,7 +4359,8 @@
         "hoverCardTransparency": 39,
         "hoverCardBlur": 16,
         "marketStickyClip": true,
-        "marketStickyFade": 26
+        "marketStickyFade": 26,
+        "tableReadability": true
       }
     },
     {
@@ -4531,7 +4554,8 @@
         "hoverCardTransparency": 39,
         "hoverCardBlur": 16,
         "marketStickyClip": true,
-        "marketStickyFade": 26
+        "marketStickyFade": 26,
+        "tableReadability": true
       },
       "host": {
         "id": "",
@@ -4704,7 +4728,8 @@
         "hoverCardTransparency": 39,
         "hoverCardBlur": 16,
         "marketStickyClip": true,
-        "marketStickyFade": 26
+        "marketStickyFade": 26,
+        "tableReadability": true
       }
     },
     {
@@ -4963,7 +4988,8 @@
         "hoverCardTransparency": 39,
         "hoverCardBlur": 16,
         "marketStickyClip": true,
-        "marketStickyFade": 26
+        "marketStickyFade": 26,
+        "tableReadability": true
       },
       "host": {
         "id": "",
@@ -5161,7 +5187,8 @@
         "hoverCardTransparency": 39,
         "hoverCardBlur": 16,
         "marketStickyClip": true,
-        "marketStickyFade": 26
+        "marketStickyFade": 26,
+        "tableReadability": true
       }
     },
     {
@@ -5344,7 +5371,8 @@
         "hoverCardTransparency": 39,
         "hoverCardBlur": 16,
         "marketStickyClip": true,
-        "marketStickyFade": 26
+        "marketStickyFade": 26,
+        "tableReadability": true
       },
       "host": {
         "id": "",
@@ -5517,7 +5545,8 @@
         "hoverCardTransparency": 39,
         "hoverCardBlur": 16,
         "marketStickyClip": true,
-        "marketStickyFade": 26
+        "marketStickyFade": 26,
+        "tableReadability": true
       }
     },
     {
@@ -5700,7 +5729,8 @@
         "hoverCardTransparency": 39,
         "hoverCardBlur": 16,
         "marketStickyClip": true,
-        "marketStickyFade": 26
+        "marketStickyFade": 26,
+        "tableReadability": true
       },
       "host": {
         "id": "wallpaper-42",
@@ -5873,7 +5903,8 @@
         "hoverCardTransparency": 39,
         "hoverCardBlur": 16,
         "marketStickyClip": true,
-        "marketStickyFade": 26
+        "marketStickyFade": 26,
+        "tableReadability": true
       }
     },
     {
@@ -6057,7 +6088,8 @@
         "hoverCardTransparency": 39,
         "hoverCardBlur": 16,
         "marketStickyClip": true,
-        "marketStickyFade": 26
+        "marketStickyFade": 26,
+        "tableReadability": true
       },
       "host": {
         "id": "",
@@ -6230,7 +6262,8 @@
         "hoverCardTransparency": 39,
         "hoverCardBlur": 16,
         "marketStickyClip": true,
-        "marketStickyFade": 26
+        "marketStickyFade": 26,
+        "tableReadability": true
       }
     }
   ]

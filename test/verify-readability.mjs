@@ -642,7 +642,7 @@ function main() {
     // （底面 / 表头带 / 两级边框）必须被钉住，否则将来删掉任何一条都全绿。
     const tableRules = normal.filter((r) => r.header.includes('[data-we-thinking-glass]')
       && /\btable\b/.test(r.header));
-    const tableSelectors = tableRules.flatMap((r) => splitSelectors(r.header));
+    const tableSelectors = tableRules.flatMap((r) => splitSelectors(r.header).map((selector) => selector.trim()));
     const hasTablePlate = tableRules.filter((r) => /(^|[\s>+~])table$/.test(r.header.trim()));
     const hasHeaderBand = tableRules.filter((r) => /table\s+th$/.test(r.header.trim()));
     const hasCellBorder = tableRules.filter((r) => /table\s+td$/.test(r.header.trim()));
@@ -663,6 +663,14 @@ function main() {
       && tableSelectors.every((s) => !/\[class\*=/.test(s) && !/\[class\^=/.test(s))
       && tableSelectors.every((s) => /\[data-chat-flow\]/.test(s) || /\[data-vcp-rawhtml\]/.test(s)),
       tableSelectors.join(' | ').slice(0, 120));
+    const tableGate = 'body[data-we-glass-page][data-we-thinking-glass][data-we-table-readability]';
+    const tableContexts = ['[data-chat-flow]', '[data-vcp-rawhtml]'];
+    check('F2h 对话流与 VCP 的浅深色底面、表头及单元格都受可读底开关控制',
+      tableSelectors.length > 0
+      && tableSelectors.every((s) => s.includes('[data-we-table-readability]'))
+      && tableContexts.every((context) =>
+        ['table', 'table th', 'table td'].every((subject) => tableSelectors.includes(`${tableGate} ${context} ${subject}`))
+        && tableSelectors.includes(`${tableGate.replace('body', 'body[data-ds-dark-theme]')} ${context} table`)));
     check('negative control: 挂着宿主哈希类名的表格选择器会被同一判据判红',
       /\[class\*=/.test('body[data-we-glass-page] [class*="_tableScroll_rve47_199"] table')
       && tableSelectors.every((s) => !/\[class\*=/.test(s)));

@@ -245,8 +245,11 @@ function applyGlassLayer() {
   // 令牌退回宿主原生值，画布与输入框不碰。
   if (selection.thinkingNative && !skinYield) document.body.setAttribute("data-we-thinking-native", "on");
   else document.body.removeAttribute("data-we-thinking-native");
-  if (selection.thinkingGlass && !selection.thinkingNative && !skinYield) document.body.setAttribute("data-we-thinking-glass", "on");
+  const thinkingGlass = selection.thinkingGlass && !selection.thinkingNative && !skinYield;
+  if (thinkingGlass) document.body.setAttribute("data-we-thinking-glass", "on");
   else document.body.removeAttribute("data-we-thinking-glass");
+  if (thinkingGlass && selection.tableReadability !== false) document.body.setAttribute("data-we-table-readability", "on");
+  else document.body.removeAttribute("data-we-table-readability");
   // 标题栏容器锚点（#235）：顶栏玻璃那一族 CSS 只认 [data-we-titlebar-anchor]，不再写死宿主
   // 构建哈希 —— 探针判据与理由见本文件 findTitlebarFrame 的注释。关掉标题栏玻璃 / 皮肤让路
   // = 这一面整组不生效，标记也一并摘掉（`&& !skinYield` 正是让路早退路径的摘锚点）。
@@ -335,6 +338,7 @@ function disposeGlassLayer() {
   // 三挡的另一半（对话区原生挡）同批：漏撤 ⇒ 卸载后对话区令牌仍被钉回原生值。
   document.body.removeAttribute("data-we-thinking-glass");
   document.body.removeAttribute("data-we-thinking-native");
+  document.body.removeAttribute("data-we-table-readability");
   // ⚠️ W5 新增的三个门控属性**也必须在这里撤掉**（与上面两个同批）：
   //    漏掉它们 ⇒ 插件被禁用 / HMR 卸载后，宿主 DOM 上仍留着 `data-we-glass-chat` /
   //    `data-we-glass-floaters`，而挂在这些属性上的规则组**照旧生效** ——

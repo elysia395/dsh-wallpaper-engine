@@ -3925,7 +3925,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     // 从 QP_CTX_SETTINGS_ONLY 占位器名单移出、由 quick-panel 真值接线 ⇒ 这些名字现在是
     // **quick-panel 源码里的裸标识符** ⇒ 必须在这里当形参给（漏一个就是 vm 求值 ReferenceError）。
     'onCaretColor', 'onSidebarAlpha', 'onSidebarBlur', 'onSidebarColor',
-    'onSidebarContentAlpha', 'onSidebarContentColor', 'onSidebarFollowGlobal', 'onThinkingMode',
+    'onSidebarContentAlpha', 'onSidebarContentColor', 'onSidebarFollowGlobal', 'onThinkingMode', 'onTableReadability',
     'onCapsuleBlur', 'onCapsuleColor',
     // 「玻璃 UI」节的**子项「独立配置」**及其参数处理器（glass-panel.js 里 `= ctx` 解构出的
     // 绑定不是自由变量，真正需要这里给的是 panel 模块作用域里的那些名字）；
@@ -7468,7 +7468,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       // ⚠️ 本档打开 `thinkingGlass`（上游 #134 的「思考块液态玻璃」，默认关）：原属本档的
       //    「胶囊雾化」与「思考触发条玻璃·独立配置」都迁进侧栏折叠块了（本档不再画它们 ——
       //    这正是"真迁移"的字面含义；侧栏展开档在下面钉它们）。
-      wantLabels: ['主题随壁纸', '边框', '预设方案', '深色单独设置', '玻璃透明度', '雾化', '遮罩浓度', '额外补雾化的选择器', '玻璃保真度', '思考块液态玻璃', '左侧栏液态玻璃', '标题栏液态玻璃', '侧栏液态玻璃', '侧栏全透明', '第三方弹窗不透明底', '市场吸顶条裁掉下层内容', '市场吸顶条·渐隐宽度', '侧栏玻璃跟随全局', '内容面玻璃·独立配置', '左侧栏 · 统一圆角', '左侧栏 · 四角单独', '右侧栏 · 统一圆角', '右侧栏 · 四角单独'] },
+      wantLabels: ['主题随壁纸', '边框', '预设方案', '深色单独设置', '玻璃透明度', '雾化', '遮罩浓度', '额外补雾化的选择器', '玻璃保真度', '思考块液态玻璃', '表格可读底', '左侧栏液态玻璃', '标题栏液态玻璃', '侧栏液态玻璃', '侧栏全透明', '第三方弹窗不透明底', '市场吸顶条裁掉下层内容', '市场吸顶条·渐隐宽度', '侧栏玻璃跟随全局', '内容面玻璃·独立配置', '左侧栏 · 统一圆角', '左侧栏 · 四角单独', '右侧栏 · 统一圆角', '右侧栏 · 四角单独'] },
     // 设置页 · 主题预设**收起**档：不给 `presetsOpen`（ctxFrom 填 noop ⇒ 被当成收起）。
     // 节头必须仍在（它是重新展开的唯一入口），预设网格一行都不画 —— 判据形状与「全局 UI 配色」
     // 收起档同款（verify-client 里那条"存 0 ⇒ 色板不进树、节头仍在"的渲染侧镜像）。
@@ -7476,7 +7476,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       selOver: { sidebarPresent: true, sidebarGlass: true, thinkingGlass: true },
       ctxOver: { glassPresets: { presets: [] }, detailOpen: true, glassUiOpen: true, cornersOpen: true },
       want: ['主题', '细节', '主题预设', '玻璃 UI', '侧边栏圆角', '全局 UI 配色', '全局字体'],
-      wantLabels: ['主题随壁纸', '边框', '深色单独设置', '玻璃透明度', '雾化', '遮罩浓度', '额外补雾化的选择器', '玻璃保真度', '思考块液态玻璃', '左侧栏液态玻璃', '标题栏液态玻璃', '侧栏液态玻璃', '侧栏全透明', '第三方弹窗不透明底', '市场吸顶条裁掉下层内容', '市场吸顶条·渐隐宽度', '侧栏玻璃跟随全局', '内容面玻璃·独立配置', '左侧栏 · 统一圆角', '左侧栏 · 四角单独', '右侧栏 · 统一圆角', '右侧栏 · 四角单独'] },
+      wantLabels: ['主题随壁纸', '边框', '深色单独设置', '玻璃透明度', '雾化', '遮罩浓度', '额外补雾化的选择器', '玻璃保真度', '思考块液态玻璃', '表格可读底', '左侧栏液态玻璃', '标题栏液态玻璃', '侧栏液态玻璃', '侧栏全透明', '第三方弹窗不透明底', '市场吸顶条裁掉下层内容', '市场吸顶条·渐隐宽度', '侧栏玻璃跟随全局', '内容面玻璃·独立配置', '左侧栏 · 统一圆角', '左侧栏 · 四角单独', '右侧栏 · 统一圆角', '右侧栏 · 四角单独'] },
     // 侧栏档（默认收起）：**简化配置 + 两块折叠块的头**（ADR-0008 D4）——
     // 「详细玻璃调节」开关在（收起 ⇒ 它后面的独立配置层一行都不画）；「全局字体」节头在
     // （收起 ⇒ 字体内容不画）。`selOver` 与设置页用例同位 ⇒ 侧栏家族开关同样画得出来。
@@ -7528,7 +7528,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       selOver: { sidebarPresent: true, sidebarGlass: true, thinkingGlass: true },
       ctxOver: { glassDetailOpen: true, detailOpen: true, glassUiOpen: true, cornersOpen: true },
       want: ['主题', '细节', '玻璃 UI', '侧边栏圆角', '全局 UI 配色', '全局字体'],
-      wantLabels: ['主题随壁纸', '边框', '玻璃透明度', '雾化', '额外补雾化的选择器', '玻璃保真度', '思考块液态玻璃', '左侧栏液态玻璃', '标题栏液态玻璃', '侧栏液态玻璃', '侧栏全透明', '第三方弹窗不透明底', '市场吸顶条裁掉下层内容', '市场吸顶条·渐隐宽度', '侧栏玻璃跟随全局', '详细玻璃调节', '胶囊雾化', '设置窗口玻璃·独立配置', '对话框玻璃·独立配置', '思考触发条玻璃·独立配置', '浮层玻璃·独立配置', '文件预览玻璃·独立配置', '悬停卡玻璃·独立配置', '内容面玻璃·独立配置', '左侧栏 · 统一圆角', '左侧栏 · 四角单独', '右侧栏 · 统一圆角', '右侧栏 · 四角单独'] },
+      wantLabels: ['主题随壁纸', '边框', '玻璃透明度', '雾化', '额外补雾化的选择器', '玻璃保真度', '思考块液态玻璃', '表格可读底', '左侧栏液态玻璃', '标题栏液态玻璃', '侧栏液态玻璃', '侧栏全透明', '第三方弹窗不透明底', '市场吸顶条裁掉下层内容', '市场吸顶条·渐隐宽度', '侧栏玻璃跟随全局', '详细玻璃调节', '胶囊雾化', '设置窗口玻璃·独立配置', '对话框玻璃·独立配置', '思考触发条玻璃·独立配置', '浮层玻璃·独立配置', '文件预览玻璃·独立配置', '悬停卡玻璃·独立配置', '内容面玻璃·独立配置', '左侧栏 · 统一圆角', '左侧栏 · 四角单独', '右侧栏 · 统一圆角', '右侧栏 · 四角单独'] },
     // ⚠️ 这一条是**覆盖缺口**补上的：字体那一节的细节（颜色角色 / 排版角色 / 字体族 / 组件字体 /
     // 字体集预设，~180 行）被 `sel.fontCustom` 挡着，而它的默认值是关 ⇒ **任何用例都没渲染过它**。
     // 打开它才能让那些行第一次进入判据的视野（这本身是找缺陷，不只是补锚）。
@@ -7956,7 +7956,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       'onPauseOnBattery', 'onPauseOnBlur', 'onPauseOnHidden', 'onStartPaused', 'onToggleLiveDiag', 'sel'],
     renderAppearanceTab: ['setSetting', 'officialColorOf', 'onAccent', 'onBlur', 'onBorder',
       'onCaretColor', 'onChatGlassFidelity', 'onComponentFamily', 'onComponentFont', 'onExtraGlassSelectors', 'onFontAdvanced', 'onFontResetAll',
-      'onGlassAlpha', 'onGlassColor', 'onGlassFidelity', 'onThinkingMode', 'onLeftSidebarGlass', 'onTitlebarGlass', 'onSidebarAlpha',
+      'onGlassAlpha', 'onGlassColor', 'onGlassFidelity', 'onThinkingMode', 'onTableReadability', 'onLeftSidebarGlass', 'onTitlebarGlass', 'onSidebarAlpha',
       'onSidebarBlur', 'onSidebarColor', 'onSidebarContentAlpha', 'onSidebarContentColor',
       'onSidebarGlass', 'onThemeColor', 'onThemeColorClear', 'onThemeDarkSeparate', 'onThemeFamily',
       'onThemeSize', 'onThemeTypeOnly', 'onThemeWeight', 'onToggleFontCustom', 'onToggleThemeFollow',
