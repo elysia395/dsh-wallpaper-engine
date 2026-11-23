@@ -12,7 +12,7 @@
  *   ① **内核分级面机械复算**：`KERNEL_STABLE_FACE`（`lib/kernel/host-kernel.js` 导出的 15 项）
  *      与**实跑内核**的 `Object.keys()` 对账。**合同数字的唯一真源 = 本行**（改一次 =
  *      一次可见的决策：同时把下面这行改掉）：
- *      「合计 109 / 稳定面 15 / 稳定面 ∩ 内核 7 / 内部面 102」
+ *      「合计 110 / 稳定面 15 / 稳定面 ∩ 内核 7 / 内部面 103」
  *      （99/92 → 104/97 是 issue #240 的图片缩略图族：`imageThumbDir` / `imageThumbPath` /
  *        `ensureImagePreview` / `pruneImagePreviewCache` / `IMAGE_PREVIEW_WIDTH` ——
  *        只被清单族与 /preview 路由消费，按分级口径属内部面。
@@ -22,7 +22,10 @@
  *        —— 只被清单族（`lib/inventory.js`）消费，同样属内部面。
  *        107/100 → 109/102 是 issue #386 的 WE 素材自动探测：`getWeAssetsSource` /
  *        `adoptWeAssetsDir` —— 只被清单族（`lib/inventory.js` 的 rescan/buildInventory）与
- *        子包启动键表消费，同样属内部面。）
+ *        子包启动键表消费，同样属内部面。
+ *        109/102 → 110/103 是 issue #394 的 macOS WallpaperMachine 库根探测：
+ *        `wallpaperMachineRootsP` —— 只被清单族（`lib/inventory.js` 的 assembleInventory）
+ *        消费，同样属内部面。）
  *      —— 判据**从这一行现算**期望值，不再把数字抄进 check 名与负对照（本会话实测：内核从
  *      95 长到 98 后，主判据与它的负对照一起假红 —— 负对照写死了 95/96/89/87）。
  *   ② **M9 → 0**：`lib/components/**` 与 `lib/routes/**` 里**零处**直接消费内核对象

@@ -184,6 +184,12 @@ export interface Inventory {
    * source must degrade rather than blank the wallpaper.
    */
   sceneMediaBase: string;
+  /**
+   * How many WallpaperMachine library roots exist on disk (the macOS Wallpaper Engine port).
+   * The client polls `/inventory` only when this is > 0 — never infer "no Steam" from
+   * `installDir` being null, which is also true when Steam detection simply failed.
+   */
+  wallpaperMachineRoots: number;
   /** Total entries: installed WE wallpapers plus custom uploads. */
   total: number;
   /** Number of entries with playable media. */

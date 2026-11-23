@@ -240,6 +240,7 @@ check('面板：扩展页签有头像间隔滑块，量程取 schema 常量（�
       log, BASE, tokenFor, mediaOriginApi, warmFaststart: async () => {},
       locateWallpaperEngineP: async () => null, owningLibrariesP: async () => [],
       enumerateWallpapersAsync: async () => [], scanSignatureP: async () => 'fixture',
+      wallpaperMachineRootsP: async () => [],
       pathKey: (p) => p, listCustomFrameIds: () => new Set(), pathExistsP,
       mtimeOrNullP: async (p) => { try { return statSync(p).mtimeMs; } catch { return null; } },
       extOf, ensureUploadDir: store.ensureUploadDir, readUploadMeta: store.readUploadMeta,
