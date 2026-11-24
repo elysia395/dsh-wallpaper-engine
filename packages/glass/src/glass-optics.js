@@ -19,6 +19,7 @@ function installGlassOptics() {
     // Match the same bubble carrier as glass-css; the question reply's _bubbleWidth is square.
     'body[data-we-glass-chat][data-we-glass-page]:not([data-we-thinking-native]) [data-chat-flow] [class*="_bubble_"]:not([role="tooltip"])',
     'body[data-we-glass-page][data-we-thinking-glass]:not([data-we-thinking-native]) [data-chat-flow] div:has(> table:only-child)',
+    'body[data-we-glass-page][data-we-glass-chat]:not([data-we-thinking-native]) :is([data-changed-files],[data-presented-file])',
     'body[data-we-glass-page]:not([data-we-thinking-native]) [data-chat-flow] .md-code-block',
     'body[data-we-glass-page]:not([data-we-thinking-native]) [data-chat-flow] :not(pre) > code',
     'body[data-we-glass-page] [data-slot="conversation.view"] button[class*="_toBottom"]',
@@ -324,6 +325,9 @@ function installGlassOptics() {
       ${surfaceSelector}:is([data-we-optics="direct"],[data-we-optics="compact-leaf"]),${surfaceSelector}:is([data-we-optics="pseudo"],[data-we-optics="local"])::before {
         -webkit-backdrop-filter:var(--we-optics-filter,) var(--we-optics-native,blur(1px))!important;
         backdrop-filter:var(--we-optics-filter,) var(--we-optics-native,blur(1px))!important;
+      }
+      ${surfaceSelector}:is([data-changed-files],[data-presented-file]) {
+        background-color:var(--we-chat-glass-fill)!important;
       }
       ${surfaceSelector}[data-we-optics="compact"] {
         -webkit-backdrop-filter:none!important;backdrop-filter:none!important;

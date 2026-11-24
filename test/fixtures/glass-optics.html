@@ -171,6 +171,12 @@ const assertions=[];function check(value,message){if(!value)throw new Error(mess
  document.querySelector('[data-chat-flow]').append(errorRow);
  const errorCode=errorRow.firstElementChild;
  check(parseFloat(getComputedStyle(errorCode).borderTopLeftRadius)>0,'Terminal error badge has round corners with optics off');
+ const files=document.createElement('div');
+ files.style.cssText='position:fixed;left:580px;top:605px;width:340px;--we-chat-glass-fill:rgba(200,220,240,.35)';
+ files.innerHTML='<div data-changed-files style="border-radius:12px"><button type="button">Edited file</button></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div data-presented-file style="border-radius:12px"><button type="button">Archive</button></div><div data-presented-file style="border-radius:12px"><button type="button">Report</button></div></div>';
+ document.body.append(files);
+ const fileCards=[...files.querySelectorAll('[data-changed-files],[data-presented-file]')];
+ check(fileCards.every(card=>getComputedStyle(card).backdropFilter==='none')&&getComputedStyle(fileCards[1]).backgroundColor==='rgba(0, 0, 0, 0)','File cards keep their existing material with optics off');
  document.body.setAttribute('data-we-glass-floaters','');
  const disposeTableOptics=installGlassOptics();
  check(await waitFor(()=>getComputedStyle(tableWrap).backdropFilter.includes('url(')),'Markdown table wrapper carries one rounded refraction filter');
@@ -179,6 +185,9 @@ const assertions=[];function check(value,message){if(!value)throw new Error(mess
  await next();
  check(tableWrap.scrollLeft===90 && getComputedStyle(tableWrap).backdropFilter.includes('url('),'Wide table keeps horizontal scrolling and refraction');
  check(await waitFor(()=>getLeaf(errorCode) && getComputedStyle(getLeaf(errorCode)).backdropFilter.includes('url(')),'Terminal error badge refracts on its rounded capsule');
+ check(await waitFor(()=>fileCards.every(card=>getComputedStyle(card).backdropFilter.includes('url('))),'Edited and delivered file cards each get rounded refraction');
+ check(fileCards.every(card=>getComputedStyle(card).backgroundColor==='rgba(200, 220, 240, 0.35)'&&getComputedStyle(card).borderRadius==='12px'),'File cards reuse the conversation fill and host corners');
+ check(!files.querySelector('button[data-we-optics]'),'File card controls receive no duplicate refraction');
  const modalRoot=document.createElement('div');
  modalRoot.setAttribute('role','presentation');
  modalRoot.style.cssText='position:fixed;inset:0;z-index:8;display:grid;place-items:center';
@@ -215,6 +224,7 @@ const assertions=[];function check(value,message){if(!value)throw new Error(mess
  list.remove();
  document.body.setAttribute('data-we-thinking-native','');
  check(await waitFor(()=>!tableWrap.hasAttribute('data-we-optics')),'Native conversation mode releases the table filter');
+ check(fileCards.every(card=>!card.hasAttribute('data-we-optics')),'Native conversation mode also releases all file cards');
  disposeTableOptics();
  document.getElementById('result').textContent=JSON.stringify({ok:true,assertions,diagnostics});
 })().catch(e=>document.getElementById('result').textContent=JSON.stringify({ok:false,error:e.stack,assertions,diagnostics}));
