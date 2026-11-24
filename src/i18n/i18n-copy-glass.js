@@ -8,6 +8,8 @@
  */
 const WE_I18N_EN_GLASS = {
   "透镜折射与追光（实验）": "Lens refraction and pointer light (experimental)",
+  "当前显卡型号暂不支持开启折射与追光。": "Lens refraction and pointer light are disabled for this GPU model.",
+  "当前使用软件渲染，无法开启折射与追光。": "Lens refraction and pointer light are unavailable in software rendering mode.",
   "增强圆角折射、薄边高光与鼠标追光；增加合成开销，卡顿时关闭。换行代码保留原生样式，减少动态效果时关闭追光。": "Adds rounded refraction, rim highlights and pointer light. Uses additional compositing; turn off if scrolling slows down. Wrapped code stays native; reduced motion disables pointer light.",
   // ── 思考块液态玻璃（PR #130）──
   "思考块液态玻璃": "Thinking-block liquid glass",

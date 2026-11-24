@@ -25,6 +25,9 @@ code.capsule{backdrop-filter:blur(10px) saturate(1.3)}
 // Match the real bundle's lexical shadowing instead of testing in an empty scope.
 const CSS = 'plugin stylesheet';
 const selection={glassOptics:true};let glassRowDisabled=false,skinYieldState=false;const skinYieldActive=()=>skinYieldState;
+// The visual fixture runs in headless Chromium; exercise the supported-GPU path explicitly.
+const probeGlassRenderer=()=>({renderer:'Intel Arc B580 Graphics',software:false});
+const detectSoftwareRender=()=>false;
 const apiUrl=p=>p;
 window.fetch=async(url,opts)=>{if(opts?.body){const row=JSON.parse(opts.body);diagnostics.push(row)}return {ok:true}};
 const diagnostics=[];function reportClientDiag(event,detail){diagnostics.push({event,detail})}

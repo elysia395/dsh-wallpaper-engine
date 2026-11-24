@@ -392,24 +392,46 @@ function reportGlassOptics(event, detail) {
 }
 
 let glassOpticsTimer = 0, glassOpticsRelease = null;
+
+// Match specific older GPU families. Generic and masked renderer names cannot establish a model.
+const legacyGlassRenderers = [
+  /\bIntel\s+(?:GMA\b|HD Graphics\b|Iris(?: Plus| Pro)? Graphics\b|UHD Graphics\s+P?(?:6[0-2]\d|630)\b)/i,
+  /\bGeForce\s+(?:(?:GTX?\s+)?[2-9]\d{2}M?|GTX?\s+10[135]0)\b/i,
+  /\bRadeon\s+(?:HD\b|R[579]\b|RX\s+[45]\d{2}M?\b|Vega\s+(?:3|6|8|10|11)\s+Graphics\b)/i,
+];
+
+function glassOpticsBlockReason() {
+  if (detectSoftwareRender()) return 'software';
+  const { renderer, software } = probeGlassRenderer();
+  if (software) return 'software';
+  const model = renderer.replace(/\s*\((?:R|TM)\)|[®™]/gi, '');
+  return legacyGlassRenderers.some(pattern => pattern.test(model)) ? 'legacy' : '';
+}
+
 function disposeGlassOptics() {
   window.clearTimeout(glassOpticsTimer); glassOpticsTimer = 0;
   if (glassOpticsRelease) { try { glassOpticsRelease(); } catch {} glassOpticsRelease = null; }
 }
+function canMountGlassOptics() {
+  const body = document.body;
+  return selection.glassOptics === true && !glassRowDisabled
+    && !(typeof skinYieldActive === 'function' && skinYieldActive())
+    && body?.hasAttribute('data-we-glass-page') && !body.hasAttribute('data-we-glass-fallback')
+    && !glassOpticsBlockReason();
+}
+
 function syncGlassOptics() {
-  // Respect the native glass row, skin yielding, software fallback, and upstream surface ownership.
-  const yielding = typeof skinYieldActive === 'function' && skinYieldActive();
-  if (selection.glassOptics !== true || glassRowDisabled || yielding || !document.body.hasAttribute('data-we-glass-page') || document.body.hasAttribute('data-we-glass-fallback')) {
+  if (!canMountGlassOptics()) {
     disposeGlassOptics(); return;
   }
   if (glassOpticsRelease || glassOpticsTimer) return;
   glassOpticsTimer = window.setTimeout(() => {
     glassOpticsTimer = 0;
-    if (selection.glassOptics !== true || glassRowDisabled || skinYieldActive() || document.body.hasAttribute('data-we-glass-fallback') || !document.body.hasAttribute('data-we-glass-page')) return;
+    if (!canMountGlassOptics()) return;
     try { glassOpticsRelease = installGlassOptics() || null; }
     catch (error) { reportGlassOptics('local-lens-v2-boot-error', String(error?.stack || error)); }
   }, 150);
 }
 
 
-export { installGlassOptics, syncGlassOptics, disposeGlassOptics };
+export { installGlassOptics, syncGlassOptics, disposeGlassOptics, glassOpticsBlockReason };

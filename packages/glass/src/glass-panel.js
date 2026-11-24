@@ -62,6 +62,10 @@ function renderAppearanceGlassSection(ctx) {
   //   （高级行处理器已随迁移**移出**占位器名单、改为真值接线）。判据见 verify-scene-live
   //   的「侧栏 ctx 覆盖」与两档标签序列。
   const sidebarSurface = surface === "sidebar";
+  const opticsBlocked = Boolean(ctx.opticsBlock);
+  const opticsHint = ctx.opticsBlock === "legacy"
+    ? weT("当前显卡型号暂不支持开启折射与追光。")
+    : opticsBlocked ? weT("当前使用软件渲染，无法开启折射与追光。") : undefined;
   const children = ((typeof GLASS_CHILDREN !== "undefined" && GLASS_CHILDREN) || [])
     // ⚠️ 排除 `panelOff` 的子项：乙类（左侧栏）**不进这一层** ——
     //    它已有自己的总开关「左侧栏液态玻璃」，而它的"独立配置"耦合在那一项下面
@@ -366,8 +370,10 @@ function renderAppearanceGlassSection(ctx) {
         (hex, live) => onGlassColor("light", hex, live), { key: "glass-color" }),
       !sidebarSurface && sel.glassDarkSeparate === true && swatchRow(weT("玻璃颜色 · 深色"), GLASS_COLOR_PRESETS, glassPair.dark,
         (hex, live) => onGlassColor("dark", hex, live), { key: "glass-color-dark" }),
-      !sidebarSurface && switchRow(weT("透镜折射与追光（实验）"), sel.glassOptics === true, onGlassOptics, {
+      !sidebarSurface && switchRow(weT("透镜折射与追光（实验）"), !opticsBlocked && sel.glassOptics === true, onGlassOptics, {
         key: "glass-optics",
+        disabled: opticsBlocked,
+        hint: opticsHint,
         tooltip: weT("增强圆角折射、薄边高光与鼠标追光；增加合成开销，卡顿时关闭。换行代码保留原生样式，减少动态效果时关闭追光。"),
       }),
       SliderRow(weT("玻璃透明度"), 0, 100, 5, sel.glassAlpha, onGlassAlpha, "%"),

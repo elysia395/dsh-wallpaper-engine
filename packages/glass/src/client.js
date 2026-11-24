@@ -427,7 +427,9 @@ function startGlassRowPolling() {
 registerPanelSection('appearance', 'glass', {
   id: 'glass',
   get title() { return weT("玻璃 UI"); },
-  render: (ctx) => (glassRowDisabled ? null : renderAppearanceGlassSection(ctx)),
+  render: (ctx) => (glassRowDisabled ? null : renderAppearanceGlassSection({
+    ...ctx, opticsBlock: ctx.surface === "sidebar" ? "" : glassOpticsBlockReason(),
+  })),
 });
 
 /* ===== 跨包登记 #2：玻璃行为层（ADR-0016 第三刀）===== */

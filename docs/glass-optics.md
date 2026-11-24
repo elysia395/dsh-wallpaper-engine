@@ -4,6 +4,8 @@ Appearance → Glass UI → **Lens refraction and pointer light (experimental)**
 
 The setting is `glassOptics`, owned by the shared settings schema and included in glass reset and appearance presets. The glass child owns its runtime and releases observers, timers, CSSOM rules, decoration leaves and SVG filters when disabled, unloaded, yielding to a skin, or using software-render fallback. No network diagnostics are added.
 
+The toggle is disabled on software rendering and recognized older GPU families, including Intel HD and UHD up to 630, GeForce GTX 900 and earlier numbered families, GTX 1050 and Radeon RX 400/500. The check uses the browser's active GPU locally. Renderer names without a recognizable model retain the default-off opt-in behavior.
+
 Existing material tint and blur remain in place on panels. Short, single-line code uses a clearer lens profile on an independent background leaf: glyphs are not filtered or duplicated. Wrapped inline code keeps the native line boxes and does not receive a rectangular backdrop over neighboring prose (see #197). Nested surfaces and explicit native-preserve regions are excluded.
 
 Maps are shared by geometry, capped at 560 pixels per dimension and retained in a bounded unused cache. Surfaces near the vertical edge of a scrollport get their maps before entering view, with preparation spread across frames. On nested scroll, only the affected surfaces refresh their positions. Pointer-only frames use cached rectangles and update coordinates through CSSOM. Refraction stays enabled while scrolling. Dense inline code and animated wallpaper still incur backdrop compositing cost.
