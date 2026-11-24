@@ -12,6 +12,7 @@ const WE_I18N_EN_GLASS = {
   "已开启。显卡负载可能过大，出现滚动卡顿时请关闭。": "Enabled. GPU load may be high. Turn this off if scrolling stutters.",
   "开启此实验功能可能带来的显卡相关风险和问题，由使用者自行承担。": "Enable this experimental feature at your own risk. You are responsible for any GPU-related issues it causes.",
   "当前使用软件渲染，无法开启折射与追光。": "Lens refraction and pointer light are unavailable in software rendering mode.",
+  "实验功能会增加渲染开销，卡顿时可关闭。": "This experimental feature adds rendering overhead. Turn it off if you notice stutter.",
   "增强圆角折射、薄边高光与鼠标追光；增加合成开销，卡顿时关闭。换行代码保留原生样式，减少动态效果时关闭追光。": "Adds rounded refraction, rim highlights and pointer light. Uses additional compositing; turn off if scrolling slows down. Wrapped code stays native; reduced motion disables pointer light.",
   // ── 思考块液态玻璃（PR #130）──
   "思考块液态玻璃": "Thinking-block liquid glass",

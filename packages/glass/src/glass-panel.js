@@ -65,13 +65,16 @@ function renderAppearanceGlassSection(ctx) {
   const opticsBlocked = ctx.opticsMode === "software";
   const opticsEnabled = ctx.opticsEnabled ?? (sel.glassOptics === true);
   let opticsHint;
-  if (opticsBlocked) opticsHint = weT("当前使用软件渲染，无法开启折射与追光。");
-  if (ctx.opticsMode === "limited") {
+  if (opticsBlocked) {
+    opticsHint = weT("当前使用软件渲染，无法开启折射与追光。");
+  } else if (ctx.opticsMode === "limited") {
     const loadHint = opticsEnabled
       ? weT("已开启。显卡负载可能过大，出现滚动卡顿时请关闭。")
       : weT("当前显卡低于推荐性能档位，开启可能导致负载过大。");
     opticsHint = React.createElement("span", { role: "status" }, loadHint, " ",
       weT("开启此实验功能可能带来的显卡相关风险和问题，由使用者自行承担。"));
+  } else if (ctx.opticsMode === "standard") {
+    opticsHint = weT("实验功能会增加渲染开销，卡顿时可关闭。");
   }
   const children = ((typeof GLASS_CHILDREN !== "undefined" && GLASS_CHILDREN) || [])
     // ⚠️ 排除 `panelOff` 的子项：乙类（左侧栏）**不进这一层** ——
