@@ -6,11 +6,14 @@ import { resolve, join } from 'node:path';
 import { tmpdir } from 'node:os';
 import { pathToFileURL } from 'node:url';
 import { setTimeout as delay } from 'node:timers/promises';
+import { CSS_GLASS } from '../packages/glass/src/glass-css.js';
 
 const out = resolve('.artifacts/glass-optics');
 mkdirSync(out, { recursive: true });
 const source = readFileSync(resolve('packages/glass/src/glass-optics.js'), 'utf8').replace(/export \{[^}]+\};/, '');
-const html = readFileSync(resolve('test/fixtures/glass-optics.html'), 'utf8').replace('/* OPTICS_SOURCE */', source);
+const html = readFileSync(resolve('test/fixtures/glass-optics.html'), 'utf8')
+  .replace('/* OPTICS_SOURCE */', source)
+  .replace('/* GLASS_CSS */', () => JSON.stringify(CSS_GLASS));
 writeFileSync(join(out, 'fixture.html'), html);
 const candidates = process.platform === 'win32'
   ? ['C:/Program Files (x86)/Microsoft/Edge/Application/msedge.exe', 'C:/Program Files/Google/Chrome/Application/chrome.exe']

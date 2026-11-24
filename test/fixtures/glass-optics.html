@@ -153,6 +153,26 @@ const assertions=[];function check(value,message){if(!value)throw new Error(mess
  check(!document.querySelector('[data-we-optics]'),'Asynchronous map failure rolls back all surfaces');
 
  HTMLCanvasElement.prototype.getContext=getContext;
+
+ const tableStyle=document.createElement('style');
+ tableStyle.textContent=/* GLASS_CSS */;
+ document.head.append(tableStyle);
+ document.body.setAttribute('data-we-thinking-glass','');
+ const tableWrap=document.createElement('div');
+ tableWrap.style.cssText='position:fixed;left:560px;top:350px;width:340px;overflow-x:auto;overscroll-behavior-x:contain';
+ tableWrap.tabIndex=0;
+ tableWrap.innerHTML='<table style="width:540px;max-width:none;border-collapse:collapse"><thead><tr><th>Title</th><th>Details</th></tr></thead><tbody><tr><td><code>table code</code></td><td>Body</td></tr></tbody></table>';
+ document.querySelector('[data-chat-flow]').append(tableWrap);
+ check(parseFloat(getComputedStyle(tableWrap).borderTopLeftRadius)>0,'Markdown table clips its colored corners at the scroll wrapper with optics off');
+ const disposeTableOptics=installGlassOptics();
+ check(await waitFor(()=>getComputedStyle(tableWrap).backdropFilter.includes('url(')),'Markdown table wrapper carries one rounded refraction filter');
+ check(!tableWrap.querySelector('[data-we-optics]'),'Table and inline cells do not receive redundant refraction filters');
+ tableWrap.scrollLeft=90;
+ await next();
+ check(tableWrap.scrollLeft===90 && getComputedStyle(tableWrap).backdropFilter.includes('url('),'Wide table keeps horizontal scrolling and refraction');
+ document.body.setAttribute('data-we-thinking-native','');
+ check(await waitFor(()=>!tableWrap.hasAttribute('data-we-optics')),'Native conversation mode releases the table filter');
+ disposeTableOptics();
  document.getElementById('result').textContent=JSON.stringify({ok:true,assertions,diagnostics});
 })().catch(e=>document.getElementById('result').textContent=JSON.stringify({ok:false,error:e.stack,assertions,diagnostics}));
 </script>

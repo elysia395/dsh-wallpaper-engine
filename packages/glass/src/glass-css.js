@@ -842,6 +842,11 @@ const CSS_GLASS = `
      [data-vcp-rawhtml]：宿主的表格类名带构建哈希，docs/CODE-STRUCTURE.md §13
      判其稳定性为低，不许把用户可见行为挂在它上面。
      这条规则不加霜 ⇒ 不需要 glass-fallback 的孪生规则（回退模式要同一张网格）。 */
+  /* The host already clips overflow on its Markdown table wrapper. Round that
+     clip so the collapsed-border table and its header are clipped together. */
+  body[data-we-glass-page][data-we-thinking-glass] [data-chat-flow] div:has(> table:only-child) {
+    border-radius: var(--dsw-radius-md, 12px);
+  }
   body[data-we-glass-page][data-we-thinking-glass] [data-chat-flow] table,
   body[data-we-glass-page][data-we-thinking-glass] [data-vcp-rawhtml] table {
     background: color-mix(in srgb,

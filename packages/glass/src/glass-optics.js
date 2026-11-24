@@ -18,6 +18,7 @@ function installGlassOptics() {
     'body[data-we-glass-chat][data-we-glass-page] [data-composer-card]',
     // Match the same bubble carrier as glass-css; the question reply's _bubbleWidth is square.
     'body[data-we-glass-chat][data-we-glass-page]:not([data-we-thinking-native]) [data-chat-flow] [class*="_bubble_"]:not([role="tooltip"])',
+    'body[data-we-glass-page][data-we-thinking-glass]:not([data-we-thinking-native]) [data-chat-flow] div:has(> table:only-child)',
     'body[data-we-glass-page]:not([data-we-thinking-native]) [data-chat-flow] .md-code-block',
     'body[data-we-glass-page]:not([data-we-thinking-native]) [data-chat-flow] :not(pre) > code',
     'body[data-we-glass-page] [data-slot="conversation.view"] button[class*="_toBottom"]',
