@@ -3384,6 +3384,20 @@ setTimeout(async () => {
     assert.ok(!showsInventoryError(tree), '重试成功 ⇒ 错误态消失');
     assert.ok(findBtnByText(tree, '选择壁纸'), '恢复后回到正常面板（页签内容回来了；类型筛选在库视图里，下钻打开即有）');
 
+    // #379：失败分支不许把手里那份库存换成空库 —— 换成 `wallpapers: []` 之后，
+    // 任何一次 revalidateSelection() 都会把当前壁纸判成"已从库里移除"并
+    // `setSetting("id", "")` 落盘 ⇒ 背景当场变黑、重启也回不来（用户视角 = 数据丢失）。
+    // 判据读**真渲染**的产物：失败 + 重试成功后，壁纸层必须还在（层就是背景本身）。
+    assert.ok(document.getElementById('dsh-wallpaper-engine-layer'),
+      '★ #379：库存刷新失败不得清掉当前壁纸（失败只说明"这次没拿到新数据"）');
+    // 本节后继用例以"无活动壁纸"为前提（挑选新壁纸要建首层、过渡要旧层），
+    // 所以这里按用户路径显式清一次，而不是继续依赖失败分支顺手清空。
+    const clearWallpaperBtn = findBtnByText(tree, '清除');
+    assert.ok(clearWallpaperBtn, '前置：面板应有「清除」入口（清掉壁纸回到无壁纸状态）');
+    clearWallpaperBtn.props.onClick();
+    tree = renderPicker();
+    assert.ok(!document.getElementById('dsh-wallpaper-engine-layer'), '前置：清除后壁纸层消失');
+
     // ── 0b：ESC 关闭 picker（处理器住在 useEffect 里 ⇒ 必须让 effect 跑一次才可达）──────
     // 做法：**临时**把 mock 的 `useEffect` 换成收集器 ⇒ 渲染一次拿到注册函数 ⇒ 立刻还原 ⇒
     // 再跑收集到的 effect（它们只做注册）⇒ 派发 keydown。全程不改全局行为，所以不会牵动既有

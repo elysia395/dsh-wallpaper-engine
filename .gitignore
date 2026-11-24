@@ -55,6 +55,8 @@ packages/*/lib/client.*.js
 # 此前只写在 .git/info/exclude 里 —— 那是**每个 clone 各写一份**的本地配置,
 # 于是每个新工作区都会把 400+ 个笔记文件当未跟踪改动报出来。
 /.integration-notes/
+# 本地 PR 评审临时区（worktree 副本、浏览器 profile、一次性评审脚本；属本机过程记录，不入库）
+/.review/
 .DS_Store
 **/.DS_Store
 

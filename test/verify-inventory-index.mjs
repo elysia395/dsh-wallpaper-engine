@@ -86,6 +86,7 @@ function makeBuilder() {
     owningLibrariesP: async () => [],
     enumerateWallpapersAsync: async () => entries,
     scanSignatureP: async () => sig,
+    wallpaperMachineRootsP: async () => [],
     pathKey: (p) => String(p).toLowerCase(),
     listCustomFrameIds: () => new Set(),
     pathExistsP: async (p) => { probes.exists += 1; return existsSync(p); },
@@ -111,6 +112,8 @@ function makeBuilder() {
     customIdFromAbs: () => '',
     getUploadDir: () => UPLOADS,
     getWeAssetsDir: () => join(ISO, 'we-assets'),
+    adoptWeAssetsDir: () => {},
+    getWeAssetsSource: () => null,
     cacheBaseDir: () => CACHE,
   });
 }

@@ -331,7 +331,7 @@ node test/tools/host-route-index.mjs --write   # 重算并写入 docs/ROUTE-INDE
 
 ### 4.6 `test/tools/` 清单（都没有 CI 消费者）
 
-工具很多，清单见 [`CODE-STRUCTURE.md`](./CODE-STRUCTURE.md) §12。本表只是索引、不是必须维护的名册（ADR-0017），`test/tools/` 的磁盘枚举才是权威。
+工具很多，清单见 [`CODE-STRUCTURE.md`](./CODE-STRUCTURE.md) §12。该清单是索引快照、不是契约（ADR-0017），`test/tools/` 的磁盘枚举才是权威。
 新增工具的约定见 §4.7 约定 4；改「同时是守卫的库」那一族等于改判据，走 `npm run verify:all`。
 
 ### 4.7 约定（十条，守卫会判）
@@ -345,7 +345,8 @@ node test/tools/host-route-index.mjs --write   # 重算并写入 docs/ROUTE-INDE
    合成的 `import … from '…'` 字符串 —— 不剥注释的判据会被自己的负对照绊倒。
 4. **新守卫只按"域"判定，没有登记动作**：判据的域应当**从磁盘枚举**，而不是靠一张手工维护的
    名单 —— 名单漏一行只会让那个文件**静默脱离判据**。
-   ⚠️ 唯独 `test/tools/*.mjs` 与 `test/compat-*.mjs` **仍要在 [CODE-STRUCTURE.md](./CODE-STRUCTURE.md) §12 点名**。
+   旧例外也已撤除：`test/tools/*.mjs` 与 `test/compat-*.mjs` 不必再写进 [CODE-STRUCTURE.md](./CODE-STRUCTURE.md) §12
+   （ADR-0017；§12 自己写明是索引快照，漏登与落后都允许）。
 5. **负对照必须把变异输入喂进「同一条判据」**：判据只在**一侧**定义 —— 命名函数、
    或命名的正则常量 —— 正判据与负对照都调它。两种写法不算数：
    - ① **只断言某个常量 / 数组不含 X**：判据根本没被执行，判据空转时它照样绿；

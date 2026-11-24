@@ -14,6 +14,13 @@
 > 完整逐提交历史见 GitHub Commits / Releases；升级前置条件见 [`UPGRADING.md`](./UPGRADING.md)。
 > `test/verify-scene-live.mjs` 这一类判据条数**只记该条写作当时的实测总数**（如 466 / 465），不是现在的总数 —— 后续条目会往上加（现为 502）；照原文保留，好让它与当次提交对得上。
 
+### 未发布（悬停卡唯一子 div · 深色孪生 · macOS 壁纸库，2026-11-23）
+
+- **修：深色主题 + 软件渲染时输入卡与仓库抽屉被刷成 92% 纯白（#398）**。软件光栅回退（`body[data-we-glass-fallback]`）里这两条近不透明配方只写了浅色一支，深色主题下取到 `--we-surface-tint-light`（#ffffff）⇒ 输入卡 `[data-composer-card]::before` 与 `.we-repo-panel` 变成 92% 白板，和周围的深色面板不是一种材质。现按本块既有写法各补一条深色孪生（多一层 `[data-ds-dark-theme]`，只换 `--we-surface-tint-dark`，配方逐字相同）；`verify-softrender` 新增 E6（每条读 `--we-surface-tint-light` 的回退规则必须有同选择器的深色孪生）与 E6b 负对照（删掉输入卡那条孪生必须被判出）。纯 CSS，刷新页面生效。
+- **修：悬停卡玻璃不再误涂多子元素对话框的每个直接子 div**。`[role="dialog"] > div` 只应命中宿主 HoverCard 的唯一卡片 div；写成裸 `> div` 时，宿主「本轮用量」面板（`title` / `titleRule` 两个 div）和第三方弹层（标题 / 摘要 / 影响清单等多个 div）会各涂一层底、渐变与霜，出现多条不同色色带。现改为 `> div:only-of-type`，正常档与无霜回退档同步；`verify-glass-surfaces` 新增 ㉗ 组（两条规则 + 负对照）。纯 CSS，刷新页面生效。
+
+- **新增：macOS 上也能选 WallpaperMachine 的壁纸（#394）**。WallpaperMachine 把 Steam 工作坊壁纸下到 `~/Library/Application Support/WallpaperMachine/Library/<id>/`，结构与 Steam 的 `content/431960/<id>/` 同构，所以直接接成额外的扫描根：签名与枚举仍走同一套推导，清单字段形状不变；目录不存在时自动跳过，Windows / Linux 不受影响。`DSH_WE_WALLPAPER_MACHINE_LIBRARY` 可覆盖库路径（多个用逗号或分号分隔，只认绝对路径）。宿主 `/inventory` 新增 `wallpaperMachineRoots`（按磁盘实测的库根数）：**只有本机真的有这个库**时客户端才每 30 秒静默刷新一次清单（不亮 loading、清单没变不重渲染），Steam 用户保持手动刷新；连续失败 3 次退避约 3 分钟。`verify-wallpaper-scan` 新增 W1–W6（含两条负对照）。
+
 ### v1.4.3（2026-11-19）
 
 - **新增：宿主悬停信息卡（`hoverCard`）玻璃与插件市场吸顶条下方卡片渐隐（#377）**。

@@ -677,6 +677,54 @@ section('T. WE visibility.json filter (issue #260)');
   check('T6 negative control: without the filter the hidden entry comes back', mlist.some((p) => p.id === '99020'));
 }
 
+// ── W. WallpaperMachine 库根（macOS，issue #394 / #396 评审）────────────────────────────
+section('W. WallpaperMachine library roots (macOS, issue #394)');
+{
+  const wmRoot = join(ISO, 'wm-library');
+  project(join(wmRoot, '123'), { file: 'v.mp4', type: 'video' }, { 'v.mp4': 'x' });
+  const envKey = 'DSH_WE_WALLPAPER_MACHINE_LIBRARY';
+  const saved = process.env[envKey];
+  try {
+    process.env[envKey] = wmRoot;
+    const kit = makeKit();
+    const roots = await kit.wallpaperMachineRootsP();
+    check('W1 env override pointing at an existing library reports exactly that root',
+      roots.length === 1 && roots[0] === wmRoot, JSON.stringify(roots));
+
+    process.env[envKey] = join(ISO, 'not-there');
+    check('W2 a missing library reports zero roots (so the client does not poll)',
+      (await kit.wallpaperMachineRootsP()).length === 0);
+
+    process.env[envKey] = 'relative/dir;' + wmRoot;
+    const mixed = await kit.wallpaperMachineRootsP();
+    check('W3 relative paths are dropped, absolute ones kept',
+      mixed.length === 1 && mixed[0] === wmRoot, JSON.stringify(mixed));
+
+    // 库根接进了 scanRootsP ⇒ 枚举真的看得见它（否则「上报了根数但清单里没有」没人发现）。
+    const listed = await kit.enumerateWallpapersAsync(null, []);
+    check('W4 the library root is actually enumerated (scanRootsP integration)',
+      listed.some((p) => p.id === '123'), 'ids=' + listed.map((p) => p.id).join(','));
+
+    // 负对照：把探盘去掉 ⇒ W2 必须红（证明 W2 判的是磁盘事实，不是常量）。
+    const noProbe = await loadMutant('wm-roots-no-probe', (src) => src
+      .replace('if (await pathExistsP(root)) out.push(root);', 'out.push(root);'));
+    process.env[envKey] = join(ISO, 'not-there');
+    const mutantRoots = await noProbe({ WE_APPID: APPID, ...realDeps() }).wallpaperMachineRootsP();
+    check('W5 negative control: without the disk probe a missing library is still reported',
+      mutantRoots.length === 1, JSON.stringify(mutantRoots));
+
+    // 负对照：把库根从 scanRootsP 里摘掉 ⇒ W4 必须红。
+    const noRoot = await loadMutant('wm-roots-not-scanned', (src) => src
+      .replace('for (const wm of await wallpaperMachineRootsP()) roots.push(wm);', ''));
+    process.env[envKey] = wmRoot;
+    const mutantList = await noRoot({ WE_APPID: APPID, ...realDeps() }).enumerateWallpapersAsync(null, []);
+    check('W6 negative control: without the scan root the library entry disappears',
+      !mutantList.some((p) => p.id === '123'), 'ids=' + mutantList.map((p) => p.id).join(','));
+  } finally {
+    if (saved === undefined) delete process.env[envKey]; else process.env[envKey] = saved;
+  }
+}
+
 if (failed) {
   console.log(`WALLPAPER-SCAN CHECKS FAILED — ${failed} failed, ${passed} passed`);
   process.exit(1);

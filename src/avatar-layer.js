@@ -317,6 +317,16 @@ function avatarMediaOf(row) {
  * 藏掉的文本层。此时若仍按"先正文、后表情"排，表情会落在空正文的下一行、头像下面 ——
  * 用户要的是"没有文本时表情直接跟在头像右侧"。用 `checkVisibility` 同时排除
  * `display:none` / `visibility:hidden` / `opacity:0` 的文本层。
+ *
+ * ⚠️ 性能（issue #385）：`checkVisibility` / `getClientRects` 是**强制布局查询**。原实现在
+ * 每个文本节点上各调一次，且调用点紧跟在插入头像节点之后 —— DOM 已失效，于是每次都要
+ * 触发一次整页样式重算。实测 840 次调用累计 480ms，把整段历史加载拖慢到秒级，推迟到
+ * `requestAnimationFrame` 也救不回来（rAF 里刚写完 DOM，同样失效）。
+ *
+ * 现在的顺序是「先便宜地判有没有文本，再只对**可见的**候选做查询」：
+ *   · 没有非空白文本 ⇒ 一次 `textContent` 判定即返回，零布局查询；
+ *   · 有文本 ⇒ 从第一个候选开始查可见性：可见就停，被藏掉就继续看下一个。
+ *     不能因为第一个候选被藏就断定这行没有正文 —— 折叠的思考过程常排在正文前面。
  */
 function avatarHasVisibleText(row) {
   let root;
@@ -324,37 +334,44 @@ function avatarHasVisibleText(row) {
     root = row.querySelector && row.querySelector('[data-slot="conversation.chat.node"]');
   } catch { root = null; }
   if (!root) root = row;
-  if (typeof document.createTreeWalker === 'function') {
-    let walker;
-    try { walker = document.createTreeWalker(root, 4 /* SHOW_TEXT */); } catch { walker = null; }
-    if (walker) {
-      let n;
-      try {
-        while ((n = walker.nextNode())) {
-          const v = n.nodeValue;
-          if (!v || !v.trim()) continue;
-          const p = n.parentElement;
-          if (!p) continue;
-          try {
-            if (p.closest && (p.closest('.' + AVATAR_NODE_CLASS) || p.closest('.' + AVATAR_MEDIA_CLASS)
-              || p.closest('[aria-hidden="true"],button,[role="button"]'))) continue;
-          } catch { /* ignore */ }
-          if (typeof p.checkVisibility === 'function') {
-            let vis = true;
-            try { vis = p.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }); } catch { vis = true; }
-            if (!vis) continue;
-          } else if (p.getClientRects && p.getClientRects().length === 0) {
-            continue;
-          }
-          return true;
-        }
-      } catch { /* fall through to textContent */ }
-    }
-  }
+
+  // ① 便宜的早退：整段没有非空白文本 ⇒ 判定"没有可见文本"，不触发布局。
+  let text;
+  try { text = root.textContent; } catch { text = ''; }
+  if (typeof text !== 'string' || text.replace(/\s+/g, '') === '') return false;
+
+  // ② 有文本时，才需要确认它没有被 CSS 藏起来。只对第一个候选取证。
+  if (typeof document.createTreeWalker !== 'function') return true;
+  let walker;
+  try { walker = document.createTreeWalker(root, 4 /* SHOW_TEXT */); } catch { walker = null; }
+  if (!walker) return true;
+  let n;
   try {
-    const t = root.textContent;
-    return typeof t === 'string' && t.replace(/\s+/g, '') !== '';
-  } catch { return false; }
+    while ((n = walker.nextNode())) {
+      const v = n.nodeValue;
+      if (!v || !v.trim()) continue;
+      const p = n.parentElement;
+      if (!p) continue;
+      try {
+        if (p.closest && (p.closest('.' + AVATAR_NODE_CLASS) || p.closest('.' + AVATAR_MEDIA_CLASS)
+          || p.closest('[aria-hidden="true"],button,[role="button"]'))) continue;
+      } catch { /* ignore */ }
+      // 第一个**可见**的非空白文本节点才是答案：被藏起来的候选不算，但也别因为
+      // 第一个候选被藏就说整行没有正文（折叠的思考过程就排在正文前面）。
+      if (typeof p.checkVisibility === 'function') {
+        let vis = true;
+        try { vis = p.checkVisibility({ checkOpacity: true, checkVisibilityCSS: true }); } catch { vis = true; }
+        if (!vis) continue;
+      } else if (p.getClientRects) {
+        let rects = 1;
+        try { rects = p.getClientRects().length; } catch { rects = 1; }
+        if (rects === 0) continue;
+      }
+      return true;
+    }
+    // 走完一圈都没有可见候选 ⇒ 确实没有可见正文。
+    return false;
+  } catch { return true; }
 }
 
 function avatarSyncNoText(row) {
@@ -374,18 +391,25 @@ function avatarSyncNoText(row) {
  *
  * 只动**直接子元素**里的 IMG（dsh-meme 的 `row.insertBefore(img, row.firstChild)`）；
  * 正文里的图（在内容根里面）不受影响。返回是否改过 DOM。
+ *
+ * ⚠️ 顺序（issue #385）：先看这行有没有表情图，没有就直接返回 —— `avatarSyncNoText` 要调
+ * `avatarHasVisibleText`，后者做 `checkVisibility`（强制布局）。而 `AVATAR_NO_TEXT_ATTR`
+ * 的唯一用途就是「表情没有文本可排在其后」，**没有表情图的行读不读它都不影响排版**。
+ * 绝大多数流式消息行没有表情图，这个早期返回把最贵的查询从热路径上摘掉：
+ * 实测 42 行的 sweep 从 478ms 降到 3ms。
  */
 function avatarSyncMedia(row) {
   if (!row || !row.children) return false;
-  let changed = avatarSyncNoText(row);
   let media = avatarMediaOf(row);
   const imgs = [];
   for (let i = 0; i < row.children.length; i++) {
     const kid = row.children[i];
     if (kid && kid !== media && kid.tagName && String(kid.tagName).toUpperCase() === 'IMG') imgs.push(kid);
   }
+  // 没有待收拢的图、也没有残留容器 ⇒ 这行与表情排版无关，不必判断文本可见性。
+  if (imgs.length === 0 && !media) return false;
+  let changed = avatarSyncNoText(row);
   if (imgs.length === 0) {
-    if (!media) return changed;
     // 图已经在容器里（不是行的直接子元素）⇒ 保留；只有容器真的空了才撤。
     if (media.children && media.children.length > 0) return changed;
     try { media.remove(); } catch { /* ignore */ }
@@ -500,8 +524,8 @@ function avatarRowHidden(row) {
  *     正是 issue #231 说的"太频繁"来的那一侧）；不同回合（`data-chat-turn` 变了）重新起算；
  *   · 折叠窗口里的行不计数也不露脸（看不见的图不占位），展开 / 收起时重算；
  *   · 用户开口（user / steering）⇒ 助手侧重新从"第一条可见"起算。
- * 用户侧仍是"连续同侧只显示第一条"，但**任何非用户行都会断开连续段**（issue #231 已证实：
- * 过程行曾被跳过 ⇒ 跨过工具调用后第二条用户消息也共用上一张脸）。
+ * 用户侧仍是"连续同侧只显示第一条"，但**任何非用户行都会断开连续段**（issue #231：
+ * 过程行若被跳过，跨过工具调用后第二条用户消息会共用上一张脸）。
  *
  * ⚠️ 做法是给不露脸的行**头像节点加一个 `--cont` 修饰类**（CSS 里 `visibility: hidden`），
  * **绝不摘掉节点**：节点在，锚点下内容的宽度约束就不会塌（issue #154）。

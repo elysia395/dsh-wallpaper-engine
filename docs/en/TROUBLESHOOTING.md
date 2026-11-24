@@ -144,6 +144,7 @@ dsh plugin --profile web add dsh-plugin-wallpaper-engine
 | The frame-rate cap does nothing | It needs ffmpeg (the encoder prefers NVENC, falling back to libx264 software encoding without an NVIDIA GPU); with no ffmpeg at all the feature disables itself (see 「Limitations」 in `../../README.en.md`) |
 | A mid-grey / light slab appears to the right of the conversation area once the right sidebar is closed | The right-panel container keeps its width and only hides its children, while the plugin's frosted background applies to that container in every state (guarded by `verify-host-paint-scope`); workaround: turn off the 「侧栏液态玻璃」 master switch, or drag that session's right-sidebar width to 0 |
 | Settings revert after a restart | Settings live in a host-side file (see "Where are my settings stored?" below) — check `~/.dsh-wallpaper-engine/config.json` is writable and that you did not roll back to an older version. Also: a host log line reading 「settings PUT 丢弃了白名单外的键」 means the client's and host's field lists have drifted — please report that line |
+| The desktop update fails on "Install and restart" with "did not complete graceful task teardown" | Plugin-side long-lived handles keep the host from exiting: disable the plugin before updating (see "Desktop auto-update fails" below) |
 
 ### Terminal output: problems only by default
 
@@ -189,6 +190,31 @@ opt in:
 ```powershell
 $env:DSH_WE_NOTICE = "1"   # set before launching DSH; "0" silences it permanently (including the warn for a failed delivery)
 ```
+
+---
+
+## Desktop auto-update fails: "did not complete graceful task teardown"
+
+Clicking "Install and restart" fails with:
+
+```text
+desktop update: Host did not complete graceful task teardown
+(exit null, signal SIGTERM, shutdown acknowledged true, graceful deadline exceeded true)
+```
+
+**Why**: the desktop updater needs the host process to exit cleanly first. The plugin keeps a few long-lived resources inside the host process (the media-origin HTTP server and its keep-alive connections, transcoding child processes); any one of them still holding keeps the host past its 10-second graceful-exit window, so the installer gives up on this update.
+
+**The plugin-attributable part is fixed** (#289: the media-origin HTTP server and its connections are `unref()`-ed and no longer keep the process alive). The rest lives in the host's `DesktopHost.stop()` shutdown path and cannot be changed here.
+
+**Workaround (measured)**: disable the plugin before updating and re-enable it afterwards.
+
+1. Settings → plugin manager → Wallpaper Engine → **disable**
+2. Run the desktop update again
+3. Re-enable the plugin once the update is done
+
+**How to confirm it is this one**: the error contains `graceful deadline exceeded true` *and* the same update succeeds first try with the plugin disabled — both together mean it is this, not network or signing.
+
+**Related**: #241 (plugin-side residue fixed; the remainder is the host shutdown path).
 
 ---
 

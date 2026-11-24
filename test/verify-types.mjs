@@ -145,6 +145,7 @@ const INVENTORY_REQUIRED = [
   { name: 'weAssetsDir', why: 'WE_ASSETS_DIR; the client derives localAssets=1 from it' },
   { name: 'weAssetsAvailable', why: 'weAssetsAvailable() probe gates the official-assets UI' },
   { name: 'sceneMediaBase', why: 'media source origin the live renderer uses as mediaBase for Scenes (buildInventory payload)' },
+  { name: 'wallpaperMachineRoots', why: 'how many WallpaperMachine library roots exist on disk; the client polls the inventory only when > 0 (assembleInventory payload, issue #394)' },
   { name: 'total', why: 'entry count shown in the picker (buildInventory payload)' },
   { name: 'portableCount', why: 'playable count shown in the picker (buildInventory payload)' },
   { name: 'wallpapers', why: 'the entry list itself (payload shorthand)' },

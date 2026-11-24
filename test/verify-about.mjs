@@ -38,7 +38,7 @@ import { Writable } from 'node:stream';
 // 就写着"不要用 startsWith(dir + '/')"，不剥注释会被自己的说明误伤成真阳性）。
 import { stripComments } from './tools/js-text.mjs';
 // 词表族的按构建顺序读法（组装点 + 各域模块；单一真源 = scripts/build-client.mjs 的 INLINE_MODULES）。
-import { scopeFiles, panelText } from './tools/src-scope.mjs';
+import { panelText } from './tools/src-scope.mjs';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 let passed = 0;
@@ -477,16 +477,16 @@ console.log('\n④ 客户端：三态文案 + 只读 + 不进设置');
 const clientSrc = read('src/client.js');
 // 刀4：页签族并集（5 个域模块 + 组装点）；判据与断言一字未改。
 const tabsSrc = panelText();
-// 词表已按域拆族（`src/i18n/i18n-copy-*.js` + 组装点）：读**族并集**，判据与断言一字未改。
-const copySrc = scopeFiles('src/i18n/i18n-copy').map(read).join('\n');
 
 check('客户端只读宿主这条路由（apiJson 唯一入口）',
   clientSrc.includes('apiJson("/star-count")') && !/fetch\(\s*["'`]\/star-count/.test(clientSrc));
-check('三态文案都在（正在取 / 当前值 / 取不到）',
-  ['⭐ 正在获取 star 数…', '⭐ 当前 {count} star', '⭐ 暂时取不到 star 数'].every((k) => clientSrc.includes(k)));
-check('三条文案都进了英文词表（i18n 门禁的另一半）',
-  ['"⭐ 正在获取 star 数…"', '"⭐ 当前 {count} star"', '"⭐ 暂时取不到 star 数"',
-    '"来自 GitHub API 的实时数据（带缓存；拉不到时显示上一次取到的值）"'].every((k) => copySrc.includes(k)));
+// 三态的**措辞**不在这里钉：文案即词表键，键与英文词表的双向对账、占位符集合逐键相等都由
+// `test/verify-i18n.mjs` 守（ADR-0007 第 4 问：判据里不出现面向用户的文案字面量）。
+// 本条只钉状态机事实：三条分支各自成立，且取值态确实带 `{count}` 插值。
+check('三态分支都在（正在取 / 当前值 / 取不到），取值态带 {count} 插值',
+  clientSrc.includes('starCount.busy && starCount.value == null')
+  && clientSrc.includes('starCount.tried')
+  && /return weT\("⭐ [^"]*\{count\}/.test(clientSrc));
 /** star 数被当成设置写进去（直写 selection 字段 / 交给 setSetting 落盘）——两种都算越界。 */
 const writesStarIntoSetting = (s) =>
   /selection\.\w*[Ss]tarCount/.test(s) || /starCount[\s\S]{0,40}setSetting\(/.test(s);

@@ -117,6 +117,8 @@ const WE_I18N_EN_PANEL = {
   "目录不可用（缺 materials/），场景实时渲染走程序化复刻": "Directory unavailable (materials/ missing) · Scene live rendering falls back to procedural recreation",
   "未配置 · 场景实时渲染贴图走程序化复刻": "Not configured · Scene live rendering textures fall back to procedural recreation",
   "指向 Wallpaper Engine 安装目录的 assets（或其拷贝）": "Points to the assets folder of the Wallpaper Engine installation (or a copy of it)",
+  "（自动探测）": "(auto-detected)",
+  "未配置时场景壁纸的 WE 内置字体（fonts/ 等）也会回落系统字体，文字会变样": "Without this, WE built-in fonts used by scene wallpapers (fonts/ etc.) fall back to system fonts and text looks different",
   "上传中…": "Uploading…",
   "已上传 {count} 个": "Uploaded {count} item(s)",
   "支持 JPG / PNG / WebP / MP4，及含 project.json 的 WE 壁纸目录": "Supports JPG / PNG / WebP / MP4, and WE wallpaper folders containing project.json",

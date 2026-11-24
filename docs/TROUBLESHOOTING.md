@@ -138,6 +138,7 @@ dsh plugin --profile web add dsh-plugin-wallpaper-engine
 | 帧率上限没效果 | 需要 ffmpeg（编码器优先 NVENC，无 N 卡时回落 libx264 软件编码）；拿不到 ffmpeg 时该功能自动关闭（见 `../README.md` 的「已知限制」） |
 | 右栏关闭后，对话区右侧出现一块中灰 / 浅色板 | 右栏容器是「保留宽度、只隐藏子元素」，插件给该容器刷的玻璃底在关闭态也生效（`verify-host-paint-scope` 钉住）；临时办法：关掉「侧栏液态玻璃」总开关，或把该会话的右栏宽度拖到 0 |
 | 设置改完重启又变回去 | 设置存宿主端文件（见下「设置存在哪」）—— 先确认 `~/.dsh-wallpaper-engine/config.json` 可写、且没有回退到旧版本。若宿主日志里出现「settings PUT 丢弃了白名单外的键」，说明客户端与宿主的字段清单不一致，附上该行反馈即可定位 |
+| 桌面端更新点「安装并重启」失败，报「未能安全停止任务」 | 插件常驻句柄拖住宿主退出：更新前先禁用本插件（见下「桌面端自动更新失败」） |
 
 ### 终端输出：默认只报问题
 
@@ -178,6 +179,31 @@ DSH_WE_LOG_LEVEL=info dsh web
 ```powershell
 $env:DSH_WE_NOTICE = "1"   # 启动 DSH 前设置；设成 0 则永久静默（连提示投递失败的 warn 也不报）
 ```
+
+---
+
+## 桌面端自动更新失败：「未能安全停止任务，更新尚未安装」
+
+点「安装并重启」后更新失败，技术细节是：
+
+```text
+desktop update: Host did not complete graceful task teardown
+(exit null, signal SIGTERM, shutdown acknowledged true, graceful deadline exceeded true)
+```
+
+**为什么**：桌面端更新要先让宿主进程干净退出。插件在宿主进程里起了几样常驻资源（媒体源 HTTP 服务及其 keep-alive 连接、转码用的子进程），只要还有一样没放掉，宿主就等不满那 10 秒优雅退出窗口，安装器判「没能安全停止任务」并放弃本次更新。
+
+**插件侧可归因的部分已修**（#289：媒体源 HTTP 服务与连接都 `unref()`，不再阻止进程退出）；剩下的在宿主 `DesktopHost.stop()` 的退出流程里，本仓改不了。
+
+**绕过（实测有效）**：更新前先禁用插件，更新完再启用。
+
+1. 设置 → 插件管理 → 壁纸引擎 → **禁用**
+2. 重新执行桌面端更新
+3. 更新完成后把插件启用回来
+
+**判据**：报错里同时出现 `graceful deadline exceeded true`，且禁用插件后同一个更新一次成功 —— 两条都中就是这条，不是网络或签名问题。
+
+**相关**：#241（插件侧残留已修，剩余在宿主退出流程）。
 
 ---
 

@@ -27,8 +27,9 @@
  * 已知局限（写在工具头，别让读者以为它是穷尽的）：
  *   ① A 的判据是"**最后一次 push 晚于最后一次评估**"。成对交错（评估、push、评估、push…）里
  *      若最后一次评估仍晚于最后一次 push，就漏报 —— 那种形态要人读。
- *   ② A **按名字认变量，不看作用域** ⇒ 两个不同块里的同名数组会被并成一条。task-14 起对
- *      **已实测的两类同形而不同绑定**做了排除（形参与同名 `const`；同名两处 `const`）——
+ *   ② A **按名字认变量，不看作用域** ⇒ 两个不同块里的同名数组会被并成一条。push 与评估只认
+ *      **代码**里的出现（字符串字面量先抹白）—— 变异体源码字符串里的 `roots.push(ws)` 不是 push。
+ *      task-14 起对**已实测的两类同形而不同绑定**做了排除（形参与同名 `const`；同名两处 `const`）——
  *      排除靠"绑定唯一"（恰好一次 `const/let/var` 声明 + 不是形参），代价是那两类形态里的**真缺陷**
  *      也会一起漏报，要人读。输出里仍带**声明行**。
  *   ③ B 比 `verify-client.mjs` 内那条棘轮**更窄**（那条还带 `/expect|应该|必须|不得/` 的词分支）
@@ -37,13 +38,16 @@
  *      判决在调用方）⇒ 真写成 `console.log('✓ ' + (n === 1))` 的伪判据会被这条一起放过。
  *   ③c A **看不见"把数组交给判据函数"**那种评估（`noticeBudgetOk(KINDS, calls, …)`）—— 为了
  *      躲开递归 walker 的假阳性而刻意不收。那种写法会**漏报**，要人读。
+ *   ③d 收口后 B 要求**布尔结果作为一个独立实参**（`console.log('x', n === 1)`）；写在拼接文案里的
+ *      比较（`'dir=' + String(a && b)`、`x || '默认'`）不算判决 ⇒ 跨行 `console.log` 里的伪判据抓不到。
  *   ④ C 只认"全文只出现一次"的声明 ⇒ 名字出现在注释/字符串里就不算死（宁可漏报）。
  *      ④b task-14 起扫描面含**表声明**（`const X = [...]` / `{…}` / `new Map()`），
  *      修掉了"清单常量零引用一条都不报"的旧洞。
  *   ⑤ D 是**最粗形态**的 grep，不解析语法："恒真得绕一圈"的写法（如对恒空集合做 `.every()`）
  *      它看不见 —— 那类要人读。
  *   ⑥ E 只看"有没有会红的出口"，不看那条出口**是否可达**（`if (failed) exit(1)` 里 `failed`
- *      永不递增也照样算"能红"）。可达性要人读。
+ *      永不递增也照样算"能红"）。可达性要人读。扫描面只含**入口守卫**：被别的守卫 `import` 的
+ *      用例模块（`*-browser-case.mjs`）判决在调用方，自己不该 `exit` ⇒ C/E 对它不适用。
  *   ⑦ F 报的是"**这一段被剥注释时会消失**"，不报"这已经造成缺陷" —— 是否有影响取决于
  *      **有没有守卫剥这个文件**（见判据的方向说明）。本工具不追那层，要人接。
  *
@@ -53,7 +57,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 // 判据 F 要与共享的字符串感知实现对比（同目录 js-text.mjs）。
-import { stripComments } from './js-text.mjs';
+import { stripComments, blankStringLiterals } from './js-text.mjs';
 
 // `test/tools/` 比 `test/` 深一层 ⇒ 推仓库根要退**两层**（CODE-STRUCTURE §4 第 5 条；verify-module-layout ④ 有断言）
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..', '..');
@@ -78,7 +82,12 @@ const isComment = (line) => /^\s*(\/\/|\*|\/\*)/.test(line);
 const EVAL_METHODS = ['.forEach(', '.every(', '.some('];
 const esc = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
 function staleControls(src) {
-  const lines = src.split('\n');
+  // ⚠️ 收口（本轮）：`X.push(` 出现在**字符串字面量**里时是夹具文本，不是真的 push。实测
+  //    `test/verify-wallpaper-scan.mjs` 的 `roots`：:151 `const roots = [ … ]` 是数组字面量、
+  //    :157-158 就 `.every(…)` 评估完了，而 :247/:253 的两处 `roots.push(ws)` 落在
+  //    `loadMutant(…)` 的**变异体源码字符串**里（`'if (await pathExistsP(ws)) roots.push(ws);'`）。
+  //    旧版按原文认 push ⇒ 报了一条不存在的「后推的对照」。抹白与原文等长、行号不变。
+  const lines = blankStringLiterals(stripComments(src), () => true).split('\n');
   // 找出所有以 `IDENT.push(` 形态出现的标识符，并记住它的声明行（同名碰撞时人一眼能看出）
   const idents = new Map();
   lines.forEach((line, i) => {
@@ -137,24 +146,77 @@ function staleControls(src) {
 //   · **报告**：`console.log('扫描面：' + ALL.length + …)` —— 只有取值、没有比较。
 // 收紧前实测 25 个候选全是这两类；收紧后剩下的才是真信号：`console.log('x (expect 1):', n === 1)`。
 // 代价：`console.log('应该等于 3')` 这种不带运算符的伪判据抓不到（那要人读）。
+/** 拆 `console.log(...)` 的**顶层实参**（括号深度 0 的逗号分开；字符串已抹白，逗号不会藏在文案里）。 */
+function topLevelArgs(stmt) {
+  const args = [];
+  let depth = 0;
+  let cur = '';
+  for (let i = stmt.indexOf('(') + 1; i < stmt.length; i++) {
+    const c = stmt[i];
+    if (c === '(' || c === '[' || c === '{') { depth++; cur += c; continue; }
+    if (c === ')') {
+      if (depth === 0) { args.push(cur); return args; }
+      depth--; cur += c; continue;
+    }
+    if (c === ']' || c === '}') { depth--; cur += c; continue; }
+    if (c === ',' && depth === 0) { args.push(cur); cur = ''; continue; }
+    cur += c;
+  }
+  args.push(cur);
+  return args;
+}
+
+/** 这个实参本身是**一个布尔表达式**吗（不是"文案里提到一个比较"）。 */
+function isBooleanArg(arg) {
+  const a = arg.trim();
+  if (!a) return false;
+  if (!/(===|!==|<=|>=|&&|\|\||<|>)/.test(a)) return false;
+  if (a.includes('+') || a.includes('?') || a.includes('=>')) return false; // 拼接 / 三元 / 箭头 ⇒ 在报值，不在判决
+  return true;
+}
+
 function fakeJudgements(src) {
-  const hit = (line) => {
-    const t = line.trim();
-    if (!/^console\.log\(/.test(t)) return false;
-    if (/catch|threw|\.message/.test(t)) return false;
-    if (!/(===|!==|<=|>=|&&|\|\|)/.test(t)) return false;   // 只认真比较运算（裸 `<` `>` 会命中散文）
-    if (/(?:failures|failed|problems|stray|failedCount)(?:\.length)?\s*===\s*0/.test(t)) return false; // 汇总（可能跨行）
-    if (/===\s*0\s*\?/.test(t)) return false;            // 汇总形态：计数 == 0 ? PASS : FAIL
-    if (/'(?:ALL[^']*PASSED|[^']*FAILED|OK|PASSED)'/.test(t)) return false; // 汇总文案
+  // ⚠️ 收口（本轮）：要抓的是「比较的结果**作为一个独立实参**交给 console.log」——
+  //    `console.log('x (expect 1):', n === 1)`。此前只要这一行里出现比较运算就算命中，于是
+  //    `console.log('POST dir=' + String(obj && obj.dir) + …)` 这类**诊断取值行**（实测 5 处：
+  //    verify-cache-dir / verify-component-visibility / verify-settings-namespaces / verify-static /
+  //    verify-subpackage-purity）全被报成伪判据；其中一条的比较运算还整段在**字符串**里。
+  //    判据因此改成：①先把字符串抹白（比较只在字符串里 ⇒ 不是比较）；②按顶层逗号拆实参；
+  //    ③**至少一个非首实参**是裸布尔表达式。仍比 verify-client 内那条窄（不带运算符的抓不到）。
+  const masked = blankStringLiterals(stripComments(src), () => true).split('\n');
+  const orig = src.split('\n');
+  const out = [];
+  masked.forEach((line, i) => {
+    if (!/^console\.log\(/.test(line.trim())) return;
+    if (!topLevelArgs(line.trim()).slice(1).some(isBooleanArg)) return;
+    const o = orig[i].trim();
+    if (/catch|threw|\.message/.test(o)) return;
+    if (/(?:failures|failed|problems|stray|failedCount)(?:\.length)?\s*===\s*0/.test(o)) return; // 汇总（可能跨行）
+    if (/===\s*0\s*\?/.test(o)) return;            // 汇总形态：计数 == 0 ? PASS : FAIL
+    if (/'[^']*(?:ALL[^']*PASSED|[^']*FAILED|OK|PASSED)'/.test(o)) return; // 汇总文案
     // ⚠️ B3②（task-14 补的排除项）：`check()` 助手的**失败上报行**不是伪判据 ——
-    // 判决在**调用方**（`if (ok) passed++ else failed++`），这一行只负责把结论打印出来；
-    // 它命中只是因为 `detail !== undefined ? … : …` 里带了个 `!==`。
-    // 判据：`console.log(` 后**紧跟一个已定的对错记号**（✓/✗）⇒ 这行是"报结论"，不是"算结论"。
-    // 局限：真写成 `console.log('✓ ' + (n === 1))` 的伪判据会被这条一起放过（见工具头局限 ③）。
-    if (/^console\.log\(\s*['"`]\s*[✓✗]/.test(t)) return false;
-    return true;
-  };
-  return src.split('\n').map((line, i) => ({ n: i + 1, line: line.trim() })).filter((x) => hit(x.line));
+    // 判决在**调用方**（`if (ok) passed++ else failed++`），这一行只负责把结论打印出来。
+    // 收口后它本来就不再命中（`'  ✗ ' + name + (detail !== undefined ? …)` 是**单个**拼接实参），
+    // 这条排除留着当第二道闸：真写成 `console.log('✓ ' + (n === 1))` 也照样放过（局限 ③）。
+    if (/^console\.log\(\s*['"`]\s*[✓✗]/.test(o)) return;
+    out.push({ n: i + 1, line: o });
+  });
+  return out;
+}
+
+// ── 入口守卫 vs 被 import 的**用例模块** ──────────────────────────────────────────
+/** 被别的守卫 `import` 的模块不是入口：它不自己 `process.exit`（判决在调用方），它的「零引用声明」
+ *  也可能被模板切片注入后由**注入方**使用（`test/verify-guard-map.mjs:141` 已把
+ *  `verify-pet-sidebar-glass-browser-case.mjs` 标为 `verify-glass-runtime-browser.mjs` 的用例模块）。
+ *  C/E 对这类文件不适用。
+ *  @param {Map<string,string>} files 文件名 → 源码
+ *  @returns {Set<string>} 被 import 的文件名 */
+function helperModules(files) {
+  const out = new Set();
+  for (const [name, body] of files) {
+    for (const m of body.matchAll(/from\s+'(?:\.\/)?([^']+\.mjs)'/g)) if (m[1] !== name) out.add(m[1]);
+  }
+  return out;
 }
 
 // ── 判据 E：守卫必须有"会红"的出口 ────────────────────────────────────────────
@@ -291,6 +353,12 @@ const SELF = [
     'for (const x of hits([])) { }',
     'function walk() { const hits = []; hits.push("#"); return hits; }',
   ].join('\n')).length === 0],
+  // 收口（本轮）：push 只出现在**变异体源码字符串**里 ⇒ 不是真的 push（旧版会假报 A）
+  ['A 不误伤"push 只在变异体的源码字符串里"（本轮收口）', staleControls([
+    'const roots = [a, b];',
+    'roots.every((r) => probes.includes(r));',
+    'const mutant = load("no-ws", (s) => s.replace("x", "if (await p(ws)) roots.push(ws);"));',
+  ].join('\n')).length === 0],
   ['正对照：合成夹具（1 个零引用表 + 1 个恒真判据）改进后仍然报出',
     deadDeclarations(FIXTURE_BAD).map((d) => d.name).sort().join() === 'NEVER_USED_MAP,NEVER_USED_TABLE'
     && tautologies(FIXTURE_BAD).length === 1],
@@ -304,6 +372,17 @@ const SELF = [
   // B3②：`check()` 助手的失败上报行（旧版会假报）
   ['B 不误伤 `check()` 助手的失败上报行（旧版会假报）',
     fakeJudgements("  console.log('  ✗ ' + name + (detail !== undefined ? ' — ' + detail : ''));").length === 0],
+  // 收口（本轮）：比较运算落在**拼接的诊断信息 / 字符串**里 ⇒ 是在报值，不是判决（旧版会假报 B）
+  ['B 不误伤"比较只在诊断取值或字符串里"（本轮收口）', fakeJudgements([
+    "  console.log('   [diag] POST dir=' + String(obj && obj.dir) + ' migrate=' + String(obj && obj.migrate));",
+    "  console.log('SKIP | 未安装（' + (a || b) + '）');",
+    "  console.log('\\n⑨ 纯迁移矩阵：v<4 才换算 / v>=4 一次都不换算');",
+    "  console.log('    · 通道：' + (rows.join('；') || '（无）'));",
+  ].join('\n')).length === 0],
+  ['B 能抓到"布尔结果作为独立实参"', fakeJudgements("  console.log('expect 1, got', n === 1);").length === 1],
+  // 收口（本轮）：被 import 的用例模块不是入口守卫（判决/注入使用都在调用方）⇒ C/E 不适用
+  ['模块面：被 import 的用例模块不算入口守卫',
+    helperModules(new Map([['host.mjs', "import { x } from './case.mjs';"], ['case.mjs', '']])).has('case.mjs')],
   ['C 能抓到零引用声明', deadDeclarations('function neverCalled() {}\n').length === 1],
   ['C 不误伤有引用的声明', deadDeclarations('function used() {}\nused();\n').length === 0],
   ['D 能抓到 assert.ok(true)', tautologies('assert.ok(true);').length === 1],
@@ -326,7 +405,7 @@ const SELF = [
   ['F 不误伤"注释只是换了空白"', stripSwallows("const a = 1; // 说明\nconst b = 2;\n").length === 0],
 ];
 let selfFailed = 0;
-console.log('自检（四个判据对合成输入都必须有牙）');
+console.log('自检（六条判据对合成输入都必须有牙）');
 for (const [what, ok] of SELF) {
   console.log('  ' + (ok ? '✓' : '✗') + ' ' + what);
   if (!ok) selfFailed++;
@@ -335,18 +414,23 @@ if (selfFailed) { console.log('\nSELF-CHECK FAILED — 判据本身无牙，候�
 
 // ── 扫描 ─────────────────────────────────────────────────────────────────────
 const found = { A: [], B: [], C: [], D: [], E: [], F: [] };
+// 被别的守卫 import 的用例模块：C/E 不适用（见 helperModules 的说明）。
+const sources = new Map(guardFiles.map((g) => [g.slice('test/'.length), read(g)]));
+const helpers = helperModules(sources);
+const helperGuards = guardFiles.filter((g) => helpers.has(g.slice('test/'.length)));
 for (const file of guardFiles) {
-  const src = read(file);
+  const src = sources.get(file.slice('test/'.length));
+  const isEntry = !helpers.has(file.slice('test/'.length));
   for (const x of staleControls(src)) found.A.push({ file, ...x, text: '对照「' + x.id + '」最后一次评估在第 ' + x.lastEval + ' 行，之后还有 push：第 ' + x.orphanPushes.join(',') + ' 行（声明行 ' + (x.decls.length ? x.decls.join(',') : '—未按 const/let/var 声明—') + '）' });
   for (const x of fakeJudgements(src)) found.B.push({ file, n: x.n, text: x.line.slice(0, 118) });
-  for (const x of deadDeclarations(src)) found.C.push({ file, n: x.at, text: '声明后全文只出现一次：' + x.name });
+  if (isEntry) for (const x of deadDeclarations(src)) found.C.push({ file, n: x.at, text: '声明后全文只出现一次：' + x.name });
   for (const x of tautologies(src)) found.D.push({ file, n: x.n, text: x.what + ' —— ' + x.line.slice(0, 100) });
-  const why = cannotFail(src);
+  const why = isEntry ? cannotFail(src) : null;
   if (why) found.E.push({ file, n: 1, text: why });
   for (const x of stripSwallows(src)) found.F.push({ file, n: x.n, text: x.text });
 }
 
-console.log(`\n扫描面：${guardFiles.length} 个守卫（verify-* + *-smoke）`);
+console.log(`\n扫描面：${guardFiles.length} 个守卫（verify-* + *-smoke），其中 ${helperGuards.length} 个是被别的守卫 import 的用例模块（C/E 不适用）`);
 const sections = [
   ['A. 对照构造了却没被评估', 'A'],
   ['B. log 形式的伪判据（带比较运算的那些）', 'B'],

@@ -114,10 +114,10 @@ const CSS_PANEL = `  /* ── 吉祥物形态**3D 圆环转盘**（四次返工
   .we-picker__mascot-item:disabled { cursor: default; }
   .we-picker__mascot-item:disabled:hover { border-color: transparent; }
   .we-picker__mascot-item:disabled:not(.we-picker__mascot-item--center) { opacity: 0.45 !important; }
-  /* ⚠️ 这里曾有 .we-picker__mascot-nav（‹ › 两个圆形箭头钮）。按用户口径
-     「把左右两个箭头去掉」删掉了组件与样式 —— 它们与圆点功能重叠，而圆点更强（直接跳
-     任意一只 + 显示总数）。**别把它加回来**：换形态仍有四条路（拖环 / 点圆点 / 点立绘 /
-     键盘 ← →），而箭头会把舞台挤窄、并抢走最外侧那两张卡的点击。 */
+  /* ⚠️ **不要再加 .we-picker__mascot-nav（‹ › 两个圆形箭头钮）**：按用户口径
+     「把左右两个箭头去掉」已删除组件与样式 —— 它们与圆点功能重叠，而圆点更强（直接跳
+     任意一只 + 显示总数）。换形态仍有四条路（拖环 / 点圆点 / 点立绘 / 键盘 ← →），
+     而箭头会把舞台挤窄、并抢走最外侧那两张卡的点击。 */
   .we-picker__mascot-art { display: flex; align-items: flex-end; justify-content: center; }
   .we-picker__mascot-art img { display: block; width: 100%; height: 100%; object-fit: contain; pointer-events: none; }
   .we-picker__mascot-name { font-size: 0.78em; color: var(--we-ink, inherit); white-space: nowrap; }

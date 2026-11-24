@@ -360,7 +360,11 @@ async function probeGlassRowState() {
       // 对齐，避免用户必须刷新页面才能看到玻璃。
       if (!glassRowDisabled) {
         try {
-          const right = document.querySelector('[data-sidebar-right-panel][data-sidebar-right-open]');
+          // #382：fullscreen 下可能同时有两份展开面板（push 在前、fullscreen 在后）。这里只关心
+          // 「有没有一份被认领」，所以优先取带 runtime 标记的那份；否则每次都读到前面那份未认领
+          // 的 push 面板，会把“缺玻璃”判成常态而每轮探测都全量 sync。
+          const right = document.querySelector('[data-sidebar-right-panel][data-sidebar-right-open][data-we-surface-runtime="right-sidebar"]')
+            || document.querySelector('[data-sidebar-right-panel][data-sidebar-right-open]');
           // marker 在但装饰根/plate 不在 ⇒ 别的实例把根 prune 掉了，必须重新 sync
           // 让当前实例重建（refresh 会作废指向断开节点的 plate）。
           const missingLayers = !document.querySelector('[data-we-surface-root]')

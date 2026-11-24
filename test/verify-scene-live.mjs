@@ -25,7 +25,7 @@
  * Usage:  node test/verify-scene-live.mjs
  */
 
-import { readFileSync, writeFileSync, mkdirSync, existsSync, rmSync, readdirSync, symlinkSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, existsSync, rmSync, readdirSync, symlinkSync, statSync } from 'node:fs';
 import { dirname, join, resolve, sep } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Readable, Writable } from 'node:stream';
@@ -3092,8 +3092,11 @@ check('host 侧 /media-control 只收 POST + 动作走 mediaBackend.control（�
 // 快捷播放面板）按**代码**（剥注释）都不得再出现这两个开关。
 // （原第三个键「在线歌词」已整条删除 —— 连设置键一起，见上面的白名单判据。）
 {
-  const RETIRED_LABELS = ['系统音频反应', '媒体信息'];
-  const leftoversIn = (text) => RETIRED_LABELS.filter((label) => text.includes(label));
+  // 退役键的残留判据按**代码键**判（`switchRow` 同行出现 `mediaIntegration` / `audioSource`），
+  // 不按文案判：文案是 i18n 键，键本身由 schema 决定（ADR-0007 第 1、4 问）。
+  const bindsRetired = (text) => text.split('\n')
+    .filter((line) => line.includes('switchRow(')
+      && (line.includes('mediaIntegration') || line.includes('audioSource')));
   const tabsCode = stripComments(tabsSrc);
   const qpCode = stripComments(readFileSync(join(root, 'src', 'quick-panel.js'), 'utf8'));
   check('两键退役为常开（schema kind const + 默认接入）',
@@ -3103,42 +3106,42 @@ check('host 侧 /media-control 只收 POST + 动作走 mediaBackend.control（�
     'kinds=' + schemaMod.KINDS.audioSource.kind + '/' + schemaMod.KINDS.mediaIntegration.kind
       + ' · defaults=' + schemaMod.DEFAULTS.audioSource + '/' + schemaMod.DEFAULTS.mediaIntegration
       + ' · lyrics 键=' + ('mediaLyricsOnline' in schemaMod.DEFAULTS));
-  check('两个开关的页面定义已从设置页与快捷面板移除（按代码判，注释里提到不算）',
-    leftoversIn(tabsCode).length === 0 && leftoversIn(qpCode).length === 0,
-    '残留：' + ([...leftoversIn(tabsCode), ...leftoversIn(qpCode)].join(', ') || '无'));
+  check('两个退役键没有在设置页与快捷面板留下 switchRow 绑定（按代码判，注释里提到不算）',
+    bindsRetired(tabsCode).length === 0 && bindsRetired(qpCode).length === 0,
+    '残留行数：' + (bindsRetired(tabsCode).length + bindsRetired(qpCode).length));
   // 负对照：同一条判据喂合成文本 —— 真出现开关文案必须被判出（判据不是恒真）。
-  check('negative control: 合成代码里的开关文案会被同一条判据点出',
-    leftoversIn('switchRow("媒体信息", v)').join(',') === '媒体信息'
-      && leftoversIn('switchRow("系统音频反应", v) && switchRow("媒体信息", v)').length === 2);
+  check('negative control: 合成代码里再绑这两个键会被同一条判据点出',
+    bindsRetired('switchRow(weT("x"), sel.mediaIntegration === true,').length === 1
+      && bindsRetired('switchRow(weT("y"), sel.audioSource !== "off",').length === 1);
   // 「在线歌词」不是"退役成常开"，而是**整条删除**（含设置键）：文案里出现它属于残留。
-  check('在线歌词不再是常开键（已整条删除，文案出现即残留）',
-    leftoversIn('switchRow("在线歌词", v)').length === 0
-      && !('mediaLyricsOnline' in schemaMod.KINDS));
+  check('在线歌词不再是常开键（整条删除，schema 里没有这个 key）',
+    !('mediaLyricsOnline' in schemaMod.KINDS) && !('mediaLyricsOnline' in schemaMod.DEFAULTS));
 
 // 用户口径（更新）：侧栏壁纸列表的类型档（全部 / 场景 / 网页 / 视频 / 图片）
 // **与设置页是同一个键 `typeFilter`** —— 类型变动两处同步、不做单独的档（原「面板本地
 // 瞬态 qpType + 两层交集空态兜底」整套退役：不再 setTransient("qpType")、不再有默认档
 // 行、空态不再有"没有交集/完整操作链"提示）。「图片」是后补的一档（上传的单文件图片
 // 壁纸）：判据按**同一份档位表**逐档核对，再加一条负对照 —— 少一档必须被判红。
-  const QP_TYPE_ROWS = [['scene', '场景'], ['web', '网页'], ['video', '视频'], ['image', '图片']];
+  // 判据只钉**档位 id 与绑定形态**（`{ id: "<id>", label: weT(…) }`）：文案即 i18n 键，
+  // 键与英文词表的双向对账由 `test/verify-i18n.mjs` 守（ADR-0007 第 4 问）。
+  const QP_TYPE_IDS = ['scene', 'web', 'video', 'image'];
   const sideTypeFilterOk = (text) => text.includes('function qpTypes()')
-    && QP_TYPE_ROWS.every(([id, label]) => text.includes('id: "' + id + '"')
-      && (text.includes('label: weT("' + label + '")') || text.includes('label: weT("' + label + '", null,')))
+    && QP_TYPE_IDS.every((id) => text.includes('{ id: "' + id + '", label: weT('))
     && text.includes('typeAllow.indexOf(w.type) === -1');
   check('侧栏列表类型筛选：四档齐全（含「图片」）+ 与设置页同键同步（setSetting typeFilter，勾选集合）',
   // i18n（中文原文即键）之后：容器从文件顶层常量改成 `qpTypes()`（每次渲染现建，
   // 否则文案会冻在加载期），每档 label 各自走 `weT("…")` —— 判据只认"档位 id 仍绑着
-  // 同一句原文"，不认包装形态（认形态的判据会在下一次改写法时静默失效）。
+  // 一个 weT 键"，不认具体文案、也不认包装形态（认形态的判据会在下一次改写法时静默失效）。
     sideTypeFilterOk(qpSrc)
     && qpSrc.includes('setSetting("typeFilter", next)')
     && !qpSrc.includes('setTransient("qpType"')
     && !qpSrc.includes('sel.qpType')
-    && !src.includes('qpType: "all"')
-    && !qpSrc.includes('没有交集')
-    && !qpSrc.includes('完整操作链'));
+    && !src.includes('qpType: "all"'));
+  // 旧空态的「没有交集 / 完整操作链」两句提示随 qpType 瞬态整条退役 ⇒ 不再钉文案
+  //（文案不进判据，ADR-0007 第 4 问；退役本身由上面三条按键的断言负责）。
   // 负对照：同一条判据喂"少一档"的合成文本，必须被判红（判据不是恒真）。
   check('negative control: 少一档（缺「图片」）会被同一条判据点出',
-    !sideTypeFilterOk(qpSrc.replace('{ id: "image", label: weT("图片") },', ''))
+    !sideTypeFilterOk(qpSrc.replace('{ id: "image", label: weT(', '{ id: "image-x", label: weT('))
       && sideTypeFilterOk(qpSrc));
   // ↑ 本段与"三键退役"共用同一个 `{ … }` 块（原先那条 check 的收尾 `}` 就在这里）——
   //   不要再包一层 `{}`：块会多开一层，整个文件在 EOF 报 "Unexpected end of input"。
@@ -3345,7 +3348,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       + '  React.createElement("span", { className: "we-picker__section-label" }, weT("全局字体")),', '全局字体') === true);
   check('侧栏档空态 CTA 切回壁纸页（不是设置页的库下钻）',
     tabsSrc.includes('sidebarSurface ? onPickWallpaper : onOpenPicker')
-      && tabsSrc.includes('sidebarSurface ? weT("去挑一张 ›") : weT("选择壁纸")')
+      && /}, sidebarSurface \? weT\("[^"]+"\) : weT\("[^"]+"\)\),/.test(tabsSrc)
       && qpSrc.includes('onPickWallpaper: () => switchQpTab("wallpaper")'));
   // ── 侧栏壁纸档的「壁纸属性」（用户口径：属性要在侧栏里调，不要跳设置页）──────
   // 交互口径 = **页内下钻**：点入口把壁纸页内容区整区换成属性面板（列表让位），
@@ -5010,9 +5013,9 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       losslessFirst(gsrc) && canvasOnly,
       'losslessFirst=' + losslessFirst(gsrc) + ' canvasOnly=' + canvasOnly);
     // 面板侧：超限时给的是**出路**（一枚「自动压缩后导入」），不是只有一句拒绝。
-    check('头像超限的面板出口：提示行 + 「自动压缩后导入」按钮都接在真处理器上',
+    check('头像超限的面板出口：提示行 + 压缩按钮（忙/闲两态都走 weT）都接在真处理器上',
       eSrc.includes('sel.avatarOverflow') && eSrc.includes('onAvatarAutoCompress')
-      && eSrc.includes('weT("自动压缩后导入")') && eSrc.includes('weT("压缩中…")'),
+      && /busy \? weT\("[^"]+"\) : weT\("[^"]+"\)/.test(eSrc),
       'ext-avatar 源码口径');
     // 负对照：把判定挪到解码之后（先 openAvatarCrop 再判）⇒ 同一条判据判红。
     const reversed = gsrc.replace(
@@ -6158,7 +6161,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     check('ext-parallax.js / client.js / settings-schema.js 插件前端有自己的开关（独立于界面跟随 · 默认关）',
       extParSrc.includes('const pluginOn = on && sel.parallaxPlugin === true;')
       && extParSrc.includes('const slots = pluginOn && Array.isArray(parallaxPluginSlots) ? parallaxPluginSlots : [];')
-      && extParSrc.includes('switchRow(weT("插件前端跟随"), sel.parallaxPlugin === true, onParallaxPlugin,')
+      && /switchRow\(weT\("[^"]+"\), sel\.parallaxPlugin === true, onParallaxPlugin,/.test(extParSrc)
       && extParSrc.includes('pluginOn && (slots.length')
       && extParSrc.includes('pluginOn && slots.map(')
       // 反向：插件那几行不再挂在「界面元素跟随」上（老写法 `ui &&`）。
@@ -6169,7 +6172,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       && schemaMod.DEFAULTS.parallaxPlugin === false
       && schemaMod.KINDS.parallaxPlugin.kind === 'boolFalse',
       'island=' + (extParSrc.includes('const pluginOn = on && sel.parallaxPlugin === true;') ? '1' : '0')
-        + (extParSrc.includes('switchRow(weT("插件前端跟随"), sel.parallaxPlugin === true, onParallaxPlugin,') ? '1' : '0')
+        + (/switchRow\(weT\("[^"]+"\), sel\.parallaxPlugin === true, onParallaxPlugin,/.test(extParSrc) ? '1' : '0')
         + (extParSrc.includes('pluginOn && slots.map(') ? '1' : '0')
         + ' client=' + (clientSrcPar.includes('function onParallaxPlugin(e)') ? '1' : '0')
         + ' schema=' + String(schemaMod.DEFAULTS.parallaxPlugin) + '/' + schemaMod.KINDS.parallaxPlugin.kind);
@@ -6439,7 +6442,8 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     check('ext-avatar.js 两个滑块的范围取自 schema 常量（AVATAR_SIZE_* / AVATAR_RADIUS_*）· 无昵称残留',
       /AVATAR_SIZE_MIN,\s*AVATAR_SIZE_MAX/.test(extAvSrc)
       && /AVATAR_RADIUS_MIN,\s*AVATAR_RADIUS_MAX/.test(extAvSrc)
-      && !extAvSrc.includes('昵称') && !extAvSrc.includes('avatarName')
+      // 不钉「昵称」这句文案（ADR-0007 第 4 问）：无文本输入 / 无 name 键三元组已足够。
+      && !extAvSrc.includes('avatarName')
       && !extAvSrc.includes('AVATAR_NAME_MAX') && !extAvSrc.includes('type: "text"'));
     // 排布落在样式表上：那一段必须（a）整段挂在开关属性下、（b）头像按左右分列、
     // （c）内容格可伸缩（否则长消息会把头像挤出可视区）、（d）表情收进内容列且排在正文后。
@@ -8151,10 +8155,26 @@ async function postJson(route, url, obj) {
 }
 
 if (laRoute && weDirRoute) {
-  // 未配置素材：探测 ok:false（渲染页静默回落，不是错误）。
+  // 未配置素材时的探测：200 + 「ok 与 roots 自洽」的清单形（渲染页静默回落，不是错误）。
+  // ⚠️ 这里**不能**再断言 ok:false —— #386 起扫描链会把探测到的 WE 安装目录当素材目录
+  //    自动带出（`adoptWeAssetsDir`，只认「真含 materials/」的树、不落盘），所以装了 WE 的
+  //    开发机在「用户没配过」时也合法地 ok:true。改成与环境无关的契约判据：
+  //    200 / ok 是布尔 / ok ⇔ roots 非空 / 声称可用就必须真的含 materials/。
+  //    「未配置 ⇒ ok:false」由本段末尾的 clear → probe2 覆盖（显式清除后不再自动带出）。
   const probe0 = await runHandler(laRoute, '/api/local-assets');
   const probe0Body = JSON.parse(probe0.__state.body.toString('utf8'));
-  check('probe before configure → ok:false', probe0.__state.status === 200 && probe0Body.ok === false);
+  const probe0Root = Array.isArray(probe0Body.roots) ? probe0Body.roots[0] : null;
+  const probe0LiveTree = Boolean(probe0Root) && (() => {
+    try { return statSync(join(probe0Root.dir, 'materials')).isDirectory(); } catch { return false; }
+  })();
+  check('probe before configure → 200 且 ok/roots 自洽（可用时必须真的含 materials/）',
+    probe0.__state.status === 200
+      && typeof probe0Body.ok === 'boolean'
+      && Array.isArray(probe0Body.roots)
+      && probe0Body.ok === (probe0Body.roots.length > 0)
+      && (!probe0Body.ok || (probe0Root.id === 'local' && probe0LiveTree)),
+    'status=' + probe0.__state.status + ' ok=' + probe0Body.ok
+      + ' roots=' + (Array.isArray(probe0Body.roots) ? probe0Body.roots.length : 'n/a'));
 
   // POST 校验：不存在的目录 / 缺 materials/ 都 400。
   const badPost = await postJson(weDirRoute, '/wallpaper-engine/we-assets-dir', { dir: join(TEST_CACHE_DIR, 'no-such-dir') });
