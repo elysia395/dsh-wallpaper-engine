@@ -874,6 +874,12 @@ const CSS_GLASS = `
   body[data-we-glass-page][data-we-thinking-glass] [data-vcp-rawhtml] table td {
     border-bottom: 1px solid rgba(180, 180, 180, calc(var(--we-border-alpha, 0.35) * 0.9)) !important;
   }
+  body[data-we-glass-page][data-we-thinking-glass] [data-chat-flow] table :is(th, td):first-child {
+    padding-inline-start: 16px;
+  }
+  body[data-we-glass-page][data-we-thinking-glass] [data-chat-flow] table :is(th, td):last-child {
+    padding-inline-end: 16px;
+  }
   /* The two chat navigation buttons reuse capsule mist and frost.
      Local fill tokens preserve native hover/disabled states and hit areas. */
   body[data-we-glass-page][data-we-thinking-glass] [data-dsh-navbar] > button[data-vlln-load-older],

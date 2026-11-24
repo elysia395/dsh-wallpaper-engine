@@ -164,6 +164,7 @@ const assertions=[];function check(value,message){if(!value)throw new Error(mess
  tableWrap.innerHTML='<table style="width:540px;max-width:none;border-collapse:collapse"><thead><tr><th>Title</th><th>Details</th></tr></thead><tbody><tr><td><code>table code</code></td><td>Body</td></tr></tbody></table>';
  document.querySelector('[data-chat-flow]').append(tableWrap);
  check(parseFloat(getComputedStyle(tableWrap).borderTopLeftRadius)>0,'Markdown table clips its colored corners at the scroll wrapper with optics off');
+ check(getComputedStyle(tableWrap.querySelector('th')).paddingInlineStart==='16px'&&getComputedStyle(tableWrap.querySelector('td:last-child')).paddingInlineEnd==='16px','Table header and body leave room at the outer edges');
  const errorRow=document.createElement('div');
  errorRow.setAttribute('role','status');
  errorRow.style.cssText='position:fixed;left:580px;top:570px;display:grid';
@@ -180,6 +181,8 @@ const assertions=[];function check(value,message){if(!value)throw new Error(mess
  document.body.setAttribute('data-we-glass-floaters','');
  const disposeTableOptics=installGlassOptics();
  check(await waitFor(()=>getComputedStyle(tableWrap).backdropFilter.includes('url(')),'Markdown table wrapper carries one rounded refraction filter');
+ const getMap=surface=>document.getElementById(getComputedStyle(surface).backdropFilter.match(/#([^"]+)/)?.[1]);
+ check(getMap(tableWrap)?.querySelector('feDisplacementMap').getAttribute('scale')==='72','Wide table uses the stronger edge profile');
  check(!tableWrap.querySelector('[data-we-optics]'),'Table and inline cells do not receive redundant refraction filters');
  tableWrap.scrollLeft=90;
  await next();
@@ -213,11 +216,12 @@ const assertions=[];function check(value,message){if(!value)throw new Error(mess
  list.setAttribute('role','dialog');
  list.setAttribute('data-subagent-panel','');
  list.setAttribute('data-menu-material','translucent');
- list.style.cssText='position:fixed;left:150px;top:150px;width:280px;border-radius:16px;overflow:hidden;isolation:isolate';
- list.innerHTML='<div aria-hidden="true" class="_material_host_21" style="position:absolute;inset:0;z-index:-1;border-radius:inherit;backdrop-filter:blur(3px);background:#eff5"></div><div role="tree" style="height:70px;overflow:auto"><button type="button" role="treeitem" style="height:120px">Agent</button></div>';
+ list.style.cssText='position:fixed;left:150px;top:150px;width:280px;border-radius:16px;overflow:hidden;isolation:isolate;--dsw-menu-surface-fill:rgba(252,253,254,.7)';
+ list.innerHTML='<div aria-hidden="true" class="_material_host_21" style="position:absolute;inset:0;z-index:-1;border-radius:inherit;backdrop-filter:blur(40px) saturate(150%);background:var(--dsw-menu-surface-fill)"></div><div role="tree" style="height:70px;overflow:auto"><button type="button" role="treeitem" style="height:120px">Agent</button></div>';
  document.body.append(list);
  const [menuMaterial,menuBody]=list.children;
  check(await waitFor(()=>getComputedStyle(menuMaterial).backdropFilter.includes('url(')),'Subagent dropdown only refracts on its rounded host material');
+ check(getMap(menuMaterial)?.querySelector('feDisplacementMap').getAttribute('scale')==='72'&&getComputedStyle(menuMaterial).backdropFilter.includes('blur(5px) saturate(1.5)'),'Subagent dropdown keeps the wide refraction band visible through a lighter frost');
  menuBody.scrollTop=25;
  check(menuBody.scrollTop===25&&getComputedStyle(menuBody).backdropFilter==='none'&&getComputedStyle(menuBody).backgroundImage==='none','Subagent rows scroll without the square HoverCard overlay');
  check(!list.hasAttribute('data-we-optics'),'Subagent dropdown outer layout does not create a second filter');

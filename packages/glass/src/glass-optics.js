@@ -13,12 +13,14 @@ function installGlassOptics() {
     return;
   }
   const ns = 'http://www.w3.org/2000/svg';
+  const chatTable = '[data-chat-flow] div:has(> table:only-child)';
+  const subagentMaterial = '[data-subagent-panel][data-menu-material="translucent"] > [aria-hidden="true"][class*="_material_"]';
   const selector = [
     'body[data-we-glass-page][data-we-left-sidebar] [data-we-surface-plate="left-sidebar"]',
     'body[data-we-glass-chat][data-we-glass-page] [data-composer-card]',
     // Match the same bubble carrier as glass-css; the question reply's _bubbleWidth is square.
     'body[data-we-glass-chat][data-we-glass-page]:not([data-we-thinking-native]) [data-chat-flow] [class*="_bubble_"]:not([role="tooltip"])',
-    'body[data-we-glass-page][data-we-thinking-glass]:not([data-we-thinking-native]) [data-chat-flow] div:has(> table:only-child)',
+    'body[data-we-glass-page][data-we-thinking-glass]:not([data-we-thinking-native]) ' + chatTable,
     'body[data-we-glass-page][data-we-glass-chat]:not([data-we-thinking-native]) :is([data-changed-files],[data-presented-file])',
     'body[data-we-glass-page]:not([data-we-thinking-native]) [data-chat-flow] .md-code-block',
     'body[data-we-glass-page]:not([data-we-thinking-native]) [data-chat-flow] :not(pre) > code',
@@ -27,7 +29,7 @@ function installGlassOptics() {
     // Host Modal keeps its page blur on the preceding mask. Only the card refracts.
     'body[data-we-glass-page] [role="presentation"] > [aria-hidden="true"][class*="_mask_"]:not([style*="backdrop-filter"]) + [role="dialog"][aria-modal="true"][class*="_dialog_"]:not([data-shortcut-modal],[data-we-surface-runtime])',
     // MenuSurface already has a rounded decoration leaf below its scrolling content.
-    'body[data-we-glass-page] [data-subagent-panel][data-menu-material="translucent"] > [aria-hidden="true"][class*="_material_"]',
+    'body[data-we-glass-page] ' + subagentMaterial,
     'body[data-we-glass-page] [data-we-surface-runtime="declared"],body[data-we-glass-page] [data-we-surface-runtime="extra"]',
     'body[data-we-glass-page] .we-picker',
     'body[data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_panel"]',
@@ -113,6 +115,8 @@ function installGlassOptics() {
     let native = layer.backdropFilter || layer.webkitBackdropFilter;
     // Wide frost wipes out the entire refracting band of a 20–30px code capsule.
     if (seat.mode === 'compact') native = native && native !== 'none' ? native.replace(/blur\([^)]*\)/g, 'blur(0.35px)') : 'blur(0.35px)';
+    // The host menu's 40px frost erases the displacement at its rounded edge.
+    if (seat.subagent) native = native.replace(/blur\([^)]*\)/g, 'blur(5px)');
     const decoration = seat.mode === 'local' ? layer : css;
     if (seat.mode === 'compact' && !seat.leaf) {
       if (!compactRoot) {
@@ -148,8 +152,9 @@ function installGlassOptics() {
     // A wrapping inline box must not sample one large rectangle over adjacent prose.
     if (seat.mode === 'fragmented') return;
     const compact = seat.mode === 'compact';
+    const wideEdge = seat.wideEdge;
     const radii = seat.radii.map(value => Math.max(0, Math.min(parseFloat(value) || 0, w / 2, h / 2)));
-    const key = [w, h, ...radii, compact ? 'capsule' : 'panel'].join(':');
+    const key = [w, h, ...radii, compact ? 'capsule' : wideEdge ? 'wide-edge' : 'panel'].join(':');
     if (seat.key === key) return;
     releaseAsset(seat);
     const reused = cache.get(key);
@@ -159,20 +164,24 @@ function installGlassOptics() {
       return;
     }
     const started = win.performance.now();
-    const pad = compact ? 18 : h < 64 ? 12 : 24, scale = compact ? 84 : 38;
+    const pad = compact ? 18 : wideEdge ? 40 : h < 64 ? 12 : 24;
+    const scale = compact ? 84 : wideEdge ? 72 : 38;
     const density = Math.min(compact ? .85 : 1, 560 / (w + pad * 2), 560 / (h + pad * 2));
     const mw = Math.ceil((w + pad * 2) * density), mh = Math.ceil((h + pad * 2) * density);
     const canvas = doc.createElement('canvas'); canvas.width = mw; canvas.height = mh;
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('Lens displacement canvas unavailable');
     const pixels = ctx.createImageData(mw, mh), data = pixels.data;
-    const bevel = compact ? Math.min(16, h * .46) : Math.min(18, h * .22), eta = 1 / 1.45;
+    const bevel = compact ? Math.min(16, h * .46) : wideEdge ? Math.min(34, h * .28) : Math.min(18, h * .22);
+    const exponent = wideEdge ? 1.15 : 1.65;
+    const strength = compact ? 40 : wideEdge ? 46 : 29;
+    const eta = 1 / 1.45;
     // Reuse the same refraction response across every pixel, rather than pow/sqrt per pixel.
     const response = new Float32Array(1025);
     for (let i = 0; i <= 1024; i++) {
-      const slope = Math.pow(i / 1024, 1.65) * .94, nz = Math.sqrt(1 - slope * slope);
+      const slope = Math.pow(i / 1024, exponent) * .94, nz = Math.sqrt(1 - slope * slope);
       const rz = Math.sqrt(1 - eta * eta * (1 - nz * nz));
-      response[i] = (eta * nz - rz) * slope / Math.max(rz, .05) * (compact ? 40 : 29);
+      response[i] = (eta * nz - rz) * slope / Math.max(rz, .05) * strength;
     }
     for (let y = 0; y < mh; y++) for (let x = 0; x < mw; x++) {
       const px = (x + .5) / density - pad - w / 2, py = (y + .5) / density - pad - h / 2;
@@ -302,6 +311,8 @@ function installGlassOptics() {
       if (el.closest('[data-we-surface-preserve]') || el.parentElement?.closest(selector)) continue;
       if (!seats.has(el)) {
         const seat = { id: serial++, mode: el.hasAttribute('data-we-surface-runtime') ? 'local' : el.matches('[data-composer-card]') ? 'pseudo' : 'direct', saved: new Map() };
+        seat.subagent = el.matches(subagentMaterial);
+        seat.wideEdge = seat.subagent || el.matches(chatTable);
         variableNames.forEach(name => seat.saved.set(name, { value: el.style.getPropertyValue(name), priority: el.style.getPropertyPriority(name) }));
         seats.set(el, seat); dirty.add(el);
         resize.observe(el); intersection.observe(el);
@@ -328,6 +339,9 @@ function installGlassOptics() {
       }
       ${surfaceSelector}:is([data-changed-files],[data-presented-file]) {
         background-color:var(--we-chat-glass-fill)!important;
+      }
+      ${surfaceSelector}:is(${subagentMaterial}) {
+        background-color:color-mix(in srgb,var(--dsw-menu-surface-fill,var(--we-readability-base,#ffffff)) 75%,transparent)!important;
       }
       ${surfaceSelector}[data-we-optics="compact"] {
         -webkit-backdrop-filter:none!important;backdrop-filter:none!important;
