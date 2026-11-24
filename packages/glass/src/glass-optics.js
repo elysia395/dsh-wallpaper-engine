@@ -23,6 +23,10 @@ function installGlassOptics() {
     'body[data-we-glass-page]:not([data-we-thinking-native]) [data-chat-flow] :not(pre) > code',
     'body[data-we-glass-page] [data-slot="conversation.view"] button[class*="_toBottom"]',
     'body[data-we-glass-window] [data-we-surface-runtime="settings-window"]',
+    // Host Modal keeps its page blur on the preceding mask. Only the card refracts.
+    'body[data-we-glass-page] [role="presentation"] > [aria-hidden="true"][class*="_mask_"]:not([style*="backdrop-filter"]) + [role="dialog"][aria-modal="true"][class*="_dialog_"]:not([data-shortcut-modal],[data-we-surface-runtime])',
+    // MenuSurface already has a rounded decoration leaf below its scrolling content.
+    'body[data-we-glass-page] [data-subagent-panel][data-menu-material="translucent"] > [aria-hidden="true"][class*="_material_"]',
     'body[data-we-glass-page] [data-we-surface-runtime="declared"],body[data-we-glass-page] [data-we-surface-runtime="extra"]',
     'body[data-we-glass-page] .we-picker',
     'body[data-we-sidebar-glass] [data-dsh-better-sidebar] [class*="_panel"]',

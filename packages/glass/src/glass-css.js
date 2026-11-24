@@ -400,7 +400,8 @@ const CSS_GLASS = `
         同样用 aria-modal），不依赖哈希类名。
      ⚠️ 无模糊内核（data-we-glass-fallback）时不能只关霜：半透明无霜会把壁纸透上来压字，
        回退组把底退回不透明令牌色 + 去掉高光渐变（与 #156② 同政策）。 */
-  body[data-we-glass-floaters] [role="dialog"]:not([class*="_dialog"]):not([data-we-surface-runtime]):not([data-we-host-dialog]):not([aria-modal="true"]):not([data-shortcut-modal]):not(.we-perf-float) > div {
+  /* The subagent list uses MenuSurface, with its own rounded material layer. */
+  body[data-we-glass-floaters] [role="dialog"]:not([class*="_dialog"]):not([data-we-surface-runtime]):not([data-we-host-dialog]):not([aria-modal="true"]):not([data-shortcut-modal]):not(.we-perf-float):not([data-subagent-panel]) > div {
     /* 宿主这张卡的实底必须降 alpha：实测（2026-11-17）是 rgb(72,154,161) 这类**不透明**实色，
        只补 blur 等于把霜压在实底下面，肉眼无感（前一版就是这么失败的）。色相仍取宿主浮层
        令牌 --dsw-alias-bg-overlay（受保真度映射），这里只把「实」改成按 --we-hovercard-alpha
@@ -410,7 +411,7 @@ const CSS_GLASS = `
     -webkit-backdrop-filter: blur(var(--we-hovercard-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
     backdrop-filter: blur(var(--we-hovercard-blur, 16px)) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
   }
-  body[data-we-glass-fallback][data-we-glass-floaters] [role="dialog"]:not([class*="_dialog"]):not([data-we-surface-runtime]):not([data-we-host-dialog]):not([aria-modal="true"]):not([data-shortcut-modal]):not(.we-perf-float) > div {
+  body[data-we-glass-fallback][data-we-glass-floaters] [role="dialog"]:not([class*="_dialog"]):not([data-we-surface-runtime]):not([data-we-host-dialog]):not([aria-modal="true"]):not([data-shortcut-modal]):not(.we-perf-float):not([data-subagent-panel]) > div {
     /* 无模糊内核：半透明无霜会把壁纸直接透上来压字 ⇒ 底退回不透明令牌色、去掉高光渐变。 */
     background-color: var(--dsw-alias-bg-overlay, var(--we-panel-color, #1e1f26)) !important;
     background-image: none !important;
@@ -824,6 +825,11 @@ const CSS_GLASS = `
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
     border-color: var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.14)) !important;
+  }
+  /* Turn status renders a bare code element, outside the Markdown capsule styles. */
+  body[data-we-glass-page][data-we-thinking-glass] [data-chat-flow] [role="status"] > code[class$="_turnErrorCode"] {
+    padding-inline: 4px;
+    border-radius: var(--dsw-radius-sm, 6px);
   }
   /* ── Markdown 表格 ───────────────────────────────────────────────────────
      两个各自的毛病，在纯色背景上都看不出来：
