@@ -4,7 +4,7 @@ Appearance → Glass UI → **Lens refraction and pointer light (experimental)**
 
 The setting is `glassOptics`, owned by the shared settings schema and included in glass reset and appearance presets. The glass child owns its runtime and releases observers, timers, CSSOM rules, decoration leaves and SVG filters when disabled, unloaded, yielding to a skin, or using software-render fallback. No network diagnostics are added.
 
-The toggle is disabled on software rendering and recognized older GPU families, including Intel HD and UHD up to 630, GeForce GTX 900 and earlier numbered families, GTX 1050 and Radeon RX 400/500. The check uses the browser's active GPU locally. Renderer names without a recognizable model retain the default-off opt-in behavior.
+The toggle is disabled in software rendering mode. The GTX 1650 is the approximate recommendation. The GTX 1060, older Intel integrated graphics, Radeon RX 400/500 and other recognized lower-tier models require manual opt-in on the current device. The settings panel shows a GPU load warning when enabling the effect. The device opt-in stays in local storage, so an imported preset cannot enable it on a device that has not opted in. Unknown renderer names follow the ordinary default-off setting.
 
 Existing material tint and blur remain in place on panels. Short, single-line code uses a clearer lens profile on an independent background leaf: glyphs are not filtered or duplicated. Wrapped inline code keeps the native line boxes and does not receive a rectangular backdrop over neighboring prose (see #197). Nested surfaces and explicit native-preserve regions are excluded.
 

@@ -16,6 +16,7 @@ assert.ok(PROFILE_PRESET_KEYS.includes('glassOptics'));
 const source = readFileSync(new URL('../packages/glass/src/glass-optics.js', import.meta.url), 'utf8');
 const tail = source.slice(source.indexOf('let glassOpticsTimer')).replace(/export \{[^}]+\};/, '');
 const tasks = new Map(), attrs = new Set(['data-we-glass-page']);
+const local = new Map();
 let serial = 0, installs = 0, releases = 0, yielding = false;
 let gpu = { renderer: '', software: false };
 const ctx = vm.createContext({
@@ -27,6 +28,7 @@ const ctx = vm.createContext({
   window: {
     setTimeout: fn => { tasks.set(++serial, fn); return serial; },
     clearTimeout: id => tasks.delete(id),
+    localStorage: { getItem: key => local.get(key), setItem: (key, value) => local.set(key, value) },
   },
   installGlassOptics: () => { installs++; return () => releases++; },
   reportGlassOptics: () => { throw new Error('Unexpected mount error'); },
@@ -34,29 +36,37 @@ const ctx = vm.createContext({
 vm.runInContext(tail, ctx);
 const sync = () => vm.runInContext('syncGlassOptics()', ctx);
 const flush = () => { for (const [id, fn] of [...tasks]) { tasks.delete(id); fn(); } };
-const blockReason = () => vm.runInContext('glassOpticsBlockReason()', ctx);
+const gpuMode = () => vm.runInContext('glassOpticsGpuMode()', ctx);
 for (const renderer of [
   'ANGLE (Intel, Intel(R) UHD Graphics 630 (0x00003E92) Direct3D11)',
-  'Mesa Intel(R) HD Graphics 4000 (IVB GT2)',
+  'Mesa Intel(R) HD Graphics 4000 (IVB GT2)', 'Intel(R) UHD Graphics 770', 'Intel(R) Iris(R) Xe Graphics',
+  'Intel(R) Arc(TM) A380 Graphics', 'Apple M1',
   'ANGLE (NVIDIA, GeForce GTX 960M Direct3D11)',
-  'NVIDIA GeForce GTX 1050 Ti/PCIe/SSE2',
-  'AMD Radeon (TM) RX 580 Series (radeonsi, polaris10)',
+  'NVIDIA GeForce GTX 1050 Ti/PCIe/SSE2', 'ANGLE (NVIDIA, GeForce GTX 1060 6GB Direct3D11)',
+  'GeForce GTX 1630', 'GeForce MX450',
+  'AMD Radeon (TM) RX 580 Series (radeonsi, polaris10)', 'AMD Radeon RX 6400', 'AMD Radeon 680M',
 ]) {
   gpu = { renderer, software: false };
-  assert.equal(blockReason(), 'legacy', renderer);
+  assert.equal(gpuMode(), 'limited', renderer);
   ctx.selection.glassOptics = true;
   sync(); assert.equal(tasks.size, 0, renderer);
 }
+vm.runInContext('setGlassOpticsLocalOptIn(true)', ctx);
+sync(); assert.equal(tasks.size, 1, 'Manual opt-in allows an identified lower-tier GPU');
+vm.runInContext('disposeGlassOptics(); glassOpticsLocalOptIn = undefined', ctx);
+sync(); assert.equal(tasks.size, 1, 'The device opt-in is read back from local storage');
+vm.runInContext('setGlassOpticsLocalOptIn(false)', ctx);
+sync(); assert.equal(tasks.size, 0, 'Manual opt-out cancels a pending mount');
 for (const renderer of [
   'ANGLE (Intel, Intel(R) Arc(TM) B580 Graphics Direct3D11)',
-  'Intel(R) Iris(R) Xe Graphics', 'Intel(R) UHD Graphics 770',
-  'GeForce GTX 1660 Ti', 'GeForce RTX 4060', 'Radeon RX 6600', 'Apple M1', 'ANGLE', '',
+  'Intel(R) Arc(TM) 140V GPU', 'AMD Radeon 780M Graphics', 'Apple M2 Pro',
+  'GeForce GTX 1650', 'GeForce GTX 1660 Ti', 'GeForce RTX 4060', 'Radeon RX 6600', 'ANGLE', '',
 ]) {
   gpu = { renderer, software: false };
-  assert.equal(blockReason(), '', renderer);
+  assert.equal(gpuMode(), 'standard', renderer);
 }
 gpu = { renderer: 'SwiftShader', software: true };
-assert.equal(blockReason(), 'software');
+assert.equal(gpuMode(), 'software');
 sync(); assert.equal(tasks.size, 0);
 gpu = { renderer: 'Intel(R) Arc(TM) B580 Graphics', software: false };
 ctx.selection.glassOptics = false;

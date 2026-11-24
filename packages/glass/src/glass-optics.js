@@ -393,19 +393,39 @@ function reportGlassOptics(event, detail) {
 
 let glassOpticsTimer = 0, glassOpticsRelease = null;
 
-// Match specific older GPU families. Generic and masked renderer names cannot establish a model.
-const legacyGlassRenderers = [
-  /\bIntel\s+(?:GMA\b|HD Graphics\b|Iris(?: Plus| Pro)? Graphics\b|UHD Graphics\s+P?(?:6[0-2]\d|630)\b)/i,
-  /\bGeForce\s+(?:(?:GTX?\s+)?[2-9]\d{2}M?|GTX?\s+10[135]0)\b/i,
-  /\bRadeon\s+(?:HD\b|R[579]\b|RX\s+[45]\d{2}M?\b|Vega\s+(?:3|6|8|10|11)\s+Graphics\b)/i,
+// Approximate the GTX 1650 recommendation using known renderer names.
+const limitedGlassRenderers = [
+  /\bIntel\s+(?:GMA\b|U?HD Graphics\b|Iris(?: Plus| Pro| Xe)? Graphics\b|Arc A3[1578]0[EM]?\b)/i,
+  /\bGeForce\s+(?:(?:GTX?\s+)?[2-9]\d{2}M?|GTX?\s+(?:10[1356]0|1630)|MX(?:[1-4]\d{2}|5[15]0))\b/i,
+  /\bRadeon\s+(?:HD\b|R[579]\b|RX\s+(?:[45]\d{2}|5[34]00|6400)M?\b|Vega\s+(?:3|6|8|10|11)\s+Graphics\b|(?:6[168]0|[78][46]0)M\b)/i,
+  /\bApple\s+M[12]\b(?!\s+(?:Pro|Max|Ultra)\b)/i,
 ];
 
-function glassOpticsBlockReason() {
+function glassOpticsGpuMode() {
   if (detectSoftwareRender()) return 'software';
   const { renderer, software } = probeGlassRenderer();
   if (software) return 'software';
   const model = renderer.replace(/\s*\((?:R|TM)\)|[®™]/gi, '');
-  return legacyGlassRenderers.some(pattern => pattern.test(model)) ? 'legacy' : '';
+  return limitedGlassRenderers.some(pattern => pattern.test(model)) ? 'limited' : 'standard';
+}
+
+const glassOpticsOptInKey = 'we-glass-optics-local-opt-in';
+let glassOpticsLocalOptIn;
+
+function setGlassOpticsLocalOptIn(enabled) {
+  glassOpticsLocalOptIn = enabled;
+  try { window.localStorage.setItem(glassOpticsOptInKey, enabled ? '1' : '0'); } catch { /* session only */ }
+}
+
+function glassOpticsEnabled(configured, mode) {
+  if (configured !== true) return false;
+  mode ??= glassOpticsGpuMode();
+  if (mode !== 'limited') return mode === 'standard';
+  if (glassOpticsLocalOptIn === undefined) {
+    try { glassOpticsLocalOptIn = window.localStorage.getItem(glassOpticsOptInKey) === '1'; }
+    catch { glassOpticsLocalOptIn = false; }
+  }
+  return glassOpticsLocalOptIn;
 }
 
 function disposeGlassOptics() {
@@ -414,10 +434,10 @@ function disposeGlassOptics() {
 }
 function canMountGlassOptics() {
   const body = document.body;
-  return selection.glassOptics === true && !glassRowDisabled
+  return !glassRowDisabled
     && !(typeof skinYieldActive === 'function' && skinYieldActive())
-    && body?.hasAttribute('data-we-glass-page') && !body.hasAttribute('data-we-glass-fallback')
-    && !glassOpticsBlockReason();
+    && glassOpticsEnabled(selection.glassOptics)
+    && body?.hasAttribute('data-we-glass-page') && !body.hasAttribute('data-we-glass-fallback');
 }
 
 function syncGlassOptics() {
@@ -434,4 +454,4 @@ function syncGlassOptics() {
 }
 
 
-export { installGlassOptics, syncGlassOptics, disposeGlassOptics, glassOpticsBlockReason };
+export { installGlassOptics, syncGlassOptics, disposeGlassOptics, glassOpticsGpuMode, glassOpticsEnabled, setGlassOpticsLocalOptIn };

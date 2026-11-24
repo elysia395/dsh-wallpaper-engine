@@ -62,10 +62,15 @@ function renderAppearanceGlassSection(ctx) {
   //   （高级行处理器已随迁移**移出**占位器名单、改为真值接线）。判据见 verify-scene-live
   //   的「侧栏 ctx 覆盖」与两档标签序列。
   const sidebarSurface = surface === "sidebar";
-  const opticsBlocked = Boolean(ctx.opticsBlock);
-  const opticsHint = ctx.opticsBlock === "legacy"
-    ? weT("当前显卡型号暂不支持开启折射与追光。")
-    : opticsBlocked ? weT("当前使用软件渲染，无法开启折射与追光。") : undefined;
+  const opticsBlocked = ctx.opticsMode === "software";
+  const opticsEnabled = ctx.opticsEnabled ?? (sel.glassOptics === true);
+  let opticsHint;
+  if (opticsBlocked) opticsHint = weT("当前使用软件渲染，无法开启折射与追光。");
+  if (ctx.opticsMode === "limited") {
+    opticsHint = React.createElement("span", { role: "status" }, opticsEnabled
+      ? weT("已开启。显卡负载可能过大，出现滚动卡顿时请关闭。")
+      : weT("当前显卡低于推荐性能档位，开启可能导致负载过大。"));
+  }
   const children = ((typeof GLASS_CHILDREN !== "undefined" && GLASS_CHILDREN) || [])
     // ⚠️ 排除 `panelOff` 的子项：乙类（左侧栏）**不进这一层** ——
     //    它已有自己的总开关「左侧栏液态玻璃」，而它的"独立配置"耦合在那一项下面
@@ -370,7 +375,7 @@ function renderAppearanceGlassSection(ctx) {
         (hex, live) => onGlassColor("light", hex, live), { key: "glass-color" }),
       !sidebarSurface && sel.glassDarkSeparate === true && swatchRow(weT("玻璃颜色 · 深色"), GLASS_COLOR_PRESETS, glassPair.dark,
         (hex, live) => onGlassColor("dark", hex, live), { key: "glass-color-dark" }),
-      !sidebarSurface && switchRow(weT("透镜折射与追光（实验）"), !opticsBlocked && sel.glassOptics === true, onGlassOptics, {
+      !sidebarSurface && switchRow(weT("透镜折射与追光（实验）"), opticsEnabled, onGlassOptics, {
         key: "glass-optics",
         disabled: opticsBlocked,
         hint: opticsHint,
