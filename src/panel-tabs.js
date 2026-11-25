@@ -354,6 +354,8 @@ function weComponentVisibleOf(components, name) {
     // star 数那一行（模块级：值 + 三态文案都在 client.js 的 starCountLabel 里；
     // 这里的"读"与 SliderRow 一类模块级助手同口径 —— 只读，不发请求）。
     const stars = starCountLabel();
+    // 陈旧值的 tooltip（"没连上 GitHub"）：同样是模块级助手，渲染器只读。
+    const starTitle = starCountTitle();
     // 两张码的参数表：图（路由 URL）/ 图题 / 替代文本 / 一句话说明。渲染一次 map 两遍，
     // 免得两段几乎一样的 createElement 各自演化（改一处忘一处正是这类页面最容易烂的地方）。
     const qrCards = [
@@ -416,7 +418,7 @@ function weComponentVisibleOf(components, name) {
           stars
             ? React.createElement("span", {
                 className: "we-about__stars",
-                title: weT("来自 GitHub API 的实时数据（带缓存；拉不到时显示上一次取到的值）"),
+                title: starTitle,
               }, stars)
             : null,
         ),
