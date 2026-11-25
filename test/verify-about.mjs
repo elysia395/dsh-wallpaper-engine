@@ -487,6 +487,19 @@ check('三态分支都在（正在取 / 当前值 / 取不到），取值态带 
   clientSrc.includes('starCount.busy && starCount.value == null')
   && clientSrc.includes('starCount.tried')
   && /return weT\("⭐ [^"]*\{count\}/.test(clientSrc));
+// 陈旧值（宿主 stale 分支回的上一次取值）必须把"哪一天取的"显示出来：断网 / 证书拦截下
+// 宿主的 fetch 会一直失败，回的就是旧值 —— 客户端吞掉 stale / fetchedAt，几十天前的数
+// 就会顶替实时数出现在关于页上（实测事故：2026-10-08 的 728 挂了 48 天没人看出来）。
+const consumesStaleMarker = (s) =>
+  /d\.ok && d\.stale/.test(s)
+  && /Number\.isFinite\(d\.fetchedAt\)/.test(s)
+  && /return weT\("⭐ [^"]*\{date\}/.test(s)
+  && /function starCountTitle\(\)/.test(s);
+check('陈旧值要标出取数日期：客户端消费 stale / fetchedAt，并给陈旧态一条带 {date} 的文案',
+  consumesStaleMarker(clientSrc));
+check('negative control: 丢掉 stale 标记 / 丢掉 fetchedAt ⇒ 同一条判据判红',
+  !consumesStaleMarker(clientSrc.replace(/d\.ok && d\.stale/, 'false'))
+  && !consumesStaleMarker(clientSrc.replace(/Number\.isFinite\(d\.fetchedAt\)/, 'false')));
 /** star 数被当成设置写进去（直写 selection 字段 / 交给 setSetting 落盘）——两种都算越界。 */
 const writesStarIntoSetting = (s) =>
   /selection\.\w*[Ss]tarCount/.test(s) || /starCount[\s\S]{0,40}setSetting\(/.test(s);
@@ -505,8 +518,9 @@ const aboutBody = tabsSrc.slice(tabsSrc.indexOf('function renderAboutTab(ctx) {'
 const ABOUT_API_CALL_RE = /api(Json|Fetch)\(/;
 const ABOUT_SET_SETTING_RE = /setSetting\(/;
 const ABOUT_EMIT_CALL_RE = /\bemit\s*\(/;
-check('「关于」渲染器只读模块级状态（不自己发请求 / 不写设置 / 不发通知）',
+check('「关于」渲染器只读模块级状态（star 文案与 tooltip 都来自模块级助手；不自己发请求 / 不写设置 / 不发通知）',
   aboutBody.length > 0 && aboutBody.includes('const stars = starCountLabel();')
+    && aboutBody.includes('const starTitle = starCountTitle();')
     && !ABOUT_API_CALL_RE.test(aboutBody) && !ABOUT_SET_SETTING_RE.test(aboutBody)
     && !ABOUT_EMIT_CALL_RE.test(aboutBody));
 check('negative control: 渲染器判据对三种越界都有牙（喂进同一批常量）',
