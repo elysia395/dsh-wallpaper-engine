@@ -1007,6 +1007,21 @@ const CSS_GLASS = `
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
   }
+  /* While the toolbar sticks, the original top edge of the backing plate
+     scrolls away. Move the shared round clip to the visible edge so the
+     plate and scrolling code cannot show through the toolbar's corners. */
+  @supports (animation-timeline: view(block 0px)) and (animation-range: exit-crossing) {
+    body[data-we-glass-page][data-we-thinking-glass]:not([data-we-thinking-native])
+      [data-conversation-scroll] [data-chat-flow] .md-code-block:has(> * > [data-code-block-banner]) {
+      animation: we-code-block-clip auto linear both;
+      animation-timeline: view(block 0px);
+      animation-range: exit-crossing;
+    }
+    @keyframes we-code-block-clip {
+      from { clip-path: inset(0 round var(--dsl-code-block-border-radius, 12px)); }
+      to { clip-path: inset(100% 0 0 round var(--dsl-code-block-border-radius, 12px)); }
+    }
+  }
   /* A user bubble already supplies the single glass plate and frost. */
   body[data-we-glass-page][data-we-thinking-glass] [data-chat-flow] [class*="_bubble_"]:not([role="tooltip"]) .md-code-block {
     background: transparent !important;

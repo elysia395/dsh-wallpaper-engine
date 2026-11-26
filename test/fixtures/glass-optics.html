@@ -226,6 +226,34 @@ const assertions=[];function check(value,message){if(!value)throw new Error(mess
  check(menuBody.scrollTop===25&&getComputedStyle(menuBody).backdropFilter==='none'&&getComputedStyle(menuBody).backgroundImage==='none','Subagent rows scroll without the square HoverCard overlay');
  check(!list.hasAttribute('data-we-optics'),'Subagent dropdown outer layout does not create a second filter');
  list.remove();
+ const codeScroll=document.createElement('section');
+ codeScroll.setAttribute('data-conversation-scroll','');
+ codeScroll.style.cssText='position:fixed;left:70px;top:110px;width:450px;height:250px;overflow:auto;z-index:9';
+ codeScroll.innerHTML='<div data-chat-flow><div style="height:50px"></div><div class="md-code-block" style="position:relative;width:auto;height:auto;margin:0;--dsl-code-block-border-radius:16px"><div style="position:sticky;top:0;z-index:6;border-radius:16px 16px 0 0"><div data-code-block-banner style="height:40px;display:flex;justify-content:space-between;padding:0 16px"><span>Code</span><button type="button">Copy</button></div></div><pre style="margin:0;height:440px;overflow-x:auto"><code>long example</code></pre></div><div style="height:300px"></div></div>';
+ document.body.append(codeScroll);
+ const codeBlock=codeScroll.querySelector('.md-code-block');
+ const banner=codeBlock.firstElementChild;
+ const insideCode=(x,y)=>codeBlock.contains(document.elementFromPoint(x,y));
+ function checkRoundedCorners(top, mode) {
+   const {left,right}=codeBlock.getBoundingClientRect();
+   const hits=[left+1,right-1,left+20,right-20].map(x=>insideCode(x,top+1));
+   const css=getComputedStyle(codeBlock);
+   check(hits.join(',')==='false,false,true,true',
+     `${mode} clips both top corners without covering the toolbar (${css.clipPath}, ${hits})`);
+ }
+ codeScroll.scrollTop=145;
+ await next();
+ const scrollTopEdge=codeScroll.getBoundingClientRect().top;
+ check(codeBlock.getBoundingClientRect().top<scrollTopEdge&&banner.getBoundingClientRect().top===scrollTopEdge,'Tall code toolbar is pinned above the moving code');
+ checkRoundedCorners(scrollTopEdge,'Pinned code');
+ check(await waitFor(()=>getComputedStyle(codeBlock).backdropFilter.includes('url(')),'Rounded pinned code keeps refraction active');
+ const copy=codeBlock.querySelector('button');
+ const copyRect=copy.getBoundingClientRect();
+ check(document.elementFromPoint(copyRect.left+copyRect.width/2,copyRect.top+copyRect.height/2)===copy,'Pinned copy control remains clickable');
+ codeScroll.scrollTop=0;
+ await next();
+ checkRoundedCorners(codeBlock.getBoundingClientRect().top,'Unpinned code');
+ codeScroll.remove();
  document.body.setAttribute('data-we-thinking-native','');
  check(await waitFor(()=>!tableWrap.hasAttribute('data-we-optics')),'Native conversation mode releases the table filter');
  check(fileCards.every(card=>!card.hasAttribute('data-we-optics')),'Native conversation mode also releases all file cards');
