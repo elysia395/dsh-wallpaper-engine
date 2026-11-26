@@ -9,6 +9,8 @@
 const WE_I18N_EN_GLASS = {
   // ── 思考块液态玻璃（PR #130）──
   "思考块液态玻璃": "Thinking-block liquid glass",
+  "表格可读底": "Table readability background",
+  "关闭后，表格恢复宿主样式，壁纸可透过表格。": "Turn off to use the host’s table style and let the wallpaper show through.",
 
   "玻璃兼容": "Glass compatibility",
   "自动适配": "Automatic",

@@ -69,7 +69,7 @@ const GLASS_RESIDUE_ATTRS = [
   "data-we-glass-page", "data-we-glass-chat", "data-we-glass-window", "data-we-glass-floaters",
   "data-we-left-sidebar", "data-we-left-sidebar-radius", "data-we-right-sidebar-radius",
   "data-we-left-sidebar-square", "data-we-right-sidebar-square",
-  "data-we-titlebar-glass", "data-we-thinking-glass", "data-we-thinking-native",
+  "data-we-titlebar-glass", "data-we-thinking-glass", "data-we-thinking-native", "data-we-table-readability",
   "data-we-sidebar-follow", "data-we-sidebar-glass", "data-we-sidebar-fullclear",
   "data-we-floater-solid", "data-we-glass-fallback",
 ];
@@ -2944,6 +2944,10 @@ function onThinkingMode(mode) {
   setSetting("thinkingNative", mode === "native");
   emit();
 }
+function onTableReadability(e) {
+  setSetting("tableReadability", e.target.checked);
+  emit();
+}
 // 胶囊雾化（行内代码 / 新会话 / 导航按钮）：与 thinkingGlass 同族 —— 消费它的规则
 // 全部挂在 data-we-thinking-glass 门下，所以滑杆也只在该开关打开时渲染（glass-panel）。
 const onCapsuleBlur = (px, live) =>
@@ -5144,7 +5148,7 @@ function WallpaperPicker() {
       uiColorOpen: pickerUiColorOpen, onToggleUiColorSection: togglePickerUiColorSection,
       onToggleUiColorCustom, onUiColorElement,
       onGlassSurfacePolicy, surfaceStatus: weGlassSurfaceStatus(),
-      officialColorOf, onAccent, onCapsuleBlur, onCapsuleColor, onBlur, onBorder, onCaretColor, onChatGlassFidelity, onComponentFamily, onComponentFont, onExtraGlassSelectors, onFontAdvanced, onFontResetAll, onGlassAlpha, onGlassMaskStrength, onGlassColor, onGlassDarkSeparate, onGlassFidelity, onGlobalFamily, onLeftSidebarGlass, onTitlebarGlass, onRefreshSystemFonts, onSidebarAlpha, onSidebarBlur, onSidebarColor, onSidebarContentAlpha, onSidebarContentColor, onSidebarCornerRadius, onSidebarCornerSquare, onSidebarFollowGlobal, onSidebarGlass, onSidebarFullClear, onFloaterSolidBase, onMarketStickyClip, onMarketStickyFade, onThemeColor, onThemeColorClear, onThemeDarkSeparate, onThemeFamily, onThemeSize, onThemeTypeOnly, onThemeWeight, onThinkingMode, onToggleFontCustom, onToggleThemeFollow, sel,
+      officialColorOf, onAccent, onCapsuleBlur, onCapsuleColor, onBlur, onBorder, onCaretColor, onChatGlassFidelity, onComponentFamily, onComponentFont, onExtraGlassSelectors, onFontAdvanced, onFontResetAll, onGlassAlpha, onGlassMaskStrength, onGlassColor, onGlassDarkSeparate, onGlassFidelity, onGlobalFamily, onLeftSidebarGlass, onTitlebarGlass, onRefreshSystemFonts, onSidebarAlpha, onSidebarBlur, onSidebarColor, onSidebarContentAlpha, onSidebarContentColor, onSidebarCornerRadius, onSidebarCornerSquare, onSidebarFollowGlobal, onSidebarGlass, onSidebarFullClear, onFloaterSolidBase, onMarketStickyClip, onMarketStickyFade, onThemeColor, onThemeColorClear, onThemeDarkSeparate, onThemeFamily, onThemeSize, onThemeTypeOnly, onThemeWeight, onThinkingMode, onTableReadability, onToggleFontCustom, onToggleThemeFollow, sel,
       // 玻璃 UI 子项开关 + 独立配置 + 独立参数（见 onToggleChildIndependent 那段注释）
       onToggleChildIndependent, onGlassChildParam, childIndependentOn,
       // 二次修订：设置页也**支持隐藏**这几节（默认全展开）——
