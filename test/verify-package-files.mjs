@@ -514,7 +514,7 @@ async function main() {
     // 再：verify 105→106 / all 118→119 —— 新增 `test/verify-url-import-route.mjs`（#320 URL 导入路由守卫）。
     // 再：verify 106→107 / all 119→120 —— 新增 `test/verify-media-size.mjs`（#304 方向筛选的
     //     图片文件头 / MP4 tkhd 宽高解析）。
-    const CHAIN_FLOOR = { verify: 109, docs: 6, smoke: 6, all: 122 };    /** 地板表与 GROUPS 的对齐体检：键名必须与**组名**逐一对齐（纯函数 ⇒ 负对照可直接喂）。 */
+    const CHAIN_FLOOR = { verify: 110, docs: 6, smoke: 6, all: 123 };    /** 地板表与 GROUPS 的对齐体检：键名必须与**组名**逐一对齐（纯函数 ⇒ 负对照可直接喂）。 */
     const floorGaps = (groups, floors) => groups.map(([, g]) => g).filter((g) => !Number.isInteger(floors[g]));
     const problems = floorGaps(GROUPS, CHAIN_FLOOR).map((g) => '地板表缺组 ' + g
       + '（键名要写**组名**：`verify`/`docs`/`smoke`/`all`，不是脚本键名 `verify:docs`/`verify:all`）');

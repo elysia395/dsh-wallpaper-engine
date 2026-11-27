@@ -5,7 +5,7 @@
 > 口径：只统计守卫**代码**里真正碰到的模块（先剥注释），并区分"直接读源文件"与"隔着产物 `lib/client.js`"。
 > 写法：字面量路径 / `join(...)` 拼接 / 唯一 basename / 产物配方 / **前缀族读法** `scopeFiles|scopeText(<前缀>)` / **经共享族助手读**（`import { panelText } from './tools/src-scope.mjs'` + 真调用；族口径封在那个库里，见 `docs/CODE-STRUCTURE.md` §12「同时是守卫的库」）/ **真源定位读**（`locate('符号')` / `locateFile('文件名')`，`test/tools/source-locator.mjs`：符号唯一声明在哪就是读了哪个模块）。
 
-模块面 219 个 · 守卫 136 个
+模块面 219 个 · 守卫 137 个
 
 ## 守卫 → 模块
 
@@ -142,6 +142,7 @@
 | `verify-upload-store.mjs` | `lib/index.js` `lib/kernel/config.js` `lib/kernel/data-dir.js` `lib/upload-dir.js` `lib/upload-store.js` |  |
 | `verify-url-import-route.mjs` | `lib/http-body.js` `lib/json-response.js` `lib/upload-store.js` `packages/media-bridge/lib/routes/url-import.js` `packages/media-bridge/lib/url-source.js` |  |
 | `verify-url-source.mjs` | `lib/upload-dir.js` `lib/upload-store.js` `packages/media-bridge/lib/url-source.js` |  |
+| `verify-video-canvas-fps.mjs` | `src/client/media-frame.js` |  |
 | `verify-video-preview.mjs` | `lib/media/video-preview.js` |  |
 | `verify-wallpaper-scan.mjs` | `lib/fs-paths.js` `lib/wallpaper-scan.js` |  |
 | `verify-we-folders.mjs` | `lib/settings-schema.js` `lib/wallpaper-scan.js` `src/picker-model.js` |  |
@@ -306,7 +307,7 @@
 | `src/avatar-layer.js` | 2 | `verify-avatar-interval-and-rotation` `verify-scene-live` |
 | `src/client.js` | 30 | `verify-about` `verify-adapter` `verify-api-client` `verify-avatar-interval-and-rotation` `verify-client` `verify-component-fonts` `verify-contracts` `verify-extra-glass` `verify-fontset` `verify-glass-surfaces` `verify-i18n` `verify-layer-ownership` `verify-module-layout` `verify-notice-routing` `verify-occlusion-debounce` `verify-package-files` `verify-package-publish` `verify-perf-metrics` `verify-picker-model` `verify-presets` `verify-scene-live` `verify-slideshow-client` `verify-subpackage-client-half` `verify-subpackage-purity` `verify-subpackage-toggle-roundtrip` `verify-system-fonts` `verify-theme-follow` `verify-theme-layer` `verify-transcode-state` `verify-types` |
 | `src/client/audio-playback.js` | 2 | `verify-layer-ownership` `verify-scene-live` |
-| `src/client/media-frame.js` | 2 | `verify-perf-metrics` `verify-scene-live` |
+| `src/client/media-frame.js` | 3 | `verify-perf-metrics` `verify-scene-live` `verify-video-canvas-fps` |
 | `src/client/rope-dock.js` | 5 | `verify-i18n` `verify-pet-rope-entry` `verify-pet-sidebar-diag` `verify-pet-sidebar-rebound` `verify-scene-live` |
 | `src/client/rotation.js` | 1 | `verify-scene-live` |
 | `src/effects.js` | 7 | `verify-adapter` `verify-client` `verify-component-fonts` `verify-glass-surfaces` `verify-scene-live` `verify-theme-layer` `verify-titlebar-anchor` |
