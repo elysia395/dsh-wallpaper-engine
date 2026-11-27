@@ -162,7 +162,8 @@ const assertions=[];function check(value,message){if(!value)throw new Error(mess
  const tableWrap=document.createElement('div');
  tableWrap.style.cssText='position:fixed;left:560px;top:350px;width:340px;overflow-x:auto;overscroll-behavior-x:contain';
  tableWrap.tabIndex=0;
- tableWrap.innerHTML='<table style="width:540px;max-width:none;border-collapse:collapse"><thead><tr><th>Title</th><th>Details</th></tr></thead><tbody><tr><td><code>table code</code></td><td>Body</td></tr></tbody></table>';
+ tableWrap.innerHTML='<table style="width:240px;margin-inline-start:38px;max-width:none;border-collapse:collapse"><thead><tr><th>Title</th><th>Details</th></tr></thead><tbody><tr><td><code>table code</code></td><td>Body</td></tr></tbody></table>';
+ const table=tableWrap.firstElementChild;
  document.querySelector('[data-chat-flow]').append(tableWrap);
  check(parseFloat(getComputedStyle(tableWrap).borderTopLeftRadius)>0,'Markdown table clips its colored corners at the scroll wrapper with optics off');
  check(getComputedStyle(tableWrap.querySelector('th')).paddingInlineStart==='16px'&&getComputedStyle(tableWrap.querySelector('td:last-child')).paddingInlineEnd==='16px','Table header and body leave room at the outer edges');
@@ -181,13 +182,19 @@ const assertions=[];function check(value,message){if(!value)throw new Error(mess
  check(fileCards.every(card=>getComputedStyle(card).backdropFilter==='none')&&getComputedStyle(fileCards[1]).backgroundColor==='rgba(0, 0, 0, 0)','File cards keep their existing material with optics off');
  document.body.setAttribute('data-we-glass-floaters','');
  const disposeTableOptics=installGlassOptics();
- check(await waitFor(()=>getComputedStyle(tableWrap).backdropFilter.includes('url(')),'Markdown table wrapper carries one rounded refraction filter');
+ check(await waitFor(()=>getComputedStyle(table).backdropFilter.includes('url(')),'Only the visible table carries the refraction filter');
+ check(!tableWrap.hasAttribute('data-we-optics')&&getComputedStyle(tableWrap).backdropFilter==='none','The wider horizontal scroll area stays free of refraction');
+ const tableRect=table.getBoundingClientRect();
+ check(!table.contains(document.elementFromPoint(tableRect.left+1,tableRect.top+1))
+   &&table.contains(document.elementFromPoint(tableRect.left+20,tableRect.top+1)),'The table clips its own top corners inside the wider scroll area');
  const getMap=surface=>document.getElementById(getComputedStyle(surface).backdropFilter.match(/#([^"]+)/)?.[1]);
- check(getMap(tableWrap)?.querySelector('feDisplacementMap').getAttribute('scale')==='72','Wide table uses the stronger edge profile');
- check(!tableWrap.querySelector('[data-we-optics]'),'Table and inline cells do not receive redundant refraction filters');
+ check(getMap(table)?.querySelector('feDisplacementMap').getAttribute('scale')==='72','Wide table uses the stronger edge profile');
+ check(!table.querySelector('[data-we-optics]'),'Inline cells do not receive redundant refraction filters');
+ table.style.width='540px';
+ table.style.marginInlineStart='0';
  tableWrap.scrollLeft=90;
  await next();
- check(tableWrap.scrollLeft===90 && getComputedStyle(tableWrap).backdropFilter.includes('url('),'Wide table keeps horizontal scrolling and refraction');
+ check(tableWrap.scrollLeft===90 && getComputedStyle(table).backdropFilter.includes('url('),'Wide table keeps horizontal scrolling and refraction');
  check(await waitFor(()=>getLeaf(errorCode) && getComputedStyle(getLeaf(errorCode)).backdropFilter.includes('url(')),'Terminal error badge refracts on its rounded capsule');
  check(await waitFor(()=>fileCards.every(card=>getComputedStyle(card).backdropFilter.includes('url('))),'Edited and delivered file cards each get rounded refraction');
  check(fileCards.every(card=>getComputedStyle(card).backgroundColor==='rgba(200, 220, 240, 0.35)'&&getComputedStyle(card).borderRadius==='12px'),'File cards reuse the conversation fill and host corners');
@@ -256,11 +263,11 @@ const assertions=[];function check(value,message){if(!value)throw new Error(mess
  checkRoundedCorners(codeBlock.getBoundingClientRect().top,'Unpinned code');
  codeScroll.remove();
  document.body.removeAttribute('data-we-table-readability');
- check(await waitFor(()=>!tableWrap.hasAttribute('data-we-optics'))&&getComputedStyle(tableWrap).borderTopLeftRadius==='0px','Disabling table readability restores the native table with optics still on');
+ check(await waitFor(()=>!table.hasAttribute('data-we-optics'))&&getComputedStyle(table).clipPath==='none'&&getComputedStyle(tableWrap).borderTopLeftRadius==='0px','Disabling table readability restores the native table with optics still on');
  document.body.setAttribute('data-we-table-readability','');
- check(await waitFor(()=>getComputedStyle(tableWrap).backdropFilter.includes('url(')),'Enabling table readability restores the rounded lens');
+ check(await waitFor(()=>getComputedStyle(table).backdropFilter.includes('url(')),'Enabling table readability restores the rounded lens');
  document.body.setAttribute('data-we-thinking-native','');
- check(await waitFor(()=>!tableWrap.hasAttribute('data-we-optics')),'Native conversation mode releases the table filter');
+ check(await waitFor(()=>!table.hasAttribute('data-we-optics')),'Native conversation mode releases the table filter');
  check(fileCards.every(card=>!card.hasAttribute('data-we-optics')),'Native conversation mode also releases all file cards');
  disposeTableOptics();
  document.getElementById('result').textContent=JSON.stringify({ok:true,assertions,diagnostics});

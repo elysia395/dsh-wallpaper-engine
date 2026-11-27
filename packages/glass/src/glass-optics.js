@@ -13,7 +13,8 @@ function installGlassOptics() {
     return;
   }
   const ns = 'http://www.w3.org/2000/svg';
-  const chatTable = '[data-chat-flow] div:has(> table:only-child)';
+  // A breakout table can have a scroll wrapper wider than the table itself.
+  const chatTable = '[data-chat-flow] div > table:only-child';
   const subagentMaterial = '[data-subagent-panel][data-menu-material="translucent"] > [aria-hidden="true"][class*="_material_"]';
   const selector = [
     'body[data-we-glass-page][data-we-left-sidebar] [data-we-surface-plate="left-sidebar"]',

@@ -860,6 +860,12 @@ const CSS_GLASS = `
   body[data-we-glass-page][data-we-thinking-glass][data-we-table-readability] [data-chat-flow] div:has(> table:only-child) {
     border-radius: var(--dsw-radius-md, 12px);
   }
+  /* A breakout wrapper can be wider than its table, so clip the table's own
+     collapsed borders and cells at the edge of the refracting surface. */
+  body[data-we-glass-page][data-we-thinking-glass][data-we-table-readability] [data-chat-flow] div > table:only-child {
+    border-radius: var(--dsw-radius-md, 12px);
+    clip-path: inset(0 round var(--dsw-radius-md, 12px));
+  }
   body[data-we-glass-page][data-we-thinking-glass][data-we-table-readability] [data-chat-flow] table,
   body[data-we-glass-page][data-we-thinking-glass][data-we-table-readability] [data-vcp-rawhtml] table {
     background: color-mix(in srgb,
