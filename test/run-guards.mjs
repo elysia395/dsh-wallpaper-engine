@@ -115,6 +115,13 @@ const VERIFY_STEPS = [
   // 图片 / 幻灯片壁纸的浏览器半边：叠层 / 交叉淡化 / 失联即停 / 隐藏不推进。与 verify-client 同侧
   // （只读 src/**，不依赖 build 产物）。硬档依据：过场层摘不干净 ⇒ 换壁纸后旧图集继续解码。
   step('test/verify-slideshow-client.mjs'),
+  // 视频 Edge 兼容路径的 canvas 限帧（#383）：buildVideoMedia 把 <video> 藏屏外改逐帧 drawImage
+  // 上屏，60–120Hz 回调里每帧都画 ⇒ 2K60 源「解码帧一个不少、媒体时钟只走 89.5%」。判据 =
+  // weDrawTick 的节流（WE_DRAW_FPS_CAP=30、首绘不节流、副作用 data-we-drawn/noteLayerContent
+  // 只在真落笔时发生、暂停不重挂、weStopDraw 后首绘不被旧时间戳压住）+ node:vm 沙箱行为断言
+  // （60Hz 一秒 30 画 / 去掉节流负对照 60 画）。与 slideshow 同侧（只读 src/**，不依赖产物）。
+  // 硬档依据：节流被掏空 ⇒ 每帧回读的卡顿回归，且无任何其他判据会红。
+  step('test/verify-video-canvas-fps.mjs'),
   // ⚠️ D3 可见面判据必须留在链上：它不在链里时，一次取上游 panel-tabs.js 就能把 D3 gate 丢掉
   // 而长期没人跑到（链的短路特性会让"链外的强判据"变成摆设）。
   // 在链上：只要 gate 落点与声明表对不上，链就在这里断。
