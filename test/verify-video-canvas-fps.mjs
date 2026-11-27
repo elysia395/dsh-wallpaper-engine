@@ -17,6 +17,8 @@
 //   A4 rAF 回退路径同样被节流；暂停时不重挂下一帧（原语义保留）。
 //   A5 换壁纸（weStopDraw → weStartDraw）后首绘仍然立即发生（时间戳被重置）。
 //   A6 画布尺寸变化（ResizeObserver）立即重画，不受节流影响。
+//   A7 软渲染档（#411）：探测为真时同一 1 秒压到 ≈ 15 次。
+//   A8 负对照：把软渲染判定改成恒 false，同样 1 秒回到 ≈ 30 次（证明 15 档由探测决定，不是写死）。
 //
 // Usage: node test/verify-video-canvas-fps.mjs
 import { readFileSync } from 'node:fs';
@@ -42,11 +44,14 @@ check('S1 节流只跳过绘制、rVFC 重挂照旧',
   /v\.requestVideoFrameCallback\) \{ weVfHandle = v\.requestVideoFrameCallback\(weDrawTick\)/.test(SRC));
 check('S1 rAF 回退的暂停判据未变（!v.paused && !v.ended）',
   /if \(!v\.paused && !v\.ended\) \{ weRafId = requestAnimationFrame\(weDrawTick\)/.test(SRC));
+check('S1 软渲染档常量 15 与它自己的最小间隔都在',
+  /const SOFT_RENDER_DRAW_FPS = 15;/.test(SRC)
+  && /const SOFT_RENDER_MIN_INTERVAL_MS = 1000 \/ SOFT_RENDER_DRAW_FPS - 0\.5;/.test(SRC));
 check('S1 weStopDraw 重置 weLastDrawAt = 0',
   /weDrawCtx = null;\s*\n\s*\/\/[^\n]*\n\s*weLastDrawAt = 0;/.test(SRC));
 
 // ── 沙箱：直接执行 src/client/media-frame.js（内联模块，无 import） ────────
-function loadFrame(source, { useRvfc = true } = {}) {
+function loadFrame(source, { useRvfc = true, softRender = false } = {}) {
   const harness = {
     draws: 0,
     notes: 0,
@@ -86,7 +91,7 @@ function loadFrame(source, { useRvfc = true } = {}) {
   }
   harness.canvas = canvas;
   harness.video = video;
-  const context = vm.createContext({
+  const globals = {
     performance: { now: () => harness.clock },
     window: { devicePixelRatio: 2 },
     document: { body: {} },
@@ -99,7 +104,11 @@ function loadFrame(source, { useRvfc = true } = {}) {
       disconnect() {}
     },
     noteLayerContent() { harness.notes += 1; }
-  });
+  };
+  // #411：软渲染档的探测桩。真源码在构建期由 probe.js 提供同名函数，这里按用例注入；
+  // 不注入 ⇒ `typeof liveSoftRenderProbeNow` 不是 function ⇒ 源码按硬件处理（30fps 档）。
+  if (softRender) globals.liveSoftRenderProbeNow = () => true;
+  const context = vm.createContext(globals);
   const api = vm.runInContext(
     source + '\n;({ weDrawTick, weStartDraw, weStopDraw, weDrawFrame });',
     context,
@@ -203,6 +212,33 @@ function runRaf(harness, seconds, fps = 60) {
   const before = h.draws;
   for (const cb of h.resizeCbs) cb();
   check('A6 画布尺寸变化立即重画一次', h.draws === before + 1, `draws=${before} → ${h.draws}`);
+  h.api.weStopDraw();
+}
+
+// ── A7. 软渲染档（#411）：探测为真时压到 15fps ─────────────────────────────
+{
+  const h = loadFrame(SRC, { softRender: true });
+  h.api.weStartDraw(h.canvas, h.video);
+  const first = h.draws;
+  runRvfc(h, 1.0, 60);
+  const soft = h.draws - first;
+  check('A7 软渲染下 60Hz 回调 1 秒内绘制 ≈ 15 次', soft >= 12 && soft <= 18, 'soft=' + soft);
+  h.api.weStopDraw();
+}
+
+// ── A8. 负对照：软渲染判定恒 false → 回到 30 档 ────────────────────────────
+{
+  const forced = SRC.replace(
+    'return typeof liveSoftRenderProbeNow === "function" && liveSoftRenderProbeNow() === true;',
+    'return false;'
+  );
+  check('A8 负对照源码替换成功（软渲染判定恒 false）', forced !== SRC);
+  const h = loadFrame(forced, { softRender: true });
+  h.api.weStartDraw(h.canvas, h.video);
+  const first = h.draws;
+  runRvfc(h, 1.0, 60);
+  const back = h.draws - first;
+  check('A8 判定恒 false 时回到 ≈ 30 次（15 档不是写死的）', back >= 28 && back <= 33, 'back=' + back);
   h.api.weStopDraw();
 }
 
