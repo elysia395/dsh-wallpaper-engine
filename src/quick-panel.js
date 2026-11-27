@@ -205,7 +205,7 @@
   }
 
   // ── 侧栏档的渲染 ctx（与设置页共用同一批渲染器）────────────────────────────
-  // 侧栏「外观」画**简化配置**（全局四件套与各面的**总开关**）+ 两块**默认收起的折叠块**
+  // 侧栏「外观」画**简化配置**（全局材质旋钮与各面的**总开关**）+ 两块**默认收起的折叠块**
   // （全局字体节、「详细玻璃调节」门后的高级行）。分档见 ADR-0008 **D4**（三次修订）。
   // 折叠态住 localStorage（本档 `qp-font-open` / `qp-glass-detail`；设置页那份字体节用它自己的
   // `picker-font-open`），经 `qpRenderAppearancePane` 作为 `fontOpen` / `glassDetailOpen`
@@ -503,7 +503,7 @@
       // 模块级重置（issue #192）：本档也画外观那六个节头 ⇒ ↺ 也要能用
       //（同一个模块级处理器，与设置页那份同源）。
       onResetModule,
-      onAccent, onBlur, onBorder, onChatGlassFidelity, onExtraGlassSelectors, onGlassAlpha, onGlassMaskStrength, onGlassColor, onGlassFidelity, onGlassOptics, onLeftSidebarGlass, onTitlebarGlass, onSidebarGlass, onSidebarFullClear, onFloaterSolidBase, onMarketStickyClip, onMarketStickyFade, onToggleThemeFollow,
+      onAccent, onBlur, onBorder, onChatGlassFidelity, onExtraGlassSelectors, onGlassAlpha, onGlassMaskStrength, onGlassColor, onGlassFidelity, onGlassOptics, onGlassSheenStrength, onLeftSidebarGlass, onTitlebarGlass, onSidebarGlass, onSidebarFullClear, onFloaterSolidBase, onMarketStickyClip, onMarketStickyFade, onToggleThemeFollow,
       // 侧边栏圆角（外观 → 侧边栏圆角）：侧栏档也画这一节 ⇒ 处理器走真值（不是占位器）
       onSidebarCornerRadius, onSidebarCornerSquare,
       onCaretColor, onSidebarFollowGlobal, onThinkingMode, onTableReadability,

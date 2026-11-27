@@ -34,7 +34,7 @@
   function renderAppearanceDetailSection(ctx) {
     const { onBorder, onResetModule, sel, detailOpen, onToggleDetailSection } = ctx;
     // 简化 / 高级分档见 ADR-0008 **D4**（实现口径在 packages/glass/src/glass-panel.js，按 `ctx.surface` 判定）：
-    // 全局四件套、预设方案与各面总开关属简化配置（侧栏档也画）；本节的「独立配置」层及其子项
+    // 全局材质旋钮、预设方案与各面总开关属简化配置（侧栏档也画）；本节的「独立配置」层及其子项
     // 属高级配置 ⇒ 只在设置页画。它与 quick-panel 的 setting-only 占位器互为负对照。
     // ⚠️ 折叠门（**二次修订**）：**两档都支持隐藏**；差别只在默认值
     //    （组件算好当 `open` 传进来）—— 侧边栏默认展开、设置页默认展开。

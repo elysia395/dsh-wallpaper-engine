@@ -75,6 +75,7 @@ const GLASS_RESIDUE_ATTRS = [
 ];
 const GLASS_RESIDUE_VARS = [
   "--we-blur", "--we-saturate", "--we-glass-brightness", "--we-glass-alpha", "--we-glass-color",
+  "--we-sheen-scale",
   "--we-surface-tint-light", "--we-surface-tint-dark",
   "--we-surface-tint-rgb-light", "--we-surface-tint-rgb-dark",
   "--we-left-sidebar-radius", "--we-right-sidebar-radius",
@@ -2960,7 +2961,7 @@ const onCapsuleColor = (hex, live) => {
 };
 
 // ── 以下处理器模块级 —— 快捷播放面板（src/quick-panel.js）与设置页**共用同一批处理器**。
-//    ⚠️ 分档（ADR-0008 D4）：侧栏档只画**简化配置**（全局四件套 + 各面总开关），
+//    ⚠️ 分档（ADR-0008 D4）：侧栏档只画**简化配置**（全局材质旋钮 + 各面总开关），
 //    高级行的处理器在那份 ctx 里是"取用即抛错"的占位器 —— 所以这里给的是**全量**模块级处理器，
 //    "哪一档真的用到哪些"由 quick-panel 的 provided 对象与 QP_CTX_SETTINGS_ONLY 名单决定。
 //    依赖（setSetting / commitLiveSetting / clampNum / schemaRange / selection /
@@ -3985,6 +3986,10 @@ const onGlassMaskStrength = (pct, live) =>
 // 数学入口在 effects.js 的 weClampSurfaceColor 第三参 + --we-glass-fidelity。
 const onGlassFidelity = (pct, live) =>
   commitLiveSetting("glassFidelity", clampNum(pct, ...schemaRange("glassFidelity"), DEFAULTS.glassFidelity), live);
+// 镜面高光强度（#404，默认 100 = 现状）：0 = 主块三档与侧栏派生档的釉光全部归零，
+// 只保留底与霜；100 = 与接线前逐值相同。落地在 glass-layer.js 的 --we-sheen-scale。
+const onGlassSheenStrength = (pct, live) =>
+  commitLiveSetting("glassSheenStrength", clampNum(pct, ...schemaRange("glassSheenStrength"), DEFAULTS.glassSheenStrength), live);
 // 额外补雾化的选择器（#200）：值是一串 CSS 选择器（逗号 / 换行分隔，最多 8 条）。
 // 消毒只走 settings-schema 的 sanitizeExtraGlassSelectors —— 读侧（sanitizeFromSchema）
 // 与本模块生成侧（glass-extra.js）**共用同一份**判据，所以用户敲到一半的非法串既不会进
@@ -5149,7 +5154,8 @@ function WallpaperPicker() {
       uiColorOpen: pickerUiColorOpen, onToggleUiColorSection: togglePickerUiColorSection,
       onToggleUiColorCustom, onUiColorElement,
       onGlassSurfacePolicy, surfaceStatus: weGlassSurfaceStatus(),
-      officialColorOf, onAccent, onCapsuleBlur, onCapsuleColor, onBlur, onBorder, onCaretColor, onChatGlassFidelity, onComponentFamily, onComponentFont, onExtraGlassSelectors, onFontAdvanced, onFontResetAll, onGlassAlpha, onGlassMaskStrength, onGlassColor, onGlassDarkSeparate, onGlassFidelity, onGlassOptics, onGlobalFamily, onLeftSidebarGlass, onTitlebarGlass, onRefreshSystemFonts, onSidebarAlpha, onSidebarBlur, onSidebarColor, onSidebarContentAlpha, onSidebarContentColor, onSidebarCornerRadius, onSidebarCornerSquare, onSidebarFollowGlobal, onSidebarGlass, onSidebarFullClear, onFloaterSolidBase, onMarketStickyClip, onMarketStickyFade, onThemeColor, onThemeColorClear, onThemeDarkSeparate, onThemeFamily, onThemeSize, onThemeTypeOnly, onThemeWeight, onThinkingMode, onTableReadability, onToggleFontCustom, onToggleThemeFollow, sel,
+      officialColorOf, onAccent, onCapsuleBlur, onCapsuleColor, onBlur, onBorder, onCaretColor, onChatGlassFidelity, onComponentFamily, onComponentFont, onExtraGlassSelectors, onFontAdvanced, onFontResetAll, onGlassAlpha, onGlassMaskStrength, onGlassColor, onGlassDarkSeparate, onGlassFidelity, onGlassOptics, onGlassSheenStrength, onGlobalFamily, onLeftSidebarGlass, onTitlebarGlass, onRefreshSystemFonts, onSidebarAlpha, onSidebarBlur, onSidebarColor, onSidebarContentAlpha, onSidebarContentColor, onSidebarCornerRadius, onSidebarCornerSquare, onSidebarFollowGlobal, onSidebarGlass, onSidebarFullClear, onFloaterSolidBase, onMarketStickyClip, onMarketStickyFade, onThemeColor, onThemeColorClear, onThemeDarkSeparate, onThemeFamily, onThemeSize, onThemeTypeOnly, onThemeWeight, onThinkingMode, onTableReadability, onToggleFontCustom, onToggleThemeFollow, sel,
+
       // 玻璃 UI 子项开关 + 独立配置 + 独立参数（见 onToggleChildIndependent 那段注释）
       onToggleChildIndependent, onGlassChildParam, childIndependentOn,
       // 二次修订：设置页也**支持隐藏**这几节（默认全展开）——

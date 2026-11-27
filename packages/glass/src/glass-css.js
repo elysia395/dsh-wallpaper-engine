@@ -94,7 +94,12 @@ const CSS_GLASS = `
        侧栏的釉（镜面渐变三档）也收在这里：原生左栏与 dsh-better-sidebar 两侧栏共用同一道，
        否则"跟随全局"之后两侧栏仍会差一层白釉。 */
     --we-follow-tint: var(--we-surface-tint-light, #ffffff);
-    --we-panel-sheen-a: 0.10; --we-panel-sheen-b: 0.03; --we-panel-sheen-c: 0.05;
+    /* #404 镜面高光强度：三档都乘同一个系数（100% ⇒ 1 = 接线前逐值相同；
+       0 ⇒ 全零，只留底与霜）。侧栏那条派生通道在 glass.js 的写入点乘同一个变量，
+       两组合起来才是"一个旋钮管全部釉光"。 */
+    --we-panel-sheen-a: calc(0.10 * var(--we-sheen-scale, 1));
+    --we-panel-sheen-b: calc(0.03 * var(--we-sheen-scale, 1));
+    --we-panel-sheen-c: calc(0.05 * var(--we-sheen-scale, 1));
   }
   body[data-ds-dark-theme] {
     --we-readability-floor-base: ${READABILITY_FLOOR_DARK};
@@ -103,7 +108,10 @@ const CSS_GLASS = `
     --we-chat-readability-floor: calc(var(--we-readability-floor-base) * var(--we-chat-glass-fidelity, 1));
     --we-chat-readability-base: var(--we-chat-surface-tint-dark, #0d1524);
     --we-follow-tint: var(--we-surface-tint-dark, #0d1524);
-    --we-panel-sheen-a: 0.07; --we-panel-sheen-b: 0.02; --we-panel-sheen-c: 0.03;
+    /* #404：暗档同样是"档值 × 同一个系数"，与浅档逐条同形。 */
+    --we-panel-sheen-a: calc(0.07 * var(--we-sheen-scale, 1));
+    --we-panel-sheen-b: calc(0.02 * var(--we-sheen-scale, 1));
+    --we-panel-sheen-c: calc(0.03 * var(--we-sheen-scale, 1));
   }
 
   /* ── 页面玻璃总锚点（data-we-glass-page）——**与有没有壁纸无关** ───────────────

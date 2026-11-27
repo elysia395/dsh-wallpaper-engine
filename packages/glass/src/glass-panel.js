@@ -37,7 +37,7 @@ function renderGlassSurfaceControls(ctx) {
 
 function renderAppearanceGlassSection(ctx) {
   const {
-    onBlur, onGlassAlpha, onGlassMaskStrength, onGlassChildParam, onGlassColor, onGlassDarkSeparate, onExtraGlassSelectors, onGlassFidelity, onGlassOptics,
+    onBlur, onGlassAlpha, onGlassMaskStrength, onGlassChildParam, onGlassColor, onGlassDarkSeparate, onExtraGlassSelectors, onGlassFidelity, onGlassOptics, onGlassSheenStrength,
     onToggleChildIndependent, childIndependentOn, sel, surface, onResetModule,
     onCapsuleBlur, onCapsuleColor,
     onLeftSidebarGlass, onTitlebarGlass, onSidebarAlpha, onSidebarBlur, onSidebarColor,
@@ -47,8 +47,8 @@ function renderAppearanceGlassSection(ctx) {
     presetsOpen, onTogglePresetsSection,
   } = ctx;
   // ── 简化配置 vs 高级配置（ADR-0008 **D4**，用户口径修订）────────────
-  //   · **简化配置**（侧栏档 + 设置页都画）：全局四件套（玻璃颜色 / 玻璃透明度 / 雾化 /
-  //     玻璃保真度）、"要不要这一面吃玻璃"的**总开关**（思考块液态玻璃 / 侧栏液态玻璃 /
+  //   · **简化配置**（侧栏档 + 设置页都画）：全局材质旋钮（玻璃颜色 / 玻璃透明度 / 雾化 /
+  //     玻璃保真度 / 镜面高光）、"要不要这一面吃玻璃"的**总开关**（思考块液态玻璃 / 侧栏液态玻璃 /
   //     侧栏全透明 / 侧栏玻璃跟随全局 / 左侧栏液态玻璃）；
   //   · **高级配置**（**只在侧栏档画，且默认收起** —— 节尾「详细玻璃调节」开关门控）：
   //     每个面的「独立配置」层**及其子项参数**，以及挂在总开关下面的**细调行**
@@ -360,7 +360,7 @@ function renderAppearanceGlassSection(ctx) {
     //    而 React 的 Fragment 不产生 DOM 节点 ⇒ 观感与无障碍树都没有多出来的层级。
     open && React.createElement(React.Fragment, null,
       !sidebarSurface && typeof ctx.onGlassSurfacePolicy === "function" && renderGlassSurfaceControls(ctx),
-      // ── 全局四件套 ──
+      // ── 全局材质旋钮（原四件套 + #404 镜面高光）──
       // 玻璃颜色: the settings-window glass BASE tint. Defaults keep the stock
       // look (white light / deep navy dark); picking any preset or a custom
       // color tints the whole window glass in BOTH themes.
@@ -426,6 +426,13 @@ function renderAppearanceGlassSection(ctx) {
       // weClampSurfaceColor 第三参 + --we-glass-fidelity。
       SliderRow(weT("玻璃保真度"), 0, 100, 5, sel.glassFidelity, onGlassFidelity, "%", "glass-fidelity", {
         tooltip: weT("100 = 完整可读性红线（默认）：自定义玻璃色经亮度钳制，正文对比度始终 ≥4.5:1 —— 深色主题下颜色被压暗、浅色主题下被提亮。拉低后颜色更贴你选的原色，但正文在极端明暗的壁纸上可能看不清；看不清字时把本项拉回 100，或按「看不清字三步」调节。"),
+      }),
+      // 镜面高光（#404）：玻璃面板顶上那道白色镜面高光的强度。它由两组变量给出 ——
+      // 主块三档（--we-panel-sheen-*，左侧栏 / 标题栏读它）与右侧栏由透明度派生的
+      // 那一路（--we-sidebar-sheen）—— 一个旋钮同时覆盖，0 = 全部归零、只留底与霜。
+      // 刻意不做成"逐面独立"：釉光是材质的整体特征，#404 的原话是"单独关掉釉光"。
+      SliderRow(weT("镜面高光"), 0, 100, 5, sel.glassSheenStrength, onGlassSheenStrength, "%", "glass-sheen", {
+        tooltip: weT("玻璃面板表面那层白色镜面高光（釉光）的强度：100 = 现状；0 = 完全去掉，只保留底色与雾化。左侧栏、标题栏与侧栏的高光也一起吃这个旋钮。"),
       }),
       // ⚠️ 「对话栏的保真度」**只有**「对话框玻璃·独立配置」下的「对话框玻璃·玻璃保真度」一个入口
       //    （两个旋钮控同一件事是要防的）；存储键复用 `chatGlassFidelity`（D2：不新建平行键），

@@ -5,7 +5,7 @@
 > 口径：只统计守卫**代码**里真正碰到的模块（先剥注释），并区分"直接读源文件"与"隔着产物 `lib/client.js`"。
 > 写法：字面量路径 / `join(...)` 拼接 / 唯一 basename / 产物配方 / **前缀族读法** `scopeFiles|scopeText(<前缀>)` / **经共享族助手读**（`import { panelText } from './tools/src-scope.mjs'` + 真调用；族口径封在那个库里，见 `docs/CODE-STRUCTURE.md` §12「同时是守卫的库」）/ **真源定位读**（`locate('符号')` / `locateFile('文件名')`，`test/tools/source-locator.mjs`：符号唯一声明在哪就是读了哪个模块）。
 
-模块面 220 个 · 守卫 138 个
+模块面 220 个 · 守卫 139 个
 
 ## 守卫 → 模块
 
@@ -50,7 +50,7 @@
 | `verify-fontset.mjs` | `lib/index.js` `lib/settings-schema.js` `packages/fonts/lib/index.js` `packages/fonts/src/appearance-font-section.js` `packages/fonts/src/fontset-editor.js` `packages/glass/src/glass-panel.js` `packages/glass/src/glass-presets-panel.js` `packages/media-bridge/src/playback-rate-section.js` `packages/media-bridge/src/wallpaper-fit-section.js` `src/client.js` `src/extension-registry.js` `src/font/apply.js` `src/font/color-roles.js` `src/font/components.js` `src/font/typography.js` `src/fontset-store.js` `src/media-prep.js` `src/module-reset.js` `src/panel-tabs.js` `src/panel-tabs/advanced.js` `src/panel-tabs/appearance.js` `src/panel-tabs/effects.js` `src/panel-tabs/mascot.js` `src/picker-modal.js` `src/picker-props-panel.js` `src/section-head.js` `src/styles.js` `src/styles/base.js` `src/styles/chrome.js` `src/styles/ext.js` `src/styles/panel.js` `src/styles/quick.js` `src/styles/settings.js` `src/styles/shell.js` `src/system-fonts.js` `src/we-cond.js` | ✅ |
 | `verify-glass-compat.mjs` | `lib/settings-schema.js` `packages/glass/src/glass-panel.js` |  |
 | `verify-glass-compositing.mjs` | — | ✅ |
-| `verify-glass-optics-browser.mjs` | `packages/glass/src/glass-optics.js` |  |
+| `verify-glass-optics-browser.mjs` | `packages/glass/src/glass-css.js` `packages/glass/src/glass-optics.js` |  |
 | `verify-glass-optics.mjs` | `lib/settings-schema.js` `packages/glass/src/glass-optics.js` |  |
 | `verify-glass-runtime-browser.mjs` | — | ✅ |
 | `verify-glass-runtime.mjs` | `packages/glass/src/client.js` `packages/glass/src/glass-surfaces.js` | ✅ |
@@ -144,6 +144,7 @@
 | `verify-upload-store.mjs` | `lib/index.js` `lib/kernel/config.js` `lib/kernel/data-dir.js` `lib/upload-dir.js` `lib/upload-store.js` |  |
 | `verify-url-import-route.mjs` | `lib/http-body.js` `lib/json-response.js` `lib/upload-store.js` `packages/media-bridge/lib/routes/url-import.js` `packages/media-bridge/lib/url-source.js` |  |
 | `verify-url-source.mjs` | `lib/upload-dir.js` `lib/upload-store.js` `packages/media-bridge/lib/url-source.js` |  |
+| `verify-video-canvas-fps.mjs` | `src/client/media-frame.js` |  |
 | `verify-video-preview.mjs` | `lib/media/video-preview.js` |  |
 | `verify-wallpaper-scan.mjs` | `lib/fs-paths.js` `lib/wallpaper-scan.js` |  |
 | `verify-we-folders.mjs` | `lib/settings-schema.js` `lib/wallpaper-scan.js` `src/picker-model.js` |  |
@@ -228,7 +229,7 @@
 | `packages/glass/lib/index.js` | 0 | **（无）** |
 | `packages/glass/lib/routes/glass-row.js` | 0 | **（无）** |
 | `packages/glass/src/client.js` | 1 | `verify-glass-runtime` |
-| `packages/glass/src/glass-css.js` | 5 | `verify-adapter` `verify-glass-surfaces` `verify-i18n` `verify-readability` `verify-titlebar-anchor` |
+| `packages/glass/src/glass-css.js` | 6 | `verify-adapter` `verify-glass-optics-browser` `verify-glass-surfaces` `verify-i18n` `verify-readability` `verify-titlebar-anchor` |
 | `packages/glass/src/glass-extra.js` | 1 | `verify-extra-glass` |
 | `packages/glass/src/glass-layer.js` | 4 | `verify-client` `verify-extra-glass` `verify-glass-surfaces` `verify-titlebar-anchor` |
 | `packages/glass/src/glass-market-sticky.js` | 1 | `verify-market-sticky` |
@@ -309,7 +310,7 @@
 | `src/avatar-layer.js` | 2 | `verify-avatar-interval-and-rotation` `verify-scene-live` |
 | `src/client.js` | 30 | `verify-about` `verify-adapter` `verify-api-client` `verify-avatar-interval-and-rotation` `verify-client` `verify-component-fonts` `verify-contracts` `verify-extra-glass` `verify-fontset` `verify-glass-surfaces` `verify-i18n` `verify-layer-ownership` `verify-module-layout` `verify-notice-routing` `verify-occlusion-debounce` `verify-package-files` `verify-package-publish` `verify-perf-metrics` `verify-picker-model` `verify-presets` `verify-scene-live` `verify-slideshow-client` `verify-subpackage-client-half` `verify-subpackage-purity` `verify-subpackage-toggle-roundtrip` `verify-system-fonts` `verify-theme-follow` `verify-theme-layer` `verify-transcode-state` `verify-types` |
 | `src/client/audio-playback.js` | 2 | `verify-layer-ownership` `verify-scene-live` |
-| `src/client/media-frame.js` | 2 | `verify-perf-metrics` `verify-scene-live` |
+| `src/client/media-frame.js` | 3 | `verify-perf-metrics` `verify-scene-live` `verify-video-canvas-fps` |
 | `src/client/rope-dock.js` | 5 | `verify-i18n` `verify-pet-rope-entry` `verify-pet-sidebar-diag` `verify-pet-sidebar-rebound` `verify-scene-live` |
 | `src/client/rotation.js` | 1 | `verify-scene-live` |
 | `src/effects.js` | 7 | `verify-adapter` `verify-client` `verify-component-fonts` `verify-glass-surfaces` `verify-scene-live` `verify-theme-layer` `verify-titlebar-anchor` |
