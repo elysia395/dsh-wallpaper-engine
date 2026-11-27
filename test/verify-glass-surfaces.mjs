@@ -2887,6 +2887,70 @@ console.log('\n⑲ 标记值跟走 resolver（t9-001 运行级断言：真跑 we
 
 }
 
+// ═══ ㉘ #404 镜面高光强度：一个旋钮同时覆盖主块三档与侧栏派生档 ═══════════════
+// 验收口径（issue #404）：
+//   · 强度 0 ⇒ 主块三档与侧栏派生档的釉光**全部归零**（只保留底与霜）；
+//   · 强度 100 ⇒ 与接线前逐值相同（基数 × 1）；
+//   · 负对照：只关主块、侧栏 `--we-sidebar-sheen` 仍非零 ⇒ 必须判红。
+// 判据分两半：CSS 侧（三个档值的乘数）与 JS 侧（两条写入点），缺一条就算没接全。
+console.log('\n㉘ #404 镜面高光强度：主块三档 × 侧栏派生档 = 同一个系数');
+{
+  const SHEEN_KEYS = ['--we-panel-sheen-a', '--we-panel-sheen-b', '--we-panel-sheen-c'];
+  // ⚠️ 本文件的 CSS 是**主包 + 玻璃包**两份样式表拼起来的（见 CSS_BODY 的取文处），
+  //    所以按"第一个 body 块"取会拿到主包那份（它没有釉光三档）。这里直接按声明扫全文：
+  //    每个键恰好两处定义 —— 第一处浅色、第二处深色（「侧栏全透明」那条是 0，不是 calc）。
+  const scaledBases = (cssText, key) => [...cssText.matchAll(new RegExp(
+    key + ':\\s*calc\\(\\s*([0-9.]+)\\s*\\*\\s*var\\(--we-sheen-scale, 1\\)\\s*\\)', 'g'))].map((m) => m[1]);
+  const panelBases = (cssText) => SHEEN_KEYS.flatMap((k) => scaledBases(cssText, k));
+  const lightBase = SHEEN_KEYS.map((k) => (scaledBases(CSS, k)[0] || ''));
+  const darkBase = SHEEN_KEYS.map((k) => (scaledBases(CSS, k)[1] || ''));
+  check('㉘a 主块三档在浅 / 深两档都乘 --we-sheen-scale，基数与接线前逐字相同',
+    lightBase.join(',') === '0.10,0.03,0.05' && darkBase.join(',') === '0.07,0.02,0.03',
+    'light=' + lightBase.join(',') + ' dark=' + darkBase.join(','));
+  const mutatedPanel = CSS.replace('calc(0.10 * var(--we-sheen-scale, 1))', '0.10');
+  check('negative control: 主块漏乘系数（浅 / 深任一处）会被 ㉘a 判红',
+    SHEEN_KEYS.some((k) => scaledBases(mutatedPanel, k).length !== 2));
+
+  // JS 侧：0–100 ⇒ 0–1；缺省（旧设置 / 无键）⇒ 1。
+  const scaleOf = (patch) => run(effectsBody, patch).wrote.get('--we-sheen-scale');
+  check('㉘b 玻璃层把 0 / 55 / 100 折成 0 / 0.55 / 1，缺键回落 1',
+    scaleOf({ glassSheenStrength: 0 }) === '0'
+    && scaleOf({ glassSheenStrength: 55 }) === '0.55'
+    && scaleOf({ glassSheenStrength: 100 }) === '1'
+    && scaleOf({}) === '1',
+    '0=' + scaleOf({ glassSheenStrength: 0 }) + ' 55=' + scaleOf({ glassSheenStrength: 55 })
+    + ' 100=' + scaleOf({ glassSheenStrength: 100 }) + ' 缺键=' + scaleOf({}));
+  // 侧栏的两条写入点：自定义（glass.js 由透明度派生）与跟随全局（glass-layer.js 写 1）。
+  const SIDEBAR_SCALE = /var\(--we-sheen-scale, 1\)/;
+  const sidebarSheen = (patch) => String(run(effectsBody, patch).wrote.get('--we-sidebar-sheen') || '');
+  const custom = sidebarSheen({ glassSheenStrength: 50 });
+  const follow = sidebarSheen({ glassSheenStrength: 50, sidebarFollowGlobal: true });
+  check('㉘c 侧栏派生档在两条写入点都乘同一个系数（自定义 + 跟随全局）',
+    SIDEBAR_SCALE.test(custom) && SIDEBAR_SCALE.test(follow),
+    'custom=' + custom + ' follow=' + follow);
+  check('negative control: 侧栏写入点漏乘系数会被 ㉘c 判红',
+    !SIDEBAR_SCALE.test(custom.replace('var(--we-sheen-scale, 1)', '1')));
+  // 数值验收：0 ⇒ 全 0；100 ⇒ 与接线前逐值相同（CSS 基数与 JS 写入点各自可算）。
+  const evalSidebar = (expr, scale) => {
+    const m = /^calc\(\s*([0-9.]+)\s*\*\s*var\(--we-sheen-scale, 1\)\s*\)$/.exec(expr);
+    return m ? Number(m[1]) * scale : null;
+  };
+  const panel = panelBases(CSS);
+  const oldAlpha = Number((/calc\(([0-9.]+) \*/.exec(custom) || [])[1]);
+  check('㉘d 强度 0 ⇒ 主块六档与侧栏派生值全部为 0；强度 100 ⇒ 与接线前逐值相同',
+    panel.every((b) => b !== '')
+    && panel.every((b) => Number(b) * 0 === 0)
+    && evalSidebar(custom, 0) === 0 && evalSidebar(custom, 1) === oldAlpha,
+    'panel=' + panel.join(',') + ' sidebar@0=' + evalSidebar(custom, 0)
+    + ' sidebar@1=' + evalSidebar(custom, 1) + ' (基数 ' + oldAlpha + ')');
+  check('㉘e 设置键默认 100、量程 0–100，且进了模块 / 页签重置',
+    SCHEMA.DEFAULTS.glassSheenStrength === 100
+    && SCHEMA.KINDS.glassSheenStrength && SCHEMA.KINDS.glassSheenStrength.min === 0
+    && SCHEMA.KINDS.glassSheenStrength.max === 100
+    && SCHEMA.RESET_MODULES.glass.includes('glassSheenStrength')
+    && SCHEMA.RESET_TABS.appearance.includes('glassSheenStrength'));
+}
+
 console.log('');
 if (failed) {
   console.log('GLASS SURFACE CHECKS FAILED — ' + failed + ' failed');

@@ -275,7 +275,12 @@ function applyGlass(selection, s) {
   //   精确出现 1 次、且那次在注释里，没有任何 CSS 消费者）。真正接线的是它的两个下游
   //   派生物 —— `--we-sidebar-sheen`（釉光，12 处消费）与 `--we-sidebar-tint`
   //   （染色权重，6 处）—— 两者都在下面写出。
-  s.setProperty("--we-sidebar-sheen", String(Math.min(1, sidebarAlpha / 0.2236)));
+  // ⚠️ #404：釉光强度（--we-sheen-scale）在**写入点**乘进这条派生通道，而不是
+  //    改下面那三档系数 —— 它是侧栏釉光的唯一源头，乘在这里就能一次覆盖
+  //    `--we-sidebar-sheen-a/b/c` 的全部消费者（含「侧栏全透明」以外的所有档）。
+  //    100% ⇒ 系数 1，与接线前的数值逐位相同。
+  s.setProperty("--we-sidebar-sheen",
+    "calc(" + String(Math.min(1, sidebarAlpha / 0.2236)) + " * var(--we-sheen-scale, 1))");
   // #159②：这里**只取浅色那一侧**，侧栏不做深浅分离（有意取舍）——
   // 侧栏的消费者把颜色混进**主题解析出来的底**上（color-mix … var(--we-readability-base)），
   // 规则里没有 data-ds-dark-theme 孪生；要分两套得给那批声明加暗色孪生，而 --we-sidebar-color
