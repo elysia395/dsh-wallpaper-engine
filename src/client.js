@@ -69,7 +69,7 @@ const GLASS_RESIDUE_ATTRS = [
   "data-we-glass-page", "data-we-glass-chat", "data-we-glass-window", "data-we-glass-floaters",
   "data-we-left-sidebar", "data-we-left-sidebar-radius", "data-we-right-sidebar-radius",
   "data-we-left-sidebar-square", "data-we-right-sidebar-square",
-  "data-we-titlebar-glass", "data-we-thinking-glass", "data-we-thinking-native",
+  "data-we-titlebar-glass", "data-we-thinking-glass", "data-we-thinking-native", "data-we-table-readability",
   "data-we-sidebar-follow", "data-we-sidebar-glass", "data-we-sidebar-fullclear",
   "data-we-floater-solid", "data-we-glass-fallback",
 ];
@@ -2439,7 +2439,7 @@ function writeSavedPickerOpen(key, on) {
 // 与宿主同一量级的 TTL：避免每次重渲染、每次切页签都打一次网络（GitHub 未认证限流
 // 60 次/小时 **整机共享**）。失败不写 at ⇒ 下次切到关于页立刻重试（失败不该被冷却）。
 const STAR_COUNT_TTL = 10 * 60 * 1000;
-let starCount = { value: null, at: 0, busy: false, tried: false };
+let starCount = { value: null, at: 0, busy: false, tried: false, stale: false, fetchedAt: 0 };
 function loadStarCount(force) {
   if (starCount.busy) return;
   if (!force && starCount.tried && Date.now() - starCount.at < STAR_COUNT_TTL) return;
@@ -2451,7 +2451,13 @@ function loadStarCount(force) {
       // 冷却用**本地**时间戳（不是宿主的 fetchedAt）：宿主的缓存可能本身就是上一次的
       // 旧值（离线兜底那条腿），拿它当年龄会让客户端每次切页签都去问一次 —— 冷却的意义
       // 是"别重复问"，数据到底多旧由宿主那一层的 TTL 负责。
-      starCount = { value: n, at: n == null ? 0 : Date.now(), busy: false, tried: true };
+      // 但"多旧"必须**显示**出来：宿主的 stale 分支回的就是上一次取到的值（断网 / 证书
+      // 拦截时会一直回它），客户端不标日期的话，几十天前的数会和实时数长得一模一样。
+      starCount = {
+        value: n, at: n == null ? 0 : Date.now(), busy: false, tried: true,
+        stale: Boolean(d && d.ok && d.stale),
+        fetchedAt: d && Number.isFinite(d.fetchedAt) ? d.fetchedAt : 0,
+      };
       emit();
     })
     .catch(() => {
@@ -2461,13 +2467,40 @@ function loadStarCount(force) {
 }
 // 那行字的唯一出处（渲染器直接读它 —— 与 SliderRow 一类模块级助手同口径）。
 // 三种态各有明确文案：还没问过 ⇒ 空串（不占位）、正在问 ⇒ 说明在取、取不到 ⇒ 如实说。
+// 第四种是"有值但陈旧"（宿主 stale 分支）：**必须带取数日期**，否则断网时它会冒充实时数。
+/** 宿主 fetchedAt → 本地 `YYYY-MM-DD`；非法就给空串（宁可退回普通文案，也不显示 NaN）。 */
+function starCountFetchedDate() {
+  const t = Number(starCount.fetchedAt);
+  if (!Number.isFinite(t) || t <= 0) return "";
+  const d = new Date(t);
+  if (!Number.isFinite(d.getTime())) return "";
+  const pad = (n) => String(n).padStart(2, "0");
+  return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
+}
+/** 陈旧值**且能说出取数日期**时才返回日期：说不清多旧的旧值不许冒充实时数。 */
+function starCountStaleDate() {
+  return starCount.stale && starCount.value != null ? starCountFetchedDate() : "";
+}
 function starCountLabel() {
   if (starCount.busy && starCount.value == null) return weT("⭐ 正在获取 star 数…");
   if (starCount.value != null) {
-    return weT("⭐ 当前 {count} star", { count: Number(starCount.value).toLocaleString("en-US") });
+    const count = Number(starCount.value).toLocaleString("en-US");
+    const date = starCountStaleDate();
+    if (date) return weT("⭐ 当前 {count} star（{date} 取到）", { count, date });
+    // 陈旧但拿不到时间戳 ⇒ 按"取不到"处理（否则它和实时数长得一模一样，正是这次事故的形态）。
+    if (starCount.stale) return weT("⭐ 暂时取不到 star 数");
+    return weT("⭐ 当前 {count} star", { count });
   }
   if (starCount.tried) return weT("⭐ 暂时取不到 star 数");
   return "";
+}
+// 数字那行的 tooltip（渲染器同样只读模块级助手）：陈旧时把"没连上"说清楚，
+// 别让「实时数据」四个字挂在一个几十天前的值上。
+function starCountTitle() {
+  if (starCountStaleDate()) {
+    return weT("这次没能连上 GitHub，显示的是上一次取到的一次值（不是实时数）");
+  }
+  return weT("来自 GitHub API 的实时数据（带缓存；拉不到时显示上一次取到的值）");
 }
 
 // 滑杆右侧那格「数值区」的可输入形态（SliderRow 的 opts.numberEdit 用它）。
@@ -2910,6 +2943,10 @@ function onTitlebarGlass(e) { setSetting("titlebarGlass", e.target.checked); emi
 function onThinkingMode(mode) {
   setSetting("thinkingGlass", mode === "glass");
   setSetting("thinkingNative", mode === "native");
+  emit();
+}
+function onTableReadability(e) {
+  setSetting("tableReadability", e.target.checked);
   emit();
 }
 // 胶囊雾化（行内代码 / 新会话 / 导航按钮）：与 thinkingGlass 同族 —— 消费它的规则
@@ -5112,7 +5149,7 @@ function WallpaperPicker() {
       uiColorOpen: pickerUiColorOpen, onToggleUiColorSection: togglePickerUiColorSection,
       onToggleUiColorCustom, onUiColorElement,
       onGlassSurfacePolicy, surfaceStatus: weGlassSurfaceStatus(),
-      officialColorOf, onAccent, onCapsuleBlur, onCapsuleColor, onBlur, onBorder, onCaretColor, onChatGlassFidelity, onComponentFamily, onComponentFont, onExtraGlassSelectors, onFontAdvanced, onFontResetAll, onGlassAlpha, onGlassMaskStrength, onGlassColor, onGlassDarkSeparate, onGlassFidelity, onGlassOptics, onGlobalFamily, onLeftSidebarGlass, onTitlebarGlass, onRefreshSystemFonts, onSidebarAlpha, onSidebarBlur, onSidebarColor, onSidebarContentAlpha, onSidebarContentColor, onSidebarCornerRadius, onSidebarCornerSquare, onSidebarFollowGlobal, onSidebarGlass, onSidebarFullClear, onFloaterSolidBase, onMarketStickyClip, onMarketStickyFade, onThemeColor, onThemeColorClear, onThemeDarkSeparate, onThemeFamily, onThemeSize, onThemeTypeOnly, onThemeWeight, onThinkingMode, onToggleFontCustom, onToggleThemeFollow, sel,
+      officialColorOf, onAccent, onCapsuleBlur, onCapsuleColor, onBlur, onBorder, onCaretColor, onChatGlassFidelity, onComponentFamily, onComponentFont, onExtraGlassSelectors, onFontAdvanced, onFontResetAll, onGlassAlpha, onGlassMaskStrength, onGlassColor, onGlassDarkSeparate, onGlassFidelity, onGlassOptics, onGlobalFamily, onLeftSidebarGlass, onTitlebarGlass, onRefreshSystemFonts, onSidebarAlpha, onSidebarBlur, onSidebarColor, onSidebarContentAlpha, onSidebarContentColor, onSidebarCornerRadius, onSidebarCornerSquare, onSidebarFollowGlobal, onSidebarGlass, onSidebarFullClear, onFloaterSolidBase, onMarketStickyClip, onMarketStickyFade, onThemeColor, onThemeColorClear, onThemeDarkSeparate, onThemeFamily, onThemeSize, onThemeTypeOnly, onThemeWeight, onThinkingMode, onTableReadability, onToggleFontCustom, onToggleThemeFollow, sel,
       // 玻璃 UI 子项开关 + 独立配置 + 独立参数（见 onToggleChildIndependent 那段注释）
       onToggleChildIndependent, onGlassChildParam, childIndependentOn,
       // 二次修订：设置页也**支持隐藏**这几节（默认全展开）——

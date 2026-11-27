@@ -16,6 +16,8 @@ const WE_I18N_EN_GLASS = {
   "增强圆角折射、薄边高光与鼠标追光；增加合成开销，卡顿时关闭。换行代码保留原生样式，减少动态效果时关闭追光。": "Adds rounded refraction, rim highlights and pointer light. Uses additional compositing; turn off if scrolling slows down. Wrapped code stays native; reduced motion disables pointer light.",
   // ── 思考块液态玻璃（PR #130）──
   "思考块液态玻璃": "Thinking-block liquid glass",
+  "表格可读底": "Table readability background",
+  "关闭后，表格恢复宿主样式，壁纸可透过表格。": "Turn off to use the host’s table style and let the wallpaper show through.",
 
   "玻璃兼容": "Glass compatibility",
   "自动适配": "Automatic",

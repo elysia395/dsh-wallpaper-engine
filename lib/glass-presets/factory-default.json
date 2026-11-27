@@ -82,6 +82,7 @@
     "titlebarGlass": false,
     "thinkingGlass": false,
     "thinkingNative": false,
+    "tableReadability": true,
     "glassMode": {
       "sidebar": "inherit",
       "sidebarContent": "custom",

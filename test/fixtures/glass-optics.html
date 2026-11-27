@@ -158,6 +158,7 @@ const assertions=[];function check(value,message){if(!value)throw new Error(mess
  tableStyle.textContent=/* GLASS_CSS */;
  document.head.append(tableStyle);
  document.body.setAttribute('data-we-thinking-glass','');
+ document.body.setAttribute('data-we-table-readability','');
  const tableWrap=document.createElement('div');
  tableWrap.style.cssText='position:fixed;left:560px;top:350px;width:340px;overflow-x:auto;overscroll-behavior-x:contain';
  tableWrap.tabIndex=0;
@@ -254,6 +255,10 @@ const assertions=[];function check(value,message){if(!value)throw new Error(mess
  await next();
  checkRoundedCorners(codeBlock.getBoundingClientRect().top,'Unpinned code');
  codeScroll.remove();
+ document.body.removeAttribute('data-we-table-readability');
+ check(await waitFor(()=>!tableWrap.hasAttribute('data-we-optics'))&&getComputedStyle(tableWrap).borderTopLeftRadius==='0px','Disabling table readability restores the native table with optics still on');
+ document.body.setAttribute('data-we-table-readability','');
+ check(await waitFor(()=>getComputedStyle(tableWrap).backdropFilter.includes('url(')),'Enabling table readability restores the rounded lens');
  document.body.setAttribute('data-we-thinking-native','');
  check(await waitFor(()=>!tableWrap.hasAttribute('data-we-optics')),'Native conversation mode releases the table filter');
  check(fileCards.every(card=>!card.hasAttribute('data-we-optics')),'Native conversation mode also releases all file cards');

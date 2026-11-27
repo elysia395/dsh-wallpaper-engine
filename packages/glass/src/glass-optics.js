@@ -20,7 +20,7 @@ function installGlassOptics() {
     'body[data-we-glass-chat][data-we-glass-page] [data-composer-card]',
     // Match the same bubble carrier as glass-css; the question reply's _bubbleWidth is square.
     'body[data-we-glass-chat][data-we-glass-page]:not([data-we-thinking-native]) [data-chat-flow] [class*="_bubble_"]:not([role="tooltip"])',
-    'body[data-we-glass-page][data-we-thinking-glass]:not([data-we-thinking-native]) ' + chatTable,
+    'body[data-we-glass-page][data-we-thinking-glass][data-we-table-readability]:not([data-we-thinking-native]) ' + chatTable,
     'body[data-we-glass-page][data-we-glass-chat]:not([data-we-thinking-native]) :is([data-changed-files],[data-presented-file])',
     'body[data-we-glass-page]:not([data-we-thinking-native]) [data-chat-flow] .md-code-block',
     'body[data-we-glass-page]:not([data-we-thinking-native]) [data-chat-flow] :not(pre) > code',
@@ -384,7 +384,7 @@ function installGlassOptics() {
         mutationTimer = 0; discover(pendingResample, [...pendingRoots]); pendingRoots.clear(); pendingResample = false;
       }), 100);
     }));
-    mutation.observe(doc.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-we-glass-page', 'data-we-glass-chat', 'data-we-left-sidebar', 'data-we-glass-window', 'data-we-sidebar-glass', 'data-sidebar-right-open', 'data-ds-dark-theme', 'data-we-left-sidebar-radius', 'data-we-right-sidebar-radius', 'data-we-thinking-native', 'data-we-surface-runtime', 'data-we-surface-preserve'] });
+    mutation.observe(doc.body, { childList: true, subtree: true, attributes: true, attributeFilter: ['data-we-glass-page', 'data-we-glass-chat', 'data-we-left-sidebar', 'data-we-glass-window', 'data-we-sidebar-glass', 'data-sidebar-right-open', 'data-ds-dark-theme', 'data-we-left-sidebar-radius', 'data-we-right-sidebar-radius', 'data-we-thinking-glass', 'data-we-table-readability', 'data-we-thinking-native', 'data-we-surface-runtime', 'data-we-surface-preserve'] });
     cleanup.push(() => { mutation.disconnect(); win.clearTimeout(mutationTimer); });
     const move = guard(event => {
       if (event.pointerType === 'touch' || win.matchMedia?.('(prefers-reduced-motion: reduce)').matches) return;

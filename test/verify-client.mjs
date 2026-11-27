@@ -1888,10 +1888,21 @@ setTimeout(async () => {
     };
     assert.equal(findCtlInput(tree, '思考触发条玻璃·独立配置'), null,
       '思考玻璃非"液态玻璃"挡时「思考触发条玻璃·独立配置」不该画（master 门）');
+    assert.equal(findCtlInput(tree, '表格可读底'), null, '关挡 ⇒ 表格开关收起');
     clickThinkGear(tree, '液态玻璃');
     tree = renderSidePane();
     assert.equal(bodyEl.attributes['data-we-thinking-glass'], 'on', '选液态玻璃挡 ⇒ 玻璃门挂上');
     assert.equal(bodyEl.attributes['data-we-thinking-native'], undefined, '选液态玻璃挡 ⇒ 原生门不挂');
+    const tableSwitch = findCtlInput(tree, '表格可读底');
+    assert.equal(tableSwitch?.props.checked, true, '旧配置默认保留表格可读底');
+    assert.equal(bodyEl.attributes['data-we-table-readability'], 'on');
+    tableSwitch.props.onChange({ target: { checked: false } });
+    flushPersistWrites();
+    assert.equal(JSON.parse(localStorage._store['dsh-wallpaper-engine:selection']).tableReadability, false);
+    assert.equal(bodyEl.attributes['data-we-table-readability'], undefined, '关闭可读底 ⇒ 表格门摘下');
+    assert.equal(bodyEl.attributes['data-we-thinking-glass'], 'on', '思考块保持液态玻璃');
+    tree = renderSidePane();
+    assert.equal(findCtlInput(tree, '表格可读底').props.checked, false);
     findCtlInput(tree, '思考触发条玻璃·独立配置').props.onChange({ target: { checked: true } });
     tree = renderSidePane();
     assert.equal(sliderMax(findSliderRow(tree, '思考触发条玻璃·玻璃透明度')), '100',
@@ -1904,8 +1915,15 @@ setTimeout(async () => {
     tree = renderSidePane();
     assert.equal(bodyEl.attributes['data-we-thinking-native'], 'on', '选原生挡 ⇒ 原生门挂上');
     assert.equal(bodyEl.attributes['data-we-thinking-glass'], undefined, '选原生挡 ⇒ 玻璃门摘下（互斥）');
+    assert.equal(findCtlInput(tree, '表格可读底'), null, '原生挡 ⇒ 表格开关收起');
+    assert.equal(bodyEl.attributes['data-we-table-readability'], undefined);
     assert.equal(findCtlInput(tree, '思考触发条玻璃·独立配置'), null, '原生挡 ⇒ 触发条独立配置行收起');
     assert.equal(findSliderRow(tree, '胶囊雾化'), null, '原生挡 ⇒ 胶囊雾化行收起（死旋钮防线）');
+    clickThinkGear(tree, '液态玻璃');
+    tree = renderSidePane();
+    assert.equal(findCtlInput(tree, '表格可读底').props.checked, false, '切回液态玻璃仍记住表格偏好');
+    findCtlInput(tree, '表格可读底').props.onChange({ target: { checked: true } });
+    assert.equal(bodyEl.attributes['data-we-table-readability'], 'on', '重新开启 ⇒ 可读底恢复');
     // 收尾：关挡 ⇒ 两个门控属性都摘下 —— 三挡往返钉住，不留"关着还挂门"的缺口。
     clickThinkGear(tree, '关');
     tree = renderSidePane();

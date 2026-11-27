@@ -642,7 +642,7 @@ function main() {
     // （底面 / 表头带 / 两级边框）必须被钉住，否则将来删掉任何一条都全绿。
     const tableRules = normal.filter((r) => r.header.includes('[data-we-thinking-glass]')
       && /\btable\b/.test(r.header));
-    const tableSelectors = tableRules.flatMap((r) => splitSelectors(r.header));
+    const tableSelectors = tableRules.flatMap((r) => splitSelectors(r.header).map((selector) => selector.trim()));
     const hasTablePlate = tableRules.filter((r) => /(^|[\s>+~])table$/.test(r.header.trim()));
     const hasHeaderBand = tableRules.filter((r) => /table\s+th$/.test(r.header.trim()));
     const hasCellBorder = tableRules.filter((r) => /table\s+td$/.test(r.header.trim()));
@@ -663,9 +663,23 @@ function main() {
       && tableSelectors.every((s) => !/\[class\*=/.test(s) && !/\[class\^=/.test(s))
       && tableSelectors.every((s) => /\[data-chat-flow\]/.test(s) || /\[data-vcp-rawhtml\]/.test(s)),
       tableSelectors.join(' | ').slice(0, 120));
+    const tableGate = 'body[data-we-glass-page][data-we-thinking-glass][data-we-table-readability]';
+    const tableContexts = ['[data-chat-flow]', '[data-vcp-rawhtml]'];
+    // 判据抽成函数，负对照才能把变异后的选择器喂进**同一条判据**（DEV-GUIDE §4.7 约定 5）：
+    // 底下第二条负对照分别删掉一个可读底门、丢掉深色底面那一条，两条都必须被判红。
+    const tableGateIntact = (selectors) => selectors.length > 0
+      && selectors.every((s) => s.includes('[data-we-table-readability]'))
+      && tableContexts.every((context) =>
+        ['table', 'table th', 'table td'].every((subject) => selectors.includes(`${tableGate} ${context} ${subject}`))
+        && selectors.includes(`${tableGate.replace('body', 'body[data-ds-dark-theme]')} ${context} table`));
+    check('F2h 对话流与 VCP 的浅深色底面、表头及单元格都受可读底开关控制',
+      tableGateIntact(tableSelectors));
     check('negative control: 挂着宿主哈希类名的表格选择器会被同一判据判红',
       /\[class\*=/.test('body[data-we-glass-page] [class*="_tableScroll_rve47_199"] table')
       && tableSelectors.every((s) => !/\[class\*=/.test(s)));
+    check('negative control: 少写一个可读底门、或丢掉深色底面那一条，都会被 F2h 判红',
+      !tableGateIntact(tableSelectors.map((s, i) => (i === 0 ? s.replace('[data-we-table-readability]', '') : s)))
+      && !tableGateIntact(tableSelectors.filter((s) => !s.startsWith('body[data-ds-dark-theme]'))));
   }
 
   // 负对照（DEV-GUIDE §4.7 约定 5：变异输入必须喂进**同一条判据**）：把一条真实声明改坏

@@ -846,38 +846,38 @@ const CSS_GLASS = `
      锚点只用语义元素（table / th / td）+ 宿主写死的 [data-chat-flow] /
      [data-vcp-rawhtml]：宿主的表格类名带构建哈希，docs/CODE-STRUCTURE.md §13
      判其稳定性为低，不许把用户可见行为挂在它上面。
-     这条规则不加霜 ⇒ 不需要 glass-fallback 的孪生规则（回退模式要同一张网格）。 */
+     关闭表格可读底时，这组规则整体让回宿主。没有模糊载体，软件渲染共用这组规则。 */
   /* The host already clips overflow on its Markdown table wrapper. Round that
      clip so the collapsed-border table and its header are clipped together. */
-  body[data-we-glass-page][data-we-thinking-glass] [data-chat-flow] div:has(> table:only-child) {
+  body[data-we-glass-page][data-we-thinking-glass][data-we-table-readability] [data-chat-flow] div:has(> table:only-child) {
     border-radius: var(--dsw-radius-md, 12px);
   }
-  body[data-we-glass-page][data-we-thinking-glass] [data-chat-flow] table,
-  body[data-we-glass-page][data-we-thinking-glass] [data-vcp-rawhtml] table {
+  body[data-we-glass-page][data-we-thinking-glass][data-we-table-readability] [data-chat-flow] table,
+  body[data-we-glass-page][data-we-thinking-glass][data-we-table-readability] [data-vcp-rawhtml] table {
     background: color-mix(in srgb,
       var(--we-readability-base) calc(var(--we-readability-floor) * 100%),
       color-mix(in srgb, var(--we-surface-tint-light, #ffffff) calc(var(--we-glass-alpha, 0.15) * 0.8 * 100%), transparent) calc((1 - var(--we-readability-floor)) * 100%)) !important;
   }
-  body[data-ds-dark-theme][data-we-glass-page][data-we-thinking-glass] [data-chat-flow] table,
-  body[data-ds-dark-theme][data-we-glass-page][data-we-thinking-glass] [data-vcp-rawhtml] table {
+  body[data-ds-dark-theme][data-we-glass-page][data-we-thinking-glass][data-we-table-readability] [data-chat-flow] table,
+  body[data-ds-dark-theme][data-we-glass-page][data-we-thinking-glass][data-we-table-readability] [data-vcp-rawhtml] table {
     background: color-mix(in srgb,
       var(--we-readability-base) calc(var(--we-readability-floor) * 100%),
       color-mix(in srgb, var(--we-surface-tint-dark, #0d1524) calc(var(--we-glass-alpha, 0.15) * 0.8 * 100%), transparent) calc((1 - var(--we-readability-floor)) * 100%)) !important;
   }
-  body[data-we-glass-page][data-we-thinking-glass] [data-chat-flow] table th,
-  body[data-we-glass-page][data-we-thinking-glass] [data-vcp-rawhtml] table th {
+  body[data-we-glass-page][data-we-thinking-glass][data-we-table-readability] [data-chat-flow] table th,
+  body[data-we-glass-page][data-we-thinking-glass][data-we-table-readability] [data-vcp-rawhtml] table th {
     background-color: rgba(180, 180, 180, calc(var(--we-border-alpha, 0.35) * 0.45)) !important;
     border-bottom: 1px solid rgba(180, 180, 180, min(0.8, calc(var(--we-border-alpha, 0.35) * 1.7))) !important;
     color: var(--dsw-alias-label-primary) !important;
   }
-  body[data-we-glass-page][data-we-thinking-glass] [data-chat-flow] table td,
-  body[data-we-glass-page][data-we-thinking-glass] [data-vcp-rawhtml] table td {
+  body[data-we-glass-page][data-we-thinking-glass][data-we-table-readability] [data-chat-flow] table td,
+  body[data-we-glass-page][data-we-thinking-glass][data-we-table-readability] [data-vcp-rawhtml] table td {
     border-bottom: 1px solid rgba(180, 180, 180, calc(var(--we-border-alpha, 0.35) * 0.9)) !important;
   }
-  body[data-we-glass-page][data-we-thinking-glass] [data-chat-flow] table :is(th, td):first-child {
+  body[data-we-glass-page][data-we-thinking-glass][data-we-table-readability] [data-chat-flow] table :is(th, td):first-child {
     padding-inline-start: 16px;
   }
-  body[data-we-glass-page][data-we-thinking-glass] [data-chat-flow] table :is(th, td):last-child {
+  body[data-we-glass-page][data-we-thinking-glass][data-we-table-readability] [data-chat-flow] table :is(th, td):last-child {
     padding-inline-end: 16px;
   }
   /* The two chat navigation buttons reuse capsule mist and frost.
