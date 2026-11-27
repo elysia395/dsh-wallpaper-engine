@@ -14,7 +14,9 @@
 > 完整逐提交历史见 GitHub Commits / Releases；升级前置条件见 [`UPGRADING.md`](./UPGRADING.md)。
 > `test/verify-scene-live.mjs` 这一类判据条数**只记该条写作当时的实测总数**（如 466 / 465），不是现在的总数 —— 后续条目会往上加（现为 502）；照原文保留，好让它与当次提交对得上。
 
-### 未发布（悬停卡唯一子 div · 深色孪生 · macOS 壁纸库 · 表格可读底，2026-11-24）
+### 未发布（镜面高光强度 · 悬停卡唯一子 div · 深色孪生 · macOS 壁纸库 · 表格可读底，2026-11-27）
+
+- **新增：玻璃表面的镜面高光（釉光）可单独调弱或关掉（#404）**。「玻璃 UI」新增「镜面高光」滑杆（`glassSheenStrength`，0–100，默认 100 = 现状）：0 时主块三档 `--we-panel-sheen-*`（左侧栏 / 标题栏 / 各面板）与右侧栏由透明度派生的 `--we-sidebar-sheen` 一起归零，只保留底与霜；100 与接线前逐值相同。滑杆值由 `glass-layer.js` 写成 `--we-sheen-scale`（0–1），`glass-css.js` 的主块三档与 `glass.js` 的侧栏写入点乘同一个系数；旧配置与七套出厂预设缺键时按 100 处理。`verify-glass-surfaces` 新增 ㉘ 组（两条通道 + 负对照）。
 
 - **修：深色主题 + 软件渲染时输入卡与仓库抽屉被刷成 92% 纯白（#398）**。软件光栅回退（`body[data-we-glass-fallback]`）里这两条近不透明配方只写了浅色一支，深色主题下取到 `--we-surface-tint-light`（#ffffff）⇒ 输入卡 `[data-composer-card]::before` 与 `.we-repo-panel` 变成 92% 白板，和周围的深色面板不是一种材质。现按本块既有写法各补一条深色孪生（多一层 `[data-ds-dark-theme]`，只换 `--we-surface-tint-dark`，配方逐字相同）；`verify-softrender` 新增 E6（每条读 `--we-surface-tint-light` 的回退规则必须有同选择器的深色孪生）与 E6b 负对照（删掉输入卡那条孪生必须被判出）。纯 CSS，刷新页面生效。
 - **修：悬停卡玻璃不再误涂多子元素对话框的每个直接子 div**。`[role="dialog"] > div` 只应命中宿主 HoverCard 的唯一卡片 div；写成裸 `> div` 时，宿主「本轮用量」面板（`title` / `titleRule` 两个 div）和第三方弹层（标题 / 摘要 / 影响清单等多个 div）会各涂一层底、渐变与霜，出现多条不同色色带。现改为 `> div:only-of-type`，正常档与无霜回退档同步；`verify-glass-surfaces` 新增 ㉗ 组（两条规则 + 负对照）。纯 CSS，刷新页面生效。

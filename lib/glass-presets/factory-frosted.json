@@ -63,6 +63,7 @@
     },
     "glassDarkSeparate": false,
     "glassFidelity": 100,
+    "glassSheenStrength": 100,
     "extraGlassSelectors": "",
     "capsuleBlur": 16,
     "capsuleColor": "#ffffff",

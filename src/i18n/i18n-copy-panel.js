@@ -152,6 +152,8 @@ const WE_I18N_EN_PANEL = {
   "玻璃颜色 · 深色": "Glass color · Dark",
   "玻璃透明度": "Glass opacity",
   "玻璃保真度": "Glass fidelity",
+  "镜面高光": "Specular highlight",
+  "玻璃面板表面那层白色镜面高光（釉光）的强度：100 = 现状；0 = 完全去掉，只保留底色与雾化。左侧栏、标题栏与侧栏的高光也一起吃这个旋钮。": "Strength of the white specular highlight (glaze) on glass panels: 100 = current look; 0 removes it entirely, leaving only the base tint and frost. The left sidebar, title bar and sidebar highlights follow the same knob.",
   "100 = 完整可读性红线（默认）：自定义玻璃色经亮度钳制，正文对比度始终 ≥4.5:1 —— 深色主题下颜色被压暗、浅色主题下被提亮。拉低后颜色更贴你选的原色，但正文在极端明暗的壁纸上可能看不清；看不清字时把本项拉回 100，或按「看不清字三步」调节。": "100 = the full readability floor (default): your custom glass color is brightness-clamped so body text keeps a 4.5:1 contrast or better — darkened in the dark theme, lightened in the light theme. Lower it and the color stays closer to what you picked, but text may become hard to read on wallpapers with extreme brightness; if text gets hard to read, pull this back to 100 or follow the “can't read the text” three steps.",
   "左侧栏液态玻璃": "Left sidebar liquid glass",
   "左侧栏也跟随玻璃配方（配色 / 玻璃颜色 / 透明度 / 雾化 / 边框）": "The left sidebar follows the same glass recipe too (accent / glass color / opacity / frost / border)",

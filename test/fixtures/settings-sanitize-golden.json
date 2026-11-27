@@ -182,7 +182,8 @@
         "hoverCardBlur": 16,
         "marketStickyClip": true,
         "marketStickyFade": 26,
-        "tableReadability": true
+        "tableReadability": true,
+        "glassSheenStrength": 100
       },
       "host": {
         "id": "",
@@ -356,7 +357,8 @@
         "hoverCardBlur": 16,
         "marketStickyClip": true,
         "marketStickyFade": 26,
-        "tableReadability": true
+        "tableReadability": true,
+        "glassSheenStrength": 100
       }
     },
     {
@@ -548,7 +550,8 @@
         "hoverCardBlur": 16,
         "marketStickyClip": true,
         "marketStickyFade": 26,
-        "tableReadability": true
+        "tableReadability": true,
+        "glassSheenStrength": 100
       },
       "host": "__null__"
     },
@@ -741,7 +744,8 @@
         "hoverCardBlur": 16,
         "marketStickyClip": true,
         "marketStickyFade": 26,
-        "tableReadability": true
+        "tableReadability": true,
+        "glassSheenStrength": 100
       },
       "host": "__null__"
     },
@@ -934,7 +938,8 @@
         "hoverCardBlur": 16,
         "marketStickyClip": true,
         "marketStickyFade": 26,
-        "tableReadability": true
+        "tableReadability": true,
+        "glassSheenStrength": 100
       },
       "host": "__null__"
     },
@@ -1119,7 +1124,8 @@
         "hoverCardBlur": 16,
         "marketStickyClip": true,
         "marketStickyFade": 26,
-        "tableReadability": true
+        "tableReadability": true,
+        "glassSheenStrength": 100
       },
       "host": {
         "id": "",
@@ -1293,7 +1299,8 @@
         "hoverCardBlur": 16,
         "marketStickyClip": true,
         "marketStickyFade": 26,
-        "tableReadability": true
+        "tableReadability": true,
+        "glassSheenStrength": 100
       }
     },
     {
@@ -1534,7 +1541,8 @@
         "hoverCardBlur": 16,
         "marketStickyClip": true,
         "marketStickyFade": 26,
-        "tableReadability": true
+        "tableReadability": true,
+        "glassSheenStrength": 100
       },
       "host": {
         "id": "",
@@ -1708,7 +1716,8 @@
         "hoverCardBlur": 16,
         "marketStickyClip": true,
         "marketStickyFade": 26,
-        "tableReadability": true
+        "tableReadability": true,
+        "glassSheenStrength": 100
       }
     },
     {
@@ -1994,7 +2003,8 @@
         "hoverCardBlur": 16,
         "marketStickyClip": true,
         "marketStickyFade": 26,
-        "tableReadability": true
+        "tableReadability": true,
+        "glassSheenStrength": 100
       },
       "host": {
         "id": "",
@@ -2168,7 +2178,8 @@
         "hoverCardBlur": 16,
         "marketStickyClip": true,
         "marketStickyFade": 26,
-        "tableReadability": true
+        "tableReadability": true,
+        "glassSheenStrength": 100
       }
     },
     {
@@ -2353,7 +2364,8 @@
         "hoverCardBlur": 16,
         "marketStickyClip": true,
         "marketStickyFade": 26,
-        "tableReadability": true
+        "tableReadability": true,
+        "glassSheenStrength": 100
       },
       "host": {
         "id": "",
@@ -2527,7 +2539,8 @@
         "hoverCardBlur": 16,
         "marketStickyClip": true,
         "marketStickyFade": 26,
-        "tableReadability": true
+        "tableReadability": true,
+        "glassSheenStrength": 100
       }
     },
     {
@@ -2726,7 +2739,8 @@
         "hoverCardBlur": 16,
         "marketStickyClip": true,
         "marketStickyFade": 26,
-        "tableReadability": true
+        "tableReadability": true,
+        "glassSheenStrength": 100
       },
       "host": {
         "id": "",
@@ -2900,7 +2914,8 @@
         "hoverCardBlur": 16,
         "marketStickyClip": true,
         "marketStickyFade": 26,
-        "tableReadability": true
+        "tableReadability": true,
+        "glassSheenStrength": 100
       }
     },
     {
@@ -3099,7 +3114,8 @@
         "hoverCardBlur": 16,
         "marketStickyClip": true,
         "marketStickyFade": 26,
-        "tableReadability": true
+        "tableReadability": true,
+        "glassSheenStrength": 100
       },
       "host": {
         "id": "",
@@ -3273,7 +3289,8 @@
         "hoverCardBlur": 16,
         "marketStickyClip": true,
         "marketStickyFade": 26,
-        "tableReadability": true
+        "tableReadability": true,
+        "glassSheenStrength": 100
       }
     },
     {
@@ -3459,7 +3476,8 @@
         "hoverCardBlur": 16,
         "marketStickyClip": true,
         "marketStickyFade": 26,
-        "tableReadability": true
+        "tableReadability": true,
+        "glassSheenStrength": 100
       },
       "host": {
         "id": "",
@@ -3633,7 +3651,8 @@
         "hoverCardBlur": 16,
         "marketStickyClip": true,
         "marketStickyFade": 26,
-        "tableReadability": true
+        "tableReadability": true,
+        "glassSheenStrength": 100
       }
     },
     {
@@ -3824,7 +3843,8 @@
         "hoverCardBlur": 16,
         "marketStickyClip": true,
         "marketStickyFade": 26,
-        "tableReadability": true
+        "tableReadability": true,
+        "glassSheenStrength": 100
       },
       "host": {
         "id": "",
@@ -3998,7 +4018,8 @@
         "hoverCardBlur": 16,
         "marketStickyClip": true,
         "marketStickyFade": 26,
-        "tableReadability": true
+        "tableReadability": true,
+        "glassSheenStrength": 100
       }
     },
     {
@@ -4186,7 +4207,8 @@
         "hoverCardBlur": 16,
         "marketStickyClip": true,
         "marketStickyFade": 26,
-        "tableReadability": true
+        "tableReadability": true,
+        "glassSheenStrength": 100
       },
       "host": {
         "id": "",
@@ -4360,7 +4382,8 @@
         "hoverCardBlur": 16,
         "marketStickyClip": true,
         "marketStickyFade": 26,
-        "tableReadability": true
+        "tableReadability": true,
+        "glassSheenStrength": 100
       }
     },
     {
@@ -4555,7 +4578,8 @@
         "hoverCardBlur": 16,
         "marketStickyClip": true,
         "marketStickyFade": 26,
-        "tableReadability": true
+        "tableReadability": true,
+        "glassSheenStrength": 100
       },
       "host": {
         "id": "",
@@ -4729,7 +4753,8 @@
         "hoverCardBlur": 16,
         "marketStickyClip": true,
         "marketStickyFade": 26,
-        "tableReadability": true
+        "tableReadability": true,
+        "glassSheenStrength": 100
       }
     },
     {
@@ -4989,7 +5014,8 @@
         "hoverCardBlur": 16,
         "marketStickyClip": true,
         "marketStickyFade": 26,
-        "tableReadability": true
+        "tableReadability": true,
+        "glassSheenStrength": 100
       },
       "host": {
         "id": "",
@@ -5188,7 +5214,8 @@
         "hoverCardBlur": 16,
         "marketStickyClip": true,
         "marketStickyFade": 26,
-        "tableReadability": true
+        "tableReadability": true,
+        "glassSheenStrength": 100
       }
     },
     {
@@ -5372,7 +5399,8 @@
         "hoverCardBlur": 16,
         "marketStickyClip": true,
         "marketStickyFade": 26,
-        "tableReadability": true
+        "tableReadability": true,
+        "glassSheenStrength": 100
       },
       "host": {
         "id": "",
@@ -5546,7 +5574,8 @@
         "hoverCardBlur": 16,
         "marketStickyClip": true,
         "marketStickyFade": 26,
-        "tableReadability": true
+        "tableReadability": true,
+        "glassSheenStrength": 100
       }
     },
     {
@@ -5730,7 +5759,8 @@
         "hoverCardBlur": 16,
         "marketStickyClip": true,
         "marketStickyFade": 26,
-        "tableReadability": true
+        "tableReadability": true,
+        "glassSheenStrength": 100
       },
       "host": {
         "id": "wallpaper-42",
@@ -5904,7 +5934,8 @@
         "hoverCardBlur": 16,
         "marketStickyClip": true,
         "marketStickyFade": 26,
-        "tableReadability": true
+        "tableReadability": true,
+        "glassSheenStrength": 100
       }
     },
     {
@@ -6089,7 +6120,8 @@
         "hoverCardBlur": 16,
         "marketStickyClip": true,
         "marketStickyFade": 26,
-        "tableReadability": true
+        "tableReadability": true,
+        "glassSheenStrength": 100
       },
       "host": {
         "id": "",
@@ -6263,7 +6295,8 @@
         "hoverCardBlur": 16,
         "marketStickyClip": true,
         "marketStickyFade": 26,
-        "tableReadability": true
+        "tableReadability": true,
+        "glassSheenStrength": 100
       }
     }
   ]

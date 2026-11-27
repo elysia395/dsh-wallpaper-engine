@@ -204,6 +204,12 @@ function applyGlassLayer() {
   const fidNum = Number(selection.glassFidelity);
   const glassFidelity = Number.isFinite(fidNum) ? Math.min(1, Math.max(0, fidNum / 100)) : 1;
   s.setProperty("--we-glass-fidelity", String(glassFidelity));
+  // - 镜面高光强度（#404，0–100，默认 100 = 现状）：只缩放釉光的两组变量 ——
+  //   主块三档（--we-panel-sheen-*）与侧栏派生那一路（--we-sidebar-sheen）。
+  //   100 ⇒ 1 = 与接线前逐值相同；0 = 两组归零，只留底与霜。
+  const sheenNum = Number(selection.glassSheenStrength);
+  const sheenScale = Number.isFinite(sheenNum) ? Math.min(1, Math.max(0, sheenNum / 100)) : 1;
+  s.setProperty("--we-sheen-scale", String(sheenScale));
   // 宿主 Modal 遮罩浓度（#254）：0–100 ⇒ 0–1；CSS 侧按主题把 --dsw-alias-bg-mask-1
   // 的 alpha 乘上它（100 = 宿主原值浅 0.24 / 深 0.50，0 = 完全不遮）。
   const maskNum = Number(selection.settingsMaskStrength);
@@ -281,7 +287,7 @@ function applyGlassLayer() {
     s.setProperty("--we-sidebar-saturate", "var(--we-saturate)");
     s.setProperty("--we-sidebar-tint", "calc(var(--we-glass-alpha) * 100%)");
     s.setProperty("--we-sidebar-color", "var(--we-follow-tint)");
-    s.setProperty("--we-sidebar-sheen", "1");
+    s.setProperty("--we-sidebar-sheen", "var(--we-sheen-scale, 1)");
   }
   // 跟随态另挂一个属性：样式表用它决定"侧栏的釉"取共享那一份还是侧栏专用那一份。
   if (selection.sidebarGlass && selection.sidebarFollowGlobal && !skinYield) document.body.setAttribute("data-we-sidebar-follow", "on");
@@ -306,6 +312,7 @@ function disposeGlassLayer() {
   s.removeProperty("--we-glass-brightness");
   s.removeProperty("--we-glass-alpha");
   s.removeProperty("--we-glass-color");
+  s.removeProperty("--we-sheen-scale");
   s.removeProperty("--we-mask-strength");
   s.removeProperty("--we-surface-tint-light");
   s.removeProperty("--we-surface-tint-dark");
