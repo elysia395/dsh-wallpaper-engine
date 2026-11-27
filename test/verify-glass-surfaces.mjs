@@ -2930,19 +2930,27 @@ console.log('\n㉘ #404 镜面高光强度：主块三档 × 侧栏派生档 = �
     'custom=' + custom + ' follow=' + follow);
   check('negative control: 侧栏写入点漏乘系数会被 ㉘c 判红',
     !SIDEBAR_SCALE.test(custom.replace('var(--we-sheen-scale, 1)', '1')));
-  // 数值验收：0 ⇒ 全 0；100 ⇒ 与接线前逐值相同（CSS 基数与 JS 写入点各自可算）。
-  const evalSidebar = (expr, scale) => {
+  // 数值验收：0 ⇒ 全 0；0.5 ⇒ 各减半；1 ⇒ 与接线前逐值相同（CSS 基数与 JS 写入点各自可算）。
+  // ⚠️ 别写成 `base * 0 === 0`（恒真）：那只是「基数非空」的另一种写法，乘数链断了也照样绿。
+  const evalSheen = (expr, scale) => {
     const m = /^calc\(\s*([0-9.]+)\s*\*\s*var\(--we-sheen-scale, 1\)\s*\)$/.exec(expr);
     return m ? Number(m[1]) * scale : null;
   };
   const panel = panelBases(CSS);
+  const panelBase = panel.map((b) => Number(b));
+  const panelAt = (scale) => panelBase.map((b) => b * scale);
   const oldAlpha = Number((/calc\(([0-9.]+) \*/.exec(custom) || [])[1]);
-  check('㉘d 强度 0 ⇒ 主块六档与侧栏派生值全部为 0；强度 100 ⇒ 与接线前逐值相同',
-    panel.every((b) => b !== '')
-    && panel.every((b) => Number(b) * 0 === 0)
-    && evalSidebar(custom, 0) === 0 && evalSidebar(custom, 1) === oldAlpha,
-    'panel=' + panel.join(',') + ' sidebar@0=' + evalSidebar(custom, 0)
-    + ' sidebar@1=' + evalSidebar(custom, 1) + ' (基数 ' + oldAlpha + ')');
+  check('㉘d 强度 0 / 50 / 100 ⇒ 主块六档与侧栏派生档按同一系数缩放（0 / 减半 / 原值）',
+    panel.length === 6 && panelBase.every((b) => Number.isFinite(b) && b > 0)
+    && panelAt(0).every((v) => v === 0)
+    && panelAt(0.5).every((v, i) => v === panelBase[i] / 2)
+    && panelAt(1).every((v, i) => v === panelBase[i])
+    && evalSheen(custom, 0) === 0
+    && evalSheen(custom, 0.5) === oldAlpha / 2
+    && evalSheen(custom, 1) === oldAlpha,
+    'panel@0=' + panelAt(0).join(',') + ' panel@0.5=' + panelAt(0.5).join(',')
+    + ' sidebar@0=' + evalSheen(custom, 0) + ' sidebar@0.5=' + evalSheen(custom, 0.5)
+    + ' (基数 ' + oldAlpha + ')');
   check('㉘e 设置键默认 100、量程 0–100，且进了模块 / 页签重置',
     SCHEMA.DEFAULTS.glassSheenStrength === 100
     && SCHEMA.KINDS.glassSheenStrength && SCHEMA.KINDS.glassSheenStrength.min === 0
