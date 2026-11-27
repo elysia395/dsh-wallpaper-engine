@@ -3035,10 +3035,15 @@ check('client 按曲目缓存封面并重试（宿主下载封面是异步的）
   src.includes('function scheduleArtworkFetch(') && src.includes('MEDIA_ART_MAX_TRIES'));
 check('client 不再向渲染页透传歌词（lyrics 字段与 push key 里的歌词版本都已移除）',
   !src.includes('m.lyrics') && !src.includes('lyrRev') && src.includes('albumArtist: m.albumArtist || ""'));
-check('音频桥按宿主 running 装卸（装了桥 = 渲染页放弃自带音频源）',  src.includes('function syncAudioBridge(frame, running)') && src.includes('syncAudioBridge(frame, d.running === true)'));
+// #416：running 判定先落到 mediaHostRunning（同一个原子值同时供 1Hz 降频与装桥用），
+// 判据跟着钉这条链，而不是钉某一次调用的字面量。
+check('音频桥按宿主 running 装卸（装了桥 = 渲染页放弃自带音频源）',
+  src.includes('function syncAudioBridge(frame, running)')
+  && src.includes('mediaHostRunning = d.running === true;')
+  && src.includes('syncAudioBridge(frame, mediaHostRunning)'));
 // 无真实频谱时收起「靠频谱才有内容」的合成层（#167）：没有音频输入时，音频可视化层
 // 退化成一整块**空矩形**，而作者叠在其上的 scroll 照跑 ⇒ 屏幕上是一条匀速横爬的带子，
-// 用户只会当成渲染故障。四条缺一不可：与桥**同拍**调用（否则永不生效）、两条收层判据
+// 用户只会当成渲染故障。四条缺一不可：随桥态 / 场景身份**收敛**（#416 起不再每拍重跑，但翻转与换场景必须补）、两条收层判据
 // 各自在场（合成层 / 频谱特效）、以及**可逆**（恢复采集要逐层还原，不能永久改场景）。
 {
   const fnBody = (text, name) => {
@@ -3055,12 +3060,125 @@ check('音频桥按宿主 running 装卸（装了桥 = 渲染页放弃自带音�
       && /const wantHide = !running;/.test(body)
       && /layer\.visible = true;/.test(body);
   };
-  check('音频桥同拍收敛音频反应层（合成层 + 频谱特效两条判据都在）',
+  check('音频桥收敛音频反应层（合成层 + 频谱特效两条判据都在）',
     /syncAudioReactiveLayers\(frame, running\)/.test(fnBody(src, 'syncAudioBridge')) && reactiveWiring(src),
     '#167：没频谱 → 那层只是一块空矩形 + 作者的 scroll 平移');
+  // #416：收敛从「与桥同拍（20Hz）」改成「桥态翻转 / 场景换新」时才跑。判据不能只钉
+  // 「有调用」—— 那样把门去掉也能过；要连门、场景身份刷新、调用三件一起钉住。
+  const bridgeGate = (text) => {
+    const body = fnBody(text, 'syncAudioBridge');
+    return /const scene = frame\.contentWindow && frame\.contentWindow\.__scene;/.test(body)
+      && /mediaSceneRef !== scene \|\| mediaBridgeRunning !== running/.test(body)
+      && /mediaSceneRef = scene;/.test(body)
+      && /syncAudioReactiveLayers\(frame, running\);/.test(body);
+  };
+  check('音频层收敛只在「桥态翻转 / 场景换新」时发生（#416：不再 20Hz 遍历整层）',
+    bridgeGate(src), '40 层场景 × 20Hz = 每秒 800 次字符串匹配，纯浪费');
+  check('negative control: 去掉收敛门 ⇒ 判红',
+    !bridgeGate(src.replace('mediaSceneRef !== scene || mediaBridgeRunning !== running', 'true')));
+  check('negative control: 去掉场景身份刷新（换场景不再重收）⇒ 判红',
+    !bridgeGate(src.replace('mediaSceneRef = scene;', '')));
   check('negative control: 放宽成「所有合成层」或去掉可逆分支都会被判出',
     !reactiveWiring(src.replace(/layer\.image\.indexOf\("composelayer"\) < 0/g, 'false'))
       && !reactiveWiring(src.replace('layer.visible = true;', '')));
+}
+
+// ── #416：频谱轮询的消费者判据 / 降频 / 超时看门狗 ────────────────────────────
+// 原实现只有「帧还在不在」一个判据：暂停、隐藏、包内没音频层时照打 20Hz，每拍
+// touch() 给 media-bridge 续命，15 分钟的 idle-stop 永远到不了期（实测暂停后仍 19.6 次/秒）。
+{
+  const fnBody = (text, name) => {
+    const i = text.indexOf('function ' + name + '(');
+    if (i < 0) return '';
+    const j = text.indexOf('\n}', i);
+    return j < 0 ? text.slice(i) : text.slice(i, j);
+  };
+  const pollGates = (text) => {
+    const body = fnBody(text, 'startMediaSync');
+    return /if \(document\.hidden \|\| !isEffectivelyPlaying\(\)\) return;/.test(body)
+      && /const spectrumEvery = mediaHostRunning === false \? 20 : 1;/.test(body)
+      && /AbortSignal\.timeout\(2000\)/.test(body);
+  };
+  check('频谱轮询在隐藏 / 暂停 / 遮挡时早退（#416：不再给 media-bridge 续命）', pollGates(src));
+  check('negative control: 去掉 hidden/播放态早退 ⇒ 判红',
+    !pollGates(src.replace('if (document.hidden || !isEffectivelyPlaying()) return;', '')));
+  check('negative control: 去掉 running=false 的 1Hz 降频 ⇒ 判红',
+    !pollGates(src.replace('mediaHostRunning === false ? 20 : 1', '1')));
+  check('negative control: 去掉 2s 超时看门狗 ⇒ 判红',
+    !pollGates(src.replaceAll('AbortSignal.timeout(2000)', 'undefined')));
+}
+
+// ── #416 行为面：真跑一遍定时回调，数每秒请求数（静态判据证明不了「到底发了几次」）──
+// 口径：一个 tick = 50ms。播放中 100 tick = 5s ⇒ 频谱 100 次（20Hz）、Now Playing 5 次（1Hz）；
+// 隐藏 / 暂停 ⇒ 0 次；宿主 running=false ⇒ 首拍之后按 1Hz 降频（5s 内个位数）。
+{
+  const mediaFrameSrc = readFileSync(join(root, 'src', 'client', 'media-frame.js'), 'utf8');
+  const bootMedia = (opts = {}) => {
+    const state = { playing: true, hostRunning: true, ...opts };
+    const calls = [];
+    let tick = null;
+    const frame = {
+      isConnected: true,
+      contentWindow: { __wp: { setAudioBridge() {}, setMedia() {}, setMediaControl() {} }, __scene: { layers: [] } },
+    };
+    const sandbox = {
+      document: { hidden: false, body: {} },
+      window: { devicePixelRatio: 1 },
+      performance: { now: () => 0 },
+      AbortSignal,
+      setInterval: (fn) => { tick = fn; return 1; },
+      clearInterval: () => {},
+      setTimeout: () => 1,
+      clearTimeout: () => {},
+      requestAnimationFrame: () => 1,
+      cancelAnimationFrame: () => {},
+      selection: { audioSource: 'auto', mediaIntegration: true, sceneLiveActive: true },
+      isEffectivelyPlaying: () => state.playing,
+      apiJson: (path, o) => {
+        calls.push({ path, opts: o });
+        return Promise.resolve({ ok: true, status: 200, data: { ok: true, running: state.hostRunning, bands: [1, 2, 3] } });
+      },
+      apiFetch: async () => ({ ok: true }),
+      apiPostJson: async () => ({ ok: true }),
+      syncMediaControl: () => {},
+      syncAudioBridge: () => {},
+      syncAudioReactiveLayers: () => {},
+      reportClientDiag: () => {},
+      liveWatch: null,
+    };
+    const api = runInNewContext(mediaFrameSrc + '\n;({ startMediaSync });', sandbox, { filename: 'media-frame.js' });
+    api.startMediaSync(frame);
+    return {
+      calls,
+      setHidden(v) { sandbox.document.hidden = v; },
+      setPlaying(v) { state.playing = v; },
+      setHostRunning(v) { state.hostRunning = v; },
+      async ticks(n) {
+        for (let i = 0; i < n; i += 1) { tick(); await new Promise((r) => { setImmediate(r); }); }
+      },
+    };
+  };
+  const count = (h, path) => h.calls.filter((c) => c.path === path).length;
+  const baseline = bootMedia();
+  await baseline.ticks(100);
+  check('播放中频谱 ≈20 次/秒、Now Playing 1 次/秒（#416 基线）',
+    count(baseline, '/audio-spectrum') === 100 && count(baseline, '/now-playing') === 5,
+    'spectrum=' + count(baseline, '/audio-spectrum') + ' nowPlaying=' + count(baseline, '/now-playing'));
+  check('频谱请求带 2s 超时看门狗（signal 在 init 里）',
+    Boolean(baseline.calls[0] && baseline.calls[0].opts && baseline.calls[0].opts.signal));
+  const hiddenCase = bootMedia();
+  hiddenCase.setHidden(true);
+  await hiddenCase.ticks(100);
+  const pausedCase = bootMedia({ playing: false });
+  await pausedCase.ticks(100);
+  check('页面隐藏 / 壁纸暂停时频谱请求为 0（#416 主判据：不再给 media-bridge 续命）',
+    count(hiddenCase, '/audio-spectrum') === 0 && count(pausedCase, '/audio-spectrum') === 0,
+    'hidden=' + count(hiddenCase, '/audio-spectrum') + ' paused=' + count(pausedCase, '/audio-spectrum'));
+  const degraded = bootMedia({ hostRunning: false });
+  await degraded.ticks(100);
+  const degradedCount = count(degraded, '/audio-spectrum');
+  check('宿主 running=false 时频谱退到 1Hz（5s 内个位数，不是 100 次）',
+    degradedCount >= 4 && degradedCount <= 7, 'spectrum=' + degradedCount);
 }
 // 媒体控制面（控制反转）：场景壁纸里 Now Playing 组件的按钮由渲染页推断成动作，
 // 打到宿主注入的控制面 → POST /media-control → 中间件真控播放器。判据按**源码形态**
