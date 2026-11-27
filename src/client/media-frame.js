@@ -43,12 +43,29 @@ const SOFT_RENDER_DRAW_FPS = 15;
 const SOFT_RENDER_MIN_INTERVAL_MS = 1000 / SOFT_RENDER_DRAW_FPS - 0.5;
 
 /** 软渲染时是否把绘制压到 SOFT_RENDER_DRAW_FPS。取不到判定 ⇒ 视为硬件（不改变既有行为）。 */
-function softRenderDrawThrottle() {
+function isSoftRenderThrottled() {
   try {
     return typeof liveSoftRenderProbeNow === "function" && liveSoftRenderProbeNow() === true;
   } catch {
     return false;
   }
+}
+/** 降档只留一条现场证据：用户报「视频变卡 / 变抽」时，日志要能回答是不是这一档生效的。
+ *  同一个页面会话只打一条 —— 每帧都打会把诊断环形缓冲刷满（与 #270 的 soft-render-pause
+ *  同一条通路：liveLog → host /diag）。 */
+let softRenderThrottleLogged = false;
+function noteSoftRenderThrottle() {
+  if (softRenderThrottleLogged) return;
+  softRenderThrottleLogged = true;
+  try {
+    if (typeof liveLog !== "function") return;
+    // 这里刻意用 ASCII 兜底名：src/** 的中文字面量必须进 weT(...)（verify-i18n ①），
+    // 而这条只是诊断里给渲染器占位的标签，不值得为它加一条界面文案。
+    const renderer = typeof liveSoftRenderName === "string" && liveSoftRenderName
+      ? liveSoftRenderName : "no-WebGL";
+    liveLog("video-softrender-throttle",
+      "canvas 绘制压到 " + SOFT_RENDER_DRAW_FPS + "fps（" + renderer + "）", "info");
+  } catch { /* 诊断失败不影响绘制 */ }
 }
 function weStopDraw() {
   const v = weDrawCtx && weDrawCtx.video;
@@ -107,12 +124,10 @@ function weDrawTick() {
   // 首绘直接画；之后只画「距上一笔够一帧」的那些，其余帧只重挂回调。
   // 节流只决定「这一帧画不画」，rVFC / rAF 的重挂节奏不变（视频照常解码）。
   // #411：软渲染再降一档（15fps）；硬件路径仍是 #383 的 30fps 上限。
-  if (softRenderDrawThrottle()) {
-    if (weLastDrawAt === 0 || now - weLastDrawAt >= SOFT_RENDER_MIN_INTERVAL_MS) {
-      weLastDrawAt = now;
-      weDrawFrame();
-    }
-  } else if (weLastDrawAt === 0 || now - weLastDrawAt >= WE_DRAW_MIN_INTERVAL_MS) {
+  const softRender = isSoftRenderThrottled();
+  if (softRender) noteSoftRenderThrottle();
+  const minInterval = softRender ? SOFT_RENDER_MIN_INTERVAL_MS : WE_DRAW_MIN_INTERVAL_MS;
+  if (weLastDrawAt === 0 || now - weLastDrawAt >= minInterval) {
     weLastDrawAt = now;
     weDrawFrame();
   }

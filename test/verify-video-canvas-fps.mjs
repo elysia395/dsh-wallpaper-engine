@@ -19,6 +19,8 @@
 //   A6 画布尺寸变化（ResizeObserver）立即重画，不受节流影响。
 //   A7 软渲染档（#411）：探测为真时同一 1 秒压到 ≈ 15 次。
 //   A8 负对照：把软渲染判定改成恒 false，同样 1 秒回到 ≈ 30 次（证明 15 档由探测决定，不是写死）。
+//   A9 软渲染降档只留一条诊断（带渲染器名），不是每帧一条。
+//   A10 负对照：硬件路径不产生这条诊断（证明留痕由探测决定，不是无条件写）。
 //
 // Usage: node test/verify-video-canvas-fps.mjs
 import { readFileSync } from 'node:fs';
@@ -39,7 +41,9 @@ check('S1 常量 WE_DRAW_FPS_CAP = 30 存在', /const WE_DRAW_FPS_CAP = 30;/.tes
 check('S1 最小间隔由常量派生（含 0.5ms 浮点容差）',
   /const WE_DRAW_MIN_INTERVAL_MS = 1000 \/ WE_DRAW_FPS_CAP - 0\.5;/.test(SRC));
 check('S1 weDrawTick 用「首绘或间隔够一帧」判据',
-  /weLastDrawAt === 0 \|\| now - weLastDrawAt >= WE_DRAW_MIN_INTERVAL_MS/.test(SRC));
+  /weLastDrawAt === 0 \|\| now - weLastDrawAt >= minInterval/.test(SRC));
+check('S1 最小间隔按软渲染判定二选一（15 档 / 30 档），不是两段重复的条件',
+  /const minInterval = softRender \? SOFT_RENDER_MIN_INTERVAL_MS : WE_DRAW_MIN_INTERVAL_MS;/.test(SRC));
 check('S1 节流只跳过绘制、rVFC 重挂照旧',
   /v\.requestVideoFrameCallback\) \{ weVfHandle = v\.requestVideoFrameCallback\(weDrawTick\)/.test(SRC));
 check('S1 rAF 回退的暂停判据未变（!v.paused && !v.ended）',
@@ -59,6 +63,7 @@ function loadFrame(source, { useRvfc = true, softRender = false } = {}) {
     rafQueue: [],
     rvfcCb: null,
     resizeCbs: [],
+    logs: [],
     canvas: null,
     video: null
   };
@@ -103,11 +108,17 @@ function loadFrame(source, { useRvfc = true, softRender = false } = {}) {
       observe() {}
       disconnect() {}
     },
-    noteLayerContent() { harness.notes += 1; }
+    noteLayerContent() { harness.notes += 1; },
+    // #411：降档留痕走 liveLog（真源码里由 src/live-layer/diag.js 提供）。这里收进 harness，
+    // A9 / A10 才有东西可断；不注入也能跑，源码里的 typeof 守卫会静默跳过留痕。
+    liveLog(tag, detail, level) { harness.logs.push({ tag, detail, level }); }
   };
   // #411：软渲染档的探测桩。真源码在构建期由 probe.js 提供同名函数，这里按用例注入；
   // 不注入 ⇒ `typeof liveSoftRenderProbeNow` 不是 function ⇒ 源码按硬件处理（30fps 档）。
-  if (softRender) globals.liveSoftRenderProbeNow = () => true;
+  if (softRender) {
+    globals.liveSoftRenderProbeNow = () => true;
+    globals.liveSoftRenderName = 'ANGLE (Google, SwiftShader Device)';
+  }
   const context = vm.createContext(globals);
   const api = vm.runInContext(
     source + '\n;({ weDrawTick, weStartDraw, weStopDraw, weDrawFrame });',
@@ -166,7 +177,7 @@ function runRaf(harness, seconds, fps = 60) {
 // ── A3. 负对照：去掉节流条件 → 同样 1 秒内绘制 ≈ 60 次（满帧） ──────────────
 {
   const unthrottled = SRC.replace(
-    'if (weLastDrawAt === 0 || now - weLastDrawAt >= WE_DRAW_MIN_INTERVAL_MS) {',
+    'if (weLastDrawAt === 0 || now - weLastDrawAt >= minInterval) {',
     'if (true) {'
   );
   check('A3 负对照源码替换成功（去掉节流条件）', unthrottled !== SRC);
@@ -239,6 +250,28 @@ function runRaf(harness, seconds, fps = 60) {
   runRvfc(h, 1.0, 60);
   const back = h.draws - first;
   check('A8 判定恒 false 时回到 ≈ 30 次（15 档不是写死的）', back >= 28 && back <= 33, 'back=' + back);
+  h.api.weStopDraw();
+}
+
+// ── A9. 降档留痕：软渲染下只打一条诊断，带渲染器名 ─────────────────────────
+{
+  const h = loadFrame(SRC, { softRender: true });
+  h.api.weStartDraw(h.canvas, h.video);
+  runRvfc(h, 1.0, 60);
+  check('A9 软渲染降档只留一条诊断（每帧都打会刷满环形缓冲）', h.logs.length === 1, 'logs=' + h.logs.length);
+  const line = h.logs[0] || {};
+  check('A9 诊断带目标档位与渲染器名',
+    line.tag === 'video-softrender-throttle' && /15fps/.test(String(line.detail))
+    && /SwiftShader/.test(String(line.detail)), JSON.stringify(line));
+  h.api.weStopDraw();
+}
+
+// ── A10. 负对照：硬件路径不产生这条诊断 ────────────────────────────────────
+{
+  const h = loadFrame(SRC);
+  h.api.weStartDraw(h.canvas, h.video);
+  runRvfc(h, 1.0, 60);
+  check('A10 负对照：硬件路径不产生降档诊断', h.logs.length === 0, 'logs=' + h.logs.length);
   h.api.weStopDraw();
 }
 
