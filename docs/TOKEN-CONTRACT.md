@@ -54,7 +54,7 @@
 | `--dsw-alias-bg-mask-1` | 2 | 玻璃(2) | packages/glass/src/glass-css.js:246, packages/glass/src/glass-css.js:507 |  |
 | `--dsw-alias-bg-module-platform` | 2 | 玻璃(2) | packages/glass/src/glass-css.js:165, packages/glass/src/glass-css.js:263 |  |
 | `--dsw-alias-bg-multi-select` | 2 | 玻璃(2) | packages/glass/src/glass-css.js:168, packages/glass/src/glass-css.js:266 |  |
-| `--dsw-alias-bg-overlay` | 2 | 玻璃(2) | packages/glass/src/glass-css.js:162, packages/glass/src/glass-css.js:260 | 弹层/浮出层底（issue #71 全表面玻璃） |
+| `--dsw-alias-bg-overlay` | 2 | 玻璃(2) | packages/glass/src/glass-css.js:162, packages/glass/src/glass-css.js:260 | 弹层/浮出层底（全表面玻璃） |
 | `--dsw-alias-border-l1` | 2 | 玻璃(2) | packages/glass/src/glass-css.js:226, packages/glass/src/glass-css.js:312 | 边框强调 L1（「边框」滑条） |
 | `--dsw-alias-border-l2` | 2 | 玻璃(2) | packages/glass/src/glass-css.js:227, packages/glass/src/glass-css.js:313 | 边框强调 L2 |
 | `--dsw-alias-border-l2-darkmode-thin` | 2 | 玻璃(2) | packages/glass/src/glass-css.js:228, packages/glass/src/glass-css.js:314 | 深色细边框 |

@@ -373,7 +373,7 @@ const WE_I18N_EN_PANEL = {
   "本会话有效 · 逐秒心跳读数": "This session only · per-second heartbeat readings",
   "开启后每秒记录一次渲染页心跳读数（fps / running / 暂停原因）与准备、领养、判失败事件；同时写入浏览器控制台和宿主诊断缓冲（GET /wallpaper-engine/diag-log）。排查 live 掉帧/降级时用，平时关着。": "When enabled, the render page's heartbeat readings (fps / running / pause reason) are logged once a second, along with prepare, adopt, and failure events; Also writes to the browser console and the host diagnostic buffer (GET /wallpaper-engine/diag-log). Use it when troubleshooting live frame drops or degradation; leave it off otherwise.",
 
-  // ── 重置（issue #192）──────────────────────────────────────────────────────
+  // ── 重置──────────────────────────────────────────────────────
   "重置": "Reset",
   "重置本模块": "Reset this module",
   "把这一块的参数恢复为默认值（不需要确认）": "Restore this module's settings to their defaults (no confirmation needed)",
@@ -384,7 +384,7 @@ const WE_I18N_EN_PANEL = {
   "把这一页的设置恢复为默认值；其他页签与导入的图片不受影响。": "Restore this tab's settings to their defaults. Other tabs and imported images are not affected.",
   "确定要把这一页的设置恢复为默认吗？此操作不可撤销。": "Restore this tab's settings to their defaults? This cannot be undone.",
 
-  // ── 上传裁切（issue #191 问题 1）────────────────────────────────────────────
+  // ── 上传裁切────────────────────────────────────────────
   "裁切头像": "Crop avatar",
   "拖动调整位置、滚轮或滑块缩放；框内这一块会作为头像（方形）。": "Drag to reposition, scroll or use the slider to zoom; the area inside the frame becomes the avatar (square).",
   "确认并导入": "Confirm and import",

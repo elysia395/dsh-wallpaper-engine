@@ -24,7 +24,7 @@ function resolveDshHomeLocal(env = {}) {
  * profile 下真实装包的地方（`<profileDir>/node_modules`）。
  *
  * state-probe 读的是这个目录；此前调用方传了 `profileDir`，两边键名对不上，
- * 于是 `detect()` 恒判「未安装」——2026-11-02 修。
+ * 于是 `detect()` 恒判「未安装」——修。
  * @param {string|null|undefined} profileDir
  * @returns {string|null}
  */

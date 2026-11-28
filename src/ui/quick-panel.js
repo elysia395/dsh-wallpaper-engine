@@ -137,7 +137,7 @@
       measure();
       // 尺寸变化（窗口缩放 / 页签换档 / 列表换视图 / 列数增减）都从 el 的尺寸兜一道；
       // 再补 window resize 覆盖"滚动容器变高但列表没变"的形态。
-      // issue #340：设置页库视图里 sc 是**祖先**滚动容器，网格随内容生长（max-height:none）
+      // 设置页库视图里 sc 是**祖先**滚动容器，网格随内容生长（max-height:none）
       // ⇒ 容器变高不会改 el 的尺寸、el 的 RO 不响；sc 的观察由 bindScroller 补上。
       if (ro) ro.observe(el);
       window.addEventListener("resize", schedule);
@@ -500,7 +500,7 @@
     // 渲染器保持纯读：状态在组件里、写在 handler 里，这里只装配进 ctx。
     return renderAppearanceTab(sidebarRenderCtx({
       setSetting, setTransient, sel,
-      // 模块级重置（issue #192）：本档也画外观那六个节头 ⇒ ↺ 也要能用
+      // 模块级重置：本档也画外观那六个节头 ⇒ ↺ 也要能用
       //（同一个模块级处理器，与设置页那份同源）。
       onResetModule,
       onAccent, onBlur, onBorder, onChatGlassFidelity, onExtraGlassSelectors, onGlassAlpha, onGlassMaskStrength, onGlassColor, onGlassFidelity, onGlassSheenStrength, onLeftSidebarGlass, onTitlebarGlass, onSidebarGlass, onSidebarFullClear, onFloaterSolidBase, onMarketStickyClip, onMarketStickyFade, onToggleThemeFollow,
@@ -564,7 +564,7 @@
         "aria-label": weT("搜索壁纸标题"),
         onInput: (e) => { setTransient("qpSearch", e.target.value); emit(); },
       }),
-      // 内容分级：下拉 + 多档勾选（与壁纸选择器同款设计，用户口径 2026-10-30：
+      // 内容分级：下拉 + 多档勾选（与壁纸选择器同款设计：
       // 四枚胶囊在快捷面板里同样观感差）。键仍是 contentRatingFilter（typeFilter
       // 同款治理）—— 这里改，设置页列表与轮播候选同步生效；设置页改，这边同步显示。
       // 分级是**内容闸门**（拦播放，不只筛列表），勾选集合立刻决定哪些壁纸能点。
@@ -595,7 +595,7 @@
       ),
       // 类型筛选：与设置页「类型」**同一个键**（typeFilter；v8 起是勾选集合）——
       // 这里改，设置页列表同步生效；两处都只筛「列表」，不拦正在应用的壁纸。
-      // 形态与内容分级同款：下拉 + 多档勾选（用户口径 2026-10-30）。
+      // 形态与内容分级同款：下拉 + 多档勾选。
       React.createElement("details", { className: "we-qp__type-menu we-picker__type-menu" },
       React.createElement("summary", {
         className: "we-qp__type-btn we-picker__type-btn",
@@ -969,7 +969,7 @@
     );
   }
 
-  // `qpTypes` / `QP_TAB_KEY` / `qpTypeLabel` 是文件内自用（PR #202 的底座落后于本地线
+  // `qpTypes` / `QP_TAB_KEY` / `qpTypeLabel` 是文件内自用（的底座落后于本地线
   // 的导出面清理，顺手把它们留在了导出里）⇒ 按本仓口径收回，声明本体不动。
   export {
     QP_TABS,

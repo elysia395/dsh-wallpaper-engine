@@ -145,7 +145,7 @@ const FX_EXTENSION_MODULE = {
   // 屏上位置（与 avatar=1 / parallax=3 对齐）：三份 bundle 的求值顺序不保证，
   // 「扩展」页签由 panel-tabs 的注册表按 (order, 注册序) 排序，不能靠注册先后。
   order: 2,
-  // 模块级重置的分组名（issue #192）：键集住在 lib/settings-schema.js 的 RESET_MODULES。
+  // 模块级重置的分组名：键集住在 lib/settings-schema.js 的 RESET_MODULES。
   resetGroup: 'fx',
   get title() { return weT("点击效果与拖尾效果"); },
   get desc() { return weT("在壁纸之上叠加随光标响应的点击与拖尾效果：整层在界面之后，不会挡到任何控件"); },

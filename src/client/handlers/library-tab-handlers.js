@@ -45,7 +45,7 @@ function onEditInterval(e) {
   // ⚠️ 取值域用 ROTATION_INTERVAL_MIN/MAX 而不是 schemaRange("rotationInterval")：
   // `rotationInterval` 是 DEFAULTS_ONLY 键（**不在 KINDS 里**）⇒ 问 KINDS 得到的是
   // [undefined, undefined] ⇒ clampNum 恒回落默认值 30，界面上"选任何时间都无效"
-  // （issue #230 的根因）。真源见 lib/settings-schema.js 的那对常量。
+  // （根因）。真源见 lib/settings-schema.js 的那对常量。
   selection.editing.interval = clampNum(Number(e.target.value), ROTATION_INTERVAL_MIN, ROTATION_INTERVAL_MAX, DEFAULTS.rotationInterval);
   emit();
 }

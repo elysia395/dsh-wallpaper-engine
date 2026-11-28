@@ -107,7 +107,7 @@ function loadUserPropDefs(token, force) {
         if (!live || !(p.name in live)) return p;
         return { ...p, value: live[p.name], overridden: Boolean(d.overrides && p.name in d.overrides) };
       });
-      // issue #341：宿主只读带出的 WE 当前值（`wproperties`）。它**不参与**默认值合并，
+      // 宿主只读带出的 WE 当前值（`wproperties`）。它**不参与**默认值合并，
       // 只供面板「从 WE 导入」，所以这里单独存一份，进 UI 前剥掉宿主的绝对路径。
       const we = d.we && d.we.ok && d.we.values && typeof d.we.values === "object"
         ? { values: d.we.values, monitor: String(d.we.monitor || ""), profile: String(d.we.profile || "") }
@@ -239,7 +239,7 @@ function userPropsWeImport() {
 }
 
 /**
- * 从 WE 当前值导入（issue #341）：把与面板当前显示不同的值写成用户覆盖值。
+ * 从 WE 当前值导入：把与面板当前显示不同的值写成用户覆盖值。
  *
  * 只做用户**显式**动作（面板按钮）：不自动应用 —— WE `config.json` 是外部状态，静默
  * 覆盖会让"我在插件里调的值"凭空消失。导入后与手工改值同一条落盘路径

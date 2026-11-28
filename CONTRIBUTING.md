@@ -307,7 +307,7 @@ CI 完整路径使用 `npm ci --omit=peer --ignore-scripts --no-audit --no-fund`
 - **UI 面清单棘轮**（`test/compat-harness-surfaces.mjs`）：已装 harness 的 `dsh-client-ui-*`
   表面与提交清单 `test/fixtures/harness-ui-surfaces.json` 做差，**新表面未登记即红** ——
   盖不盖由人裁定、裁定必须落盘；另对 `dsh-client-ui-sidebar-right` 真源码断言属性锚点与
-  隐藏机制 allowlist（#107 型回归的活判据）。
+  隐藏机制 allowlist（这类回归的活判据）。
 - **逐页 DOM/样式断言**（`test/compat-harness-pages.mjs`，档位 2）：零依赖 CDP 驱动无头
   浏览器进真 harness 走首页 → 会话页 → 设置页，对**计算样式**下判据（设置窗口玻璃的
   backdrop / sheen 渐变 / token 接管 + 五分区逐页走查 + 零插件错误）；`--dump` 是探查模式。

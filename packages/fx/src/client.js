@@ -10,7 +10,7 @@
  *     （与宿主 graph row 的 id 逐字相等，客户端 require 才命中）。
  *
  * ⚠️ 本文件**不许**出现 require/import（所以这里没有那行 host 绑定）——
- *    test/verify-subpackage-purity.mjs 的放行清单已**收紧为零**（，ADR-0014 S5.1）：包内任何文件
+ *    test/verify-subpackage-purity.mjs 的放行清单已**收紧为零**（ADR-0014 S5.1）：包内任何文件
  *    都不许出现主包说明符（旧的 'dsh-plugin-wallpaper-engine/subpackage-boot.js' 叶子通道作废）。
  *    唯一例外是**客户端产物** packages/<pkg>/lib/client.<short>.js 里由构建期发出的
  *    require('dsh-plugin-wallpaper-engine')（判据 isClientArtifact）。源码面写 require 会判红。

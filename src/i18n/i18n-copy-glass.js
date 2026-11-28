@@ -7,7 +7,7 @@
  * 只读不写：纯数据，不得有可执行语句。守卫判据见 `test/verify-i18n.mjs`（族读法 test/tools/src-scope.mjs）。
  */
 const WE_I18N_EN_GLASS = {
-  // ── 思考块液态玻璃（PR #130）──
+  // ── 思考块液态玻璃──
   "思考块液态玻璃": "Thinking-block liquid glass",
   "表格可读底": "Table readability background",
   "关闭后，表格恢复宿主样式，壁纸可透过表格。": "Turn off to use the host’s table style and let the wallpaper show through.",
@@ -68,7 +68,7 @@ const WE_I18N_EN_GLASS = {
   "第三方弹窗不透明底": "Opaque base for third-party dialogs",
   "给第三方插件的弹窗补实底": "Give third-party plugin dialogs a solid base",
   "打开（默认）：第三方插件（任务看板等）的弹窗与确认框补一层不透明底，背后的页面内容与兄弟弹窗不再透上来；宿主自己的设置窗、输入卡与菜单保持原样，宿主的确认 / 审批卡会一并变实底（它们此前同样在漏）。关闭：恢复宿主原生的半透明观感": "On (default): dialogs and confirm boxes from third-party plugins (task boards and the like) get an opaque base, so the page behind them and sibling dialogs no longer bleed through; the host's own settings window, composer and menus stay as they are, while the host's own confirm / approval cards also become opaque (they were leaking too). Off: restore the host's native translucent look",
-  // ── 宿主悬停信息卡（hoverCard 面，2026-11-17；补上上一版漏掉的英文词条）──
+  // ── 宿主悬停信息卡（hoverCard 面）──
   "悬停卡玻璃·独立配置": "Hover card glass · independent config",
   "悬停卡玻璃·玻璃透明度": "Hover card glass · glass opacity",
   "悬停卡玻璃·雾化": "Hover card glass · blur",

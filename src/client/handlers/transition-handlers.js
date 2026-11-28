@@ -15,8 +15,8 @@
 // 玻璃的 backdrop-filter 采样到透明背景会静默失效（见 applyEffects 内注释），
 // 所以这里没有「淡到黑再淡出」那种中间态透明的方案。
 // ms = 基准毫秒 × 速度档乘子（SWITCH_SPEEDS）。基准在快档也不为 0，避免「点了没反应」。
-// 交叉淡化时长（新层淡入 + 旧层宽限移除的基准）。原先住正文；随本族搬出来后必须**先于**档位表
-// 求值 —— 档位表的 fade 项在模块初始化时直接读它，留在正文会撞 TDZ（2026-11-28 实测 ReferenceError）。
+// 交叉淡化时长（新层淡入 + 旧层宽限移除的基准）。必须**先于**档位表求值 ——
+// 档位表的 fade 项在模块初始化时直接读它，放到正文会撞 TDZ（实测 ReferenceError）。
 const ROTATION_FADE_MS = 1800;
 const SWITCH_TRANSITIONS = [
   { id: "cut", get label() { return weT("硬切"); }, ms: 0 },
@@ -26,7 +26,7 @@ const SWITCH_TRANSITIONS = [
   { id: "iris", get label() { return weT("光圈"); }, ms: 800 },
   { id: "zoom", get label() { return weT("缩放"); }, ms: 900 },
   { id: "bars", get label() { return weT("条带"); }, ms: 800 },
-  // 随机（#254）：真正换层那一刻才从非硬切池里抽一个；ms 只是面板代表值（按池内最长算）。
+  // 随机：真正换层那一刻才从非硬切池里抽一个；ms 只是面板代表值（按池内最长算）。
   { id: "random", get label() { return weT("随机"); }, ms: 0 },
 ];
 const SWITCH_SPEEDS = [

@@ -153,7 +153,7 @@ function scenePreviewUrl(preview) {
 }
 
 /**
- * 宿主清单里的**资源 URL 字段**（issue #409）。
+ * 宿主清单里的**资源 URL 字段**。
  *
  * 这些字段都是 `${BASE}/...` 形态（或宿主媒体源的绝对 URL），最终被塞进 `<img src>` /
  * `<video src>` / iframe —— 它们**不经过 apiFetch**，所以 apiUrl 的挂载前缀不会自动落到
@@ -296,7 +296,7 @@ function applySelection(id, opts) {
   // 判定来自 src/picker/picker-model.js：过滤档与隐藏集合从调用点显式传入（模型不读 selection）。
   // 闸门是 keepPlayingWallpaper（分级拦播放；类型档只筛列表/轮播候选，不碰正在应用的壁纸）。
   if (!w || !keepPlayingWallpaper(w, selection.contentRatingFilter)) {
-    // 被过滤条件排除 / 条目消失时必须留下可读原因（#84），见 selectionBlockedNote。
+    // 被过滤条件排除 / 条目消失时必须留下可读原因，见 selectionBlockedNote。
     selection.blockedNote = selectionBlockedNote(w);
     selection.url = null;
     selection.type = null;
@@ -324,7 +324,7 @@ function applySelection(id, opts) {
   }
   const savedVariant = Number(selection.frameVariants && selection.frameVariants[String(w.id)]) || 0;
   // 场景全屏占位和静态帧失败回退都需要原图。清单的卡片 URL 不变。
-  // 网页壁纸的降级垫底也是**作者预览图**：与场景同一条 full=1 通路（issue #419 附件 1）。
+  // 网页壁纸的降级垫底也是**作者预览图**：与场景同一条 full=1 通路（附件 1）。
   // 以前 web 直接拿清单给的缩略图，远程端黑屏后垫出来的是一张糊图。
   selection.previewUrl = (w.type === "scene" || w.type === "web")
     ? scenePreviewUrl(w.preview)
@@ -436,7 +436,7 @@ function buildMedia(sel) {
   const isSceneVideo = sel.type === "scene" && Boolean(sel.sceneVideo) && !isLive;
   // 网页壁纸在 live 不可用（远程取不到载荷 / 首帧判定失败）时同样走静态垫底：
   // 否则会掉进下面的「web 裸 iframe 兼容路径」，浏览器把封面 PNG 当**文档**加载，
-  // 按原始尺寸贴在左上角（issue #419 附件 2）。
+  // 按原始尺寸贴在左上角（附件 2）。
   const isStill = sel.type === "image"
     || (sel.type === "scene" && !isLive && !isSceneVideo)
     || (sel.type === "web" && !isLive);

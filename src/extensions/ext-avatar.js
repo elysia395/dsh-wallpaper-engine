@@ -46,7 +46,7 @@ const AVATAR_SIDE_ROWS = [
 /** 预览框的固定边长（px）：比最大档（72）再留一点余量，于是任何一档都不被裁。
  *  固定不外扩的理由：这个框是**唯一**受"大小"影响的东西 —— 让它跟着变会让整页在拖动时抖。 */
 const AVATAR_PREVIEW_BOX = 80;
-/** 预览的兜底值（= lib/settings-schema.js 的 DEFAULTS.avatarSize / avatarRadius）。
+/** 预览的兜底值（=lib/settings-schema.js 的 DEFAULTS.avatarSize / avatarRadius）。
  *  只在设置值是坏的（NaN / 缺键）时用得上 —— 正常情况下 schema 已经把值钳好了。 */
 const AVATAR_PREVIEW_SIZE_FALLBACK = 40;
 const AVATAR_PREVIEW_ROUND_FALLBACK = 100;
@@ -129,7 +129,7 @@ function avatarPreviewRound(sel) {
 }
 
 /**
- * 上传裁切弹窗（issue #191 问题 1）：居中模态 + 方形取景框。
+ * 上传裁切弹窗：居中模态 + 方形取景框。
  *
  * 交互：**拖拽平移** + **滚轮 / 滑块缩放**；框里那张图按 `zoom = 1 短边铺满` 起算
  * （再小就会露白），平移的边界是"图不能露出空白"。
@@ -214,7 +214,7 @@ function renderAvatarCropModal(ctx) {
 }
 
 /**
- * 超限提示行（#185 后续）：原图过了两道闸就被拦在这里 ——
+ * 超限提示行（后续）：原图过了两道闸就被拦在这里 ——
  * 一句话说清**哪一条超了、实测多少**，再给一枚「自动压缩后导入」作为出路。
  *
  * 为什么不是直接拒绝：用户口径是"提示无法导入**或**选择启用自动压缩"。只有拒绝没有出路，
@@ -268,7 +268,7 @@ function renderAvatarIsland(ctx) {
     on && SliderRow(weT("头像大小"), AVATAR_SIZE_MIN, AVATAR_SIZE_MAX, 1, sel.avatarSize, onAvatarSize, "px", "avatar-size"),
     on && SliderRow(weT("圆角强度"), AVATAR_RADIUS_MIN, AVATAR_RADIUS_MAX, 1, sel.avatarRadius, onAvatarRadius, "%", "avatar-radius",
       { tooltip: weT("100% = 正圆（默认），50% = 大圆角方块，0% = 直角方形") }),
-    // 助手头像的**出现间隔**（issue #231 第二轮的观感旋钮）：每过多少条可见流条目
+    // 助手头像的**出现间隔**（第二轮的观感旋钮）：每过多少条可见流条目
     // （思考 / 工具调用 / 回复都算）在下一条可见助手行上再露一次脸。
     // 1 = 每条助手行都露脸（最密）；越大越稀。语义真源 = src/extensions/avatar-layer.js 的读取处。
     on && SliderRow(weT("助手头像间隔"), AVATAR_AI_REPEAT_MIN, AVATAR_AI_REPEAT_MAX, 1,
@@ -277,7 +277,7 @@ function renderAvatarIsland(ctx) {
     on && avatarOverflowRow(sel, { onAutoCompress: ctx.onAvatarAutoCompress }),
     on && sel.avatarError
       && React.createElement("div", { className: "we-picker__hint we-avatar-error", key: "avatar-err" }, sel.avatarError),
-    // 裁切弹窗（issue #191 问题 1）：只在"已选好图、还没确认"时画。
+    // 裁切弹窗：只在"已选好图、还没确认"时画。
     renderAvatarCropModal(ctx),
   );
 }
@@ -290,7 +290,7 @@ const AVATAR_EXTENSION_MODULE = {
   // 头像必须在**第一**（用户口径），两项子包模块各自声明 2 / 3。
   // 排序 = (order, 注册序)，唯一实现在 src/extensions/extension-registry.js。
   order: 1,
-  // 模块级重置的分组名（issue #192）：键集住在 lib/settings-schema.js 的 RESET_MODULES，
+  // 模块级重置的分组名：键集住在 lib/settings-schema.js 的 RESET_MODULES，
   // 这一侧只报"我是哪一组" —— 键表不在渲染器里手抄第二份。
   resetGroup: 'avatar',
   get title() { return weT("自定义会话头像"); },
@@ -298,6 +298,6 @@ const AVATAR_EXTENSION_MODULE = {
   render: renderAvatarIsland,
 };
 
-// `renderAvatarCropModal` 只在文件内被 `renderAvatarIsland` 调用（PR #202 顺带把它导了
+// `renderAvatarCropModal` 只在文件内被 `renderAvatarIsland` 调用（顺带把它导了
 // 出来，本地线没有任何跨文件消费者）⇒ 按本仓导出面口径不导出。
 export { AVATAR_EXTENSION_MODULE, renderAvatarIsland };

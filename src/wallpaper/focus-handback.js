@@ -1,5 +1,5 @@
 /**
- * 宿主侧**焦点交还**（#148「网页壁纸周期性抢焦点」第二步的后半）。
+ * 宿主侧**焦点交还**（「网页壁纸周期性抢焦点」第二步的后半）。
  *
  * 为什么需要它：`lib/we-focus-guard.js` 只能拦**壁纸文档里**的两条程序化路径
  * （帧级 `window.focus()` 与元素级 `element.focus()`）。还有几条路它够不着：
@@ -19,13 +19,13 @@
  * 另外两道保险：记住的元素超过 `STALE_MS` 没被**使用**过就不交还（否则半天前点过的输入框会被
  * 翻出来抢焦点）。「使用」按最近一次**聚焦或在该元素里打字**算（`keydown/beforeinput/input` 刷新），
  * 不是只看聚焦时刻 —— 同一个输入框连续打字超过 2 分钟不会再有 `focusin`，只按聚焦算会让交还
- * 恰好在该机制要服务的场景（打字中）里失效（#169 §2）。两次交还之间至少隔 `MIN_GAP_MS`（壁纸若
+ * 恰好在该机制要服务的场景（打字中）里失效（§2）。两次交还之间至少隔 `MIN_GAP_MS`（壁纸若
  * 以极高频率夺焦，不至于把主线程拖成焦点乒乓）。
  *
  * 还有一族**只记账、不补偿**：宿主侧重排/重合成把焦点腾到 `body`（`relatedTarget: null` 的经典形态）。
  * 它既不经过 `focus()`（围栏够不着），也不是"落进壁纸帧"（交还的目标不存在），所以本模块只把
  * `bodyLandings` / `lastBodyAt` 记进自证面，让真机读数能区分"被搬进帧"与"被宿主腾掉"；是否要
- * 把焦点再搬回 `lastEl` 等真机样本再加（#169 §1，避免无证据的焦点抢占）。
+ * 把焦点再搬回 `lastEl` 等真机样本再加（§1，避免无证据的焦点抢占）。
  *
  * 自证手段：`window.__weFocusHandback = { lastEl, lastAt, gestureAt, handbacks, skipped, lastHandBackAt,
  * retrying, bodyLandings, lastBodyAt, active }`
@@ -74,7 +74,7 @@ function installFocusHandback() {
     const el = e.target;
     // body/html 拿到焦点说明"宿主这边本来就没有焦点"，没有可交还的对象。但它是**另一族**：
     // 焦点被宿主侧重排/重合成腾到 body（`relatedTarget: null` 的经典形态），与"被搬进壁纸帧"
-    // 成因不同、读数也不该混。只记账、不改行为（#169 §1：先有读数，再谈要不要补偿）。
+    // 成因不同、读数也不该混。只记账、不改行为（§1：先有读数，再谈要不要补偿）。
     if (!el || el === document.body || el === document.documentElement) {
       if (state.lastEl) { state.bodyLandings += 1; state.lastBodyAt = Date.now(); }
       return;
@@ -83,7 +83,7 @@ function installFocusHandback() {
     state.lastEl = el;
     state.lastAt = Date.now();
   };
-  // 新鲜度按"最近一次使用"而不是"最近一次聚焦"（#169 §2）：同一元素里打字不会再有 focusin，
+  // 新鲜度按"最近一次使用"而不是"最近一次聚焦"（§2）：同一元素里打字不会再有 focusin，
   // 只按聚焦算会在长时打字后被 STALE_MS 拦下 —— 那正是交还机制要服务的场景。
   const onUse = (e) => {
     const el = state.lastEl;
@@ -99,7 +99,7 @@ function installFocusHandback() {
     const active = document.activeElement;
     const now = Date.now();
     if (!weIsWallpaperFrame(active) || !active.isConnected) { // ② 焦点得真的在壁纸帧里
-      // 落点是 body/html（或根本没有焦点）⇒ 宿主侧那一族：只记账，不交还（#169 §1）。
+      // 落点是 body/html（或根本没有焦点）⇒ 宿主侧那一族：只记账，不交还（§1）。
       if (!active || active === document.body || active === document.documentElement) {
         state.bodyLandings += 1;
         state.lastBodyAt = now;
@@ -133,7 +133,7 @@ function installFocusHandback() {
     if (!state.lastEl || e.target !== state.lastEl) return;
     // `document.activeElement` 在 focusout 之后才更新，所以挪到下一拍再判。
     // 每个 focusout 排一个 0ms 任务（既有语义：每次跳过都要记账），但**句柄全部入账**：
-    // 拆除时必须能清掉它们（#169 §3；此前不记名，dispose 只清 retryTimer ⇒ 拆完仍会醒来）。
+    // 拆除时必须能清掉它们（§3；此前不记名，dispose 只清 retryTimer ⇒ 拆完仍会醒来）。
     const timer = setTimeout(() => { handbackTimers.delete(timer); handBack(); }, 0);
     handbackTimers.add(timer);
   };

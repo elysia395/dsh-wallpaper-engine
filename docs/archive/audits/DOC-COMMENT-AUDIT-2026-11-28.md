@@ -62,7 +62,11 @@
    `src/glass{,-surfaces,-extra,-panel}`、`src/quick-panel`、`src/system-fonts`、`src/preset-store`、`src/fontset-store`、
    `src/focus-handback` 等 17 处改为现状地址；**Decision / Consequences / 触发线一字未动**。
    同时修订 `docs/adr/README.md` 的维护口径：方针不改、结论类可校正、拿不准按方针处理。
-8. **历史/外部引用**（不改，工具里逐条写理由）：`lib/components/…` 的「旧址 → 新址」对照与术语定义、
+8. **历史账清理**（2026-11-28 追补）：删掉「日期 / issue·PR 编号」这类**只记录改动**的措辞，保留现状与坑 ——
+   文档（`CONTRIBUTING`、`README`、`TROUBLESHOOTING`、`HOW-IT-WORKS` 等）与 `src|lib|packages` 的注释一并清；
+   ADR 的 `Date` 头属决策账本，保留。约定写进 `DEV-GUIDE.md` §5：不写日期与编号，写坑的触发条件 + 后果 + 规避。
+   审计工具新增 `history` 检查（日期 / `issue #` / `（#NNN`），当前可执行项为 0。
+9. **历史/外部引用**（不改，工具里逐条写理由）：`lib/components/…` 的「旧址 → 新址」对照与术语定义、
    ADR-0015/-0016 里明确写「已删除 / 旧状」的锚点、`dsh-pet-dshwe` 自带 `assets/…`、父仓 `dsh-my-ui/…`、
    DSH CLI 的 `lib/bin.js`、`scripts/compare-bundle.mjs` 的自检夹具字符串。
 

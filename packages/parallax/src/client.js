@@ -47,7 +47,7 @@ registerExtensionModule('parallax', PARALLAX_EXTENSION_MODULE);
 // ② 行为层生命周期 + 插件槽位发现。主包 src/client.js 的作用域里**没有**这些裸名 ——
 //    主包只按注册表调用：挂载期订阅（`attachLayer` 里 `subscribe(hooks.sync)`）、挂载后首次对时、
 //    拆卸期 `hooks.dispose()`（并退订）；插件槽位在 `sync` 里经 host 键取
-//    `parallaxPluginSlots`（= `weDiscoveredGroupsOf('parallax').sort()`）。
+//    `parallaxPluginSlots`（=`weDiscoveredGroupsOf('parallax').sort()`）。
 //    ⇒ discoveredGroups 与 sync/dispose 一起注册（主包只调用、不接管实现）。
 registerLayerHooks('parallax', {
   sync: syncParallaxLayer,

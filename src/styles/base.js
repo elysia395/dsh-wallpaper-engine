@@ -24,7 +24,7 @@
 // ── Styles ──────────────────────────────────────────────────────────────────
 const CSS_BASE = `
   /* Wallpaper layer: a fixed child of <body>, sunk BELOW the app frame.
-     壁纸透明度（#82）作用在**媒体叶子**（.we-layer .we-media）上 —— 对
+     壁纸透明度作用在**媒体叶子**（.we-layer .we-media）上 —— 对
      <video>/<img>/<iframe>/canvas 四类媒体统一生效，也无需逐媒体处理
      fit/transform 的相互作用；层自身垫一层**原生底色**
      （--we-wallpaper-fade-bg，浅色纯白 / 深色纯黑）保持不透明合成（透明
@@ -75,7 +75,7 @@ const CSS_BASE = `
   .we-layer .we-media {
     width: 100%; height: 100%; object-fit: cover; display: block;
     background: transparent; border: 0;
-    /* 壁纸透明度（#82）作用于媒体叶子而非 .we-layer 整层：layer 垫**原生底色**
+    /* 壁纸透明度作用于媒体叶子而非 .we-layer 整层：layer 垫**原生底色**
        （--we-wallpaper-fade-bg，浅色纯白 / 深色纯黑）保持不透明合成，避免透明
        backdrop 让玻璃 backdrop-filter 失效（见 applyEffects 注释）。 */
     opacity: var(--we-wallpaper-opacity, 1);
@@ -189,7 +189,7 @@ const CSS_BASE = `
      all columns share the same wallpaper+scrim background. 页面基色让位**只属于壁纸**：
      壁纸层挂在 body 的 z-index:-1 上，页面基色必须让开才看得见；无壁纸时保持宿主原色。
      ⚠️ 侧栏填充的让位**只属于玻璃**（ADR-0016 第四刀勘误）：玻璃的侧栏配方随玻璃行走后，
-     产品口径（2026-10-29 修订）：侧栏填充只挂壁纸门——插件/玻璃行关闭时侧栏主体透明，
+     产品口径：侧栏填充只挂壁纸门——插件/玻璃行关闭时侧栏主体透明，
      壁纸从侧栏透出；玻璃行开启且左栏玻璃开关关闭时同样是透明洞，打开才由玻璃配方接管。
      ⚠️ !important 是**跨插件契约**，不是防御性写法：DSH 的主题 API 允许插件用
      ctx.theme.overrideTokens 给宿主上色，而宿主把合成后的令牌以**内联样式**写在
@@ -203,8 +203,7 @@ const CSS_BASE = `
      [data-slot="main.conversation"] 上只影响该元素自身的声明，它的祖先仍是不透明
      ⇒ 壁纸被祖先盖死（实测：中栏整块变灰）。所以基色必须留在 body 上，且**只挂壁纸门**
      （中栏透壁纸与玻璃行无关）。
-     侧栏填充则**额外挂玻璃门**（产品口径 2026-11-05 修订，取代 10-29 的
-     「壁纸在场即让位、与玻璃行无关」）：玻璃行关掉后左右栏 / 顶栏回宿主原生态。
+     侧栏填充则**额外挂玻璃门**：玻璃行关掉后左右栏 / 顶栏回宿主原生态。
      [data-we-glass-page] 由玻璃包在 applyGlass 里恒挂、disposeGlassLayer 里摘除，
      是"玻璃行是否活着"最可靠的 DOM 信号（bundle 不加载 ⇒ 属性无人写 ⇒ 天然不匹配）。
      !important 必须都写：只补基色 ⇒ 侧栏填充仍输给内联值。 */
@@ -261,7 +260,7 @@ const CSS_BASE = `
 
   /* Windows 桌面壳的 AppFrame 在 [data-windows-titlebar] 下把整块 frame 底刷成
      --dsw-specific-sidebar-fill（宿主 AppFrame.module.css 的实现事实）。壁纸在场时
-     该 token 已由上面的壁纸门规则统一清成 transparent（产品口径 2026-10-29：壁纸在场
+     该 token 已由上面的壁纸门规则统一清成 transparent（壁纸在场
      即让位，与玻璃行无关），但壳容器会把自己那一层 frame 底**单独刷一遍**、不保证读
      我们清过的令牌 ⇒ 停玻璃行后 frame 底仍可能不透明，中栏虽读到 bg-base=transparent，
      父级 frame 底却盖住 body 上 z-index:-2 的壁纸层（现场：关「液态玻璃」行后壁纸
@@ -384,7 +383,7 @@ const CSS_BASE = `
      浅色块保持不变（--we-ui-* 原值在浅底上即可读）。
      #334：掺白改按相对亮度分流（effects.js 的 weUiDarkKeep）—— 亮 accent 保留 100%（原色直出），
      暗 accent 保留 55%（= 掺白 45%，与 #239 现状逐位一致）。--we-ui-keep-* 恒定义，缺省 55%
-     让「JS 没跑/旧版残留」时仍落回 #239 的可读兜底；shimmer 单独一档（亮 82% / 暗 70%）。
+     让「JS 没跑/旧版残留」时仍落回可读兜底；shimmer 单独一档（亮 82% / 暗 70%）。
      守卫 verify-glass-compositing 的 G9 钉「主题成对令牌禁止浅深同值」；它必须按本组自己的门
      data-we-ui-color 扫描 —— 扫 data-we-glass-page 会退化成空集对空集（静默假绿）。 */
   body[data-ds-dark-theme][data-we-ui-color] {

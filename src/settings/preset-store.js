@@ -87,10 +87,10 @@ function glassPresetFailureReason(res) {
   if (bare && (res.status === 404 || res.status === 405)) {
     return weT("宿主里没有玻璃预设路由：重启 DSH 后再试（改过宿主代码要重挂，刷新页面不够）");
   }
-  // ⚠️ 404 **带** JSON body 也会漏英文给用户（#188）：宿主 404 `{"error":"unknown preset"}`
+  // ⚠️ 404 **带** JSON body 也会漏英文给用户：宿主 404 `{"error":"unknown preset"}`
   //    时 `bare` 为 false ⇒ 原句直落 `hostFailureReason` ⇒ "unknown preset" 原样上屏。
   //    这句英文没有中文键、也没查 weT。
-  // **因果两分**（#199 的后续）：新宿主会把这个 404 的**原因**写进 body 的 `reason`
+  // **因果两分**（的后续）：新宿主会把这个 404 的**原因**写进 body 的 `reason`
   //    —— `missing`（真的没有这份预设）/ `tombstone`（出厂预设已被删除）—— 这两种
   //    情况下路由是在的，重启 DSH 一点用都没有 ⇒ 各给一条能走下去的出路；只有
   //    **没有 reason**（旧宿主，或 #199 之前的宿主）才归"重启 DSH"：那一刻通常是
@@ -174,7 +174,7 @@ async function loadGlassPresets() {
 async function refreshGlassPresets() { return loadGlassPresets(); }
 
 /**
- * 「已隐藏的出厂预设」清单（#219）：`GET /glass-presets?hidden=1`。
+ * 「已隐藏的出厂预设」清单：`GET /glass-presets?hidden=1`。
  * 它是**补充信息**，失败不写错误行（清单本身还可能好用，不该被这条腿拖成"预设不可用"）；
  * 结果经 setTransient 写 `glassPresetHidden`，面板据此画恢复区。
  */
@@ -189,7 +189,7 @@ async function loadHiddenBuiltin() {
 }
 
 /**
- * 恢复一套被隐藏的出厂预设（#219）：`POST /glass-presets/<id>/restore`。
+ * 恢复一套被隐藏的出厂预设：`POST /glass-presets/<id>/restore`。
  * 宿主删掉用户层那份墓碑，随包层那套重新出现在清单里（成功回 `{ ok, restored }`）。
  * 失败原因走统一出口：`not-hidden`（本来就没隐藏）与 `missing`（这套出厂已被包移除）可区分。
  */

@@ -128,7 +128,7 @@ function authoritativeSources(platform) {
       source: 'powershell-fonts',
       cmd: 'powershell.exe',
       args: ['-NoProfile', '-NonInteractive', '-Command',
-        // 钉死写往 **stdout 的编码**（#300）：PS 5.1 在 stdout 被重定向成管道时按**控制台输出编码**
+        // 钉死写往 **stdout 的编码**：PS 5.1 在 stdout 被重定向成管道时按**控制台输出编码**
         // 写（中文系统是 OEM CP936），本侧却按 UTF-8 解码 ⇒ 每个中文字体名都成 U+FFFD。
         // `[Console]::OutputEncoding` 必须在任何输出之前设；`$OutputEncoding` 只影响"喂给别的程序"的输入，
         // 不解决这条。UTF8Encoding 不带 BOM，首行不会多出 U+FEFF（即便有，normalizeFamilies 的 trim 也会吃掉）。

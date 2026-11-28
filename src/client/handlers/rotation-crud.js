@@ -78,7 +78,7 @@ function deleteGroup(id) {
   }
   if (selection.editing && selection.editing.id === id) setSetting("editing", null);
   // 删除是**结构变更**，必须落盘：原来只 `splice` 内存、不调 persistSelection ⇒ 删掉的列表
-  // 重启后「复活」（#292）。与 saveEditingGroup 同一条纪律：改完列表就 persist。
+  // 重启后「复活」。与 saveEditingGroup 同一条纪律：改完列表就 persist。
   persistSelection();
   syncRotationTimer();
   emit();

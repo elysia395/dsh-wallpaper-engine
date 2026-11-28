@@ -138,7 +138,7 @@ const PARALLAX_EXTENSION_MODULE = {
   // 屏上位置（与 avatar=1 / fx=2 对齐）：三份 bundle 的求值顺序不保证，
   // 「扩展」页签由 panel-tabs 的注册表按 (order, 注册序) 排序，不能靠注册先后。
   order: 3,
-  // 模块级重置的分组名（issue #192）：键集住在 lib/settings-schema.js 的 RESET_MODULES。
+  // 模块级重置的分组名：键集住在 lib/settings-schema.js 的 RESET_MODULES。
   resetGroup: 'parallax',
   get title() { return weT("3D 效果"); },
   get desc() { return weT("光标移动时，壁纸与吉祥物沿屏幕中心的对称方向轻轻偏移，界面整块则与壁纸同向轻挪（视差纵深）"); },

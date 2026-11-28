@@ -133,7 +133,7 @@ let petLinkContext = null;
 /**
  * 联动开关（M7）：开=linked 优先，关=强制 native。
  *
- * 2026-11-02：从「纯内存态」改成 localStorage 持久化（键 `dsh-we-pet-link-enabled-v1`，
+ *从「纯内存态」改成 localStorage 持久化（键 `dsh-we-pet-link-enabled-v1`，
  * 值 `1` / `0`）。此前关掉后刷新页面或重开设置页会变回开——内存里没人记住用户的决定。
  * 仍然遵守主包零改动：不写主包设置，只写 pet-link 自己的键；存储不可用（隐私模式/配额）
  * 时退化为内存态，本次会话仍然生效。

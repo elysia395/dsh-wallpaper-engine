@@ -15,7 +15,7 @@
  * 独立模块形态下取不到 ⇒ 站点根）。
  * 对外提供：BASE / apiUrl(path) / apiFetch / apiJson / apiHead / apiPostJson / apiDelete。
  *
- * 挂载前缀（issue #409）：`apiUrl()` 会在路径前补上**反代子路径部署**的挂载前缀
+ * 挂载前缀：`apiUrl()` 会在路径前补上**反代子路径部署**的挂载前缀
  *（探测在 `src/wallpaper/app-mount.js`，根路径部署下恒为空串）。宿主给回来的资源 URL 也一律
  * 经 `apiUrl()` 归一化 —— 它们同样带 `/wallpaper-engine` 前缀，同样会被网关的站点根吞掉。
  *
@@ -41,7 +41,7 @@
 const BASE = '/wallpaper-engine';
 
 /**
- * 应用挂载前缀（反代子路径部署，issue #409）。
+ * 应用挂载前缀（反代子路径部署）。
  *
  * 前缀住 `src/wallpaper/app-mount.js`（唯一探测点：资源名 → document.baseURI → 站点根）。
  * **根路径部署恒为空串** ⇒ 下面所有拼接与改动前逐字节相同。
@@ -120,7 +120,7 @@ async function apiFetch(path, options) {
   const ok = status >= 200 && status < 300;
   let data = null;
   let error = null;
-  // 归因（issue #409）：非 2xx 且响应是一页 HTML ⇒ 这不是宿主的接口，多半是反代丢了
+  // 归因：非 2xx 且响应是一页 HTML ⇒ 这不是宿主的接口，多半是反代丢了
   // 挂载前缀、请求落到了站点根。**只标记事实**：不改判 ok、不自动换前缀重试 ——
   // 重试要猜另一个前缀，猜错的代价（把正常 404 变成两次请求）比收益大。
   const notHostEnvelope = !ok && (status === 404 || status === 405) && responseIsHtml(response);

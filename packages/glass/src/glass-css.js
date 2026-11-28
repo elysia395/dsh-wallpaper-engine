@@ -70,7 +70,7 @@ const CSS_GLASS = `
      --we-wallpaper-opacity 不参与本层：壁纸透明度仍只作用于 .we-layer。 */
   /* 染色地板：--we-readability-base 是玻璃色经亮度钳制后的按主题版本
      （effects.js 的 weClampSurfaceColor 计算、--we-surface-tint-* 注入）
-     —— 色相跟随用户选择，亮度钳制保住 #82 的 ≥4.5:1 正文判据。缺省回落原值。
+     —— 色相跟随用户选择，亮度钳制保住 ≥4.5:1 正文判据。缺省回落原值。
      玻璃保真度（glassFidelity，默认 100）：--we-readability-floor = floor 常量
      × --we-glass-fidelity（glass-layer.js 注入 0–1，缺省 1 = 现状、任何旧设置文件
      无此键时也不变）。拉低保真度 = 地板覆盖度同比例减薄 + 釉色向用户原色回退
@@ -124,7 +124,7 @@ const CSS_GLASS = `
      raise border alpha for visibility, and apply the frosted-glass effect to
      opaque surfaces. */
   body[data-we-glass-page] {
-    /* ── 表面令牌（#80）——在**令牌源头**接管，不逐面补选择器 ────────────────────
+    /* ── 表面令牌——在**令牌源头**接管，不逐面补选择器 ────────────────────
        宿主的对话框 / 面板 / 抬高按钮面读的都是别名层：--dsw-alias-bg-layer-1/2/3 是
        面板梯度（浅色三层同为白；深色 bluish-875/850/800 逐层抬亮），
        --dsw-alias-button-elevated-fill 是「抬高按钮」的实色（侧栏「新建会话」、
@@ -153,7 +153,7 @@ const CSS_GLASS = `
     --dsw-alias-button-elevated-fill: color-mix(in srgb,
       var(--we-readability-base) calc(var(--we-readability-floor) * 100%),
       color-mix(in srgb, var(--we-surface-tint-light, #ffffff) calc(var(--we-glass-alpha, 0.5) * 1.15 * 100%), transparent) calc((1 - var(--we-readability-floor)) * 100%));
-    /* ── 全表面玻璃（issue #71 的 glass-patch.css 收编）─────────────────────────
+    /* ── 全表面玻璃（glass-patch.css 收编）─────────────────────────
        覆盖壳层**其余**能画出实色面的别名 token（浮起按钮、弹层、工具条、引用块、
        占位图…），治的是「个别面仍是突兀实色块」。层权重沿用那份补丁的角色分档，
        但**每条都包上可读性下限**（补丁的裸 rgba 在花壁纸上会把菜单文字直接露给
@@ -256,7 +256,7 @@ const CSS_GLASS = `
     --dsw-alias-button-elevated-fill: color-mix(in srgb,
       var(--we-readability-base) calc(var(--we-readability-floor) * 100%),
       color-mix(in srgb, var(--we-surface-tint-dark, #0d1524) calc(var(--we-glass-alpha, 0.5) * 1.15 * 100%), transparent) calc((1 - var(--we-readability-floor)) * 100%));
-    /* 全表面玻璃的深色档（issue #71，与浅色逐条同形；层权重见浅色块的注释）。 */
+    /* 全表面玻璃的深色档（与浅色逐条同形；层权重见浅色块的注释）。 */
     --dsw-alias-bg-overlay: color-mix(in srgb,
       var(--we-readability-base) calc(var(--we-readability-floor) * 100%),
       color-mix(in srgb, var(--we-surface-tint-dark, #0d1524) calc(var(--we-glass-alpha, 0.5) * 1.3 * 100%), transparent) calc((1 - var(--we-readability-floor)) * 100%));
@@ -316,7 +316,7 @@ const CSS_GLASS = `
     --dsw-alias-border-l3: rgba(180, 180, 180, var(--we-border-alpha, 0.35));
     --dsw-alias-border-l4: rgba(180, 180, 180, var(--we-border-alpha, 0.35));
   }
-  /* ── 浮层不吃页面玻璃那张令牌映射（issue #161 的漏网形态）─────────────────────────
+  /* ── 浮层不吃页面玻璃那张令牌映射（漏网形态）─────────────────────────
      上面两处在令牌源头把面板梯度改成「底色压可读性下限 + 玻璃色」的半透明配方：对面板
      正确（背后只有壁纸），对浮层错误 —— 浮层背后是界面自己的正文，任何 < 100% 的覆盖
      都会让底下那行字透上来，表现成「两行字叠在一起」的重影。#161 只豁免了气泡那几条
@@ -328,7 +328,7 @@ const CSS_GLASS = `
      底色取 --we-panel-color（主题感知），一条规则同时覆盖深浅两主题，且与浮层文字
      （宿主与第三方都读 --dsw-alias-label-primary）维持原生配对。不要改借宿主 Tooltip
      那对专用令牌 —— 那是「深底 + 固定近白字」，浅色主题下浮层会变成黑底黑字。
-     三层都要给（#354）：设置窗那组规则会把 layer-3 重声明成读 --we-settings-window-alpha
+     三层都要给：设置窗那组规则会把 layer-3 重声明成读 --we-settings-window-alpha
      的玻璃配方，于是拿 layer-3 当底色的第三方 tooltip（dsh-im 的 .dim-presetTooltip 等）
      在设置页里仍是半透明、提示文字与下面的正文叠字；豁免声明写在浮层元素自己身上，
      直接声明压过从对话框继承来的值，这是用户实测有效的口径。 */
@@ -351,7 +351,7 @@ const CSS_GLASS = `
      CSS Module 名只作兜底（[class*="opPanel"]：哈希前缀随构建变，语义后缀才稳）。
      这里不给令牌、直接给不透明实底：三步探针证明选择器命中、该元素也是视觉容器，但
      令牌赋值在这两个元素上不落地（92% / 96%、带不带 !important 都试过）。浮层本来
-     就不该玻璃化（#161 的口径），实底既满足可读性又少一层不确定性 —— 别把这两条
+     就不该玻璃化，实底既满足可读性又少一层不确定性 —— 别把这两条
      「优化」回令牌或 alpha 写法，否则它们会重新变透。
      [data-install-registry]（插件源 fieldset）不放进本组：它属于「浮层玻璃」面的成员，
      W5 要求整面同锚点（data-we-glass-floaters），混进来会让 verify-glass-surfaces 判红；
@@ -375,7 +375,7 @@ const CSS_GLASS = `
      两条历史判据为什么全落空：
        · 早先两版按「无 role 的卡」写（:not([role]) / [class*="_portal"] > div:not([role])）
          ⇒ 外壳**带 role="dialog"**，选择器一条都不匹配；
-       · #277 的 ARIA 实底组确实匹配到了外壳（它没有 _dialog 类、也没有 runtime 标记），
+       · ARIA 实底组确实匹配到了外壳（它没有 _dialog 类、也没有 runtime 标记），
          但那组只重声明 --dsw-alias-bg-layer-N，这张卡读的是**另一条**令牌
          ⇒ 赋值不落地，看到的仍是「变了半点色」的中间态。
      本条的判据：外壳 role="dialog"，它**唯一的直接子 div 就是画底色的那张卡**
@@ -395,8 +395,8 @@ const CSS_GLASS = `
      ⚠️ 底色只走 color-mix 降 alpha，别写死 #1e1f26 之类常量：色相要留在主题/保真度手里。
      ⚠️ 只挂在**卡片本身**上，别往外壳或更深的后代挂：backdrop-filter 会把元素背后的
         一切（包括卡片自己的文字）一起糊掉。选择器必须是 > div:only-of-type（只认唯一的
-        直接子 div）；写成 > div 会把多子元素对话框逐个子 div 涂成色带（2026-11-21）。
-     ⚠️ 排除面（#377 审查第 1 条，2026-11-18）：:not([class*="_dialog"]) 只能排掉类名带
+        直接子 div）；写成 > div 会把多子元素对话框逐个子 div 涂成色带。
+     ⚠️ 排除面（审查第 1 条）：:not([class*="_dialog"]) 只能排掉类名带
         dialog 的宿主 Modal，排不掉宿主其余对话框与本插件自己的浮窗。已知会被误伤的三类：
         · 本插件性能 HUD：src/extensions/ext-perf.js 的 we-perf-float 与 role="dialog"，两个直接
           子 div（__head / __grid）会各涂一层底 + 渐变 + 霜 ⇒ 用 :not(.we-perf-float) 排掉；
@@ -409,7 +409,7 @@ const CSS_GLASS = `
      ⚠️ 无模糊内核（data-we-glass-fallback）时不能只关霜：半透明无霜会把壁纸透上来压字，
        回退组把底退回不透明令牌色 + 去掉高光渐变（与 #156② 同政策）。 */
   body[data-we-glass-floaters] [role="dialog"]:not([class*="_dialog"]):not([data-we-surface-runtime]):not([data-we-host-dialog]):not([aria-modal="true"]):not([data-shortcut-modal]):not(.we-perf-float) > div:only-of-type {
-    /* 宿主这张卡的实底必须降 alpha：实测（2026-11-17）是 rgb(72,154,161) 这类**不透明**实色，
+    /* 宿主这张卡的实底必须降 alpha：实测）是 rgb(72,154,161) 这类**不透明**实色，
        只补 blur 等于把霜压在实底下面，肉眼无感（前一版就是这么失败的）。色相仍取宿主浮层
        令牌 --dsw-alias-bg-overlay（受保真度映射），这里只把「实」改成按 --we-hovercard-alpha
       的「透」（默认 0.61 ≈ 旧版写死的 62%）。 */
@@ -526,7 +526,7 @@ const CSS_GLASS = `
   body[data-ds-dark-theme][data-we-glass-page] {
     --we-chat-glass-fill: rgba(var(--we-surface-tint-rgb-dark, 13, 21, 36), var(--we-glass-alpha, 0.15));
     --we-tool-glass-fill: rgba(var(--we-surface-tint-rgb-dark, 13, 21, 36), calc(var(--we-glass-alpha, 0.15) + 0.06));
-    /* 滚动条（#157）：暗主题宿主取 neutral-700/600（静态）与 600/550（悬停），混色会把整体
+    /* 滚动条：暗主题宿主取 neutral-700/600（静态）与 600/550（悬停），混色会把整体
        压暗，所以每档都往亮一级取，混完仍落在宿主原来的亮度台阶上（宿主 l2 与 hover-l1 同值，
        这里同样同值）。权重 65% 同浅色档（见上：深色低饱和玻璃色的色相存活）。 */
     --dsw-alias-scrollbar-bg-l1: color-mix(in srgb, var(--we-surface-tint-dark, #0d1524) 65%, var(--dsw-static-neutral-600, #545557));
@@ -540,7 +540,7 @@ const CSS_GLASS = `
      ⚠️ **输入框（[data-composer-card]）退出思考玻璃作用域**：输入卡不铺这层 fill 接管，
      开关开 = 输入框与关着时逐位相同（只受基础对话栏玻璃与「对话框玻璃·独立配置」管）。
      守卫：verify-glass-surfaces「思考玻璃门下不得出现 data-composer-card」。
-     ⚠️ **宿主 Tooltip 也是 *_bubble**（issue #161）：宿主把悬浮提示的元素类名编译成
+     ⚠️ **宿主 Tooltip 也是 *_bubble**（宿主把悬浮提示的元素类名编译成
      _bubble_ + 哈希 + 序号（dsh-client-ui-primitives 的 Tooltip），与对话气泡共享
      [class*="_bubble_"] 这个后缀约定，但它是**独立浮层**：底色读 --dsw-alias-tooltip-bg
      （浅色 #2c2c2e 实色，深色 #43454a），文字固定 --dsw-static-neutral-bluish-00（近白），
@@ -627,7 +627,7 @@ const CSS_GLASS = `
      这一条带 :not() —— 原生挡下气泡退出霜釉（正文原生 = 无玻璃装饰）；**输入卡与工具
      弹卡不豁免**（用户口径：输入对话框保留玻璃），照旧吃霜/釉。
      气泡这条还带第二道 :not([role="tooltip"])：这一组是**恒挂**的（默认就生效），
-     不加豁免就会给宿主 Tooltip 抹上白釉 + 模糊（#161），详见上面那条注释。 */
+     不加豁免就会给宿主 Tooltip 抹上白釉 + 模糊，详见上面那条注释。 */
   body[data-we-glass-chat][data-we-glass-page] [data-composer-card],
   body[data-we-glass-chat][data-we-glass-page]:not([data-we-thinking-native]) [class*="_bubble_"]:not([role="tooltip"]),
   /* Interactive tool popup cards read the SAME --dsw-specific-input-major
@@ -657,7 +657,7 @@ const CSS_GLASS = `
       0 12px 40px rgba(0, 0, 0, var(--we-glass-shadow, 0.12));
   }
   /* ── 思考触发条（TurnTriggerNodeView，DOM 锚点 section[data-turn-trigger]）──────────
-     ⚠️ 门 = 上游 #134 的「思考块液态玻璃」（属性 data-we-thinking-glass，默认关）：这一面是它
+     ⚠️ 门 = 上游的「思考块液态玻璃」（属性 data-we-thinking-glass，默认关）：这一面是它
      **门下的**一员 —— 开关关着时下面整组不生效（宿主令牌不被接管、模糊不挂）⇒ 「关 = 逐字节
      现状」。与推理面不同：推理面「清底 + 无霜」（见上面那组），触发条**不清底、吃玻璃**
      （用户口径：触发条要玻璃，不要纯透明），并给它自己的「独立配置」。
@@ -697,7 +697,7 @@ const CSS_GLASS = `
     -webkit-backdrop-filter: blur(var(--we-thinking-trigger-blur, var(--we-blur, 16px))) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
     backdrop-filter: blur(var(--we-thinking-trigger-blur, var(--we-blur, 16px))) saturate(var(--we-saturate, 1.8)) brightness(var(--we-glass-brightness, 1.04)) contrast(1.01);
   }
-  /* ── 输入座位（composer seat）：**不铺底板**（#156③ 于启用后撤回）─────────────
+  /* ── 输入座位（composer seat）：**不铺底板**（于启用后撤回）─────────────
      宿主把「输入卡 + dock 行（统计行 / 模型按钮 / ContextMeter）」一起装进
      [data-composer-seat] 这条**整宽**的 sticky 座位（实测 110–130px 高），并给它画一条
      「透明 → --dsw-alias-bg-base」的渐变当底板。宿主那块之所以看不出来，是因为它的
@@ -764,7 +764,7 @@ const CSS_GLASS = `
      CSS 模块哈希是构建产物，稳定的是 "_<类名>" 这半边（与 [class*="_bubble_"] / [class*="_panel"]
      同一手法）。
      ⚠️ 实测该模块里没有 position:fixed ⇒ 在这些元素上加 backdrop-filter 不会让 fixed 后代改锚
-     （#89 那类问题）；模糊挂在滚动区上与侧栏面板同一条政策。回退档不需要额外处理：那一条
+     （那类问题）；模糊挂在滚动区上与侧栏面板同一条政策。回退档不需要额外处理：那一条
      --dsw-alias-bg-layer-1 已经被钉回不透明面板色，底下不再是壁纸。 */
   body[data-we-glass-page] [class*="_tablePane"],
   body[data-we-glass-page] [class*="_overviewPreview"],
@@ -967,7 +967,7 @@ const CSS_GLASS = `
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
   }
-  /* ── 吸顶条（宿主 .bannerWrap）重铺底板（#156④）──────────────────────────────
+  /* ── 吸顶条（宿主 .bannerWrap）重铺底板──────────────────────────────
      宿主 CodeBlock.module.css 里真正的 sticky 载体是 .bannerWrap
      （position: sticky; top: 0; z-index: 6），它的底板写成
      background-color: var(--dsw-alias-bg-base)；本插件把 --dsw-alias-bg-base 置成
@@ -1161,7 +1161,7 @@ const CSS_GLASS = `
       background-color: color-mix(in srgb, var(--we-surface-tint-dark, #0d1524) 92%, transparent);
     }
   }
-  /* ── issue #272：窄视口（手机远程适配层 / 折叠抽屉）下的不依赖模糊的兜底 ─────────
+  /* ── ：窄视口（手机远程适配层 / 折叠抽屉）下的不依赖模糊的兜底 ─────────
      宿主在 <1100px 把侧栏折叠成抽屉、用 transform 做位移；此时装饰板的 backdrop-filter
      要么采样不到有效矩形、要么被祖先的 transform/filter 静默废掉 ⇒ 抽屉全透明、正文直接
      压在壁纸上。这里按「#95：文字绝不直接落在壁纸上」的同一政策给近不透明底（92%），
@@ -1192,7 +1192,7 @@ const CSS_GLASS = `
      ⚠️ 左栏锚点与「左侧栏液态玻璃」同一条：座位出口 div[data-slot="sidebar"] 带
         display:contents、**不生成盒子**，背景 / 圆角都画不出来 ⇒ 只能 :has() 反向选父元素。
      ⚠️ 右栏锚点**必须**带 [data-sidebar-right-open]：容器收起时仍挂在布局里（只把子元素
-        visibility:hidden），裸锚会给收起态留一块板子（#107，与右栏玻璃同一条护栏）。
+        visibility:hidden），裸锚会给收起态留一块板子（与右栏玻璃同一条护栏）。
      ⚠️ 默认（统一档 = 跟随原生、四角都不直角）时 body 上没有任何属性 ⇒ 本块全部不生效，
         逐字节等于今天。
      ⚠️ 宿主原生左栏与右栏面板都**不带圆角**（*_sidebarCol 只有底色 + 右分割线；
@@ -1260,7 +1260,7 @@ const CSS_GLASS = `
           左栏那条能用是因为它是**单层** :has(> [data-slot="sidebar"]) —— 别把左栏的经验外推。
         探针失效的兜底将来若要加，必须**另起一条规则**，不得并进逗号列表。
      ⚠️ **本块的结构分工**：底色 / 釉光 / accent 在下面这条 ::before；模糊在紧随其后的
-        ::after —— 为什么必须分两层、绘制顺序、以及 issue #131 的 fixed 包含块，见那条规则的注释。
+        ::after —— 为什么必须分两层、绘制顺序、以及 fixed 包含块的坑，见那条规则的注释。
      ⚠️ **"不要有任何色差"是本块的第一约束**：底色的 color-mix 权重与五条 accent 映射与左侧栏
         **逐字相同**（判据 TB4）。釉光**刻意不同**（判据 TB4a）—— 停靠点是百分比，装进两个高度差
         27.8 倍的盒子会算出不同值，见 ::before 那条注释。两面都**不画分割线**（本面判据 TB6，
@@ -1311,7 +1311,7 @@ const CSS_GLASS = `
      ::after（::before 先、::after 后绘制 ⇒ ::after 的 backdrop 恰好**含** ::before 的底色，
      与左栏逐像素同构）。
      ⚠️ 几何必须与壳层那条 ::before 完全一致（inset:0 0 auto + 标题栏高度），否则两层错位露边。
-     ⚠️ ::after 没有后代 ⇒ 永不成为 position:fixed 的包含块（issue #131 同一理由）；
+     ⚠️ ::after 没有后代 ⇒ 永不成为 position:fixed 的包含块（同一理由）；
         pointer-events:none ⇒ 不挡壳层 ::before 的 app-region 拖拽区，也不挡壳层 z-index:30 的固定按钮。
      ⚠️ 不写 z-index（保持 auto）：这样才能在 ::before **之上**按树序绘制；写成 -1 会掉到
         frame 底色之下，甚至跑到壁纸后面。 */
@@ -1410,7 +1410,7 @@ const CSS_GLASS = `
      "[data-sidebar-right-open]", plus an explicit closed-state clear so a
      stale painted background can never linger.
      ⚠️ 同类陷阱：凡是"宿主容器留在布局里、只靠子元素隐藏"的元素都不能无条件上色；
-     护栏见 test/verify-host-paint-scope.mjs（另见 #91 的 body * { !important } 修复）。 */
+     护栏见 test/verify-host-paint-scope.mjs（另见 body * { !important } 的修复）。 */
   body[data-we-glass-page] [data-sidebar-right-panel][data-sidebar-right-open] {
     /* 侧栏玻璃总开关关闭时的兜底：面板必须**不透明**（否则文字直接压在壁纸上）。
        --dsw-alias-bg-layer-* 在壁纸下已被改写成玻璃配方 ⇒ 这里读插件自己的面板色。 */
@@ -1422,7 +1422,7 @@ const CSS_GLASS = `
      被困在面板内部，整个面板作为原子跌回 z=auto，被会话列里宿主自己的更高层内容
      （hero 输入卡 z=1 / composerSeat z=7，同为根层叠上下文里的 flex 项）反压：
      push / 收起态没有空间重叠所以看不出来，唯独「右栏全屏」面板与对话列重叠时，
-     输入卡与 hero 标题会穿透玻璃面板叠在侧栏上（issue #150 截图形态）。
+     输入卡与 hero 标题会穿透玻璃面板叠在侧栏上（截图形态）。
      修法 = 玻璃开着时把面板本身抬到宿主为它设计的同一层——该 var 就声明在面板上，
      全屏时自动解析为 40，与内部 dock 单元原生取得的层完全一致；玻璃关着（主开关
      兜底只上不透明底色）与软件光栅回退档（backdrop-filter 显式 none）都不成层叠
@@ -1448,7 +1448,7 @@ const CSS_GLASS = `
   body[data-we-glass-page] [data-sidebar-right-panel="fullscreen"][data-sidebar-right-open]:where([data-we-surface-runtime="right-sidebar"]) {
     z-index: var(--dsh-dockkit-dock-layer, 40);
   }
-  /* ── issue #237：右侧栏不画外沿描边（与左栏玻璃同一政策）──────────────────
+  /* ── ：右侧栏不画外沿描边（与左栏玻璃同一政策）──────────────────
      旧「去边框」规则门控在圆角档上：圆角=跟随原生时整段不匹配。这里把门控搬到玻璃开关本身：
      只要右栏是玻璃面，就不再留宿主原生描边 / 竖线；关掉玻璃后宿主外观逐字节恢复。
      ⚠️ 面板那条沿用玻璃面自己的运行时锚点（:where([data-we-surface-runtime="right-sidebar"])）——
@@ -1511,7 +1511,7 @@ const CSS_GLASS = `
      data-we-surface-runtime 撤掉（preserve / hidden / 多实例不猜），那时这一页就完全
      没有底色 —— 而它是最需要稳定阅读底的一张。这条规则按**锚点**直接给底，
      与上面那条策略规则同配方、同可读性地板 ⇒ 两套都在时观感一致，策略接管时覆盖它。
-     ⚠️ 只作用于打开态右栏（与官方右栏那组同一纪律，见上方 #107 的注释）。 */
+     ⚠️ 只作用于打开态右栏（与官方右栏那组同一纪律，见上方注释）。 */
   body[data-we-sidebar-glass] [data-sidebar-right-panel][data-sidebar-right-open] [data-document-preview] {
     background-color: color-mix(in srgb, var(--we-content-surface-color, var(--we-panel-color, #1e1f26)) max(calc(var(--we-readability-floor) * 100%), var(--we-content-surface-alpha, 88%)), transparent) !important;
   }
@@ -1576,7 +1576,7 @@ const CSS_GLASS = `
     /* Whole-dialog accent remap: every native control (links, primary buttons,
        switches, active tabs, slider fills) follows the 配色 control.
        ⚠️ 块内消费一律读 --we-accent-src：本块末尾把 --we-accent 掐成 initial
-      （issue #127），同名 var() 在**同一元素**上会解析成 guaranteed-invalid、
+      ，同名 var() 在**同一元素**上会解析成 guaranteed-invalid、
       全部塌进兜底蓝 —— src 是 body 上的原件，继承不受掐掉影响。 */
     --dsw-alias-brand-primary: var(--we-accent-src, #4f8cff);
     --dsw-alias-brand-text: var(--we-accent-src, #4f8cff);
@@ -1584,13 +1584,13 @@ const CSS_GLASS = `
     --dsw-alias-button-primary-hover: color-mix(in srgb, var(--we-accent-src, #4f8cff) 88%, var(--we-accent-ink, #fff));
     --dsw-alias-button-primary-dimmed: color-mix(in srgb, var(--we-accent-src, #4f8cff) 22%, transparent);
     --dsw-alias-state-business-primary: var(--we-accent-src, #4f8cff);
-    /* issue #127（文字与背景同色）：填充一旦变成**任意亮度**的用户配色，宿主的
+    /* （文字与背景同色）：填充一旦变成**任意亮度**的用户配色，宿主的
        主题静态墨（label-primary-foreground：浅色主题 = 白、深色主题 = 近黑）就不再
        保证可读 —— primitives 的 primary 按钮契约是「填充 × 反色墨」成对翻转的。
        这里把墨一并按 accent 亮度重选（effects.js 的 weAccentInk）。
        hover 同理：混白对亮 accent 是把底往墨的反方向推，改为往墨色混。 */
     --dsw-alias-label-primary-foreground: var(--we-accent-ink, #fff);
-    /* issue #127 的另一半：第三方 settings 分区若拿 var(--we-accent) 当**文字色**
+    /* 的另一半：第三方 settings 分区若拿 var(--we-accent) 当**文字色**
        （无兜底），落在我们重映射成 accent 的填充上就是逐像素同色（黄底黄字 ——
        实测按钮内部 8250 像素全部是同一个 #FFCF4D）。--we-accent 是本插件的名字
        空间，不该泄漏给窗内第三方分区：在窗内把它掐掉（initial = guaranteed-invalid，
@@ -1790,7 +1790,7 @@ const CSS_GLASS = `
      机制），只多一条显式的 backdrop-filter: none（语法检查通过时 @supports
      做不到这件事）。选择器与上面 @supports 回退逐条对应，并保留各自的总开关
      (data-we-sidebar-glass / data-we-glass-window)，所以关掉开关仍然是原生外观。
-     输入框卡片按上游 #94 的 ::before 载体单独覆盖（见下方规则）。
+     输入框卡片按上游的 ::before 载体单独覆盖（见下方规则）。
      手动覆盖：?we-glassfallback=on|off（见 detectSoftwareRender）。 ── */
   body[data-we-glass-fallback][data-we-sidebar-glass] [data-sidebar-right-panel][data-sidebar-right-open]:where([data-we-surface-runtime="right-sidebar"]) {
     background-color: color-mix(in srgb, var(--we-sidebar-color) 92%, transparent) !important;
@@ -1806,7 +1806,7 @@ const CSS_GLASS = `
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
   }
-  /* issue #131：模糊已搬到列自身的 ::before 上；软件光栅器下同样要显式关掉
+  /* ：模糊已搬到列自身的 ::before 上；软件光栅器下同样要显式关掉
      （同一政策：不会生效的 backdrop-filter 不留着）。一条覆盖深浅两色。 */
   body[data-we-glass-fallback][data-we-glass-page][data-we-left-sidebar] [data-we-surface-plate="left-sidebar"] {
     backdrop-filter: none !important;
@@ -1883,7 +1883,7 @@ const CSS_GLASS = `
     --dsw-alias-turn-trigger-bg: var(--we-panel-color, #ffffff);
     --dsw-alias-turn-trigger-bg-hover: var(--we-panel-color, #ffffff);
   }
-  /* 输入框卡片（issue #95 报「过透」的那块界面）：上游 #94 已把模糊从卡片本体搬到
+  /* 输入框卡片（报「过透」的那块界面）：上游 #94 已把模糊从卡片本体搬到
      [data-composer-card]::before 载体（卡片上的 backdrop-filter 会成为 fixed 后代的
      包含块，#89）——载体上没有背景，卡片自身的底色只有 --we-glass-alpha（默认 15%），
      所以只关掉 backdrop-filter 仍然过透。这里让 ::before 自己变成近不透明底板：
@@ -1894,7 +1894,7 @@ const CSS_GLASS = `
     backdrop-filter: none !important;
     -webkit-backdrop-filter: none !important;
   }
-  /* issue #398：上一条只给了浅色釉色 —— 深色主题 + 软件渲染（data-we-glass-fallback）时，
+  /* ：上一条只给了浅色釉色 —— 深色主题 + 软件渲染（data-we-glass-fallback）时，
      输入卡 ::before 被刷成 92% 纯白，与周围的深色面板不是一种材质。深色孪生多一层
      [data-ds-dark-theme]（特异性更高，不依赖书写顺序），与本块左栏 / 标题栏 / 设置窗
      那三对同法，配方逐字相同、只换 --we-surface-tint-dark。 */
@@ -1910,7 +1910,7 @@ const CSS_GLASS = `
   }
   /* ⚠️ 这条与上面 92% 不透明的思考玻璃填充配套，挂同一道门 —— 否则关着思考玻璃的
      fallback 模式也会被摘掉气泡的 backdrop-filter。
-     带 :not([role="tooltip"]) 与上面三条同办（#161）：宿主 Tooltip 从来不吃插件霜釉，
+     带 :not([role="tooltip"]) 与上面三条同办：宿主 Tooltip 从来不吃插件霜釉，
      清它不是修 bug 而是保持「一条规则只谈气泡」的可读性 + 让守卫按同一判据数。 */
   body[data-we-glass-fallback][data-we-glass-page][data-we-thinking-glass] [class*="_bubble_"]:not([role="tooltip"]) {
     -webkit-backdrop-filter: none !important;
@@ -1931,7 +1931,7 @@ const CSS_GLASS = `
     backdrop-filter: none;
     -webkit-backdrop-filter: none;
   }
-  /* issue #398 同一条：仓库抽屉的 92% 配方也要深色孪生，否则深色主题下抽屉同样变白板。 */
+  /* 同一条：仓库抽屉的 92% 配方也要深色孪生，否则深色主题下抽屉同样变白板。 */
   body[data-ds-dark-theme][data-we-glass-fallback] .we-repo-panel {
     background-color: color-mix(in srgb, var(--we-surface-tint-dark, #0d1524) 92%, transparent);
   }
@@ -1945,7 +1945,7 @@ const CSS_GLASS = `
     .we-rope--settle, .we-repo-panel { transition: none !important; }
   }
 
-  /* ── 侧栏全透明（issue #137，设置键 sidebarFullClear，默认关）──────────────
+  /* ── 侧栏全透明（设置键 sidebarFullClear，默认关）──────────────
      用户口径：其他面都能调透，唯独侧栏被可读性下限锁死 —— 地板（浅 0.45 / 深 0.59）
      以带 !important 的 color-mix 恒定掺入，侧栏透明度拉满也绕不过。本组规则在
      **壁纸激活**时把插件画在侧栏上的底色层整块撤掉，让用户主动放弃下限换全透：
@@ -1957,8 +1957,8 @@ const CSS_GLASS = `
        · 右栏第二条与左列第三条是**显式接管**：玻璃关着时右栏兜底读插件面板色、左列
          的浅深与兜底写死 92% 釉色（都不走上面的变量）⇒ 把这两处的底色与釉光直接画
          透。落盘位置晚于全部既有侧栏规则 ⇒ 同特异度后写者赢（含软件渲染深色那档）。
-     模糊：本组末尾那条规则把两片装饰叶的 backdrop-filter 显式关掉（issue #329）——
-     1.4.2 起模糊已从面板搬到装饰叶（#291），装饰叶挂在 body > [data-we-surface-root]
+     模糊：本组末尾那条规则把两片装饰叶的 backdrop-filter 显式关掉——
+     1.4.2 起模糊已从面板搬到装饰叶，装饰叶挂在 body > [data-we-surface-root]
      下、不在面板子树里，也不读上面归零的那七个变量（它读 --we-sidebar-blur /
      --we-sidebar-saturate / --we-glass-brightness，与归零集无交集）⇒ 旧口径「模糊
      仍由旋钮管」会让面板全透、壁纸仍被装饰叶糊着；「侧栏玻璃跟随全局」下侧栏模糊
@@ -1993,7 +1993,7 @@ const CSS_GLASS = `
     backdrop-filter: none !important;
   }
 
-  /* ── 第三方插件表面的实底底板（issue #277）──────────────────────────────────
+  /* ── 第三方插件表面的实底底板──────────────────────────────────
      症状：装了带弹窗 / 自带框架页的第三方插件后，那些面是**半透明**的 ——
      背后的页面内容、兄弟弹窗一起透上来，叠成一团看不清。
 
@@ -2013,7 +2013,7 @@ const CSS_GLASS = `
        宿主自己的确认框 / 审批卡 / 问答卡  α = 0.656~0.662（同一个洞的受害者）
        宿主设置窗**本体**                α = 0（玻璃画在 ::before 上，见下面的排除项）
 
-     为什么只做 ARIA 这一层（#277 评论里的意见我采纳了一半，另一半**明确不做**）：
+     为什么只做 ARIA 这一层（评论里的意见我采纳了一半，另一半**明确不做**）：
        评论指出「吸顶条 / 整页框架层不带 role，只认 ARIA 覆盖不到」—— 这是对的，
        真机实测也确认了（α≈0.65 仍透）。但那类面**没有稳定锚点**：宿主不给它们
        data-* 属性，第三方插件的类名又是哈希，唯一可用的识别方式是「body 直系」
@@ -2029,7 +2029,7 @@ const CSS_GLASS = `
         Token 用量 / 会话统计 三个宿主锚定浮层都是 portal 到 body 的 role="dialog"，
         自带菜单材质 background: var(--dsw-specific-menu) + blur(40px) 的霜；
         一刀切涂底 + 摘霜会把它们刷成不透明板，用户口径就是「玻璃组件丢失」）。
-        令牌重声明只影响读 --dsw-alias-bg-layer-* 的浮层（正是 #277 的受害者），
+        令牌重声明只影响读 --dsw-alias-bg-layer-* 的浮层（正是受害者），
         读菜单材质令牌的浮层一个字节都不碰：它们的底与霜都是宿主自己的玻璃。
 
      ⚠️ 门控 = data-we-floater-solid（设置项 floaterSolidBase，默认开）。
@@ -2071,7 +2071,7 @@ const CSS_GLASS = `
     --dsw-alias-bg-layer-2: var(--we-readability-base, #ffffff);
     --dsw-alias-bg-layer-3: var(--we-readability-base, #ffffff);
   }
-  /* #315：无 role 浮层的可声明实底（#277 的剩余边界第一步）。
+  /* #315：无 role 浮层的可声明实底（的剩余边界第一步）。
      上面两条只认 ARIA 面；没有 role 的框架层 / 吸顶条 / 第三方容器没有稳定锚点，
      按类名或结构猜会误伤宿主自己的框架层（壁纸该透出来的地方），也会被对方改类名
      静默失效。这里给「用户显式声明过的额外选择器」一条确定出路：运行时在

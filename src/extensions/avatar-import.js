@@ -1,5 +1,5 @@
 /**
- * avatar-import.js — 头像导入的**两道闸**与它们的**零解码尺寸探针**（issue #185 后续）。
+ * avatar-import.js — 头像导入的**两道闸**与它们的**零解码尺寸探针**。
  *
  * ══ 为什么独立成文件 ═══════════════════════════════════════════════════════════
  * 理由与 `src/ui/section-head.js` / `src/ui/module-reset.js` **完全同一条**：`test/verify-scene-live.mjs`
@@ -25,7 +25,7 @@
 /**
  * 头像落盘的长边上限（px）—— 用户口径「头像最大 1024×1024」。
  *
- * 为什么不是 512：显示档最大 72px，1024 已是 **14 倍**超采样；而矢量导入（issue #185）
+ * 为什么不是 512：显示档最大 72px，1024 已是 **14 倍**超采样；而矢量导入
  * 想要"更清晰"，唯一能兑现的地方就是**光栅化的分辨率** —— 512 那版把矢量优势直接抹平了。
  * 为什么不是更大：1024×1024 的 RGBA 本就是 4 MiB 像素，再往上收益递减而体积线性涨。
  */
@@ -47,7 +47,7 @@ const AVATAR_IMPORT_MAX_BYTES = 4 * 1024 * 1024;
  */
 const IMAGE_DIRECT_ACCEPT = "image/png,image/jpeg,image/webp";
 /**
- * **仅光栅化层** accept（issue #185：SVG 等格式）：选择器收得下，但**绝不原样落盘** ——
+ * **仅光栅化层** accept（SVG 等格式）：选择器收得下，但**绝不原样落盘** ——
  * 它们经 canvas 解码成像素、再由同一个编码器重编成直传格式。
  *
  * 为什么不给宿主加 `{ 'image/svg+xml': 'svg' }`：`/avatar/<side>` 是**同源**服务的
@@ -68,7 +68,7 @@ function readU32LE(b, at) {
   return (b[at] | (b[at + 1] << 8) | (b[at + 2] << 16) | (b[at + 3] << 24)) >>> 0;
 }
 /**
- * ── AVIF / ISOBMFF（issue #185 的 P1 收口）─────────────────────────────────────
+ * ── AVIF / ISOBMFF（P1 收口）─────────────────────────────────────
  * `IMAGE_RASTER_ACCEPT` 里列着 `image/avif`，而 AVIF 的宽高不在文件开头，在 `ftyp` 之后的
  * 盒树 `meta → iprp → ipco → ispe` 里 ⇒ **探针必须走这条盒树**，否则恒返 null，
  * `avatarImportLimit` 只剩体积闸 —— 一个 3 MiB 的 20000×20000 AVIF 能直接过闸，直到
@@ -423,7 +423,7 @@ function humanMb(bytes) {
 // （`AVATAR_IMPORT_MAX_BYTES` 见 `avatarImportLimit`、`AVATAR_SVG_HEAD_BYTES` /
 // `AVATAR_BITMAP_HEAD_BYTES` 见 `probeImageSize`、`readU32BE` / `readU32LE` 见
 // `parseBitmapHeaderSize`），仓库里没有任何跨文件引用 ⇒ 不加 `export`。
-// （本文件来自 PR #202，其底座落后于本地线的 task-17 导出面清理，故这里按本地口径收窄。）
+// （本文件来自 ，其底座落后于本地线的 task-17 导出面清理，故这里按本地口径收窄。）
 export {
   AVATAR_IMPORT_MAX_EDGE,
   IMAGE_DIRECT_ACCEPT, IMAGE_RASTER_ACCEPT, AVATAR_PICK_ACCEPT,

@@ -404,12 +404,12 @@ function WallpaperPicker() {
     // 名单与"真的会动"必须同源，否则会出现点了没反应的滑杆。它与「界面元素跟随」互不依赖。
     parallaxPluginSlots: sel.parallaxPlugin === true ? weDiscoveredGroupsOf('parallax').sort() : [],
     onAvatarEnabled, onAvatarSize, onAvatarRadius, onAvatarAiRepeatRows, onAvatarPick, onAvatarClear,
-    // 上传裁切（issue #191 问题 1）：几何在这里现算（唯一实现），渲染器只读结果。
+    // 上传裁切：几何在这里现算（唯一实现），渲染器只读结果。
     onAvatarCropZoom, onAvatarCropDrag, onAvatarCropWheel, onAvatarCropConfirm, onAvatarCropCancel: closeAvatarCrop,
     avatarCropGeo: avatarCropGeometry(), avatarCropView: AVATAR_CROP_VIEW,
-    // 超限拦截（#185 后续）：面板画提示行 + 「自动压缩后导入」按钮，处理器在 client 这一侧。
+    // 超限拦截（后续）：面板画提示行 + 「自动压缩后导入」按钮，处理器在 client 这一侧。
     onAvatarAutoCompress,
-    // 模块级重置（issue #192）：各模块头的 ↺ 把该模块的键整批写回默认值。
+    // 模块级重置：各模块头的 ↺ 把该模块的键整批写回默认值。
     onResetModule,
   });
   const renderActiveTab = () => {
@@ -444,7 +444,7 @@ function WallpaperPicker() {
       detailOpen: pickerDetailOpen, onToggleDetailSection: togglePickerDetailSection,
       glassUiOpen: pickerGlassUiOpen, onToggleGlassUiSection: togglePickerGlassUiSection,
       cornersOpen: pickerCornersOpen, onToggleCornersSection: togglePickerCornersSection,
-      // 模块级重置（issue #192）：外观页签下每个模块（主题 / 细节 / 玻璃 UI / 侧边栏圆角 /
+      // 模块级重置：外观页签下每个模块（主题 / 细节 / 玻璃 UI / 侧边栏圆角 /
       // 全局 UI 配色 / 全局字体）节头右端各一枚 ↺。
       onResetModule,
       presetsOpen: pickerPresetsOpen, onTogglePresetsSection: togglePickerPresetsSection,
@@ -526,7 +526,7 @@ function WallpaperPicker() {
         onShowNormalView, onShowHiddenView,
         onToggleBatchMode, onArmBatchHide, onBatchHide, onBatchCancel, onSearchInput, onPickCard,
       }) : React.createElement(React.Fragment, null,
-        // 页签内容 → **每个页签末尾一个重置**（issue #192 用户口径：重置指定选项卡）→
+        // 页签内容 → **每个页签末尾一个重置**（用户口径：重置指定选项卡）→
         // 全局重置（只在「系统」页签末尾，即设置页里最接近"最底部"的位置）。
         renderActiveTab(),
         renderTabReset({

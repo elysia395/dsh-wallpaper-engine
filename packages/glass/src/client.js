@@ -120,7 +120,7 @@ let glassRowMisses = 0; // 连续 404 计数（首启窗口：bundle 求值可�
  * 现场却被外部改掉」（宿主侧文档重建 / 别的 <style> 清理 / 行图重装窗口里的半次拆卸）——
  * 那种情况下 applyGlassRowState 根本不会被调用，状态位一直是 false、探测一直返回 200。
  * 实测：带外摘掉 sheet 后连续 45 轮 200 探测无一恢复，右栏与内容面整页裸壁纸，
- * 只有刷新页面才好（2026-10-30 PR #289 首启报障现场）。
+ * 只有刷新页面才好首启报障现场）。
  */
 function glassRowSceneIntact() {
   if (typeof document === 'undefined' || !document.body) return true; // 无文档无从谈起：按完好，探测外层自会守
@@ -289,7 +289,7 @@ function applyGlassRowState(disabled) {
     // ── 启用态的调和（reconcile）─────────────────────────────────────────────
     // 状态位是 false ≠ 现场完好：样式表 / 门控可能被**本状态机以外**的途径摘走
     // （宿主侧文档重建 / 行图重装窗口里的半次拆卸 / 任何未知来源的 <style> 清理）。
-    // PR #289 前玻璃 CSS 住主包 sheet（每次重挂 ensurePluginCss 都会重注 + 代际清理）
+    // 前玻璃 CSS 住主包 sheet（每次重挂 ensurePluginCss 都会重注 + 代际清理）
     // ⇒ 出户后本状态机是玻璃在页面里**唯一的管家**，只认"状态位没变"会把任何一次
     // 带外残缺变成**本页面余生的永久破损**（真机取证见 glassRowSceneIntact 的注释）。
     // 200 = 行活着的权威信号 ⇒ 就地核实、缺哪补哪；健康态这条路径**零写入**
@@ -375,14 +375,14 @@ async function probeGlassRowState() {
         } catch { /* 下一轮探测重试 */ }
       }
     } else if (res.status === 404) {
-      // 首启竞态（PR #289 报障的另一条腿）：bundle 求值可能早于宿主行路由注册 ——
+      // 首启竞态（报障的另一条腿）：bundle 求值可能早于宿主行路由注册 ——
       // 路由要等行 fiber 激活才存在，而页面/求值不等它。单次 404 不判停用，
       // 连续两轮（≥3s）仍 404 才认停用 ⇒ 行真被 prune 时停用语义照常到达，
       // 注册晚一拍的启动窗口不再造成"先撤光玻璃、3 秒后又整页弹回"的闪烁。
       if (++glassRowMisses >= 2) applyGlassRowState(true);
     } else {
       // 非 404 的应答（5xx = 宿主重启中 / 其它异常）必须打断“连续”语义：
-      // 404 → 5xx → 404 不是连续两次 404，不能据此判停用（#312 评审②）。
+      // 404 → 5xx → 404 不是连续两次 404，不能据此判停用（评审②）。
       glassRowMisses = 0;
     }
   } catch { glassRowMisses = 0; /* 本轮拿不到应答，同样不算连续 404；观感保持现状。 */ }

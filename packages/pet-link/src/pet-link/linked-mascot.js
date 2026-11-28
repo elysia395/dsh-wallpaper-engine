@@ -143,7 +143,7 @@ function createLinkedMascotLogic(kit) {
 
       /**
        * 脱手下落：到点后逐帧 `adoptPosition` 写页面内位置，零请求。
-       * 从脱手瞬间中心沿 easeInOutQuad 滑到**绝对落点** dropTarget（= landingBase.y + dropPx）。
+       * 从脱手瞬间中心沿 easeInOutQuad 滑到**绝对落点** dropTarget（=landingBase.y + dropPx）。
        */
       const applyDrop = () => {
         if (!released || dropPx <= 0 || dropComplete) return;

@@ -119,7 +119,7 @@ function weComponentVisibleOf(components, name) {
   }
 
 
-  // 模块级 ↺ 的**薄包装**（issue #192）：真实现住在 `src/ui/module-reset.js`（panel-tabs 与
+  // 模块级 ↺ 的**薄包装**：真实现住在 `src/ui/module-reset.js`（panel-tabs 与
   // glass-panel 共用，抽出来才能让挂载台 import 真实现）。这里只把"取词 + 处理器"两样外界
   // 喂给它 —— 中文因此留在本文件的 `weT(...)` 里（i18n 扫描器认这个形态；写进被调模块会
   // 被判成"裸中文"），各节调用点则保持 `moduleResetButton("模块名", onResetModule)` 这么短。
@@ -196,7 +196,7 @@ function weComponentVisibleOf(components, name) {
         sel.mascotError
           && React.createElement("div", { className: "we-picker__hint we-avatar-error", key: "rope-custom-err" }, sel.mascotError),
         // 吉祥物大小的**显示刻度**与存储刻度不同（ropeScale = 倍率，滑杆值本身也是倍率）：
-        // 右侧是 `Math.round(scale*100)+"%"` 的预格式化整串 ⇒ 保持只读回显（#255⑤ 明确保留）。
+        // 右侧是 `Math.round(scale*100)+"%"` 的预格式化整串 ⇒ 保持只读回显（明确保留）。
         SliderRow(weT("吉祥物大小"), ROPE_SCALE_MIN, ROPE_SCALE_MAX, ROPE_SCALE_STEP,
           sel.ropeScale, onRopeScaleChange, Math.round(sel.ropeScale * 100) + "%", "rope-scale"),
       ),
@@ -480,7 +480,7 @@ function weComponentVisibleOf(components, name) {
   }
 
 
-  // ── 页签级重置（issue #192 用户口径：「每个选项卡后面加重置，重置指定选项卡」）──────────
+  // ── 页签级重置（用户口径：「每个选项卡后面加重置，重置指定选项卡」）──────────
   // 压在**每个页签内容的最末尾**，由 client.js 的渲染点在 renderActiveTab() 之后统一挂 ——
   // 六处渲染器各挂一遍必然漏一个，挂一处才是结构性的。
   // 走两步确认：整页设置量不小（外观页就有 60 个键）且不可撤销 ⇒ 与模块级 ↺ 分档
@@ -514,7 +514,7 @@ function weComponentVisibleOf(components, name) {
     );
   }
 
-  // ── 全局重置节（issue #192，压在「系统」页签末尾）──────────────────────────────
+  // ── 全局重置节（压在「系统」页签末尾）──────────────────────────────
   // 三档里的最高一档：**模块 < 页签 < 全局**。全局必须二次确认（不可撤销）。
   // 二次确认复用 client.js 既有的 `armConfirm` / `renderConfirmRow` 两步构件 ——
   // `selection.armedConfirm` 是单值 ⇒ 结构上同一时刻只有一个动作待确认。

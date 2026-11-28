@@ -204,7 +204,7 @@ desktop update: Host did not complete graceful task teardown
 
 **Why**: the desktop updater needs the host process to exit cleanly first. The plugin keeps a few long-lived resources inside the host process (the media-origin HTTP server and its keep-alive connections, transcoding child processes); any one of them still holding keeps the host past its 10-second graceful-exit window, so the installer gives up on this update.
 
-**The plugin-attributable part is fixed** (#289: the media-origin HTTP server and its connections are `unref()`-ed and no longer keep the process alive). The rest lives in the host's `DesktopHost.stop()` shutdown path and cannot be changed here.
+**The plugin-attributable part is handled**: the media-origin HTTP server and its connections are `unref()`-ed and no longer keep the process alive. The rest lives in the host's `DesktopHost.stop()` shutdown path and cannot be changed here.
 
 **Workaround (measured)**: disable the plugin before updating and re-enable it afterwards.
 
@@ -214,7 +214,7 @@ desktop update: Host did not complete graceful task teardown
 
 **How to confirm it is this one**: the error contains `graceful deadline exceeded true` *and* the same update succeeds first try with the plugin disabled — both together mean it is this, not network or signing.
 
-**Related**: #241 (plugin-side residue fixed; the remainder is the host shutdown path).
+**Related**: plugin-side residue is handled; the remainder is the host shutdown path.
 
 ---
 
@@ -262,7 +262,7 @@ gate's signal table is logged in [`wip/UNIMPLEMENTED.md`](../wip/UNIMPLEMENTED.m
 
 "Opaque base for third-party dialogs" (`floaterSolidBase`, on by default) recognises overlays through **stable
 anchors**. The surfaces below carry none of them, so under glass they show the "translucent and frost-free"
-look (see #315: base alpha ≈ 0.65, `backdrop-filter: none`) and whatever is behind them shows straight through:
+look (base alpha ≈ 0.65, `backdrop-filter: none`) and whatever is behind them shows straight through:
 
 - framework-layer containers parented directly to `body` (overlays / drawers / custom menus drawn by
   third-party plugins);

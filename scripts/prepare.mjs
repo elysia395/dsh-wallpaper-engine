@@ -1,7 +1,7 @@
 /**
  * prepare.mjs — npm `prepack` 钩子（打包 / 发布前构建客户端）。
  *
- * 挂 `prepack` 而不是 `prepare` 是 issue #141 的直接修法：`prepare` 会在**安装期**跑
+ * 挂 `prepack` 而不是 `prepare` 的直接修法：`prepare` 会在**安装期**跑
  * （git 直装 / 解包当根项目 `pnpm install`），而 pnpm 11 对 git 依赖的构建脚本有
  * allowBuilds 安全闸 —— 插件市场默认走 `git+https://…` 直装，于是每个用户都被
  * `ERR_PNPM_GIT_DEP_PREPARE_NOT_ALLOWED` 拒装。改成 `prepack` 后：发布仍是"先构建再打包"，

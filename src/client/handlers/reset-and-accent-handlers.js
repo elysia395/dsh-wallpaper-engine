@@ -31,7 +31,7 @@ function resetKeysToDefault(keys) {
   return touched;
 }
 /**
- * 模块级重置（**无需确认**：单模块代价低 —— 用户口径见 issue #192）。
+ * 模块级重置（**无需确认**：单模块代价低 —— 用户口径）。
  * 覆盖**两处**的模块：扩展页签的三个（avatar / fx / parallax）与外观页签的六个
  * （theme / detail / glass / corners / uiColor / font）—— 同一个入口，键集由模块名查表。
  */
@@ -42,7 +42,7 @@ const onResetModule = (groupName) => {
   emit();
 };
 /**
- * 页签级重置（issue #192 用户口径：「每个选项卡后面加重置，重置指定选项卡」）。
+ * 页签级重置（用户口径：「每个选项卡后面加重置，重置指定选项卡」）。
  * 键集取自 `RESET_TABS`（schema 里手写并由守卫对账的完整划分）。
  * 走两步确认 ⇒ 这个函数只负责"确认之后真的做"，确认由面板用 armConfirm 上膛。
  */

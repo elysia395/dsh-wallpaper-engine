@@ -100,7 +100,7 @@ let persistWrites = 0;
 // 条数不写死）。`null` = 还不知道宿主
 // 有什么（loadPersisted 未跑 / 宿主不可达 / 首启迁移）⇒ pushPersisted() 走老整段入口。
 // 只在"写入成功 / 宿主值真的被采纳"时推进；按簇确认成功键，失败键下次重发（按键合并 ⇒ 幂等）。
-// ⚠️ 不变量（#292）：基线必须是**冻结副本**，且差分按**值**比较 —— 两件事缺一不可。
+// ⚠️ 不变量：基线必须是**冻结副本**，且差分按**值**比较 —— 两件事缺一不可。
 //   · 只比较不冻结：`serializeSettings` 是浅拷贝，数组/对象与 `selection` 共用同一个引用 ⇒
 //     `push()` / `splice()` 就地改后两边永远相等，复合键从第二次起**永远进不了 PUT 体**（原缺陷）；
 //   · 只冻结不比较：每次序列化都产生新引用 ⇒ 所有键都被判成"变了"，退化成按簇全量 PUT。
@@ -118,7 +118,7 @@ function writableNamespaceOf(key) {
   if (!ns || ns === SETTINGS_META_NAMESPACE) return "";
   return KINDS[key] && KINDS[key].kind === "const" ? "" : ns;
 }
-// ── 差分基线的冻结与按值比较（#292）────────────────────────────────────────
+// ── 差分基线的冻结与按值比较────────────────────────────────────────
 // `serializeSettings` 只做浅拷贝：数组 / 对象与 `selection` 共用引用，而轮播列表（push/splice）、
 // 隐藏清单（push）是**就地修改**的。基线若直接存快照，就地改会同时改到基线 ⇒ 引用比较永远相等。
 // 所以：存进去的每一层值都必须脱离 `selection`；比较时必须**按值**（否则冻结后引用必不相等，
@@ -199,13 +199,13 @@ async function pushPersisted() {
       try { nsOk = await putSettingsBody(SETTINGS_URL + "/" + ns, groups[ns]); }
       catch { nsOk = false; }
       // 按成功的簇确认基线：别的簇失败时，用户仍可能把已成功的键改回旧值。
-      // 值同样要冻结（#292）：`groups[ns]` 里是 `snapshot` 的引用，直接并进基线会再次与
+      // 值同样要冻结：`groups[ns]` 里是 `snapshot` 的引用，直接并进基线会再次与
       // `selection` 共用数组 ⇒ 下一次就地修改又会被"引用相同"吞掉。
       if (nsOk) Object.assign(pushedSnapshot, cloneSettingsSnapshot(groups[ns]));
       else ok = false;
     }
     persistDirty = !ok;
-    // 全批成功才推进基线；且必须是冻结副本（#292：直接存 `snapshot` 会让基线继续与
+    // 全批成功才推进基线；且必须是冻结副本（直接存 `snapshot` 会让基线继续与
     // `selection` 共用数组，下一次就地修改又被"引用相同"吞掉）。
     if (ok) pushedSnapshot = cloneSettingsSnapshot(snapshot);
   } finally {
@@ -285,7 +285,7 @@ async function loadPersisted() {
       // CLIENT_ONLY 的键宿主**从来不收**（它们只住 localStorage：设备本地的抽帧 / 自定义画面记忆）。宿主 GET 回的是
       // 宿主快照，而 `sanitizeSettings()` 是客户端视角的消毒 —— 它会给这两个键补上**默认值**。整份 assign 下去 ⇒
       // 每次启动都把本地记忆清成默认值，随后 `writeLocalCache()` 再把清空结果写回缓存（真·数据丢失，且与"宿主不可达
-      // 就回落本地缓存"那条路径合并结果不同 —— #371 的附带发现，两条加载路径语义必须一致）。所以这两个键一律取已有的本地值。
+      // 就回落本地缓存"那条路径合并结果不同 —— 附带发现，两条加载路径语义必须一致）。所以这两个键一律取已有的本地值。
       const fromHost = sanitizeSettings(hostSettings);
       // 本地值取**内存里的 `selection`**：它初始化时就铺了 `readPersisted()`（client.js 的 store 初始化），
       // 再读一遍 localStorage 既是重复的 parse + 消毒，也埋了一个边界 —— 启动瞬间 localStorage 不可用时

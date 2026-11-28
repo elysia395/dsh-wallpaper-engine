@@ -58,7 +58,7 @@ const fsJson = (path, options) => fsFetch(path, Object.assign({ method: "GET" },
 /**
  * 启动预取：启动链里 `loadFontSet()` 原本要等 `loadPersisted()` 之后才发 `/fontsets` 请求，
  * 而这份清单**与设置无关**。apply 一开始就把它发出去，等启动链走到字体集那一步时通常已经
- * 回来（trace 2026-10-30：清单请求 242ms，且串在 settings 之后）。
+ * 回来（清单请求 242ms，且串在 settings 之后）。
  * 只预取一次；`loadFontSet` 消费后清空，后续 activate/create 仍走自己的请求。
  *
  * **预取只加速成功路径**：`apiFetch` 不抛错，网络瞬断会以 `{ ok:false, status:0 }`
@@ -300,7 +300,7 @@ async function loadFontSet() {
 
   if (values) {
     activeFontSetId = id;
-    selection.fontSetActive = id; // 指针（= 宿主那边正在用的那份；能力判定用它）
+    selection.fontSetActive = id; // 指针（=宿主那边正在用的那份；能力判定用它）
     // 用户在 GET 在途时改过 ⇒ 他的值更新，别覆盖（但活动 id 必须记下：写目标要对）。
     if (fontSetWrites === writesAtStart) {
       // ⚠️ **回滚防线**（用户反馈"重启后保存的自定义颜色没了"）：上次会话的
@@ -368,7 +368,7 @@ function canonicalFontValues(values) {
 }
 
 /**
- * 当前字体值是否已经**偏离**上次采纳的那一份（= 面板里"使用中"该不该亮）。
+ * 当前字体值是否已经**偏离**上次采纳的那一份（=面板里"使用中"该不该亮）。
  * 没采纳过（快照空）时返回 false —— 宁可不标，也不谎报"已改"。
  */
 function fontSetDrifted() {

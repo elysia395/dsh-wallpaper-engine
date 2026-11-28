@@ -264,7 +264,7 @@ function buildVideoMedia(sel, fitClass) {
     if (stillPreview) media.poster = sel.previewUrl;
   }
   media.autoplay = true;
-  // 轮播「当前视频播完就换下一张」档（issue #230 后续）必须**关掉 loop** ——
+  // 轮播「当前视频播完就换下一张」档必须**关掉 loop** ——
   // `loop` 会让元素循环播放、`ended` 永远不触发，那条轮换信号就发不出来。
   // 其他档照旧 loop（壁纸单张循环是产品语义）。`activeRotationGroup` 在单文件 import
   // 的沙箱里不存在 ⇒ 用 typeof 探，缺省按 loop 开（安全方向：不改变既有行为）。
@@ -373,7 +373,7 @@ let mediaInfoAbort = null;
  * `refreshMediaInfo` 采纳宿主"已有缓存"的回答都走它 —— 两处各拼一次字符串迟早漂移。
  */
 function transcodedUrlFor(token, fps) {
-  // 走 apiUrl：转码 URL 是**插件路由**，反代子路径部署时要带挂载前缀（issue #409）。
+  // 走 apiUrl：转码 URL 是**插件路由**，反代子路径部署时要带挂载前缀。
   // 本机 / 根路径部署下拼出来的字符串与改动前逐字节相同。
   return apiUrl("/transcoded/" + encodeURIComponent(token) + "?fps=" + fps);
 }

@@ -23,7 +23,7 @@
  *                                     以引用进 `c` —— 本 fiber 单例（生命周期与一次 apply 一致）。
  *
  * 不变量：
- *   · **两把键、两个构造点**：缓存键是 `sv1_<abs 的短哈希>_<mtimeMs>`（#208：不放路径，见 lib/cache-keys.js）；探测键另有构造点
+ *   · **两把键、两个构造点**：缓存键是 `sv1_<abs 的短哈希>_<mtimeMs>`（不放路径，见 lib/cache-keys.js）；探测键另有构造点
  *     （`sceneVideoProbeKey`，与 inventory 同键）。两者不许互相抄 —— 抄一处就少一处会漂的拼接。
  *   · **机会式缓存**：真实请求（含客户端拿到的 404）都回填探测账本 ⇒ inventory 不必自己探。
  *   · **in-flight 只按槽位键合并，settle 即摘**：并发请求共享一次提取；失败也摘（允许重试）。
@@ -94,7 +94,7 @@ export function registerSceneMediaRoutes(webServer, c) {
             inflight = (async () => {
               try {
                 // 异步读盘：scene.pkg 可达几百 MB，readFileSync 会阻塞事件循环。
-                // pkg 走文件版提取（issue #136：只读索引 + 前缀 + 命中条目，不再整包读）。
+                // pkg 走文件版提取（只读索引 + 前缀 + 命中条目，不再整包读）。
                 const bytes = abs.toLowerCase().endsWith('.json')
                   ? extractSceneVideoFromDir(dirname(abs))
                   : await extractSceneVideoFromPkgFile(abs);

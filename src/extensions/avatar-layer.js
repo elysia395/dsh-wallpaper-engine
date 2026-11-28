@@ -40,7 +40,7 @@
  *     （用户口径：间隔参数就是为 CoT 过程中控制头像频率而设）；只有不露脸的**续行**才由行标记
  *     `data-we-avatar-cont` 把该行退化成单列，隐藏的头像移出 grid 流，正文不再被空列顶到右边。
  *     工具调用、压缩标记、turn 尾巴一律不碰（那些不是"好友发的消息"）。
- *   · **出现频率（issue #231）**：助手侧**每个回合都露脸**，且长回合不会"一张脸滚出屏幕后整页
+ *   · **出现频率**：助手侧**每个回合都露脸**，且长回合不会"一张脸滚出屏幕后整页
  *     再没有"。口径是三条叠加：① 回合的**第一条可见**助手行露脸（宿主会把思考 / 工具调用折叠成
  *     `hidden` / `data-turn-process-hidden`，折叠行不占这个位置，否则整轮一张脸都不剩）；
  *     ② 之后每过「助手头像间隔」条**可见**流条目（思考 / 工具调用 / 回复都算）在
@@ -87,10 +87,10 @@ const AVATAR_FLOW_SIDES = { user: 'user', steering: 'user', 'assistant-step': 'a
 const AVATAR_ROW_SELECTOR = '[data-chat-flow-kind="user"], [data-chat-flow-kind="steering"], [data-chat-flow-kind="assistant-step"]';
 /**
  * **全部**会话流行的选择器（分组用）。分组必须看见工具调用 / 思考过程这些**不补头像**的行：
- * 它们承载宿主的折叠状态，决定哪一条助手行才是屏幕上真正可见的"段首"（issue #231）。
+ * 它们承载宿主的折叠状态，决定哪一条助手行才是屏幕上真正可见的"段首"。
  */
 const AVATAR_FLOW_ROW_SELECTOR = '[data-chat-flow-kind]';
-/** 宿主写在每条流条目上的**回合号**：同一回合的助手行只配一张脸（issue #231 的频率口径）。 */
+/** 宿主写在每条流条目上的**回合号**：同一回合的助手行只配一张脸（频率口径）。 */
 const AVATAR_TURN_ATTR = 'data-chat-turn';
 /**
  * 宿主"这一行属于折叠中的过程窗口"的标记。它与 `hidden` / `hidden="until-found"` 一起
@@ -98,7 +98,7 @@ const AVATAR_TURN_ATTR = 'data-chat-turn';
  */
 const AVATAR_FOLD_ATTR = 'data-turn-process-hidden';
 /**
- * 长回合里助手的脸**隔多少条可见流条目**再露一次（issue #231 的用户反馈：一个回合只贴一张，
+ * 长回合里助手的脸**隔多少条可见流条目**再露一次（用户反馈：一个回合只贴一张，
  * 而思考 / 工具调用常常占满好几屏 ⇒ 整页看不到助手）。
  *
  * ⚠️ 这个数**由设置驱动**（`avatarAiRepeatRows`，「扩展」页签的「助手头像间隔」滑块；
@@ -131,8 +131,8 @@ const AVATAR_MEDIA_CLASS = 'we-avatar-media';
 const AVATAR_NO_TEXT_ATTR = 'data-we-avatar-no-text';
 const AVATAR_NODE_ATTR = 'data-we-avatar-node';
 /**
- * 「连续同侧消息的后续行」标记（issue #191 问题 2）：加在**头像节点**上。
- * CSS 里只做 `visibility: hidden` —— 节点始终留在 DOM 里（摘节点会踩 issue #154 的锚点塌陷）。
+ * 「连续同侧消息的后续行」标记：加在**头像节点**上。
+ * CSS 里只做 `visibility: hidden` —— 节点始终留在 DOM 里（摘节点会踩 的锚点塌陷）。
  */
 const AVATAR_CONT_CLASS = 'we-avatar--cont';
 /**
@@ -318,7 +318,7 @@ function avatarMediaOf(row) {
  * 用户要的是"没有文本时表情直接跟在头像右侧"。用 `checkVisibility` 同时排除
  * `display:none` / `visibility:hidden` / `opacity:0` 的文本层。
  *
- * ⚠️ 性能（issue #385）：`checkVisibility` / `getClientRects` 是**强制布局查询**。原实现在
+ * ⚠️ 性能：`checkVisibility` / `getClientRects` 是**强制布局查询**。原实现在
  * 每个文本节点上各调一次，且调用点紧跟在插入头像节点之后 —— DOM 已失效，于是每次都要
  * 触发一次整页样式重算。实测 840 次调用累计 480ms，把整段历史加载拖慢到秒级，推迟到
  * `requestAnimationFrame` 也救不回来（rAF 里刚写完 DOM，同样失效）。
@@ -392,7 +392,7 @@ function avatarSyncNoText(row) {
  * 只动**直接子元素**里的 IMG（dsh-meme 的 `row.insertBefore(img, row.firstChild)`）；
  * 正文里的图（在内容根里面）不受影响。返回是否改过 DOM。
  *
- * ⚠️ 顺序（issue #385）：先看这行有没有表情图，没有就直接返回 —— `avatarSyncNoText` 要调
+ * ⚠️ 顺序：先看这行有没有表情图，没有就直接返回 —— `avatarSyncNoText` 要调
  * `avatarHasVisibleText`，后者做 `checkVisibility`（强制布局）。而 `AVATAR_NO_TEXT_ATTR`
  * 的唯一用途就是「表情没有文本可排在其后」，**没有表情图的行读不读它都不影响排版**。
  * 绝大多数流式消息行没有表情图，这个早期返回把最贵的查询从热路径上摘掉：
@@ -510,25 +510,25 @@ function avatarRowHidden(row) {
 
 /**
  * 分组：助手侧**每个回合都露脸、长回合按可见行数周期性再露**，用户侧连续消息只显示第一张
- * （issue #191 问题 2 + issue #231 的频率口径）。
+ * （问题 2 + 的频率口径）。
  *
  * 为什么不能只按"连续同侧"：宿主把思考 / 工具调用渲染成**过程窗口**里的独立行，折叠时它们
  * 带 `hidden` / `data-turn-process-hidden` —— 若"段首"落在这些**看不见**的行上，本轮唯一
- * 可见的那条回复就会被判成续行，整轮一张脸都没有（issue #231 的实测：助手侧 83% 被隐藏）。
+ * 可见的那条回复就会被判成续行，整轮一张脸都没有（实测：助手侧 83% 被隐藏）。
  * 为什么不能"一个回合只一张"：一个回合里思考 + 几十次工具调用能撑满好几屏，唯一那张脸
  * 早早滚出视野 ⇒ 整页看不到助手（用户实测反馈）。所以助手侧的口径是：
  *   · 回合的**第一条可见**助手行露脸；
  *   · 之后每过「助手头像间隔」条**可见**流条目（任何 kind，含工具调用）就在下一条
  *     可见助手行上再露一次 —— 脸因此跟着内容往下走（实测每 8 行左右一张、一屏 2~3 张）；
  *   · 同一回合计一次"该露了"的额度，**工具调用行不重置它**（否则每一步工具调用都重新贴一张，
- *     正是 issue #231 说的"太频繁"来的那一侧）；不同回合（`data-chat-turn` 变了）重新起算；
+ *     正是 说的"太频繁"来的那一侧）；不同回合（`data-chat-turn` 变了）重新起算；
  *   · 折叠窗口里的行不计数也不露脸（看不见的图不占位），展开 / 收起时重算；
  *   · 用户开口（user / steering）⇒ 助手侧重新从"第一条可见"起算。
- * 用户侧仍是"连续同侧只显示第一条"，但**任何非用户行都会断开连续段**（issue #231：
+ * 用户侧仍是"连续同侧只显示第一条"，但**任何非用户行都会断开连续段**（
  * 过程行若被跳过，跨过工具调用后第二条用户消息会共用上一张脸）。
  *
  * ⚠️ 做法是给不露脸的行**头像节点加一个 `--cont` 修饰类**（CSS 里 `visibility: hidden`），
- * **绝不摘掉节点**：节点在，锚点下内容的宽度约束就不会塌（issue #154）。
+ * **绝不摘掉节点**：节点在，锚点下内容的宽度约束就不会塌。
  * 助手侧续行同时给**行**加 `data-we-avatar-cont`，CSS 让该行退化为单列、列间距归零 ——
  * 脸不露，但正文也不再多缩进 48px（用户截图里思考链"层次不齐"的根因）。
  */
@@ -747,7 +747,7 @@ function syncAvatarLayer() {
       avatarObserver.observe(body, {
         childList: true, subtree: true, characterData: true,
         // 折叠 / 展开过程窗口会改这些属性，而"哪条助手行可见"决定这一轮的脸贴在哪条上
-        // （issue #231）⇒ 只订这四枚，别的属性变化（包括本层自己加的 class）一概不惊动。
+        // ⇒ 只订这四枚，别的属性变化（包括本层自己加的 class）一概不惊动。
         attributes: true,
         attributeFilter: ['hidden', AVATAR_FOLD_ATTR, AVATAR_TURN_ATTR, 'data-chat-flow-kind', 'style', 'class', 'data-meme-hidden'],
       });

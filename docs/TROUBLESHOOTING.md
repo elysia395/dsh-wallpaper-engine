@@ -193,7 +193,7 @@ desktop update: Host did not complete graceful task teardown
 
 **为什么**：桌面端更新要先让宿主进程干净退出。插件在宿主进程里起了几样常驻资源（媒体源 HTTP 服务及其 keep-alive 连接、转码用的子进程），只要还有一样没放掉，宿主就等不满那 10 秒优雅退出窗口，安装器判「没能安全停止任务」并放弃本次更新。
 
-**插件侧可归因的部分已修**（#289：媒体源 HTTP 服务与连接都 `unref()`，不再阻止进程退出）；剩下的在宿主 `DesktopHost.stop()` 的退出流程里，本仓改不了。
+**插件侧可归因的部分已处理**：媒体源 HTTP 服务与连接都 `unref()`，不再阻止进程退出；剩下的在宿主 `DesktopHost.stop()` 的退出流程里，本仓改不了。
 
 **绕过（实测有效）**：更新前先禁用插件，更新完再启用。
 
@@ -203,7 +203,7 @@ desktop update: Host did not complete graceful task teardown
 
 **判据**：报错里同时出现 `graceful deadline exceeded true`，且禁用插件后同一个更新一次成功 —— 两条都中就是这条，不是网络或签名问题。
 
-**相关**：#241（插件侧残留已修，剩余在宿主退出流程）。
+**相关**：插件侧残留已处理，剩余在宿主退出流程。
 
 ---
 
@@ -238,7 +238,7 @@ desktop update: Host did not complete graceful task teardown
 ### 玻璃态下，第三方浮层还是半透明：没有稳定锚点的那一类
 
 「第三方弹窗不透明底 → 给第三方插件的弹窗补实底」（`floaterSolidBase`，默认开）按**稳定锚点**认浮层。
-下面这几类本身不带锚点，玻璃态下会呈现「半透明且没有霜」（图样见 #315：底色 α ≈ 0.65、
+下面这几类本身不带锚点，玻璃态下会呈现「半透明且没有霜」（底色 α ≈ 0.65、
 `backdrop-filter: none`），背后内容直接透上来：
 
 - `body` 直系的框架层容器（第三方插件自绘的覆盖层 / 抽屉 / 自定义菜单）；

@@ -22,14 +22,14 @@
 function onAvatarEnabled(e) { setSetting("avatarEnabled", e.target.checked); emit(); }
 function onAvatarSize(v, live) { commitLiveSetting("avatarSize", v, live); if (live) syncAvatarLayer(); }
 function onAvatarRadius(v, live) { commitLiveSetting("avatarRadius", v, live); if (live) syncAvatarLayer(); }
-/** 助手头像的出现间隔（issue #231）：只影响分组判定，没有样式变量 ⇒ 抬手那一次 emit 重算即可
+/** 助手头像的出现间隔：只影响分组判定，没有样式变量 ⇒ 抬手那一次 emit 重算即可
  *  （渲染器不重算分组；分组由 emit 订阅链里的 syncAvatarLayer 触发，见下）。 */
 function onAvatarAiRepeatRows(v, live) {
   // 取值域走 schemaRange（与其它滑块同一口径：改 KINDS 不会漏改这里的第二份数字）。
   commitLiveSetting("avatarAiRepeatRows", clampNum(Math.round(Number(v)), ...schemaRange("avatarAiRepeatRows"), DEFAULTS.avatarAiRepeatRows), live);
   if (live) syncAvatarLayer();
 }
-// 上传裁切（issue #191 问题 1）：用户口径是"上传非正方形、或主体不在中央时效果很差"。
+// 上传裁切：用户口径是"上传非正方形、或主体不在中央时效果很差"。
 // 做法是**导入时先裁再传**（而不是存裁切参数第二次渲染）：
 //   · 盘上那张就是裁完的方形图 ⇒ 预览、会话里、以及"以后任何读到它的地方"天然一致，
 //     不存在"存了参数但某处忘了应用"的漏网点；

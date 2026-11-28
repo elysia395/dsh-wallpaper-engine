@@ -42,7 +42,7 @@ function onSceneLiveFps(f) { setSetting("sceneLiveFps", f); syncLayers(); emit()
 // （v 是事件对象）恒为 false ⇒ 开关只能写 false（"能关不能开"）。与 onTitlebarGlass /
 // onPauseOnHidden 等同款，取 e.target.checked。
 function onSceneAutoQuality(e) { setSetting("sceneAutoQuality", e.target.checked === true); syncLayers(); emit(); }
-// 软件渲染兜底（#270）：关掉即恢复「软渲染也照跑实时」，下次 sync 会把暂停态解除。
+// 软件渲染兜底：关掉即恢复「软渲染也照跑实时」，下次 sync 会把暂停态解除。
 function onSceneSoftRenderPause(e) { setSetting("sceneSoftRenderPause", e.target.checked === true); syncLayers(); emit(); }
 function onPlaybackRate(rate) { setSetting("playbackRate", rate); emit(); }
 function onFpsCap(cap) {

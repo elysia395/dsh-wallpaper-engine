@@ -58,7 +58,7 @@ const onEdgeCompatChange = (checked) => {
   setSetting("edgeCompat", checked);
   emit();
 };
-// 轮播实时覆盖（#254）：0 = 跟随列表预设；> 0 只改本次运行的间隔，**不写回列表**。
+// 轮播实时覆盖：0 = 跟随列表预设；> 0 只改本次运行的间隔，**不写回列表**。
 function onRotationLiveInterval(e) {
   setSetting("rotationLiveInterval", clampNum(Number(e.target.value), ...schemaRange("rotationLiveInterval"), DEFAULTS.rotationLiveInterval));
   syncRotationTimer();

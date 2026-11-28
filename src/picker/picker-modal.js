@@ -153,7 +153,7 @@
       className: "we-picker__card" + (w.id === sel.id ? " we-picker__card--selected" : "")
         // 勾选高亮：草稿模式 = 成员集合；批量模式 = batchSelected。
         // ⚠️ 高亮类必须是 `--checked` —— CSS 挂在它上面，挂到
-        // `--selected`（= 当前播放）上会"勾了永远不亮"。
+        // `--selected`（=当前播放）上会"勾了永远不亮"。
         + ((draft ? draftIdSet.has(w.id) : sel.batchMode && sel.batchSelected.indexOf(w.id) >= 0) ? " we-picker__card--checked" : ""),
       role: "button",
       tabIndex: 0,
@@ -379,7 +379,7 @@
       sel, basePlayable, ratingCounts, typeCounts, orientationCounts, onSearchInput, onRatingToggle, onTypeToggle,
       folderOptions, folderFilter, onFolderFilterChange, onOrientationChange,
     } = ctx;
-    // 分级是**多档勾选**（用户口径 2026-10-30，像 WE 本身那样自由组合）：勾上的档才允许
+    // 分级是**多档勾选**（像 WE 本身那样自由组合）：勾上的档才允许
     // 出现在列表、轮播与播放里；计数用各档精确张数（不是累加，勾选本身就是自由组合）。
     const ratingsOn = new Set(Array.isArray(sel.contentRatingFilter) ? sel.contentRatingFilter : []);
     const ratingTiers = ["everyone", "pg13", "mature", "unrated"];
@@ -391,7 +391,7 @@
       mature: () => weT("成人 / R（{n}）", { n: ratingCounts.mature }),
       unrated: () => weT("未分级（{n}）", { n: ratingCounts.unrated }),
     };
-    // 摘要只写固定的「内容分级」四个字（用户口径 2026-10-30：随勾选变宽会让整行不协调，
+    // 摘要只写固定的「内容分级」四个字（随勾选变宽会让整行不协调，
     // 选中状态读勾选框本身即可）。计数文案只出现在候选行的整句词条里。
     // 类型勾选集合（v8 起 typeFilter 是数组，与内容分级同款下拉多选）；计数用各档精确张数。
     const typesOn = new Set(Array.isArray(sel.typeFilter) ? sel.typeFilter : []);
@@ -411,7 +411,7 @@
         "aria-label": weT("搜索壁纸标题"),
         onInput: onSearchInput,
       }),
-      // 文件夹（#264）：只在**用户真的在 WE 里建过文件夹**时才画这一栏（`folderOptions`
+      // 文件夹：只在**用户真的在 WE 里建过文件夹**时才画这一栏（`folderOptions`
       // 空 ⇒ 整块不渲染）。单选取值（不是多档）：夹子之间是互斥浏览，组合起来没有意义。
       // 与内容分级/类型同一套 `<details>` 下拉形态，行样式复用 `we-picker__rating-toggle`，
       // 所以筛选行观感一致、也不用另写一份候选行 CSS。
@@ -460,7 +460,7 @@
           ),
           )
         : null,
-      // 内容分级：下拉 + 多档勾选（用户口径 2026-10-30：四枚胶囊铺在筛选行里观感差）。
+      // 内容分级：下拉 + 多档勾选（四枚胶囊铺在筛选行里观感差）。
       // `<details>/<summary>` 给原生开合与键盘可达性；勾选即写数组，任一下拉项都不改列表
       // 语义（分级是内容闸门，勾上的档才允许出现在列表、轮播与播放里）。
       React.createElement("details", { className: "we-picker__rating-menu" },

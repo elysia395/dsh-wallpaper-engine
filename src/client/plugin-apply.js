@@ -20,7 +20,7 @@ function apply(ctx) {
 
   // 0b. 启动预取（字体集清单）：与设置无关，启动链却要等 settings 之后才发 —— 这里先发，
   //     链走到它时通常已经回来（只预取一次；失败不影响启动链）。
-  //     ⚠️ **inventory 不在这里预取**（#158）：大库（2600 项目 / 13,941 文件）上
+  //     ⚠️ **inventory 不在这里预取**：大库（2600 项目 / 13,941 文件）上
   //     `/inventory` 冷调用要等整轮扫描，实测总延迟 1.6–2.0 s。插件激活期就发，等于让
   //     宿主的启动和这轮全盘扫描抢同一段 I/O；而首帧之前没有任何界面在等它。改为首帧后
   //     空闲时再发（见 apply 末尾启动链里的 `afterFirstPaint`）。
@@ -187,7 +187,7 @@ function apply(ctx) {
       // 但它**只在宿主真的找到这个库**时才需要轮询。判据是 /inventory 回的
       // wallpaperMachineRoots（宿主按磁盘实测报的数）—— 不用「installDir 为空」当
       // 「没有 Steam」的代理：探测不到 Steam 的 Windows 用户会因此被拖进每 30s 一次
-      // 的大库重拉（#396 评审）。轮询走 silent：不亮 loading、清单没变不 emit、不重算选择。
+      // 的大库重拉（评审）。轮询走 silent：不亮 loading、清单没变不 emit、不重算选择。
       let invWatch = 0, invPollFails = 0, invPollSkip = 0;
       if (typeof setInterval === "function") {
         invWatch = setInterval(() => {
@@ -469,7 +469,7 @@ function apply(ctx) {
   //     都会 tearDownEntryFiber 后用新模块体重跑一遍，不挂 fiber ⇒ 旧实例的定时器
   //     与监听器永不释放（实测同一 document 214 个页 id、一次 window blur 被 117 份实例各记一条）。
   //     与官方契约一致（原文与现场见 src/live-layer.js 的 installLiveDiagnostics）。
-  //     焦点交还（#148 宿主半）同理由同形态：document/window 级监听器，拆除函数交给 fiber。
+  //     焦点交还（宿主半）同理由同形态：document/window 级监听器，拆除函数交给 fiber。
   if (ctx.effect && typeof document !== "undefined") {
     ctx.effect(() => installLiveDiagnostics() || undefined);
     ctx.effect(() => installLiveBootRestore() || undefined);
@@ -506,7 +506,7 @@ function apply(ctx) {
     });
   }
 
-  // 3c. 性能监控悬浮窗（issue #263）：同样是 body 下的独立 React root，浮在对话上。
+  // 3c. 性能监控悬浮窗：同样是 body 下的独立 React root，浮在对话上。
   //     RopeDock 是常驻入口，这里不同 —— 组件内部读 perfEnabled / perfFloat，关着就
   //     return null，不会画任何东西；打开后关掉配置面板仍然常驻（这正是用户要的）。
   if (ctx.effect && typeof document !== "undefined" &&
@@ -528,7 +528,7 @@ function apply(ctx) {
     });
   }
 
-  // 启动时暂停（#349）：宿主设置落地后（`loadPersisted` 末尾置 `hostLoaded`）统一在这里
+  // 启动时暂停：宿主设置落地后（`loadPersisted` 末尾置 `hostLoaded`）统一在这里
   // 把播放意图置为暂停。位置在库存恢复**之前**（`loadInventory → revalidateSelection →
   // applySelection`），于是壁纸以暂停态挂载，而不是"先自动播放、随后才被暂停"（会闪一帧）。
   // 两个瞬态都置位：`playing` 是用户意图（面板按钮/出图闸门读它），`videoPlaying` 是元素

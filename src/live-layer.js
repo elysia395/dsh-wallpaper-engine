@@ -122,7 +122,7 @@ const SCENE_PAYLOAD_PROGRESS_PATH = "/scene-payload-progress";
  * 页面是不是跑在**非本机**的 http(s) 源上（远程桌面 / 代理进来的客户端）。
  * 只有 http(s) 才谈得上"远程"：dsh-app:// 这类壳内自定义 scheme 的页面必然在本机；
  * 判不出（URL 解析失败）也按本机算 —— 误判成远程的代价是大包挤应用源那条慢路，
- * 误判成本机的代价是整条 live 链路在远程端全灭（issue #129），后者贵得多。
+ * 误判成本机的代价是整条 live 链路在远程端全灭，后者贵得多。
  */
 function originIsRemoteHttp(origin) {
   try {
@@ -144,13 +144,13 @@ function resolveSceneMediaBase() {
     // 宿主媒体源：它自己起在 loopback 上、路由就在 BASE 下，**不带**挂载前缀。
     return hostSceneBase + SCENE_FILES_PATH;
   }
-  // 应用源回落（远程页面 / 媒体源不可用）：相对路径 + 挂载前缀（issue #409）——
+  // 应用源回落（远程页面 / 媒体源不可用）：相对路径 + 挂载前缀——
   // 反代把 DSH 挂在子路径下时，站点根的 /wallpaper-engine/* 会被网关吞掉。
   return apiUrl(SCENE_FILES_PATH);
 }
 
 /**
- * 把宿主媒体源的 **loopback 绝对 URL** 剥成相对路径（issue #419）。
+ * 把宿主媒体源的 **loopback 绝对 URL** 剥成相对路径。
  *
  * 只有"页面本身跑在远程 http(s) 上"并且"URL 指向本机 loopback"两条同时成立才剥：
  * 前者是症状的成因（loopback 地址在客户端上指向客户端自己），后者保证剥掉的那一段
@@ -171,7 +171,7 @@ function remoteLoopbackPath(url) {
 }
 
 /**
- * web 壁纸的 live 入口地址（issue #419）。
+ * web 壁纸的 live 入口地址。
  *
  * 宿主给的 `webLiveSrc` 是**宿主媒体源**（独立 loopback 端口）的绝对 URL：本机客户端
  * 取得到，远程客户端上它指向客户端自己 ⇒ `ERR_CONNECTION_REFUSED`，症状是「先闪出作者
@@ -201,7 +201,7 @@ function liveRenderUrl(selLike) {
   // 就是「预览图正常、随后整块黑」。只有旧 host / 媒体源启动失败时才回落成
   // 应用源相对路径（浏览器形态照常可用）。
   const webEntry = String(selLike.webLiveSrc || "");
-  // 远程端 web 壁纸的入口必须剥成本地可达的相对路径（issue #419）：绝对 URL 见 webLiveSrcFor。
+  // 远程端 web 壁纸的入口必须剥成本地可达的相对路径：绝对 URL 见 webLiveSrcFor。
   const src = isWeb ? webLiveSrcFor(webEntry) : selLike.sceneLiveSrc;
   const fit = SCENE_LIVE_FIT[selLike.objectFit] || "cover";
   const fps = SCENE_LIVE_FPS_VALUES.includes(selLike.sceneLiveFps) ? selLike.sceneLiveFps : 30;
@@ -218,7 +218,7 @@ function liveRenderUrl(selLike) {
   const mediaBase = isWeb
     ? (typeof location !== "undefined" && location.origin ? location.origin : "") + SCENE_FILES_PATH
     : resolveSceneMediaBase();
-  // 渲染页 iframe 的 URL 同样要带挂载前缀（#409）：它也是站点根下的插件路由。
+  // 渲染页 iframe 的 URL 同样要带挂载前缀：它也是站点根下的插件路由。
   return apiUrl("/wallpaper-engine/scene-live/index.html?type=" + (isWeb ? "web" : "scene")
     // 网页壁纸必须严格沙箱：第三方 workshop HTML 不得继承 DSH 的 origin
     //（否则可冒用宿主身份调宿主 API / 读宿主存储）——只给 allow-scripts，
@@ -255,7 +255,7 @@ function applyLiveControls(frame) {
     liveApplied.fit = null;
   }
   try {
-    // 软渲染兜底（#270）：探测到软后端且用户没关开关时，把播放意图钉在暂停，
+    // 软渲染兜底：探测到软后端且用户没关开关时，把播放意图钉在暂停，
     // 只用最后一帧当静态画面。用户关掉开关后这里自然恢复 resume。
     const playing = isEffectivelyPlaying() && !liveSoftRenderPauseOn();
     if (liveApplied.playing !== playing) {
@@ -312,7 +312,7 @@ function layerWantKey(layerLive) {
           // **sceneAutoQuality 也进 key**：它决定渲染页 URL 里的 `autoq=0`，
           // 与帧率档 / localAssets / sceneMediaBase 同一类（都改 iframe query）。
           // 少了这一格 ⇒ 切换「自动画质」时 wantKey 不变 ⇒ syncLayers 判定「不重建」
-          // ⇒ 旧渲染页继续按默认（自动画质开）跑，开关看起来完全失效（#358）。
+          // ⇒ 旧渲染页继续按默认（自动画质开）跑，开关看起来完全失效。
           + "\u0000" + (selection.sceneAutoQuality === false ? "aq0" : "aq1")
           + "\u0000" + (selection.inventory && selection.inventory.weAssetsAvailable ? "la1" : "")
           + "\u0000" + ((selection.inventory && selection.inventory.sceneMediaBase) || "")
@@ -543,7 +543,7 @@ function syncLayers() {
       if (!sameDraw) weStartDraw(canvas, video, canvas.className.indexOf("we-media--fit") !== -1);
     }
     if (video) {
-      // 播放态收敛（#84）：意图 → 元素真实状态，失败时回写 store 让「播放」
+      // 播放态收敛：意图 → 元素真实状态，失败时回写 store 让「播放」
       // 按钮回来（见 applyVideoPlayback）。
       applyVideoPlayback(video);
       // Keep the rate in sync on every layer sync (covers rate changes while

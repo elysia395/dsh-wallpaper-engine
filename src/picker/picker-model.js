@@ -52,7 +52,7 @@
 // "Everyone" (G) / "PG13" / "Mature" (R)；没有该字段的项目算「未分级」。匹配大小写
 // 不敏感并接受常见拼写，好让别的本地副本行为一致。
 //
-// 过滤档是**勾选集合**（用户口径 2026-10-30，像 WE 本身的多档勾选）：勾上的档才允许
+// 过滤档是**勾选集合**（像 WE 本身的多档勾选）：勾上的档才允许
 // 出现在列表、轮播与播放里，组合完全自由（含"只勾成人"这种纯 R18 用法）。
 //   · 空集合 / 非数组 / 认不得的值一律 fail-closed（判不匹配）—— 免得脏档把成人内容放出来；
 //   · 旧的单档枚举只作为**读兜底**（旧预设、手改 config 不走迁移那一层），映射成等价集合：
@@ -80,12 +80,12 @@ function isDirWallpaper(w) {
 
 function ratingOf(w) {
   const rating = typeof w.contentrating === "string" ? w.contentrating.trim() : "";
-  // 自上传壁纸没有标注分级时按 Everyone 处理（#84）。用户自己的文件不该被默认的
+  // 自上传壁纸没有标注分级时按 Everyone 处理。用户自己的文件不该被默认的
   // 「Everyone」过滤挡在门外 —— uploads/.meta.json 从不写 contentrating，把这种条目
   // 算成「未分级」会让默认过滤下所有自上传壁纸既不出现在网格里，也无法被选中：
   // 上传接口自动应用新 id 时 applySelection 直接拒绝，壁纸层空白、播放按钮因
   // !sel.url 变灰 —— 表现就是「视频壁纸不能播放，也没有继续按钮」。显式写了
-  // G / PG13 / R 的照读（#77），成人内容依然会被过滤。
+  // G / PG13 / R 的照读，成人内容依然会被过滤。
   if (!rating) return isUploadedWallpaper(w) ? "everyone" : "unrated";
   if (/^(everyone|general|g)$/i.test(rating)) return "everyone";
   if (PG13_RATING_PATTERN.test(rating)) return "pg13";
@@ -183,8 +183,8 @@ function keepPlayingWallpaper(w, ratingFilter) {
   return Boolean(w) && isPlayableType(w) && matchesRatingFilter(w, ratingFilter);
 }
 
-// 轮播成员 / 「下一张」的入选判据（用户口径 2026-10-30）：只认「内容安全 ∧ 可播放」，
-// **不认列表的类型档** —— 类型档只筛选择器网格的显示（issue #294：切类型档不得改变
+// 轮播成员 / 「下一张」的入选判据：只认「内容安全 ∧ 可播放」，
+// **不认列表的类型档** —— 类型档只筛选择器网格的显示（切类型档不得改变
 // 轮播成员，也不得改变「下一张」的池）。与 keepPlayingWallpaper 共用同一份判定，
 // 免得轮播候选与播放闸门各长一个真源。
 function isRotationEligible(w, ratingFilter) {

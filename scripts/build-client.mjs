@@ -263,7 +263,7 @@ const INLINE_MODULES = [
       'className: "we-picker__section-head we-picker__section-head--toggle"'],
   },
   {
-    // 模块级重置按钮（issue #192 的 ↺）：与 section-head 同一条理由抽出来 ——
+    // 模块级重置按钮（↺）：与 section-head 同一条理由抽出来 ——
     // panel-tabs（外观各节 + 扩展模块头）在主 bundle 用；packages/glass（玻璃 UI）经桥接键
     // moduleResetButtonNode 取同一实现（ADR-0016 第二刀起不再本表内联）。
     file: 'src/ui/module-reset.js',
@@ -283,7 +283,7 @@ const INLINE_MODULES = [
   //    迁出的等价性证据：两个子包产物里的 fx-layer/ext-fx/parallax-layer/ext-parallax 与迁出前
   //    逐字节相同（`git diff --no-index` 可复核），差量只有 outline 的 host 绑定与空 apply/inject。
   {
-    // 头像导入的两道闸 + 零解码尺寸探针（#185 后续）。**纯函数**，因此是本仓少数几个
+    // 头像导入的两道闸 + 零解码尺寸探针。**纯函数**，因此是本仓少数几个
     // 能被守卫**直接执行**的模块之一（用真字节喂真函数 —— 位域读错一位那种错，
     // "源码里有没有这行字"测不出来）。排在 avatar-layer / ext-avatar / client 正文之前：
     // 那几处的调用点直接按名引用这些常量与函数。
@@ -459,7 +459,7 @@ const INLINE_MODULES = [
     markers: ['const LIVE_FIRST_FRAME_MS = ', 'function syncLayers()', 'function toggleLiveDiag('],
   },
   {
-    // 挂载前缀（#409）：apiUrl 在**运行时**读它，函数声明提升保证内联顺序不承重；
+    // 挂载前缀：apiUrl 在**运行时**读它，函数声明提升保证内联顺序不承重；
     // 放在本清单 api-client 之前只是为了读起来像依赖：前缀来源在 app-mount，消费在 apiUrl。
     file: 'src/wallpaper/app-mount.js',
     why: '反代子路径部署的挂载前缀探测（资源名 → document.baseURI → 站点根）；根路径部署恒为空串',
@@ -580,7 +580,7 @@ const INLINE_MODULES = [
   },
   {
     file: 'src/client/handlers/reset-and-accent-handlers.js',
-    why: 'src/client.js 正文的重置处理器（模块级 ↺ / 页签级 / 全局恢复默认，issue #192）—— 构建期内联在正文之前，同处一个扁平作用域',
+    why: 'src/client.js 正文的重置处理器（模块级 ↺ / 页签级 / 全局恢复默认）—— 构建期内联在正文之前，同处一个扁平作用域',
     markers: ['function resetKeysToDefault(keys)', 'const onResetModule = (groupName) => {', 'const onResetTab = (tabId) => {', 'const onResetAll = () => {'],
   },
   {
@@ -958,11 +958,11 @@ function readInlinedPrelude(modules, baseDir, bodySrc, label = '') {
 }
 
 /**
- * 立绘（rope art）载荷的**外置**与构建期对账（2026-10-30 启动性能）。
+ * 立绘（rope art）载荷的**外置**与构建期对账（启动性能）。
  *
  * ## 为什么不再内联
  * 10 张立绘以前在构建期以 base64 注入主产物：2,369,676 字符 = 4.2MB bundle 的 56%，
- * 而渲染主线程实测下载 178ms、`v8.compile` 25ms（DevTools trace 2026-10-30）。立绘不是
+ * 而渲染主线程实测下载 178ms、`v8.compile` 25ms（DevTools trace）。立绘不是
  * 启动必需数据 —— 桌面只画**当前形态**一张，其余只在吉祥物面板里出现。现在字节仍住
  * `assets/rope/<name>.png`（随 npm 包发布），由宿主只读路由
  * `/wallpaper-engine/rope-art/<name>.png` 按需直出，客户端只拿 URL（`ROPE_IMG_*`）。

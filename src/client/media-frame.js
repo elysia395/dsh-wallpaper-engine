@@ -14,7 +14,7 @@ let weRafId = 0;        // requestAnimationFrame fallback handle
 let weResizeObs = null; // ResizeObserver (canvas size / DPR changes)
 let weDrawCtx = null;   // { canvas, video, fit }
 
-// 绘制帧率上限（#383）：「Edge 兼容」下 <video> 被藏到屏外、改由 canvas 逐帧
+// 绘制帧率上限：「Edge 兼容」下 <video> 被藏到屏外、改由 canvas 逐帧
 // drawImage 上屏（见 buildVideoMedia 的 Edge 镜像分支），每帧都是一次纹理回读 +
 // CPU 上传。2K60 的源在 60–120Hz 的 rVFC/rAF 回调里每帧都画，会把主线程与合成器
 // 一起拖慢——实测「解码帧一个不少、媒体时钟只走 89.5%」。
@@ -27,8 +27,8 @@ const WE_DRAW_MIN_INTERVAL_MS = 1000 / WE_DRAW_FPS_CAP - 0.5;
 /** 上一笔 drawImage 的时间戳；0 = 还没有首绘（首绘不许被节流吃掉）。 */
 let weLastDrawAt = 0;
 
-// ── 软渲染下再降一档（#411：Video 缺降级能力）────────────────────────────────
-// 为什么在这里：#383 的 30fps 上限治的是「canvas 路径本身贵」；软件渲染
+// ── 软渲染下再降一档（Video 缺降级能力）────────────────────────────────
+// 为什么在这里：30fps 上限治的是「canvas 路径本身贵」；软件渲染
 // （SwiftShader / llvmpipe / Microsoft Basic Render…）下这笔回读 + 上传没有 GPU
 // 帮忙，2K60 源即使 30fps 也仍然吃满 CPU，所以再压到 15fps。
 //
@@ -37,7 +37,7 @@ let weLastDrawAt = 0;
 //   · 手动逃生舱沿用同一个 URL 开关（`?we-softrender=0`）。
 //
 // 只压绘制频率，**不暂停原生 `<video>`**：原生腿没有这笔回读开销，去暂停它
-// 等于给正常路径加复杂度（#411 维护者确认的范围）。
+// 等于给正常路径加复杂度（维护者确认的范围）。
 const SOFT_RENDER_DRAW_FPS = 15;
 /** 软渲染档的最小间隔：与 30fps 档同样的 0.5ms 浮点容差。 */
 const SOFT_RENDER_MIN_INTERVAL_MS = 1000 / SOFT_RENDER_DRAW_FPS - 0.5;
@@ -51,7 +51,7 @@ function isSoftRenderThrottled() {
   }
 }
 /** 降档只留一条现场证据：用户报「视频变卡 / 变抽」时，日志要能回答是不是这一档生效的。
- *  同一个页面会话只打一条 —— 每帧都打会把诊断环形缓冲刷满（与 #270 的 soft-render-pause
+ *  同一个页面会话只打一条 —— 每帧都打会把诊断环形缓冲刷满（与 soft-render-pause
  *  同一条通路：liveLog → host /diag）。 */
 let softRenderThrottleLogged = false;
 function noteSoftRenderThrottle() {
@@ -123,7 +123,7 @@ function weDrawTick() {
   const now = performance.now();
   // 首绘直接画；之后只画「距上一笔够一帧」的那些，其余帧只重挂回调。
   // 节流只决定「这一帧画不画」，rVFC / rAF 的重挂节奏不变（视频照常解码）。
-  // #411：软渲染再降一档（15fps）；硬件路径仍是 #383 的 30fps 上限。
+  // #411：软渲染再降一档（15fps）；硬件路径仍是 30fps 上限。
   const softRender = isSoftRenderThrottled();
   if (softRender) noteSoftRenderThrottle();
   const minInterval = softRender ? SOFT_RENDER_MIN_INTERVAL_MS : WE_DRAW_MIN_INTERVAL_MS;
@@ -337,7 +337,7 @@ function pushMediaSnapshot(frame, m) {
  * **为什么**：这类层（WE 场景里常见的 `Simple_Audio_Bars`）画的是频谱柱 —— 有频谱
  * 才是一排条；没有频谱时它退化成一整块**没有内容的矩形**，而作者往往还在同一层上叠了
  * scroll 之类的时间驱动特效（`frac()` 循环平移）。结果屏幕上就是「一块图像在匀速横爬」，
- * 用户第一眼只会当成渲染故障（#167）。收起它反而更接近作者意图：没有音乐，就没有频谱。
+ * 用户第一眼只会当成渲染故障。收起它反而更接近作者意图：没有音乐，就没有频谱。
  *
  * **判据只用两个字段**：层的 `image` 是合成层，且它的效果链里有 `Simple_Audio_Bars`。
  * 刻意不按「所有合成层」一刀切 —— 不碰任何别的层（水面 / 反射 / 粒子 / 时钟都不受影响）。
@@ -523,12 +523,12 @@ function startMediaSync(frame) {
     // 不停的话每一拍都会 touch() 刷新 media-bridge 的 lastUsedAt，15 分钟的 idle-stop 永不到期。
     if (document.hidden || !isEffectivelyPlaying()) return;
     // 宿主回 running=false（没有可用采集，例如 Windows 回落 legacy 的 audio.status=unavailable）
-    // 时频谱退到 1Hz：没有频谱可给，20Hz 请求只是空转；running 翻真立刻回 50ms（#416）。
+    // 时频谱退到 1Hz：没有频谱可给，20Hz 请求只是空转；running 翻真立刻回 50ms。
     mediaSpectrumGate += 1;
     const spectrumEvery = mediaHostRunning === false ? 20 : 1;
     if (wantSpectrum && !mediaFetchBusy && mediaSpectrumGate % spectrumEvery === 0) {
       mediaFetchBusy = true;
-      // 2s 看门狗：宿主挂起 / socket 半开时 mediaFetchBusy 会永久锁死频谱（#416）。
+      // 2s 看门狗：宿主挂起 / socket 半开时 mediaFetchBusy 会永久锁死频谱。
       // 手法照抄 src/wallpaper/occlusion.js：AbortSignal 缺失（单测沙箱 / 老引擎）时退化为无超时。
       const spectrumOpts = typeof AbortSignal !== "undefined" && AbortSignal.timeout
         ? { signal: AbortSignal.timeout(2000) } : undefined;
@@ -643,7 +643,7 @@ function userPropsStateOf() {
     error: String(propsState.error || ""),
     count: propsState.props.length,
     heard: !propsState.loading && !propsState.remote,
-    // issue #341：WE 里这张壁纸的当前值与本机覆盖值的差异摘要（null = 没有可导入项/没读到）。
+    // WE 里这张壁纸的当前值与本机覆盖值的差异摘要（null = 没有可导入项/没读到）。
     we: userPropsWeImport(),
   };
 }
@@ -673,7 +673,7 @@ function renderUserPropsPanel() {
     },
     onPropInput: onUserPropInput,
     onReset: resetUserProps,
-    // issue #341：WE 当前值导入（只读；显式按钮触发）
+    // WE 当前值导入（只读；显式按钮触发）
     we: st.we,
     onImportWe: importUserPropsFromWe,
   });

@@ -53,18 +53,18 @@ const onGlassDarkSeparate = (v) => {
 };
 const onGlassAlpha = (pct, live) =>
   commitLiveSetting("glassAlpha", clampNum(pct, ...schemaRange("glassAlpha"), DEFAULTS.glassAlpha), live);
-// 遮罩浓度（#254）：只折算宿主 Modal 遮罩 token 的 alpha（玻璃层写 --we-mask-strength）。
+// 遮罩浓度：只折算宿主 Modal 遮罩 token 的 alpha（玻璃层写 --we-mask-strength）。
 const onGlassMaskStrength = (pct, live) =>
   commitLiveSetting("settingsMaskStrength", clampNum(pct, ...schemaRange("settingsMaskStrength"), DEFAULTS.settingsMaskStrength), live);
 // 玻璃保真度（默认 100 = 完整可读性红线）：唯一的「颜色 vs 可读」权衡旋钮，
 // 数学入口在 effects.js 的 weClampSurfaceColor 第三参 + --we-glass-fidelity。
 const onGlassFidelity = (pct, live) =>
   commitLiveSetting("glassFidelity", clampNum(pct, ...schemaRange("glassFidelity"), DEFAULTS.glassFidelity), live);
-// 镜面高光强度（#404，默认 100 = 现状）：0 = 主块三档与侧栏派生档的釉光全部归零，
+// 镜面高光强度（默认 100 = 现状）：0 = 主块三档与侧栏派生档的釉光全部归零，
 // 只保留底与霜；100 = 与接线前逐值相同。落地在 glass-layer.js 的 --we-sheen-scale。
 const onGlassSheenStrength = (pct, live) =>
   commitLiveSetting("glassSheenStrength", clampNum(pct, ...schemaRange("glassSheenStrength"), DEFAULTS.glassSheenStrength), live);
-// 额外补雾化的选择器（#200）：值是一串 CSS 选择器（逗号 / 换行分隔，最多 8 条）。
+// 额外补雾化的选择器：值是一串 CSS 选择器（逗号 / 换行分隔，最多 8 条）。
 // 消毒只走 settings-schema 的 sanitizeExtraGlassSelectors —— 读侧（sanitizeFromSchema）
 // 与本模块生成侧（glass-extra.js）**共用同一份**判据，所以用户敲到一半的非法串既不会进
 // 规则、也不会被"修剪"成另一个选择器。**不做防抖**：只有清单真的变了才会重写 <style>

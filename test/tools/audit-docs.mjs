@@ -112,7 +112,9 @@ const NUM_RE = /\b\d[\d,]{2,}\s*(行|条|个|份|处)/g;
 const LINK_RE = /\]\((?!https?:|mailto:|#)([^)\s]+)\)/g;
 const LINE_RE = /([A-Za-z0-9_./-]+\.(?:js|mjs|json|md)):(\d{1,6})(?:-(\d{1,6}))?/g;
 
-const findings = { stalePath: [], brokenLink: [], staleAnchor: [], driftingNumber: [], parity: [] };
+const findings = { stalePath: [], brokenLink: [], staleAnchor: [], driftingNumber: [], parity: [], history: [] };
+/** 历史账：日期、issue 编号、"本次/原先/现已" 这类**仅记录改动**的措辞（ADR-0006 D2 的写作约定）。 */
+const HISTORY_RE = /(20\d\d-\d\d-\d\d|issue #\d+|（#\d{2,4}(?![0-9a-fA-F])|PR #\d+)/g;
 /** 构建产物：它们的注释来自源文件，重算即可 —— 不参与注释审计（否则同一处会报两遍）。 */
 const GEN_ARTIFACT = /(^|\/)lib\/client(\.[a-z0-9-]+)?\.js$/;
 /** `packages/<pkg>/**` 里的相对路径既可以相对仓库根、也可以相对包目录（`client.build.json` 就是后者）。 */
@@ -164,6 +166,7 @@ for (const abs of docsFiles) {
         for (const m of line.matchAll(NUM_RE)) {
           add('driftingNumber', file, i + 1, m[0].trim(), { cat });
         }
+        for (const m of line.matchAll(HISTORY_RE)) add('history', file, i + 1, m[0], { cat });
       }
     }
   });
@@ -181,6 +184,8 @@ for (const abs of codeFiles) {
       if (foreignContext(line, m.index) || ignored(file, p)) continue;
       if (!existsAny(p, file)) add('stalePath', file, i + 1, p, { cat: 'comment' });
     }
+    const cmt = /^\s*(\/\/|\*|\/\*)/.test(line) ? line : line.slice(Math.max(0, line.lastIndexOf('//')));
+    for (const m of cmt.matchAll(HISTORY_RE)) add('history', file, i + 1, m[0], { cat: 'comment' });
     // 注释里的行号锚：只报**确定超界**的（文件存在且行号大于文件长度）
     for (const m of line.matchAll(LINE_RE)) {
       const p = m[1];
@@ -223,6 +228,7 @@ const groups = [
   ['staleAnchor', '行号锚已超出文件长度（应改锚符号）'],
   ['driftingNumber', '现行文档里的会漂数值'],
   ['parity', '中英不成对'],
+  ['history', '历史账：日期 / issue·PR 编号'],
 ];
 for (const [kind, title] of groups) {
   const list = findings[kind];

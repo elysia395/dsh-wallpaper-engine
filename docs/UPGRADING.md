@@ -3,7 +3,7 @@
 > **English**: [`en/UPGRADING.md`](./en/UPGRADING.md)（与本文同源：改一处请同步另一处）
 
 
-> 本文件承接原先放在 README 首页的**升级前置条件与版本兼容说明**。README 只保留一行提示 + 链接。
+> 本文件收录**升级前置条件与版本兼容说明**。README 只保留一行提示 + 链接。
 > 各版本修了什么见 [`CHANGELOG.md`](./CHANGELOG.md)；安装失败报错见 [`TROUBLESHOOTING.md`](./TROUBLESHOOTING.md)。
 
 

@@ -93,7 +93,7 @@ function installWeNavIcon() {
         if (!iconEl || iconEl === btn.lastElementChild && btn.childElementCount < 2) continue;
         // 已经是我们的图标（语言切换触发的重放）⇒ 只登记、不重复替换。
         try { if (iconEl.getAttribute("data-we-nav-icon") === "1") { patched.add(btn); continue; } } catch { /* ignore */ }
-        // ── issue #194①：替换件必须**本身是 `<svg>`**，不能包一层 `<span>` ──────────
+        // ── 替换件必须**本身是 `<svg>`**，不能包一层 `<span>` ──────────
         // 官方那格的图标就是那个 svg（shell 的 `navIcon(id)` 直接渲染 `<svg className=navIcon>`），
         // 于是它是 navCell 的**直接 flex 项** ⇒ 被块化（display 不再是 inline）、由
         // `align-items:center` 精确居中。我们若包一层 span：span 自己居中没问题，但里面的

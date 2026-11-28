@@ -7,7 +7,7 @@
  *
  * 契约：registerInventoryRoutes(webServer, c)；`c` 里是这一族要用、但不属于它的东西：
  *   - disposers      apply() 的清理句柄台账（注册返回值**必须**推进去）
- *   - base           URL 前缀（= 门面 BASE，这里本地别名为 BASE）
+ *   - base           URL 前缀（=门面 BASE，这里本地别名为 BASE）
  *   - mediaOriginApi 媒体源访问器（`observeAdapter(req)`）
  *   - buildInventory 清单构建器（门面模块作用域的 3s TTL 缓存，生命周期 = 一次 apply）
  *   - componentsProbe 组件行**行状态**探针（门面 `componentProbe()`，只读；见下「组件行状态」）
@@ -114,7 +114,7 @@ export function registerInventoryRoutes(webServer, c) {
         const body = Buffer.from(JSON.stringify(components ? { ...payload, components } : payload), 'utf8');
         res.setHeader('Content-Type', 'application/json; charset=utf-8');
         res.setHeader('Cache-Control', 'no-store');
-        // ── 协商式 gzip（#158 回归）────────────────────────────────────────────────
+        // ── 协商式 gzip（回归）────────────────────────────────────────────────
         // 1.4.0 时这条路由还在主包 `lib/index.js` 里、走 `sendJson`，大库 `/inventory`
         // 是 MB 级载荷、按 Accept-Encoding 协商压缩；`0949e625` 加的就是这条。
         // P0.2-D 把处理器逐字搬进本包后，序列化改成了裸 `JSON.stringify` + `res.end`

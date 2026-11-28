@@ -45,7 +45,7 @@
     // `props` 是**上一次求值留下的那张表**（宿主是异步的）：token 与当前选中项不一致时
     // 它属于上一张壁纸 —— 那种情况下不许画出来（否则改的是这张、看到的是上一张的值）。
     const stale = Boolean(source && source.token && source.token !== token);
-    // `hidden`：作者标记 `editable:false` 的条目（issue #341 起留在回包里、值照常下发）
+    // `hidden`：作者标记 `editable:false` 的条目（起留在回包里、值照常下发）
     // —— 只从面板隐藏，仍参与上面的条件求值（`values` 用全表）。
     const defs = stale ? [] : props.filter((p) => !p.hidden);
     const rows = defs

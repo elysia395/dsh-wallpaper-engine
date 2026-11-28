@@ -200,7 +200,7 @@ function systemFontStack(key) {
   const name = systemFontNameOf(key);
   return name ? '"' + name + '"' : "";
 }
-/** 族键 / 历史栈 → 可用的 CSS 栈；空、`inherit`、未知一律 `inherit`（= 不覆盖官方外观）。 */
+/** 族键 / 历史栈 → 可用的 CSS 栈；空、`inherit`、未知一律 `inherit`（=不覆盖官方外观）。 */
 function fontFamilyStack(v) {
   const key = typeof v === "string" ? v.trim() : "";
   if (!key || key === "inherit") return "inherit";
@@ -348,7 +348,7 @@ const selection = {
   // 误当成"用户没存过"），以及引导当前挂着的目标 id（空串 = 不显示引导）。
   glassPresetsLoaded: false,
   glassPresetGuideTargetId: "",
-  // 「已隐藏的出厂预设」清单（#219）：随包层被墓碑遮蔽的那些，供面板画恢复区。
+  // 「已隐藏的出厂预设」清单：随包层被墓碑遮蔽的那些，供面板画恢复区。
   glassPresetHidden: [],
   url: null,
   type: null,
@@ -571,7 +571,7 @@ function exitSkinYield(reason, opts) {
 
 /**
  * 排定一次退场：对方**启动上妆**（它的运行时在我们的标记到达前先按持久化选择上妆）会在自己的
- * `refresh()` 里被自纠，是一次**瞬时翻转**；而用户显式动作（#49）会一直亮着（它的让路宽限 1.5s
+ * `refresh()` 里被自纠，是一次**瞬时翻转**；而用户显式动作会一直亮着（它的让路宽限 1.5s
  * 才回收）。所以只认"过一拍还在"的出现：宽限结束时 DOM 仍带标记、且我方确实有要退的东西
  * （壁纸在台 ⇒ 清层；或**无壁纸**且设置已就位 ⇒ 只剩玻璃要让）⇒ 才是动作。
  * ⚠️ 450ms 必须显著短于对方的 1500ms 宽限，否则真实动作会在我们确认前被它回收。
@@ -904,7 +904,7 @@ function hostFailureReason(res) {
   if (!res || !res.status) return weT("宿主不可达（请求未完成）");
   const data = res.data;
   if (data && data.error) return data.error;
-  // 非 2xx 且拿到的是 HTML 页 ⇒ 这不是宿主的接口（反代把挂载前缀丢了，issue #409）。
+  // 非 2xx 且拿到的是 HTML 页 ⇒ 这不是宿主的接口（反代把挂载前缀丢了）。
   // 把"404 归因不清"说成一句可执行的话：以前只显示"宿主返回 404"，用户看不出是前缀问题。
   if (res.notHostEnvelope) {
     return weT("宿主返回 {status}：响应不是插件的接口，检查 DSH 是否挂在子路径下", { status: res.status });
@@ -915,9 +915,9 @@ let inventorySeq = 0;
 /**
  * 库存预取：`/inventory` 与设置无关，启动链却把它排在 settings → fontsets → fontsets/<id>
  * 之后（见 apply 末尾的链）。链走到 inventory 前发出这一次请求，好让扫描和字体集那几步
- * 并行（trace 2026-10-30：inventory 请求 971→1036ms，纯串行浪费）。
+ * 并行（inventory 请求 971→1036ms，纯串行浪费）。
  *
- * ⚠️ **发起时机在首帧之后**（#158）：插件激活期就发会让大库的整轮扫描和宿主启动抢 I/O；
+ * ⚠️ **发起时机在首帧之后**：插件激活期就发会让大库的整轮扫描和宿主启动抢 I/O；
  * 现在由启动链在 `afterFirstPaint()` 放行后调用，见 apply 末尾。
  * 只预取一次；`loadInventory` 消费后清空，手动刷新 / 轮播补拉仍走自己的请求。
  *
@@ -958,13 +958,13 @@ async function loadInventory(opts) {
       cacheDir: data.cacheDir || null,
       weAssetsDir: data.weAssetsDir || null,
       weAssetsAvailable: Boolean(data.weAssetsAvailable),
-      // 来源（#386）：'env' / 'config' / 'auto' / null —— 'auto' 表示从探测到的安装目录带出。
+      // 来源：'env' / 'config' / 'auto' / null —— 'auto' 表示从探测到的安装目录带出。
       weAssetsSource: data.weAssetsSource || null,
       // 场景载荷的源（独立壁纸媒体源的 origin；空串 = 回落应用源，见 live-layer 的 liveRenderUrl）。
       sceneMediaBase: typeof data.sceneMediaBase === "string" ? data.sceneMediaBase : "",
       // 本机真实存在的 WallpaperMachine 库根数（宿主实测）。0 = 不轮询 —— 见 invWatch 的门控。
       wallpaperMachineRoots: Number(data.wallpaperMachineRoots) || 0,
-      // 宿主给的资源 URL 在这里**一次性**补挂载前缀（#409）：消费点全是 <img>/<video>/iframe，
+      // 宿主给的资源 URL 在这里**一次性**补挂载前缀：消费点全是 <img>/<video>/iframe，
       // 不走 apiFetch，补在这里才能同时盖住选择器卡片、属性面板与轮播。
       wallpapers: normalizeWallpaperUrls(data.wallpapers || []),
       total: data.total || 0,
@@ -983,7 +983,7 @@ async function loadInventory(opts) {
     // 随后这次 render 才不会在"行已停用但玻璃还在"的中间态上画一帧。
     reclaimGlassResidue(data.components);
   } catch (err) {
-    // 失败分支**不许**用一份空库存顶掉手里那一份（#379）：请求失败只说明"这次没拿到新
+    // 失败分支**不许**用一份空库存顶掉手里那一份：请求失败只说明"这次没拿到新
     // 数据"，不说明"用户的库空了"。这里一旦换成 `wallpapers: []`，后面任何一次
     // revalidateSelection() 都会把当前选择判成"壁纸已被移除" → `setSetting("id", "")`
     // 落盘 ⇒ 背景当场变黑、重启也回不来（用户视角就是数据丢失）。
@@ -1015,7 +1015,7 @@ async function loadInventory(opts) {
   setTransient("loading", false);
   setTransient("loaded", true);
   if (next.error) {
-    // 失败时**不重算选择**（同上：#379 的落盘点就在 revalidateSelection 里）。校验"选中的
+    // 失败时**不重算选择**（同上：落盘点就在 revalidateSelection 里）。校验"选中的
     // id 还在不在库里"只在真拿到新库存时有意义 —— 拿不到库存时库里有什么我们并不知道。
     // 背景保持现状，面板顶部照常显示 next.error。
     // 静默轮询下同一个错误只报一次：每 30s 重刷一次错误横幅只是噪音（换一条错误要报）。
@@ -1040,7 +1040,7 @@ async function loadInventory(opts) {
   }
   // 轮询（silent）且清单没变 ⇒ 到此为止：不重算选择、不 emit。
   // revalidateSelection → applySelection 会 cancelRotationPrepare() + disposePreparedMedia()，
-  // 每 30s 一次会把正在准备的轮播过场掐掉；面板也会跟着重渲染（#396 评审）。
+  // 每 30s 一次会把正在准备的轮播过场掐掉；面板也会跟着重渲染（评审）。
   if (silent && prevIds === nextIds) return;
 
   // Rotation groups: validate the active one and seed a first group from a
@@ -1227,7 +1227,7 @@ function syncRotationTimer() {
   if (!selection.rotationEnabled || !selection.id) return;
   if (rotationCandidates().length < 2) return;
   const group = activeRotationGroup();
-  // 「当前视频播完就换」档（issue #230 后续诉求）：**不计时** —— 推进由视频的 ended
+  // 「当前视频播完就换」档：**不计时** —— 推进由视频的 ended
   // 事件驱动（watchVideoState 里那一支）。这里只把上一次留下的计时收掉（上面已调
   // clearRotationTimer），于是切回「按间隔」档时由下一次 sync 重新 arm。
   const trigger = group && group.trigger === "videoEnd" ? "videoEnd" : "interval";
@@ -1364,7 +1364,7 @@ const IS_EDGE = typeof navigator !== "undefined" && /Edg\//.test(navigator.userA
 
 let weBattery = null; // BatteryManager from navigator.getBattery (if available)
 /**
- * `pauseOnHidden` 的**持续期防抖**（issue #288）。
+ * `pauseOnHidden` 的**持续期防抖**。
  *
  * 宿主在虚拟桌面切换 / 焦点变化期间会瞬时把 `document.hidden` 误判为 true（Chromium 遮挡跟踪
  * 竞态，2–3 秒后被复查纠正）。旧逻辑对 `document.hidden` **零防抖、照单全收** ⇒ 一次瞬时抖动就
@@ -1423,7 +1423,7 @@ function isEffectivelyPlaying() {
   // 出帧物理上不可能，而首帧预算与运行期 stall 两条判据都以"有帧"为唯一证据。
   // 少了这一项，收拍期间窗口被最小化 / 切到别的标签页 ⇒ 渲染页被冻结 ⇒ 看护按
   // `LIVE_FIRST_FRAME_MAX_MS` 判 timeout；而 `liveFailCauseOf` 在"本窗口内确有整包
-  // 完成证据"时会归成渲染侧并**落盘**（实测事故 2026-10-27：一张 29.7MB 的场景壁纸
+  // 完成证据"时会归成渲染侧并**落盘**（实测事故：一张 29.7MB 的场景壁纸
   // 在隐藏期被判 timeout 写进 sceneLiveFailures，此后六天多每次启动都直接降级静态帧，
   // 直到下一次管线变更才被 migrateStaleLiveFailures 清掉）。
   // 运行期 stall 规则此前已有同款守卫（看护心跳的 `!isEffectivelyPlaying()` 分支），
@@ -1476,7 +1476,7 @@ function watchVideoState(video) {
   for (const t of ["play", "playing", "pause", "ended", "error", "emptied"]) {
     try { video.addEventListener(t, () => syncVideoState(video)); } catch { /* ignore */ }
   }
-  // 「当前视频播完就换下一张」（issue #230 后续诉求）：轮播组选了 `trigger: 'videoEnd'`
+  // 「当前视频播完就换下一张」：轮播组选了 `trigger: 'videoEnd'`
   // 时，壁纸视频的 ended 就是轮换信号 —— 与计时器二选一（syncRotationTimer 在该档不计时）。
   // 只认**当前层**那个 <video>：预热 / 探测元素也走 watchVideoState，它们播完不代表壁纸播完。
   // `loop` 会把 ended 吞掉，所以按 trigger 在建层时关掉 loop（见 video-layer 的
@@ -1940,7 +1940,7 @@ const onCaretColor = (hex, live) => {
 };
 
 function onSidebarGlass(e) { setSetting("sidebarGlass", e.target.checked); emit(); }
-// 侧栏全透明（issue #137）：显式放弃可读性下限。与 onSidebarGlass 同形 —— 门控属性
+// 侧栏全透明：显式放弃可读性下限。与 onSidebarGlass 同形 —— 门控属性
 //（data-we-sidebar-fullclear）由 applyGlass 挂/摘，CSS 那组规则只认属性。
 function onSidebarFullClear(e) { setSetting("sidebarFullClear", e.target.checked); emit(); }
 
@@ -2868,7 +2868,7 @@ weRegisterExtensionModule("avatar", AVATAR_EXTENSION_MODULE);
 weRegisterLayerHooks("avatar", { sync: syncAvatarLayer, dispose: disposeAvatarLayer });
 weRegisterExtensionModule("perf", PERF_EXTENSION_MODULE);
 
-// ── 首帧后空闲门（#158）────────────────────────────────────────────────────────
+// ── 首帧后空闲门────────────────────────────────────────────────────────
 // 口径：宿主 `ClientEntries.start()` 对**每个**插件都 `create` + `loader.await()`，
 // 插件没法把自己摘出启动关键路径（审计 docs/archive/wip/ISSUE-AUDIT-148PLUS.md 的更正 ①）；
 // 能减的只有"启动期别让宿主干重活"。inventory 的冷路径在大库上要等整轮扫描

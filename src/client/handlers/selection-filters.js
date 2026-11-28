@@ -74,9 +74,8 @@ function rotationPoolAll() {
 // Re-validate the active selection against the current inventory + filters.
 // Called after a refresh AND after changing the rating/type filter. 丢弃闸门是
 // keepPlayingWallpaper：分级是内容闸门（勾选集合：勾上的档才允许播）；类型档只筛选择器
-// 网格的**显示**，既不得把正在应用的壁纸干掉，也不得改变轮播成员与「下一张」（用户口径
-// 2026-10-30 / issue #294）。轮播在场时拿不到候选就换下一张；当前壁纸被勾选集合挡掉
-// 时**立即换台**（用户口径 2026-10-30：「换得了就换，换不了才提示」）。
+// 网格的**显示**，既不得把正在应用的壁纸干掉，也不得改变轮播成员与「下一张」（用户口径）。轮播在场时拿不到候选就换下一张；当前壁纸被勾选集合挡掉
+// 时**立即换台**（「换得了就换，换不了才提示」）。
 function revalidateSelection() {
   // 被过滤条件丢弃的选择要留下原因：先取下来，applySelection("") 会清掉
   // blockedNote，故在其之后写回 —— 否则用户改一次过滤条件，壁纸就无声变空白。

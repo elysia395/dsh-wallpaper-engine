@@ -75,7 +75,7 @@ export function apply(ctx, _config) {
   // host.http，由下方传给两条路由的 register。
   const keys = host.keys('fonts', ctx);
   assertFontsKeys(host.keyNames('fonts'), keys);
-  // issue #267：注册面容错（原地升级撞 1.3.3 残留路由时不整条抛错）。
+  // 注册面容错（原地升级撞 1.3.3 残留路由时不整条抛错）。
   webServer = keys.tolerantWebServer(webServer);
 
   // 拆卸句柄数组：照主包 lib/kernel/host-session.js 的口径（一个数组、插入顺序、

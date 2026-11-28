@@ -111,7 +111,7 @@ function marketStickyFade() {
   const body = typeof document !== "undefined" ? document.body : null;
   const value = body && typeof body.getAttribute === "function" ? body.getAttribute(MARKET_STICKY_ATTR) : null;
   // ⚠️ 先判 null 再 Number：`Number(null) === 0` 且 isFinite(0) 为真，直接 Number 会让「读不到」
-  //    变成「渐隐 0px（硬切口）」，注释与实现不符（#377 审查第 6 条）。
+  //    变成「渐隐 0px（硬切口）」，注释与实现不符（审查第 6 条）。
   if (value === null || value === "") return 26;
   const raw = Number(value);
   if (!Number.isFinite(raw)) return 26;
@@ -168,7 +168,7 @@ function marketStickyPaint(el, cut, fade, height) {
     marketStickyTargets.add(el);
   }
   // 去重比的是**我们上次写下去的原串**：rec.written 存的是浏览器读回值（已规范化），
-  // 拿它跟原串比永远不等 ⇒ 每次 sync 都重写两个属性（#377 审查第 3 条）。
+  // 拿它跟原串比永远不等 ⇒ 每次 sync 都重写两个属性（审查第 3 条）。
   if (rec.writtenRaw === mask) return;
   el.style.setProperty("-webkit-mask-image", mask);
   el.style.setProperty("mask-image", mask);
@@ -249,7 +249,7 @@ function marketStickyRequest() {
 /**
  * 轮询只在**市场挂着**的时候开：没有 market root 时一个定时器都不留。
  * 这条纪律抄自 glass-surfaces.js 的「静止时不安排循环帧」—— 第一版不管市场开没开都常驻
- * 400ms 定时器，还每次全文档 querySelector（#377 审查第 4 条）。
+ * 400ms 定时器，还每次全文档 querySelector（审查第 4 条）。
  * 市场打开只可能来自用户操作 ⇒ 用 pointerdown（捕获）当「市场可能刚出现」的触发点，
  * 配合 scroll / resize / visibilitychange，市场没开时零开销。
  */
