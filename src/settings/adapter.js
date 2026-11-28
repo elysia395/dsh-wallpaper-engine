@@ -39,7 +39,7 @@ const ADAPTER_LABELS = {
 let adapterHostReport = null; // { detected, fence } · null = 未上报
 
 /**
- * 宿主上报入口（src/persistence.js 的 loadPersisted 调）。非对象一律视为
+ * 宿主上报入口（src/settings/persistence.js 的 loadPersisted 调）。非对象一律视为
  * "宿主没给"，保持 null —— 客户端不能因为响应里缺字段就抛。
  */
 function setAdapterFromHost(adapter) {

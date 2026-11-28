@@ -1419,7 +1419,7 @@ section('③e #199：随包层旧 tag ⇒ 422「版本已作废」（不是 404�
 // ── ④ 客户端形态棘轮（文本级）══════════════════════════════════════════════
 section('④ 客户端形态棘轮：新编排链（合并→落盘→reapplyAll→emit）/ 失败滚回 / 无第二持久化');
 {
-  const storeSrc = readFileSync(join(root, 'src', 'preset-store.js'), 'utf8');
+  const storeSrc = readFileSync(join(root, 'src', 'settings', 'preset-store.js'), 'utf8');
   const panelSrc = [readFileSync(join(root, 'packages', 'glass', 'src', 'glass-presets-panel.js'), 'utf8'),
     readFileSync(join(root, 'packages', 'glass', 'src', 'glass-panel.js'), 'utf8')].join('\n');
   const storeCode = stripComments(storeSrc);
@@ -1590,8 +1590,8 @@ section('④ 客户端形态棘轮：新编排链（合并→落盘→reapplyAll
   // ④ factory-author 真的声明了 dark。
   {
     const clientSrc = stripComments(readFileSync(join(root, 'src', 'client.js'), 'utf8'));
-    const persistenceSrc = stripComments(readFileSync(join(root, 'src', 'persistence.js'), 'utf8'));
-    const presetStoreSrc = stripComments(readFileSync(join(root, 'src', 'preset-store.js'), 'utf8'));
+    const persistenceSrc = stripComments(readFileSync(join(root, 'src', 'settings', 'persistence.js'), 'utf8'));
+    const presetStoreSrc = stripComments(readFileSync(join(root, 'src', 'settings', 'preset-store.js'), 'utf8'));
     const schemaSrc = readFileSync(join(root, 'lib', 'settings-schema.js'), 'utf8');
 
     // ① 弹窗彻底下线：组件、挂载点、localStorage 哨兵都不许留。
@@ -1990,8 +1990,8 @@ section('④b 行为判据：删除令牌链 + broken 行禁用与可删 + 勾�
 section('④c #199 失败文案：404 不再把宿主英文原句直落上屏，窗口期出路口径在词表里');
 {
   const copyText = scopeText('src/i18n/i18n-copy');
-  const storeCode = stripComments(readFileSync(join(root, 'src', 'preset-store.js'), 'utf8'));
-  // 真跑 `src/preset-store.js` 里的 `glassPresetFailureReason()`：按花括号配平提取具名函数、喂桩执行。
+  const storeCode = stripComments(readFileSync(join(root, 'src', 'settings', 'preset-store.js'), 'utf8'));
+  // 真跑 `src/settings/preset-store.js` 里的 `glassPresetFailureReason()`：按花括号配平提取具名函数、喂桩执行。
   // grep 到 `reason` 三个字符串**不算**证据 —— 把分类改回"一句到底"它照样能匹配到。
   const at = storeCode.indexOf('function glassPresetFailureReason(');
   let fn = '';

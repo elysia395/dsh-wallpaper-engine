@@ -3755,7 +3755,7 @@ setTimeout(async () => {
       // 取文口径：客户端正文族（正文 + src/client/*.js 助手模块）—— 处理器搬出正文后，
       // 按单文件读会让"持久化直写必须与落盘配对"扫不到它们（漏判），也会把豁免名单判成空转。
       const src = clientText();
-      const persistSrc = readFileSync(new URL('../src/persistence.js', import.meta.url), 'utf8');
+      const persistSrc = readFileSync(new URL('../src/settings/persistence.js', import.meta.url), 'utf8');
       const host = readFileSync(new URL('../lib/index.js', import.meta.url), 'utf8');
       const schemaMod = await import(new URL('../lib/settings-schema.js', import.meta.url).href);
       const { sanitizeFromSchema, serializeSettings, CLIENT_ONLY, DEFAULTS_ONLY, KINDS, DEFAULTS } = schemaMod;
@@ -3781,7 +3781,7 @@ setTimeout(async () => {
         'id 必须在两侧白名单里但不在 DEFAULTS 里（它是选中项，不是设置项）');
 
       // ①b F3 阶段 2：六个字体键**不在** settings 的持久化白名单里 —— 它们的值住
-      //    `fontsets/<id>.json`（客户端通道见 src/fontset-store.js，宿主侧见 lib/routes/fontsets.js）。
+      //    `fontsets/<id>.json`（客户端通道见 src/settings/fontset-store.js，宿主侧见 lib/routes/fontsets.js）。
       //    与下面的 golden 夹具互为印证：这些键一旦回到白名单，宿主输出就会多出它们、夹具当场漂移。
       //    kind 元数据与默认值**仍须在册**：`sanitizeFontset` 按 `KINDS` 的 kind 消毒、按 `DEFAULTS` 兜底。
       const FONT_KEYS = ['themeColors', 'themeDarkSeparate', 'themeSize', 'themeWeight', 'themeFamily', 'globalFamily', 'componentFonts'];
@@ -3854,7 +3854,7 @@ setTimeout(async () => {
       //      · `src/live-layer.js` ×2 —— `syncLayers` 内部，**本次渲染正由 emit 驱动**（源码注释写明
       //        "这里不 emit：本次 syncLayers 正是由 emit 驱动的"）；
       //      · `src/effects.js` ×3 —— **卸载清理**（禁用 / HMR 后不留上一张壁纸的播放态）。
-      //      · `src/preset-store.js` ×1 —— 通道失败文案的唯一写点（`setPresetError` 助手：
+      //      · `src/settings/preset-store.js` ×1 —— 通道失败文案的唯一写点（`setPresetError` 助手：
       //        清单 / 应用 / 保存 / 删除四条路的失败与清空都汇到它，写点收口是一处 ——
       //         引入玻璃预设时按本棘轮要求归的类）。
       //      给它们注入入口是**仪式**而不是收口（"禁裸写会逼出任意豁免"那条注记就是这个意思）⇒ 这条
@@ -3936,11 +3936,11 @@ setTimeout(async () => {
           why: '卸载清理（禁用 / HMR 后不留上一张壁纸的播放态）；无 emit 是刻意的 —— 这一路径本身就是"把屏上痕迹收干净"',
           fields: ['sceneAudioUrl', 'sceneHasAudio'],
         },
-        'src/fontset-store.js': {
+        'src/settings/fontset-store.js': {
           why: '字体集通道内部的加载态/错误文案/清单；面板经 client.js 的渲染期读取消费（不是每次改动都 emit）',
           fields: ['fontSetActive', 'fontSetError', 'fontSets'],
         },
-        'src/preset-store.js': {
+        'src/settings/preset-store.js': {
           why: '玻璃预设通道内部的清单投影（活跃清单；已删除的出厂不回来，无隐藏形态）；错误文案已收口到 setPresetError 单写点（verify-client ①e 棘轮）',
           fields: ['glassPresets'],
         },        'src/live-layer.js': {
@@ -3957,11 +3957,11 @@ setTimeout(async () => {
             'sceneFrameUrl', 'sceneHasAudio', 'sceneLiveActive', 'sceneLiveSrc', 'sceneVideo',
             'schemeColor', 'slideIntervalMs', 'slidesUrl', 'transcodeState', 'type', 'webLiveSrc'],
         },
-        'src/persistence.js': {
+        'src/settings/persistence.js': {
           why: '启动加载期的一次性赋值（宿主→本地合并的结果），随后由调用方 emit',
           fields: ['hostLoaded', 'sidebarPresent'],
         },
-        'src/system-fonts.js': {
+        'src/settings/system-fonts.js': {
           why: '本机字体清单通道的瞬态（不落盘、不进字体集）：清单 / 在途 / 失败文案 / 取得时刻'
             + '由 ensureSystemFonts 的取数生命周期写入，面板渲染期读取（client.js selection 初始化处有同段注释）',
           fields: ['systemFonts', 'systemFontsApproximate', 'systemFontsAt', 'systemFontsError', 'systemFontsLoading'],
@@ -4244,11 +4244,11 @@ setTimeout(async () => {
         'positive control: 两支各自写、各自通知 ⇒ 不算');
 
       // ② 结构：两侧都必须**委托**给 schema，宿主不得再有手写逐键白名单。
-      //    ⚠️ `serializeSelection` 住在 src/persistence.js ⇒ 那一条按文件归属分源；
+      //    ⚠️ `serializeSelection` 住在 src/settings/persistence.js ⇒ 那一条按文件归属分源；
       //    `sanitizeSettings` 住在 client.js，是对同一份 schema 的另一侧入口。
       assert.ok(/sanitizeFromSchema\(o, "client"\)/.test(src), '客户端 sanitizeSettings 必须委托给 schema');
       assert.ok(/serializeSettings\(selection\)/.test(persistSrc),
-        '客户端 serializeSelection 必须委托给 schema（现在住在 src/persistence.js）');
+        '客户端 serializeSelection 必须委托给 schema（现在住在 src/settings/persistence.js）');
       assert.ok(/sanitizeFromSchema\(raw, 'host'\)/.test(host), '宿主 sanitizeSettings 必须委托给 schema');
       const handWritten = (host.match(/clampNum\(o\.|clampStr\(o\./g) || []).length;
       assert.equal(handWritten, 0,

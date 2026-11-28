@@ -211,7 +211,7 @@ function apply(ctx) {
       // 持久化监听器: pagehide → 立即 flush 未落盘的设置; visibilitychange →
       // 页面回到前台时重试失败过的 PUT。注册在这里 (而不是模块作用域) 才能随
       // fiber 注销 — 否则每次插件重载/HMR 都会在同一页面再叠一对, 永不释放。
-      // 字体集是**另一条**通道（src/fontset-store.js），同形但各自记自己的脏标记 ⇒ 各自注册。
+      // 字体集是**另一条**通道（src/settings/fontset-store.js），同形但各自记自己的脏标记 ⇒ 各自注册。
       let pageHideBound = false, visBound = false;
       let fontPageHideBound = false, fontVisBound = false;
       if (typeof window !== "undefined" && typeof window.addEventListener === "function") {

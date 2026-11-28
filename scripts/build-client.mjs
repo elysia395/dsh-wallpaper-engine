@@ -188,14 +188,14 @@ const INLINE_MODULES = [
     // `function settingsDefaults(` 曾是第 3 个锚点，但它全仓零调用点、已按死代码删除
     // （settings-schema 的零消费者导出面清理）。按"锚点只能换、不能减"的规矩，换成
     // `function sanitizePresetValues(`：同为**顶层函数声明**，且客户端半边
-    // （`src/preset-store.js`）与宿主半边（`lib/routes/presets.js`）都在调它 ⇒
+    // （`src/settings/preset-store.js`）与宿主半边（`lib/routes/presets.js`）都在调它 ⇒
     // 它不可能被单独删掉，作结构锚比原锚更稳。
     markers: ['const KINDS = {', 'function sanitizeFromSchema(', 'function sanitizePresetValues(',
       'function serializeSettings(', 'const DEFAULTS = {'],
   },
   {
     // 排在 settings-schema 之后：本文件的判定值域就是那里的 ADAPTER_TARGET_VALUES。
-    file: 'src/adapter.js',
+    file: 'src/settings/adapter.js',
     why: '适配器模式：宿主形态判定（手选 > 宿主上报 > 本地信号）与能力矩阵',
     markers: ['const ADAPTER_LABELS = {', 'function setAdapterFromHost(',
       'function resolveAdapterTarget(', 'function adapterCaps('],
@@ -230,26 +230,26 @@ const INLINE_MODULES = [
       'function removeFontStyles()'],
   },
   {
-    file: 'src/persistence.js',
+    file: 'src/settings/persistence.js',
     why: '设置持久化层：debounce 写 / 脏标记重试 / 宿主→本地迁移 / 在途 GET 竞态守卫',
     markers: ['function readPersisted()', 'function serializeSelection()', 'function pushPersisted()',
       'function schedulePersist()', 'async function loadPersisted()', 'function cancelPendingPersist()'],
   },
   {
-    file: 'src/fontset-store.js',
+    file: 'src/settings/fontset-store.js',
     why: '字体集通道（F3 阶段 2）：活动集正文的加载 / 原子采用 / debounce 落盘 / 本地缓存（与设置平行但另一条真源）',
     markers: ['const FONTSET_CACHE_KEY = ', 'function readCachedFontSet()', 'function setFontValues(patch)',
       'async function loadFontSet()', 'function scheduleFontSet()', 'function cancelPendingFontSet()'],
   },
   {
-    file: 'src/preset-store.js',
+    file: 'src/settings/preset-store.js',
     why: '玻璃预设通道：清单加载 / 整快照应用（走设置通道落效）/ 保存 / 删除（重名由宿主裁决）',
     markers: ['const gpFetch = ', 'function glassPresetFailureReason(res)', 'async function applyGlassPreset(id)',
       'async function saveGlassPreset(name)', 'async function deleteGlassPreset(id)'],
   },
   // P-C：字体集编辑器面板 + 外观页签字体节**已搬进 packages/fonts**（本包自己的 inline 表），
   // 主 bundle 不再内联它们；两条通道各有配方（packages/fonts/client.build.json）。
-  // 顺序注记：这两条原先排在 `src/preset-store.js` 之后、`src/section-head.js` 之前，搬走后
+  // 顺序注记：这两条原先排在 `src/settings/preset-store.js` 之后、`src/section-head.js` 之前，搬走后
   // 本数组里 `preset-store → section-head` 的相邻关系不变（各模块都按名字引用，顺序不承载语义）。
   {
     // 面板各节的统一节头构件（二次修订：**两档都支持隐藏**）。
@@ -315,7 +315,7 @@ const INLINE_MODULES = [
     markers: ['const PERF_EXTENSION_MODULE = {', 'function renderPerfIsland(ctx)'],
   },
   {
-    file: 'src/system-fonts.js',
+    file: 'src/settings/system-fonts.js',
     why: '本机字体清单的客户端通道：宿主那次进程扫描的唯一读者（清单 / 缓存 / 失败文案 / 本浏览器能否匹配的探针），与字体集通道同形',
     markers: ['const SYSTEM_FONTS_CACHE_KEY = ', 'function readCachedSystemFonts()',
       'async function ensureSystemFonts(', 'function systemFontKeyList(',

@@ -3981,7 +3981,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
 // panel-tabs 是 bundle-inline 形态：这些符号在真产物里由 settings-schema / system-fonts
 // 的内联段供给；真模块导入形态下必须当 global 预置，缺一个就是渲染期 ReferenceError。
 {
-  const sysMod = await import(pathToFileURL(join(root, 'src', 'system-fonts.js')).href);
+  const sysMod = await import(pathToFileURL(join(root, 'src', 'settings', 'system-fonts.js')).href);
   const schemaEarly = await import(pathToFileURL(join(root, 'lib', 'settings-schema.js')).href);
   Object.assign(globalThis, {
     sanitizeFamilyKey: schemaEarly.sanitizeFamilyKey,

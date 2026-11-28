@@ -833,7 +833,7 @@ if (fontsetsRoute) {
 section('⑦ 客户端通道（静态契约：字体值不再经 settings 出去，也不再从 settings 进来）');
 {
   const clientSrc = clientFamily();
-  const storeSrc = readFileSync(join(root, 'src', 'fontset-store.js'), 'utf8');
+  const storeSrc = readFileSync(join(root, 'src', 'settings', 'fontset-store.js'), 'utf8');
   /** 静态判据只认代码：调用点沿用短名 `strip`。 */
   const strip = stripComments;
   const clientCode = strip(clientSrc);
@@ -1088,7 +1088,7 @@ section('⑧ 面板渲染回归（配色区在总开关打开时必须渲染得�
     // 同理（issue #192）：模块级重置按钮也是跨模块共用构件，按文件 import 时是裸标识符。
     await import(pathToFileURL(join(root, 'src', 'module-reset.js')).href),
     // 面板还会调 `filterUsableSystemFonts(...)`（本机字体那道"本浏览器能否匹配"的筛，同一条理由）。
-    await import(pathToFileURL(join(root, 'src', 'system-fonts.js')).href),
+    await import(pathToFileURL(join(root, 'src', 'settings', 'system-fonts.js')).href),
     // 刀4：panel-tabs 的 5 个域模块（节渲染器）—— 与上面 glass-panel / section-head 同一条理由：
     // 打包后同作用域，按文件 import 时必须映成全局。
     ...(await Promise.all(panelSources().slice(0, -1).map((rel) => import(pathToFileURL(join(root, rel)).href)))),
@@ -1598,12 +1598,12 @@ section('⑨ 字体集编辑器（面板可驱动：意图映射 / confirm 门�
 
   // ── ⑩ 导入入口（阶段 4）────────────────────────────────────────────────────
   // 面板只做"选文件"：隐藏 input + 一个按钮去 click()（与自定义画面的导入同形）。
-  // 读文件 / 校验 / 上传都在 src/fontset-store.js（那里有各自的判据），这一段只管**接线**。
+  // 读文件 / 校验 / 上传都在 src/settings/fontset-store.js（那里有各自的判据），这一段只管**接线**。
   section('⑩ 导入入口（隐藏 file input + 按钮触发；读/校验/上传在通道里）');
   {
     let clicked = 0;
     const baseReact = globalThis.React;
-    const storeSrc = readFileSync(join(root, 'src', 'fontset-store.js'), 'utf8');
+    const storeSrc = readFileSync(join(root, 'src', 'settings', 'fontset-store.js'), 'utf8');
     const editorSrc = readFileSync(join(root, 'packages', 'fonts', 'src', 'fontset-editor.js'), 'utf8');
     // 让假 React 也调 ref 回调：`importInput` 是模块级 ref，面板靠它去 click()。
     globalThis.React = Object.assign({}, baseReact, {
@@ -1652,7 +1652,7 @@ section('⑨ 字体集编辑器（面板可驱动：意图映射 / confirm 门�
       // 删字体集）全部走同一套面板内令牌（`armConfirm` + `renderConfirmRow`，见 src/client.js）。
       // 判据写成**等号**：0 是终态，回增必须红（`<= 0` 与 `=== 0` 等价，但等号才读得出这一点）。
       const confirmFiles = ['src/client.js', 'src/panel-tabs.js', 'src/picker-modal.js',
-        'src/picker-props-panel.js', 'src/media-prep.js', 'packages/fonts/src/fontset-editor.js', 'src/fontset-store.js'];
+        'src/picker-props-panel.js', 'src/media-prep.js', 'packages/fonts/src/fontset-editor.js', 'src/settings/fontset-store.js'];
       const confirmSites = confirmFiles.reduce(
         (n, f) => n + ((readFileSync(join(root, f), 'utf8').match(/window\.confirm\(/g) || []).length), 0);
       // 只看**代码**：注释里可以提 window.confirm（说明为什么禁用），代码里不许出现。

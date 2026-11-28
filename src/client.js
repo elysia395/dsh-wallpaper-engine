@@ -177,7 +177,7 @@ const FONT_FAMILY_LABELS = [
 ];
 // 依持久化值取应用字体栈。取值域有两类**族键**（都只存键、不存栈）：
 //   · 内置键：FONT_FAMILY_STACKS 里的那些（栈写死在这里，含中文 fallback 链）；
-//   · 本机字体键 `sys:<族名>`：清单来自宿主枚举（src/system-fonts.js），栈在这里现拼。
+//   · 本机字体键 `sys:<族名>`：清单来自宿主枚举（src/settings/system-fonts.js），栈在这里现拼。
 // 另有一类**历史值**：组件字体可能存的是"解析后的 CSS 栈"（见 onComponentFamily 的注释）
 // —— 那种值原样可用，因此解析侧两条都认（老字体集零迁移）。
 const FONT_FAMILY_BY_STACK = Object.create(null);
@@ -280,7 +280,7 @@ function sanitizeSettings(o) {
   return sanitizeFromSchema(o, "client");
 }
 
-// `readPersisted()` 已随持久化层抽到 src/persistence.js（store 初始化仍在下面调用它）。
+// `readPersisted()` 已随持久化层抽到 src/settings/persistence.js（store 初始化仍在下面调用它）。
 
 // ── Shared selection store (React + DOM layer share it) ────────────────────
 const selection = {
@@ -298,7 +298,7 @@ const selection = {
   //      没有时它返回的就是①那份兜底。宿主回了真值再由 loadFontSet() 覆盖。
   ...fontValueDefaults(),
   ...readCachedFontSetValues(),
-  // 本机字体清单（src/system-fonts.js）：**首帧就用缓存那份** —— 否则一个已选中的本机字体
+  // 本机字体清单（src/settings/system-fonts.js）：**首帧就用缓存那份** —— 否则一个已选中的本机字体
   // 在下拉里会先显示成"跟随"，等宿主回话才跳回来。`systemFontsAt: 0` 让它照样算过期，
   // 打开字体设置时该重扫还是会重扫（缓存只是"先有个能显示的名字"）。
   systemFonts: readCachedSystemFonts(),
@@ -332,7 +332,7 @@ const selection = {
   // 对话框第一行（名字）的视图态；busy 是任何在途动作（应用/保存/导入/删除/清单）；
   // assetChecks 是保存对话框的资产勾选态（ADR-0011 D4：字体/吉祥物默认勾、头像默认不勾，
   // 且只有本机有那份资产时才可勾）；note 是导入成功这类一次性提示（成功与失败不同屏）。
-  // store 见 src/preset-store.js。
+  // store 见 src/settings/preset-store.js。
   glassPresets: [],
   glassPresetError: "",
   glassPresetBusy: false,
@@ -764,7 +764,7 @@ function useStore() {
 // （"改了不生效 / 刷新后回退"，且没有任何判据会红）。收成三个入口后：
 //   · setSetting(field, value)   改**设置**并落盘（唯一入口）
 //   · setFontValues(patch)       改**字体值**并落盘（唯一入口；真源是 fontsets/<id>.json，
-//     见 src/fontset-store.js —— 这些键已退出 settings 的持久化白名单）
+//     见 src/settings/fontset-store.js —— 这些键已退出 settings 的持久化白名单）
 //   · setTransient(field, value) 改**瞬态**字段（上传中/编辑中/加载中…），不落盘 ——
 //     它们不在 schema 白名单里，落盘只会白跑一次 debounce。
 // 页签（src/panel-tabs.js）通过 ctx 拿到前两个入口，因此**完全不碰** `selection`。
@@ -884,11 +884,11 @@ function renderConfirmRow(armed, token, question, onConfirm, onDisarm) {
 }
 
 // ── 设置持久化（debounce / 迁移 / 重试 / 启动加载）────────────────────────────
-// 这一族的实现已抽到 **src/persistence.js**。构建期内联回本作用域，
+// 这一族的实现已抽到 **src/settings/persistence.js**。构建期内联回本作用域，
 // 调用点（persistSelection / flushPersist / onPageHideFlush / …）无需改动。
 // 契约：8 个出向依赖的清单、入口与不变量 —— 见该文件头。
 // ⚠️ **字体值不走这条通道**：那些键住 `fontsets/<活动 id>.json`，通道在
-// **src/fontset-store.js**（同形的 debounce + 脏标记 + 重试，但真源、键集与失败语义都不同）。
+// **src/settings/fontset-store.js**（同形的 debounce + 脏标记 + 重试，但真源、键集与失败语义都不同）。
 
 // Concurrency guard: 刷新 / 上传完成 / 移除 / 改目录 all call loadInventory(),
 // and two overlapping requests used to resolve in arbitrary order — an older,
@@ -2457,7 +2457,7 @@ const officialColorOf = (tokens) => {
 
 // 字体自定义：总开关 + 颜色/字重/字体族，各项立即生效并持久化。
 // 打开开关时**顺手**去要一次本机字体清单（宿主那次扫描很贵，只在用户真的进这一区时才发生；
-// 清单本身不参与字体值，拿不到也不影响任何别的功能 —— 见 src/system-fonts.js）。
+// 清单本身不参与字体值，拿不到也不影响任何别的功能 —— 见 src/settings/system-fonts.js）。
 const onToggleFontCustom = (v) => {
   setSetting("fontCustom", !!v); applyEffects(); emit();
   if (v) ensureSystemFonts(false);
@@ -2721,7 +2721,7 @@ function readRopePos(size) {
 
 // ── 首次安装：自动套用「深色 + 作者自用」（用户口径，取代原来的推广弹窗）──────
 // 口径：新装默认就是作者在用的那套观感，不再弹窗问"要不要试试"。
-// 触发点只有一个 —— `src/persistence.js` 的 `loadPersisted()` 发现**宿主没有存档
+// 触发点只有一个 —— `src/settings/persistence.js` 的 `loadPersisted()` 发现**宿主没有存档
 // 且本机也没有本地存档**（真正第一次）。升级用户、重装宿主但本地存档还在的用户，
 // 一概不受影响；套用后存档被写出，下次启动走宿主分支，天然只触发一次。
 //

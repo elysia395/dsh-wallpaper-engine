@@ -1,6 +1,6 @@
 /**
  * glass-preset-handlers.js — 玻璃预设的接线（渲染器只读 ctx、动作经 on*），从 `src/client.js`
- * 按族搬出，函数体逐字未改；store 与失败语义仍住 src/preset-store.js。
+ * 按族搬出，函数体逐字未改；store 与失败语义仍住 src/settings/preset-store.js。
  *
  * 契约：
  *   1) 本文件不 import —— 构建期由 scripts/build-client.mjs 内联在正文之前，与正文同处一个扁平作用域；
@@ -12,7 +12,7 @@
  *   4) 导出预设那条路会在 `document.body` 上挂一次性 <a>（宿主附件应答）：它是**下载锚点**，
  *      在 verify-layer-ownership 的 body 挂载白名单里单列为本文件的 1 处，与壁纸层无关。
  */
-// ── 玻璃预设的接线（渲染器只读 ctx、动作经 on*；store 与失败语义见 src/preset-store.js）──
+// ── 玻璃预设的接线（渲染器只读 ctx、动作经 on*；store 与失败语义见 src/settings/preset-store.js）──
 // 与 fontSetCtx 同形：清单/错误是宿主投影，busy 是在途标记，删除走 armConfirm 两步确认。
 // 应用预设会**整机快照覆盖**（settings 段 + 勾选的资产段）⇒ 动作前先清掉挂着的删除确认
 //（上下文切换必清，同字体集）。

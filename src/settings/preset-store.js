@@ -24,8 +24,8 @@
  *   hostFailureReason                            ← src/client.js（失败原因的唯一翻译出口）
  *   setTransient                                 ← src/client.js（瞬态字段的唯一写入口）
  *   setSetting                                   ← src/client.js（持久化设置的唯一写入口）
- *   landPresetFontSet                             ← src/fontset-store.js（预设字体落位：专用槽 preset-font，不写用户活动集）
- *   persistSelection                             ← src/persistence.js（应用预设 = 走设置通道落盘）
+ *   landPresetFontSet                             ← src/settings/fontset-store.js（预设字体落位：专用槽 preset-font，不写用户活动集）
+ *   persistSelection                             ← src/settings/persistence.js（应用预设 = 走设置通道落盘）
  *   syncLayers / syncRotationTimer / syncSceneAudio ← src/client.js / src/live-layer.js（reapplyAll 编排）
  *   emit                                         ← 单向重渲染
  * 本文件自己的内部约定（不导出、别处不该有）：
@@ -529,7 +529,7 @@ async function importGlassPreset(file) {
 }
 
 /**
- * 读一个 File 的文本（与 src/fontset-store.js 的同名助手同形 —— 那边没有 export，
+ * 读一个 File 的文本（与 src/settings/fontset-store.js 的同名助手同形 —— 那边没有 export，
  * 但**函数名不能撞**：两个模块平铺进 bundle 是同一作用域，故这里用族前缀专名）。
  * `file.text()` 是 Blob 的标准方法（Chromium/Electron 都有）；旧的 / 替身形态退回到
  * FileReader —— 两条都失败才报错（失败要**可判定**，不许静默）。

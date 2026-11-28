@@ -12,7 +12,7 @@
 // 键集一律取自 lib/settings-schema.js 的 `RESET_MODULES`（模块级）/ `RESET_TABS`（页签级）/
 // `PROFILE_PRESET_KEYS`（全局）—— 都在那一侧定义，这一侧不手抄键表。
 // ⚠️ 必须是**整批赋值 + 一次 persistSelection + 一次 emit**：逐键走 `setSetting` 会发 N 次
-// debounce、N 次整棵面板重渲染（本仓"写必成对"纪律，同 src/fontset-store.js 的注释）。
+// debounce、N 次整棵面板重渲染（本仓"写必成对"纪律，同 src/settings/fontset-store.js 的注释）。
 /**
  * 把给定的键整批写回默认值，返回真正改动的键数。
  * 只碰"确实有默认值"的键：缺默认值的键原样留着，免得把 `undefined` 写进 store ——

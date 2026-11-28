@@ -24,7 +24,7 @@
  *      两侧 ctx 都给处理器（漏一侧 = 侧栏档渲染期 ReferenceError）· schema 两处登记
  *   ⑥ 设置往返：合法清单过 sanitizeFromSchema 逐字保留；非法条被丢
  *
- * 本模块与 src/adapter.js 同族：按构建期契约**同作用域内联**，`sanitizeExtraGlassSelectors`
+ * 本模块与 src/settings/adapter.js 同族：按构建期契约**同作用域内联**，`sanitizeExtraGlassSelectors`
  * 是外部作用域的自由变量 ⇒ 这里把它挂到 globalThis 复现同一形态（每种初值用新 URL 重新
  * import，避免模块级状态互相污染）。
  *

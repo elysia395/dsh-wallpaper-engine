@@ -1,6 +1,6 @@
 /**
  * fontset-store.js — 字体集的**客户端通道**：活动集的值住宿主文件，
- * 与设置（src/persistence.js）**平行但另一条**通道。
+ * 与设置（src/settings/persistence.js）**平行但另一条**通道。
  *
  * 为什么另立一条而不是并进 persistence.js：两者的**真源不同**（settings blob ↔
  * `fontsets/<id>.json`）、**键集不同**（那字体键已退出 settings 的持久化白名单）、

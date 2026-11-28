@@ -15,7 +15,7 @@
  *   SCRIM_ID                     ← scrim 元素的固定 id（顶层 const）
  *   syncSceneAudio(selLike)      ← 场景音轨同步（顶层 function）
  *   detectMicaSupport()          ← 惰性探针：Mica 支持
- *   adapterCaps()                ← src/adapter.js（适配目标能力矩阵 → body 属性）
+ *   adapterCaps()                ← src/settings/adapter.js（适配目标能力矩阵 → body 属性）
  *   applyComponentFonts()        ← src/font/apply.js（字体：组件作用域）
  *   removeComponentFonts()       ← 同上
  *   snapshotHostFontDefaults()   ← 同上（宿主角色色快照）
@@ -540,7 +540,7 @@ function applyEffects(opts) {
   //    同一条链先后各跑一次）。本文件只剩**非玻璃**效果（accent / 可读性弹层墨 /
   //    壁纸 / 光标 / 字体 / 音频 / scrim）。
 
-  // 适配目标钩子（src/adapter.js）：把最终目标挂到 <body>，外壳材质类选择器
+  // 适配目标钩子（src/settings/adapter.js）：把最终目标挂到 <body>，外壳材质类选择器
   // 一律经 [data-we-adapter^="desktop-"] 门控 —— 原生浏览器形态永远不吃桌面壳
   // 的材质规则。取值恒为三档之一（auto 在 resolve 里已被消解），手选改动后
   // 下一次 applyEffects 就换值；与其它 body 钩子一样成对清理。

@@ -16,7 +16,7 @@
  *      回宿主持久白名单键数的规范化快照，而 `config.json` **逐字节不变**（读不落盘）。
  *   ⑥ **装配与源码棘轮**：注册调用仍是行首形态、`/settings` 仍是一条 prefix 注册（服务裸路径与子路径）、
  *      `lib/routes/settings.js` 里既有守卫钉住的四个字面量仍在。
- *   ⑦ **客户端差分发送**（P1-S2，`src/persistence.js`）：只发改动键、按组件簇分组、无改动不发请求、
+ *   ⑦ **客户端差分发送**（P1-S2，`src/settings/persistence.js`）：只发改动键、按组件簇分组、无改动不发请求、
  *      CLIENT_ONLY / `settingsVersion` / `kind:'const'` 的键都不发、首启迁移与宿主不可达仍走整段入口。
  *      这一节 import **真模块本体**并把工厂作用域的名字挂到 globalThis（内联契约见 build-client.mjs）；
  *      挂起 PUT 时回退/连续更新/失败重试合并最新值，部分分区成功后回退仍最终一致。
@@ -38,7 +38,7 @@ import { dirname, join } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Readable, Writable } from 'node:stream';
 import { stripComments } from './tools/js-text.mjs';
-// 真源定位：`BASE`（宿主路由前缀）、`src/persistence.js`（客户端差分发送实现）、
+// 真源定位：`BASE`（宿主路由前缀）、`src/settings/persistence.js`（客户端差分发送实现）、
 // `registerSettingsRoutes`（路由模块的声明处 + 门面里的调用点）都不写死路径 ——
 // 实现搬家时判据跟着符号走；0 处 / 多处即红（缺锚即红，不回落到默认值）。
 import { locate, locateCallSites } from './tools/source-locator.mjs';
@@ -499,12 +499,12 @@ console.log('\n⑥ 装配（行首注册）+ 单条 prefix + 既有棘轮字面�
 }
 
 // ═══ ⑦ 客户端差分发送（P1-S2：只发改动键、按 ns 分组、首启迁移仍走整段）════════
-// `src/persistence.js` 是**构建期内联**的浏览器半边：它不 import 任何东西，靠工厂作用域里的名字
+// `src/settings/persistence.js` 是**构建期内联**的浏览器半边：它不 import 任何东西，靠工厂作用域里的名字
 // （lib/settings-schema.js 与 client.js 的 const）工作。所以这里按同一套契约把那些名字挂到 globalThis，
 // 再 import **真文件**本体 —— 断言打在实现上，不是复刻一份判据。
 console.log('\n⑦ 客户端差分：只发改动键、按 ns 分组、首启迁移仍走整段');
 {
-  // 客户端差分发送实现的真源：按符号定位（原先写死 `src/persistence.js`）。
+  // 客户端差分发送实现的真源：按符号定位（原先写死 `src/settings/persistence.js`）。
   const PERSIST_REL = anchorRel(locate('flushPersist'));
   const persistSrc = PERSIST_REL ? readFileSync(join(ROOT, PERSIST_REL), 'utf8') : '';
   const PERSIST_URL = pathToFileURL(join(ROOT, PERSIST_REL)).href;
@@ -848,7 +848,7 @@ console.log('\n⑦ 客户端差分：只发改动键、按 ns 分组、首启迁
   // ⑦ j 复合键（#292）：轮播列表 / 隐藏清单是**就地改**（push/splice）的数组。
   //    缺陷形态：`serializeSettings` 只做浅拷贝、基线又存了同一引用 ⇒ 就地改同时改到基线，
   //    引用比较永远相等 ⇒ 复合键从第二次起永远进不了 PUT 体（用户侧：重启后轮播列表消失、
-  //    隐藏的壁纸复活）。修法是**基线冻结 + 按值比较**，两件事缺一不可（见 src/persistence.js 不变量）。
+  //    隐藏的壁纸复活）。修法是**基线冻结 + 按值比较**，两件事缺一不可（见 src/settings/persistence.js 不变量）。
   const compositeHost = schema.sanitizeFromSchema({ id: 'host-id', blur: 20 }, 'host');
   const c5 = await loadPersist({ hostSettings: compositeHost });
   await c5.mod.loadPersisted();

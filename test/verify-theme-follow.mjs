@@ -23,7 +23,7 @@
  *   ⑧ 皮肤互操作：退场放回（改过才放、一次性）· 让路态一律不写 · 外部切换不硬覆盖回去
  *      （让位标记 + 现值比对两层判据，含 fromSkinRestore 的正负对照）
  *
- * 本模块与 src/adapter.js 一样，按构建期契约以**同作用域**内联（`selection` /
+ * 本模块与 src/settings/adapter.js 一样，按构建期契约以**同作用域**内联（`selection` /
  * `propTokenOf` / `storedUserPropsOf` 都是外部作用域的自由变量）⇒ 这里把这三个名字挂到
  * globalThis 上复现同一形态；每种初值用**新 URL 重新 import**，避免模块级判定状态互相污染。
  *
