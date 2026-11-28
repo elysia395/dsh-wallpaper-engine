@@ -1651,8 +1651,8 @@ section('⑨ 字体集编辑器（面板可驱动：意图映射 / confirm 门�
       // 棘轮已收到 **0**：五处破坏性动作（轮播列表 / 批量隐藏 / 移除自定义画面 / 恢复已隐藏 /
       // 删字体集）全部走同一套面板内令牌（`armConfirm` + `renderConfirmRow`，见 src/client.js）。
       // 判据写成**等号**：0 是终态，回增必须红（`<= 0` 与 `=== 0` 等价，但等号才读得出这一点）。
-      const confirmFiles = ['src/client.js', 'src/panel-tabs.js', 'src/picker-modal.js',
-        'src/picker-props-panel.js', 'src/media-prep.js', 'packages/fonts/src/fontset-editor.js', 'src/settings/fontset-store.js'];
+      const confirmFiles = ['src/client.js', 'src/panel-tabs.js', 'src/picker/picker-modal.js',
+        'src/picker/picker-props-panel.js', 'src/media-prep.js', 'packages/fonts/src/fontset-editor.js', 'src/settings/fontset-store.js'];
       const confirmSites = confirmFiles.reduce(
         (n, f) => n + ((readFileSync(join(root, f), 'utf8').match(/window\.confirm\(/g) || []).length), 0);
       // 只看**代码**：注释里可以提 window.confirm（说明为什么禁用），代码里不许出现。

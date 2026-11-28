@@ -293,7 +293,7 @@ function applySelection(id, opts) {
     return;
   }
   const w = selection.inventory.wallpapers.find((x) => x.id === selection.id);
-  // 判定来自 src/picker-model.js：过滤档与隐藏集合从调用点显式传入（模型不读 selection）。
+  // 判定来自 src/picker/picker-model.js：过滤档与隐藏集合从调用点显式传入（模型不读 selection）。
   // 闸门是 keepPlayingWallpaper（分级拦播放；类型档只筛列表/轮播候选，不碰正在应用的壁纸）。
   if (!w || !keepPlayingWallpaper(w, selection.contentRatingFilter)) {
     // 被过滤条件排除 / 条目消失时必须留下可读原因（#84），见 selectionBlockedNote。

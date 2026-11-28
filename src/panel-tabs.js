@@ -17,7 +17,7 @@
  *     面板的 `sel` / 页签需要的局部视图状态 / 处理器。**多传字段无害，漏传会当场
  *     ReferenceError**（守卫会抓住）—— 这是刻意选的失败方式：响亮且可定位。
  *   · 页签**只做"读 + 组装 React 树"**，四类越界由 `test/verify-client.mjs` 的接缝判据钉住
- *     （与 `src/picker-modal.js` / `src/picker-props-panel.js` **同一条口径**）：
+ *     （与 `src/picker/picker-modal.js` / `src/picker/picker-props-panel.js` **同一条口径**）：
  *       ① 不得引用 `selection`（写入经 ctx 的 `setSetting` / `setTransient` 两个入口）；
  *       ② 不得调 `emit(`（通知归处理器）；
  *       ③ 不得改写 **ctx 别名**指向的东西（`editing` = `selection.editing`、`sel` = store 快照…）

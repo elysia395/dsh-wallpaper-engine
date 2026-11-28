@@ -362,7 +362,7 @@ const INLINE_MODULES = [
       'renderWallpaperTab, renderAppearanceTab, renderAudioTab, renderMascotTab, renderEffectsTab, renderAdvancedTab,'],
   },
   {
-    file: 'src/picker-model.js',
+    file: 'src/picker/picker-model.js',
     why: '选择器模型层：过滤判定 + 派生数据 + 分页切片（纯函数 / 显式入参 / 零 DOM）',
     markers: ['function ratingOf(w)', 'function isPlayableType(w)',
       'function isRotatableWallpaper(w, ratingFilter, typeFilter)',
@@ -370,14 +370,14 @@ const INLINE_MODULES = [
       'function pageSlice(list, page)', 'function pickerModel(input)'],
   },
   {
-    file: 'src/picker-modal.js',
+    file: 'src/picker/picker-modal.js',
     why: '选择器库视图的渲染器（整棵 we-picker__modal 子树；页内下钻，不再是弹框）—— 显式 ctx 取外界，标记逐字搬',
     markers: ['function renderPickerModal(ctx)',
       'className: "we-picker__modal"',
       'className: "we-picker__modal-head"', 'className: "we-picker__grid"'],
   },
   {
-    file: 'src/picker-props-panel.js',
+    file: 'src/picker/picker-props-panel.js',
     why: '选择器「壁纸属性」面板的渲染器（整棵 we-picker__props 子树 + 每个 ptype 的控件分支）—— 显式 ctx 取外界，标记逐字搬',
     markers: ['function renderPickerPropsPanel(ctx)', 'function renderUserPropRow(p, onPropInput)',
       'className: "we-picker__props"', 'className: "we-picker__props-row"',
@@ -773,7 +773,7 @@ function readNormalized(abs) {
  * 的全作用域重复判据**共用这一份**（两份口径写着写着必然漂移，而这两条判据判的正是同一件事）。
  * ⚠️ 判据是"缩进 == 本文件声明的最小缩进"，不是"行首"也不是任意缩进：
  *   · 要求行首（原实现 `^(?:const|let|var|function)`)会**静默漏掉**把顶层声明写了一层缩进的模块
- *     （本仓真实形态：`src/picker-modal.js` / `src/picker-props-panel.js` / `src/ui/quick-panel.js`）
+ *     （本仓真实形态：`src/picker/picker-modal.js` / `src/picker/picker-props-panel.js` / `src/ui/quick-panel.js`）
  *     ⇒ 撞名不被判出，平铺后就是运行期 SyntaxError；
  *   · 只写 `^\s*` 又会把**嵌套**声明（函数内 const/let）全收进来 ⇒ 遍地假撞名。
  */

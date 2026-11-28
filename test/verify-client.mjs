@@ -4640,8 +4640,8 @@ setTimeout(async () => {
 }
 
 // ── P3-11 阶段 2/3：搬出去的渲染器都只经 ctx（不写 selection / 不自发通知）──────
-// 两次搬迁的契约同口径：模态框 → `src/picker-modal.js`（那 11 处原本内联改 `selection.*`
-// 的箭头都成了 ctx 里的具名回调，动作体留在组件里）；属性面板 → `src/picker-props-panel.js`
+// 两次搬迁的契约同口径：模态框 → `src/picker/picker-modal.js`（那 11 处原本内联改 `selection.*`
+// 的箭头都成了 ctx 里的具名回调，动作体留在组件里）；属性面板 → `src/picker/picker-props-panel.js`
 // （面板状态与「改一个属性」的动作同样留在组件里，渲染器只拿值 + 回调）。
 // 判据只有这一处：数"越过接缝直呼"的次数 —— **按代码判**（先剥注释，否则这些文件的头注
 // 自己提到这两个词就会被误伤）。
@@ -4658,9 +4658,9 @@ setTimeout(async () => {
   };
   // 每条都带一个**非空转锚点**：那串必须在文件里真的存在，否则"零次越界"只是扫了个空文件。
   const RENDERERS = [
-    { file: '../src/picker-modal.js', user: '库视图',
+    { file: '../src/picker/picker-modal.js', user: '库视图',
       anchor: ['function renderPickerModal(ctx)', 'we-picker__modal-head'] },
-    { file: '../src/picker-props-panel.js', user: '属性面板',
+    { file: '../src/picker/picker-props-panel.js', user: '属性面板',
       anchor: ['function renderPickerPropsPanel(ctx)', 'we-picker__props-row'] },
     // P4-15：`panel-tabs.js` 此前**不在**这张表里 —— 它用的是上面那条更弱的判据（只数
     // `selection.` 字面量），于是三类越界全都漏过去了：直接 `emit()`、写模块状态
@@ -4757,7 +4757,7 @@ setTimeout(async () => {
 // 相邻关系绑定 116 个选择器，见文件头注）。判据盯**代码**：装配函数体内不得再出现标记，
 // 且必须调用子渲染器；负对照证明同一条判据能判出"标记确实在子渲染器里"（否则是个恒真判据）。
 {
-  const src = readFileSync(new URL('../src/picker-modal.js', import.meta.url), 'utf8');
+  const src = readFileSync(new URL('../src/picker/picker-modal.js', import.meta.url), 'utf8');
   // 取"函数体"：从声明处到下一个同级声明（`\n  function `/`\n  export {`）—— 不靠行号。
   const bodyOf = (name) => {
     const i = src.indexOf('function ' + name + '(');

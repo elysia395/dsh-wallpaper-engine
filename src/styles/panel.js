@@ -697,7 +697,7 @@ const CSS_PANEL = `  /* ── 吉祥物形态**3D 圆环转盘**（四次返工
   .we-picker__modal-body .we-picker__grid { max-height: none; }
   /* 库视图虚拟滚动的占位行（picker-modal 的 renderVSpacer）：撑出未渲染部分的高度。
      网格里必须 grid-column 全跨整行，否则会占一个卡位把可见卡片挤错行。行高常量
-     PICKER_CARD_H / PICKER_CARD_GAP 在 src/picker-modal.js 顶层，两边必须同步改。 */
+     PICKER_CARD_H / PICKER_CARD_GAP 在 src/picker/picker-modal.js 顶层，两边必须同步改。 */
   .we-picker__vspacer { width: 100%; pointer-events: none; }
   .we-picker__grid .we-picker__vspacer { grid-column: 1 / -1; }
   .we-picker__modal-foot { display: flex; align-items: center; justify-content: space-between; }

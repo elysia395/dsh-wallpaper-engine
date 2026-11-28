@@ -17,7 +17,7 @@ const URL_IMPORT_URL = "/wallpaper-engine/url-import";
 const UPLOAD_TYPES = ["image/jpeg", "image/png", "image/webp", "video/mp4"];
 
 // `isUploadedWallpaper(w)` / `isDirWallpaper(w)`（id 前缀判定）住在
-// **src/picker-model.js** —— ratingOf 的宽松分级与上传管理列表共用同一对判定。
+// **src/picker/picker-model.js** —— ratingOf 的宽松分级与上传管理列表共用同一对判定。
 
 async function uploadWallpaperFile(file) {
   const ctype = (file.type || "").toLowerCase();

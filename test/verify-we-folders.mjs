@@ -26,7 +26,7 @@ import { join, dirname, resolve } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { createWallpaperScanKit } from '../lib/wallpaper-scan.js';
 import { DEFAULTS, KINDS, PRESET_EXCLUDED_KEYS } from '../lib/settings-schema.js';
-import { pickerModel } from '../src/picker-model.js';
+import { pickerModel } from '../src/picker/picker-model.js';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 

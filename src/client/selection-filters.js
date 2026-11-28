@@ -1,5 +1,5 @@
 /**
- * selection-filters.js — 内容分级 / 类型筛选的调用点（判定本体仍住 src/picker-model.js），
+ * selection-filters.js — 内容分级 / 类型筛选的调用点（判定本体仍住 src/picker/picker-model.js），
  * 从 `src/client.js` 按族搬出，函数体逐字未改。
  *
  * 契约：
@@ -7,12 +7,12 @@
  *      函数体引用的 selection / setTransient / emit / applySelection 等自由名由正文提供。
  *   2) 搬移只改了"声明住哪"：本文件正文与拆前 src/client.js 的 1107–1209 行逐字节相同。
  *   3) 本文件只有函数声明、无顶层状态：不读正文的 const、不挂监听 ⇒ 无 TDZ 风险。
- *   4) 过滤判定仍是**单一真源**（src/picker-model.js）：这里只做"读两个档 + 调模型 + 落选择"。
+ *   4) 过滤判定仍是**单一真源**（src/picker/picker-model.js）：这里只做"读两个档 + 调模型 + 落选择"。
  */
 // ── Content-rating + type filters ───────────────────────────────────────────
 // 判定本身（`ratingOf` / `matchesRatingFilter` / `matchesTypeFilter` /
 // `isPlayableType` / `isRotatableWallpaper` / `isHiddenWallpaper`）与它们的分级正则已抽到
-// **src/picker-model.js** —— 网格、轮换编辑器、轮换候选、自动选择与两个下拉的计数共用
+// **src/picker/picker-model.js** —— 网格、轮换编辑器、轮换候选、自动选择与两个下拉的计数共用
 // 同一份判定，判定留在本文件就会长出第二个真源。这里是**调用点**：两个过滤档从
 // `selection` 显式传入，模型自己不读任何模块级状态。
 

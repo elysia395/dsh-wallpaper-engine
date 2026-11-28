@@ -7,7 +7,7 @@
  * 而不是让作者维护一份清单：清单漏一行只会让那个文件**静默脱离**（[`DEV-GUIDE.md`] §4.7 约定 4）。
  *
  * 覆盖本仓实际出现的七种写法：
- *   A) 字面量路径      `'src/picker-model.js'` / `'../src/client.js'`
+ *   A) 字面量路径      `'src/picker/picker-model.js'` / `'../src/client.js'`
  *   B) 目录拼接        `join(root, 'src', 'ui', 'quick-panel.js')`（含嵌套如 `'font','apply.js'`）
  *   C) 纯文件名        `'quick-panel.js'`（切片 / 读源码用）—— 只在 basename **唯一**时认
  *   D) 内联产物        `lib/client.js` · `packages/<pkg>/lib/client.<x>.js` —— 单独一档（多数行为

@@ -119,7 +119,7 @@ const clientText = clientFamilyText();
 const probeText = read('src/live-layer/probe.js');
 const watchText = read('src/live-layer/watch.js');
 const mediaFrameText = read('src/client/media-frame.js');
-const panelText = read('src/picker-props-panel.js');
+const panelText = read('src/picker/picker-props-panel.js');
 const panelCss = read('src/styles/panel.js');
 const diagText = read('lib/routes/diag.js');
 

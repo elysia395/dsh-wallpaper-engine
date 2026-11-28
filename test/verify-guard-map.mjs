@@ -238,7 +238,7 @@ console.log('\n⑥ 派生判据本身有牙（正负对照调同一条 targetsOf
   //    一次就是这里的自检字符串）。拼出来的字符串在**运行时**照样是那条路径。
   const P = (...p) => p.join('/');
   const mods = moduleSurface(ROOT);
-  const pm = P('src', 'picker-model.js');
+  const pm = P('src', 'picker', 'picker-model.js');
   check('字面量路径被认出', targetsOf(`const p = '${pm}';`, mods).includes(pm));
   check('join 目录拼接被认出（含嵌套）',
     targetsOf(`readFileSync(join(root, 'src', 'font', 'apply.js'), 'utf8');`, mods).includes(P('src/font/apply.js'))
@@ -250,7 +250,7 @@ console.log('\n⑥ 派生判据本身有牙（正负对照调同一条 targetsOf
   check('negative control: 不存在的文件不会被认成目标',
     targetsOf(`const p = '${P('src', 'no-such-module.js')}';`, mods).length === 0);
   check('negative control: 更长的路径不算（子串匹配会把它误判成"引用了那个模块"）',
-    !targetsOf(`const p = '${P('assets', 'src', 'picker-model.js')}';`, mods).includes(pm));
+    !targetsOf(`const p = '${P('assets', 'src', 'picker', 'picker-model.js')}';`, mods).includes(pm));
 }
 
 // ═══ ⑥b 前缀族读法（`scopeFiles` / `scopeText`）══════════════════════════════════

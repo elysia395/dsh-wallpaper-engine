@@ -1,4 +1,4 @@
-// Verify the picker's MODEL layer — src/picker-model.js as inlined into the emitted
+// Verify the picker's MODEL layer — src/picker/picker-model.js as inlined into the emitted
 // bundle lib/client.js — by two independent routes:
 //
 //   ① 用例表：直接调模型（从**产物**里切出内联段落再求值），逐条判「同一份输入给出
@@ -82,7 +82,7 @@ const wallpaperCards = (root) =>
   collectCards(root).filter((c) => !JSON.stringify(c).includes('✕ 关闭'));
 const renderedCardCount = (root) => wallpaperCards(root).length;
 
-/** 虚拟首窗的条目容量（与 src/picker-modal.js 顶层 PICKER_VP_FIRST 同源；改那边必须同步这里）。 */
+/** 虚拟首窗的条目容量（与 src/picker/picker-modal.js 顶层 PICKER_VP_FIRST 同源；改那边必须同步这里）。 */
 const PICKER_VP_FIRST = 30;
 /** 首窗的**总**卡片数 = 关闭卡 + min(首窗容量, 可播放数)。 */
 const firstWindowCards = (playableCount) => Math.min(PICKER_VP_FIRST, 1 + playableCount);
@@ -150,7 +150,7 @@ const MODEL_API_NAMES = '{ ratingOf, matchesRatingFilter, matchesTypeFilter, mat
   + ' isRotatableWallpaper, keepPlayingWallpaper, isRotationEligible, isHiddenWallpaper, isUploadedWallpaper,'
   + ' isDirWallpaper, playableWallpapers, hiddenWallpapers, pageSlice, pickerModel,'
   + ' PICKER_PAGE_SIZE }';
-/** 该模块的完整导出清单（与 `src/picker-model.js` 末尾的 `export { … }` 逐字相同）。
+/** 该模块的完整导出清单（与 `src/picker/picker-model.js` 末尾的 `export { … }` 逐字相同）。
  *
  *  注意它和上面 `MODEL_API_NAMES` 是**两个不同的面**，别一起改：
  *  - `MODEL_API_NAMES` 是「从内联段落里解构出哪些名字来测」⇒ 需要的是**声明**存在
@@ -167,10 +167,10 @@ const MODEL_EXPORTS = ['ratingOf', 'matchesRatingFilter', 'matchesTypeFilter', '
 /** 把切出来的段落包进一个函数作用域求值 —— 返回模型 API（纯函数，无需宿主环境）。 */
 function evaluateModelSection(section) {
   return new vm.Script('(function () {\n' + section + '\n;return ' + MODEL_API_NAMES + ';})()',
-    { filename: 'inlined:src/picker-model.js' }).runInNewContext({});
+    { filename: 'inlined:src/picker/picker-model.js' }).runInNewContext({});
 }
 
-const modelSection = inlinedSection(code, 'src/picker-model.js');
+const modelSection = inlinedSection(code, 'src/picker/picker-model.js');
 const M = modelSection ? evaluateModelSection(modelSection) : null;
 
 // ══ 用例夹具 ═════════════════════════════════════════════════════════════════
@@ -484,8 +484,8 @@ console.log('0. 挂载台 / 模型段自检');
       //    写死 `src/client.js` 会让本文件被算成"管了那个模块"（GUARD-MAP 会多一行假目标，实测踩过）。
       const m2 = sectionMarkers("const a = '// ── 内联模块：';\nconst b = '// ── 客户端正文（" + ['src', 'client.js'].join('/') + "）';\n");
       if (!m2.inline || !m2.body) return false;
-      const bundle2 = m2.inline + 'src/picker-model.js\nconst probe = 1;\n' + m2.body + '\n';
-      const sec = inlinedSection(bundle2, 'src/picker-model.js', m2);
+      const bundle2 = m2.inline + 'src/picker/picker-model.js\nconst probe = 1;\n' + m2.body + '\n';
+      const sec = inlinedSection(bundle2, 'src/picker/picker-model.js', m2);
       return sec !== null && sec.includes('const probe = 1;') && !sec.includes('客户端正文');
     })());
   check('负对照：散文注释里长得像标记的 `// ── X：` 不会劫持现取（只有发射点算数）',
@@ -496,7 +496,7 @@ console.log('0. 挂载台 / 模型段自检');
       return m2.inline === '// ── 内联模块：' && m2.body === '// ── 客户端正文（';
     })());
   check('负对照：构建脚本里没有分段标记时返回 null（判据不静默放行一个空段落）',
-    inlinedSection('anything', 'src/picker-model.js', sectionMarkers('const a = 1;')) === null);
+    inlinedSection('anything', 'src/picker/picker-model.js', sectionMarkers('const a = 1;')) === null);
   check('模型 API 齐全（函数都在、PICKER_PAGE_SIZE 是数字）——否则后面每条都在空跑',
     !!M && hasModelApi(M));
   check('负对照：空对象被同一条「API 齐全」判据判为不齐',
@@ -524,15 +524,15 @@ for (const c of CASES) {
 
 console.log('\n2. 直接 import 的源模块 vs 产物里那段内联副本（双通道对拍）');
 // 为什么这条值得存在：上面每一行判的都是**产物里那段**（R1：浏览器半边隔着产物）。
-// `src/picker-model.js` 原本没有 `export {}`，于是「直接 import 源模块」这条最便宜的路
+// `src/picker/picker-model.js` 原本没有 `export {}`，于是「直接 import 源模块」这条最便宜的路
 // 根本不存在 —— 全仓只有本守卫要写 `inlinedSection()` 去切字符串。加上导出块之后，
 // 这里把两条通道**对拍**：既证明内联副本 == 源模块（构建保真），也证明导出接口是活的
 // （守着导出的名字，而不是守着一份手抄的 API 清单）。
 // 直接用 `URL` 的 `href`（Windows 上 `pathToFileURL(...).pathname` 会拼出 `/D:/…` ⇒ ERR_MODULE_NOT_FOUND）
-const MODEL_PATH = new URL('../src/picker-model.js', import.meta.url);
+const MODEL_PATH = new URL('../src/picker/picker-model.js', import.meta.url);
 {
   const srcMod = await import(MODEL_PATH.href);
-  check('src/picker-model.js 的导出接口齐全（导出清单 == 本文件钉住的 API 面）',
+  check('src/picker/picker-model.js 的导出接口齐全（导出清单 == 本文件钉住的 API 面）',
     MODEL_EXPORTS.every((n) => srcMod[n] !== undefined)
     && Object.keys(srcMod).sort().join() === MODEL_EXPORTS.slice().sort().join(),
     '导出 ' + Object.keys(srcMod).length + ' 个：' + Object.keys(srcMod).sort().join(','));
@@ -671,7 +671,7 @@ console.log('\n3. 直调判定：六个谓词 + 两个过滤助手（负对照�
     !slicesTo(M, EXTRA, 1, [24, 0, 2]));
 
   // 分级白名单在「持久化消毒」（lib/settings-schema.js 的 RATING_TIER_VALUES）与「判定」
-  // （src/picker-model.js 的 RATING_TIERS）各有一份字面量：必须逐字同序。两边各自都不报错，
+  // （src/picker/picker-model.js 的 RATING_TIERS）各有一份字面量：必须逐字同序。两边各自都不报错，
   // 一旦漂移就是「存进去的档判定不认识」（勾了却永远不出现）—— 只能靠文本对账钉住。
   const tierList = (src, name) => {
     const m = new RegExp('const ' + name + ' = \\[([^\\]]*)\\]').exec(src);
@@ -804,7 +804,7 @@ await sleep(80); // 等 loadPersisted → loadInventory → revalidateSelection 
 
 // #255③：库视图第一张「关闭」卡在有壁纸时是**暂停/继续**（保留当前画面），不是清空壁纸。
 {
-  const pickerSrc = readFileSync(new URL('../src/picker-modal.js', import.meta.url), 'utf8');
+  const pickerSrc = readFileSync(new URL('../src/picker/picker-modal.js', import.meta.url), 'utf8');
   // 取文口径：客户端正文族（组件体自 2026-11-28 起住 src/client/picker-component.js）。
   const clientSrc = clientText();
   const closeCardShape = (t) => {

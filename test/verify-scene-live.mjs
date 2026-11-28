@@ -2094,7 +2094,7 @@ for (const [name, ok] of clientChecks) check(name, ok);
       && src.includes('addEventListener("pointerover", onWarmPointerOver, { capture: true, passive: true });')
       && CH.includes('VIDEO_WARM_HOVER_MS')
       && src.includes('disposeWarmVideo();')
-      && readFileSync(join(root, 'src', 'picker-modal.js'), 'utf8').includes('"data-we-id": String(w.id)')
+      && readFileSync(join(root, 'src', 'picker', 'picker-modal.js'), 'utf8').includes('"data-we-id": String(w.id)')
       && readFileSync(join(root, 'src', 'ui', 'quick-panel.js'), 'utf8').includes('"data-we-id": String(w.id)'));
     // faststart：从"落盘变体"改成"服务期虚拟布局"（磁盘 0），以及"字节布局不得中途改换"。
     //   · 真机取证（当时加的临时插桩，已随该次提交删除）：播放器对 `Range: bytes=0-` 会
@@ -3437,10 +3437,10 @@ check('场景就绪后回放覆盖值（无 HTML 种子通道）',
 // 用户口径：库视图只保留**顶部**返回按钮（底部那个是重复的）。
 // 计数口径：UI 重构后选择壁纸是**页内下钻视图**（不再有遮罩/弹框）⇒ closePicker
 // 只剩顶部「返回」按钮这 1 处绑定。
-// P3-11 阶段 2：库视图标记已搬到 src/picker-modal.js ⇒ 这三条文本断言跟着**所属文件**走
+// P3-11 阶段 2：库视图标记已搬到 src/picker/picker-modal.js ⇒ 这三条文本断言跟着**所属文件**走
 // （同下面诊断族那批"按所属文件分家"的口径）。计数口径仍覆盖**整个客户端半**
 // （client.js + picker-modal.js），所以在别处再加一个返回/关闭绑定照样会被判出。
-const modalSrc = readFileSync(join(root, 'src', 'picker-modal.js'), 'utf8');
+const modalSrc = readFileSync(join(root, 'src', 'picker', 'picker-modal.js'), 'utf8');
 const clientHalf = src + '\n' + modalSrc;
 // 官方侧栏接入（src/ui/sidebar-right.js）：能力门 / 两段注册 / 模式真源的断言读它。
 const sidebarSrc = readFileSync(join(root, 'src', 'ui', 'sidebar-right.js'), 'utf8');

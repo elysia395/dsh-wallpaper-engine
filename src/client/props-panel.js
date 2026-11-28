@@ -9,7 +9,7 @@
  *      （复核：git show <拆前提交>:src/client.js | sed -n '1857,2153p'，与本文件去掉本头注释后 diff）。
  *   3) 顶层状态只有字面量初始化（propsPanelOpen / propsState / USER_PROPS_COMMIT_MS /
  *      userPropsCommitTimer）：不读正文的 const、不挂监听 ⇒ 被内联到 bundle 顶部不会撞 TDZ。
- *   4) 面板标记不在本文件：仍在 src/picker-props-panel.js，ctx 由正文在调用点就地组装。
+ *   4) 面板标记不在本文件：仍在 src/picker/picker-props-panel.js，ctx 由正文在调用点就地组装。
  *   5) 时序住这里（180ms 去抖落盘、silent 拖动期不重渲染、换壁纸期间丢弃迟到回包）；
  *      src/client/media-frame.js 的 propsPanelSnapshot / renderUserPropsPanel 只读本文件的状态与函数。
  */
@@ -126,7 +126,7 @@ function loadUserPropDefs(token, force) {
  * 「壁纸属性」拖动期的提交窗口（毫秒）：最后一次 input 之后安静这么久，才算这次拖动结束。
  *
  * 为什么需要这个定时器：面板对 color / slider 只能送 silent 的 input（见
- * src/picker-props-panel.js 的 renderUserPropRow）—— **React 的 onChange 对
+ * src/picker/picker-props-panel.js 的 renderUserPropRow）—— **React 的 onChange 对
  * `<input type="range">` / `<input type="color">` 是逐格触发的 input 事件**，不是原生
  * change 的"抬手"。把它当抬手（旧实现）等于拖动中每格 `emit()` 一次：emit 的订阅者里
  * 有全量 `applyEffects`（重建字体样式表 / 同步场景音频 / 强制同步样式计算）和整棵设置

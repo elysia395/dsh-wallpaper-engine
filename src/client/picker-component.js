@@ -278,7 +278,7 @@ function WallpaperPicker() {
     switchTab(req);
   }, [sel.settingsTabRequest, activeTab]);
 
-  // 库视图虚拟滚动的窗口（机制与几何见 src/picker-modal.js 顶注）：hooks 必须长在组件
+  // 库视图虚拟滚动的窗口（机制与几何见 src/picker/picker-modal.js 顶注）：hooks 必须长在组件
   // 里（renderPickerModal 是纯渲染器），经 ctx 传下去。classic CD 架不虚拟化 ⇒ 渲染侧
   // 不把 gridRef 挂到网格上，测量 effect 拿不到元素就整体空转。count 给**上界**（正常 /
   // 隐藏两个列表 + 关闭卡都 ≤ 库存 + 1；无滚动容器时窗口 = count，渲染侧按真实列表
@@ -342,7 +342,7 @@ function WallpaperPicker() {
   const activeFolder = folderOptions.find((folder) => folder.id === sel.folderFilter) || null;
   const folderFilter = activeFolder ? activeFolder.id : "all";
   const folderWallpaperIds = activeFolder ? activeFolder.wallpaperIds : null;
-  // 派生数据 + 分页全部由 **src/picker-model.js** 算（`pickerModel`）：可播放网格、两个
+  // 派生数据 + 分页全部由 **src/picker/picker-model.js** 算（`pickerModel`）：可播放网格、两个
   // 过滤下拉的分档计数、隐藏列表，以及三个列表各自的当页切片。搜索是大小写不敏感的
   // 标题子串匹配（空查询 = 不过滤），每页 24 张，页号越界自动 clamp。这里只把状态喂
   // 进去、把结果取出来 —— 组件体不再就地算这些（分级/类型/隐藏的判定也在那边）。
@@ -372,7 +372,7 @@ function WallpaperPicker() {
   const editing = sel.editing;
 
   // ── 壁纸属性面板的接线────────────────────────────────────
-  // 面板标记搬去了 `src/picker-props-panel.js`（构建期内联回本作用域）。这里只做**组装**：
+  // 面板标记搬去了 `src/picker/picker-props-panel.js`（构建期内联回本作用域）。这里只做**组装**：
   // 面板状态（开关 / token / 加载态 / 错误 / 属性表 / 实时渲染是否接管）与三个动作
   // （该重拉时重拉、改一个属性、恢复默认）都留在本文件 —— 状态与处理器是 ctx 的**供给方**，
   // 渲染器只拿值 + 回调（同模态框那条契约）。判定就一句：

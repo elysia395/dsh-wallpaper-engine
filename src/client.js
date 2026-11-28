@@ -791,7 +791,7 @@ function setTransient(field, value) {
 //     重活，样式变量照旧全量写），**不 emit** —— 面板不重渲染，数值回显由控件自己就地更新
 //     （SliderRow 的 --we-fill / 原生色块的自身外观）；
 //   · 抬手（change）：走完整的一次 —— `emit()`（applyEffects 是它的订阅者，全量那一次照旧）。
-// 与「壁纸属性」面板的 silent 拖动同一条口径（src/picker-props-panel.js 的 onPropInput）。
+// 与「壁纸属性」面板的 silent 拖动同一条口径（src/picker/picker-props-panel.js 的 onPropInput）。
 // 拖动期的中间值**照样会落盘**（setSetting → debounce 200ms），所以中途关窗也不丢最后一次值。
 function commitLiveSetting(field, value, live) {
   setSetting(field, value);
@@ -861,7 +861,7 @@ const armedIdOf = (family) => {
  * `armed` 是**读值**，`onConfirm` / `onDisarm` 是**回调** —— 由组件经 ctx 交给渲染器，
  * 渲染器自己不写 `selection`（两个渲染器的文件头契约）。问句文本由**调用点**现算（"选中的
  * N 张"这类计数跟着当前状态走），所以渲染器不许把它当常量缓存。
- * 4 处使用点（src/panel-tabs.js 两处 / src/picker-modal.js 两处）共用这一份标记：抄四份会让
+ * 4 处使用点（src/panel-tabs.js 两处 / src/picker/picker-modal.js 两处）共用这一份标记：抄四份会让
  * "两字的按钮等宽""置灰不塌位"这类形态约束各走各的。
  *
  * ⚠️ `!token` 这一支是**必须的**，不是防御性编程：令牌由当前对象现算，对象没了就退化成 `""`
@@ -1106,7 +1106,7 @@ function scheduleSceneVideoResync() {
 
 // ── 内容分级 / 类型筛选的调用点已按族搬出 ────────────────────────────────────
 // selectionBlockedNote / playableInventory / 目录扁平化 / 轮播候选池 / 收窄后的重新校验
-// 整段住 src/client/selection-filters.js；判定本体仍在 src/picker-model.js。
+// 整段住 src/client/selection-filters.js；判定本体仍在 src/picker/picker-model.js。
 
 // ── Rotation groups (user-defined carousel lists) ───────────────────────────
 function activeRotationGroup() {
@@ -1300,7 +1300,7 @@ const ROTATION_PREP_TIMEOUT_MS = 20000; // 单阶段就绪探测上限（超时�
 // wallpaper that is currently playing keeps playing (it only leaves the
 // lists). Rotation candidates exclude hidden ids via groupWallpapers(), so a
 // hidden wallpaper can never be auto-selected by the carousel. The membership
-// test itself lives in **src/picker-model.js**（`isHiddenWallpaper(id, hiddenIds)`）——
+// test itself lives in **src/picker/picker-model.js**（`isHiddenWallpaper(id, hiddenIds)`）——
 // 隐藏集合从调用点显式传入。
 
 function hideWallpapers(ids) {
@@ -1360,7 +1360,7 @@ const IS_EDGE = typeof navigator !== "undefined" && /Edg\//.test(navigator.userA
 // 打开/收起、载入定义、覆盖写入、「从 WE 导入」、热更新、重启回放，连同它们的状态
 // （propsPanelOpen / propsState / 180ms 去抖计时器）整段住 src/client/props-panel.js；
 // 构建期由 scripts/build-client.mjs 内联回本作用域 —— 扁平作用域不变，调用点无需改动。
-// 面板标记仍住 src/picker-props-panel.js（ctx 在本文件调用点组装）。
+// 面板标记仍住 src/picker/picker-props-panel.js（ctx 在本文件调用点组装）。
 
 let weBattery = null; // BatteryManager from navigator.getBattery (if available)
 /**
@@ -2513,7 +2513,7 @@ const onFontResetAll = () => {
 // 整段住 src/client/library-handlers.js；构建期内联回本作用域。
 // ── Pagination row: big libraries must not render every card at once (hundreds
 //    of thumbnails per emit make the picker lag). The slicing itself is the
-//    model's (`pageSlice` in src/picker-model.js); 这里只画「上一页 / 下一页」。──
+//    model's (`pageSlice` in src/picker/picker-model.js); 这里只画「上一页 / 下一页」。──
 const pagerRow = (count, page, pages, onPrev, onNext) =>
   React.createElement("div", { className: "we-picker__pager" },
     React.createElement("span", { className: "we-picker__hint" },
@@ -2531,7 +2531,7 @@ const pagerRow = (count, page, pages, onPrev, onNext) =>
   );
 
 // ── 模态框交互的接线 ───────────────────────────────────────────────────────
-// 契约：渲染器（`src/picker-modal.js`）**不写 `selection`、不自己发通知** ⇒
+// 契约：渲染器（`src/picker/picker-modal.js`）**不写 `selection`、不自己发通知** ⇒
 // 「改状态 + 发通知」的动作一律留在这里（模块级），经 `ctx` 交给渲染器；标记里只剩
 // `onClick: onShowNormalView` 这样的引用。判据是接缝那几条（同 `panel-tabs` / 属性面板口径）。
 const onShowNormalView = () => { disarmConfirm(); setTransient("modalView", "normal"); emit(); };
