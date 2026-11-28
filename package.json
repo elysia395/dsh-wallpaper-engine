@@ -200,7 +200,7 @@
     }
   },
   "dependencies": {
-    "webwallgl": "^3.0.0",
+    "webwallgl": "^3.1.0",
     "x11": "^4.3.1"
   },
   "overrides": {

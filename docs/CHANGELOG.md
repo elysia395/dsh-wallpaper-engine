@@ -33,6 +33,8 @@
 
 - **修：软件渲染下视频壁纸的 canvas 绘制再压到 15fps，不再让整页跟着卡（#411）**。`edgeCompat` 腿（Edge 默认开）把 `<video>` 藏到屏外、改用 canvas 逐帧 `drawImage` 上屏，这一笔是纹理回读 + CPU 上传；#383 的 30fps 上限在软渲染（SwiftShader / llvmpipe / 无 WebGL）下仍吃满 CPU。现复用 `src/live-layer/probe.js` 的 `liveSoftRenderProbeNow()`（同一套判定、同一个 `?we-softrender=0` 逃生舱），命中时按自己的最小间隔压到 15fps，硬件路径逐值不变；有效帧率随源帧率取整（30 / 60 源 → 15fps，24p 源 → 12fps）。首次降档只打一条 `video-softrender-throttle` 诊断（带渲染器名），事后能确认是不是这一档生效。`verify-video-canvas-fps` 补 A7–A10（含两条负对照）。
 
+- **改：渲染引擎 webwallgl 3.0.1 → 3.1.0（npm lock；本次只动仓库、不发包）**。上游 11-11 / 11-20 / 11-26 连发 3.0.2、3.0.3、3.1.0，运行时相关：严格沙箱下宿主贴图 / 视频帧改走 CORS 模式（上游 #25，对应本仓 #376）、`resolveMountConfig` 透传 `autoQuality` / `webSandbox`（#20 / #21）、`getLayer` 按名未命中改返回 null 并入 miss 预算（#19）、条件变体纹理不再整张作废、单张贴图失败隔离、效果 pass 顶点空间 y 向上与文字层墨水扩边（#22 / #23）、限帧下多条 rAF 同帧公平交付（#27）；渐显预览默认关，不进现有链路。**注意**：additive 效果层逐帧泛白（#413）的修复在上游 3.1.0 之后才并入 main（PR #28），尚未发版，需等 3.1.1 再升一次。验证：`verify-package-files` 全绿、`verify-scene-live` 812 条通过（1 条环境跳过）；`compat-harness-live` 属 CI 专用（真实 harness + 网络），本地在隔离 HOME 探针处被沙箱挡住，未进入安装闭包。
+
 ### v1.4.3（2026-11-19）
 
 - **新增：宿主悬停信息卡（`hoverCard`）玻璃与插件市场吸顶条下方卡片渐隐（#377）**。
