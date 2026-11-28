@@ -16,7 +16,7 @@
 
 可测事实（用符号名与路径作锚点，不写行号与数值）：
 
-- 取值入口是 `glassValue(surface, param, own, global)`（`src/glass.js`）；
+- 取值入口是 `glassValue(surface, param, own, global)`（`packages/glass/src/glass.js`）；
 - 设置真源是 `lib/settings-schema.js` 的 `KINDS` / `DEFAULTS` / `readOne` / `migrateSettings`；
 - 判据在 `test/verify-glass-surfaces.mjs`；"有效取值"的等价性由一份**未入库**的等价性探针
   在多个状态下逐项比较（口径与复算方式见归档的 wip §10.9 —— 入库文档不指向本机专用路径）。
@@ -48,7 +48,7 @@
 > · **高级配置**（当时只在设置页画）：每个面的**「独立配置」层及其子项参数**，以及挂在总开关下面的
 >   **细调行**（「思考块液态玻璃」门下的胶囊雾化 / 胶囊颜色，左侧栏与侧栏 / 内容面的独立参数）。
 > · **预设方案 = 高级配置**（只在设置页画）：显式门 `!sidebarSurface && renderGlassPresetsBlock(...)`
->   在 `src/glass-panel.js`；`glassPresets` 进 `quick-panel` 的 setting-only 占位器（拆掉门 ⇒ 渲染器
+>   在 `packages/glass/src/glass-panel.js`；`glassPresets` 进 `quick-panel` 的 setting-only 占位器（拆掉门 ⇒ 渲染器
 >   解构它的第一下就炸）；`verify-scene-live` 两档都钉（侧栏档的**标签序列与整树文本**都不许出现
 >   预设块，设置档必须有 —— 用例补了 `ctxOver` 注入 preset 替身，否则那条断言会恒假）。
 >   分类理由：它既不是"总开关"也不是"逐面覆盖"，而是**跨面批量覆盖**（一份预设 = 玻璃子系统完整
@@ -59,7 +59,7 @@
 >   它就会静默出现。2026-10-05 已显式化（门 + 占位器 + 两档断言）。`docs/CHANGELOG.md` 里
 >   "设置页与侧栏快捷面板共用同一预设块"那句与实现不符（上游文案过宽），同批更正。
 >
-> 与门配套的第二道保险是 `src/quick-panel.js` 的 **setting-only 占位器**：侧栏档不再画的那些
+> 与门配套的第二道保险是 `src/ui/quick-panel.js` 的 **setting-only 占位器**：侧栏档不再画的那些
 > 处理器在那份 ctx 里是"取用即抛错"的替身 ⇒ 将来把高级行挪回侧栏档会**当场炸**，而不是静默
 > 变成"拖了没反应"的死旋钮。判据：`verify-scene-live` 的「侧栏 ctx 覆盖渲染器要的全部字段」与
 > 两档**控件标签序列**（`CASES`/`MORE_CASES` 两侧都钉，含"侧栏档一个「独立配置」都不许有、

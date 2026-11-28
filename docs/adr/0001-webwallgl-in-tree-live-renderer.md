@@ -6,7 +6,7 @@
 - **Supersedes**: 离线静态帧路线（该线已整体移除并迁往独立仓库；其归档记录与证据脚本已按 v1.1.0 一节的预定删除，见 git 历史）
 
 > 本 ADR 记录**渲染路线的取舍**。实现机制（抓帧几何校验、空帧门禁、载荷账本、遮挡暂停）
-> 住在 `lib/routes/scene-frame.js`、`lib/routes/scene-serve.js`、`src/live-layer.js` 的文件头注释里；
+> 住在 `packages/media-bridge/lib/routes/scene-frame.js`、`packages/media-bridge/lib/routes/scene-serve.js`、`src/live-layer.js` 的文件头注释里；
 > 用户可见行为在 `docs/HOW-IT-WORKS.md`。本文不复述它们。
 
 ## Context
@@ -83,8 +83,8 @@ Wallpaper Engine 的三类壁纸里，**Scene（场景）**是最难移植的一
 ## 参考
 
 - 出图来源链与抓帧几何：`docs/HOW-IT-WORKS.md`
-- 抓帧路由与空帧门禁：`lib/routes/scene-frame.js`
-- 渲染页与壁纸文件服务、目录围栏：`lib/routes/scene-serve.js`
+- 抓帧路由与空帧门禁：`packages/media-bridge/lib/routes/scene-frame.js`
+- 渲染页与壁纸文件服务、目录围栏：`packages/media-bridge/lib/routes/scene-serve.js`
 - 浏览器端图层与降级：`src/live-layer.js`
 - 网页壁纸兼容 shim 的提取与注入：`lib/index.js`（`extractWebShim`）
 - 已退役的离线路线取证（**不反映现行实现**）：那条线（离线成帧）已整体删除，见 git 历史

@@ -6,7 +6,7 @@
 - **Amends**: 场景载荷服务族的挂载方式（见 `docs/adr/0001-webwallgl-in-tree-live-renderer.md` 的 D2）
 
 > 实现与围栏不变量在 `lib/index.js` 的 `ensureMediaOrigin` / `handleSceneFiles` 与
-> `lib/routes/scene-serve.js` 的文件头；本文只记**为什么需要第二个源**。
+> `packages/media-bridge/lib/routes/scene-serve.js` 的文件头；本文只记**为什么需要第二个源**。
 
 ## Context
 
@@ -89,6 +89,6 @@ DSH Desktop 的插件路由前面有一道**能力头栅栏**，它会拒绝这�
 
 - 媒体源的建立、失败记忆与访问器：`lib/index.js`（`ensureMediaOrigin` / `mediaOriginBase` / `mediaOriginInfo`）
 - 两处挂载共用的处理函数、目录围栏与 CORS：`lib/index.js`（`handleSceneFiles`）
-- 载荷服务族路由与围栏不变量：`lib/routes/scene-serve.js`
+- 载荷服务族路由与围栏不变量：`packages/media-bridge/lib/routes/scene-serve.js`
 - 网页壁纸的沙箱与 shim 注入：`lib/index.js`（`extractWebShim`，shim 取自 `webwallgl` 包）
 - 相关的渲染路线决定：`docs/adr/0001-webwallgl-in-tree-live-renderer.md`

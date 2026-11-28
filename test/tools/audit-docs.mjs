@@ -12,7 +12,9 @@
  * 分类口径：
  *   · current   —— docs 根与 docs/en 的用户文档：**发现即缺陷**（ADR-0017 D1）；
  *   · generated —— 生成物：发现路径失效 ⇒ 跑对应生成器（工具只报，不改）；
- *   · ledger    —— CHANGELOG / changelog/ / archive/ / adr/：**账本，不追溯改写**（ADR-0017 D4），只统计；
+ *   · adr       —— 决策记录：**方针/取舍不改**，但结论类内容（路径、符号、现状断言）允许按现状校正；
+ *                  明显属“决策当时旧址”的引用由 IGNORE 逐条豁免并写明理由（见 docs/adr/README.md）；
+ *   · ledger    —— CHANGELOG / changelog/ / archive/：**账本，不追溯改写**（ADR-0017 D4），只统计；
  *   · comment   —— 源码注释：发现路径失效即缺陷（注释是读者入口）。
  *
  * Usage: node test/tools/audit-docs.mjs [--json] [--max 200]
@@ -39,10 +41,12 @@ function walk(dir, out = []) {
   return out;
 }
 
-const LEDGER = /^docs\/(archive\/|changelog\/|en\/changelog\/|CHANGELOG\.md$|en\/CHANGELOG\.md$|adr\/)/;
+const LEDGER = /^docs\/(archive\/|changelog\/|en\/changelog\/|CHANGELOG\.md$|en\/CHANGELOG\.md$)/;
+/** ADR 不是账本：方针/取舍不改，但**结论类内容**（路径、符号、「现状是 X」的断言）允许按现状校正。 */
+const ADR_DIR = /^docs\/adr\//;
 const GENERATED = /^docs\/(ROUTE-INDEX|GUARD-MAP|TOKEN-CONTRACT)\.md$/;
 const USER_DOCS = ['CHANGELOG.md', 'HOW-IT-WORKS.md', 'TROUBLESHOOTING.md', 'UPGRADING.md'];
-const category = (fileRel) => (LEDGER.test(fileRel) ? 'ledger' : GENERATED.test(fileRel) ? 'generated' : 'current');
+const category = (fileRel) => (LEDGER.test(fileRel) ? 'ledger' : ADR_DIR.test(fileRel) ? 'adr' : GENERATED.test(fileRel) ? 'generated' : 'current');
 
 const ROOT_DOCS = ['README.md', 'README.en.md', 'CONTRIBUTING.md', 'AGENTS.md']
   .map((f) => join(ROOT, f)).filter((f) => existsSync(f));
@@ -91,6 +95,17 @@ const IGNORE = [
   { file: 'packages/parallax/lib/index.js', line: 17, path: 'lib/components', why: '同上' },
   { file: 'packages/pet-link/lib/index.js', line: 98, path: 'assets/config.jsonc', why: '指的是第三方包 dsh-pet-dshwe 自带的 assets（同句已点名该包），不是本仓文件' },
   { file: 'CONTRIBUTING.md', path: 'lib/bin.js', why: '指的是 DSH CLI 自己的入口文件（`<DSH CLI lib/bin.js 路径>`），不是本仓文件' },
+  // —— ADR 里的**历史类**引用：正文明确写出“旧址→新址/已删除”，属决策当时的锚点，按方针不动 ——
+  { file: 'docs/adr/0013-bundle-multi-component-rows.md', line: 166, path: 'lib/components', why: '决策正文里的“旧址 → packages/<pkg>/lib/”（同句已写明 P-F 起统一到新址）' },
+  { file: 'docs/adr/0014-subpackage-contract.md', line: 25, path: 'lib/components', why: '术语定义：区分“组件行（旧形态）”与“独立子包行”；同段已写明该形态已不存在' },
+  { file: 'docs/adr/0014-subpackage-contract.md', line: 28, path: 'lib/components', why: '同上（判据面的历史描述）' },
+  { file: 'docs/adr/0014-subpackage-contract.md', line: 36, path: 'lib/components', why: '同段已写“lib/components/ 目录已删除”' },
+  { file: 'docs/adr/0014-subpackage-contract.md', line: 106, path: 'lib/components', why: '同句已写“2026-10-16 起仓里已无此形态”' },
+  { file: 'docs/adr/0015-glass-surface-ownership.md', line: 12, path: 'src/styles-sidebar.js', why: '同句已写“第三处 src/styles-sidebar.js 已删除”' },
+  { file: 'docs/adr/0016-glass-subpackage.md', line: 11, path: 'src/glass.js', why: 'Context 描述的是“自 ADR-0008 起住在主包”的**旧状**，Decision 才是出户' },
+  { file: 'docs/adr/0016-glass-subpackage.md', line: 11, path: 'src/glass-surfaces.js', why: '同上（旧状锚点）' },
+  { file: 'docs/adr/0016-glass-subpackage.md', line: 12, path: 'src/glass-extra.js', why: '同上（旧状锚点）' },
+  { file: 'docs/adr/0016-glass-subpackage.md', line: 12, path: 'src/glass-panel.js', why: '同上（旧状锚点）' },
 ];
 const ignored = (file, p) => IGNORE.some((x) => x.file === file && x.path === p);
 const NUM_RE = /\b\d[\d,]{2,}\s*(行|条|个|份|处)/g;
@@ -215,8 +230,13 @@ for (const [kind, title] of groups) {
   console.log('');
   console.log('## ' + title + '（' + list.length + '）');
   const current = list.filter((x) => x.cat === 'current' || x.cat === 'comment');
+  const adrs = list.filter((x) => x.cat === 'adr');
   const ledgers = list.filter((x) => x.cat === 'ledger' || x.cat === 'generated');
   for (const it of current.slice(0, MAX)) console.log('  · ' + it.file + ':' + it.line + '  ' + it.text);
   if (current.length > MAX) console.log('  … 另有 ' + (current.length - MAX) + ' 条（--max 调整）');
+  if (adrs.length) {
+    console.log('  [ADR：方针不改、结论类可校正] ' + adrs.length + ' 条');
+    for (const it of adrs.slice(0, MAX)) console.log('    · ' + it.file + ':' + it.line + '  ' + it.text);
+  }
   if (ledgers.length) console.log('  [账本/生成物，按 ADR-0017 D4 不追溯] ' + ledgers.length + ' 条');
 }

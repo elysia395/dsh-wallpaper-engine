@@ -22,20 +22,22 @@
 | 会漂的数值 | 现行文档 | `N 行 / N 条 / N 个` 这类断言现状的计数 |
 | 中英成对 | 用户文档 | `docs/X.md` 与 `docs/en/X.md` 是否成对 |
 
-对象按**寿命**分类，只有前三类会被要求修：
+对象按**寿命**分类：
 
 - `current`（`docs/` 根、`docs/en/`、根 README/CONTRIBUTING/AGENTS）—— 发现即缺陷；
 - `comment`（`src|lib|packages|scripts` 的注释；构建产物 `lib/client*.js` 除外）—— 发现即缺陷；
 - `generated`（`ROUTE-INDEX` / `GUARD-MAP` / `TOKEN-CONTRACT`）—— 报给生成器，本次为 0；
-- `ledger`（`CHANGELOG` / `changelog/` / `archive/` / `adr/`）—— **不追溯**，只统计。
+- `adr`（`docs/adr/`）—— **不是账本**：方针/取舍不改，**结论类内容**（路径、符号、「现状是 X」的断言）允许按现状校正；
+  明显属「决策当时旧址」的引用（正文已写「已出户 / 已删除」）逐条豁免并写理由（口径见 `docs/adr/README.md`）；
+- `ledger`（`CHANGELOG` / `changelog/` / `archive/`）—— **不追溯**，只统计。
 
 ## 3. 结论（审计时）
 
-修复后，`current` 与 `comment` 两类**可执行项归零**；剩余条目全部落在账本类：
+修复后，`current` / `comment` / `adr` 三类的**可执行项归零**；剩余条目全部落在账本类：
 
 | 类别 | 可执行项（修前） | 可执行项（修后） | 账本类残留 |
 |---|---|---|---|
-| 失效路径 | 现行文档 22 · 注释 172 | **0** | 账本类残留（CHANGELOG / archive / adr 的历史地址）—— 数量见工具输出，本文不抄 |
+| 失效路径 | 现行文档 22 · 注释 172 · ADR 28 | **0** | 账本类残留（CHANGELOG / archive 的历史地址）—— 数量见工具输出，本文不抄 |
 | 断链 | 根文档 2 | **0** | 账本类残留（archive / changelog 内部链接）—— 同上 |
 | 行号锚超界 | 0 | **0** | — |
 | 会漂的数值 | 根文档 1 | **0** | — |
@@ -56,13 +58,19 @@
    `src/extension-registry.js:139/:194`、`src/ext-perf.js:399/:401` 一类改为「文件名 + 符号/文件头」。
 5. **漂移的数值**：`wallpaper-uploads-section.js` 的「71 键」改为「键集真源，数量不抄」；`CONTRIBUTING.md` 不再引用具体行数。
 6. **断链**：`CONTRIBUTING.md` 的 `./adr/0013`、`./adr/0014` 改为 `./docs/adr/…`。
-7. **历史/外部引用**（不改，工具里逐条写理由）：`lib/components/…` 的迁移对照、`dsh-pet-dshwe` 自带 `assets/…`、
-   父仓 `dsh-my-ui/…`、DSH CLI 的 `lib/bin.js`、`scripts/compare-bundle.mjs` 的自检夹具字符串。
+7. **ADR 的结论类引用**（2026-11-28 口径修订后）：`lib/routes/scene-frame|scene-serve`、`src/persistence`、
+   `src/glass{,-surfaces,-extra,-panel}`、`src/quick-panel`、`src/system-fonts`、`src/preset-store`、`src/fontset-store`、
+   `src/focus-handback` 等 17 处改为现状地址；**Decision / Consequences / 触发线一字未动**。
+   同时修订 `docs/adr/README.md` 的维护口径：方针不改、结论类可校正、拿不准按方针处理。
+8. **历史/外部引用**（不改，工具里逐条写理由）：`lib/components/…` 的「旧址 → 新址」对照与术语定义、
+   ADR-0015/-0016 里明确写「已删除 / 旧状」的锚点、`dsh-pet-dshwe` 自带 `assets/…`、父仓 `dsh-my-ui/…`、
+   DSH CLI 的 `lib/bin.js`、`scripts/compare-bundle.mjs` 的自检夹具字符串。
 
 ## 5. 没有做什么
 
 - **没有加文档类守卫**（ADR-0006/0007）：这是工具不是门禁；谁想复核就手动跑一次。
-- **没有改写账本**：`CHANGELOG` / `changelog/` / `archive/` / `adr/` 里的旧路径与旧数字按 ADR-0017 D4 保留原文。
+- **没有改写账本**：`CHANGELOG` / `changelog/` / `archive/` 里的旧路径与旧数字按 ADR-0017 D4 保留原文。
+- **没有改 ADR 的方针**：只按新口径校正结论类引用；任何 `Decision` / `Consequences` / 触发线都保持原文（推翻走新 ADR + `Status`）。
 - **没有做「全面重写散文」**：只改**断言现状却已不成立**的句子与失效锚点；叙述风格与历史陈述不动。
 
 ## 6. 复算
