@@ -1277,209 +1277,22 @@ let pendingStagedLayerNode = null;
 // 加载"的黑屏闪烁。
 let preparedMediaEl = null;
 const ROTATION_PREP_TIMEOUT_MS = 20000; // 单阶段就绪探测上限（超时走兜底，不卡死轮换）
-// 交叉淡化时长（新层淡入 + 旧层宽限移除的基准）。切换过场表（SWITCH_TRANSITIONS）
-// 里 fade 的基准毫秒直接引用本常量，所以「调交叉淡化时长」只需要改这里一处。
-const ROTATION_FADE_MS = 1800;
-// ── 切换过场（手动点选与自动轮播共用）──────────────────────────────────────
-// 每种过场只动 transform / opacity / clip-path —— 全是合成器友好属性。（本插件在
-// <video> 与 live <iframe> 上踩过 mask / filter 掉出合成层的坑，故一律不用。）
-// 所有过场都守同一条铁律：**旧层保持不透明垫在新层之下**，新层在它之上入场 ——
-// 玻璃的 backdrop-filter 采样到透明背景会静默失效（见 applyEffects 内注释），
-// 所以这里没有「淡到黑再淡出」那种中间态透明的方案。
-// ms = 基准毫秒 × 速度档乘子（SWITCH_SPEEDS）。基准在快档也不为 0，避免「点了没反应」。
-const SWITCH_TRANSITIONS = [
-  { id: "cut", get label() { return weT("硬切"); }, ms: 0 },
-  { id: "fade", get label() { return weT("交叉淡化"); }, ms: ROTATION_FADE_MS },
-  { id: "push", get label() { return weT("推移"); }, ms: 700 },
-  { id: "wipe", get label() { return weT("擦除"); }, ms: 700 },
-  { id: "iris", get label() { return weT("光圈"); }, ms: 800 },
-  { id: "zoom", get label() { return weT("缩放"); }, ms: 900 },
-  { id: "bars", get label() { return weT("条带"); }, ms: 800 },
-  // 随机（#254）：真正换层那一刻才从非硬切池里抽一个；ms 只是面板代表值（按池内最长算）。
-  { id: "random", get label() { return weT("随机"); }, ms: 0 },
-];
-const SWITCH_SPEEDS = [
-  { id: "fast", get label() { return weT("快"); }, factor: 0.6 },
-  { id: "normal", get label() { return weT("标准"); }, factor: 1 },
-  { id: "slow", get label() { return weT("慢"); }, factor: 1.6 },
-];
-const SWITCH_DIR_LABELS = {
-  get left() { return weT("左"); },
-  get right() { return weT("右"); },
-  get up() { return weT("上"); },
-  get down() { return weT("下"); },
-  get random() { return weT("随机"); },
-};
-// 只有方向型过场听 switchTransitionDir（条带用它决定竖条 / 横条）。
-const SWITCH_DIRECTIONAL = ["push", "wipe", "bars"];
-// 条带（百叶窗）：板数。横向过场时是 N 块横板，纵向时是 N 块竖板；板数决定缝的
-// 密度 —— 5 块太粗、9 块以上在 4K 上偏碎，7 块实测最像百叶窗。点数恒定
-// （4N+1），polygon() 才可插值 → 动画连续。
-const SWITCH_BARS_TEETH = 7;
+// 交叉淡化时长 ROTATION_FADE_MS 随「切换过场」族搬进 src/client/transition-handlers.js
+// （档位表的 fade 项在模块初始化时读它，留在正文会撞 TDZ）。
+// ── 切换过场的档位表与几何已按族搬出 ────────────────────────────────────────
+// SWITCH_TRANSITIONS / SWITCH_SPEEDS / SWITCH_DIR_LABELS / SWITCH_DIRECTIONAL / SWITCH_BARS_TEETH
+// 与 wipeInset 整段住 src/client/transition-handlers.js；条带几何 barsPolygon 住 src/client/rotation.js。
 
-/** 当前生效的过场（类型 + 方向 + 实测算出的毫秒）。cut = 不动画。 */
-
-/** 擦除的起始 inset：从新画面「进入」的那一侧长出来（left = 新画面自右进入）。 */
-function wipeInset(dir) {
-  if (dir === "right") return "inset(0 100% 0 0)";
-  if (dir === "up") return "inset(100% 0 0 0)";
-  if (dir === "down") return "inset(0 0 100% 0)";
-  return "inset(0 0 0 100%)"; // left
-}
-
-/**
- * 条带 / 百叶窗：N 块**独立的板**从「进入侧」一起长出来，板间留缝 —— 这才看得出是条带。
- * ⚠️ 必须是独立板（有缝、两端不收拢）：实测做成连续锯齿扫过时，肉眼与「擦除」
- * 分不出来，等于白做。
- *
- * 记法：outer = 进入侧（left/up 取 1，right/down 取 0），t 轴是与扫过方向垂直的轴
- * （left/right 时板是**横板**，up/down 时是竖板）。每块板厚 slat = p/N，深度
- * depth = p：p=0 时全塌在进入侧边缘（零面积），p=1 时板厚刚好铺满一个周期
- * （slat = period）→ 缝隙闭合、合成完整矩形。
- *
- * ⚠️ clip-path: polygon() 只能画**一个连通区域**，而 N 块板彼此不相连 —— 用一条
- * 贴在进入侧边缘、宽度 spine（≤0.4%，且随 depth 从 0 一起长起）的「脊」把板串起来。
- * 脊落在已经露出新画面的那一侧，所以视觉上完全看不出来。
- *
- * 点数恒定（4N+1），polygon() 才能平滑插值。
- */
+// 条带几何（barsPolygon）的说明随函数住在 src/client/rotation.js。
 // ── 轮换 / 媒体生命周期助手已按族搬出（构建期内联在正文之前，同一扁平作用域）────────────
 // 声明在 src/client/rotation.js：过场几何（barsPolygon / switchFrames）、探测元素的领养与释放、
 // 隐藏期轮换推迟与可见时补做。LIVE_FIRST_FADE_MS 与两个隐藏态标记随声明一起搬走（初始化式不读模块状态）。
 
-// ── 媒体准备（预准备 / 构建 / 选中项落地）────────────────────────────────────
-// 这一族的实现已抽到 **src/media-prep.js**（跨三个不相邻区段：预准备与轮换预挂载、
-// applySelection、buildMedia）。构建期内联回本作用域，调用点无需改动。
-// 契约：出向依赖清单 / 入口 / 不变量 —— 见该文件头（清单只在那里维护，此处不复述数量）。
+// ── 媒体准备处理器已按族搬出 ───────────────────────────────────────────────
+// 预准备、构建与选中项落地整段住 src/client/media-prep-handlers.js；构建期内联回本作用域。
 
-function commitRotationSwitch(prep) {
-  rotationPrep = null;
-  for (const t of prep.timers) { try { clearTimeout(t); } catch { /* ignore */ } }
-  prep.timers = [];
-  releaseProbeMedia(prep);
-  const staged = prep.staged;
-  prep.staged = null;
-  const w = wallpaperById().get(prep.id);
-  const valid = selection.rotationEnabled && selection.id === prep.fromId
-    && w && isRotationEligible(w, selection.contentRatingFilter)
-    && !isHiddenWallpaper(w.id, selection.hiddenIds);
-  liveLog("rotation-commit", "wid=" + prep.id + " from=" + prep.fromId + " kind=" + (prep.kind || "-")
-    + " valid=" + valid + " " + liveStateBrief());
-  if (!valid) {
-    if (staged) { try { staged.div.remove(); } catch { /* ignore */ } }
-    if (prep.readyEl) disposeMediaEl(prep.readyEl);
-    syncRotationTimer();
-    return;
-  }
-  // 就绪元素随提交走，分两条通道：
-  // - iframe 类（live 渲染页 / 旧链网页）：staging 容器整体转为新层（节点级
-  //   领养）—— 同源 iframe 同文档 reparent 会重载文档，绝不能让 iframe 移动；
-  // - img/video：元素级领养，buildMedia 直接收编进新层。
-  if ((prep.kind === "live" || prep.kind === "web") && staged && staged.div && prep.readyEl) {
-    pendingStagedLayerNode = staged.div;
-    prep.readyEl = null; // iframe 留在容器里，不拆散
-  } else {
-    preparedMediaEl = prep.readyEl || null;
-    prep.readyEl = null;
-    if (staged) { try { staged.div.remove(); } catch { /* ignore */ } }
-  }
-  pendingRotationFade = true;
-  applySelection(prep.id, { fromRotation: true, kind: prep.kind });
-  // 领养保险丝：applySelection 的 emit 未消费节点级领养（理论上不可达 ——
-  // 准备期前提与领养条件一致，此处仅兜底）时 staging 容器不能泄漏。
-  if (pendingStagedLayerNode) {
-    const div = pendingStagedLayerNode;
-    pendingStagedLayerNode = null;
-    try {
-      const f = div.querySelector && div.querySelector("iframe");
-      if (f) disposeMediaEl(f);
-    } catch { /* ignore */ }
-    try { div.remove(); } catch { /* ignore */ }
-  }
-}
-
-// ── Rotation group CRUD (draft-based editor) ────────────────────────────────
-function startEditGroup(id) {
-  const group = selection.rotationGroups.find((g) => g.id === id);
-  if (!group) return;
-  setTransient("editing", JSON.parse(JSON.stringify(group)));
-  emit();
-}
-
-function startCreateGroup() {
-  setTransient("editing", {
-    id: nextGroupId(),
-    name: weT("轮播列表 {index}", { index: selection.rotationGroups.length + 1 }),
-    interval: DEFAULTS.rotationInterval,
-    order: "sequence",
-    trigger: "interval",
-    wallpaperIds: [],
-  });
-  emit();
-}
-
-function saveEditingGroup() {
-  const draft = selection.editing;
-  if (!draft) return;
-  const idx = selection.rotationGroups.findIndex((g) => g.id === draft.id);
-  const cleaned = {
-    id: draft.id,
-    name: typeof draft.name === "string" && draft.name.trim() ? draft.name.trim() : weT("轮播列表"),
-    interval: clampNum(draft.interval, ROTATION_INTERVAL_MIN, ROTATION_INTERVAL_MAX, DEFAULTS.rotationInterval),
-    trigger: draft.trigger === "videoEnd" ? "videoEnd" : "interval",
-    order: draft.order === "random" ? "random" : "sequence",
-    wallpaperIds: Array.isArray(draft.wallpaperIds)
-      ? draft.wallpaperIds.filter((x) => typeof x === "string" && x)
-      : [],
-  };
-  if (idx >= 0) selection.rotationGroups[idx] = cleaned;
-  else selection.rotationGroups.push(cleaned);
-  selection.rotationGroupId = cleaned.id;
-  setTransient("editing", null);
-  // 列表成员可能已变：进行中的轮换准备候选作废，下轮按新成员重评。
-  cancelRotationPrepare();
-  if (selection.rotationEnabled && !rotationCandidates().some((w) => w.id === selection.id)) {
-    const first = rotationCandidates()[0];
-    applySelection(first ? first.id : "");
-    return;
-  }
-  persistSelection();
-  syncRotationTimer();
-  emit();
-}
-
-function cancelEditGroup() {
-  setTransient("editing", null);
-  emit();
-}
-
-function deleteGroup(id) {
-  const idx = selection.rotationGroups.findIndex((g) => g.id === id);
-  if (idx < 0) return;
-  selection.rotationGroups.splice(idx, 1);
-  // 列表结构变化：进行中的轮换准备候选可能已不在活动列表 → 取消，下轮重评。
-  cancelRotationPrepare();
-  if (selection.rotationGroupId === id) {
-    selection.rotationGroupId = "";
-    if (selection.rotationEnabled) {
-      const fallback = firstUsableGroup();
-      if (fallback) selection.rotationGroupId = fallback.id;
-      else selection.rotationEnabled = false;
-    }
-  }
-  if (selection.editing && selection.editing.id === id) setSetting("editing", null);
-  // 删除是**结构变更**，必须落盘：原来只 `splice` 内存、不调 persistSelection ⇒ 删掉的列表
-  // 重启后「复活」（#292）。与 saveEditingGroup 同一条纪律：改完列表就 persist。
-  persistSelection();
-  syncRotationTimer();
-  emit();
-}
-
-function importPlaylistIntoDraft(playlist) {
-  if (!selection.editing || !playlist || !Array.isArray(playlist.wallpaperIds)) return;
-  selection.editing.wallpaperIds = playlist.wallpaperIds.slice();
-  emit();
-}
+// ── 轮播组 CRUD（草稿式编辑器）已按族搬出 ───────────────────────────────────
+// 新建/改名/删除/成员增删与两步确认整段住 src/client/rotation-crud.js；构建期内联回本作用域。
 
 
 // ── Hidden wallpapers (soft delete / restore, localStorage only) ───────────
@@ -1511,74 +1324,8 @@ function restoreWallpapers(ids) {
   }
 }
 
-// ── Custom uploads (read-A storage) ─────────────────────────────────────────
-// The HOST writes the uploaded bytes to its plugin-managed directory and
-// serves them through the same token/media/preview routes as WE media; the
-// client only POSTs the file, then refreshes the (already-merged) inventory.
-const UPLOAD_URL = "/wallpaper-engine/upload";
-const REMOVE_URL = "/wallpaper-engine/remove";
-const URL_IMPORT_URL = "/wallpaper-engine/url-import";
-const UPLOAD_TYPES = ["image/jpeg", "image/png", "image/webp", "video/mp4"];
-
-// `isUploadedWallpaper(w)` / `isDirWallpaper(w)`（id 前缀判定）住在
-// **src/picker-model.js** —— ratingOf 的宽松分级与上传管理列表共用同一对判定。
-
-async function uploadWallpaperFile(file) {
-  const ctype = (file.type || "").toLowerCase();
-  if (!UPLOAD_TYPES.includes(ctype)) {
-    setTransient("uploadError", weT("仅支持 JPG / PNG / WebP 图片与 MP4 视频"));
-    emit();
-    return;
-  }
-  if (!/\.(jpe?g|png|webp|mp4)$/i.test(file.name)) {
-    setTransient("uploadError", weT("文件扩展名需为 .jpg / .png / .webp / .mp4"));
-    emit();
-    return;
-  }
-  setTransient("uploading", true);
-  setTransient("uploadError", "");
-  setTransient("uploadNote", "");
-  emit();
-  try {
-    const title = file.name.replace(/\.[^.]+$/, "").slice(0, 80);
-    const res = await apiFetch(UPLOAD_URL + "?title=" + encodeURIComponent(title), {
-      method: "POST",
-      headers: { "Content-Type": ctype },
-      body: file,
-      parse: "always", // 失败时也要读宿主给的原因（4xx/5xx 的 {error}）
-    });
-    const data = res.data || {};
-    if (!res.ok) throw new Error(hostFailureReason(res));
-    // Host dedup: uploading the same file again returns the existing entry
-    // (data.duplicate) instead of storing a second copy.
-    if (data.duplicate) {
-      setTransient("uploadNote", weT("已存在相同内容的壁纸，已直接选择原有的那张"));
-    }
-    await loadInventory();
-    applySelection(data.id);
-  } catch (err) {
-    setTransient("uploadError", weT("上传失败：{error}", { error: weT(err && err.message ? err.message : err) }));
-  }
-  setTransient("uploading", false);
-  emit();
-}
-
-async function removeUploadWallpaper(id) {
-  if (!id) return;
-  setTransient("uploading", true);
-  setTransient("uploadError", "");
-  emit();
-  try {
-    const res = await apiPostJson(REMOVE_URL, { id }, { parse: "always" });
-    if (!res.ok) throw new Error(hostFailureReason(res));
-    if (selection.id === id) applySelection("");
-    await loadInventory();
-  } catch (err) {
-    setTransient("uploadError", weT("移除失败：{error}", { error: weT(err && err.message ? err.message : err) }));
-  }
-  setTransient("uploading", false);
-  emit();
-}
+// ── 自定义上传处理器（read-A 存储）已按族搬出 ────────────────────────────────
+// 选文件、校验、命名、写入与删除整段住 src/client/upload-handlers.js；构建期内联回本作用域。
 
 // ── 图片 URL 源（Bing 每日一图 / 用户直链）已按族搬出 ────────────────────────────
 // 草稿输入、导入、手动刷新、两枚入口整段住 src/client/url-source.js；构建期内联回本作用域。

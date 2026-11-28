@@ -23,7 +23,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { panelText } from './tools/src-scope.mjs';
+import { panelText, clientText } from './tools/src-scope.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (rel) => readFileSync(join(ROOT, rel), 'utf8');
@@ -134,7 +134,9 @@ const hostSrc = read('lib/index.js') + '\n' + read('lib/host-boot.js') + '\n' + 
 //    "读哪个文件"（下面 hostMimeKeys 的两个实参），判据与期望值一字未改。`hostSrc` 仍供 BASE 等其余判据。
 const hostAssetsSrc = read('lib/media/media-dirs.js');
 const apiSrc = read('src/api-client.js');
-const clientSrc = read('src/client.js');
+// 取文口径：客户端正文族（正文 + src/client/*.js）。UPLOAD_TYPES 自 2026-11-28 起住
+// src/client/upload-handlers.js；按单文件读会让两侧 MIME 对账恒假。
+const clientSrc = clientText();
 const tabsSrc = panelText();
 
 {

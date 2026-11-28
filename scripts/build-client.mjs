@@ -600,6 +600,28 @@ const INLINE_MODULES = [
     markers: ['const petLinkWiring = {', 'petLinkWireAttach', 'warmup() {', 'dispose() {'],
   },
   {
+    file: 'src/client/upload-handlers.js',
+    why: 'src/client.js 正文的自定义上传处理器（读文件/校验/命名/写入、删除与刷新清单）—— 构建期内联在正文之前，同处一个扁平作用域',
+    markers: ['const UPLOAD_URL = "/wallpaper-engine/upload";', 'const UPLOAD_TYPES = ["image/jpeg", "image/png", "image/webp", "video/mp4"];',
+      'async function uploadWallpaperFile(file) {', 'async function removeUploadWallpaper(id) {'],
+  },
+  {
+    file: 'src/client/rotation-crud.js',
+    why: 'src/client.js 正文的轮播组 CRUD（新建/改名/删除/成员增删的草稿式编辑器与两步确认）—— 构建期内联在正文之前，同处一个扁平作用域',
+    markers: ['function startEditGroup(id) {', 'function saveEditingGroup() {',
+      'function deleteGroup(id) {', 'function importPlaylistIntoDraft(playlist) {'],
+  },
+  {
+    file: 'src/client/media-prep-handlers.js',
+    why: 'src/client.js 正文的媒体准备处理器（预准备、构建、选中项落地）—— 构建期内联在正文之前，同处一个扁平作用域',
+    markers: ['function commitRotationSwitch(prep) {'],
+  },
+  {
+    file: 'src/client/transition-handlers.js',
+    why: 'src/client.js 正文的切换过场档位表与几何（SWITCH_TRANSITIONS / SWITCH_SPEEDS / SWITCH_DIRECTIONAL / wipeInset）—— 构建期内联在正文之前，同处一个扁平作用域',
+    markers: ['const SWITCH_TRANSITIONS = [', 'const SWITCH_SPEEDS = [', 'const SWITCH_BARS_TEETH = 7;', 'function wipeInset(dir)'],
+  },
+  {
     file: 'src/client/update-notice.js',
     why: 'src/client.js 正文的更新公告组件（NOTICE_VERSION 哨兵、配图就绪探针节奏、UpdateNotice 组件与文案块）—— 构建期内联在正文之前，同处一个扁平作用域',
     markers: ['const NOTICE_VERSION', 'function UpdateNotice()', 'UPDATE NOTICE COPY（end）', 'we-update-notice__btn'],
