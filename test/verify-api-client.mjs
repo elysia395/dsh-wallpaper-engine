@@ -18,7 +18,7 @@ import { stripComments } from './tools/js-text.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const api = await import(new URL('../src/api-client.js', import.meta.url).href);
-const { BASE, apiUrl, apiFetch, apiJson, apiHead, apiPostJson, apiDelete } = api;
+const { BASE, apiUrl, apiUrlWithMount, apiFetch, apiJson, apiHead, apiPostJson, apiDelete } = api;
 
 /**
  * ① 的不变量：**业务代码零裸 `fetch(`** —— 客户端每个模块都必须走 `src/api-client.js`。
@@ -133,6 +133,85 @@ console.log('\n② URL 前缀 / 默认值');
   check('路径经前缀', calls[0].url === BASE + '/stats');
   check('负对照：显式覆盖 cache 时必须尊重', await apiFetch('/x', { fetch: fake, cache: 'force-cache' })
     .then(() => calls[calls.length - 1].init.cache === 'force-cache'));
+}
+
+// ── ②b 挂载前缀（反代子路径部署，issue #409）────────────────────────────────────
+// 前缀探测住 src/app-mount.js：资源名 → document.baseURI → 站点根。判据的口径同文件头：
+// **宁可不补，也不乱补** —— 根路径部署必须逐字节退回现状。
+console.log('\n②b 挂载前缀（#409）');
+{
+  const { weAppMount, weNormalizeMount, weAppBase, weAppMountReset } = await import(
+    new URL('../src/app-mount.js', import.meta.url).href);
+
+  check('根路径部署：baseURI 为 / ⇒ 空串（apiUrl 与改动前逐字节一致）',
+    weAppMount({ baseURI: 'http://h:1/', origin: 'http://h:1' }) === '');
+  check('没有环境读数 ⇒ 空串', weAppMount({}) === '');
+  check('资源名反推：<mount>/assets/… 与 <mount>/plugins/… 一致 ⇒ 采信',
+    weAppMount({
+      resources: [{ name: 'http://h:1/app/Harness/dsh/assets/index.js' },
+        { name: '/app/Harness/dsh/plugins/x/client.js' }],
+      baseURI: 'http://h:1/app/Harness/dsh/',
+    }) === '/app/Harness/dsh');
+  check('资源名互相矛盾 ⇒ 不猜（按站点根）',
+    weAppMount({ resources: ['/a/assets/x.js', '/b/plugins/y.js'] }) === '');
+  check('baseURI 两级前缀 /app/Harness/dsh/ ⇒ /app/Harness/dsh',
+    weAppMount({ baseURI: 'http://h:1/app/Harness/dsh/', origin: 'http://h:1' }) === '/app/Harness/dsh');
+  check('baseURI 无尾斜杠的 /app/Harness/dsh 也认得（fnOS 真机形态）',
+    weAppMount({ baseURI: 'http://h:1/app/Harness/dsh', origin: 'http://h:1' }) === '/app/Harness/dsh');
+  check('目录形态 /dsh/ ⇒ /dsh', weAppMount({ baseURI: 'http://h:1/dsh/' }) === '/dsh');
+  // 负对照：路由形态不猜 —— 补错前缀会把**根路径部署**（所有用户的默认形态）整块打死。
+  check('负对照：路由形态 /session/abc 不猜', weAppMount({ baseURI: 'http://h:1/session/abc' }) === '');
+  check('负对照：带文件名的 /x/index.html 不猜', weAppMount({ baseURI: 'http://h:1/x/index.html' }) === '');
+  check('负对照：跨源 baseURI 不采信', weAppMount({ baseURI: 'http://other/x/', origin: 'http://h:1' }) === '');
+  check('归一化：/ 与空串为空、尾斜杠去掉、缺前导斜杠补上',
+    weNormalizeMount('/') === '' && weNormalizeMount('') === ''
+    && weNormalizeMount('/a/b/') === '/a/b' && weNormalizeMount('a') === '/a');
+  weAppMountReset();
+  check('Node 环境（无 document / performance）⇒ 站点根', weAppBase() === ''
+    && apiUrl('/settings') === BASE + '/settings');
+
+  // 拼接核（纯函数，前缀与路径分开喂）：这才测得到"补"与"不补"。
+  // 为什么不在 Node 里注入 document/performance 再走 apiUrl：独立模块形态下前缀**恒为空串**
+  // （见 apiMountPrefix 的 typeof 守卫），注入只会测到给 api-client 加全局依赖的假通路。
+  const M = '/app/Harness/dsh';
+  check('拼接核：相对路径 / 已带 BASE 的路径都补前缀',
+    apiUrlWithMount('/settings', M) === M + BASE + '/settings'
+    && apiUrlWithMount(BASE + '/settings', M) === M + BASE + '/settings');
+  check('拼接核幂等：已带挂载前缀的路径不会被补第二次',
+    apiUrlWithMount(M + BASE + '/settings', M) === M + BASE + '/settings');
+  check('拼接核：站点根（空串 / 尾斜杠）与原行为逐字节相同',
+    apiUrlWithMount('/settings', '') === BASE + '/settings'
+    && apiUrlWithMount('/settings', '/') === BASE + '/settings'
+    && apiUrlWithMount('/settings', M + '/') === M + BASE + '/settings'
+    && apiUrlWithMount('', '') === BASE + '/');
+  check('拼接核：绝对 URL / dsh-app:// / data: / blob: 原样通过（前缀不参与）',
+    apiUrlWithMount('http://127.0.0.1:9/x', M) === 'http://127.0.0.1:9/x'
+    && apiUrlWithMount('dsh-app://app/x', M) === 'dsh-app://app/x'
+    && apiUrlWithMount('data:text/plain,1', M) === 'data:text/plain,1');
+  check('负对照：拼接核若改成无条件拼 BASE（不看已带前缀）会被判出',
+    apiUrlWithMount(M + BASE + '/x', M) === M + BASE + '/x');
+  const apiSrcTxt = strip(readFileSync(join(root, 'src/api-client.js'), 'utf8'));
+  check('接线：apiUrl 的前缀来自 app-mount（独立模块形态按站点根）',
+    apiSrcTxt.includes("typeof weAppBase === 'function'")
+    && apiSrcTxt.includes("weAppBase() : ''")
+    && apiSrcTxt.includes('apiUrlWithMount(path, apiMountPrefix())'));
+}
+
+// ── ②c 404 归因：响应不是宿主信封（issue #409）─────────────────────────────────
+console.log('\n②c 非 2xx 归因（网关 HTML 页 vs 宿主 JSON 信封）');
+{
+  const html = { status: 404, headers: { get: () => 'text/html; charset=utf-8' }, text: async () => '<html>404</html>' };
+  const json = { status: 404, headers: { get: () => 'application/json' }, text: async () => '{"error":"no"}' };
+  const r1 = await apiFetch('/inventory', { fetch: async () => html });
+  check('404 + HTML ⇒ notHostEnvelope（子路径部署丢了前缀）', r1.notHostEnvelope === true && r1.status === 404);
+  const r2 = await apiFetch('/inventory', { fetch: async () => json, parse: 'always' });
+  check('404 + JSON 信封 ⇒ 不是网关页（归因为宿主的 404）', r2.notHostEnvelope === false);
+  const r3 = await apiFetch('/inventory', { fetch: async () => ({ status: 200, text: async () => '{}' }) });
+  check('2xx ⇒ 不做归因', r3.notHostEnvelope === false);
+  const r4 = await apiFetch('/inventory', { fetch: async () => ({ status: 500, headers: { get: () => 'text/html' } }) });
+  check('500 不参与（网关换页只发生在路由层）', r4.notHostEnvelope === false);
+  check('负对照：没有 headers 的替身不会被误判成网关页',
+    (await apiFetch('/x', { fetch: async () => ({ status: 404, text: async () => '' }) })).notHostEnvelope === false);
 }
 
 // ── ③ 语义：不吞错、不误判 ──────────────────────────────────────────────────

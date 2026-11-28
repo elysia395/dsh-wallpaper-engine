@@ -1616,8 +1616,9 @@ const clientChecks = [
   ['live fps probe reports ui / web / rnd to the diag channel',
     liveSrc.includes('function reportLiveFps') && liveSrc.includes('"live-fps"')
       && liveSrc.includes('function takeUiFps') && liveSrc.includes('wstate.webFps')],
-  // 网页壁纸的 src 直用 host 给的绝对 URL（媒体源）；相对形态仅作回落。
-  ['web live src reuses the absolute media-origin URL', liveSrc.includes('const webEntry = String(selLike.webLiveSrc || "")')
+  // 网页壁纸的入口仍从 host 给的 webLiveSrc 出发（**绝对 URL 是本机主路径**，见 #419 块：
+  // 远程页面才剥成相对路径）。
+  ['web live src is derived from the host-provided webLiveSrc', liveSrc.includes('const webEntry = String(selLike.webLiveSrc || "")')
     && liveSrc.includes('/^https?:\\/\\//i.test(webEntry)')],
   // **实测**症状：「场景类壁纸正常几秒就失效」「网页也是」「失效以后是静态的」
   // 「只有扩展模式」「网页类是预览图」。成因是 extended 的「首帧后延迟 8000ms 换元」自救：
@@ -1630,6 +1631,73 @@ const clientChecks = [
     && /if \(desktopWindowMode\(\) === "extended" && !liveFrameRebuildTimer && useExtendedFrameSwap\(\)\) \{/.test(liveSrc)],
 ];
 for (const [name, ok] of clientChecks) check(name, ok);
+
+// ── #409 / #419：挂载前缀与远程端 web 入口 ──────────────────────────────────────
+{
+  // #419 主修：网页壁纸的 iframe src 必须经 webLiveSrcFor —— 宿主给的是**媒体源 loopback
+  // 绝对 URL**，非本机客户端打它就是打自己（症状：先闪作者预览图、随后整块黑）。
+  const webEntryOk = (s) => s.includes('const src = isWeb ? webLiveSrcFor(webEntry) : selLike.sceneLiveSrc')
+    && s.includes('function webLiveSrcFor(')
+    && s.includes('function remoteLoopbackPath(')
+    && s.includes('if (remoteRel) return apiUrl(remoteRel);');
+  check('#419 远程 web 入口：loopback 绝对 URL 剥成相对路径（经代理回主端口）', webEntryOk(liveSrc));
+  check('#419 负对照：直接把绝对 webLiveSrc 当 iframe src（黑屏病因）会被判红',
+    webEntryOk(liveSrc)
+    && !webEntryOk(liveSrc.replace('const src = isWeb ? webLiveSrcFor(webEntry) : selLike.sceneLiveSrc',
+      'const src = isWeb ? webEntry : selLike.sceneLiveSrc')));
+  // #409：渲染页 iframe 自身也是站点根下的插件路由 ⇒ 必须带挂载前缀。
+  check('#409 渲染页 iframe URL 经 apiUrl（带挂载前缀）',
+    liveSrc.includes('return apiUrl("/wallpaper-engine/scene-live/index.html?type="'));
+  // #409：场景载荷基址的两支必须分开 —— 宿主媒体源的路由就在 BASE 下（**不带**挂载前缀），
+  // 应用源回落是相对路径（**必须**带挂载前缀）。
+  const sceneBase = (liveSrc.match(/function resolveSceneMediaBase\(\) \{[\s\S]{0,900}?\n\}/) || [''])[0];
+  const sceneBaseOk = (s) => s.includes('hostSceneBase + SCENE_FILES_PATH')
+    && s.includes('return apiUrl(SCENE_FILES_PATH);');
+  check('#409 场景载荷基址：宿主源直拼路由、应用源回落走 apiUrl',
+    sceneBaseOk(sceneBase), sceneBase.replace(/\s+/g, ' ').slice(0, 110));
+  check('#409 负对照：应用源回落直拼 origin+路由（不带挂载前缀）会被判红',
+    sceneBaseOk(sceneBase)
+    && !sceneBaseOk(sceneBase.replace('return apiUrl(SCENE_FILES_PATH);',
+      'return (typeof location !== "undefined" && location.origin ? location.origin : "") + SCENE_FILES_PATH;')));
+  // #419 附带的两处降级（media-prep）：web 垫底图取原图、live 不可用时走静态图。
+  const prep = readFileSync(new URL('../src/media-prep.js', import.meta.url), 'utf8');
+  check('#419 降级：web 的 previewUrl 走 scenePreviewUrl（full=1 原图）',
+    prep.includes('selection.previewUrl = (w.type === "scene" || w.type === "web")'));
+  check('#419 降级：web 且 live 不可用时按静态图建层（不再是裸 iframe）',
+    prep.includes('|| (sel.type === "web" && !isLive)'));
+  check('#419 负对照：把 web 从 isStill 里去掉，同一条判据为假',
+    !prep.replace('|| (sel.type === "web" && !isLive)', '').includes('|| (sel.type === "web" && !isLive)'));
+
+  // 行为级（结构判据看不出"远程才剥、本机不剥"）：把两个纯函数抠进 vm，各喂一遍环境。
+  // 抽取面 = originIsRemoteHttp … webLiveSrcFor（到 liveRenderUrl 之前），不含 selection 读取。
+  {
+    const from = liveSrc.indexOf('function originIsRemoteHttp(origin) {');
+    const to = liveSrc.indexOf('function liveRenderUrl(');
+    const fns = from >= 0 && to > from ? liveSrc.slice(from, to) : '';
+    const load = (pageOrigin, text) => runInNewContext(
+      text + '\n({ webLiveSrcFor, remoteLoopbackPath });',
+      { location: { origin: pageOrigin }, URL, apiUrl: (p) => '/MOUNT' + p });
+    const LOOPBACK = 'http://127.0.0.1:52341/wallpaper-engine/scene-files/tok/index.html';
+    const REMOTE_PAGE = 'http://10.0.0.5:8080';
+    const ok = (() => {
+      if (!fns) return false;
+      const remote = load(REMOTE_PAGE, fns);
+      const local = load('http://127.0.0.1:65415', fns);
+      return remote.webLiveSrcFor(LOOPBACK) === '/MOUNT/wallpaper-engine/scene-files/tok/index.html'
+        && local.webLiveSrcFor(LOOPBACK) === LOOPBACK
+        && remote.webLiveSrcFor('https://cdn.example.com/a/index.html') === 'https://cdn.example.com/a/index.html'
+        && remote.webLiveSrcFor('/wallpaper-engine/scene-files/t/i.html') === '/MOUNT/wallpaper-engine/scene-files/t/i.html'
+        && remote.remoteLoopbackPath('http://localhost:9/x') === '/x'
+        && remote.remoteLoopbackPath('https://10.0.0.5:9/x') === '';
+    })();
+    check('#419 行为：远程页面剥 loopback（补挂载前缀）、本机与公网绝对 URL 原样', ok, fns ? '' : '抠不到函数');
+    // 负对照：把剥离分支短路掉（= 回到 #419 的病因），同一组断言必须为假。
+    const broken = load(REMOTE_PAGE, fns.replace('if (remoteRel) return apiUrl(remoteRel);', 'if (false && remoteRel) return apiUrl(remoteRel);'));
+    check('#419 负对照：短路剥离分支后（原病因）行为判据变假',
+      broken.webLiveSrcFor(LOOPBACK) === LOOPBACK
+      && broken.webLiveSrcFor(LOOPBACK) !== '/MOUNT/wallpaper-engine/scene-files/tok/index.html');
+  }
+}
 
 // ── #248：UI 受压时给实时渲染页降帧 ─────────────────────────────────────────────
 // 现场是「Scene 60fps + 液态玻璃 + 大页面」时整窗卡 10s、流式输出期间 1.2s+ 主线程停顿；
@@ -2860,9 +2928,9 @@ check('宿主端出场景载荷的源，且按 sceneLive 门控（没有场景�
 // 那是恒真式判据，属于 P3-16 点名的形态）。所以抠出 mediaBase 的赋值再断言它消费宿主值
 // —— 场景路径消费 resolveSceneMediaBase()（issue #129：那里同时决定远程页面回落自身
 // origin；宿主源是 127.0.0.1 loopback，远程客户端打它等于打自己）。
-const mbAssign = (liveSrc.match(/const mediaBase = [\s\S]{0,220}?;/) || [''])[0];
+const mbAssign = (liveSrc.match(/const mediaBase = [\s\S]{0,400}?;/) || [''])[0];
 check('客户端场景 mediaBase 的**赋值表达式**消费宿主给的源（经 resolveSceneMediaBase）',
-  /isWeb \? /.test(mbAssign) && /resolveSceneMediaBase\(\)/.test(mbAssign)
+  /isWeb\s*\?/.test(mbAssign) && /resolveSceneMediaBase\(\)/.test(mbAssign)
     && !/const mediaBase = location\.origin/.test(mbAssign),
   mbAssign.replace(/\s+/g, ' ').slice(0, 90));
 check('该源来自宿主载荷 inventory.sceneMediaBase',

@@ -141,9 +141,51 @@ function originIsRemoteHttp(origin) {
 function resolveSceneMediaBase() {
   const hostSceneBase = selection.inventory && selection.inventory.sceneMediaBase;
   if (typeof hostSceneBase === "string" && hostSceneBase && !originIsRemoteHttp(typeof location !== "undefined" ? location.origin : "")) {
-    return hostSceneBase;
+    // 宿主媒体源：它自己起在 loopback 上、路由就在 BASE 下，**不带**挂载前缀。
+    return hostSceneBase + SCENE_FILES_PATH;
   }
-  return typeof location !== "undefined" && location.origin ? location.origin : "";
+  // 应用源回落（远程页面 / 媒体源不可用）：相对路径 + 挂载前缀（issue #409）——
+  // 反代把 DSH 挂在子路径下时，站点根的 /wallpaper-engine/* 会被网关吞掉。
+  return apiUrl(SCENE_FILES_PATH);
+}
+
+/**
+ * 把宿主媒体源的 **loopback 绝对 URL** 剥成相对路径（issue #419）。
+ *
+ * 只有"页面本身跑在远程 http(s) 上"并且"URL 指向本机 loopback"两条同时成立才剥：
+ * 前者是症状的成因（loopback 地址在客户端上指向客户端自己），后者保证剥掉的那一段
+ * 确实不可达。本机页面、`dsh-app://` 壳内页面、非 loopback 的绝对 URL 一律返回空串
+ * ⇒ 调用点保持原行为。
+ */
+function remoteLoopbackPath(url) {
+  if (!originIsRemoteHttp(typeof location !== "undefined" ? location.origin : "")) return "";
+  try {
+    const u = new URL(String(url || ""));
+    if (u.protocol !== "http:" && u.protocol !== "https:") return "";
+    const h = u.hostname;
+    const isLoopback = h === "127.0.0.1" || h === "localhost" || h === "::1"
+      || h === "[::1]" || h === "0.0.0.0";
+    if (!isLoopback) return "";
+    return u.pathname + u.search + u.hash;
+  } catch { return ""; }
+}
+
+/**
+ * web 壁纸的 live 入口地址（issue #419）。
+ *
+ * 宿主给的 `webLiveSrc` 是**宿主媒体源**（独立 loopback 端口）的绝对 URL：本机客户端
+ * 取得到，远程客户端上它指向客户端自己 ⇒ `ERR_CONNECTION_REFUSED`，症状是「先闪出作者
+ * 预览图、随后整块黑」。远程页面于是改成**相对路径 + 挂载前缀**：由浏览器按当前（代理）
+ * origin 解析，经代理回主端口 —— 主端口的 `/scene-files` 路由同样服务严格沙箱 iframe
+ *（实测 200）。沙箱一格没动：仍是 `allow-scripts`，不透明源没有放宽。
+ */
+function webLiveSrcFor(webEntry) {
+  const entry = String(webEntry || "");
+  if (!entry) return "";
+  const remoteRel = remoteLoopbackPath(entry);
+  if (remoteRel) return apiUrl(remoteRel);
+  if (/^https?:\/\//i.test(webEntry)) return entry;   // 本机 / 非 loopback 的绝对 URL：原样
+  return apiUrl(entry);                              // 旧 host 的回退形态（BASE 下的相对路径）
 }
 function liveRenderUrl(selLike) {
   const isWeb = selLike.type === "web";
@@ -159,9 +201,8 @@ function liveRenderUrl(selLike) {
   // 就是「预览图正常、随后整块黑」。只有旧 host / 媒体源启动失败时才回落成
   // 应用源相对路径（浏览器形态照常可用）。
   const webEntry = String(selLike.webLiveSrc || "");
-  const src = isWeb
-    ? (/^https?:\/\//i.test(webEntry) ? webEntry : location.origin + webEntry)
-    : selLike.sceneLiveSrc;
+  // 远程端 web 壁纸的入口必须剥成本地可达的相对路径（issue #419）：绝对 URL 见 webLiveSrcFor。
+  const src = isWeb ? webLiveSrcFor(webEntry) : selLike.sceneLiveSrc;
   const fit = SCENE_LIVE_FIT[selLike.objectFit] || "cover";
   const fps = SCENE_LIVE_FPS_VALUES.includes(selLike.sceneLiveFps) ? selLike.sceneLiveFps : 30;
   const muted = weAudioVolume() > 0 ? "false" : "true";
@@ -172,9 +213,13 @@ function liveRenderUrl(selLike) {
   // 那条路挤不过首帧 LIVE_FIRST_FRAME_MS 预算（那里还要买纹理解码与 shader 编译）。
   // 网页壁纸**不走**这个源：它的入口是绝对 URL（webLiveSrc），mediaBase 对它只剩
   //「诊断信标打哪个 origin」一个用途，保持原样以免多动一条已经通的链。
-  const mediaBase = (isWeb ? (typeof location !== "undefined" && location.origin ? location.origin : "") : resolveSceneMediaBase())
-    + SCENE_FILES_PATH;
-  return "/wallpaper-engine/scene-live/index.html?type=" + (isWeb ? "web" : "scene")
+  // 网页壁纸的 mediaBase 只给诊断信标用，保持页面 origin；场景走 resolveSceneMediaBase
+  //（它已经把 /scene-files 尾巴与挂载前缀算进去了，见那里）。
+  const mediaBase = isWeb
+    ? (typeof location !== "undefined" && location.origin ? location.origin : "") + SCENE_FILES_PATH
+    : resolveSceneMediaBase();
+  // 渲染页 iframe 的 URL 同样要带挂载前缀（#409）：它也是站点根下的插件路由。
+  return apiUrl("/wallpaper-engine/scene-live/index.html?type=" + (isWeb ? "web" : "scene")
     // 网页壁纸必须严格沙箱：第三方 workshop HTML 不得继承 DSH 的 origin
     //（否则可冒用宿主身份调宿主 API / 读宿主存储）——只给 allow-scripts，
     // 控制经渲染页的 postMessage 通道下发，shim 由宿主注入 HTML 响应。
@@ -190,7 +235,7 @@ function liveRenderUrl(selLike) {
     // 静默走程序化复刻，连探测请求都不发。
     + (selection.inventory && selection.inventory.weAssetsAvailable ? "&localAssets=1" : "")
     + "&src=" + encodeURIComponent(src)
-    + "&mediaBase=" + encodeURIComponent(mediaBase);
+    + "&mediaBase=" + encodeURIComponent(mediaBase));
 }
 // 向 live iframe 的 __wp 控制面收敛播放态/音量/fit。每次 emit 驱动的
 // syncLayers 与每秒心跳 tick 都会调用，但**只在目标值变化时真正下发**：
