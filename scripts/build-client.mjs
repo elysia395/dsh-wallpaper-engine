@@ -553,6 +553,21 @@ const INLINE_MODULES = [
     markers: ['function presetAssetChecksNow()', 'function glassPresetCtx()', 'onExportCommit:', 'onImportFile: (file) =>'],
   },
   {
+    file: 'src/client/url-source.js',
+    why: 'src/client.js 正文的图片 URL 源（草稿输入、导入、手动刷新、Bing/直链两枚入口）—— 构建期内联在正文之前，同处一个扁平作用域',
+    markers: ['function onUrlDraft(e)', 'async function importUrlWallpaper(kind)', 'async function refreshUrlWallpaper(id)', 'function addBingWallpaper()'],
+  },
+  {
+    file: 'src/client/dir-settings.js',
+    why: 'src/client.js 正文的三个目录设置处理器（上传目录 / 缓存目录 / WE 素材目录：编辑态、浏览、迁移、保存与失败文案，含四个路由常量）—— 构建期内联在正文之前，同处一个扁平作用域',
+    markers: ['const UPLOAD_DIR_URL = "/wallpaper-engine/upload-dir";', 'async function changeUploadDir(dir, migrate)', 'async function changeCacheDir(dir, migrate)', 'async function changeWeAssetsDir(dir)'],
+  },
+  {
+    file: 'src/client/selection-filters.js',
+    why: 'src/client.js 正文的内容分级/类型筛选调用点（收窄后的候选池、目录扁平化、当前选择重新校验与提示）—— 构建期内联在正文之前，同处一个扁平作用域',
+    markers: ['function selectionBlockedNote(w)', 'function playableInventory()', 'function flattenWallpaperFolders(folders, depth, out)', 'function revalidateSelection()'],
+  },
+  {
     // 跨包浏览器半边的**显式键集契约表**（ADR-0014 S5.1 / S5.4）：71 个 getter 挂到 module.exports。
     // 必须排在内联清单**末尾**：表顶层读 `DEFAULTS`（lib/settings-schema.js 的内联件）⇒ 要排在它之后；
     // 正文里的函数声明在工厂体内提升、getter 又是惰性求值 ⇒ 与正文的先后无关。
