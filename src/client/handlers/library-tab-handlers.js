@@ -10,7 +10,7 @@
  *      （复核：git show <拆前提交>:src/client.js | sed -n '2240,2384p'）。
  *   3) 本文件只有函数声明、无顶层状态：不读正文的 const、不挂监听 ⇒ 无 TDZ 风险。
  *   4) 段末的 WE 素材目录草稿/取消两个处理器按"渲染侧只读值"的口径留在这里；真正保存与浏览
- *      在 src/client/dir-settings.js（同一族的两半，读的是同一组 transient 键）。
+ *      在 src/client/handlers/dir-settings.js（同一族的两半，读的是同一组 transient 键）。
  */
 // ── 壁纸库页签的处理器（渲染器只读值 + 调这些）────────────────────────────────
 // `src/panel-tabs.js` 的契约是「只读 + 组装 React 树」：**写设置 / 改状态 / 发通知都归这里**。

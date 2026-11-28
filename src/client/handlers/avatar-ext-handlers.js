@@ -10,7 +10,7 @@
  *      （复核：git show <拆前提交>:src/client.js | sed -n '2986,3139p'，与本文件去掉本头注释后 diff）。
  *   3) 本文件只有函数声明与顶层字面量状态（AVATAR_CROP_VIEW / avatarCropPending /
  *      avatarOverflowPending）：不读正文的 const、不挂监听 ⇒ 内联到 bundle 顶部不会撞 TDZ。
- *   4) 裁切几何与出图住在 src/client/image-assets.js；装饰层（src/extensions/avatar-layer.js）是 emit 的订阅者，
+ *   4) 裁切几何与出图住在 src/client/handlers/image-assets.js；装饰层（src/extensions/avatar-layer.js）是 emit 的订阅者，
  *      所以滑块走 commitLiveSetting 的 live 档时要额外 syncAvatarLayer() —— 那条约定留在原地未改。
  */
 

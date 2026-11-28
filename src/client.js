@@ -1106,7 +1106,7 @@ function scheduleSceneVideoResync() {
 
 // ── 内容分级 / 类型筛选的调用点已按族搬出 ────────────────────────────────────
 // selectionBlockedNote / playableInventory / 目录扁平化 / 轮播候选池 / 收窄后的重新校验
-// 整段住 src/client/selection-filters.js；判定本体仍在 src/picker/picker-model.js。
+// 整段住 src/client/handlers/selection-filters.js；判定本体仍在 src/picker/picker-model.js。
 
 // ── Rotation groups (user-defined carousel lists) ───────────────────────────
 function activeRotationGroup() {
@@ -1277,11 +1277,11 @@ let pendingStagedLayerNode = null;
 // 加载"的黑屏闪烁。
 let preparedMediaEl = null;
 const ROTATION_PREP_TIMEOUT_MS = 20000; // 单阶段就绪探测上限（超时走兜底，不卡死轮换）
-// 交叉淡化时长 ROTATION_FADE_MS 随「切换过场」族搬进 src/client/transition-handlers.js
+// 交叉淡化时长 ROTATION_FADE_MS 随「切换过场」族搬进 src/client/handlers/transition-handlers.js
 // （档位表的 fade 项在模块初始化时读它，留在正文会撞 TDZ）。
 // ── 切换过场的档位表与几何已按族搬出 ────────────────────────────────────────
 // SWITCH_TRANSITIONS / SWITCH_SPEEDS / SWITCH_DIR_LABELS / SWITCH_DIRECTIONAL / SWITCH_BARS_TEETH
-// 与 wipeInset 整段住 src/client/transition-handlers.js；条带几何 barsPolygon 住 src/client/rotation.js。
+// 与 wipeInset 整段住 src/client/handlers/transition-handlers.js；条带几何 barsPolygon 住 src/client/rotation.js。
 
 // 条带几何（barsPolygon）的说明随函数住在 src/client/rotation.js。
 // ── 轮换 / 媒体生命周期助手已按族搬出（构建期内联在正文之前，同一扁平作用域）────────────
@@ -1289,10 +1289,10 @@ const ROTATION_PREP_TIMEOUT_MS = 20000; // 单阶段就绪探测上限（超时�
 // 隐藏期轮换推迟与可见时补做。LIVE_FIRST_FADE_MS 与两个隐藏态标记随声明一起搬走（初始化式不读模块状态）。
 
 // ── 媒体准备处理器已按族搬出 ───────────────────────────────────────────────
-// 预准备、构建与选中项落地整段住 src/client/media-prep-handlers.js；构建期内联回本作用域。
+// 预准备、构建与选中项落地整段住 src/client/handlers/media-prep-handlers.js；构建期内联回本作用域。
 
 // ── 轮播组 CRUD（草稿式编辑器）已按族搬出 ───────────────────────────────────
-// 新建/改名/删除/成员增删与两步确认整段住 src/client/rotation-crud.js；构建期内联回本作用域。
+// 新建/改名/删除/成员增删与两步确认整段住 src/client/handlers/rotation-crud.js；构建期内联回本作用域。
 
 
 // ── Hidden wallpapers (soft delete / restore, localStorage only) ───────────
@@ -1325,13 +1325,13 @@ function restoreWallpapers(ids) {
 }
 
 // ── 自定义上传处理器（read-A 存储）已按族搬出 ────────────────────────────────
-// 选文件、校验、命名、写入与删除整段住 src/client/upload-handlers.js；构建期内联回本作用域。
+// 选文件、校验、命名、写入与删除整段住 src/client/handlers/upload-handlers.js；构建期内联回本作用域。
 
 // ── 图片 URL 源（Bing 每日一图 / 用户直链）已按族搬出 ────────────────────────────
-// 草稿输入、导入、手动刷新、两枚入口整段住 src/client/url-source.js；构建期内联回本作用域。
+// 草稿输入、导入、手动刷新、两枚入口整段住 src/client/handlers/url-source.js；构建期内联回本作用域。
 
 // ── 三个目录设置（上传 / 缓存 / WE 素材）已按族搬出 ──────────────────────────────
-// 编辑态、浏览、迁移开关、保存与失败文案整段住 src/client/dir-settings.js（含四个路由常量）；
+// 编辑态、浏览、迁移开关、保存与失败文案整段住 src/client/handlers/dir-settings.js（含四个路由常量）；
 // 构建期内联回本作用域。
 
 // ── Behind-body layer: wallpaper + scrim (plain DOM, NOT a slot) ───────────
@@ -1358,7 +1358,7 @@ const IS_EDGE = typeof navigator !== "undefined" && /Edg\//.test(navigator.userA
 // 因为改这两个状态的处理器（openUserPropsPanel / closeUserPropsPanel）仍在本文件。
 // ── 壁纸属性（WE 用户属性）的状态与处理器已按族搬出 ─────────────────────────────
 // 打开/收起、载入定义、覆盖写入、「从 WE 导入」、热更新、重启回放，连同它们的状态
-// （propsPanelOpen / propsState / 180ms 去抖计时器）整段住 src/client/props-panel.js；
+// （propsPanelOpen / propsState / 180ms 去抖计时器）整段住 src/client/handlers/props-panel.js；
 // 构建期由 scripts/build-client.mjs 内联回本作用域 —— 扁平作用域不变，调用点无需改动。
 // 面板标记仍住 src/picker/picker-props-panel.js（ctx 在本文件调用点组装）。
 
@@ -1615,7 +1615,7 @@ function writeSavedPickerOpen(key, on) {
 }
 
 // ── 仓库 star 数的取数与文案已按族搬出 ──────────────────────────────────────
-// 缓存键、取数、陈旧标注与失败降级整段住 src/client/star-count.js；构建期内联回本作用域。
+// 缓存键、取数、陈旧标注与失败降级整段住 src/client/handlers/star-count.js；构建期内联回本作用域。
 
 // ── Settings picker ─────────────────────────────────────────────────────────
 // `key` is only needed when a SliderRow sits inside a conditionally-rendered
@@ -1843,8 +1843,8 @@ function markGpuFrameProbed(wid, pinned) {
 }
 
 // ── 「壁纸库」页签的处理器已按族搬出 ──────────────────────────────────────────
-// 搜索、分页、下钻、选择、批量操作、素材目录编辑态等整段住 src/client/library-tab-handlers.js；
-// 构建期内联回本作用域（保存/浏览仍在 src/client/dir-settings.js）。
+// 搜索、分页、下钻、选择、批量操作、素材目录编辑态等整段住 src/client/handlers/library-tab-handlers.js；
+// 构建期内联回本作用域（保存/浏览仍在 src/client/handlers/dir-settings.js）。
 
 // ── 外观 / 播放 / 系统页签的处理器（同上一条：渲染器只读值 + 调这些）────────────
 function onLeftSidebarGlass(e) { setSetting("leftSidebarGlass", e.target.checked); emit(); }
@@ -2154,11 +2154,11 @@ async function postImageAsset(path, blob, what) {
 
 // ── 「扩展」页签（一号模块：自定义会话头像）的处理器已按族搬出 ──────────────────────
 // 开关 / 两个滑块 / 出现间隔、图片选择与自动压缩、裁切弹窗的开关，连同 AVATAR_CROP_VIEW 与
-// 两份 pending 状态整段住 src/client/avatar-ext-handlers.js；构建期内联回本作用域。
-// 裁切几何与出图住 src/client/image-assets.js（同一族，搬在它之前）。
+// 两份 pending 状态整段住 src/client/handlers/avatar-ext-handlers.js；构建期内联回本作用域。
+// 裁切几何与出图住 src/client/handlers/image-assets.js（同一族，搬在它之前）。
 // ── 用户图片资产导入的共用腿（会话头像裁切 / 吉祥物立绘）已按族搬出 ────────────────
 // 取景框几何、拖动/缩放/滚轮手势、裁切出图与确认、清空，以及吉祥物立绘的选择/上传/清除
-// 整段住 src/client/image-assets.js；构建期由 scripts/build-client.mjs 内联回本作用域。
+// 整段住 src/client/handlers/image-assets.js；构建期由 scripts/build-client.mjs 内联回本作用域。
 // 「适配方式」onObjectFit 是外观处理器，不属于本族，仍在下面。
 
 /**
@@ -2227,7 +2227,7 @@ function cardKeyDown(e) {
 
 // ── 播放控制处理器（模块级）已按族搬出 ─────────────────────────────────────────
 // 播放/暂停、静音、音量（live 档不 emit）、清除当前壁纸、清 live 失败记忆、换组、
-// 开停轮播、下一张 —— 整段住 src/client/playback-handlers.js，构建期内联回本作用域。
+// 开停轮播、下一张 —— 整段住 src/client/handlers/playback-handlers.js，构建期内联回本作用域。
 // ── 外观 / 画面处理器（模块级）──────────────────────────────────────────────
 // 与上面那批播放控制处理器同源理由：快捷播放面板的「外观」「播放」两页与设置页
 // 同名页签**共用同一批渲染器**（renderAppearanceTab / renderEffectsTab 的
@@ -2345,7 +2345,7 @@ function fontSetCtx() {
 
 // ── 玻璃预设的接线已按族搬出 ──────────────────────────────────────────────────
 // 资产可用位三态、玻璃预设 ctx（保存 / 应用 / 引导 / 导出 / 导入 / 删除两步确认）
-// 整段住 src/client/glass-preset-handlers.js；构建期内联回本作用域。
+// 整段住 src/client/handlers/glass-preset-handlers.js；构建期内联回本作用域。
 // 导出预设的一次性 <a> 也随族搬走，body 挂载白名单里记在该文件名下。
 
 // 角色色。默认「单色」—— 一个色同时写进 light/dark 两套（内部始终存两套，
@@ -2510,7 +2510,7 @@ const onFontResetAll = () => {
 // ── 壁纸库 / 库视图处理器已按族搬出 ───────────────────────────────────────────
 // 刷新、分级/类型/文件夹/方向筛选、布局、Edge 兼容、轮播间隔与触发、过场、Rope 显隐/形态/比例、
 // 立绘两步确认、当前 live 帧、自定义帧记忆、关闭选择器、INTERVALS 档位表
-// 整段住 src/client/library-handlers.js；构建期内联回本作用域。
+// 整段住 src/client/handlers/library-handlers.js；构建期内联回本作用域。
 // ── Pagination row: big libraries must not render every card at once (hundreds
 //    of thumbnails per emit make the picker lag). The slicing itself is the
 //    model's (`pageSlice` in src/picker/picker-model.js); 这里只画「上一页 / 下一页」。──

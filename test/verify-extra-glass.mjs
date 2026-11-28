@@ -46,7 +46,7 @@ const schema = await import(pathToFileURL(join(ROOT, 'lib', 'settings-schema.js'
 const glassLayerSrc = readFileSync(join(ROOT, 'packages', 'glass', 'src', 'glass-layer.js'), 'utf8');
 const panelSrc = readFileSync(join(ROOT, 'packages', 'glass', 'src', 'glass-panel.js'), 'utf8')
   + '\n' + readFileSync(join(ROOT, 'packages', 'glass', 'src', 'glass-presets-panel.js'), 'utf8');
-// 取文口径：客户端正文族 —— onExtraGlassSelectors 自 2026-11-28 起住 src/client/color-handlers.js。
+// 取文口径：客户端正文族 —— onExtraGlassSelectors 自 2026-11-28 起住 src/client/handlers/color-handlers.js。
 const clientSrc = clientText();
 const quickSrc = readFileSync(join(ROOT, 'src', 'ui', 'quick-panel.js'), 'utf8');
 // ADR-0016 第三刀：glass-extra 随玻璃子包出产物 ⇒ 登记面判据改读**该包自己的配方**。
@@ -342,7 +342,7 @@ function selectorList(css) {
     /onExtraGlassSelectors,/.test(quickSrc));
   check('处理器是模块级（不在 WallpaperPicker 组件体内声明）',
     clientSrc.includes('const onExtraGlassSelectors')
-    // 2026-11-28 起搬进 src/client/color-handlers.js：构建期内联在**正文之前**，"在族拼文本里的位置"
+    // 2026-11-28 起搬进 src/client/handlers/color-handlers.js：构建期内联在**正文之前**，"在族拼文本里的位置"
     // 不再是判据。仍留在正文里的一份必须在组件之前；只在模块里声明的天生就在组件之外。
     && (() => {
       const body = readFileSync(join(ROOT, 'src', 'client.js'), 'utf8');

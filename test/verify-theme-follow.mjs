@@ -409,7 +409,7 @@ console.log('\n⑥ 开关「主题随壁纸」：默认关 · 关时主题不变
 {
   const schema = await import(pathToFileURL(join(root, 'lib', 'settings-schema.js')).href);
   const tabsCode = stripComments(panelText());
-  // 取文口径：客户端正文族 —— 主题随壁纸的处理器自 2026-11-28 起住 src/client/color-handlers.js。
+  // 取文口径：客户端正文族 —— 主题随壁纸的处理器自 2026-11-28 起住 src/client/handlers/color-handlers.js。
   const clientCode = stripComments(clientText());
   // i18n 之后行文案走 `weT("…")`（中文原文即键）—— 判据认"开关 + 配色行都还在、且位置如此"，
   // 不认裸字面量（认形态的判据会在下一次改包装时静默失效）。

@@ -3767,7 +3767,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
         return at === -1 || at > boundary;
       });
     };
-    // 2026-11-28 起这批处理器按族搬进 src/client/color-handlers.js：构建期内联在**正文之前**，
+    // 2026-11-28 起这批处理器按族搬进 src/client/handlers/color-handlers.js：构建期内联在**正文之前**，
     // 所以"在族拼文本里的位置"不再是判据。仍留在正文里的那些必须在组件之前；只在模块里声明的
     // 天生就在组件之外 —— 只要求族里声明得到。
     const promotedBody = readFileSync(join(root, 'src', 'client.js'), 'utf8');
@@ -3801,7 +3801,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       const i = posOf(n);
       return i === -1 || i > boundary;
     });
-    // 2026-11-28 起玻璃预设 ctx 搬进 src/client/glass-preset-handlers.js：构建期把它内联在**正文
+    // 2026-11-28 起玻璃预设 ctx 搬进 src/client/handlers/glass-preset-handlers.js：构建期把它内联在**正文
     // 之前**，所以"在族拼文本里的位置"不再是判据。仍留在正文里的名字必须在组件之前；只在模块里
     // 声明的（含 glassPresetCtx）天生就在组件之外 —— 只要求族里声明得到。
     const fontBodyText = readFileSync(join(root, 'src', 'client.js'), 'utf8');
@@ -3847,7 +3847,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       const i = posOf(text, n);
       return i === -1 || i > boundary;
     });
-    // 2026-11-28 起这批处理器按族搬进 src/client/library-handlers.js：构建期把它们内联在
+    // 2026-11-28 起这批处理器按族搬进 src/client/handlers/library-handlers.js：构建期把它们内联在
     // **正文之前**，于是"在正文里的位置"不再是判据（族拼文本会把模块排在正文之后）。
     // 现在判两件：①族里声明得到（漏搬/删掉 ⇒ 判红）；②仍留在正文里的那些必须在组件之前。
     const bodyText = readFileSync(join(root, 'src', 'client.js'), 'utf8');
@@ -4778,7 +4778,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       + ' dup=' + tabDup.join(',') + ' uncovered=' + uncovered.join(',')
       + ' overlap=' + overlapWithExcluded.join(',') + ' stray=' + strayExcluded.join(','));
     // 面板侧：页签重置**挂在渲染点一处**（六处渲染器各挂一遍必然漏一个）。
-    // 取文口径：客户端正文族 —— 重置节与处理器自 2026-11-28 起住 src/client/reset-and-accent-handlers.js。
+    // 取文口径：客户端正文族 —— 重置节与处理器自 2026-11-28 起住 src/client/handlers/reset-and-accent-handlers.js。
     const clSrc3 = clientText().replace(/\r\n/g, '\n');
     check('#192 页签重置：单一挂载点 + 关于页签不给假按钮 + 处理器在客户端正文族',
       ptSrc.includes('function renderTabReset(ctx, tabId)')
@@ -4826,7 +4826,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     // 判据盯三件事：① 裁切几何只有一份实现（渲染器不自己再算一遍）；② 上传腿走既有的
     // postImageAsset（不新开第二条落盘通道）；③ 弹窗有取消路径（取消 = 不上传、撤 URL）。
     // 取文口径：**客户端正文族**（正文 + src/client/*.js 助手模块，见 test/tools/src-scope.mjs）。
-    // 裁切实现 2026-11-28 起住 src/client/image-assets.js；判据管的是"这一族里有没有、是不是
+    // 裁切实现 2026-11-28 起住 src/client/handlers/image-assets.js；判据管的是"这一族里有没有、是不是
     // 唯一一份"，不是"住在哪个文件"——按单文件读会让搬家把判据静默变成恒假。
     const clSrc2 = clientText().replace(/\r\n/g, '\n');
     const eaSrc = readFileSync(join(root, 'src', 'extensions', 'ext-avatar.js'), 'utf8').replace(/\r\n/g, '\n');
@@ -5184,7 +5184,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     //   ⑤ 结构上不泄原始文件：上传的那份 blob 来自**裁切画布**（于是 SVG 这类"客户端收得下、
     //      宿主不认"的格式只可能以像素形态落盘，同源存储型 XSS 无从谈起）。
     // 取文口径：客户端正文族（正文 + src/client/*.js 助手模块）。头像裁切/确认自 2026-11-28 起
-    // 住 src/client/image-assets.js；按单文件读会让"上传的是裁切画布"这条判据在搬家后恒假。
+    // 住 src/client/handlers/image-assets.js；按单文件读会让"上传的是裁切画布"这条判据在搬家后恒假。
     const gsrc = clientText().replace(/\r\n/g, '\n');
     const eSrc = readFileSync(join(root, 'src', 'extensions', 'ext-avatar.js'), 'utf8').replace(/\r\n/g, '\n');
     // 闸的常量与探针住在 src/extensions/avatar-import.js（纯函数，上面那组判据用真字节喂它）；
@@ -6401,7 +6401,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
   // 事件；处理器若写成布尔形参（v）再写 v === true，那个比较**恒为假** ⇒ 勾上写不回设置（只能写
   // false，界面与存档就分叉了）。这两个键必须与 onTitlebarGlass / onPauseOnHidden 同一口径。
   {
-    // 取文口径：客户端正文族 —— 场景开关键处理器自 2026-11-28 起住 src/client/settings-toggle-handlers.js。
+    // 取文口径：客户端正文族 —— 场景开关键处理器自 2026-11-28 起住 src/client/handlers/settings-toggle-handlers.js。
     const toggleSrc = clientText();
     const SCENE_TOGGLES = [['onSceneAutoQuality', 'sceneAutoQuality'], ['onSceneSoftRenderPause', 'sceneSoftRenderPause']];
     // 判据做成函数，负对照喂合成文本 —— 把 (e) 换回旧的 (v) 必须判红。

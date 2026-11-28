@@ -202,8 +202,8 @@ const BODY_MOUNT_WHITELIST = Object.freeze({
   'src/media-prep.js': { count: 1, owner: 'rotation-staging' },
   'src/media-prep/probe.js': { count: 1, owner: 'rotation-staging' },
   'src/client/audio-playback.js': { count: 1, owner: 'scene-audio' },
-  'src/client/glass-preset-handlers.js': { count: 1, owner: 'download-anchor' },
-  // 导出预设的下载 <a> 自 2026-11-28 起随玻璃预设族搬进 src/client/glass-preset-handlers.js ⇒
+  'src/client/handlers/glass-preset-handlers.js': { count: 1, owner: 'download-anchor' },
+  // 导出预设的下载 <a> 自 2026-11-28 起随玻璃预设族搬进 src/client/handlers/glass-preset-handlers.js ⇒
   // 正文那 4 处变成 3 处（一次性 <input type=file> / rope dock 宿主 / 性能悬浮窗宿主）。
   // 2026-11-28：apply() 搬进 src/client/plugin-apply.js ⇒ rope dock 宿主与性能悬浮窗宿主那两处
   // 挂载点随族搬走（成对拆除仍在同一函数体内），正文只剩 pickImageFile 的一次性 <input>。

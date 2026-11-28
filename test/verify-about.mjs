@@ -475,7 +475,7 @@ async function runQr(route, pathname, method, headers) {
 // ══ ④ 客户端那行字 ═══════════════════════════════════════════════════════════
 console.log('\n④ 客户端：三态文案 + 只读 + 不进设置');
 // 取文口径：客户端正文族（正文 + src/client/*.js 助手模块）。star 数取数自 2026-11-28 起
-// 住 src/client/star-count.js；按单文件读会让三态/陈旧标注三条判据同时恒假。
+// 住 src/client/handlers/star-count.js；按单文件读会让三态/陈旧标注三条判据同时恒假。
 const clientSrc = clientText();
 // 刀4：页签族并集（5 个域模块 + 组装点）；判据与断言一字未改。
 const tabsSrc = panelText();

@@ -135,7 +135,7 @@ const hostSrc = read('lib/index.js') + '\n' + read('lib/host-boot.js') + '\n' + 
 const hostAssetsSrc = read('lib/media/media-dirs.js');
 const apiSrc = read('src/core/api-client.js');
 // 取文口径：客户端正文族（正文 + src/client/*.js）。UPLOAD_TYPES 自 2026-11-28 起住
-// src/client/upload-handlers.js；按单文件读会让两侧 MIME 对账恒假。
+// src/client/handlers/upload-handlers.js；按单文件读会让两侧 MIME 对账恒假。
 const clientSrc = clientText();
 const tabsSrc = panelText();
 

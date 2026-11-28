@@ -1237,7 +1237,7 @@ setTimeout(async () => {
       //（否则非 2xx 的信封读不到，永远只剩裸状态码）。
       {
         // 取文口径：客户端正文族（正文 + src/client/*.js 助手模块）。头像裁切与立绘上传自
-        // 2026-11-28 起住 src/client/image-assets.js；按单文件读会让"调用点走同一腿"这条判据恒假。
+        // 2026-11-28 起住 src/client/handlers/image-assets.js；按单文件读会让"调用点走同一腿"这条判据恒假。
         const clientSrcForAvatar = clientText();
         assert.ok(/function assetRouteFailure\(res, what\)/.test(clientSrcForAvatar)
           && /res\.status === 404 \|\| res\.status === 405/.test(clientSrcForAvatar)
@@ -2656,7 +2656,7 @@ setTimeout(async () => {
       // test/verify-scene.mjs 的真 socket 路由用例（导入 / 覆盖 / 清除）覆盖。
       {
         // 取文口径：客户端正文族（正文 + src/client/*.js 助手模块）。吉祥物立绘的清除处理器
-        // 自 2026-11-28 起住 src/client/image-assets.js，按单文件读会让"能截出来"这条前置恒假。
+        // 自 2026-11-28 起住 src/client/handlers/image-assets.js，按单文件读会让"能截出来"这条前置恒假。
         const srcNow = clientText();
         const tabsNow = panelText();
         assert.ok(/function ropeArtOf\(selLike\)/.test(srcNow)
@@ -3644,7 +3644,7 @@ setTimeout(async () => {
     //    而所有渲染判据照样全绿。所以这里直接读源码核对这条线（与 paneWidth 同款防线）。
     {
       // 取文口径：客户端正文族（正文 + src/client/*.js）。onStartPaused 自 2026-11-28 起住
-      // src/client/settings-toggle-handlers.js；按单文件读会让这条判据恒假。
+      // src/client/handlers/settings-toggle-handlers.js；按单文件读会让这条判据恒假。
       const cliSrc = clientText();
       const call = cliSrc.match(/renderAdvancedTab\(\{([\s\S]*?)\}\)/);
       assert.ok(call, '（前置）找不到 renderAdvancedTab 的调用点');
@@ -4209,7 +4209,7 @@ setTimeout(async () => {
       };
       // 取文口径：运行时是**一个扁平作用域**（正文 + INLINE_MODULES 全部内联进同一工厂），
       // 所以处理器完全可以调用兄弟模块里的通知助手。按单文件判会把"跨文件但同作用域"的通知
-      // 当成缺失（2026-11-28 头像裁切搬进 src/client/image-assets.js 后，onAvatarCropConfirm
+      // 当成缺失（2026-11-28 头像裁切搬进 src/client/handlers/image-assets.js 后，onAvatarCropConfirm
       // 的通知走的就是仍留在正文的 closeAvatarCrop —— 实测假阳性）。合并成一份作用域文本判一次。
       const branchSilent = pathNotifications(panelSrcs.join('\n;\n'))
         .map((s) => s.split('@')[0]).filter((n) => !(n in BRANCH_NOTIFY_ELSEWHERE));
