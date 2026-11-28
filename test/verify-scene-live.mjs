@@ -3767,7 +3767,12 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
         return at === -1 || at > boundary;
       });
     };
-    const notPromoted = strayProcessors(src);
+    // 2026-11-28 起这批处理器按族搬进 src/client/color-handlers.js：构建期内联在**正文之前**，
+    // 所以"在族拼文本里的位置"不再是判据。仍留在正文里的那些必须在组件之前；只在模块里声明的
+    // 天生就在组件之外 —— 只要求族里声明得到。
+    const promotedBody = readFileSync(join(root, 'src', 'client.js'), 'utf8');
+    const inBody = (n) => promotedBody.includes('const ' + n + ' = ') || promotedBody.includes('function ' + n + '(');
+    const notPromoted = strayProcessors(src).filter((n) => inBody(n));
     check('外观 / 画面处理器已提升到模块级（设置页与侧栏共用同一份实现）',
       notPromoted.length === 0, notPromoted.join(', ') || PROMOTED.length + ' 个都在组件之前');
     check('negative control: 仍住在组件里的处理器会被同一条判据判出',
@@ -4773,8 +4778,9 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       + ' dup=' + tabDup.join(',') + ' uncovered=' + uncovered.join(',')
       + ' overlap=' + overlapWithExcluded.join(',') + ' stray=' + strayExcluded.join(','));
     // 面板侧：页签重置**挂在渲染点一处**（六处渲染器各挂一遍必然漏一个）。
-    const clSrc3 = readFileSync(join(root, 'src', 'client.js'), 'utf8').replace(/\r\n/g, '\n');
-    check('#192 页签重置：单一挂载点 + 关于页签不给假按钮 + 处理器在 client.js',
+    // 取文口径：客户端正文族 —— 重置节与处理器自 2026-11-28 起住 src/client/reset-and-accent-handlers.js。
+    const clSrc3 = clientText().replace(/\r\n/g, '\n');
+    check('#192 页签重置：单一挂载点 + 关于页签不给假按钮 + 处理器在客户端正文族',
       ptSrc.includes('function renderTabReset(ctx, tabId)')
       && ptSrc.includes('if (tabId === "about") return null;')
       && ptSrc.includes('renderConfirmRow(armedConfirm, token,')
@@ -6394,7 +6400,8 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
   // 事件；处理器若写成布尔形参（v）再写 v === true，那个比较**恒为假** ⇒ 勾上写不回设置（只能写
   // false，界面与存档就分叉了）。这两个键必须与 onTitlebarGlass / onPauseOnHidden 同一口径。
   {
-    const toggleSrc = readFileSync(join(root, 'src', 'client.js'), 'utf8');
+    // 取文口径：客户端正文族 —— 场景开关键处理器自 2026-11-28 起住 src/client/settings-toggle-handlers.js。
+    const toggleSrc = clientText();
     const SCENE_TOGGLES = [['onSceneAutoQuality', 'sceneAutoQuality'], ['onSceneSoftRenderPause', 'sceneSoftRenderPause']];
     // 判据做成函数，负对照喂合成文本 —— 把 (e) 换回旧的 (v) 必须判红。
     const eventShaped = (text) => SCENE_TOGGLES.every(([fn, key]) =>

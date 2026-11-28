@@ -39,7 +39,7 @@ import { stripComments } from './tools/js-text.mjs';
 import { installWeTShim } from './tools/weT-shim.mjs';
 // 族取文：样式族 / 页签族 / 实时管线族都已按域拆成兄弟模块 + 组装点 ⇒ 判据扫**整族**，
 // 单读组装点会把"代码搬到域模块"错判成"接线丢了"（刀6 的 live-layer 拆分就是这么踩到的）。
-import { panelText, liveText } from './tools/src-scope.mjs';
+import { panelText, liveText, clientText } from './tools/src-scope.mjs';
 installWeTShim();
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -409,7 +409,8 @@ console.log('\n⑥ 开关「主题随壁纸」：默认关 · 关时主题不变
 {
   const schema = await import(pathToFileURL(join(root, 'lib', 'settings-schema.js')).href);
   const tabsCode = stripComments(panelText());
-  const clientCode = stripComments(read('src/client.js'));
+  // 取文口径：客户端正文族 —— 主题随壁纸的处理器自 2026-11-28 起住 src/client/color-handlers.js。
+  const clientCode = stripComments(clientText());
   // i18n 之后行文案走 `weT("…")`（中文原文即键）—— 判据认"开关 + 配色行都还在、且位置如此"，
   // 不认裸字面量（认形态的判据会在下一次改包装时静默失效）。
   const switchAt = tabsCode.indexOf('switchRow(weT("主题随壁纸")');
@@ -506,7 +507,7 @@ console.log('\n⑥ 开关「主题随壁纸」：默认关 · 关时主题不变
 // ═══ ⑦ 接线（源码形态）════════════════════════════════════════════════════════
 console.log('\n⑦ 接线：服务句柄 / 切换评估 / 面板开关 / 内联登记');
 {
-  const clientSrc = read('src/client.js');
+  const clientSrc = clientText();
   const prepSrc = read('src/media-prep.js');
   const tabsSrc = panelText();
   const buildSrc = read('scripts/build-client.mjs');

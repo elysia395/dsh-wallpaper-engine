@@ -33,6 +33,7 @@
 import { readFileSync } from 'node:fs';
 import { join, resolve, dirname } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
+import { clientText } from './tools/src-scope.mjs';
 
 const HERE = dirname(fileURLToPath(import.meta.url));
 const ROOT = resolve(HERE, '..');
@@ -45,7 +46,8 @@ const schema = await import(pathToFileURL(join(ROOT, 'lib', 'settings-schema.js'
 const glassLayerSrc = readFileSync(join(ROOT, 'packages', 'glass', 'src', 'glass-layer.js'), 'utf8');
 const panelSrc = readFileSync(join(ROOT, 'packages', 'glass', 'src', 'glass-panel.js'), 'utf8')
   + '\n' + readFileSync(join(ROOT, 'packages', 'glass', 'src', 'glass-presets-panel.js'), 'utf8');
-const clientSrc = readFileSync(join(ROOT, 'src', 'client.js'), 'utf8');
+// 取文口径：客户端正文族 —— onExtraGlassSelectors 自 2026-11-28 起住 src/client/color-handlers.js。
+const clientSrc = clientText();
 const quickSrc = readFileSync(join(ROOT, 'src', 'quick-panel.js'), 'utf8');
 // ADR-0016 第三刀：glass-extra 随玻璃子包出产物 ⇒ 登记面判据改读**该包自己的配方**。
 const glassRecipe = readFileSync(join(ROOT, 'packages', 'glass', 'client.build.json'), 'utf8');
@@ -338,9 +340,15 @@ function selectorList(css) {
   check('设置页 ctx 给了处理器', /onExtraGlassSelectors,/.test(clientSrc));
   check('侧栏 ctx 也给了处理器（漏一侧 = 侧栏档渲染期 ReferenceError）',
     /onExtraGlassSelectors,/.test(quickSrc));
-  check('处理器是模块级（在 WallpaperPicker 之前声明）',
-    clientSrc.indexOf('const onExtraGlassSelectors') > 0
-    && clientSrc.indexOf('const onExtraGlassSelectors') < clientSrc.indexOf('function WallpaperPicker() {'));
+  check('处理器是模块级（不在 WallpaperPicker 组件体内声明）',
+    clientSrc.includes('const onExtraGlassSelectors')
+    // 2026-11-28 起搬进 src/client/color-handlers.js：构建期内联在**正文之前**，"在族拼文本里的位置"
+    // 不再是判据。仍留在正文里的一份必须在组件之前；只在模块里声明的天生就在组件之外。
+    && (() => {
+      const body = readFileSync(join(ROOT, 'src', 'client.js'), 'utf8');
+      const at = body.indexOf('const onExtraGlassSelectors');
+      return at < 0 || at < body.indexOf('function WallpaperPicker() {');
+    })());
   check('schema：KINDS + DEFAULTS 都有这个键',
     schema.KINDS.extraGlassSelectors && schema.KINDS.extraGlassSelectors.kind === 'extraSelectors'
     && schema.DEFAULTS.extraGlassSelectors === '');

@@ -38,7 +38,7 @@ import { Writable } from 'node:stream';
 // 就写着"不要用 startsWith(dir + '/')"，不剥注释会被自己的说明误伤成真阳性）。
 import { stripComments } from './tools/js-text.mjs';
 // 词表族的按构建顺序读法（组装点 + 各域模块；单一真源 = scripts/build-client.mjs 的 INLINE_MODULES）。
-import { panelText } from './tools/src-scope.mjs';
+import { panelText, clientText } from './tools/src-scope.mjs';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 let passed = 0;
@@ -474,7 +474,9 @@ async function runQr(route, pathname, method, headers) {
 
 // ══ ④ 客户端那行字 ═══════════════════════════════════════════════════════════
 console.log('\n④ 客户端：三态文案 + 只读 + 不进设置');
-const clientSrc = read('src/client.js');
+// 取文口径：客户端正文族（正文 + src/client/*.js 助手模块）。star 数取数自 2026-11-28 起
+// 住 src/client/star-count.js；按单文件读会让三态/陈旧标注三条判据同时恒假。
+const clientSrc = clientText();
 // 刀4：页签族并集（5 个域模块 + 组装点）；判据与断言一字未改。
 const tabsSrc = panelText();
 

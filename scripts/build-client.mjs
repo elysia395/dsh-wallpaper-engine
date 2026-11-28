@@ -573,6 +573,28 @@ const INLINE_MODULES = [
     markers: ['function setPickerOpener(el) { pickerOpener = el; }', 'function onTogglePropsPanel() {', 'function onWeAssetsDirDraft(e)', 'function onCancelEditWeAssetsDir()'],
   },
   {
+    file: 'src/client/color-handlers.js',
+    why: 'src/client.js 正文的 UI 配色与玻璃颜色参数处理器（全局 UI 配色的自定义开关/元素色、玻璃明暗分离/透明度/遮罩浓度/保真度/釉光/表面策略/补雾化选择器、主题随壁纸开关）—— 构建期内联在正文之前，同处一个扁平作用域',
+    markers: ['const onToggleUiColorCustom = (v) => {', 'const onUiColorElement = (field, hex, live) => {',
+      'const onGlassSheenStrength = (pct, live) =>', 'const onToggleThemeFollow = (v) => {'],
+  },
+  {
+    file: 'src/client/reset-and-accent-handlers.js',
+    why: 'src/client.js 正文的重置处理器（模块级 ↺ / 页签级 / 全局恢复默认，issue #192）—— 构建期内联在正文之前，同处一个扁平作用域',
+    markers: ['function resetKeysToDefault(keys)', 'const onResetModule = (groupName) => {', 'const onResetTab = (tabId) => {', 'const onResetAll = () => {'],
+  },
+  {
+    file: 'src/client/settings-toggle-handlers.js',
+    why: 'src/client.js 正文的设置开关处理器（玻璃子项「独立配置」/ 场景实时开关与档位 / 播放倍速与限帧 / 镜像 / 适配目标 / 三种暂停与启动暂停 / live 诊断）—— 构建期内联在正文之前，同处一个扁平作用域',
+    markers: ['function onToggleChildIndependent(id, on) {', 'function onSceneLiveFps(f) {',
+      'function onPlaybackRate(rate) {', 'function onStartPaused(e) {'],
+  },
+  {
+    file: 'src/client/star-count.js',
+    why: 'src/client.js 正文的仓库 star 数取数（关于页签那行「⭐ 当前 N star」：缓存、陈旧标注、失败降级）—— 构建期内联在正文之前，同处一个扁平作用域',
+    markers: ['const STAR_COUNT_TTL = 10 * 60 * 1000;', 'function loadStarCount(force)', 'function starCountLabel()'],
+  },
+  {
     // 跨包浏览器半边的**显式键集契约表**（ADR-0014 S5.1 / S5.4）：71 个 getter 挂到 module.exports。
     // 必须排在内联清单**末尾**：表顶层读 `DEFAULTS`（lib/settings-schema.js 的内联件）⇒ 要排在它之后；
     // 正文里的函数声明在工厂体内提升、getter 又是惰性求值 ⇒ 与正文的先后无关。

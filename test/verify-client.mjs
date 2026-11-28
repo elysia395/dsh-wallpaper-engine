@@ -3639,7 +3639,9 @@ setTimeout(async () => {
     //    处理器漏进 ctx 时开关照渲染、点了没反应（`onChange` 收到的是 undefined），
     //    而所有渲染判据照样全绿。所以这里直接读源码核对这条线（与 paneWidth 同款防线）。
     {
-      const cliSrc = readFileSync(new URL('../src/client.js', import.meta.url), 'utf8');
+      // 取文口径：客户端正文族（正文 + src/client/*.js）。onStartPaused 自 2026-11-28 起住
+      // src/client/settings-toggle-handlers.js；按单文件读会让这条判据恒假。
+      const cliSrc = clientText();
       const call = cliSrc.match(/renderAdvancedTab\(\{([\s\S]*?)\}\)/);
       assert.ok(call, '（前置）找不到 renderAdvancedTab 的调用点');
       assert.ok(/\bonStartPaused\b/.test(call[1]),
