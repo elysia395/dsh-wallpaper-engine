@@ -532,6 +532,26 @@ DSH 升级后**重取角色表**的命令写在 [`typography.js`](../src/font/ty
 **这些模块怎么进浏览器包**：目录内模块由 `scripts/build-client.mjs` 的 `INLINE_MODULES` 构建期内联（机制见 §3 与 `scripts/build-client.mjs:1-26`）。⚠️ 漏登记**不报错**、只是那个文件永远不进产物；`verify-component-fonts.mjs` 按「模块在位 + 已内联 + 不在正文」三件套断言 `apply.js`。
 > 目录语义与准入门槛见 §4。
 
+### 3.4 功能域目录（`src/` 根下的归并结果）
+
+> 本节就是 §4 第 1 条 ② 要求的那份「点名目录」的文档：**新增 / 改名目录时同一次改动里更新本表**。
+> 这些目录**不是族目录**（没有组装点、不进 `src-scope` 的前缀族语义）；它们的唯一作用是「让人一眼看出这几块是一伙的」。
+
+| 目录 | 收什么 | 不收什么 |
+|---|---|---|
+| `src/wallpaper/` | 壁纸运行时：视频层、层内核、遮挡、焦点交还、子路径挂载 | 样式（`src/styles/`）、宿主路由（`lib/routes/`） |
+| `src/settings/` | 设置 / 字体集 / 预设 / 系统字体的 **store 与持久化**、适配器判定 | schema 真源（`lib/settings-schema.js`）、面板渲染器 |
+| `src/extensions/` | 「扩展」页签与跨包注册表：头像导入与装饰层、扩展岛描述符、性能模块 | 子包自身实现（`packages/<pkg>/src/`） |
+| `src/picker/` | 选择器模型、模态渲染器、属性面板渲染器 | 选择器组件体（`src/client/picker-component.js`） |
+| `src/ui/` | 宿主 UI 接入（右栏 / 导航图标）与共用构件（节头、模块重置）、快捷播放面板 | 页签族（`src/panel-tabs/`） |
+| `src/core/` | 地基：`we-base` 工具、`we-cond` 求值器、宿主接口客户端、跨包桥表 | 业务处理器（`src/client/handlers/`） |
+| `src/client/handlers/` | 客户端正文的处理器族（`*-handlers.js` 与取数 / 设置族） | 组件体、层助手、启动入口（留 `src/client/` 根） |
+
+三条口径：
+
+1. 成员门槛同 §4 第 1 条 ①（`.js` **递归**计数 ≥ 门槛，数值真源在 `test/verify-module-layout.mjs` 的 `SRC_DIR_MIN_MEMBERS`，本文不抄）。
+2. 目录**不承载机器含义**（`src/` 无 `import`、构建期拍平）：搬目录只改路径，**不得**趁机重排 `INLINE_MODULES`（顺序承载 TDZ 与组装点）。
+3. 搬迁走机械流程：`node test/tools/move-src-module.mjs <old> <new> --apply` → 改本节与其它现行文档 → `npm run build` → 守卫链 → 重算生成物。
 ---
 
 ## 4. 新文件放哪（决策程序）
@@ -543,7 +563,9 @@ DSH 升级后**重取角色表**的命令写在 [`typography.js`](../src/font/ty
    ⚠️ 忘了登记**不会报错**，只是这个文件永远不进产物（本仓踩过一次）。
    **`src/` 默认平铺**：根目录就是默认落点。只有当一个子系统**同时**满足两条时，才为它建子目录
    （现有族目录：`src/font/`、`src/styles/`、`src/panel-tabs/`、`src/live-layer/`、`src/media-prep/`、`src/i18n/`，
-   见 §3.1 函数族表；`src/client/` **不是族目录**，是客户端正文助手（§3.1 中段），不受门槛②约束）：
+   见 §3.1 函数族表；`src/client/` **不是族目录**，是客户端正文助手（§3.1 中段），不受门槛②约束；
+   **功能域目录**（非族目录、无组装点）见 **§3.4**：`src/wallpaper/`、`src/settings/`、`src/extensions/`、
+   `src/picker/`、`src/ui/`、`src/core/`，以及 `src/client/handlers/`）：
    - ① **成员数达到准入门槛**（`.js 计数，含嵌套`）—— 门槛的**唯一真源**是守卫里的
      `SRC_DIR_MIN_MEMBERS`（`test/verify-module-layout.mjs`），本文不抄那个数字；
      同一条守卫过去还挂着**顶层文件数棘轮** `SRC_TOP_LEVEL_MAX`（软档、只许缩小）——
@@ -1259,6 +1281,7 @@ graph LR
 | `i18n-scan.mjs` | 源码里的**中文字面量**扫描（判"进没进 `weT(...)`"；迁移与 `verify-i18n` 共用同一实现） | `node test/tools/i18n-scan.mjs [--json] [paths…]` · `selftest` |
 | `js-text.mjs` | JS/TS 源码的**文本级**工具（字符串 / 正则感知的剥注释） | `node test/tools/js-text.mjs selftest` |
 | `m2-facade-code-share.mjs` | **门面「非装配代码」占比（M2 口径）的复算**：逐字符扫描（跳过字符串 / 模板串 / 注释 / 正则）求出每行净括号增量 ⇒ 把**顶层语句**分成 `assembly`（体内出现 `ctx.` 或 `registerXxxRoutes(`）/ `code` / `other`，报 `nonAssemblyShare` 等四数。段窗走**内容锚点**（锚点全缺即非 0 退出 —— 宁可不算，也不输出一份可能误导的段表）；`--plan-legacy` 复现计划时代的硬编码段窗 | `node test/tools/m2-facade-code-share.mjs [文件] [--list] [--plan-legacy] [--self-check]` |
+| `move-src-module.mjs` | **机械搬迁的唯一入口**：把 `src/` 下一个模块搬到新路径 —— 改 `INLINE_MODULES` 条目（**保序**）、改写 `test/` `scripts/` `src/` 里的完整路径与「`'src', '<文件名>'`」分段写法，并列出 `docs/` 现行文档命中（历史文档按 ADR-0017 排除）。不改函数体、不重排内联清单 | `node test/tools/move-src-module.mjs <old> <new> [--apply]` |
 | `multi-source-mutants.mjs` | **多源变异体加载器**（守卫共用的基础设施）：一条负对照可能横跨多个模块，本工具按"源键 → 文件 / 工厂导出名"把 `[源键, find, replace]` 的编辑打在该源的文本上，并内置三件纪律 —— **命中自检**（锚点落空 / 空转编辑 / 未知源键 / 取不到工厂导出都即抛，防"变异体 = 原版 ⇒ 负对照假绿"）、源码先归一 LF（锚点写的是 `\n`）、相对说明符改写成绝对 `file:` URL（变异体住 `.test-cache/` 仍能 import 真源模块）。消费者：`verify-asset-paths` / `verify-cache-prune` | `import { makeMultiSourceMutants } from './tools/multi-source-mutants.mjs'`（库，无 CLI） |
 | `official-performer.mjs` | **官方 pet 演出的三个夹具**（`clientEntryFixture` / `performerFixture` 一族）：把 `packages/pet-link/src/official-pet.js` + `pet-link.js` 的源码拼成工厂、喂一份假 facade 求值，得到可驱动的 `createOfficialPetPerformer`；时间与锁／播放态全部捏在夹具手里（不连官方插件、不起宿主）。消费者：`verify-pet-official` / `verify-pet-hotplug-client` / `verify-pet-hotplug-integration` / `verify-pet-tuner` | 守卫 `import` 消费，无 CLI |
 | `official-pet-case.mjs` | **官方 pet 路由的端到端台架**（真 `node:http` 服务 + 真路由注册）：起一个只认官方 pet 协议（`config` / `lock` / `play` / `position` 一族）的桩服务，把 `verifyOfficialPet` 喂给守卫，断言协调器在锁冲突、进度缺失、动作失败下的排播与退场 | 守卫 `import` 消费（`test/verify-pet-hotplug-host.mjs`），无 CLI |
