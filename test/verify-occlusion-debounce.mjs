@@ -17,10 +17,12 @@
 import { readFileSync } from 'node:fs';
 import { createCheck } from './tools/assert-harness.mjs';
 import { stripComments } from './tools/js-text.mjs';
+import { clientText as clientFamily } from './tools/src-scope.mjs';
 
 const { check, stats } = createCheck();
-const SRC = new URL('../src/client.js', import.meta.url);
-const raw = readFileSync(SRC, 'utf8');
+// 取文口径：客户端正文族 —— 防抖挂载/清理自 2026-11-28 起随 apply() 住 src/client/plugin-apply.js。
+const SRC_TEXT = clientFamily();
+const raw = SRC_TEXT;
 const code = stripComments(raw);
 
 /** @returns {string[]} 违例列表（空 = 通过）。主判据与负对照共用这一份。 */

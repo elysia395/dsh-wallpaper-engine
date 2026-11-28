@@ -24,6 +24,7 @@ import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import { createTranscodeKit } from '../lib/media/transcode.js';
 import { stripComments } from './tools/js-text.mjs';
+import { clientText as clientFamily } from './tools/src-scope.mjs';
 
 const results = [];
 /** 转码编码器兜底（issue：只有 NVENC ⇒ 无 NVENC 的 ffmpeg 必然全失败）。 */
@@ -778,7 +779,8 @@ async function main() {
   //   · 两个新入口必须真的被 client.js 调用（搬移后接线不能断）；
   //   · transcode.js 必须登记进 INLINE_MODULES 且**真的进了产物**（防孤儿：文件在却不进 bundle）。
   {
-    const clientSrc = readFileSync(new URL('../src/client.js', import.meta.url), 'utf8');
+    // 取文口径：客户端正文族 —— 转码状态门面与 apply 里的接线自 2026-11-28 起分开住。
+const clientSrc = clientFamily();
     const prepSrc = readFileSync(new URL('../src/media-prep.js', import.meta.url), 'utf8');
     const tcSrc = readFileSync(new URL('../src/video-layer.js', import.meta.url), 'utf8');
     const bundle = readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8');

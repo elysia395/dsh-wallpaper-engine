@@ -637,6 +637,11 @@ const INLINE_MODULES = [
     markers: ['function WallpaperPicker() {', 'useWeLocale(); // 设置页壁纸库', 'return React.createElement('],
   },
   {
+    file: 'src/client/plugin-apply.js',
+    why: 'src/client.js 正文的浏览器半边插件入口 apply(ctx)（fiber 生命周期与清理链、启动链、宿主服务接线）—— 构建期内联在正文之前，同处一个扁平作用域（函数声明提升，exports.apply 文本不变）',
+    markers: ['function apply(ctx) {', 'prefetchFontSetList();', 'loadPersisted()', 'afterFirstPaint'],
+  },
+  {
     // 跨包浏览器半边的**显式键集契约表**（ADR-0014 S5.1 / S5.4）：71 个 getter 挂到 module.exports。
     // 必须排在内联清单**末尾**：表顶层读 `DEFAULTS`（lib/settings-schema.js 的内联件）⇒ 要排在它之后；
     // 正文里的函数声明在工厂体内提升、getter 又是惰性求值 ⇒ 与正文的先后无关。

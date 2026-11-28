@@ -54,6 +54,7 @@ import { stripComments } from './tools/js-text.mjs';
 import { styleText, panelSources, panelText as panelSrcText } from './tools/src-scope.mjs';
 // 单独 import `src/**` 时补上 bundle 作用域的取词层（中文身份；见 test/tools/weT-shim.mjs）。
 import { installWeTShim } from './tools/weT-shim.mjs';
+import { clientText as clientFamily } from './tools/src-scope.mjs';
 installWeTShim();
 
 const root = resolve(dirname(fileURLToPath(import.meta.url)), '..');
@@ -831,7 +832,7 @@ if (fontsetsRoute) {
 // ── ⑦ 客户端通道（静态契约）────────────────────────────────────────────────
 section('⑦ 客户端通道（静态契约：字体值不再经 settings 出去，也不再从 settings 进来）');
 {
-  const clientSrc = readFileSync(join(root, 'src', 'client.js'), 'utf8');
+  const clientSrc = clientFamily();
   const storeSrc = readFileSync(join(root, 'src', 'fontset-store.js'), 'utf8');
   /** 静态判据只认代码：调用点沿用短名 `strip`。 */
   const strip = stripComments;
@@ -1035,7 +1036,7 @@ const FONTSET_ROWS = [
 // 没给兜底、字体集又还没载入，这个下标就是 `undefined['primary']` ⇒ React 渲染期抛 ⇒ 整个面板崩。
 // 本段直接渲染那个页签（面板模块 + 真角色表 + client.js 的助手 stub），把"渲染得出"钉成判据。
 section('⑧ 面板渲染回归（配色区在总开关打开时必须渲染得出）');{
-  const clientSrc = readFileSync(join(root, 'src', 'client.js'), 'utf8');
+  const clientSrc = clientFamily();
   const panelMod = await import(pathToFileURL(join(root, 'src', 'panel-tabs.js')).href);
   const ReactStub = {
     Fragment: 'Fragment', useState: (i) => [i, () => {}], useEffect: () => {}, useRef: (v) => ({ current: v }),
@@ -1494,7 +1495,7 @@ section('⑨ 字体集编辑器（面板可驱动：意图映射 / confirm 门�
   //    所以只能这样跑实现。
   check('名字生成（真跑实现）：同清单同名字，且取**第一个**空位（不是"最大+1"）、空/错名字不算占用',
     (() => {
-      const code = stripComments(readFileSync(join(root, 'src', 'client.js'), 'utf8'));
+      const code = stripComments(clientFamily());
       const at = code.indexOf('function nextFontSetName(');
       if (at < 0) return false;
       const open = code.indexOf('{', at);
@@ -1520,7 +1521,7 @@ section('⑨ 字体集编辑器（面板可驱动：意图映射 / confirm 门�
     })());
   check('接线（**源码形状**判据，不是行为判据）：面板新建走 createFontSet(nextFontSetName())，不先问名字',
     (() => {
-      const src = readFileSync(join(root, 'src', 'client.js'), 'utf8');
+      const src = clientFamily();
       return /createFontSet\(nextFontSetName\(\)\)/.test(src);
     })());
   check('「重命名」逐行进入编辑态；编辑态下出输入框（带草稿名）+ 保存/取消，且该行不再出「重命名」',

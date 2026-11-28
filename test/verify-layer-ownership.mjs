@@ -41,6 +41,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { blankStringLiterals, functionBodyOf, stripComments } from './tools/js-text.mjs';
+import { clientText as clientFamily } from './tools/src-scope.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -204,7 +205,10 @@ const BODY_MOUNT_WHITELIST = Object.freeze({
   'src/client/glass-preset-handlers.js': { count: 1, owner: 'download-anchor' },
   // 导出预设的下载 <a> 自 2026-11-28 起随玻璃预设族搬进 src/client/glass-preset-handlers.js ⇒
   // 正文那 4 处变成 3 处（一次性 <input type=file> / rope dock 宿主 / 性能悬浮窗宿主）。
-  'src/client.js': { count: 3, owner: 'transient-input|rope-dock|perf-float' },
+  // 2026-11-28：apply() 搬进 src/client/plugin-apply.js ⇒ rope dock 宿主与性能悬浮窗宿主那两处
+  // 挂载点随族搬走（成对拆除仍在同一函数体内），正文只剩 pickImageFile 的一次性 <input>。
+  'src/client/plugin-apply.js': { count: 2, owner: 'rope-dock|perf-float' },
+  'src/client.js': { count: 1, owner: 'transient-input' },
   'packages/fx/src/fx-layer.js': { count: 1, owner: 'pkg-own-host(fx overlay)' },
 });
 
@@ -484,7 +488,9 @@ function teardownViolations(cleanupBody) {
   return problems;
 }
 
-const clientSrc = fileOf('src/client.js');
+// P3 取文口径：客户端正文族 —— fiber cleanup 自 2026-11-28 起随 apply() 住 src/client/plugin-apply.js。
+  // P1/P2 那几条仍按单文件读（LAYER_ID / SCRIM_ID 声明确实钉在正文里）。
+  const clientSrc = { rel: 'src/client.js(族)', text: clientFamily() };
 check('P3.0 能从 src/client.js 定位到 fiber cleanup 段', clientSrc !== null);
 const cleanup = clientSrc ? extractCleanup(clientSrc.text) : null;
 check('P3.1 cleanup 段定位成功（return () => { disposed = true; … }）',

@@ -5924,7 +5924,9 @@ setTimeout(async () => {
 // ② 只读对方（绝不写它的标记）；③ 退场在玻璃三层门控点都生效、复位带滞回、手动重选立刻退；
 // ④ 复位按记忆且不抢用户新选择。
 {
-  const clientSrc = readFileSync(new URL('../src/client.js', import.meta.url), 'utf8');
+  // 取文口径：客户端正文族 —— 皮肤互操作的 ctx.effect 挂载点在 apply() 里，自 2026-11-28
+  // 起住 src/client/plugin-apply.js。
+  const clientSrc = clientText();
   const glassSrc = readFileSync(new URL('../packages/glass/src/glass.js', import.meta.url), 'utf8');
   // ADR-0016 第三刀：effects 的玻璃段随玻璃层出户 ⇒ 门控判据读 glass-layer 源码。
   const glassLayerSrc = readFileSync(new URL('../packages/glass/src/glass-layer.js', import.meta.url), 'utf8');
