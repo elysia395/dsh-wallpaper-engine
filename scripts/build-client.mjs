@@ -524,6 +524,12 @@ const INLINE_MODULES = [
       'function applyStoredUserProps(', 'const USER_PROPS_COMMIT_MS = 180;'],
   },
   {
+    file: 'src/client/image-assets.js',
+    why: 'src/client.js 正文的用户图片资产导入共用腿（会话头像取景/裁切出图与确认、吉祥物立绘选择/上传/清除）—— 构建期内联在正文之前，同处一个扁平作用域',
+    markers: ['function avatarCropGeometry(', 'function cropAvatarToBlob(', 'function onAvatarCropConfirm(',
+      'const MASCOT_BOX_MIN_SIDE = 28;', 'async function uploadMascotFile('],
+  },
+  {
     // 跨包浏览器半边的**显式键集契约表**（ADR-0014 S5.1 / S5.4）：71 个 getter 挂到 module.exports。
     // 必须排在内联清单**末尾**：表顶层读 `DEFAULTS`（lib/settings-schema.js 的内联件）⇒ 要排在它之后；
     // 正文里的函数声明在工厂体内提升、getter 又是惰性求值 ⇒ 与正文的先后无关。

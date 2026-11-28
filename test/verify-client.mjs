@@ -10,7 +10,7 @@ import vm from 'node:vm';
 // 剥注释：共享的字符串感知实现（test/tools/js-text.mjs）。
 import { stripComments, stripExportBlocks } from './tools/js-text.mjs';
 // 刀3：样式族取文（8 个域模块 + 组装点，构建序拼接）——别再自己 readFileSync 单文件。
-import { styleText, panelText, scopeText } from './tools/src-scope.mjs';
+import { styleText, panelText, scopeText, clientText } from './tools/src-scope.mjs';
 // P-D S3b：窄键 `rotationIntervalDefault` 必须与设置 schema 的默认值**同源**（下面有判据）。
 import { DEFAULTS as SCHEMA_DEFAULTS, FPS_CAP_VALUES as SCHEMA_FPS_CAP_VALUES } from '../lib/settings-schema.js';
 // 分支级"改了 store 却没通知"的分析与审计工具**同源**（避免两份判据分叉）；
@@ -1234,7 +1234,9 @@ setTimeout(async () => {
       // 头像与立绘共用同一条腿 —— 文案里的 `{what}` 由调用点给），并要求请求走 `parse: "always"`
       //（否则非 2xx 的信封读不到，永远只剩裸状态码）。
       {
-        const clientSrcForAvatar = readFileSync(new URL('../src/client.js', import.meta.url), 'utf8');
+        // 取文口径：客户端正文族（正文 + src/client/*.js 助手模块）。头像裁切与立绘上传自
+        // 2026-11-28 起住 src/client/image-assets.js；按单文件读会让"调用点走同一腿"这条判据恒假。
+        const clientSrcForAvatar = clientText();
         assert.ok(/function assetRouteFailure\(res, what\)/.test(clientSrcForAvatar)
           && /res\.status === 404 \|\| res\.status === 405/.test(clientSrcForAvatar)
           && clientSrcForAvatar.includes('宿主里没有{what}路由：重启 DSH 后再试')
@@ -2649,7 +2651,9 @@ setTimeout(async () => {
       // mascotImage 写进去的动作，而它需要真文件 + 网络）。行为侧那半边由
       // test/verify-scene.mjs 的真 socket 路由用例（导入 / 覆盖 / 清除）覆盖。
       {
-        const srcNow = readFileSync(new URL('../src/client.js', import.meta.url), 'utf8');
+        // 取文口径：客户端正文族（正文 + src/client/*.js 助手模块）。吉祥物立绘的清除处理器
+        // 自 2026-11-28 起住 src/client/image-assets.js，按单文件读会让"能截出来"这条前置恒假。
+        const srcNow = clientText();
         const tabsNow = panelText();
         assert.ok(/function ropeArtOf\(selLike\)/.test(srcNow)
           && /apiUrl\("\/mascot\?v=" \+ encodeURIComponent\(name\)\)/.test(srcNow),
@@ -4192,7 +4196,11 @@ setTimeout(async () => {
         //（weApplyAudio + syncSceneAudio），不是"改了不生效"。同 commitLiveSetting 的两档口径。
         onVideoVolume: 'live 档有意不 emit（拖动中不重渲染，回显由控件就地更新）；抬手档 emit',
       };
-      const branchSilent = panelSrcs.flatMap((t) => pathNotifications(t))
+      // 取文口径：运行时是**一个扁平作用域**（正文 + INLINE_MODULES 全部内联进同一工厂），
+      // 所以处理器完全可以调用兄弟模块里的通知助手。按单文件判会把"跨文件但同作用域"的通知
+      // 当成缺失（2026-11-28 头像裁切搬进 src/client/image-assets.js 后，onAvatarCropConfirm
+      // 的通知走的就是仍留在正文的 closeAvatarCrop —— 实测假阳性）。合并成一份作用域文本判一次。
+      const branchSilent = pathNotifications(panelSrcs.join('\n;\n'))
         .map((s) => s.split('@')[0]).filter((n) => !(n in BRANCH_NOTIFY_ELSEWHERE));
       assert.deepEqual(branchSilent, [],
         '有分支路径写了 store 却在该路径最后一次写之后没有通知：' + branchSilent.join(', '));

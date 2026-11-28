@@ -4805,7 +4805,10 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     // 做法是"**导入时先裁再传**"（盘上那张就是裁完的方形图）⇒ 零新设置键、预览与会话天然一致。
     // 判据盯三件事：① 裁切几何只有一份实现（渲染器不自己再算一遍）；② 上传腿走既有的
     // postImageAsset（不新开第二条落盘通道）；③ 弹窗有取消路径（取消 = 不上传、撤 URL）。
-    const clSrc2 = readFileSync(join(root, 'src', 'client.js'), 'utf8').replace(/\r\n/g, '\n');
+    // 取文口径：**客户端正文族**（正文 + src/client/*.js 助手模块，见 test/tools/src-scope.mjs）。
+    // 裁切实现 2026-11-28 起住 src/client/image-assets.js；判据管的是"这一族里有没有、是不是
+    // 唯一一份"，不是"住在哪个文件"——按单文件读会让搬家把判据静默变成恒假。
+    const clSrc2 = clientText().replace(/\r\n/g, '\n');
     const eaSrc = readFileSync(join(root, 'src', 'ext-avatar.js'), 'utf8').replace(/\r\n/g, '\n');
     check('#191 上传裁切：唯一几何实现 + 走既有上传腿 + 有取消路径',
       clSrc2.includes('function avatarCropGeometry()')
@@ -5160,7 +5163,9 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     //   ④ 自动压缩**无损优先**（PNG 排在 WebP 前面）；
     //   ⑤ 结构上不泄原始文件：上传的那份 blob 来自**裁切画布**（于是 SVG 这类"客户端收得下、
     //      宿主不认"的格式只可能以像素形态落盘，同源存储型 XSS 无从谈起）。
-    const gsrc = readFileSync(join(root, 'src', 'client.js'), 'utf8').replace(/\r\n/g, '\n');
+    // 取文口径：客户端正文族（正文 + src/client/*.js 助手模块）。头像裁切/确认自 2026-11-28 起
+    // 住 src/client/image-assets.js；按单文件读会让"上传的是裁切画布"这条判据在搬家后恒假。
+    const gsrc = clientText().replace(/\r\n/g, '\n');
     const eSrc = readFileSync(join(root, 'src', 'ext-avatar.js'), 'utf8').replace(/\r\n/g, '\n');
     // 闸的常量与探针住在 src/avatar-import.js（纯函数，上面那组判据用真字节喂它）；
     // 这里钉的是**接线**：client 正文有没有真的用它们、以及用的顺序对不对。
