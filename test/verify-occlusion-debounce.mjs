@@ -14,7 +14,6 @@
  *      模块级 `hiddenHoldActive` 复位（否则禁用期间若页面隐藏，重挂会带旧态直接暂停）。
  * 每条都配一个**合成变异体**负对照（改源码文本喂同一个 detector，必须判红）。
  */
-import { readFileSync } from 'node:fs';
 import { createCheck } from './tools/assert-harness.mjs';
 import { stripComments } from './tools/js-text.mjs';
 import { clientText as clientFamily } from './tools/src-scope.mjs';
