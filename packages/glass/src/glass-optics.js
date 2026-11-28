@@ -99,7 +99,36 @@ function installGlassOptics() {
     for (const [key, value] of Object.entries(attrs || {})) el.setAttribute(key, String(value));
     return el;
   }
-  function sample(el, seat) {
+  function readMaterial(el, mode, subagent) {
+    const css = win.getComputedStyle(el);
+    const layer = mode === 'pseudo' || mode === 'local' ? win.getComputedStyle(el, '::before') : css;
+    let native = layer.backdropFilter || layer.webkitBackdropFilter;
+    // Wide frost wipes out the entire refracting band of a 20–30px code capsule.
+    if (mode === 'compact') native = native && native !== 'none' ? native.replace(/blur\([^)]*\)/g, 'blur(0.35px)') : 'blur(0.35px)';
+    // The host menu's 40px frost erases the displacement at its rounded edge.
+    if (subagent) native = native.replace(/blur\([^)]*\)/g, 'blur(5px)');
+    const decoration = mode === 'local' ? layer : css;
+    const material = {
+      native: native && native !== 'none' ? native : 'blur(1px)',
+      background: decoration.backgroundImage || 'none',
+      shadow: decoration.boxShadow === 'none' ? '0 0 0 transparent' : decoration.boxShadow,
+      radii: [css.borderTopLeftRadius, css.borderTopRightRadius, css.borderBottomRightRadius, css.borderBottomLeftRadius],
+    };
+    if (mode === 'compact') {
+      material.radius = css.borderRadius;
+      material.clipParents = [];
+      for (let parent = el.parentElement; parent && parent !== doc.body; parent = parent.parentElement) {
+        const parentCss = win.getComputedStyle(parent);
+        if (/(auto|scroll|hidden|clip)/.test(parentCss.overflow + parentCss.overflowX + parentCss.overflowY)) material.clipParents.push(parent);
+      }
+    }
+    return material;
+  }
+  function sample(el, seat, material) {
+    if (!material) {
+      el.removeAttribute('data-we-optics');
+      material = readMaterial(el, seat.mode, seat.subagent);
+    }
     if (!seat.rule) {
       seat.rule = freeRules.pop();
       if (!seat.rule) {
@@ -110,15 +139,6 @@ function installGlassOptics() {
       seat.vars = seat.rule.style;
       el.setAttribute('data-we-optics-seat', `${generation}-${seat.id}`);
     }
-    el.removeAttribute('data-we-optics');
-    const css = win.getComputedStyle(el);
-    const layer = ['pseudo', 'local'].includes(seat.mode) ? win.getComputedStyle(el, '::before') : css;
-    let native = layer.backdropFilter || layer.webkitBackdropFilter;
-    // Wide frost wipes out the entire refracting band of a 20–30px code capsule.
-    if (seat.mode === 'compact') native = native && native !== 'none' ? native.replace(/blur\([^)]*\)/g, 'blur(0.35px)') : 'blur(0.35px)';
-    // The host menu's 40px frost erases the displacement at its rounded edge.
-    if (seat.subagent) native = native.replace(/blur\([^)]*\)/g, 'blur(5px)');
-    const decoration = seat.mode === 'local' ? layer : css;
     if (seat.mode === 'compact' && !seat.leaf) {
       if (!compactRoot) {
         compactRoot = doc.createElement('div'); compactRoot.setAttribute('data-we-optics-root', '');
@@ -128,27 +148,22 @@ function installGlassOptics() {
       seat.leaf.setAttribute('data-we-optics', 'compact-leaf');
       seat.leaf.setAttribute('data-we-optics-seat', `${generation}-${seat.id}`);
       compactRoot.append(seat.leaf);
-      seat.vars.setProperty('--we-optics-radius', css.borderRadius);
-      seat.clipParents = [];
-      for (let parent = el.parentElement; parent && parent !== doc.body; parent = parent.parentElement) {
-        const parentCss = win.getComputedStyle(parent);
-        if (/(auto|scroll|hidden|clip)/.test(parentCss.overflow + parentCss.overflowX + parentCss.overflowY)) seat.clipParents.push(parent);
-      }
     }
-    seat.vars.setProperty('--we-optics-native', native && native !== 'none' ? native : 'blur(1px)');
-    seat.vars.setProperty('--we-optics-bg', decoration.backgroundImage || 'none');
-    seat.vars.setProperty('--we-optics-shadow', decoration.boxShadow === 'none' ? '0 0 0 transparent' : decoration.boxShadow);
-    seat.radii = [css.borderTopLeftRadius, css.borderTopRightRadius, css.borderBottomRightRadius, css.borderBottomLeftRadius];
+    if (seat.mode === 'compact') {
+      seat.vars.setProperty('--we-optics-radius', material.radius);
+      seat.clipParents = material.clipParents;
+    }
+    seat.vars.setProperty('--we-optics-native', material.native);
+    seat.vars.setProperty('--we-optics-bg', material.background);
+    seat.vars.setProperty('--we-optics-shadow', material.shadow);
+    seat.radii = material.radii;
     el.setAttribute('data-we-optics', seat.mode);
     seat.sampled = true;
   }
-  function update(el, seat, w, h, fragments) {
+  function update(el, seat, w, h, mode, material) {
     if (!w || !h) return;
-    if (el.tagName === 'CODE') {
-      const mode = fragments > 1 ? 'fragmented' : h <= 48 ? 'compact' : 'direct';
-      if (seat.mode !== mode) { deactivate(el, seat); seat.mode = mode; }
-    }
-    if (!seat.sampled) sample(el, seat);
+    if (seat.mode !== mode) { deactivate(el, seat); seat.mode = mode; }
+    if (!seat.sampled) sample(el, seat, material);
     seat.w = w; seat.h = h;
     // A wrapping inline box must not sample one large rectangle over adjacent prose.
     if (seat.mode === 'fragmented') return;
@@ -231,11 +246,15 @@ function installGlassOptics() {
       if (measured.length >= 12 || pixelsThisFrame >= 180000) break;
       status.layoutReads += 2;
       const w = el.offsetWidth, h = el.offsetHeight;
-      let fragments = 0;
+      const seat = seats.get(el);
+      let mode = seat.mode;
       if (w && h && el.tagName === 'CODE') {
-        fragments = el.getClientRects().length; status.layoutReads++;
+        mode = el.getClientRects().length > 1 ? 'fragmented' : h <= 48 ? 'compact' : 'direct';
+        status.layoutReads++;
       }
-      measured.push([el, seats.get(el), w, h, fragments]);
+      // Read the native material of incoming lenses before inserting any rules or leaves.
+      const material = w && h && !seat.sampled ? readMaterial(el, mode, seat.subagent) : undefined;
+      measured.push([el, seat, w, h, mode, material]);
       pixelsThisFrame += Math.min(w, 560) * Math.min(h, 560);
     }
     const clips = new Map();
@@ -260,8 +279,8 @@ function installGlassOptics() {
     scrollTargets.clear();
     // Spread first appearances/streaming growth across frames; never build a whole page at once.
     let newGeometry = false;
-    for (const [el, seat, w, h, fragments] of measured) {
-      update(el, seat, w, h, fragments); dirty.delete(el);
+    for (const [el, seat, w, h, mode, material] of measured) {
+      update(el, seat, w, h, mode, material); dirty.delete(el);
       if (!seat.rect || (seat.leaf && !seat.clip)) newGeometry = true;
     }
     const writes = [];
