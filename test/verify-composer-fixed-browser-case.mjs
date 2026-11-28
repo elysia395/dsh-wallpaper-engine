@@ -26,7 +26,7 @@ function mutateStatement(source, header, before, after) {
 
 export async function verifyComposerFixedBrowser({ send, evaluate, until, check, screenshot, css, bundle, benchmark = false }) {
   const parallax = readFileSync(resolve(ROOT, 'packages/parallax/lib/client.parallax.js'), 'utf8');
-  const marker = '// ── 内联模块：src/we-base.js';
+  const marker = '// ── 内联模块：src/core/we-base.js';
   const start = bundle.indexOf(marker);
   const end = bundle.indexOf('// ── 内联模块：', start + marker.length);
   assert.ok(start >= 0 && end > start, 'main bundle 必须含唯一 we-base 内联段');

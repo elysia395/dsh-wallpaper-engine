@@ -12,7 +12,7 @@
  *   selection            ← 共享 store（本文件只写清单自己的那几个瞬态字段：systemFonts /
  *                          systemFontsAt / systemFontsApproximate / systemFontsLoading /
  *                          systemFontsError）
- *   apiFetch             ← src/api-client.js（宿主 API 唯一出入口；BASE 只在调用期读）
+ *   apiFetch             ← src/core/api-client.js（宿主 API 唯一出入口；BASE 只在调用期读）
  *   hostFailureReason    ← src/client.js（"失败到底哪一步不对"的通用文案）
  *   systemFontKeyOf      ← lib/settings-schema.js（**名字的值域**：进不了族键的名字这里就丢掉）
  *   emit                 ← 单向重渲染

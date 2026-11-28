@@ -186,7 +186,7 @@ let avatarActive = false;
 /** 分组重算的 rAF 句柄（0 = 没有挂起的一次；见 avatarScheduleGrouping）。 */
 let avatarGroupRaf = 0;
 
-/* `weBody()` / `weClampTo()` 的唯一实现见 src/we-base.js（内联后同作用域）。 */
+/* `weBody()` / `weClampTo()` 的唯一实现见 src/core/we-base.js（内联后同作用域）。 */
 
 /**
  * 头像图的 URL：`/avatar/<side>?v=<文件名>`。

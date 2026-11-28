@@ -17,7 +17,7 @@
  *   emit             ← 单向重渲染（启动加载完成后通知一次）
  *   applyEffects     ← src/effects.js（设置落地到 DOM）
  *   setAdapterFromHost ← src/settings/adapter.js（宿主上报的适配目标观测值）
- *   apiJson / apiFetch ← src/api-client.js（宿主 API 唯一出入口）
+ *   apiJson / apiFetch ← src/core/api-client.js（宿主 API 唯一出入口）
  * 提供的入口：
  *   persistSelection()      改动后调用（debounce 200ms；无定时器设施时立即写）
  *   loadPersisted()         启动加载：宿主优先 → 无存档时把本地迁移上去 → 宿主不可达时回落本地

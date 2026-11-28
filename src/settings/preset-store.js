@@ -20,7 +20,7 @@
  *   PROFILE_PRESET_SCHEMA_TAG / PROFILE_PRESET_KEYS / sanitizePresetValues ← lib/settings-schema.js
  *   FONTSET_KEYS / sanitizeFontset               ← lib/settings-schema.js（字体段载体）
  *   isGlassPresetId                              ← lib/settings-schema.js（与字体集 id 同一条白名单）
- *   BASE / apiFetch                              ← src/api-client.js（宿主 API 唯一出入口）
+ *   BASE / apiFetch                              ← src/core/api-client.js（宿主 API 唯一出入口）
  *   hostFailureReason                            ← src/client.js（失败原因的唯一翻译出口）
  *   setTransient                                 ← src/client.js（瞬态字段的唯一写入口）
  *   setSetting                                   ← src/client.js（持久化设置的唯一写入口）

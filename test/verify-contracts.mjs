@@ -8,7 +8,7 @@
  *    声明存在，且声明的**最低版本不低于代码真实用到的 API 所要求的下限**。
  *
  * ② **跨半边契约**：同一个词表在浏览器半边与宿主半边各写一份，而两边都由同一个用户操作驱动：
- *    · `BASE`（路径前缀）—— `lib/index.js` 与 `src/api-client.js` 各一份。不一致时**每一条**
+ *    · `BASE`（路径前缀）—— `lib/index.js` 与 `src/core/api-client.js` 各一份。不一致时**每一条**
  *      客户端请求 404（失败很响，但排查成本高）。
  *    · **上传 MIME** —— 客户端 `UPLOAD_TYPES` / 自定义画面的 accept 列表 vs 宿主 `UPLOAD_EXT` /
  *      `CUSTOM_FRAME_EXT`。不一致时选择器会收下一个宿主映射不出扩展名的文件 ⇒ **静默失败**。
@@ -133,7 +133,7 @@ const hostSrc = read('lib/index.js') + '\n' + read('lib/host-boot.js') + '\n' + 
 //    `lib/media/media-dirs.js`（上游同名副本 `lib/asset-paths.js` 已不在 import 图上）⇒ 只改
 //    "读哪个文件"（下面 hostMimeKeys 的两个实参），判据与期望值一字未改。`hostSrc` 仍供 BASE 等其余判据。
 const hostAssetsSrc = read('lib/media/media-dirs.js');
-const apiSrc = read('src/api-client.js');
+const apiSrc = read('src/core/api-client.js');
 // 取文口径：客户端正文族（正文 + src/client/*.js）。UPLOAD_TYPES 自 2026-11-28 起住
 // src/client/upload-handlers.js；按单文件读会让两侧 MIME 对账恒假。
 const clientSrc = clientText();
@@ -297,7 +297,7 @@ const tabsSrc = panelText();
     Boolean(tag) && /const\s+FONTSET_SCHEMA_VERSION\s*=\s*\d+/.test(kernel), tag ? tag[1] + 'N' : '(没解析到)');
   // 字面量只许出现在共享内核：其余会 import 的两半都只能写常量名。
   const literalSites = ['lib/index.js', 'packages/fonts/lib/routes/fontsets.js', 'src/settings/fontset-store.js',
-    'packages/fonts/src/fontset-editor.js', 'src/client.js', 'src/api-client.js']
+    'packages/fonts/src/fontset-editor.js', 'src/client.js', 'src/core/api-client.js']
     .filter((f) => /dsh-we\/fontset@/.test(read(f)));
   check('字体集的版本字面量只出现在共享内核（两半都引用常量名，不手抄）',
     literalSites.length === 0, literalSites.join(',') || '零处手抄');

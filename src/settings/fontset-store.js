@@ -11,7 +11,7 @@
  * 同一 prelude / src/client.js 的顶层）：
  *   selection                      ← 共享 store（本文件**只读写那字体键** + 两个瞬态字段）
  *   FONTSET_KEYS / FONTSET_MIGRATED_ID / isFontSetId / sanitizeFontset ← lib/settings-schema.js
- *   BASE / apiFetch / apiJson      ← src/api-client.js（宿主 API 唯一出入口；BASE 只在调用期读）
+ *   BASE / apiFetch / apiJson      ← src/core/api-client.js（宿主 API 唯一出入口；BASE 只在调用期读）
  *   hostFailureReason              ← src/client.js（"失败到底哪一步不对"的唯一一句文案）
  *   applyEffects                   ← src/effects.js
  *   emit                           ← 单向重渲染

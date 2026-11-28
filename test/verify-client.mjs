@@ -489,7 +489,7 @@ const readoutOfSlider = (row) => {
 // 「扩展」页签的三张卡现在来自三个 bundle：avatar（本 bundle 模块作用域注册）、fx、parallax。
 // 子包产物只在 loader 上注册自己那份 bundle，真正的注册动作发生在它们各自的 factory：
 // 它们用 require('dsh-plugin-wallpaper-engine') 取主 bundle 的**显式键集**
-// （src/host-bridge.js 的 HOST_BRIDGE_BINDINGS），再 registerExtensionModule / registerLayerHooks。
+// （src/core/host-bridge.js 的 HOST_BRIDGE_BINDINGS），再 registerExtensionModule / registerLayerHooks。
 // 所以这里必须在 apply(ctx) **之前**、同一个 vm 上下文里把两份产物求值掉，且 requireMock 要把
 // 主 bundle 的导出面交给它们 —— 否则页签只剩 avatar，:788 会红（这正是本判据要看见的形态）。
 // 求值顺序**故意反着来**（先 parallax 后 fx）：屏上顺序必须由 descriptor.order 决定，
@@ -4539,14 +4539,14 @@ setTimeout(async () => {
   }
   assert.ok(effects.length > 0, '效果链至少要跑过一次（effects 记录 ' + effects.length + ' 条）');
 
-// ⑦ 条件求值器住在独立模块（src/we-cond.js），因此可以直接 import 做**行为**测试
+// ⑦ 条件求值器住在独立模块（src/core/we-cond.js），因此可以直接 import 做**行为**测试
 // —— 这是抽模块的核心收益（不必对 src/client.js 做文本断言）。
 // 期望值是**行为快照**：抽模块只允许"行为不动"。
 // ⚠️ 已知语义：本求值器把 `===` / `!==` 也走**宽松**比较（当前实现如此）。
 //    若将来要改成严格比较，必须同步本表并评估对真实壁纸 condition 的影响。
 {
   const { weEvalCondition, weCondTokenize, weCondParse } = await import(
-    new URL('../src/we-cond.js', import.meta.url).href);
+    new URL('../src/core/we-cond.js', import.meta.url).href);
 
   const CASES = [
     // [说明, 表达式, values, 期望]

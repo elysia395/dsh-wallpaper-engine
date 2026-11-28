@@ -3421,10 +3421,10 @@ check('属性面板热更新走 __wp.updateWebProps',
   src.includes('function applyUserProps(') && src.includes('wp.updateWebProps(wire)'));
 check('属性面板值以渲染页实时表为准（getProperties）',
   src.includes('wp.getProperties()') && src.includes('function loadUserPropDefs('));
-// 求值器自 P1-7 起是**独立模块** src/we-cond.js（构建期内联回客户端作用域）。
+// 求值器自 P1-7 起是**独立模块** src/core/we-cond.js（构建期内联回客户端作用域）。
 // 断言改为三件事：模块在位、产物里确实有它、client.js 不再自带实现 —— 免得抽出去之后
 // 两边各留一份（那正是要防的漂移）。
-const weCondSrc = readFileSync(join(root, 'src', 'we-cond.js'), 'utf8');
+const weCondSrc = readFileSync(join(root, 'src', 'core', 'we-cond.js'), 'utf8');
 const bundleSrc = readFileSync(join(root, 'lib', 'client.js'), 'utf8');
 check('条件求值器已抽成独立模块并被内联（fail open）',
   /\(function weEvalCondition|function weEvalCondition\(/.test(weCondSrc)
@@ -4510,11 +4510,11 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
   };
   const textKinds = (tree) => [...new Set(treeStrings(tree))].sort();
 
-  // ── 共享地基符号的替身（src/we-base.js）──────────────────────────────────────
+  // ── 共享地基符号的替身（src/core/we-base.js）──────────────────────────────────────
   // `weClampTo` / `weNow` / `weBody` 在构建期是同一作用域里的兄弟模块符号，单文件 import 时
   // 却是**裸标识符** ⇒ 下面所有"单独 import 真模块"的腿（fx / parallax / avatar 三层）都要在
   // 运行前把这三枚补到 globalThis 上，跑完还原（别的腿可能正判"这些名字不存在"）。
-  const weBaseMod = await import(pathToFileURL(join(root, 'src', 'we-base.js')).href);
+  const weBaseMod = await import(pathToFileURL(join(root, 'src', 'core', 'we-base.js')).href);
   const stubWeBase = () => {
     const keys = ['weClampTo', 'weNow', 'weBody'];
     const prev = {};
@@ -5377,7 +5377,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     // 源码口径：这一层的要点全是"看不见的形态"（不建 DOM、只用独立属性可用量、中心对称、
     // 到位就停、系数可配、特效层不参与）。逐条钉住，改坏了当场红。
     const parSrc = readFileSync(subParallaxFile('parallax-layer.js'), 'utf8');
-    const weBaseSrc = readFileSync(join(root, 'src', 'we-base.js'), 'utf8');
+    const weBaseSrc = readFileSync(join(root, 'src', 'core', 'we-base.js'), 'utf8');
     check('parallax-layer.js 不建 DOM + 独立属性直接写位移 + 中心对称(负向) + 收敛驱动 + 特效不参与 + 帧内零测量',
       parSrc.includes("const PARALLAX_DIRECTION = -1;")
       && parSrc.includes("const PARALLAX_ATTR = 'data-we-parallax';")
@@ -5388,7 +5388,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       && parSrc.includes('const PARALLAX_BG_MIN = 0;') && parSrc.includes('const PARALLAX_BG_MAX = 10;')
       && parSrc.includes('const PARALLAX_SMOOTH_MAX = 98;')
       // 没有 DOM 的环境（无头沙箱 / SSR 探测）一律从这一个入口静默返回：body 入口是共享地基
-      // src/we-base.js 的 `weBody()`（无 DOM 一律 null），这里断言"层只经它取 body"。
+      // src/core/we-base.js 的 `weBody()`（无 DOM 一律 null），这里断言"层只经它取 body"。
       && parSrc.includes('weBody()')
       && !parSrc.includes('parallaxBody')
       && weBaseSrc.includes('function weBody()')
@@ -6424,7 +6424,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
   {
     const PREV_SEL = globalThis.selection;
     const restoreWeBase = stubWeBase();
-    // 单独 import 时这两枚在**构建期**是同一作用域的兄弟模块符号（src/api-client.js 的
+    // 单独 import 时这两枚在**构建期**是同一作用域的兄弟模块符号（src/core/api-client.js 的
     // apiUrl、src/extensions/avatar-layer.js 的默认名/头像几何）⇒ 按内联规则补替身。
     const PREV_API_URL = globalThis.apiUrl;
     globalThis.apiUrl = (p) => '/wallpaper-engine' + String(p || '');

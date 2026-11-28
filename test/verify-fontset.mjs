@@ -1071,7 +1071,7 @@ section('⑧ 面板渲染回归（配色区在总开关打开时必须渲染得�
     await import(pathToFileURL(join(root, 'src', 'font', 'typography.js')).href),
     await import(pathToFileURL(join(root, 'src', 'font', 'components.js')).href),
     await import(pathToFileURL(join(root, 'src', 'font', 'apply.js')).href),
-    await import(pathToFileURL(join(root, 'src', 'we-cond.js')).href),
+    await import(pathToFileURL(join(root, 'src', 'core', 'we-cond.js')).href),
     // 面板会调 `renderFontSetEditor(...)`（在 bundle 里是同作用域的内联模块；独立 import 时
     // 得把它映成全局，否则 ⑧ 会以 "is not defined" 的形式假红）。
     await import(pathToFileURL(join(root, 'packages', 'fonts', 'src', 'fontset-editor.js')).href),

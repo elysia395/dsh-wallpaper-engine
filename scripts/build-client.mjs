@@ -62,7 +62,7 @@ const INLINE_MODULES = [
   {
     // 零依赖的纯工具 ⇒ 紧随纯数据之后：三个层模块（fx / parallax / avatar）都要读，
     // 排在它们之前即可（本身无依赖，何处都无 TDZ 交互）。
-    file: 'src/we-base.js',
+    file: 'src/core/we-base.js',
     why: '浏览器半边的最小地基：三枚到处都用的纯工具（唯一实现）—— 钳位 `weClampTo` · 单调时钟 `weNow` · body 根 `weBody`；零依赖 + 零顶层可执行语句，故可排在内联清单最前',
     markers: ['function weClampTo(', 'function weNow(', 'function weBody('],
   },
@@ -207,7 +207,7 @@ const INLINE_MODULES = [
       'function themeFollowModeColorOf(', 'function themeFollowAttach('],
   },
   {
-    file: 'src/we-cond.js',
+    file: 'src/core/we-cond.js',
     why: 'WE 条件求值器（纯计算、零外界依赖，独立可测，见 P1-7）',
     markers: ['const WE_COND_OPS = [', 'function weEvalCondition(', 'function weCondTokenize('],
   },
@@ -467,7 +467,7 @@ const INLINE_MODULES = [
       'function weAppBase(', 'function weAppMountReset('],
   },
   {
-    file: 'src/api-client.js',
+    file: 'src/core/api-client.js',
     why: '宿主 API 的唯一出入口（P2-9）：前缀 / 默认 no-store / 不吞错的结构化结果',
     markers: ['const BASE = ', 'function apiUrl(', 'function pickFetch(', 'async function apiFetch(',
       'const apiJson = ', 'const apiHead = '],
@@ -647,7 +647,7 @@ const INLINE_MODULES = [
     // 正文里的函数声明在工厂体内提升、getter 又是惰性求值 ⇒ 与正文的先后无关。
     // （原先住 src/client.js 正文底部，搬出来只为让"改一个键要同时对账 6 处解构名单"
     // 的契约表有个能一眼找到的家；产物行为逐字不变 —— verify 链与 golden 快照会兜住这一点。）
-    file: 'src/host-bridge.js',
+    file: 'src/core/host-bridge.js',
     why: '跨包浏览器半边契约表：子包经 require(主包名) 取到的显式键集 + 冻结的 exports.hostBridgeKeys；改一个键要同时对账 6 处解构名单（产物里的 *_HOST_REQUIRED 由本构建器从解构派生，test/verify-subpackage-client-half.mjs D-7 对账）',
     markers: ['const HOST_BRIDGE_BINDINGS = {',
       'const HOST_BRIDGE_KEYS = Object.keys(HOST_BRIDGE_BINDINGS);',
@@ -1110,7 +1110,7 @@ function stripHeader(srcText) {
  *     const { React, weT, … } = host;           // 唯一真源：本文件解了哪些键，产物就申报哪些键
  *
  * 构建期在这里把 `[]` 换成从解构名单派生的字面量数组，并**当场断言**每个名字都在
- * `src/host-bridge.js` 的 HOST_BRIDGE_BINDINGS 里 —— 少给键的报错从「用户机器上运行期抛」
+ * `src/core/host-bridge.js` 的 HOST_BRIDGE_BINDINGS 里 —— 少给键的报错从「用户机器上运行期抛」
  * 提前到「构建红」，且报错文案直接点名该补哪张表。
  *
  * 保留运行期检查的理由（不因构建期断言而删）：九包各自独立发版，用户机器上可能出现
@@ -1122,16 +1122,16 @@ function stripHeader(srcText) {
 function hostBridgeKeys() {
   const self = /** @type {{ cache?: string[] }} */ (hostBridgeKeys);
   if (self.cache) return self.cache;
-  const src = readNormalized(resolve(root, 'src', 'host-bridge.js'));
+  const src = readNormalized(resolve(root, 'src', 'core', 'host-bridge.js'));
   const at = src.indexOf('const HOST_BRIDGE_BINDINGS = {');
   if (at < 0) {
-    console.error('[build-client] src/host-bridge.js 里找不到 `const HOST_BRIDGE_BINDINGS = {`：'
+    console.error('[build-client] src/core/host-bridge.js 里找不到 `const HOST_BRIDGE_BINDINGS = {`：'
       + '子包申报表无法派生，产物会带一张空键表（运行期缺键检查全部空转）。');
     process.exit(1);
   }
   const end = src.indexOf('\n};', at);
   if (end < 0) {
-    console.error('[build-client] src/host-bridge.js 的 HOST_BRIDGE_BINDINGS 没有收尾 `\\n};`（形状变了？）。');
+    console.error('[build-client] src/core/host-bridge.js 的 HOST_BRIDGE_BINDINGS 没有收尾 `\\n};`（形状变了？）。');
     process.exit(1);
   }
   const keys = [...src.slice(at, end).matchAll(/^ {2}([A-Za-z_$][\w$]*):/gm)].map((m) => m[1]);
@@ -1184,7 +1184,7 @@ function deriveHostRequiredTable(bodySrc, entryLabel) {
   const missing = keys.filter((k) => !hostKeys.includes(k));
   if (missing.length > 0) {
     console.error(`[build-client] ${entryLabel} 从 host 解构了主 bundle 没有的键：${missing.join(', ')}。\n`
-      + '  要么在 src/host-bridge.js 的 HOST_BRIDGE_BINDINGS 里补键（并在 src/client.js 正文给出同名绑定），\n'
+      + '  要么在 src/core/host-bridge.js 的 HOST_BRIDGE_BINDINGS 里补键（并在 src/client.js 正文给出同名绑定），\n'
       + '  要么从本文件的解构里去掉（ADR-0014 S5.1：多一个键就是多一条隐式契约）。');
     process.exit(1);
   }

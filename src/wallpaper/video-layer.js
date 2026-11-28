@@ -325,7 +325,7 @@ function buildVideoMedia(sel, fitClass) {
  *   emit()                    ← 单向重渲染（本文件不直接碰 DOM 结构）
  *   isEffectivelyPlaying()    ← "当前是否在播"（换源前判断，避免打断播放）
  *   weDrawFrame()             ← 抓/重绘一帧（换源后立刻上屏）
- *   apiJson(path) / apiFetch(path)  ← src/api-client.js（宿主 API 唯一出入口；探测带 signal 透传）
+ *   apiJson(path) / apiFetch(path)  ← src/core/api-client.js（宿主 API 唯一出入口；探测带 signal 透传）
  * 提供的入口：
  *   refreshMediaInfo(force)              读 /media-info，写 selection.mediaInfo（含"源 fps ≤ 上限 ⇒ 无需转码"）
  *                                        以及宿主只读回答的"该上限的抽帧版已在盘上"

@@ -2907,7 +2907,7 @@ exports.inject = inject;
 // src/client/pet-link-facade.js；构建期内联回本作用域，9 处 petLink.* 调用点文本零改动。
 
 // ── 跨包浏览器半边通道（ADR-0014 S5.1 / S5.4「宿主注入显式键集」）────────────────────
-// 显式键集表已独立到 `src/host-bridge.js`（契约真源；构建期内联在本正文之前，同处一个
+// 显式键集表已独立到 `src/core/host-bridge.js`（契约真源；构建期内联在本正文之前，同处一个
 // 扁平工厂作用域 ⇒ 正文里的活绑定照旧以 getter 形式给出去，产物行为逐字不变）。
 // 搬走的原因：这张表是跨包契约，改一个键要同时对账 6 处 `} = host;` 解构名单（判据见
 // test/verify-subpackage-client-half.mjs 的 D-7；产物里的申报表由构建期从解构派生），不该埋在 6,000+ 行正文深处。
@@ -2928,5 +2928,5 @@ function glassStatusRegister(api) {
   return api;
 }
 
-// HOST_BRIDGE_BINDINGS / HOST_BRIDGE_KEYS / exports.hostBridgeKeys 见 src/host-bridge.js。
+// HOST_BRIDGE_BINDINGS / HOST_BRIDGE_KEYS / exports.hostBridgeKeys 见 src/core/host-bridge.js。
 return module.exports;

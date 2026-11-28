@@ -46,7 +46,7 @@ const checkAsync = async (name, fn) => {
   }
 };
 
-const API_CLIENT_SRC = readFileSync(join(ROOT, 'src/api-client.js'), 'utf8');
+const API_CLIENT_SRC = readFileSync(join(ROOT, 'src/core/api-client.js'), 'utf8');
 const OCCLUSION_SRC = readFileSync(join(ROOT, 'src/wallpaper/occlusion.js'), 'utf8');
 const LIVE_SRC = liveText();
 const BUILT = readFileSync(join(ROOT, 'lib/client.js'), 'utf8');

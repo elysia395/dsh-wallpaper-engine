@@ -20,7 +20,7 @@
 // 正在跑的壁纸，并写进设置（`userProps`，按 token 存）—— 刷新/重启后网页壁纸由
 // host 并进 HTML 种子、场景壁纸由 applyStoredUserProps 在就绪后回放。
 //
-// 条件求值器已抽到 src/we-cond.js（纯计算、零外界依赖；构建期由 build-client.mjs
+// 条件求值器已抽到 src/core/we-cond.js（纯计算、零外界依赖；构建期由 build-client.mjs
 // 内联回本作用域，因此下面的 weEvalCondition(...) 调用点无需改动，见该文件头的契约）。
 
 // 面板状态：token 变了就重新拉一次（换壁纸/换目录）。
