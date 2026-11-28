@@ -3796,7 +3796,17 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       const i = posOf(n);
       return i === -1 || i > boundary;
     });
-    const stray = flagged(compStart);
+    // 2026-11-28 起玻璃预设 ctx 搬进 src/client/glass-preset-handlers.js：构建期把它内联在**正文
+    // 之前**，所以"在族拼文本里的位置"不再是判据。仍留在正文里的名字必须在组件之前；只在模块里
+    // 声明的（含 glassPresetCtx）天生就在组件之外 —— 只要求族里声明得到。
+    const fontBodyText = readFileSync(join(root, 'src', 'client.js'), 'utf8');
+    const posInBody = (n) => {
+      const a = fontBodyText.indexOf('function ' + n + '(');
+      const b = fontBodyText.indexOf('const ' + n + ' = ');
+      if (a === -1) return b;
+      return b === -1 ? a : Math.min(a, b);
+    };
+    const stray = flagged(compStart).filter((n) => posOf(n) === -1 || posInBody(n) !== -1);
     check('字体 / 主题处理器与 ctx 构造器也在模块级（组件之前声明，不再每次渲染重建）',
       stray.length === 0, stray.join(', ') || PROMOTED_FONT.length + ' 个都在组件之前');
     // 独立地板：名单空了的话上面那条 `stray.length === 0` 是**恒真**的 —— 空域上的"全部合格"

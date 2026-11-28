@@ -201,7 +201,10 @@ const BODY_MOUNT_WHITELIST = Object.freeze({
   'src/media-prep.js': { count: 1, owner: 'rotation-staging' },
   'src/media-prep/probe.js': { count: 1, owner: 'rotation-staging' },
   'src/client/audio-playback.js': { count: 1, owner: 'scene-audio' },
-  'src/client.js': { count: 4, owner: 'transient-input|download-anchor|rope-dock|perf-float' },
+  'src/client/glass-preset-handlers.js': { count: 1, owner: 'download-anchor' },
+  // 导出预设的下载 <a> 自 2026-11-28 起随玻璃预设族搬进 src/client/glass-preset-handlers.js ⇒
+  // 正文那 4 处变成 3 处（一次性 <input type=file> / rope dock 宿主 / 性能悬浮窗宿主）。
+  'src/client.js': { count: 3, owner: 'transient-input|rope-dock|perf-float' },
   'packages/fx/src/fx-layer.js': { count: 1, owner: 'pkg-own-host(fx overlay)' },
 });
 
