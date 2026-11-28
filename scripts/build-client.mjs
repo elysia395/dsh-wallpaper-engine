@@ -542,6 +542,12 @@ const INLINE_MODULES = [
       'function onClear()', 'function onNextWallpaper()'],
   },
   {
+    file: 'src/client/library-handlers.js',
+    why: 'src/client.js 正文的壁纸库/库视图模块级处理器（刷新、四类筛选、布局/兼容、轮播间隔与触发、过场、Rope 显隐形态比例、立绘两步确认、关闭选择器、INTERVALS 档位表）—— 构建期内联在正文之前，同处一个扁平作用域',
+    markers: ['const onRefresh = () => loadInventory();', 'const onRatingFilterToggle = (tier, on) => {',
+      'const onGroupTrigger = (e) => {', 'const onMascotFormConfirm = () => {', 'const INTERVALS = [1, 5, 10, 30, 60, 120];'],
+  },
+  {
     // 跨包浏览器半边的**显式键集契约表**（ADR-0014 S5.1 / S5.4）：71 个 getter 挂到 module.exports。
     // 必须排在内联清单**末尾**：表顶层读 `DEFAULTS`（lib/settings-schema.js 的内联件）⇒ 要排在它之后；
     // 正文里的函数声明在工厂体内提升、getter 又是惰性求值 ⇒ 与正文的先后无关。

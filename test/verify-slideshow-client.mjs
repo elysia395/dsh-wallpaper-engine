@@ -28,6 +28,7 @@
 import { readFileSync, mkdirSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { clientText } from './tools/src-scope.mjs';
 import vm from 'node:vm';
 
 const ROOT = fileURLToPath(new URL('..', import.meta.url));
@@ -387,7 +388,9 @@ section('C10. 装配点：buildMedia 接上 / applySelection 落地与清空 / C
   const styleSrc = readFileSync(STYLE_SRC, 'utf8');
   check('C10 CSS：`.we-layer .we-slide` 绝对定位铺满（否则两颗过场图上下排开）',
     /\.we-layer \.we-slide \{ position: absolute; inset: 0; \}/.test(styleSrc));
-  const clientSrc = readFileSync(CLIENT_SRC, 'utf8');
+  // 取文口径：客户端正文族（正文 + src/client/*.js 助手模块）。图片轮播的处理器自 2026-11-28 起
+  // 住 src/client/library-handlers.js；按单文件读会让"钳制走 schemaRange"这条判据恒假。
+  const clientSrc = clientText();
   check('C10 client.js：selection 带两个 transient 字段', /slidesUrl: null,\s*\n\s*slideIntervalMs: null,/.test(clientSrc));
   check('C10 client.js：处理器钳制走 schemaRange（不许数字字面量，否则改 KINDS 会漏改）+ 原地重装',
     /const onPictureSlideSeconds = \(e\) => \{[\s\S]{0,400}?clampNum\(Number\(e\.target\.value\), \.\.\.schemaRange\("pictureSlideSeconds"\), DEFAULTS\.pictureSlideSeconds\)[\s\S]{0,600}?setSetting\("pictureSlideSeconds", seconds\)[\s\S]{0,600}?refreshImageSlideshow\(selection\)/.test(clientSrc));

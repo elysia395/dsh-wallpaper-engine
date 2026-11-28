@@ -3832,7 +3832,11 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       const i = posOf(text, n);
       return i === -1 || i > boundary;
     });
-    const stray = flagged(src, compStart);
+    // 2026-11-28 起这批处理器按族搬进 src/client/library-handlers.js：构建期把它们内联在
+    // **正文之前**，于是"在正文里的位置"不再是判据（族拼文本会把模块排在正文之后）。
+    // 现在判两件：①族里声明得到（漏搬/删掉 ⇒ 判红）；②仍留在正文里的那些必须在组件之前。
+    const bodyText = readFileSync(join(root, 'src', 'client.js'), 'utf8');
+    const stray = flagged(src, compStart).filter((n) => posOf(src, n) === -1 || posOf(bodyText, n) !== -1);
     check('壁纸库 / 库视图处理器与纯常量也在模块级（组件之前声明）',
       stray.length === 0, stray.join(', ') || PROMOTED_HANDLERS.length + ' 个都在组件之前');
     // 负对照：把**真实组件内成员**喂进同一条界线，必须判得出；再把它的声明提到组件之前，

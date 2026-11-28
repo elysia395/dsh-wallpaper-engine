@@ -3746,7 +3746,9 @@ setTimeout(async () => {
     // lib/settings-schema.js），源码里没有手写键列表可抠，而且抠名字也证明不了
     // "宿主真的会接受"。所以改判 ①键集派生 ②结构上必须委托 ③**行为**逐键与 golden 一致。
     {
-      const src = readFileSync(new URL('../src/client.js', import.meta.url), 'utf8');
+      // 取文口径：客户端正文族（正文 + src/client/*.js 助手模块）—— 处理器搬出正文后，
+      // 按单文件读会让"持久化直写必须与落盘配对"扫不到它们（漏判），也会把豁免名单判成空转。
+      const src = clientText();
       const persistSrc = readFileSync(new URL('../src/persistence.js', import.meta.url), 'utf8');
       const host = readFileSync(new URL('../lib/index.js', import.meta.url), 'utf8');
       const schemaMod = await import(new URL('../lib/settings-schema.js', import.meta.url).href);
@@ -4163,7 +4165,10 @@ setTimeout(async () => {
         setTransient: '它就是入口本身（只写内存）：通知由调用点负责',
         setCustomFrameLocal: '两个调用点（onCustomFrameFile / onClearCustomFrame）在各自分支里都 emit',
       };
-      const silent = panelSrcs.flatMap((t) => silentHandlers(t))
+      // 口径同上：运行时是一个扁平作用域，处理器可以调用兄弟模块里的通知助手（2026-11-28 搬迁后
+      // onRatingFilterToggle / onTypeFilterToggle 的通知走正文的 emit）—— 按单文件判会误报，
+      // 按作用域整体判一次（与 ①i 同一口径）。
+      const silent = silentHandlers(panelSrcs.join('\n;\n'))
         .filter((n) => !(n in HANDLERS_NOTIFY_ELSEWHERE));
       assert.deepEqual(silent, [],
         '面板处理器写 store 却不会通知（视图会静默停在旧状态）：' + silent.join(', '));
