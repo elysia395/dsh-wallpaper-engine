@@ -108,7 +108,7 @@ function weComponentVisibleOf(components, name) {
   }
 
   // 「主题预设」+「玻璃 UI」节的**注册表占位桩**（ADR-0016 第二刀）：真渲染器住 packages/glass
-  // （它把自己的 render 登记进 src/extension-registry.js 的面板节注册表）。这里按 id 取出来、
+  // （它把自己的 render 登记进 src/extensions/extension-registry.js 的面板节注册表）。这里按 id 取出来、
   // 在内置位（第三节）上调它 —— 屏上顺序与搬迁前逐字一致，两种档面（设置页 / 侧栏）同一条路。
   // 注册表里没有 = 该子包没装 / 行被关 ⇒ 返回 null（React 对 null 子节点零渲染）⇒
   // **缺的是这一节，不是这一页**（D3①/D3③；fonts 那条尾部通道同款语义）。
@@ -284,12 +284,12 @@ function weComponentVisibleOf(components, name) {
   //   · 模块**不得**自己写设置 / 发通知 / 持有状态：本文件是渲染器（契约见文件头），
   //     要动状态就把动作做成 src/client.js 的具名处理器、经 ctx 传进来。
   // 现有三项 —— **本文件不再枚举它们**（P-A 起）：
-  //   一号 = 自定义会话头像（src/ext-avatar.js + src/avatar-layer.js，会话界面上的 DOM 补丁），
+  //   一号 = 自定义会话头像（src/extensions/ext-avatar.js + src/extensions/avatar-layer.js，会话界面上的 DOM 补丁），
   //          **留在主包**，由 src/client.js 在模块作用域自登记；
   //   二号 = 点击效果与拖尾效果（packages/fx）、三号 = 3D 效果（packages/parallax）**各自
   //          是一个独立包** —— 三份 bundle 的求值顺序不保证，同一个工厂作用域里再也放不下
   //          一份"按数组顺序排好的清单"，于是"谁登记了什么"落在一张共享注册表上
-  //          （src/extension-registry.js；跨包通道见 ADR-0014 S5.1 / S5.4）。
+  //          （src/extensions/extension-registry.js；跨包通道见 ADR-0014 S5.1 / S5.4）。
   // ⚠️ **顺序即屏上顺序**：跨包顺序**不能**靠数组序（bundle 求值顺序不是契约），改由描述符的
   //    `order` 声明（avatar=1 / fx=2 / parallax=3），排序 = (order, 注册序)。
   //    加第四项 = 在它自己的包里调 `weRegisterExtensionModule(id, descriptor)`，本文件零改动。

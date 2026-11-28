@@ -89,14 +89,14 @@ const subpackageRecipes = () => {
 const registersFile = (text, rel) =>
   new RegExp('["\']?file["\']?\\s*:\\s*["\']' + rel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '["\']').test(text);
 
-/** 装配共享注册表（src/extension-registry.js）并登记「扩展」页签的三项。
+/** 装配共享注册表（src/extensions/extension-registry.js）并登记「扩展」页签的三项。
  *
  *  为什么挂载台需要它：三份 bundle（主包 / packages/fx / packages/parallax）的**求值顺序不保证**，
  *  panel-tabs 的 extensionModules() 只问注册表。挂载台是**按文件** import 的，于是必须自己把表
  *  装起来 —— 否则 weExtensionModules 是裸标识符（ReferenceError，且只在渲染「扩展」页签时才炸）。
  *
- *  ⚠️ 这里用字面量路径 join(root, 'src', 'extension-registry.js') 来 import：本守卫因此是
- *  src/extension-registry.js 的真实覆盖（test/verify-guard-map.mjs 的「零覆盖」那条判据认它）。
+ *  ⚠️ 这里用字面量路径 join(root, 'src', 'extensions', 'extension-registry.js') 来 import：本守卫因此是
+ *  src/extensions/extension-registry.js 的真实覆盖（test/verify-guard-map.mjs 的「零覆盖」那条判据认它）。
  *  幂等：两块挂载台共用同一个模块实例，重复登记会撞注册表的「id 重复注册」抛错。
  */
 let weExtensionRegistryPromise = null;
@@ -107,9 +107,9 @@ function installExtensionRegistry() {
   return weExtensionRegistryPromise;
 }
 async function loadExtensionRegistry() {
-  const reg = await import(pathToFileURL(join(root, 'src', 'extension-registry.js')).href);
+  const reg = await import(pathToFileURL(join(root, 'src', 'extensions', 'extension-registry.js')).href);
   Object.assign(globalThis, reg);
-  const avatarMod = await import(pathToFileURL(join(root, 'src', 'ext-avatar.js')).href);
+  const avatarMod = await import(pathToFileURL(join(root, 'src', 'extensions', 'ext-avatar.js')).href);
   const fxMod = await import(pathToFileURL(subFxFile('ext-fx.js')).href);
   const parallaxMod = await import(pathToFileURL(subParallaxFile('ext-parallax.js')).href);
   // 故意**乱序**登记：屏上顺序必须由描述符的 order 决定（注册序 / 数组序不是契约）。
@@ -2379,19 +2379,19 @@ const hostLib = hostLibComposed;
   //    它跟另三个模块的关键差别是**它动宿主的会话 DOM**（给消息行补头像节点）——
   //    所以"产物里只有一份"在这里更要紧：两份注入逻辑就是同一行补两个头像。
   check('avatar-layer.js 已登记进 INLINE_MODULES 且在产物里只有一份',
-    /file:\s*'src\/avatar-layer\.js'/.test(build)
+    /file:\s*'src\/extensions\/avatar-layer\.js'/.test(build)
     && (bundle.match(/function syncAvatarLayer\(\)/g) || []).length === 1
     && (bundle.match(/function disposeAvatarLayer\(\)/g) || []).length === 1
     // 补头像只有一条路径（行标记 + 节点填充都在它里），混回两份 = 一行补两个头。
     && (bundle.match(/function avatarDecorateRow\(/g) || []).length === 1
     && (bundle.match(/function avatarFillNode\(/g) || []).length === 1);
   check('ext-perf.js 已登记进 INLINE_MODULES 且在产物里只有一份',
-    /file:\s*'src\/ext-perf\.js'/.test(build)
+    /file:\s*'src\/extensions\/ext-perf\.js'/.test(build)
     && (bundle.match(/function renderPerfIsland\(ctx\)/g) || []).length === 1
     && bundle.includes('PERF_EXTENSION_MODULE')
     && bundle.includes('weRegisterExtensionModule("perf", PERF_EXTENSION_MODULE)'));
   check('ext-avatar.js 已登记进 INLINE_MODULES 且在产物里只有一份',
-    /file:\s*'src\/ext-avatar\.js'/.test(build)
+    /file:\s*'src\/extensions\/ext-avatar\.js'/.test(build)
     && (bundle.match(/function renderAvatarIsland\(ctx\)/g) || []).length === 1
     && bundle.includes('avatarRadius') && bundle.includes('avatarUserImage')
     // A3 起**不再**断言"三项写在同一张静态数组里"：avatar 仍住主包，fx / parallax 各住自己的
@@ -2419,10 +2419,10 @@ const hostLib = hostLibComposed;
     const m = /order:\s*(\d+)/.exec(text.slice(i, i + 4000));
     return m ? Number(m[1]) : null;
   };
-  const avatarExtSrc = readFileSync(join(root, 'src', 'ext-avatar.js'), 'utf8');
+  const avatarExtSrc = readFileSync(join(root, 'src', 'extensions', 'ext-avatar.js'), 'utf8');
   const fxExtSrc = readFileSync(subFxFile('ext-fx.js'), 'utf8');
   const parExtSrc = readFileSync(subParallaxFile('ext-parallax.js'), 'utf8');
-  const perfExtSrc = readFileSync(join(root, 'src', 'ext-perf.js'), 'utf8');
+  const perfExtSrc = readFileSync(join(root, 'src', 'extensions', 'ext-perf.js'), 'utf8');
   check('屏上顺序 = 描述符的 order（avatar 1 / fx 2 / parallax 3 / perf 4）· 不靠数组序',
     orderOfModule(avatarExtSrc, 'AVATAR_EXTENSION_MODULE') === 1
     && orderOfModule(fxExtSrc, 'FX_EXTENSION_MODULE') === 2
@@ -4794,7 +4794,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
   }
   {
     // ── #191 问题 2：连续同侧消息只在首条显示头像 ──────────────────────────────
-    const avSrc = readFileSync(join(root, 'src', 'avatar-layer.js'), 'utf8').replace(/\r\n/g, '\n');
+    const avSrc = readFileSync(join(root, 'src', 'extensions', 'avatar-layer.js'), 'utf8').replace(/\r\n/g, '\n');
     // ⚠️ 刀4 之后 `src/styles.js` 只是 31 行组装点 ⇒ 样式判据必须读**样式族全文**（styleText()）。
     const stSrc = styleText();
     check('#191/#231 头像分组：一回合一张脸 + 贴在可见行 + 续行用 visibility 隐藏（不摘节点 ⇒ 不踩回 #154）',
@@ -4829,7 +4829,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     // 裁切实现 2026-11-28 起住 src/client/image-assets.js；判据管的是"这一族里有没有、是不是
     // 唯一一份"，不是"住在哪个文件"——按单文件读会让搬家把判据静默变成恒假。
     const clSrc2 = clientText().replace(/\r\n/g, '\n');
-    const eaSrc = readFileSync(join(root, 'src', 'ext-avatar.js'), 'utf8').replace(/\r\n/g, '\n');
+    const eaSrc = readFileSync(join(root, 'src', 'extensions', 'ext-avatar.js'), 'utf8').replace(/\r\n/g, '\n');
     check('#191 上传裁切：唯一几何实现 + 走既有上传腿 + 有取消路径',
       clSrc2.includes('function avatarCropGeometry()')
       && clSrc2.includes('function cropAvatarToBlob()')
@@ -4849,10 +4849,10 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     // 上面那组判据只钉"函数在不在、顺序对不对"（源码口径）。但 `parseBitmapHeaderSize`
     // 是这轮**唯一含位运算的新代码** —— 位域读错一位就会把 1024 读成 0（闸随之恒放行）。
     // 所以这里 import **真实现**、用合成的最小文件头喂它，断言的是**返回值**而不是源码形状。
-    // 之所以能这么测：`src/avatar-import.js` 是纯函数（零 DOM、零异步、零外界），
+    // 之所以能这么测：`src/extensions/avatar-import.js` 是纯函数（零 DOM、零异步、零外界），
     // 而它独立成文件的理由与 section-head / module-reset 完全相同（按文件 import 的替身
     // 必须取到真实现）。
-    const ai = await import(pathToFileURL(join(root, 'src', 'avatar-import.js')).href);
+    const ai = await import(pathToFileURL(join(root, 'src', 'extensions', 'avatar-import.js')).href);
     /** 造一个 PNG 头（89 50 4E 47 0D 0A 1A 0A + 长度 + IHDR + 宽 + 高）。 */
     const pngHead = (w, h) => {
       const b = new Uint8Array(32);
@@ -5108,7 +5108,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     // ⑦ **变异负对照**（判据有牙的证据，不是恒真式）：把真实现的 `ispe` 宽度读成高度
     //    （`hit.start + 4` → `hit.start + 8`），把变异体 import 一次 —— ① 那条
     //    「4096×2048」的判据必须在这个变异体上判红。改坏了还不红，说明判据是形状死钉。
-    const aiText = readFileSync(join(root, 'src', 'avatar-import.js'), 'utf8');
+    const aiText = readFileSync(join(root, 'src', 'extensions', 'avatar-import.js'), 'utf8');
     const mutatedText = aiText.replace(
       '  const width = readU32BE(b, hit.start + 4);',
       '  const width = readU32BE(b, hit.start + 8);');
@@ -5186,10 +5186,10 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     // 取文口径：客户端正文族（正文 + src/client/*.js 助手模块）。头像裁切/确认自 2026-11-28 起
     // 住 src/client/image-assets.js；按单文件读会让"上传的是裁切画布"这条判据在搬家后恒假。
     const gsrc = clientText().replace(/\r\n/g, '\n');
-    const eSrc = readFileSync(join(root, 'src', 'ext-avatar.js'), 'utf8').replace(/\r\n/g, '\n');
-    // 闸的常量与探针住在 src/avatar-import.js（纯函数，上面那组判据用真字节喂它）；
+    const eSrc = readFileSync(join(root, 'src', 'extensions', 'ext-avatar.js'), 'utf8').replace(/\r\n/g, '\n');
+    // 闸的常量与探针住在 src/extensions/avatar-import.js（纯函数，上面那组判据用真字节喂它）；
     // 这里钉的是**接线**：client 正文有没有真的用它们、以及用的顺序对不对。
-    const aiSrc = readFileSync(join(root, 'src', 'avatar-import.js'), 'utf8').replace(/\r\n/g, '\n');
+    const aiSrc = readFileSync(join(root, 'src', 'extensions', 'avatar-import.js'), 'utf8').replace(/\r\n/g, '\n');
     const limitsInPlace = aiSrc.includes('const AVATAR_IMPORT_MAX_EDGE = 1024;')
       && aiSrc.includes('const AVATAR_IMPORT_MAX_BYTES = 4 * 1024 * 1024;');
     const headFn = aiSrc.includes('function parseBitmapHeaderSize(buffer)');
@@ -6419,13 +6419,13 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
   // 这一层的判据口径与视差层相反：它**要**建节点（往宿主的消息行里插），但无头沙箱里
   // 连 `document` 都没有 ⇒ 一半靠"零抛错零副作用"（开着也不许炸），一半靠**源码口径**
   // 把"只碰哪几类消息行 / 关掉怎么回原生 / 名字从哪来 / 观察者怎么早退"逐条钉住。
-  const avatarLayerMod = await import(pathToFileURL(join(root, 'src', 'avatar-layer.js')).href);
-  const extAvatarMod = await import(pathToFileURL(join(root, 'src', 'ext-avatar.js')).href);
+  const avatarLayerMod = await import(pathToFileURL(join(root, 'src', 'extensions', 'avatar-layer.js')).href);
+  const extAvatarMod = await import(pathToFileURL(join(root, 'src', 'extensions', 'ext-avatar.js')).href);
   {
     const PREV_SEL = globalThis.selection;
     const restoreWeBase = stubWeBase();
     // 单独 import 时这两枚在**构建期**是同一作用域的兄弟模块符号（src/api-client.js 的
-    // apiUrl、src/avatar-layer.js 的默认名/头像几何）⇒ 按内联规则补替身。
+    // apiUrl、src/extensions/avatar-layer.js 的默认名/头像几何）⇒ 按内联规则补替身。
     const PREV_API_URL = globalThis.apiUrl;
     globalThis.apiUrl = (p) => '/wallpaper-engine' + String(p || '');
     let threw = '';
@@ -6474,7 +6474,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
         // ⚠️ `humanMb` 给**真实现**（不是替身）：它就是超限文案里那句 "{mb}" 的格式化器，
         // 替身会让"这个函数在产物里根本不存在"这种缺陷溜过去（ext-avatar 只在超限时调它，
         // 别的用例喂的是没有超限的 sel ⇒ 那条路覆盖不到）。
-        humanMb: (await import(pathToFileURL(join(root, 'src', 'avatar-import.js')).href)).humanMb,
+        humanMb: (await import(pathToFileURL(join(root, 'src', 'extensions', 'avatar-import.js')).href)).humanMb,
       };
       const prevFns = {};
       for (const k of Object.keys(stubs2)) { prevFns[k] = globalThis[k]; globalThis[k] = stubs2[k]; }
@@ -6546,7 +6546,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       }
     }
     // 源码口径：这一层的要点全是"看不见的形态"或"只准碰哪几类行"。逐条钉住，改坏了当场红。
-    const avSrc = readFileSync(join(root, 'src', 'avatar-layer.js'), 'utf8');
+    const avSrc = readFileSync(join(root, 'src', 'extensions', 'avatar-layer.js'), 'utf8');
     // 收窄导出面（task-17 第 56 条）：`avatarGlyphSvgString` 零跨模块按名引用 ⇒ 只删导出面。
     // 它是内置默认头像的**几何真源**（:107 声明，:164 内部使用）⇒ 本体与用法必须仍在；
     // 否则后人会把它当死代码连声明一起清掉，默认头像静默变成空 glyph。
@@ -6637,7 +6637,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       }
     }
     const mod = extAvatarMod.AVATAR_EXTENSION_MODULE;
-    const extAvSrc = readFileSync(join(root, 'src', 'ext-avatar.js'), 'utf8');
+    const extAvSrc = readFileSync(join(root, 'src', 'extensions', 'ext-avatar.js'), 'utf8');
     const wantOff = [globalThis.weT('启用自定义会话头像')];
     const wantOn = wantOff.concat(PARAMS.map((k) => globalThis.weT(k)));
     check('ext-avatar.js 可单独 import · 注册表项形状 · 关着只画总开关、开着才画两方各行与两个滑块',

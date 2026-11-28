@@ -279,7 +279,7 @@ const INLINE_MODULES = [
   //    差量只有 outline 的 host 绑定与空 apply/inject。
   // ── P-A 起：点击拖尾与 3D 两份「画布层 + 描述符」**已迁出主 bundle**，各自住自己的包
   //    （packages/fx、packages/parallax），由各包自己的 `client.build.json` 配方各出一份产物；主包只留
-  //    `src/extension-registry.js` 这张收件箱（谁登记了什么只能问它）。
+  //    `src/extensions/extension-registry.js` 这张收件箱（谁登记了什么只能问它）。
   //    迁出的等价性证据：两个子包产物里的 fx-layer/ext-fx/parallax-layer/ext-parallax 与迁出前
   //    逐字节相同（`git diff --no-index` 可复核），差量只有 outline 的 host 绑定与空 apply/inject。
   {
@@ -287,7 +287,7 @@ const INLINE_MODULES = [
     // 能被守卫**直接执行**的模块之一（用真字节喂真函数 —— 位域读错一位那种错，
     // "源码里有没有这行字"测不出来）。排在 avatar-layer / ext-avatar / client 正文之前：
     // 那几处的调用点直接按名引用这些常量与函数。
-    file: 'src/avatar-import.js',
+    file: 'src/extensions/avatar-import.js',
     why: '头像导入的两道闸（边长 1024 / 体积 4 MiB）、零解码的文件头尺寸探针（PNG/JPEG/GIF/BMP/WebP/SVG）与两层 MIME 清单（直传 / 仅光栅化）',
     markers: ['const AVATAR_IMPORT_MAX_EDGE = ', 'const AVATAR_IMPORT_MAX_BYTES = ',
       'const IMAGE_DIRECT_ACCEPT = ', 'const IMAGE_RASTER_ACCEPT = ',
@@ -297,20 +297,20 @@ const INLINE_MODULES = [
   {
     // 「扩展」页签**一号模块**（自定义会话头像）：与前面两份不同 —— 它的"本体"既不是画布层
     // 也不是纯变量层，而是**会话界面上的 DOM 补丁**（给宿主的消息行补头像节点 + 一个
-    // 观察者），所以行为层是 src/avatar-layer.js。排在 panel-tabs 之前（它要在渲染时取
+    // 观察者），所以行为层是 src/extensions/avatar-layer.js。排在 panel-tabs 之前（它要在渲染时取
     // 得到 AVATAR_EXTENSION_MODULE 与那几张默认头像的零件表）。
-    file: 'src/avatar-layer.js',
+    file: 'src/extensions/avatar-layer.js',
     why: '「自定义会话头像」的装饰层：按 data-chat-flow-kind 给消息行补头像节点（观察者 + 就地更新；基座模块：只读 selection、零 ctx），并供面板预览复用同一条 URL 与同一张默认头像零件表',
     markers: ['const AVATAR_FLOW_SIDES = ', 'const AVATAR_GLYPH_PARTS = ',
       'function syncAvatarLayer()', 'function disposeAvatarLayer()'],
   },
   {
-    file: 'src/ext-avatar.js',
+    file: 'src/extensions/ext-avatar.js',
     why: '「扩展」页签第一个模块的描述符（渲染该扩展岛；动作一律经 ctx 里的具名 on* 处理器）',
     markers: ['const AVATAR_EXTENSION_MODULE = {', 'function renderAvatarIsland(ctx)'],
   },
   {
-    file: 'src/ext-perf.js',
+    file: 'src/extensions/ext-perf.js',
     why: '「扩展」页签第四个模块：性能监控岛（场景/网页读渲染页帧率、视频读解码帧、静态图说明没有渲染帧，界面帧率与 CPU 另采）',
     markers: ['const PERF_EXTENSION_MODULE = {', 'function renderPerfIsland(ctx)'],
   },
@@ -322,12 +322,12 @@ const INLINE_MODULES = [
       'function filterUsableSystemFonts('],
   },
   {
-    // ── P-A 起：跨包「扩展模块 / 层钩子」注册表（src/extension-registry.js）。三项扩展里
+    // ── P-A 起：跨包「扩展模块 / 层钩子」注册表（src/extensions/extension-registry.js）。三项扩展里
     //    有**两项**（点击拖尾 packages/fx、3D packages/parallax）从 P-A 起各自住在自己的包
     //    里，三份 bundle 的求值顺序不保证 ⇒ 谁登记了什么只能落在一张共享注册表上：
     //    panel-tabs 只问它（屏上顺序 = (order, 注册序)）、client.js 只问它（挂载期接 sync /
     //    拆卸期交 dispose）。零依赖、浏览器安全。必须排在 panel-tabs 与 client.js 正文之前。
-    file: 'src/extension-registry.js',
+    file: 'src/extensions/extension-registry.js',
     why: '跨包扩展模块/层钩子注册表：登记与排序（order）扩展模块描述符、登记层的 sync/dispose、迟到注册的补接与重画回调',
     markers: ['const weExtensionModuleTable = ', 'const weLayerHookTable = ',
       'function weRegisterExtensionModule(', 'function weExtensionModules()',

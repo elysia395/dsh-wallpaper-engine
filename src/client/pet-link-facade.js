@@ -9,7 +9,7 @@
  */
 // ── 桌宠联动（packages/pet-link）的宿主侧门面 ──────────────────────────────────────────
 // 收口后这半边是**独立产物**（packages/pet-link/lib/client.pet-link.js）：它自己那一行求值，
-// 再用 host.registerPetLink(petLink) 把服务登记回来。跨包求值顺序不保证（src/extension-registry.js
+// 再用 host.registerPetLink(petLink) 把服务登记回来。跨包求值顺序不保证（src/extensions/extension-registry.js
 // 的注释：顺序必须由声明决定，不靠数组序）⇒ 主包**不许**假设子包已装载，所以这里把主包发出的
 // 一次性接线先记下来，登记到达时补做（petLinkWireAttach）；之后所有调用直接转发。
 // 本文件里 9 处 `petLink.*` 调用点因此**文本零改动**：它们读的就是这个作用域里的这个裸名。

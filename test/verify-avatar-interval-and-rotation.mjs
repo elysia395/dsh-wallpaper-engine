@@ -42,8 +42,8 @@ const schemaSrc = read('lib/settings-schema.js');
 // 取文口径：客户端正文族（正文 + src/client/*.js 助手模块）。头像处理器自 2026-11-28 起住
 // src/client/avatar-ext-handlers.js；按单文件读会让"四处齐"这条判据在搬家后恒假。
 const clientSrc = clientText();
-const avatarSrc = read('src/avatar-layer.js');
-const extAvatarSrc = read('src/ext-avatar.js');
+const avatarSrc = read('src/extensions/avatar-layer.js');
+const extAvatarSrc = read('src/extensions/ext-avatar.js');
 const tabsSrc = read('packages/media-bridge/src/wallpaper-rotation-section.js');
 const videoSrc = read('src/video-layer.js');
 

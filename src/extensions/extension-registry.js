@@ -2,7 +2,7 @@
  * extension-registry.js — 跨包「扩展模块 / 层钩子 / 面板节」注册表（P-A 的首个跨包贡献点）。
  *
  * 为什么需要它：P-A 之后，「扩展」页签的三项**不再住在同一个 bundle 里** ——
- *   一号 自定义会话头像（src/ext-avatar.js + src/avatar-layer.js）留在主包；
+ *   一号 自定义会话头像（src/extensions/ext-avatar.js + src/extensions/avatar-layer.js）留在主包；
  *   二号 点击效果与拖尾（packages/fx）、三号 3D 视差（packages/parallax）各自是一个**独立包**，
  *   三份 bundle 的**求值顺序不保证**，唯一的共同作用域是宿主经 loader 的 `require` 提供的
  *   主 bundle 导出面（ADR-0014 S5.1 / S5.4「宿主注入显式键集」）。

@@ -2,7 +2,7 @@
  * 「外观」页签的节渲染器（从 src/panel-tabs.js 按域拆出）：主题 / 细节 /
  * 侧边栏圆角 / 全局 UI 配色，含 sidebarCornerGroup 一族。本节渲染器从 src/panel-tabs.js 按域搬出，函数体逐字未改。
  * ⚠️ P-C 之后第六节「全局字体」**不在本文件**：它住在 packages/fonts/src/appearance-font-section.js，
- *    由子包把渲染器登记进面板节注册表（src/extension-registry.js），节顺序见 src/panel-tabs.js。
+ *    由子包把渲染器登记进面板节注册表（src/extensions/extension-registry.js），节顺序见 src/panel-tabs.js。
  * 内联顺序见 scripts/build-client.mjs：本模块排在组装点之前（打包后同一工厂作用域）。
  */
   function renderAppearanceThemeSection(ctx) {

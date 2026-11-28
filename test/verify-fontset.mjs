@@ -1100,7 +1100,7 @@ section('⑧ 面板渲染回归（配色区在总开关打开时必须渲染得�
   // `wePanelSectionsOf` 是裸标识符 ⇒ 本段以 ReferenceError 的形式假红）。
   const fontSectionSrc = readFileSync(join(root, 'packages', 'fonts', 'src', 'appearance-font-section.js'), 'utf8');
   const panelAllSrcText = () => panelSrcText() + '\n;\n' + fontSectionSrc;
-  const regMod = await import(pathToFileURL(join(root, 'src', 'extension-registry.js')).href);
+  const regMod = await import(pathToFileURL(join(root, 'src', 'extensions', 'extension-registry.js')).href);
   for (const [k, v] of Object.entries(regMod)) globalThis[k] = v;
   const fontSectionMod = await import(pathToFileURL(join(root, 'packages', 'fonts', 'src', 'appearance-font-section.js')).href);
   regMod.weRegisterPanelSection('appearance', 'fonts', {

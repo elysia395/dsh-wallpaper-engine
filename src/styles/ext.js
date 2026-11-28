@@ -108,7 +108,7 @@ const CSS_EXT = `
     font-size: 0.85em; font-weight: 600; color: var(--we-ink, inherit);
   }
 
-  /* ── 「扩展」页签 · 性能监控（we-perf，src/ext-perf.js）──────────────────
+  /* ── 「扩展」页签 · 性能监控（we-perf，src/extensions/ext-perf.js）──────────────────
      四项读数两列网格：窄壳（抽屉）自动变一列。数值用等宽数字位，避免每秒刷新
      时整行宽度跳动；标签与数值的主次靠字号而不是新颜色（与设置行同一口径）。
      ⚠️ 本段注释不许出现反引号：整套样式文本是模板字符串，一个反引号就拼断 JS。 */
@@ -280,7 +280,7 @@ const CSS_EXT = `
   }
 
 
-  /* ── 「扩展」页签一号模块：自定义会话头像（装饰层见 src/avatar-layer.js）──
+  /* ── 「扩展」页签一号模块：自定义会话头像（装饰层见 src/extensions/avatar-layer.js）──
      这一层是**宿主会话 DOM 的补丁**：给三类消息行（data-chat-flow-kind = user / steering /
      assistant-step）补一个 .we-avatar，并把行改成**两列 grid** —— 一列头像、一列内容。
      助手行头像在第 1 列（左），用户行在第 2 列（右）⇒「你的消息在右、助手在左」。

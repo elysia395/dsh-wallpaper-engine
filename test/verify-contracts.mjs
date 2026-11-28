@@ -190,7 +190,7 @@ const tabsSrc = panelText();
 
   const hostAvatar = hostMimeKeys(hostSrc, 'AVATAR_EXT');
   const hostMascot = hostMimeKeys(hostSrc, 'MASCOT_EXT');
-  // ⚠️ 两层的**真源**住在 `src/avatar-import.js`（纯函数模块，与选图腿同一条链）。
+  // ⚠️ 两层的**真源**住在 `src/extensions/avatar-import.js`（纯函数模块，与选图腿同一条链）。
   // 判据必须读真源、不能读产物或抄一份：抄的那份漂了判据照样绿。
 
   // 吉祥物**显示盒上限**的单源契约：`MASCOT_BOX_MAX_W/H` 只住在 lib/settings-schema.js

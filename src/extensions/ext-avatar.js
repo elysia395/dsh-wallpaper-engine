@@ -4,7 +4,7 @@
  * ══ 它是什么 ══════════════════════════════════════════════════════════════════
  * 一个**模块描述符**（形状 `{ id, title, desc?, render? }`，契约写在 src/panel-tabs.js 的
  * `extensionModules()` 上方）：panel-tabs 只负责把它排在「扩展」页签里（**第一个**），
- * 具体的控件与文案全在本文件。装饰本体在 `src/avatar-layer.js`（会话界面上的 DOM 补丁），
+ * 具体的控件与文案全在本文件。装饰本体在 `src/extensions/avatar-layer.js`（会话界面上的 DOM 补丁），
  * 设置项的真源在 `lib/settings-schema.js` 的五个 `avatar*` 键，图片本体在宿主的
  * `~/.dsh-wallpaper-engine/avatars/`（经 `packages/mascot-avatar/lib/routes/avatar.js` 读写）。
  *
@@ -24,7 +24,7 @@
  *   · **范围不在这里写死**：两个滑块的 min/max 直接读 `lib/settings-schema.js` 的
  *     `AVATAR_SIZE_MIN/MAX` 与 `AVATAR_RADIUS_MIN/MAX`（唯一真源；它们在产物里是同作用域常量）。
  *   · **预览必须说真话**：形状与大小按 `sel` 现算内联写（不进 CSS 变量、不依赖开关态），
- *     图与默认头像走 `src/avatar-layer.js` 的同一条 URL / 同一张零件表 ——
+ *     图与默认头像走 `src/extensions/avatar-layer.js` 的同一条 URL / 同一张零件表 ——
  *     面板里看到的就是会话里会出现的那一张。
  *   · 关掉总开关时**只画总开关 + 一句说明**（参数跟着收起来，与别的模块同口径）。
  */
@@ -270,7 +270,7 @@ function renderAvatarIsland(ctx) {
       { tooltip: weT("100% = 正圆（默认），50% = 大圆角方块，0% = 直角方形") }),
     // 助手头像的**出现间隔**（issue #231 第二轮的观感旋钮）：每过多少条可见流条目
     // （思考 / 工具调用 / 回复都算）在下一条可见助手行上再露一次脸。
-    // 1 = 每条助手行都露脸（最密）；越大越稀。语义真源 = src/avatar-layer.js 的读取处。
+    // 1 = 每条助手行都露脸（最密）；越大越稀。语义真源 = src/extensions/avatar-layer.js 的读取处。
     on && SliderRow(weT("助手头像间隔"), AVATAR_AI_REPEAT_MIN, AVATAR_AI_REPEAT_MAX, 1,
       sel.avatarAiRepeatRows, onAvatarAiRepeatRows, weT("条"), "avatar-ai-repeat",
       { tooltip: weT("每过这么多条可见的思考 / 工具调用 / 回复，就在下一条助手消息前再显示一次头像。1 = 每条都显示，越大越稀。") }),
@@ -288,7 +288,7 @@ const AVATAR_EXTENSION_MODULE = {
   id: 'avatar',
   // 屏上顺序（P-A 起由描述符声明，不再靠数组序 —— 三份 bundle 的求值顺序不保证）：
   // 头像必须在**第一**（用户口径），两项子包模块各自声明 2 / 3。
-  // 排序 = (order, 注册序)，唯一实现在 src/extension-registry.js。
+  // 排序 = (order, 注册序)，唯一实现在 src/extensions/extension-registry.js。
   order: 1,
   // 模块级重置的分组名（issue #192）：键集住在 lib/settings-schema.js 的 RESET_MODULES，
   // 这一侧只报"我是哪一组" —— 键表不在渲染器里手抄第二份。

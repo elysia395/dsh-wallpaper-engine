@@ -10,12 +10,12 @@
  *      （复核：git show <拆前提交>:src/client.js | sed -n '2986,3139p'，与本文件去掉本头注释后 diff）。
  *   3) 本文件只有函数声明与顶层字面量状态（AVATAR_CROP_VIEW / avatarCropPending /
  *      avatarOverflowPending）：不读正文的 const、不挂监听 ⇒ 内联到 bundle 顶部不会撞 TDZ。
- *   4) 裁切几何与出图住在 src/client/image-assets.js；装饰层（src/avatar-layer.js）是 emit 的订阅者，
+ *   4) 裁切几何与出图住在 src/client/image-assets.js；装饰层（src/extensions/avatar-layer.js）是 emit 的订阅者，
  *      所以滑块走 commitLiveSetting 的 live 档时要额外 syncAvatarLayer() —— 那条约定留在原地未改。
  */
 
 // ── 「扩展」页签（一号模块：自定义会话头像）的处理器 ────────────────────────────
-// 控件只报事件，写设置 + 重渲染都在这里。装饰层（src/avatar-layer.js）每收到一次 emit
+// 控件只报事件，写设置 + 重渲染都在这里。装饰层（src/extensions/avatar-layer.js）每收到一次 emit
 // 就按当前设置重画一遍，所以：开关 / 导入 / 清除走完整路径（emit）；两个滑块走
 // commitLiveSetting 的 live 档，但**额外补一次 syncAvatarLayer()** —— 那一层是 emit 的
 // 订阅者（不 emit 就不会被叫到），而拖动时的即时反馈正是这个模块的主要看点。
@@ -42,7 +42,7 @@ let avatarCropPending = null;
 let avatarOverflowPending = null;
 /** 导入前的裁切弹窗：先让用户框选构图，确认后才真正上传。 */
 function onAvatarPick(side) {
-  // 收的格式 = 直传层 ∪ 仅光栅化层（AVATAR_PICK_ACCEPT 与两层清单同住 src/avatar-import.js）。
+  // 收的格式 = 直传层 ∪ 仅光栅化层（AVATAR_PICK_ACCEPT 与两层清单同住 src/extensions/avatar-import.js）。
   pickImageFile((file) => onAvatarFileChosen(side, file), AVATAR_PICK_ACCEPT);
 }
 /**

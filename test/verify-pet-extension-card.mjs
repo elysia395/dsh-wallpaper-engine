@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
-import { weRegisterExtensionModule, weExtensionModules } from '../src/extension-registry.js';
+import { weRegisterExtensionModule, weExtensionModules } from '../src/extensions/extension-registry.js';
 
 /**
  * M7 设置页扩展模块卡片夹具。

@@ -2029,10 +2029,10 @@ function onParallaxSmooth(v, live) { commitLiveSetting("parallaxSmooth", v, live
 /** 客户端缩放上限（px）：显示尺寸最多 72px（头像）/ 96px（立绘），把原图按它缩一遍 ——
  *  直接把 8MB 的原图发上去只会让宿主目录变大、每次加载多传几倍字节。
  *  ⚠️ 头像是**例外**：裁切链要按原图分辨率取样，72px 的显示尺寸放大 4 倍也才 288 —
- *  它用 src/avatar-import.js 的 AVATAR_IMPORT_MAX_EDGE（1024）。 */
+ *  它用 src/extensions/avatar-import.js 的 AVATAR_IMPORT_MAX_EDGE（1024）。 */
 const IMAGE_IMPORT_MAX_EDGE = 512;
 // 头像导入的两道闸（边长 1024 / 体积 4 MiB）、零解码尺寸探针与两层 MIME 清单全部住在
-// `src/avatar-import.js` —— **纯函数**，因此 `test/verify-scene-live.mjs` 能 import 真实现、
+// `src/extensions/avatar-import.js` —— **纯函数**，因此 `test/verify-scene-live.mjs` 能 import 真实现、
 // 用真字节喂它（"源码里有没有这行字"测不出位域读错一位：1024 读成 0 ⇒ 闸恒放行）。
 /** 选图腿的 accept：默认直传层；调用方要收更多格式就显式传（头像传两层之和）。 */
 function pickImageFile(onFile, accept) {
@@ -2857,7 +2857,7 @@ function useLegacySaturateCoupling() {
 
 // ── 跨包扩展注册（P-A）：三项「扩展」里有两项（点击拖尾 packages/fx、3D packages/parallax）
 //    从 P-A 起各自住在自己的包里 —— 它们的描述符与行为层**不再出现在本 bundle 的作用域里**，
-//    唯一通道是 src/extension-registry.js 这张共享注册表。本文件是**组装根**：
+//    唯一通道是 src/extensions/extension-registry.js 这张共享注册表。本文件是**组装根**：
 //      · 留在主包的那一项（自定义会话头像）在这里自登记（模块作用域，不用等挂载）；
 //      · 挂载期按注册表把每一层的 sync 接上 store 订阅（见下面 ctx.effect）；
 //      · 拆卸期逐层 dispose（收尾所有权与"关掉=逐字节回原生"这条不变量同源）。
