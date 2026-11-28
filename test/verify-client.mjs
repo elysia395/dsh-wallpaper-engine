@@ -2386,7 +2386,9 @@ setTimeout(async () => {
       //    ⇒ 渲染器永远收到 undefined ⇒ scale 恒为 1，而**所有隔离判据照样全绿**。
       //    隔离测试证明不了"线接上了"，所以这里直接读源码核对这条线。
       {
-        const cliSrc = readFileSync(new URL('../src/client.js', import.meta.url), 'utf8');
+        // 取文口径：客户端正文族 —— WallpaperPicker 组件体自 2026-11-28 起住
+        // src/client/picker-component.js（量宽 effect 与 ctx 接线都在组件里）。
+        const cliSrc = clientText();
         // ① 量宽度的 effect 必须在，且量的是环那一行（拿"可用宽度"而不是自我指涉的窗口）
         assert.ok(/querySelector\("\.we-picker__mascot-carousel"\)/.test(cliSrc),
           '★ 必须有一个量环那一行宽度的 effect（量不到就永远是设计档尺寸）');

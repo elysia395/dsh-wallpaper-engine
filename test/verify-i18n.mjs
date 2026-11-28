@@ -33,7 +33,7 @@ import { scanCjkStrings, needsTranslation } from './tools/i18n-scan.mjs';
 import { stripExportBlocks } from './tools/js-text.mjs';
 // 词表族（组装点 + 7 个域模块）的**按构建顺序**读法：单一真源是 scripts/build-client.mjs 的
 // INLINE_MODULES（见 test/tools/src-scope.mjs）。词表已按域拆到同族模块，键序由内联顺序决定。
-import { parseInlineModules } from './tools/src-scope.mjs';
+import { parseInlineModules, clientText } from './tools/src-scope.mjs';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 
@@ -581,7 +581,8 @@ console.log('⑤ 运行期行为（vm 沙箱里跑词表族 src/i18n-copy*.js + 
 // ══ ⑥ 跟随契约（源码级）═══════════════════════════════════════════════════════
 console.log('⑥ 跟随契约（可选服务 / 不 park / 顶层订阅）');
 {
-  const clientSrc = readFileSync(join(ROOT, 'src', 'client.js'), 'utf8');
+  // 取文口径：客户端正文族（正文 + src/client/*.js）。组件体自 2026-11-28 起住 picker-component.js。
+const clientSrc = clientText();
   const i18nSrc = readFileSync(join(ROOT, 'src', 'i18n', 'i18n.js'), 'utf8');
   check('inject 里没有 locale（缺服务的旧宿主不该被 park）',
     !/const inject = \[[^\]]*"locale"/.test(clientSrc) && /const inject = \["slots"\]/.test(clientSrc),

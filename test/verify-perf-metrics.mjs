@@ -14,6 +14,7 @@
  *   5. 旧属性面板接线必须彻底消失（否则两份读数会互相打脸）。
  */
 import { readFileSync } from 'node:fs';
+import { clientText as clientFamilyText } from './tools/src-scope.mjs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { EventEmitter } from 'node:events';
@@ -113,7 +114,8 @@ check('重置后回到无基线状态', snapshot().cpu === 0);
 // ── 3. 静态接线：模块登记、悬浮窗挂载与旧接线清除 ─────────────────────────
 const build = read('scripts/build-client.mjs');
 const extPerf = read('src/ext-perf.js');
-const clientText = read('src/client.js');
+// 取文口径：客户端正文族（正文 + src/client/*.js）—— 性能监视岛与 ctx 接线随组件体/处理器搬家。
+const clientText = clientFamilyText();
 const probeText = read('src/live-layer/probe.js');
 const watchText = read('src/live-layer/watch.js');
 const mediaFrameText = read('src/client/media-frame.js');

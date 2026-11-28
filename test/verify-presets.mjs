@@ -38,7 +38,7 @@ import { dirname, join, resolve } from 'node:path';
 import { fileURLToPath, pathToFileURL } from 'node:url';
 import { Readable, Writable } from 'node:stream';
 import { stripComments } from './tools/js-text.mjs';
-import { scopeText } from './tools/src-scope.mjs';
+import { scopeText, clientText } from './tools/src-scope.mjs';
 import { installWeTShim } from './tools/weT-shim.mjs';
 installWeTShim();
 
@@ -1556,7 +1556,9 @@ section('④ 客户端形态棘轮：新编排链（合并→落盘→reapplyAll
       : [];
     check('玻璃节解构解析出处理器清单（判据不空转）', handlers.length >= 15,
       handlers.length + ' 个');
-    const clientAll = stripComments(readFileSync(join(root, 'src', 'client.js'), 'utf8'));
+    // 取文口径：客户端正文族（正文 + src/client/*.js）—— 玻璃节 ctx 的组装点随组件体搬进了
+    // src/client/picker-component.js，按单文件读会把"处理器没接上"判成一片红。
+    const clientAll = stripComments(clientText());
     const qpAll = stripComments(readFileSync(join(root, 'src', 'quick-panel.js'), 'utf8'));
     // 侧栏专属处理器（设置页 ctx 里**故意**没有）：设置页那一档不需要它们，硬塞一个死处理器
     // 反而会把"这一档根本不会调它"这件事藏起来。

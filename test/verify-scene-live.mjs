@@ -6333,7 +6333,8 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     // 存档与面板**从此同一个单位**（0..10 / 步长 0.1，真源 = lib/settings-schema.js 的 KINDS）⇒
     // 面板不再 ×100、src/client.js 那一侧也不再 ÷100（与「暗化」「边框」那条旧口径分道扬镳）；
     // 单位仍用**裸** "%"（裸单位才有拖动期就地回显，预格式化整串拖动期数字不跟手）。
-    const clientSrcPar = readFileSync(join(root, 'src', 'client.js'), 'utf8');
+        // 取文口径：客户端正文族 —— 组件体自 2026-11-28 起住 src/client/picker-component.js。
+    const clientSrcPar = clientText();
     const pctRows = ['Chat', 'Composer', 'Sidebar', 'Bubble'].map((name) => ({
       args: ', 0, 10, 0.1, sel.parallaxUi' + name + 'Depth, onParallaxUi' + name + 'Depth',
       unit: '"%", "parallax-ui-' + name.toLowerCase() + '-depth"',

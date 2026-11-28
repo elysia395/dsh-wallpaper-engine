@@ -23,6 +23,7 @@ import { readFileSync } from 'node:fs';
 import vm from 'node:vm';
 // 剥注释：共享的字符串感知实现（test/tools/js-text.mjs）。
 import { stripComments, stripExportBlocks } from './tools/js-text.mjs';
+import { clientText } from './tools/src-scope.mjs';
 
 // ══ 判据（唯一一份）══════════════════════════════════════════════════════════
 
@@ -804,7 +805,8 @@ await sleep(80); // 等 loadPersisted → loadInventory → revalidateSelection 
 // #255③：库视图第一张「关闭」卡在有壁纸时是**暂停/继续**（保留当前画面），不是清空壁纸。
 {
   const pickerSrc = readFileSync(new URL('../src/picker-modal.js', import.meta.url), 'utf8');
-  const clientSrc = readFileSync(new URL('../src/client.js', import.meta.url), 'utf8');
+  // 取文口径：客户端正文族（组件体自 2026-11-28 起住 src/client/picker-component.js）。
+  const clientSrc = clientText();
   const closeCardShape = (t) => {
     const m = /function renderPickerCloseCard\(ctx\) \{[\s\S]*?\n {2}\}/.exec(t);
     if (!m) return null;
