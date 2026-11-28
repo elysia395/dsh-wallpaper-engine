@@ -54,14 +54,14 @@
  * **保存与导出都先过这道对话框**（ADR 修订版第③条）：保存 = 名字行 → 勾选 → 「保存预设」；
  * 导出 = 每行「导出」→ 同一组勾选 → 「下载 .json」。勾选的每一项只在**本机确实有那份
  * 资产**时才可勾（宿主按名单内嵌，没有的东西内嵌不出段；行的说明会写明）。
- * 本渲染器**只画**：网络与状态全部经 ctx（store 在 src/preset-store.js，接线在 client.js 的
+ * 本渲染器**只画**：网络与状态全部经 ctx（store 在 src/settings/preset-store.js，接线在 client.js 的
  * glassPresetCtx）。
  */
 /**
  * 导入用的隐藏 file input 的**模块级 ref**（与 packages/fonts/src/fontset-editor.js 同形：模块级变量 +
  * 按钮去 `.click()`；⚠️ 名字不能撞 —— fontset-editor 已占 `importInput`，平铺进 bundle
  * 后是同一作用域，撞名 = SyntaxError，构建期会红）。只做"选文件"，读文件与三道
- * 本地预检在 `importGlassPreset`（src/preset-store.js）。
+ * 本地预检在 `importGlassPreset`（src/settings/preset-store.js）。
  */
 let gpImportInput = null;
 

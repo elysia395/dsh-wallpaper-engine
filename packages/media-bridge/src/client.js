@@ -18,7 +18,7 @@
  *     `const host = require('dsh-plugin-wallpaper-engine');`（ADR-0014 S5.2）。
  *
  * ## 消费侧契约（唯一跨包通道 = 主 bundle 的显式键集，ADR-0014 S5.1 / S5.4）
- * 下面的解构名单与主包 `src/host-bridge.js` 的 HOST_BRIDGE_BINDINGS 壁纸段**逐键一致**（缺键大声抛，
+ * 下面的解构名单与主包 `src/core/host-bridge.js` 的 HOST_BRIDGE_BINDINGS 壁纸段**逐键一致**（缺键大声抛，
  * 不许静默 undefined）；产物里的 WALLPAPER_SECTIONS_HOST_REQUIRED 由构建期从这份解构派生
  * （源码里是空表）。键集依据 = 被搬渲染器的**自由标识符**逐个点名：
  *   · 四节共享：React / weT；当前壁纸另要 VinylRecord / vinylSpinVisible / liveFailReasonOf；
@@ -39,7 +39,7 @@
  */
 /** 由构建期填充：scripts/build-client.mjs 从下方 `} = host;` 的解构逐键派生本表
  * （源码留空表只为 eslint/typecheck 可读；产物里是一份生成好的键数组）。
- * 手工加键的正确顺序：① src/host-bridge.js 的 HOST_BRIDGE_BINDINGS ② 本文件的解构名单。 */
+ * 手工加键的正确顺序：① src/core/host-bridge.js 的 HOST_BRIDGE_BINDINGS ② 本文件的解构名单。 */
 const WALLPAPER_SECTIONS_HOST_REQUIRED = [];
 for (const key of WALLPAPER_SECTIONS_HOST_REQUIRED) {
   if (!(key in host)) {
@@ -61,7 +61,7 @@ const {
 /* ===== 跨包登记：「壁纸库」页签第一/二/三/四节（全部走面板节注册表）===== */
 
 // 主包 src/panel-tabs.js 的 `renderWallpaperTab(ctx)` 本身不再内置任何一节，只按注册表续接本包
-// 登记的节（`wePanelSectionsOf('library')`，见 src/extension-registry.js）。三个硬口径：
+// 登记的节（`wePanelSectionsOf('library')`，见 src/extensions/extension-registry.js）。三个硬口径：
 //   ① `title` 必须是 **getter**：注册发生在 bundle 求值期，那时 i18n 表 / `weT` 都还没到位，
 //      注册期读词会把 `weT` 拉到求值期（字体包 / fx / parallax 的 title getter 同款理由）。
 //   ② order：current=10 / transition=20 / rotation=30 / uploads=40 —— 与搬前组装点里的调用序逐位

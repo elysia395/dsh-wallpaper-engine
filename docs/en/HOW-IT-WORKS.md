@@ -163,7 +163,7 @@ background rescan, plus a "Rescan" button; **nothing is scanned at startup**.
 
 ⚠️ **A name the system lists is not necessarily a name the browser can match** (system-reserved faces,
 alternate spellings). The panel probes each name in this browser, skips the dead ones and **says how many
-were skipped**. Invariants live in `packages/fonts/lib/routes/system-fonts.js` and `src/system-fonts.js`
+were skipped**. Invariants live in `packages/fonts/lib/routes/system-fonts.js` and `src/settings/system-fonts.js`
 file headers; the decision and its costs are in [ADR-0009](../adr/0009-system-fonts-from-the-os.md).
 ### Captured-frame geometry & the empty-frame gate
 

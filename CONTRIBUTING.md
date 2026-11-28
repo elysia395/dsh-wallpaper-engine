@@ -184,7 +184,7 @@ All changes target `main`. The plugin is **one natively cross-platform tree** (W
   - **本地链同样判新鲜度**：`test/verify-client-sync.mjs` 会重建、逐字节比对、并把文件**还原**（守卫不改工作树）⇒ 产物过期会在 **push 之前**就红。
 - **铁律二**：绝不手改 `lib/client.js`，下一次构建会抹掉。
 - **铁律三 —— 产物即契约**：多个守卫跑的是**产物**（`verify-readability`、`verify-softrender`、`verify-client`），另有一些**按行首锚点从产物里**取样式表。这就是 `src/styles.js` 禁止在自己注释里写反引号、也禁止复述那条声明语句的原因（实测踩到过：`verify-host-paint-scope` 报"裸反引号 489"）。
-- **陷阱 —— `src/**` 的注释会随包发给用户**：涉及行数 / 体积这类会漂的量，写**复算命令**而不是写数字（曾有两处模块头注释把 `src/client.js` 说成"9,500 行"，现已修掉 —— 别再写回去）。
+- **陷阱 —— `src/**` 的注释会随包发给用户**：涉及行数 / 体积这类会漂的量，写**复算命令**而不是写数字（曾有两处模块头注释给 `src/client.js` 写了一个具体行数，现已删掉 —— 别再写回去）。
 - **不要把它当巨石来"治理"**：它的体积就是 `src/**` 的体积，杠杆在源文件。
 
 ## Install a local dev build / 从本地源码安装（开发者）
@@ -396,8 +396,8 @@ UI 改动还应说明实际测试过的 DSH 界面、浏览器或 DSH Desktop �
 > 发布是维护者的操作：规则只在 `Release set / 发布集` 一节给出摘要，完整流程以本节为准。
 
 
-本插件由**一个主包 + 八个子包**组成（多包形态的取舍见 [`adr/0013`](./adr/0013-bundle-multi-component-rows.md)
-与 [`adr/0014`](./adr/0014-subpackage-contract.md)），九个包版本锁步、主包把八个子包
+本插件由**一个主包 + 八个子包**组成（多包形态的取舍见 [`adr/0013`](./docs/adr/0013-bundle-multi-component-rows.md)
+与 [`adr/0014`](./docs/adr/0014-subpackage-contract.md)），九个包版本锁步、主包把八个子包
 声明成**精确版本运行依赖**。所以"发布"从来不是发一个包，而是发**一个发布集**：
 
 | 通道 | 用户侧入口 | 需要先满足 |

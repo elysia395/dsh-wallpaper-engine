@@ -272,7 +272,7 @@ let parallaxDebugCheckMs = 0;
 let parallaxDebugStats = null;
 let parallaxDebugLastMs = 0;
 
-/* `weNow()` / `weClampTo()` 的唯一实现见 src/we-base.js（内联后同作用域）。 */
+/* `weNow()` / `weClampTo()` 的唯一实现见 src/core/we-base.js（内联后同作用域）。 */
 
 /**
  * 设置快照（每帧现读 ⇒ 拖滑块不需要 emit 就能看到反馈）。
@@ -356,7 +356,7 @@ function parallaxMaxPercent(st) {
   return max;
 }
 
-/* `weBody()`（写样式 / 属性的落点）的唯一实现见 src/we-base.js；没有 DOM 的环境一律 null。 */
+/* `weBody()`（写样式 / 属性的落点）的唯一实现见 src/core/we-base.js；没有 DOM 的环境一律 null。 */
 
 /** 写一条**元素级**的样式（只在真的变了的时候写，比的是自己攒的快照，不读回 DOM）。
  *  两个能力都先探再调：挂载台（`test/verify-client.mjs`）的 style 只实现了 setProperty。 */

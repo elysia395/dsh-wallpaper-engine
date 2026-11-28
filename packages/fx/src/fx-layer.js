@@ -151,7 +151,7 @@ let fxTrail = [];
 /** 活着的点击效果：{ x, y, t0, seed, hue }。 */
 let fxClicks = [];
 
-/* `weNow()` / `weClampTo()` 的唯一实现见 src/we-base.js（内联后同作用域）。 */
+/* `weNow()` / `weClampTo()` 的唯一实现见 src/core/we-base.js（内联后同作用域）。 */
 
 /** 每个新效果实例取一个色相（rainbow 档用）：逐个错开，同屏几个效果颜色不撞。 */
 function fxNextHue() {

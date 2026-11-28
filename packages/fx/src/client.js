@@ -22,7 +22,7 @@
  *    scripts/build-client.mjs 的 outline 里冻结 module.exports 之后逐字对齐；若改名，
  *    **只改本文件的解构那一段**，四个兄弟文件一个字不用动）。
  *
- * 键集的依据 = 两个基座/渲染器文件的**自由标识符**接缝（键集真源 = 主包 `src/host-bridge.js` 的 `HOST_BRIDGE_BINDINGS`）：
+ * 键集的依据 = 两个基座/渲染器文件的**自由标识符**接缝（键集真源 = 主包 `src/core/host-bridge.js` 的 `HOST_BRIDGE_BINDINGS`）：
  *   packages/fx/src/fx-layer.js : selection · weClampTo · weNow
  *   packages/fx/src/ext-fx.js   : weT · React · SliderRow · switchRow · ctlText
  *                                 · swatchRow · FX_BLEND_VALUES
@@ -36,7 +36,7 @@
  */
 /** 由构建期填充：scripts/build-client.mjs 从下方 `} = host;` 的解构逐键派生本表
  * （源码留空表只为 eslint/typecheck 可读；产物里是一份生成好的键数组）。
- * 手工加键的正确顺序：① src/host-bridge.js 的 HOST_BRIDGE_BINDINGS ② 本文件的解构名单。 */
+ * 手工加键的正确顺序：① src/core/host-bridge.js 的 HOST_BRIDGE_BINDINGS ② 本文件的解构名单。 */
 const FX_HOST_REQUIRED = [];
 for (const key of FX_HOST_REQUIRED) {
   if (!(key in host)) {
@@ -54,7 +54,7 @@ const {
 /* ===== 贡献（主 bundle 的 extensionModules() 改成读注册表，本包是首个贡献点）===== */
 
 // ① 「扩展」页签的二号模块描述符（order 2）。主包 panel-tabs 的 extensionModules() 只问注册表
-//    （`weExtensionModules()`，实现 src/extension-registry.js），本行登记即它的来源。
+//    （`weExtensionModules()`，实现 src/extensions/extension-registry.js），本行登记即它的来源。
 //    id='fx' 是**页签内**的模块 id（resetGroup 同为 'fx'），与包名无关。
 registerExtensionModule('fx', FX_EXTENSION_MODULE);
 

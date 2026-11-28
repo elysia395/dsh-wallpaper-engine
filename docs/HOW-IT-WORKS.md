@@ -126,7 +126,7 @@ Linux `fc-list`；都拿不到时按字体文件名推，并如实标「推测�
 
 ⚠️ **系统列出的族名不等于浏览器能匹配的族名**（系统保留字体、同一字体的另一种写法都可能取不到）——
 面板渲染时会实测一次，把用不了的略掉并**如实写出略过了几个**。机制与不变量在
-`packages/fonts/lib/routes/system-fonts.js` 与 `src/system-fonts.js` 的文件头；决策与代价见
+`packages/fonts/lib/routes/system-fonts.js` 与 `src/settings/system-fonts.js` 的文件头；决策与代价见
 [ADR-0009](./adr/0009-system-fonts-from-the-os.md)。
 ### 抓帧几何与空帧门禁
 

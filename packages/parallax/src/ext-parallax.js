@@ -58,7 +58,7 @@ function parallaxSection(label, key, rows) {
 function parallaxPluginPercent(v) {
   const n = Number(v);
   if (v === null || v === undefined || v === "" || !Number.isFinite(n)) return PARALLAX_PLUGIN_DEFAULT;
-  // 与层同源钳制（公共钳位 `weClampTo`，见 src/we-base.js）⇒ 回显的数字就是真正生效的数字。
+  // 与层同源钳制（公共钳位 `weClampTo`，见 src/core/we-base.js）⇒ 回显的数字就是真正生效的数字。
   // 触发面很窄：只有手改 settings.json / 跨版本 / 第三方往这个 map 里塞了越界值才会遇上；那时
   // 层按 [MIN, MAX] 生效，回显要是照原样显示 42% / -5% 就成了"滑杆拖到头、数值在说谎"。
   return Math.min(PARALLAX_GROUP_DEPTH_MAX, Math.max(PARALLAX_GROUP_DEPTH_MIN, n));

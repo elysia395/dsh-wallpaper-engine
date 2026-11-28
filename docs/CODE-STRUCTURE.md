@@ -348,7 +348,7 @@ graph LR
     subgraph SRC["src/**（手写真源，浏览器侧唯一真源）"]
         C["src/client.js<br/>正文"]
         A["src/styles/*.js + src/styles.js<br/>纯数据：样式域模板 + 组装点"]
-        B["src/panel-tabs.js（组装点）+ src/panel-tabs/*.js（域节渲染器）· src/picker-*.js · packages/fx/src/ext-fx.js · packages/parallax/src/ext-parallax.js · src/extensions/ext-avatar.js<br/>UI 面"]
+        B["src/panel-tabs.js（组装点）+ src/panel-tabs/*.js（域节渲染器）· src/picker/*.js · packages/fx/src/ext-fx.js · packages/parallax/src/ext-parallax.js · src/extensions/ext-avatar.js<br/>UI 面"]
         D["src/live-layer.js · src/wallpaper/video-layer.js · packages/fx/src/fx-layer.js · packages/parallax/src/parallax-layer.js · src/extensions/avatar-layer.js · src/wallpaper/layer-core.js · src/media-prep.js<br/>行为面"]
         E["src/font/*<br/>字体系统"]
         F["lib/settings-schema.js<br/>唯一共享内核"]
@@ -407,7 +407,7 @@ graph LR
 > 每个模块头只讲**自己**的契约，跨模块的这张分工表**只能靠读遍 20+ 个文件头重建**。
 
 **函数族（"这几块是一伙的"）—— 登记在这里；目录只是人类的提示。** `src/` 的目录不承载机器含义
-（§4 第 1 条），所以"谁和谁一伙"这件事以本表为准；目前 `src/font/`、`src/styles/`、`src/panel-tabs/`、`src/live-layer/`、`src/i18n/` 走目录（门槛见 §4 第 1 条）。
+（§4 第 1 条），所以"谁和谁一伙"这件事以本表为准；目前 `src/font/`、`src/styles/`、`src/panel-tabs/`、`src/live-layer/`、`src/i18n/` 走族目录（门槛见 §4 第 1 条）；**2026-11-28 起**其余模块按用户裁决归入功能域目录 `src/wallpaper/`、`src/settings/`、`src/extensions/`、`src/picker/`、`src/ui/`、`src/core/` 与 `src/client/handlers/`（收什么/不收什么见 §3.4；它们**不是**族目录，不承载前缀族读法）。
 判据是**家族内部**互相读取，不是文件名前缀，也不是被多少模块读（fan-in 高多半只是**门面装配耦合**）：
 
 | 族 | 成员 | 家族内耦合（方向） | 目录 |
@@ -415,28 +415,26 @@ graph LR
 | **字体子系统** | `font/apply` · `font/components` · `font/color-roles` · `font/typography` | `components → apply` · `→ color-roles` | ✅ `src/font/`（门槛①见 `test/verify-module-layout.mjs` 的 `SRC_DIR_MIN_MEMBERS` + 门槛② 本文 §3.3） |
 | **样式族** | `styles`（组装点 `src/styles.js` + 各域模块 `styles/{base,shell,chrome,settings,panel,quick,ext}.js`） | 组装点按 `INLINE_MODULES` 顺序相加；域模块**互相零读取** | ✅ `src/styles/`（组装点留根；`src-scope` 按前缀 `src/styles` 读 ⇒ 搬动改零判据，判据仍是"拼回 CSS 逐字节相同"） |
 | **词表族** | `i18n`（组装点 `src/i18n/i18n.js`）· `i18n-copy`（组装点 `src/i18n/i18n-copy.js` + 各域词表 `i18n/i18n-copy-{core,ext,font,glass,live,panel,pet-link,picker}.js`） | 域词表**互相零读取**；组装点按 `INLINE_MODULES` 顺序相加 | ✅ `src/i18n/`（组装点留根；成员同职责=域词表、每族 ≥3 成员；`src-scope` 前缀改成 `src/i18n/i18n-copy`，判据仍是「双向对账逐条相同」） |
-| **picker** | `picker-model`（纯函数、零外界） · `picker-modal` · `picker-props-panel` · `quick-panel` | `modal → model` | 平铺（见下） |
-| **渲染器层** | `panel-tabs`（族：组装点 + 各域模块，成员与内联顺序真源 = `scripts/build-client.mjs` 的 `INLINE_MODULES`，按 `src/panel-tabs.js` 前缀读） · `picker-modal` · `picker-props-panel` · `fontset-editor` · `ext-fx` · `ext-parallax` · `ext-avatar` | **互相零读取**（只读门面与纯函数工具） | ✅ `src/panel-tabs/`（组装点 `src/panel-tabs.js` 留根；`src-scope` 按前缀 `src/panel-tabs` 读 ⇒ 搬动零改判据） |
+| **picker** | `picker-model`（纯函数、零外界） · `picker-modal` · `picker-props-panel` · `quick-panel` | `modal → model` | ✅ `src/picker/`（§3.4；组件体仍住 `src/client/picker-component.js`） |
+| **渲染器层** | `panel-tabs`（族：组装点 + 各域模块，成员与内联顺序真源 = `scripts/build-client.mjs` 的 `INLINE_MODULES`，按 `src/panel-tabs.js` 前缀读） · `picker-modal`/`picker-props-panel`（现住 `src/picker/`）· `fontset-editor` · `ext-fx` · `ext-parallax` · `ext-avatar` | **互相零读取**（只读门面与纯函数工具） | ✅ `src/panel-tabs/`（组装点 `src/panel-tabs.js` 留根；`src-scope` 按前缀 `src/panel-tabs` 读 ⇒ 搬动零改判据） |
 | **媒体管线** | `live-layer`（组装点 `src/live-layer.js` + 各域模块 `live-layer/{diag,probe,watch,pointer,gate,underlay}.js`） · `video-layer` · `media-prep`（组装点 `src/media-prep.js` + 各域模块 `media-prep/{prepare,probe,budget}.js`） · `layer-core` · `effects` | `live-layer` → 家族内；`media-prep` 域模块按 `INLINE_MODULES` 顺序相加、彼此零读取 | ✅ `src/live-layer/`（组装点留根；`src-scope` 按前缀 `src/live-layer` 读 ⇒ 搬动零改判据）；`src/media-prep/`（组装点留根；判据走 bundle 文本与 `src/media-prep.js` 直读） |
 
-**客户端正文的助手模块**（`src/client-*.js` → `src/client/*.js`：`audio-playback` · `media-frame` · `rotation` · `rope-dock`）**不在上表**：
-它们不是一族，而是从 `src/client.js` 正文里按职责搬出的助手（正文仍在 `src/client.js`，由 `clientSources()` 拼）。搬进 `src/client/` 只是让"助手住哪"一眼可见，读法前缀 `src/client` 不变。
-| **点击与拖尾（「扩展」二号模块的两半）** | `fx-layer`（画布层：零 `ctx`、只读 `selection`、自带输入监听与内容驱动的 rAF） · `ext-fx`（扩展岛：收 `ctx`，动作走具名 `on*`） | 两者**互相零读取**（岛不读画布层的任何符号；画布层只在帧里现读 `selection`） | 平铺 |
+**客户端正文的助手模块**（`src/client/*.js`）**不在上表**：它们不是一族，而是从 `src/client.js` 正文里按职责搬出的助手（正文仍在 `src/client.js`，由 `clientSources()` 拼）。成员清单以 `scripts/build-client.mjs` 的 `INLINE_MODULES` 为准（本文不抄）；读法前缀 `src/client` 对 `src/client/handlers/` 与 `src/client/` 根一视同仁。
+| **点击与拖尾（「扩展」二号模块的两半）** | `fx-layer`（画布层：零 `ctx`、只读 `selection`、自带输入监听与内容驱动的 rAF） · `ext-fx`（扩展岛：收 `ctx`，动作走具名 `on*`） | 两者**互相零读取**（岛不读画布层的任何符号；画布层只在帧里现读 `selection`） | `packages/fx/src/`（两半随子包出户） |
 
 > 2026-11-28 起这批助手**按职责分了两个落点**：处理器族住 `src/client/handlers/`（18 个 `*-handlers` / 取数 / 设置族），组件体与层助手留 `src/client/` 根。前缀族读法 `src/client` 对两层一视同仁（`clientText()` 不变），`move-src-module.mjs` 负责搬迁。
 | **3D 纵深（「扩展」三号模块的两半）** | `parallax-layer`（行为层：零 `ctx`、只读 `selection`、不建 DOM，每帧把最终位移写进目标层自己的 `translate`；左栏与输入卡例外，走相对定位 `left`/`top`）与 `ext-parallax`（收 `ctx` 的扩展岛）。组结构、`STEP_DIV`、组选择器、气泡上限、插件组豁免的完整规则见 `packages/parallax/src/parallax-layer.js:1-60` 与 `src/styles/ext.js` 视差段 —— 本文不复制。 |
-| **设置与宿主通道** | `persistence` · `fontset-store` · `adapter` · `api-client` · `i18n` | 互读少 | 平铺 |
+| **设置与宿主通道** | `persistence` · `fontset-store` · `adapter` · `api-client` · `i18n` | 互读少 | `src/settings/` + `src/core/`（§3.4） |
 
-**为什么不给上表其余族建目录**（用户裁决：`styles` / `panel-tabs` / `live-layer` / `i18n` 四族先走目录 —— 成员同职责、互相零读取、每族 ≥3 成员；其余仍不建，理由如下）：
+**目录决策（2026-11-28 修订）**：上表里原先「不建目录」的几族，现已按用户裁决归入 §3.4 的功能域目录 ——
+`picker` → `src/picker/`；媒体管线的其余成员 → `src/wallpaper/`；设置与宿主通道 → `src/settings/` + `src/core/`；
+「扩展」两半（头像 / 扩展岛 / 性能）→ `src/extensions/`（`fx` / `parallax` 的**实现**仍住 `packages/<pkg>/src/`，
+只有主包侧的处理器与注册表入口进 `src/extensions/`）。
 
-| 族 | 不建的理由 |
-|---|---|
-| **picker** | 门槛②需要**新建一份权威文档**（本文 §3.3 的对应物）；成员里 `picker-model` 是纯数据层、`quick-panel` 是组件，**形态不同**，是否同收取决于"选择器"被定义为数据 + 视图还是再加一层外壳。收益上限只是"一眼看出是一伙的"，而成本见 §4 第 1 条的"搬动的成本" |
-| **渲染器层** | 它是同一**架构层**，不是一伙人（成员**互相零读取**）。且与 picker **归属冲突**（`picker-modal` / `picker-props-panel` 同属两族），而规则没写优先级 ⇒ **同一优先级只开一个** |
-| **媒体管线** | （`live-layer` 族已单列目录，见上表；以下针对其余成员）`src/wallpaper/video-layer.js` 头注释写明它独立的**全部理由**就是"**不**在实时那条路里"（真机踩过十几秒纯色帧）；`src/wallpaper/layer-core.js` 的围栏专门钉"与壁纸类型无关"。把它们与 `live-layer` 收进同一目录**正好从目录上抹掉这条边界** |
-| **点击与拖尾** | 同上一条：`fx-layer` 零 `ctx`、`ext-fx` 收 `ctx`，两半跨两张角色清单。共同点同样由**文件名前缀（`fx-`）+ 设置键前缀（`fx*`）+ 扩展岛**表达；额外理由：画布层是**纯客户端**的（不读任何宿主路由），与宿主那半边毫无关系，收成目录反而会暗示"这两半要一起改" |
-| **3D 纵深** | `parallax-layer`（零 `ctx`、不建 DOM，只写目标层 `translate`）+ `ext-parallax`（收 `ctx`）：共同点由文件名前缀 + 设置键前缀 + 扩展岛表达；行为层与岛连"运行时对象"都不共享，收成目录只会暗示必须一起改 |
-| **设置与宿主通道** | `src/settings/fontset-store.js` 头注释写明"**另立一条**而不是并进 `persistence.js`"（真源/键集/失败语义都不同）；目录名会传递"这些是一回事"的**误读** |
+决策依据：`src/` 根与 `src/client/` 的平铺文件已到「靠文件名前缀才找得到」的规模（计数现算，见
+`verify-module-layout` ⑥ 的打印），而目录在这一侧**不承载机器含义**（§1），搬迁成本只剩路径引用面、
+收益是读者能按域定位。原先逐族「不建」的论证（形态不同 / 互相零读取 / 归属冲突）**仍是 §3.4 划边界的依据**，
+只是结论从「不分目录」改成「**按功能域分，不按架构层分**」。
 
 **四条通用反例**（同样适用于今后新增的族）：按**文件名前缀**机械分组（`video-layer` 与 `live-layer`
 前缀相同却是两条**刻意分开**的通道）· 按 **fan-in/cluster** 聚类 · 把"**不读 `selection`**"当分组依据
@@ -497,10 +495,9 @@ graph LR
 kind 元数据在 `lib/settings-schema.js` 的 `FONTSET_KEYS`，客户端 `src/settings/fontset-store.js` 与宿主
 `packages/fonts/lib/routes/fontsets.js` 共用同一份消毒。**加键是加性的**（老文件缺键回落默认，
 `FONTSET_SCHEMA_VERSION` 不随加键升）。导入导出按整份 `.json`、写回只落当前这一套 —— 详见
-`lib/settings-schema.js:1581` 与 `src/settings/fontset-store.js` 文件头。
+`lib/settings-schema.js` 的 `FONTSET_KEYS` 与 `src/settings/fontset-store.js` 文件头。
 
-**字族的两类值与「全局」槽**（完整口径见 `src/settings/system-fonts.js:1-16`、`src/font/typography.js:1-16`、
-`src/font/apply.js:130-168` 与 `lib/settings-schema.js:1512` 的文件头）。
+**字族的两类值与「全局」槽**（完整口径见 `src/settings/system-fonts.js`、`src/font/typography.js`、`src/font/apply.js` 的文件头与 `lib/settings-schema.js` 的字体段）。
 
 - 取值域 = **内置族键**（`FONT_FAMILY_VALUES`，CSS 栈写死在客户端）+ **本机字体键 `sys:<族名>`**
   （宿主枚举，见 `packages/fonts/lib/routes/system-fonts.js` 与 [`adr/0009`](./adr/0009-system-fonts-from-the-os.md)）；
@@ -563,7 +560,8 @@ DSH 升级后**重取角色表**的命令写在 [`typography.js`](../src/font/ty
 1. **要在浏览器里跑吗？**
    → `src/**`，**并且必须登记进 `scripts/build-client.mjs` 的 `INLINE_MODULES`**（含 `markers` 锚点）。
    ⚠️ 忘了登记**不会报错**，只是这个文件永远不进产物（本仓踩过一次）。
-   **`src/` 默认平铺**：根目录就是默认落点。只有当一个子系统**同时**满足两条时，才为它建子目录
+   **落点先问功能域**（§3.4）：不属于任何功能域才落 `src/` 根。**族目录**（有组装点、有前缀族读法）另有更高门槛：
+   只有当一个子系统**同时**满足下面两条时，才为它建族目录
    （现有族目录：`src/font/`、`src/styles/`、`src/panel-tabs/`、`src/live-layer/`、`src/media-prep/`、`src/i18n/`，
    见 §3.1 函数族表；`src/client/` **不是族目录**，是客户端正文助手（§3.1 中段），不受门槛②约束；
    **功能域目录**（非族目录、无组装点）见 **§3.4**：`src/wallpaper/`、`src/settings/`、`src/extensions/`、
@@ -1056,7 +1054,7 @@ bundle 是压缩产物，符号名（`me`/`Qb` 等）会随上游同步变化。
 只给开发者：媒体供给、抓帧、空帧门禁与主题取色的实现口径。用户可见行为与入口在
 [`HOW-IT-WORKS.md`](./HOW-IT-WORKS.md)，本文不重复「为什么」。
 
-**独立 loopback 媒体源**（`lib/media-origin.js` + `lib/media-origin/*`）：为什么存在 —— DSH Desktop 给
+**独立 loopback 媒体源**（`lib/media-origin.js`）：为什么存在 —— DSH Desktop 给
 每条插件路由套能力头栅栏（`x-dsh-desktop-renderer`，只注入给同源 frame 的请求），严格沙箱 iframe 是
 不透明源、拿不到该头 ⇒ 壁纸入口恒 `403`（症状：预览图正常、随后全黑）。因此网页壁纸入口 HTML 与全部
 子资源、以及场景 `scene.pkg` 都改由宿主自建的随机端口媒体源供给；媒体源不经过栅栏，第三方 HTML
@@ -1283,6 +1281,7 @@ graph LR
 | `i18n-scan.mjs` | 源码里的**中文字面量**扫描（判"进没进 `weT(...)`"；迁移与 `verify-i18n` 共用同一实现） | `node test/tools/i18n-scan.mjs [--json] [paths…]` · `selftest` |
 | `js-text.mjs` | JS/TS 源码的**文本级**工具（字符串 / 正则感知的剥注释） | `node test/tools/js-text.mjs selftest` |
 | `m2-facade-code-share.mjs` | **门面「非装配代码」占比（M2 口径）的复算**：逐字符扫描（跳过字符串 / 模板串 / 注释 / 正则）求出每行净括号增量 ⇒ 把**顶层语句**分成 `assembly`（体内出现 `ctx.` 或 `registerXxxRoutes(`）/ `code` / `other`，报 `nonAssemblyShare` 等四数。段窗走**内容锚点**（锚点全缺即非 0 退出 —— 宁可不算，也不输出一份可能误导的段表）；`--plan-legacy` 复现计划时代的硬编码段窗 | `node test/tools/m2-facade-code-share.mjs [文件] [--list] [--plan-legacy] [--self-check]` |
+| `audit-docs.mjs` | **文档/注释审计（人工工具，不进 CI）**：现行文档与源码注释里的失效路径、断链、超界行号锚、会漂的数值、中英不成对；按 `current / generated / comment / ledger` 分类，账本类只统计不改写。豁免表逐条写理由（ADR-0007 第 1/2 问） | `node test/tools/audit-docs.mjs [--json]` |
 | `move-src-module.mjs` | **机械搬迁的唯一入口**：把 `src/` 下一个模块搬到新路径 —— 改 `INLINE_MODULES` 条目（**保序**）、改写 `test/` `scripts/` `src/` 里的完整路径与「`'src', '<文件名>'`」分段写法，并列出 `docs/` 现行文档命中（历史文档按 ADR-0017 排除）。不改函数体、不重排内联清单 | `node test/tools/move-src-module.mjs <old> <new> [--apply]` |
 | `multi-source-mutants.mjs` | **多源变异体加载器**（守卫共用的基础设施）：一条负对照可能横跨多个模块，本工具按"源键 → 文件 / 工厂导出名"把 `[源键, find, replace]` 的编辑打在该源的文本上，并内置三件纪律 —— **命中自检**（锚点落空 / 空转编辑 / 未知源键 / 取不到工厂导出都即抛，防"变异体 = 原版 ⇒ 负对照假绿"）、源码先归一 LF（锚点写的是 `\n`）、相对说明符改写成绝对 `file:` URL（变异体住 `.test-cache/` 仍能 import 真源模块）。消费者：`verify-asset-paths` / `verify-cache-prune` | `import { makeMultiSourceMutants } from './tools/multi-source-mutants.mjs'`（库，无 CLI） |
 | `official-performer.mjs` | **官方 pet 演出的三个夹具**（`clientEntryFixture` / `performerFixture` 一族）：把 `packages/pet-link/src/official-pet.js` + `pet-link.js` 的源码拼成工厂、喂一份假 facade 求值，得到可驱动的 `createOfficialPetPerformer`；时间与锁／播放态全部捏在夹具手里（不连官方插件、不起宿主）。消费者：`verify-pet-official` / `verify-pet-hotplug-client` / `verify-pet-hotplug-integration` / `verify-pet-tuner` | 守卫 `import` 消费，无 CLI |

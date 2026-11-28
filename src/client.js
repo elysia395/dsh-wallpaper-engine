@@ -39,7 +39,7 @@ const PROPS_URL = "/wallpaper-engine/props";
 const INVENTORY_URL = "/wallpaper-engine/inventory";
 // ── 组件行状态面（ADR-0013 D3②/D3③）────────────────────────────────────────
 // 「关掉一个组件行 ⇒ 该组件的浏览器可见面整块不渲染」的**唯一判据**。状态面就是宿主行状态
-// （`/inventory` 的 `components` 字段，产出点见 lib/routes/inventory.js）：浏览器半边**只读**，
+// （`/inventory` 的 `components` 字段，产出点见 packages/media-bridge/lib/routes/inventory.js）：浏览器半边**只读**，
 // 不写第二份"组件名 → UI"清单 —— 可见面落点由宿主侧的声明表 + 对账守卫双向钉住。
 // 三态口径（顺序即优先级）：
 //   ① `components` 整块读不到（字段缺席 / 不是对象：老宿主、探针没起来）⇒ **可用**
@@ -1956,7 +1956,7 @@ const onMarketStickyFade = (px, live) =>
   commitLiveSetting("marketStickyFade", clampNum(px, ...schemaRange("marketStickyFade"), DEFAULTS.marketStickyFade), live);
 
 // ── 「玻璃 UI」各子项的「独立配置」开关已按族搬出 ────────────────────────────
-// 模式写入与校验整段住 src/client/glass-toggle-handlers.js；构建期内联回本作用域。
+// 模式写入与校验整段住 src/client/handlers/settings-toggle-handlers.js；构建期内联回本作用域。
 // ── 「扩展」页签（一号模块：点击效果与拖尾效果）的处理器 ──────────────────────
 // 形状与上面一致：控件只报事件，写设置 + 重渲染都在这里。那一层没有网络往返、"点了就有反应"是
 // 每帧现读设置 ⇒ 开关与档位走 emit 的完整路径，滑块走 commitLiveSetting 的 live 档
@@ -2266,9 +2266,9 @@ const onLayerReset = (key) => {
 };
 
 // ── 模块级 / 页签级 / 全局重置已按族搬出 ─────────────────────────────────────
-// resetKeysToDefault 与三个 onReset* 整段住 src/client/reset-handlers.js；构建期内联回本作用域。
+// resetKeysToDefault 与三个 onReset* 整段住 src/client/handlers/reset-and-accent-handlers.js；构建期内联回本作用域。
 // ── 全局 UI 配色处理器已按族搬出 ─────────────────────────────────────────────
-// 角色/元素配色写入、自定义开关、清除整段住 src/client/ui-color-handlers.js；构建期内联回本作用域。
+// 角色/元素配色写入、自定义开关、清除整段住 src/client/handlers/color-handlers.js；构建期内联回本作用域。
 
 // ── 字体 / 主题处理器 + 三个 ctx 构造器 ──────────────────────────────────────
 // 它们只读模块级单例 `selection`、只调模块级函数（setFontValues / applyEffects / emit /

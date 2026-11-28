@@ -8,7 +8,7 @@
  *     「全局字体」渲染器 `packages/fonts/src/appearance-font-section.js` + 字体集编辑器 `packages/fonts/src/fontset-editor.js`，
  *     产物 `packages/fonts/lib/client.fonts.js` ⇒ 本包**声明** `dsh.client` 且清单里有 `exports['./client']`
  *     （ADR-0014 S3.4 的两向判据）。
- *   · **仍然不搬**：`src/fontset-store.js`、`src/system-fonts.js`、`src/font/apply.js`、
+ *   · **仍然不搬**：`src/settings/fontset-store.js`、`src/settings/system-fonts.js`、`src/font/apply.js`、
  *     `src/font/typography.js`、`src/font/color-roles.js`、`src/font/components.js`
  *     （它们与主包其它半边在求值期/运行期双向耦合，见 §6.1 = A 的归属裁决）。
  *

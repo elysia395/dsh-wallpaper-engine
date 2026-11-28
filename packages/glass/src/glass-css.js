@@ -398,7 +398,7 @@ const CSS_GLASS = `
         直接子 div）；写成 > div 会把多子元素对话框逐个子 div 涂成色带（2026-11-21）。
      ⚠️ 排除面（#377 审查第 1 条，2026-11-18）：:not([class*="_dialog"]) 只能排掉类名带
         dialog 的宿主 Modal，排不掉宿主其余对话框与本插件自己的浮窗。已知会被误伤的三类：
-        · 本插件性能 HUD：src/ext-perf.js:399 we-perf-float + :401 role="dialog"，两个直接
+        · 本插件性能 HUD：src/extensions/ext-perf.js 的 we-perf-float 与 role="dialog"，两个直接
           子 div（__head / __grid）会各涂一层底 + 渐变 + 霜 ⇒ 用 :not(.we-perf-float) 排掉；
         · 宿主图片灯箱：div[role="dialog"]._backdrop_… > div._stage_…，类名不含 _dialog，
           带 aria-modal="true" ⇒ 用 :not([aria-modal="true"]) 排掉；
