@@ -595,6 +595,21 @@ const INLINE_MODULES = [
     markers: ['const STAR_COUNT_TTL = 10 * 60 * 1000;', 'function loadStarCount(force)', 'function starCountLabel()'],
   },
   {
+    file: 'src/client/pet-link-facade.js',
+    why: 'src/client.js 正文的桌宠联动宿主侧门面（petLinkWiring：登记、补接线、warmup/dispose 转发与缺席语义）—— 构建期内联在正文之前，同处一个扁平作用域',
+    markers: ['const petLinkWiring = {', 'petLinkWireAttach', 'warmup() {', 'dispose() {'],
+  },
+  {
+    file: 'src/client/update-notice.js',
+    why: 'src/client.js 正文的更新公告组件（NOTICE_VERSION 哨兵、配图就绪探针节奏、UpdateNotice 组件与文案块）—— 构建期内联在正文之前，同处一个扁平作用域',
+    markers: ['const NOTICE_VERSION', 'function UpdateNotice()', 'UPDATE NOTICE COPY（end）', 'we-update-notice__btn'],
+  },
+  {
+    file: 'src/client/picker-tabs.js',
+    why: 'src/client.js 正文的可见页签表（按子包注册表现存性现算）+ 页签记忆读写（localStorage 键与旧值迁移）—— 构建期内联在正文之前，同处一个扁平作用域',
+    markers: ['function readSavedPickerTab()', 'PICKER_TAB_LEGACY', 'PICKER_TAB_KEY'],
+  },
+  {
     // 跨包浏览器半边的**显式键集契约表**（ADR-0014 S5.1 / S5.4）：71 个 getter 挂到 module.exports。
     // 必须排在内联清单**末尾**：表顶层读 `DEFAULTS`（lib/settings-schema.js 的内联件）⇒ 要排在它之后；
     // 正文里的函数声明在工厂体内提升、getter 又是惰性求值 ⇒ 与正文的先后无关。

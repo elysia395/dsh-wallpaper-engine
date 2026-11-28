@@ -601,7 +601,13 @@ console.log('⑥ 跟随契约（可选服务 / 不 park / 顶层订阅）');
       if (at < 0) throw new Error('verify-i18n: src/client/rope-dock.js 里找不到 function RopeDock');
       return s.slice(at);
     })() },
-    { name: 'UpdateNotice', src: clientSrc.slice(clientSrc.indexOf('function UpdateNotice')) },
+    // 更新公告组件自 2026-11-28 起住 src/client/update-notice.js（与 RopeDock 同一条取法）。
+    { name: 'UpdateNotice', src: (() => {
+      const s = readFileSync(join(ROOT, 'src', 'client', 'update-notice.js'), 'utf8');
+      const at = s.indexOf('function UpdateNotice');
+      if (at < 0) throw new Error('verify-i18n: src/client/update-notice.js 里找不到 function UpdateNotice');
+      return s.slice(at);
+    })() },
     { name: 'QuickPanel', src: readFileSync(join(ROOT, 'src', 'quick-panel.js'), 'utf8').slice(readFileSync(join(ROOT, 'src', 'quick-panel.js'), 'utf8').indexOf('function QuickPanel')) },
   ];
   const noHook = componentsWithoutLocaleHook(comps.map((c) => c.src.slice(0, 400)));

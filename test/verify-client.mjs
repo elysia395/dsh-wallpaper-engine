@@ -1031,7 +1031,9 @@ setTimeout(async () => {
     //    函数体）取出来，在受控的 `wePanelSectionsOf` / `localStorage` 桩下求值。判据与实现
     //    同源 —— 实现若回到恒 `PICKER_TABS`，① 立刻红（负对照 ④ 在同一个求值器上跑）。
     {
-      const srcRaw = readFileSync(new URL('../src/client.js', import.meta.url), 'utf8');
+      // 取文口径：客户端正文族（正文 + src/client/*.js）。PICKER_TABS / TAB_SECTION_OWNER 自
+      // 2026-11-28 起住 src/client/picker-tabs.js；按单文件读会让装置自检直接判红。
+      const srcRaw = clientText();
       const src = srcRaw.replace(/\r\n/g, '\n');
       const litOf = (needle, re) => {
         const m = src.match(re);
