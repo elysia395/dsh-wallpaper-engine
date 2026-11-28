@@ -94,7 +94,7 @@ const VALUE_ALLOW = [
   })),
   {
     value: '设置',
-    why: '**宿主的**标签候选（src/sidebar-right.js 的 settingsLabelCandidates）：' +
+    why: '**宿主的**标签候选（src/ui/sidebar-right.js 的 settingsLabelCandidates）：' +
       '这一串要照字面去匹配宿主 DOM，翻译它反而匹配不到（我们的词表里 "设置" 是动词义 "Set"，' +
       '与宿主菜单项的 "Settings" 不是同一个词）。理由见该函数上方注释与 docs/adr/0007。',
   },
@@ -609,7 +609,7 @@ const clientSrc = clientText();
       if (at < 0) throw new Error('verify-i18n: src/client/update-notice.js 里找不到 function UpdateNotice');
       return s.slice(at);
     })() },
-    { name: 'QuickPanel', src: readFileSync(join(ROOT, 'src', 'quick-panel.js'), 'utf8').slice(readFileSync(join(ROOT, 'src', 'quick-panel.js'), 'utf8').indexOf('function QuickPanel')) },
+    { name: 'QuickPanel', src: readFileSync(join(ROOT, 'src', 'ui', 'quick-panel.js'), 'utf8').slice(readFileSync(join(ROOT, 'src', 'ui', 'quick-panel.js'), 'utf8').indexOf('function QuickPanel')) },
   ];
   const noHook = componentsWithoutLocaleHook(comps.map((c) => c.src.slice(0, 400)));
   check('五个顶层组件都订阅了语言（否则切语言只换一半）', noHook.length === 0,
@@ -618,15 +618,15 @@ const clientSrc = clientText();
     componentsWithoutLocaleHook(['function A() { return null; }']).length === 1
     && componentsWithoutLocaleHook(['function A() { useWeLocale(); return null; }']).length === 0);
 
-  const navSrc = readFileSync(join(ROOT, 'src', 'nav-icon.js'), 'utf8');
+  const navSrc = readFileSync(join(ROOT, 'src', 'ui', 'nav-icon.js'), 'utf8');
   check('DOM 锚点用当前译文匹配（nav label / 设置入口），不冻结中文常量',
     /weT\("壁纸引擎"\)/.test(navSrc)
     && !/WE_NAV_LABEL/.test(navSrc)
-    && /weT\("壁纸引擎"\)/.test(readFileSync(join(ROOT, 'src', 'sidebar-right.js'), 'utf8')));
+    && /weT\("壁纸引擎"\)/.test(readFileSync(join(ROOT, 'src', 'ui', 'sidebar-right.js'), 'utf8')));
   check('语言切换会重放 DOM 补丁（weOnLocaleChange）', /weOnLocaleChange\(/.test(navSrc));
 
   check('官方注册面用 thunk（label/title/description 现读现算）',
-    /label: \(\) => weT\(/.test(clientSrc) && /title: \(\) => weT\(/.test(readFileSync(join(ROOT, 'src', 'sidebar-right.js'), 'utf8')));
+    /label: \(\) => weT\(/.test(clientSrc) && /title: \(\) => weT\(/.test(readFileSync(join(ROOT, 'src', 'ui', 'sidebar-right.js'), 'utf8')));
 }
 
 console.log('\n' + (failed ? 'I18N CHECKS FAILED — ' + failed + ' failed' : 'I18N CHECKS PASSED')

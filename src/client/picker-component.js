@@ -264,7 +264,7 @@ function WallpaperPicker() {
   }, [activeTab, pickerFontOpen, sel.fontCustom]);
 
   // 侧栏深链（快捷播放面板底栏的「更多外观设置 ›」/「更多播放设置 ›」）：请求"打开
-  // 设置页后停在哪一页"。打开对话框由 src/sidebar-right.js 的 DOM 路径负责，这里只管
+  // 设置页后停在哪一页"。打开对话框由 src/ui/sidebar-right.js 的 DOM 路径负责，这里只管
   // 落地 —— 走**同一个 switchTab**（清待确认 / 退出下钻 / 写 localStorage 这些副作用
   // 一处不落），落地后把请求清掉（一次性；否则用户几分钟后自己开设置会被旧请求劫持）。
   // 组件没挂载时请求就先躺在 store 里，挂载后这一趟 effect 消费它 —— 两条路都覆盖。

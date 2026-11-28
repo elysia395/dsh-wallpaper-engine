@@ -749,7 +749,7 @@
     const sel = useStore();
     const dock = (props && props.dock) || "drawer";
     // 「壁纸属性」面板渲染器与开关读数/动作都是**模块级**的（见 client.js 顶部）——
-    // 本文件当自由变量用。⚠️ 它绝不能是 `apply()` 里的闭包：`src/sidebar-right.js` 是
+    // 本文件当自由变量用。⚠️ 它绝不能是 `apply()` 里的闭包：`src/ui/sidebar-right.js` 是
     // **prelude**（在 `apply()` 之前求值），它注册的那个渲染回调引用不到 apply 的作用域，
     // 一旦那样写，真机上是 `ReferenceError: renderUserPropsPanel is not defined`
     // ⇒ React 卸载整棵树 ⇒ **整个页面空白**（实测复现，不是"这里不画"）。

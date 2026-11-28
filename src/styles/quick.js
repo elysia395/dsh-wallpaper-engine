@@ -135,7 +135,7 @@ const CSS_QUICK = `  /* ── Rope dock: chibi pull-cord + glass repo drawer �
      玻璃 sliders in settings retint this panel live. Open/close = transform +
      opacity fade, token-driven; closed keeps visibility hidden (delayed so the
      fade-out finishes first) with pointer-events off. 只在低版本宿主使用 ——
-     官方右侧栏已接管同一份内容（见 src/sidebar-right.js）。 */
+     官方右侧栏已接管同一份内容（见 src/ui/sidebar-right.js）。 */
 /* ADR-0016 第四刀：抽屉本体**无门**（几何/关闭态/面板色底）—— 玻璃行停用时抽屉
    仍是一块可用的实底滑出面板；玻璃皮只留在 --open 态那条门内规则里。 */
 .we-repo-panel {

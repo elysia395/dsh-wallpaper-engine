@@ -8,7 +8,7 @@
  *
  * 覆盖本仓实际出现的七种写法：
  *   A) 字面量路径      `'src/picker-model.js'` / `'../src/client.js'`
- *   B) 目录拼接        `join(root, 'src', 'quick-panel.js')`（含嵌套如 `'font','apply.js'`）
+ *   B) 目录拼接        `join(root, 'src', 'ui', 'quick-panel.js')`（含嵌套如 `'font','apply.js'`）
  *   C) 纯文件名        `'quick-panel.js'`（切片 / 读源码用）—— 只在 basename **唯一**时认
  *   D) 内联产物        `lib/client.js` · `packages/<pkg>/lib/client.<x>.js` —— 单独一档（多数行为
  *      判据是隔着产物做的）。产物面**取发现层 `clientPackages`**（不写死清单），且把**整个产物

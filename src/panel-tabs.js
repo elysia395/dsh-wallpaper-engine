@@ -119,7 +119,7 @@ function weComponentVisibleOf(components, name) {
   }
 
 
-  // 模块级 ↺ 的**薄包装**（issue #192）：真实现住在 `src/module-reset.js`（panel-tabs 与
+  // 模块级 ↺ 的**薄包装**（issue #192）：真实现住在 `src/ui/module-reset.js`（panel-tabs 与
   // glass-panel 共用，抽出来才能让挂载台 import 真实现）。这里只把"取词 + 处理器"两样外界
   // 喂给它 —— 中文因此留在本文件的 `weT(...)` 里（i18n 扫描器认这个形态；写进被调模块会
   // 被判成"裸中文"），各节调用点则保持 `moduleResetButton("模块名", onResetModule)` 这么短。

@@ -48,7 +48,7 @@ const panelSrc = readFileSync(join(ROOT, 'packages', 'glass', 'src', 'glass-pane
   + '\n' + readFileSync(join(ROOT, 'packages', 'glass', 'src', 'glass-presets-panel.js'), 'utf8');
 // 取文口径：客户端正文族 —— onExtraGlassSelectors 自 2026-11-28 起住 src/client/color-handlers.js。
 const clientSrc = clientText();
-const quickSrc = readFileSync(join(ROOT, 'src', 'quick-panel.js'), 'utf8');
+const quickSrc = readFileSync(join(ROOT, 'src', 'ui', 'quick-panel.js'), 'utf8');
 // ADR-0016 第三刀：glass-extra 随玻璃子包出产物 ⇒ 登记面判据改读**该包自己的配方**。
 const glassRecipe = readFileSync(join(ROOT, 'packages', 'glass', 'client.build.json'), 'utf8');
 

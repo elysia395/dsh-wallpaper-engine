@@ -165,13 +165,13 @@ const INLINE_MODULES = [
       'export { CSS };'],
   },
   {
-    file: 'src/nav-icon.js',
+    file: 'src/ui/nav-icon.js',
     why: '「壁纸引擎」SVG 图标（几何唯一真源）+ 设置导航图标 DOM 补丁（官方 nav 硬编码兜底齿轮）',
     markers: ['const WE_ICON_PARTS = [', 'function renderWeIcon(',
       'function weIconSvgString(', 'function installWeNavIcon('],
   },
   {
-    file: 'src/sidebar-right.js',
+    file: 'src/ui/sidebar-right.js',
     why: '官方右侧栏接入（能力门 + 两段注册）+ 侧边栏触达模式真源 + 「壁纸引擎设置」DOM 入口',
     markers: ['function sidebarRightMode(', 'function sidebarRightOpen(',
       'function installSidebarRight(', 'function openSettingsSection('],
@@ -249,7 +249,7 @@ const INLINE_MODULES = [
   },
   // P-C：字体集编辑器面板 + 外观页签字体节**已搬进 packages/fonts**（本包自己的 inline 表），
   // 主 bundle 不再内联它们；两条通道各有配方（packages/fonts/client.build.json）。
-  // 顺序注记：这两条原先排在 `src/settings/preset-store.js` 之后、`src/section-head.js` 之前，搬走后
+  // 顺序注记：这两条原先排在 `src/settings/preset-store.js` 之后、`src/ui/section-head.js` 之前，搬走后
   // 本数组里 `preset-store → section-head` 的相邻关系不变（各模块都按名字引用，顺序不承载语义）。
   {
     // 面板各节的统一节头构件（二次修订：**两档都支持隐藏**）。
@@ -257,7 +257,7 @@ const INLINE_MODULES = [
     //    虽然函数声明有提升、顺序其实不致命，但排在调用方前面才读得出依赖方向 —— 与
     //    `we-base.js` 排最前是同一条理由。（ADR-0016 第二刀起 glass-panel 那份经主 bundle
     //    的 HOST_BRIDGE 键 `sectionHead` 取同一实现，不再本表内联。）
-    file: 'src/section-head.js',
+    file: 'src/ui/section-head.js',
     why: '节头构件（可折叠）：panel-tabs 用；packages/glass 经桥接键 sectionHead 取同一份，抽出来是为了让挂载台能 import 真实现',
     markers: ['function sectionHead(label, open, onToggle, action) {',
       'className: "we-picker__section-head we-picker__section-head--toggle"'],
@@ -266,7 +266,7 @@ const INLINE_MODULES = [
     // 模块级重置按钮（issue #192 的 ↺）：与 section-head 同一条理由抽出来 ——
     // panel-tabs（外观各节 + 扩展模块头）在主 bundle 用；packages/glass（玻璃 UI）经桥接键
     // moduleResetButtonNode 取同一实现（ADR-0016 第二刀起不再本表内联）。
-    file: 'src/module-reset.js',
+    file: 'src/ui/module-reset.js',
     why: '模块级重置按钮（↺）：panel-tabs 用；packages/glass 经桥接键 moduleResetButtonNode 取同一份；模块名查 RESET_MODULES 取键集',
     markers: ['function moduleResetButtonNode(moduleName, onResetModule, labels) {',
       'className: "we-mod-reset"'],
@@ -384,7 +384,7 @@ const INLINE_MODULES = [
       'className: "we-picker__props-section"'],
   },
   {
-    file: 'src/quick-panel.js',
+    file: 'src/ui/quick-panel.js',
     why: '快捷播放面板（官方侧栏 tab 与低版本抽屉共用同一份内容）：当前壁纸 + 轮播 + 列表快切 + 声音 + 设置入口。列表虚拟滚动（spacer + 可视窗口）',
     markers: ['function qpFindScroller(', 'function qpVirtWindow(', 'function qpTypeLabel(', 'function QuickPanel(props)'],
   },
@@ -773,7 +773,7 @@ function readNormalized(abs) {
  * 的全作用域重复判据**共用这一份**（两份口径写着写着必然漂移，而这两条判据判的正是同一件事）。
  * ⚠️ 判据是"缩进 == 本文件声明的最小缩进"，不是"行首"也不是任意缩进：
  *   · 要求行首（原实现 `^(?:const|let|var|function)`)会**静默漏掉**把顶层声明写了一层缩进的模块
- *     （本仓真实形态：`src/picker-modal.js` / `src/picker-props-panel.js` / `src/quick-panel.js`）
+ *     （本仓真实形态：`src/picker-modal.js` / `src/picker-props-panel.js` / `src/ui/quick-panel.js`）
  *     ⇒ 撞名不被判出，平铺后就是运行期 SyntaxError；
  *   · 只写 `^\s*` 又会把**嵌套**声明（函数内 const/let）全收进来 ⇒ 遍地假撞名。
  */

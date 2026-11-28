@@ -4790,7 +4790,7 @@ setTimeout(async () => {
 // 判据盯**代码**：装配函数体内不得再出现那批标记，且必须调子渲染器；负对照证明同一条
 // 判据能判出"标记确实在子渲染器里"（否则是个恒真判据）。
 {
-  const src = readFileSync(new URL('../src/quick-panel.js', import.meta.url), 'utf8');
+  const src = readFileSync(new URL('../src/ui/quick-panel.js', import.meta.url), 'utf8');
   const bodyOf = (name) => {
     const i = src.indexOf('function ' + name + '(');
     assert.ok(i >= 0, '找不到 ' + name + '（判据不得空转）');
@@ -4832,7 +4832,7 @@ setTimeout(async () => {
 //   · 容器只改相对位置（宿主换会话 / 插队头）⇒ MutationObserver 也要触发重测；
 //   · 卸载 ⇒ RO / MO / scroll 监听全部解绑。
 {
-  const src = readFileSync(new URL('../src/quick-panel.js', import.meta.url), 'utf8');
+  const src = readFileSync(new URL('../src/ui/quick-panel.js', import.meta.url), 'utf8');
   const constOf = (name) => {
     const m = new RegExp('const ' + name + ' = [^;]+;').exec(src);
     assert.ok(m, '找不到虚拟滚动常量 ' + name + '（判据不得空转）');
@@ -4942,7 +4942,7 @@ setTimeout(async () => {
 // 那次 measure 把窗口收成一小段后就再也不重测（"新会话只显示一部分壁纸、滚到底没有更多"）。
 // 判据：显示后窗口必须重测，且**迟到的 sc 也补挂了 scroll 监听**，真滚动能继续翻。
 {
-  const src = readFileSync(new URL('../src/quick-panel.js', import.meta.url), 'utf8');
+  const src = readFileSync(new URL('../src/ui/quick-panel.js', import.meta.url), 'utf8');
   const constOf = (name) => {
     const m = new RegExp('const ' + name + ' = [^;]+;').exec(src);
     assert.ok(m, '找不到虚拟滚动常量 ' + name + '（判据不得空转）');
@@ -6104,7 +6104,7 @@ setTimeout(async () => {
   //    本组两条负对照的锚点是**跨行**字面量 —— 不归一时一个字都匹配不到、`replace` 原样返回
   //    ⇒ 判据会在 Windows 上红成"锚点漂了"（实测：本判据第一次跑 CI 就是这么红的）。
   //    与 verify-glass-surfaces / verify-scene-live 同一口径、同一处方。
-  const navRaw = readFileSync(new URL('../src/nav-icon.js', import.meta.url), 'utf8');
+  const navRaw = readFileSync(new URL('../src/ui/nav-icon.js', import.meta.url), 'utf8');
   const navSrc = navRaw.replace(/\r\n?/g, '\n');
   const navSwapOk = (el) => !!el && el.tagName === 'svg' && el.attrs.class === 'Dws9Sa_navIcon';
 

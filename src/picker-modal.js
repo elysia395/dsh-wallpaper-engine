@@ -26,7 +26,7 @@
  *     仍直接调模块级函数（`restoreWallpapers` / `applySelection`），这与 src/panel-tabs.js
  *     直接调 `syncLayers()` 是同一口径：模块级工具可以直呼，组件状态只能经 ctx。
  *   · 虚拟滚动的窗口（vwin）与网格 ref（gridRef）也走 ctx：hooks 长在 WallpaperPicker
- *     里（本渲染器是纯函数），测量由 src/quick-panel.js 的 qpVirtWindow 负责 ——
+ *     里（本渲染器是纯函数），测量由 src/ui/quick-panel.js 的 qpVirtWindow 负责 ——
  *     库视图**不分页**（用户口径），classic CD 架除外（见下）。
  *   · 模块级依赖（React / VinylRecord / cardKeyDown /
  *     modalInitialFocus / CARD_TYPE_LABELS / vinylSpinVisible / restoreWallpapers /

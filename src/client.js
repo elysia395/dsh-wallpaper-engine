@@ -437,7 +437,7 @@ const selection = {
   // 类型筛选与设置页共用持久化键 `typeFilter`（"两处同步、不做单独的"是用户口径）。
   qpSearch: "",
   // Transient: 侧栏底栏的深链请求 —— "打开设置页后停在哪一页"（`""` = 无请求）。
-  // 由 WallpaperPicker 的一个 effect 消费一次即清（见 src/sidebar-right.js 的
+  // 由 WallpaperPicker 的一个 effect 消费一次即清（见 src/ui/sidebar-right.js 的
   // openSettingsSection 与 client.js 的「侧栏深链」段）。
   settingsTabRequest: "",
   // 破坏性动作的「面板内确认」令牌 —— **所有族共用这一个真源**（`""` = 没有动作待确认）。
@@ -1893,7 +1893,7 @@ const onCapsuleColor = (hex, live) => {
   commitLiveSetting("capsuleColor", hex, live);
 };
 
-// ── 以下处理器模块级 —— 快捷播放面板（src/quick-panel.js）与设置页**共用同一批处理器**。
+// ── 以下处理器模块级 —— 快捷播放面板（src/ui/quick-panel.js）与设置页**共用同一批处理器**。
 //    ⚠️ 分档（ADR-0008 D4）：侧栏档只画**简化配置**（全局材质旋钮 + 各面总开关），
 //    高级行的处理器在那份 ctx 里是"取用即抛错"的占位器 —— 所以这里给的是**全量**模块级处理器，
 //    "哪一档真的用到哪些"由 quick-panel 的 provided 对象与 QP_CTX_SETTINGS_ONLY 名单决定。
@@ -2593,7 +2593,7 @@ function WallpaperPickerSection() {
 // A chibi ship-whale maid grips a pull-cord and floats over the chat. Drag it
 // along the top to reposition; on release it snaps back to the TOP edge (and is
 // clamped so it can never be dragged out of view). What it opens depends on the
-// host (src/sidebar-right.js 是唯一模式真源):
+// host (src/ui/sidebar-right.js 是唯一模式真源):
 //   · harness ≥0.1.5（有官方右侧栏）：点击/下拉 → openTab 展开右侧栏的「壁纸」
 //     tab（快捷播放面板融进官方侧栏，抽屉不启动）；
 //   · 低版本宿主：点击/下拉 → 右滑抽屉（玻璃面板自右向左划出，内容同一份

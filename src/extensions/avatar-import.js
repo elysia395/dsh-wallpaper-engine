@@ -2,7 +2,7 @@
  * avatar-import.js — 头像导入的**两道闸**与它们的**零解码尺寸探针**（issue #185 后续）。
  *
  * ══ 为什么独立成文件 ═══════════════════════════════════════════════════════════
- * 理由与 `src/section-head.js` / `src/module-reset.js` **完全同一条**：`test/verify-scene-live.mjs`
+ * 理由与 `src/ui/section-head.js` / `src/ui/module-reset.js` **完全同一条**：`test/verify-scene-live.mjs`
  * 是**按文件 import** 的替身（每个模块各有自己的作用域），它必须能 import 到**真实现**才能
  * 用真字节喂真函数 —— 而"源码里有没有这行字"这种判据测不出**位域读错一位**（1024 读成 0，
  * 闸随之恒放行）。本文件是纯函数（零 DOM、零异步、零外界），因此可被直接执行断言。

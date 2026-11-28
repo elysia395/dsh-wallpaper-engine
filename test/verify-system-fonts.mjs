@@ -453,7 +453,7 @@ section('⑤ 客户端通道：登记进产物 / 浏览器安全 / 只碰自己�
     && writtenFields('selection.systemFonts = [];').every((k) => allowed.includes(k)));
 
   const client = stripComments(read('src/client.js'));
-  const qp = stripComments(read('src/quick-panel.js'));
+  const qp = stripComments(read('src/ui/quick-panel.js'));
   check('清单初始化**先吃本地缓存**（否则已选中的本机字体首帧显示成"跟随"）',
     /systemFonts:\s*readCachedSystemFonts\(\)/.test(client));
   // ⚠️ 触发点随字体节迁到侧栏（设置页外观已没有字体 UI，在那边拉是白付

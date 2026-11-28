@@ -444,12 +444,12 @@ function apply(ctx) {
 
   // 2b. 设置导航图标：官方 nav 的图标是 shell 里 navIcon(id) 的硬编码映射，第三方
   //     section 一律拿兜底齿轮 —— 用 DOM 补丁把「壁纸引擎」那格换成自绘 SVG
-  //    （src/nav-icon.js；补丁失败 = 保留齿轮，不抛、不重试）。
+  //    （src/ui/nav-icon.js；补丁失败 = 保留齿轮，不抛、不重试）。
   if (ctx.effect && typeof document !== "undefined") {
     ctx.effect(() => installWeNavIcon() || undefined);
   }
 
-  // 2c. 官方右侧栏接入（harness ≥0.1.5）：能力门在 src/sidebar-right.js —— 座位
+  // 2c. 官方右侧栏接入（harness ≥0.1.5）：能力门在 src/ui/sidebar-right.js —— 座位
   //     声明则面板融进右侧栏 tab，未声明则保持抽屉态。低版本宿主上回调永远不跑，
   //     插件也不会 park（可选服务全靠 ctx.get，不写进 inject）。
   if (ctx.effect && typeof document !== "undefined") {

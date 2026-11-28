@@ -649,7 +649,7 @@ function userPropsStateOf() {
 }
 
 /** 「壁纸属性」面板的**装配点**（两个壳共用：设置页页签 + 侧栏壁纸档）。
- *  ⚠️ 必须住在**模块级**，不能是 `apply()` 里的闭包 —— `src/sidebar-right.js` 是 prelude
+ *  ⚠️ 必须住在**模块级**，不能是 `apply()` 里的闭包 —— `src/ui/sidebar-right.js` 是 prelude
  *  （在 `apply()` 之前求值），它注册的渲染回调引用不到 apply 的作用域：写成闭包时真机上
  *  抛 `ReferenceError: renderUserPropsPanel is not defined`，React 随即卸载整棵树 ⇒
  *  **整个页面空白**（实测复现；不是"这里不画"那种局部问题）。

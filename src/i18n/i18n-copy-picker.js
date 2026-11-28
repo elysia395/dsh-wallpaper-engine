@@ -94,7 +94,7 @@ const WE_I18N_EN_PICKER = {
   "将导入：{list} 等 {count} 项": "Will import {count} items: {list}",
   "（默认）": "(Default)",
 
-  // ── src/quick-panel.js ──
+  // ── src/ui/quick-panel.js ──
   "场景 · 实时渲染": "Scene · live rendering",
   "场景 · 静态帧": "Scene · static frame",
   "网页 · 实时渲染": "Web · live rendering",
@@ -122,7 +122,7 @@ const WE_I18N_EN_PICKER = {
   "在设置页打开「播放」页签 —— 出图来源 / 实时帧 / 帧率上限在那里": "Open the Playback tab in settings — frame source, live frame and FPS cap live there",
   "去挑一张 ›": "Pick one ›",
 
-  // ── src/sidebar-right.js ──
+  // ── src/ui/sidebar-right.js ──
   "本地 Wallpaper Engine 壁纸库与播放控制": "Local Wallpaper Engine library and playback controls",
   "壁纸侧栏（呼出 / 关闭）": "Wallpaper sidebar (open / close)",
   "壁纸侧栏": "Wallpaper sidebar",

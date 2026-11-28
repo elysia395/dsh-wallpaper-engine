@@ -242,9 +242,9 @@ console.log('\n⑥ 派生判据本身有牙（正负对照调同一条 targetsOf
   check('字面量路径被认出', targetsOf(`const p = '${pm}';`, mods).includes(pm));
   check('join 目录拼接被认出（含嵌套）',
     targetsOf(`readFileSync(join(root, 'src', 'font', 'apply.js'), 'utf8');`, mods).includes(P('src/font/apply.js'))
-    && targetsOf(`readFileSync(join(root, 'src', 'quick-panel.js'), 'utf8');`, mods).includes(P('src/quick-panel.js')));
+    && targetsOf(`readFileSync(join(root, 'src', 'ui', 'quick-panel.js'), 'utf8');`, mods).includes(P('src/ui/quick-panel.js')));
   check('唯一 basename 被认出',
-    targetsOf(`readFileSync(join(root,'src','nav-icon.js'),'utf8')`, mods).includes(P('src/nav-icon.js')));
+    targetsOf(`readFileSync(join(root,'src','nav-icon.js'),'utf8')`, mods).includes(P('src/ui/nav-icon.js')));
   check('negative control: **注释里**提到模块不算"管它"（判据先剥注释）',
     targetsOf(`// 见 ${pm} 的说明\nconst a = 1;`, mods).length === 0);
   check('negative control: 不存在的文件不会被认成目标',

@@ -1198,7 +1198,7 @@ const src = clientText();
 // ⚠️ 这里**在定义点**统一剥掉文件末尾的 `export { … }`：本文件有两处把它喂给 `new Function`
 // （模块级自由变量形态复现台），而 `new Function` 不是模块环境 ⇒ 不剥就是语法错误。
 // 同一手法见 `test/verify-client.mjs` 的 effects 段；构建期内联时也是这么剥的。
-const qpSrc = stripExportBlocks(readFileSync(join(root, 'src', 'quick-panel.js'), 'utf8'));
+const qpSrc = stripExportBlocks(readFileSync(join(root, 'src', 'ui', 'quick-panel.js'), 'utf8'));
 check('前置：qpSrc 已剥掉 `export { … }`（两处 new Function 依赖这条）',
   !/^\s*export\b/m.test(qpSrc), '残留 export ⇒ new Function 会当场语法错误');
 // 同上，但**剥掉注释**：面板那条下钻的判据要找"最后一个 renderUserPropsPanel() 调用点"，
@@ -2095,7 +2095,7 @@ for (const [name, ok] of clientChecks) check(name, ok);
       && CH.includes('VIDEO_WARM_HOVER_MS')
       && src.includes('disposeWarmVideo();')
       && readFileSync(join(root, 'src', 'picker-modal.js'), 'utf8').includes('"data-we-id": String(w.id)')
-      && readFileSync(join(root, 'src', 'quick-panel.js'), 'utf8').includes('"data-we-id": String(w.id)'));
+      && readFileSync(join(root, 'src', 'ui', 'quick-panel.js'), 'utf8').includes('"data-we-id": String(w.id)'));
     // faststart：从"落盘变体"改成"服务期虚拟布局"（磁盘 0），以及"字节布局不得中途改换"。
     //   · 真机取证（当时加的临时插桩，已随该次提交删除）：播放器对 `Range: bytes=0-` 会
     //     **顺流整读**，moov 在尾部的源于是要读到文件末尾才报元数据，耗时 ∝ 文件大小
@@ -3284,7 +3284,7 @@ check('host 侧 /media-control 只收 POST + 动作走 mediaBackend.control（�
     .filter((line) => line.includes('switchRow(')
       && (line.includes('mediaIntegration') || line.includes('audioSource')));
   const tabsCode = stripComments(tabsSrc);
-  const qpCode = stripComments(readFileSync(join(root, 'src', 'quick-panel.js'), 'utf8'));
+  const qpCode = stripComments(readFileSync(join(root, 'src', 'ui', 'quick-panel.js'), 'utf8'));
   check('两键退役为常开（schema kind const + 默认接入）',
     schemaMod.DEFAULTS.audioSource === 'auto' && schemaMod.KINDS.audioSource.kind === 'const'
       && schemaMod.DEFAULTS.mediaIntegration === true && schemaMod.KINDS.mediaIntegration.kind === 'const'
@@ -3442,8 +3442,8 @@ check('场景就绪后回放覆盖值（无 HTML 种子通道）',
 // （client.js + picker-modal.js），所以在别处再加一个返回/关闭绑定照样会被判出。
 const modalSrc = readFileSync(join(root, 'src', 'picker-modal.js'), 'utf8');
 const clientHalf = src + '\n' + modalSrc;
-// 官方侧栏接入（src/sidebar-right.js）：能力门 / 两段注册 / 模式真源的断言读它。
-const sidebarSrc = readFileSync(join(root, 'src', 'sidebar-right.js'), 'utf8');
+// 官方侧栏接入（src/ui/sidebar-right.js）：能力门 / 两段注册 / 模式真源的断言读它。
+const sidebarSrc = readFileSync(join(root, 'src', 'ui', 'sidebar-right.js'), 'utf8');
 check('库视图只留顶部返回按钮（页内下钻，无遮罩绑定）',
   (clientHalf.match(/onClick: closePicker/g) || []).length === 1
     && modalSrc.includes('we-picker__modal-foot" },'),
@@ -3608,7 +3608,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
         })());
     }
     // ⚠️ 血泪判据：**面板渲染器必须是模块级声明**，不能是 `apply()` 里的闭包。
-    //    `src/sidebar-right.js` 是 prelude（在 `apply()` **之前**求值），它注册的渲染回调
+    //    `src/ui/sidebar-right.js` 是 prelude（在 `apply()` **之前**求值），它注册的渲染回调
     //    引用不到 apply 的作用域 ⇒ 真机上 `ReferenceError: renderUserPropsPanel is not defined`
     //    ⇒ React 卸载整棵树 ⇒ **整个页面空白**（实测复现；不是"这里不画"那种局部问题）。
     //    设置页那条路察觉不到：它经 ctx 显式收这个函数，所以只有侧栏会炸。
@@ -4057,11 +4057,11 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
   // 折叠逻辑（`collapsible` 短路 + aria-expanded + caret）正是本节新判据要验的东西，
   // 挂个替身等于"判据测替身"（比红更糟）。
   globalThis.sectionHead =
-    (await import(pathToFileURL(join(root, 'src', 'section-head.js')).href)).sectionHead;
+    (await import(pathToFileURL(join(root, 'src', 'ui', 'section-head.js')).href)).sectionHead;
   // 模块级重置按钮（issue #192）：同样是 panel-tabs 与 glass-panel 共用的构件，同样给**真实现**
   // —— 判据要验"每处节头都挂上了 ↺"，挂替身就等于判据测替身。
   globalThis.moduleResetButtonNode =
-    (await import(pathToFileURL(join(root, 'src', 'module-reset.js')).href)).moduleResetButtonNode;
+    (await import(pathToFileURL(join(root, 'src', 'ui', 'module-reset.js')).href)).moduleResetButtonNode;
   // ⚠️ 域模块（-appearance / -effects / -mascot）的节头调的是**薄包装** `moduleResetButton(...)`：
   //    它是 panel-tabs.js 的工厂作用域自由名字（打包后同作用域）；按文件 import 时是裸标识符
   //    ⇒ 这里同样挂**真实现**（不是替身：判据要验"每处节头都挂上了 ↺"）。
@@ -4737,7 +4737,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       'panel-tabs 源码口径');
     // 模块级 ↺ 必须**覆盖外观页签下的每个模块**（用户口径："外观下的模块也要能单独重置"）：
     // 六个外观节各有一处调用，且共用构件必须阻止冒泡（否则点 ↺ 会连带收起该节）。
-    const mrSrc = readFileSync(join(root, 'src', 'module-reset.js'), 'utf8').replace(/\r\n/g, '\n');
+    const mrSrc = readFileSync(join(root, 'src', 'ui', 'module-reset.js'), 'utf8').replace(/\r\n/g, '\n');
     const gpSrc = readFileSync(join(root, 'packages', 'glass', 'src', 'glass-panel.js'), 'utf8').replace(/\r\n/g, '\n')
       + '\n' + readFileSync(join(root, 'packages', 'glass', 'src', 'glass-presets-panel.js'), 'utf8').replace(/\r\n/g, '\n');
     // ⚠️ 刀4 之后节的渲染器搬到了 src/panel-tabs/*.js 域模块 ⇒ 扫**页签族全文**（组装点在末尾），
@@ -5243,7 +5243,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     // 折叠三角、只剩一个 auto ⇒ 它贴在最右端。用户要的是**所有模块都长成主题那样**。
     // 于是两件事：① 节头里 ↺ 排到折叠三角**之后**（坐进原来"小绿点"那一列）；
     //            ② 有三角同排时 ↺ 不再抢剩余空间（让位给三角的 auto）。
-    const headSrc = readFileSync(join(root, 'src', 'section-head.js'), 'utf8').replace(/\r\n/g, '\n');
+    const headSrc = readFileSync(join(root, 'src', 'ui', 'section-head.js'), 'utf8').replace(/\r\n/g, '\n');
     // ⚠️ 同上：CSS 住在 src/styles/*.js 域模块里，`src/styles.js` 只是组装点 ⇒ 读样式族全文。
     const styleSrc = styleText();
     /** 节头尾部次序：标签 → 折叠三角 → ↺（正/负对照共用**这一个**函数）。 */
