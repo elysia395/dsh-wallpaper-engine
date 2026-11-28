@@ -7,6 +7,13 @@
  * 只读不写：纯数据，不得有可执行语句。守卫判据见 `test/verify-i18n.mjs`（族读法 test/tools/src-scope.mjs）。
  */
 const WE_I18N_EN_GLASS = {
+  "透镜折射与追光（实验）": "Lens refraction and pointer light (experimental)",
+  "当前显卡低于推荐性能档位，开启可能导致负载过大。": "This GPU is below the recommended performance tier. Enabling may increase GPU load significantly.",
+  "已开启。显卡负载可能过大，出现滚动卡顿时请关闭。": "Enabled. GPU load may be high. Turn this off if scrolling stutters.",
+  "开启此实验功能可能带来的显卡相关风险和问题，由使用者自行承担。": "Enable this experimental feature at your own risk. You are responsible for any GPU-related issues it causes.",
+  "当前使用软件渲染，无法开启折射与追光。": "Lens refraction and pointer light are unavailable in software rendering mode.",
+  "实验功能会增加渲染开销，卡顿时可关闭。": "This experimental feature adds rendering overhead. Turn it off if you notice stutter.",
+  "增强圆角折射、薄边高光与鼠标追光；增加合成开销，卡顿时关闭。换行代码保留原生样式，减少动态效果时关闭追光。": "Adds rounded refraction, rim highlights and pointer light. Uses additional compositing; turn off if scrolling slows down. Wrapped code stays native; reduced motion disables pointer light.",
   // ── 思考块液态玻璃──
   "思考块液态玻璃": "Thinking-block liquid glass",
   "表格可读底": "Table readability background",

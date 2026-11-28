@@ -36,33 +36,20 @@
 // 只探测一次并缓存 —— 玻璃层 sync 每次设置变动都会读它。
 // 全程 typeof 守卫 + try/catch：非浏览器 / 验证沙箱里绝不抛出，也绝不改变行为。
 const SOFT_RENDER_RE = /swiftshader|software|llvmpipe|softpipe|microsoft basic render|angle \(software|stack-gl/i;
-let softRenderFallback; // undefined = 未探测 · true = 软件/无 WebGL · false = 硬件
-function detectSoftwareRender() {
-  if (softRenderFallback !== undefined) return softRenderFallback;
-  softRenderFallback = false;
+let glassRendererProbe;
+function probeGlassRenderer() {
+  if (glassRendererProbe) return glassRendererProbe;
+  const result = { software: false, renderer: "" };
+  glassRendererProbe = result;
   try {
-    // 手动覆盖优先于一切探测（缓存最终决定）。
-    if (typeof location !== "undefined" && location && typeof location.search === "string") {
-      let raw = "";
-      if (typeof URLSearchParams === "function") {
-        raw = new URLSearchParams(location.search).get("we-glassfallback") || "";
-      } else {
-        const m = /[?&]we-glassfallback=([^&]*)/.exec(location.search);
-        raw = m ? decodeURIComponent(m[1]) : "";
-      }
-      const flag = String(raw).toLowerCase();
-      if (flag === "on" || flag === "1") return (softRenderFallback = true);
-      if (flag === "off" || flag === "0") return (softRenderFallback = false);
-    }
     if (typeof document === "undefined" || !document
-        || typeof document.createElement !== "function") return softRenderFallback;
+        || typeof document.createElement !== "function") return result;
     const canvas = document.createElement("canvas");
-    if (!canvas || typeof canvas.getContext !== "function") return (softRenderFallback = true);
     let gl = null;
-    try { gl = canvas.getContext("webgl"); } catch { /* ignore */ }
-    if (!gl) { try { gl = canvas.getContext("experimental-webgl"); } catch { /* ignore */ } }
+    try { gl = canvas?.getContext("webgl"); } catch { /* ignore */ }
+    if (!gl) { try { gl = canvas?.getContext("experimental-webgl"); } catch { /* ignore */ } }
     // 连 WebGL 上下文都拿不到 → 没有硬件合成，backdrop-filter 必定不生效。
-    if (!gl) return (softRenderFallback = true);
+    if (!gl) { result.software = true; return result; }
     let renderer = "";
     let vendor = "";
     try {
@@ -82,14 +69,35 @@ function detectSoftwareRender() {
         vendor = gl.getParameter(gl.VENDOR) || "";
       }
     } catch { /* 读不到渲染器字符串：不判定为软件渲染 */ }
-    softRenderFallback = SOFT_RENDER_RE.test(String(renderer) + " " + String(vendor));
+    result.renderer = String(renderer);
+    result.software = SOFT_RENDER_RE.test(result.renderer + " " + String(vendor));
     // 礼貌释放：只探测一次，但也不给页面永久占一个 WebGL 槽位。
     try {
       const lose = typeof gl.getExtension === "function" && gl.getExtension("WEBGL_lose_context");
       if (lose && typeof lose.loseContext === "function") lose.loseContext();
     } catch { /* ignore */ }
   } catch { /* 探测异常：保持 false（不改变既有行为） */ }
-  return softRenderFallback;
+  return result;
+}
+
+let softRenderFallback;
+function detectSoftwareRender() {
+  if (softRenderFallback !== undefined) return softRenderFallback;
+  try {
+    if (typeof location !== "undefined" && location && typeof location.search === "string") {
+      let raw = "";
+      if (typeof URLSearchParams === "function") {
+        raw = new URLSearchParams(location.search).get("we-glassfallback") || "";
+      } else {
+        const m = /[?&]we-glassfallback=([^&]*)/.exec(location.search);
+        raw = m ? decodeURIComponent(m[1]) : "";
+      }
+      const flag = String(raw).toLowerCase();
+      if (flag === "on" || flag === "1") return (softRenderFallback = true);
+      if (flag === "off" || flag === "0") return (softRenderFallback = false);
+    }
+  } catch { return (softRenderFallback = false); }
+  return (softRenderFallback = probeGlassRenderer().software);
 }
 
 // ── 标题栏容器锚点：运行时探针，不写死宿主构建哈希─────────────────────
@@ -299,6 +307,7 @@ function applyGlassLayer() {
   // 弹层改用与 @supports 回退完全相同的配方，并显式 backdrop-filter: none。
   if (detectSoftwareRender()) document.body.setAttribute("data-we-glass-fallback", "1");
   else document.body.removeAttribute("data-we-glass-fallback");
+  syncGlassOptics();
 }
 
 /**
@@ -306,6 +315,7 @@ function applyGlassLayer() {
  * 主包拆卸期对本层调用（attachLayer 的 unsubscribe 对面），卸载 / 禁用后 DOM 上不留玻璃态。
  */
 function disposeGlassLayer() {
+  disposeGlassOptics();
   const s = document.body.style;
   s.removeProperty("--we-blur");
   s.removeProperty("--we-saturate");

@@ -37,7 +37,7 @@ function renderGlassSurfaceControls(ctx) {
 
 function renderAppearanceGlassSection(ctx) {
   const {
-    onBlur, onGlassAlpha, onGlassMaskStrength, onGlassChildParam, onGlassColor, onGlassDarkSeparate, onExtraGlassSelectors, onGlassFidelity, onGlassSheenStrength,
+    onBlur, onGlassAlpha, onGlassMaskStrength, onGlassChildParam, onGlassColor, onGlassDarkSeparate, onExtraGlassSelectors, onGlassFidelity, onGlassOptics, onGlassSheenStrength,
     onToggleChildIndependent, childIndependentOn, sel, surface, onResetModule,
     onCapsuleBlur, onCapsuleColor,
     onLeftSidebarGlass, onTitlebarGlass, onSidebarAlpha, onSidebarBlur, onSidebarColor,
@@ -62,6 +62,20 @@ function renderAppearanceGlassSection(ctx) {
   //   （高级行处理器已随迁移**移出**占位器名单、改为真值接线）。判据见 verify-scene-live
   //   的「侧栏 ctx 覆盖」与两档标签序列。
   const sidebarSurface = surface === "sidebar";
+  const opticsBlocked = ctx.opticsMode === "software";
+  const opticsEnabled = ctx.opticsEnabled ?? (sel.glassOptics === true);
+  let opticsHint;
+  if (opticsBlocked) {
+    opticsHint = weT("当前使用软件渲染，无法开启折射与追光。");
+  } else if (ctx.opticsMode === "limited") {
+    const loadHint = opticsEnabled
+      ? weT("已开启。显卡负载可能过大，出现滚动卡顿时请关闭。")
+      : weT("当前显卡低于推荐性能档位，开启可能导致负载过大。");
+    opticsHint = React.createElement("span", { role: "status" }, loadHint, " ",
+      weT("开启此实验功能可能带来的显卡相关风险和问题，由使用者自行承担。"));
+  } else if (ctx.opticsMode === "standard") {
+    opticsHint = weT("实验功能会增加渲染开销，卡顿时可关闭。");
+  }
   const children = ((typeof GLASS_CHILDREN !== "undefined" && GLASS_CHILDREN) || [])
     // ⚠️ 排除 `panelOff` 的子项：乙类（左侧栏）**不进这一层** ——
     //    它已有自己的总开关「左侧栏液态玻璃」，而它的"独立配置"耦合在那一项下面
@@ -366,6 +380,12 @@ function renderAppearanceGlassSection(ctx) {
         (hex, live) => onGlassColor("light", hex, live), { key: "glass-color" }),
       !sidebarSurface && sel.glassDarkSeparate === true && swatchRow(weT("玻璃颜色 · 深色"), GLASS_COLOR_PRESETS, glassPair.dark,
         (hex, live) => onGlassColor("dark", hex, live), { key: "glass-color-dark" }),
+      !sidebarSurface && switchRow(weT("透镜折射与追光（实验）"), opticsEnabled, onGlassOptics, {
+        key: "glass-optics",
+        disabled: opticsBlocked,
+        hint: opticsHint,
+        tooltip: weT("增强圆角折射、薄边高光与鼠标追光；增加合成开销，卡顿时关闭。换行代码保留原生样式，减少动态效果时关闭追光。"),
+      }),
       SliderRow(weT("玻璃透明度"), 0, 100, 5, sel.glassAlpha, onGlassAlpha, "%"),
       // 「雾化」控制的只有**模糊半径**（雾面深度），饱和度是解耦的常量材料属性（见 GLASS_SATURATE）。
       // ⚠️ 覆盖面的实测口径（按规则头归面复算）：

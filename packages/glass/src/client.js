@@ -431,7 +431,19 @@ function startGlassRowPolling() {
 registerPanelSection('appearance', 'glass', {
   id: 'glass',
   get title() { return weT("玻璃 UI"); },
-  render: (ctx) => (glassRowDisabled ? null : renderAppearanceGlassSection(ctx)),
+  render(ctx) {
+    if (glassRowDisabled) return null;
+    if (ctx.surface === "sidebar") return renderAppearanceGlassSection(ctx);
+    const opticsMode = glassOpticsGpuMode();
+    return renderAppearanceGlassSection({
+      ...ctx, opticsMode, opticsEnabled: glassOpticsEnabled(ctx.sel.glassOptics, opticsMode),
+      onGlassOptics(event) {
+        if (opticsMode === "software") return;
+        if (opticsMode === "limited") setGlassOpticsLocalOptIn(event.target.checked);
+        ctx.onGlassOptics(event);
+      },
+    });
+  },
 });
 
 /* ===== 跨包登记 #2：玻璃行为层（ADR-0016 第三刀）===== */

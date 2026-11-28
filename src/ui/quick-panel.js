@@ -503,7 +503,7 @@
       // 模块级重置：本档也画外观那六个节头 ⇒ ↺ 也要能用
       //（同一个模块级处理器，与设置页那份同源）。
       onResetModule,
-      onAccent, onBlur, onBorder, onChatGlassFidelity, onExtraGlassSelectors, onGlassAlpha, onGlassMaskStrength, onGlassColor, onGlassFidelity, onGlassSheenStrength, onLeftSidebarGlass, onTitlebarGlass, onSidebarGlass, onSidebarFullClear, onFloaterSolidBase, onMarketStickyClip, onMarketStickyFade, onToggleThemeFollow,
+      onAccent, onBlur, onBorder, onChatGlassFidelity, onExtraGlassSelectors, onGlassAlpha, onGlassMaskStrength, onGlassColor, onGlassFidelity, onGlassOptics, onGlassSheenStrength, onLeftSidebarGlass, onTitlebarGlass, onSidebarGlass, onSidebarFullClear, onFloaterSolidBase, onMarketStickyClip, onMarketStickyFade, onToggleThemeFollow,
       // 侧边栏圆角（外观 → 侧边栏圆角）：侧栏档也画这一节 ⇒ 处理器走真值（不是占位器）
       onSidebarCornerRadius, onSidebarCornerSquare,
       onCaretColor, onSidebarFollowGlobal, onThinkingMode, onTableReadability,

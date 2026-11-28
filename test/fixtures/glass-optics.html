@@ -1,0 +1,291 @@
+<!doctype html><meta charset="utf-8"><style>
+body{margin:0;background:repeating-linear-gradient(30deg,#0b2943 0px,#7bc3cc 55px,#11253c 100px);height:100vh;color:white;font:16px system-ui}
+[data-composer-card],.we-picker{position:relative;z-index:0;margin:40px;width:460px;height:150px;border-radius:28px 12px 20px 0;background:#16334433;box-shadow:0 10px 20px #0003}
+[data-composer-card]::before{content:'';position:absolute;inset:0;z-index:-1;border-radius:inherit;backdrop-filter:blur(1px) saturate(1.5)}
+.we-picker{backdrop-filter:blur(1px) saturate(1.3)}
+.md-code-block,.demo_bubble_host{margin:24px 40px;width:460px;height:110px;border-radius:16px;backdrop-filter:blur(1px)}
+.demo_bubble_host{height:60px;outline:2px dotted currentColor}
+.md-code-block .md-code-block{margin:0;height:20px}
+body[data-we-glass-page] [data-chat-flow] .md-code-block{background:rgba(230,240,245,.3)!important}
+code.capsule{display:inline-block;width:140px;height:24px;border-radius:6px;background:#ffffff33}
+.demo_toBottom{position:fixed;bottom:20px;right:20px;width:44px;height:44px;border-radius:50%;background:#ffffff33}
+
+[data-we-surface-root]{position:fixed;inset:0;pointer-events:none;z-index:-1}
+[data-we-surface-plate]{position:absolute;left:0;top:0;width:24px;height:850px;border-radius:14px;backdrop-filter:blur(1px)}
+#settings{position:fixed;right:20px;bottom:90px;width:200px;height:120px;z-index:3;border-radius:20px;background:transparent}
+#settings::before{content:'';position:absolute;inset:0;z-index:-1;border-radius:inherit;backdrop-filter:blur(1px);background:#eefa}
+#versions{position:fixed;right:20px;top:70px;width:260px;height:130px;border-radius:20px;background:#eef4;overflow:hidden}
+code.capsule{backdrop-filter:blur(10px) saturate(1.3)}
+</style><body data-we-glass-page data-we-glass-chat data-we-left-sidebar data-we-glass-window><div data-composer-card>输入框／圆角折射</div><div class="we-picker">弹层／薄边高光</div><div data-chat-flow data-slot="conversation.view"><div class="md-code-block" id="fence"><pre><code>console.log('unchanged');</code></pre></div><div class="demo_bubbleWidth" id="bubbleWidth"><div class="demo_bubble_host" id="bubble">用户消息<div class="md-code-block" id="nested">nested code</div></div></div><div class="demo_bubble_host" role="tooltip" id="tooltip">tooltip</div><p><code class="capsule" id="inlineA">appParam</code> <code class="capsule" id="inlineB">LiveKernelReports</code></p><button class="demo_toBottom" id="bottom">↓</button></div><div id="sidebarHost" data-we-surface-runtime="left-sidebar"><div data-slot="sidebar"></div></div>
+<div data-we-surface-root><div data-we-surface-plate="left-sidebar" id="plate"></div></div>
+<div data-we-surface-preserve><code id="preserved">native capsule</code></div>
+<div role="dialog" data-we-surface-runtime="settings-window" id="settings"><div data-slot="settings.section">Settings</div></div>
+<section data-plugin-versions><div id="versions"><button aria-expanded="true">可更新</button><ul><li data-plugin-version="1.4.2">1.4.2</li></ul></div></section>
+<pre id="result">RUNNING</pre><script>
+// Match the real bundle's lexical shadowing instead of testing in an empty scope.
+const CSS = 'plugin stylesheet';
+const selection={glassOptics:true};let glassRowDisabled=false,skinYieldState=false;const skinYieldActive=()=>skinYieldState;
+// The visual fixture runs in headless Chromium; exercise the supported-GPU path explicitly.
+const probeGlassRenderer=()=>({renderer:'Intel Arc B580 Graphics',software:false});
+const detectSoftwareRender=()=>false;
+const apiUrl=p=>p;
+window.fetch=async(url,opts)=>{if(opts?.body){const row=JSON.parse(opts.body);diagnostics.push(row)}return {ok:true}};
+const diagnostics=[];function reportClientDiag(event,detail){diagnostics.push({event,detail})}
+/* OPTICS_SOURCE */
+const sleep=ms=>new Promise(r=>setTimeout(r,ms));
+const next=()=>new Promise(r=>requestAnimationFrame(()=>requestAnimationFrame(r)));
+async function waitFor(predicate) {
+ const deadline=performance.now()+5000;
+ while(!predicate() && performance.now()<deadline) await sleep(25);
+ return predicate();
+}
+async function movePointer(x,y) {
+ const optics=window.__weGlassOptics,previousWrites=optics.lightWrites;
+ document.dispatchEvent(new PointerEvent('pointermove',{clientX:x,clientY:y,pointerType:'mouse'}));
+ if(!await waitFor(()=>optics.lightWrites>previousWrites)) throw new Error(`No glass light update for pointer at (${x},${y})`);
+}
+const assertions=[];function check(value,message){if(!value)throw new Error(message);assertions.push(message)}
+(async()=>{
+ const el=document.querySelector('[data-composer-card]'),picker=document.querySelector('.we-picker');
+ const originalPosition=getComputedStyle(el).position;
+ const fence=document.getElementById('fence'),bubble=document.getElementById('bubble');
+ const originalCode=fence.innerHTML;
+ const native=getComputedStyle(el,'::before').backdropFilter;
+ const release=installGlassOptics();
+ // The compositor publishes visible maps over several frames.
+ await waitFor(()=>window.__weGlassOptics?.maps>=10);
+ const optics=window.__weGlassOptics;
+ check(optics?.surfaces===10,'Composer, panel, fence, bubble, inline capsules and bottom button found');
+ check(optics.maps===10,`All visible rounded displacement maps published (${optics.maps}/10)`);
+ check(getComputedStyle(el,'::before').backdropFilter.includes('url('),'Pseudo-element carries refraction');
+ check(getComputedStyle(picker).backdropFilter.includes('url('),'Direct glass carries refraction');
+ const wrapper=document.getElementById('bubbleWidth');
+ check(!wrapper.hasAttribute('data-we-optics')&&getComputedStyle(wrapper).backdropFilter==='none','Question reply width wrapper does not paint square glass outside the bubble');
+ check(getComputedStyle(fence).backdropFilter.includes('url(')&&getComputedStyle(bubble).backdropFilter.includes('url('),'Code fences and user bubbles carry actual refraction');
+ check(getComputedStyle(bubble).borderRadius==='16px','Question reply bubble keeps its host corner radius');
+ check(getComputedStyle(fence).backgroundImage.includes('radial-gradient'),'Tracking glow outranks upstream important background shorthand');
+ check(getComputedStyle(fence).outlineStyle==='none','Optics adds no full outline to code blocks');
+ check(getComputedStyle(bubble).outlineStyle==='dotted','Optics preserves host outlines');
+ check(fence.innerHTML===originalCode,'Code content and copy markup unchanged');
+ check(!document.getElementById('tooltip').hasAttribute('data-we-optics'),'Host tooltip excluded');
+ check(!document.getElementById('nested').hasAttribute('data-we-optics'),'Nested code avoids double refraction');
+ check(getComputedStyle(document.querySelector('[data-we-optics-root] [data-we-optics-seat="'+document.getElementById('inlineA').getAttribute('data-we-optics-seat')+'"]')).backdropFilter.includes('url('),'Inline code capsule carries refraction');
+ check(getComputedStyle(document.getElementById('bottom')).backdropFilter.includes('url('),'Jump-to-bottom button carries refraction');
+ check(window.__weGlassOptics.cacheHits>0,'Equal-sized capsules share a displacement filter');
+ check(getComputedStyle(el).position===originalPosition && getComputedStyle(el).backdropFilter==='none','Composer containing block unchanged');
+ check(getComputedStyle(el,'::before').backdropFilter.includes('saturate(1.5)'),'Native material filter retained');
+ await movePointer(550,125);
+ check(parseFloat(getComputedStyle(el).getPropertyValue('--we-optics-x'))>el.offsetWidth,'Pointer follows beyond card boundary');
+ let observedStyleMutations=0;
+ const styleObserver=new MutationObserver(records=>observedStyleMutations+=records.length);
+ styleObserver.observe(document.body,{subtree:true,attributes:true,attributeFilter:['style']});
+ const reads=window.__weGlassOptics.layoutReads,scans=window.__weGlassOptics.scans,updates=window.__weGlassOptics.updates;
+ for(let i=0;i<6;i++) await movePointer(555+i,125);
+ check(window.__weGlassOptics.layoutReads===reads,'Steady pointer tracking performs zero layout reads');
+ check(window.__weGlassOptics.scans===scans&&window.__weGlassOptics.updates===updates,'Pointer tracking performs no DOM discovery or map rebuild');
+ check(observedStyleMutations===0,'CSSOM pointer updates do not trigger upstream style MutationObserver');styleObserver.disconnect();
+ check(getComputedStyle(document.getElementById('plate')).backdropFilter.includes('url('),'Upstream sidebar decoration leaf carries refraction');
+ check(!document.getElementById('sidebarHost').hasAttribute('data-we-optics'),'Upstream sidebar host remains untouched');
+ check(getComputedStyle(document.getElementById('settings')).backdropFilter==='none'&&getComputedStyle(document.getElementById('settings'),'::before').backdropFilter.includes('url('),'Settings filter remains on upstream pseudo leaf');
+ check(!document.getElementById('preserved').hasAttribute('data-we-optics'),'Native preserve policy remains effective');
+ check(getComputedStyle(document.getElementById('versions')).backdropFilter.includes('url('),'Plugin version panel gains refraction');
+ check(document.getElementById('inlineA').getAttribute('data-we-optics')==='compact','Single-line text capsules use the deeper compact profile');
+ const capsule=document.getElementById('inlineA'),leaf=document.querySelector('[data-we-optics-root] [data-we-optics-seat="'+capsule.getAttribute('data-we-optics-seat')+'"]');
+ check(getComputedStyle(leaf).backdropFilter.includes('blur(0.35px)'),'Compact lens is not washed out by the original 10px frost');
+ check(getComputedStyle(capsule).position==='static'&&getComputedStyle(capsule).backdropFilter==='none','Glyphs and containing block remain outside the refraction layer');
+ check(Math.abs(leaf.getBoundingClientRect().left-capsule.getBoundingClientRect().left)<1,'Independent leaf follows capsule geometry');
+ window.dispatchEvent(new Event('resize'));await sleep(50);await next();
+ check(window.__weGlassOptics.layoutReads>reads,'Viewport resize invalidates cached pointer coordinates');
+ const oldMaps=window.__weGlassOptics.updates;el.style.width='510px';await sleep(200);await next();
+ check(window.__weGlassOptics.updates>oldMaps,'Resize rebuilds geometry');
+ document.body.removeAttribute('data-we-glass-chat');await sleep(200);await next();
+ check(!el.hasAttribute('data-we-optics'),'Native glass toggle releases enhancement');
+ document.body.setAttribute('data-we-thinking-native','');await sleep(200);await next();
+ check(!fence.hasAttribute('data-we-optics')&&!bubble.hasAttribute('data-we-optics'),'Native conversation mode opts out');
+ document.body.removeAttribute('data-we-thinking-native');document.body.setAttribute('data-we-glass-chat','');await sleep(200);await next();
+ const dynamic=document.createElement('div');dynamic.className='md-code-block';dynamic.textContent='streamed code';document.querySelector('[data-chat-flow]').prepend(dynamic);await sleep(250);await next();
+ check(dynamic.hasAttribute('data-we-optics')&&getComputedStyle(dynamic).backdropFilter.includes('url('),'New streamed code is enhanced');
+ dynamic.style.position='fixed';dynamic.style.top='1200px';await sleep(200);await next();
+ check(!dynamic.hasAttribute('data-we-optics'),'Offscreen surfaces release enhanced compositor filters');
+ dynamic.style.top='120px';await sleep(200);await next();
+ check(dynamic.hasAttribute('data-we-optics')&&getComputedStyle(dynamic).backdropFilter.includes('url('),'Returning surfaces restore refraction from cache');
+ dynamic.remove();await sleep(150);await next();
+ const scroller=document.createElement('section');
+ scroller.style.cssText='position:fixed;left:560px;top:350px;width:340px;height:160px;overflow:auto';
+ scroller.innerHTML='<div data-chat-flow>'+
+   Array.from({length:14},(_,i)=>`<p style="margin:0;height:36px"><code class="capsule" id="scroll-${i}">appParam</code> <code class="capsule">LiveKernelReports</code></p>`).join('')+'</div>';
+ document.body.append(scroller);
+ const incoming=scroller.querySelector('#scroll-6');
+ const getLeaf=code=>document.querySelector(`[data-we-optics-root] [data-we-optics-seat="${code.getAttribute('data-we-optics-seat')}"]`);
+ const clipBottom=scroller.getBoundingClientRect().bottom;
+ check(incoming.getBoundingClientRect().top>clipBottom,'Scroll regression starts with a code capsule below the nested scrollport');
+ const incomingLeaf=await waitFor(()=>getLeaf(incoming))&&getLeaf(incoming);
+ check(incomingLeaf&&getComputedStyle(incomingLeaf).backdropFilter.includes('url('),'Approaching inline code has a refraction map before it enters the scrollport');
+ let unrelatedReads=0;
+ const pickerRect=picker.getBoundingClientRect.bind(picker);
+ picker.getBoundingClientRect=()=>{unrelatedReads++;return pickerRect()};
+ await sleep(100);
+ unrelatedReads=0;
+ const scrollUpdates=optics.updates;
+ for(let i=1;i<=10;i++) {
+   scroller.scrollTop=i*12;
+   await next();
+   check(getLeaf(incoming)===incomingLeaf&&Math.abs(incomingLeaf.getBoundingClientRect().top-incoming.getBoundingClientRect().top)<1,
+     `Inline refraction stays attached and follows continuous scroll at offset ${i*12}`);
+ }
+ check(optics.updates===scrollUpdates,'Scrolling past identical code capsules reuses displacement maps');
+ check(unrelatedReads===0,'Nested scrolling does not measure unrelated glass');
+ delete picker.getBoundingClientRect;
+ scroller.remove();
+ const fenceScroll=document.createElement('section');
+ fenceScroll.setAttribute('data-conversation-scroll','');
+ fenceScroll.style.cssText='position:fixed;top:300px;left:560px;width:340px;height:200px;overflow:auto';
+ fenceScroll.innerHTML='<div data-chat-flow style="position:relative;height:1700px">'+
+   '<div id="fast-fence" class="md-code-block" style="position:absolute;top:610px;margin:0;width:300px;height:80px">First jump</div>'+
+   '<div id="far-fence" class="md-code-block" style="position:absolute;top:1400px;margin:0;width:300px;height:80px">Far below</div></div>';
+ document.body.append(fenceScroll);
+ const fastFence=fenceScroll.querySelector('#fast-fence'),farFence=fenceScroll.querySelector('#far-fence');
+ const refracts=block=>getComputedStyle(block).backdropFilter.includes('url(');
+ check(fastFence.getBoundingClientRect().top-fenceScroll.getBoundingClientRect().bottom>128,
+   'First fast-scroll code block starts beyond the short lookahead');
+ check(await waitFor(()=>refracts(fastFence)),'A chat code block is ready before a fast scroll exposes it');
+ check(!refracts(farFence),'Distant code blocks stay outside the lookahead');
+ fenceScroll.scrollTop=590;
+ check(refracts(fastFence),'A large scroll jump reveals an already prepared code block');
+ fenceScroll.remove();
+ release();check(!document.querySelector('[data-we-optics],style[data-dsh-local-lens]'),'Dispose removes optics');
+ check(getComputedStyle(el,'::before').backdropFilter===native,'Original native material restored');
+ document.body.setAttribute('data-we-glass-chat','');
+ syncGlassOptics();await sleep(350);await next();check(!!window.__weGlassOptics,'Native glass sync mounts optics');
+ glassRowDisabled=true;disposeGlassOptics();check(!window.__weGlassOptics&&!document.querySelector('[data-we-optics]'),'Native glass dispose removes optics');
+ glassRowDisabled=false;syncGlassOptics();await sleep(350);await next();check(!!window.__weGlassOptics,'Re-enabling native glass restores optics');
+ const wrapped=document.createElement('div');wrapped.style.cssText='position:fixed;left:700px;top:250px;width:65px;word-break:break-all';wrapped.innerHTML='<code id="wrappedCode">LongInlineCodeThatWrapsAcrossSeveralLines</code>';document.querySelector('[data-chat-flow]').append(wrapped);await sleep(250);await next();
+ check(document.getElementById('wrappedCode').getClientRects().length>1&&!getComputedStyle(document.getElementById('wrappedCode')).backdropFilter.includes('url('),'Wrapping code keeps native line boxes without a rectangular refraction overlay');wrapped.remove();
+ skinYieldState=true;syncGlassOptics();check(!window.__weGlassOptics,'Native skin-yield function pauses optics');
+ skinYieldState=false;syncGlassOptics();await sleep(350);await next();check(!!window.__weGlassOptics,'Leaving skin-yield restores optics');disposeGlassOptics();
+ const getContext=HTMLCanvasElement.prototype.getContext;
+ HTMLCanvasElement.prototype.getContext=()=>{throw new Error('Injected map failure')};
+ installGlassOptics();await sleep(200);await next();
+ check(!document.querySelector('[data-we-optics]'),'Asynchronous map failure rolls back all surfaces');
+
+ HTMLCanvasElement.prototype.getContext=getContext;
+
+ const tableStyle=document.createElement('style');
+ tableStyle.textContent=/* GLASS_CSS */;
+ document.head.append(tableStyle);
+ document.body.setAttribute('data-we-thinking-glass','');
+ document.body.setAttribute('data-we-table-readability','');
+ const tableWrap=document.createElement('div');
+ tableWrap.style.cssText='position:fixed;left:560px;top:350px;width:340px;overflow-x:auto;overscroll-behavior-x:contain';
+ tableWrap.tabIndex=0;
+ tableWrap.innerHTML='<table style="width:240px;margin-inline-start:38px;max-width:none;border-collapse:collapse"><thead><tr><th>Title</th><th>Details</th></tr></thead><tbody><tr><td><code>table code</code></td><td>Body</td></tr></tbody></table>';
+ const table=tableWrap.firstElementChild;
+ document.querySelector('[data-chat-flow]').append(tableWrap);
+ check(parseFloat(getComputedStyle(tableWrap).borderTopLeftRadius)>0,'Markdown table clips its colored corners at the scroll wrapper with optics off');
+ check(getComputedStyle(tableWrap.querySelector('th')).paddingInlineStart==='16px'&&getComputedStyle(tableWrap.querySelector('td:last-child')).paddingInlineEnd==='16px','Table header and body leave room at the outer edges');
+ const errorRow=document.createElement('div');
+ errorRow.setAttribute('role','status');
+ errorRow.style.cssText='position:fixed;left:580px;top:570px;display:grid';
+ errorRow.innerHTML='<code class="host_turnErrorCode">CONTEXT_WINDOW_EXCEEDED</code>';
+ document.querySelector('[data-chat-flow]').append(errorRow);
+ const errorCode=errorRow.firstElementChild;
+ check(parseFloat(getComputedStyle(errorCode).borderTopLeftRadius)>0,'Terminal error badge has round corners with optics off');
+ const files=document.createElement('div');
+ files.style.cssText='position:fixed;left:580px;top:605px;width:340px;--we-chat-glass-fill:rgba(200,220,240,.35)';
+ files.innerHTML='<div data-changed-files style="border-radius:12px"><button type="button">Edited file</button></div><div style="display:grid;grid-template-columns:1fr 1fr;gap:8px"><div data-presented-file style="border-radius:12px"><button type="button">Archive</button></div><div data-presented-file style="border-radius:12px"><button type="button">Report</button></div></div>';
+ document.body.append(files);
+ const fileCards=[...files.querySelectorAll('[data-changed-files],[data-presented-file]')];
+ check(fileCards.every(card=>getComputedStyle(card).backdropFilter==='none')&&getComputedStyle(fileCards[1]).backgroundColor==='rgba(0, 0, 0, 0)','File cards keep their existing material with optics off');
+ document.body.setAttribute('data-we-glass-floaters','');
+ const disposeTableOptics=installGlassOptics();
+ check(await waitFor(()=>getComputedStyle(table).backdropFilter.includes('url(')),'Only the visible table carries the refraction filter');
+ check(!tableWrap.hasAttribute('data-we-optics')&&getComputedStyle(tableWrap).backdropFilter==='none','The wider horizontal scroll area stays free of refraction');
+ const tableRect=table.getBoundingClientRect();
+ check(!table.contains(document.elementFromPoint(tableRect.left+1,tableRect.top+1))
+   &&table.contains(document.elementFromPoint(tableRect.left+20,tableRect.top+1)),'The table clips its own top corners inside the wider scroll area');
+ const getMap=surface=>document.getElementById(getComputedStyle(surface).backdropFilter.match(/#([^"]+)/)?.[1]);
+ check(getMap(table)?.querySelector('feDisplacementMap').getAttribute('scale')==='72','Wide table uses the stronger edge profile');
+ check(!table.querySelector('[data-we-optics]'),'Inline cells do not receive redundant refraction filters');
+ table.style.width='540px';
+ table.style.marginInlineStart='0';
+ tableWrap.scrollLeft=90;
+ await next();
+ check(tableWrap.scrollLeft===90 && getComputedStyle(table).backdropFilter.includes('url('),'Wide table keeps horizontal scrolling and refraction');
+ check(await waitFor(()=>getLeaf(errorCode) && getComputedStyle(getLeaf(errorCode)).backdropFilter.includes('url(')),'Terminal error badge refracts on its rounded capsule');
+ check(await waitFor(()=>fileCards.every(card=>getComputedStyle(card).backdropFilter.includes('url('))),'Edited and delivered file cards each get rounded refraction');
+ check(fileCards.every(card=>getComputedStyle(card).backgroundColor==='rgba(200, 220, 240, 0.35)'&&getComputedStyle(card).borderRadius==='12px'),'File cards reuse the conversation fill and host corners');
+ check(!files.querySelector('button[data-we-optics]'),'File card controls receive no duplicate refraction');
+ const modalRoot=document.createElement('div');
+ modalRoot.setAttribute('role','presentation');
+ modalRoot.style.cssText='position:fixed;inset:0;z-index:8;display:grid;place-items:center';
+ modalRoot.innerHTML='<div class="_mask_host_18" aria-hidden="true"></div><div class="_dialog_host_33" aria-modal="true" role="dialog" style="position:relative;width:360px;padding:20px;border-radius:20px;background:#eef6"><div role="status">Imported</div><button type="button">Done</button></div>';
+ const [mask,modal]=modalRoot.children;
+ // Host CSS supplies mask blur unless the component explicitly disables it inline.
+ const hostModalStyle=document.createElement('style');
+ hostModalStyle.textContent='._mask_host_18 {position:absolute;inset:0;backdrop-filter:blur(3px)}';
+ document.head.append(hostModalStyle);
+ document.body.append(modalRoot);
+ check(await waitFor(()=>getComputedStyle(modal).backdropFilter.includes('url(')),'Portaled host import modal refracts on the rounded card');
+ check(getComputedStyle(mask).backdropFilter==='blur(3px)'&&!mask.hasAttribute('data-we-optics'),'Import modal backdrop keeps its own dimming blur');
+ modalRoot.remove();
+ const noBlurRoot=modalRoot.cloneNode(true);
+ noBlurRoot.firstElementChild.style.backdropFilter='none';
+ noBlurRoot.lastElementChild.removeAttribute('data-we-optics');
+ noBlurRoot.lastElementChild.removeAttribute('data-we-optics-seat');
+ document.body.append(noBlurRoot);
+ await sleep(200);
+ check(!noBlurRoot.lastElementChild.hasAttribute('data-we-optics'),'Host modal with explicitly disabled blur opts out');
+ noBlurRoot.remove();
+ const list=document.createElement('div');
+ list.setAttribute('role','dialog');
+ list.setAttribute('data-subagent-panel','');
+ list.setAttribute('data-menu-material','translucent');
+ list.style.cssText='position:fixed;left:150px;top:150px;width:280px;border-radius:16px;overflow:hidden;isolation:isolate;--dsw-menu-surface-fill:rgba(252,253,254,.7)';
+ list.innerHTML='<div aria-hidden="true" class="_material_host_21" style="position:absolute;inset:0;z-index:-1;border-radius:inherit;backdrop-filter:blur(40px) saturate(150%);background:var(--dsw-menu-surface-fill)"></div><div role="tree" style="height:70px;overflow:auto"><button type="button" role="treeitem" style="height:120px">Agent</button></div>';
+ document.body.append(list);
+ const [menuMaterial,menuBody]=list.children;
+ check(await waitFor(()=>getComputedStyle(menuMaterial).backdropFilter.includes('url(')),'Subagent dropdown only refracts on its rounded host material');
+ check(getMap(menuMaterial)?.querySelector('feDisplacementMap').getAttribute('scale')==='72'&&getComputedStyle(menuMaterial).backdropFilter.includes('blur(5px) saturate(1.5)'),'Subagent dropdown keeps the wide refraction band visible through a lighter frost');
+ menuBody.scrollTop=25;
+ check(menuBody.scrollTop===25&&getComputedStyle(menuBody).backdropFilter==='none'&&getComputedStyle(menuBody).backgroundImage==='none','Subagent rows scroll without the square HoverCard overlay');
+ check(!list.hasAttribute('data-we-optics'),'Subagent dropdown outer layout does not create a second filter');
+ list.remove();
+ const codeScroll=document.createElement('section');
+ codeScroll.setAttribute('data-conversation-scroll','');
+ codeScroll.style.cssText='position:fixed;left:70px;top:110px;width:450px;height:250px;overflow:auto;z-index:9';
+ codeScroll.innerHTML='<div data-chat-flow><div style="height:50px"></div><div class="md-code-block" style="position:relative;width:auto;height:auto;margin:0;--dsl-code-block-border-radius:16px"><div style="position:sticky;top:0;z-index:6;border-radius:16px 16px 0 0"><div data-code-block-banner style="height:40px;display:flex;justify-content:space-between;padding:0 16px"><span>Code</span><button type="button">Copy</button></div></div><pre style="margin:0;height:440px;overflow-x:auto"><code>long example</code></pre></div><div style="height:300px"></div></div>';
+ document.body.append(codeScroll);
+ const codeBlock=codeScroll.querySelector('.md-code-block');
+ const banner=codeBlock.firstElementChild;
+ const insideCode=(x,y)=>codeBlock.contains(document.elementFromPoint(x,y));
+ function checkRoundedCorners(top, mode) {
+   const {left,right}=codeBlock.getBoundingClientRect();
+   const hits=[left+1,right-1,left+20,right-20].map(x=>insideCode(x,top+1));
+   const css=getComputedStyle(codeBlock);
+   check(hits.join(',')==='false,false,true,true',
+     `${mode} clips both top corners without covering the toolbar (${css.clipPath}, ${hits})`);
+ }
+ codeScroll.scrollTop=145;
+ await next();
+ const scrollTopEdge=codeScroll.getBoundingClientRect().top;
+ check(codeBlock.getBoundingClientRect().top<scrollTopEdge&&banner.getBoundingClientRect().top===scrollTopEdge,'Tall code toolbar is pinned above the moving code');
+ checkRoundedCorners(scrollTopEdge,'Pinned code');
+ check(await waitFor(()=>getComputedStyle(codeBlock).backdropFilter.includes('url(')),'Rounded pinned code keeps refraction active');
+ const copy=codeBlock.querySelector('button');
+ const copyRect=copy.getBoundingClientRect();
+ check(document.elementFromPoint(copyRect.left+copyRect.width/2,copyRect.top+copyRect.height/2)===copy,'Pinned copy control remains clickable');
+ codeScroll.scrollTop=0;
+ await next();
+ checkRoundedCorners(codeBlock.getBoundingClientRect().top,'Unpinned code');
+ codeScroll.remove();
+ document.body.removeAttribute('data-we-table-readability');
+ check(await waitFor(()=>!table.hasAttribute('data-we-optics'))&&getComputedStyle(table).clipPath==='none'&&getComputedStyle(tableWrap).borderTopLeftRadius==='0px','Disabling table readability restores the native table with optics still on');
+ document.body.setAttribute('data-we-table-readability','');
+ check(await waitFor(()=>getComputedStyle(table).backdropFilter.includes('url(')),'Enabling table readability restores the rounded lens');
+ document.body.setAttribute('data-we-thinking-native','');
+ check(await waitFor(()=>!table.hasAttribute('data-we-optics')),'Native conversation mode releases the table filter');
+ check(fileCards.every(card=>!card.hasAttribute('data-we-optics')),'Native conversation mode also releases all file cards');
+ disposeTableOptics();
+ document.getElementById('result').textContent=JSON.stringify({ok:true,assertions,diagnostics});
+})().catch(e=>document.getElementById('result').textContent=JSON.stringify({ok:false,error:e.stack,assertions,diagnostics}));
+</script>

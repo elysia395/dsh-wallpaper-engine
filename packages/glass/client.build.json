@@ -49,6 +49,15 @@
       ]
     },
     {
+      "file": "src/glass-optics.js",
+      "why": "Optional visible-only lens refraction and pointer light; lifecycle owned by the glass layer.",
+      "markers": [
+        "function installGlassOptics() {",
+        "function syncGlassOptics() {",
+        "function disposeGlassOptics() {"
+      ]
+    },
+    {
       "file": "src/glass-layer.js",
       "why": "玻璃行为层（ADR-0016 第三刀新落点）：主包 src/effects.js 的玻璃段（全局玻璃量 / 染色地板写入 / 思考块门控 / 胶囊 / 侧栏跟随 / 软渲染钩子）+ clearEffects 的玻璃摘除清单逐字迁入，组成 registerLayerHooks('glass') 的 sync/dispose；detectSoftwareRender 随之从主包 src/client.js 迁入",
       "markers": [

@@ -833,6 +833,11 @@ const CSS_GLASS = `
     backdrop-filter: none !important;
     border-color: var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.14)) !important;
   }
+  /* Turn status renders a bare code element, outside the Markdown capsule styles. */
+  body[data-we-glass-page][data-we-thinking-glass] [data-chat-flow] [role="status"] > code[class$="_turnErrorCode"] {
+    padding-inline: 4px;
+    border-radius: var(--dsw-radius-sm, 6px);
+  }
   /* ── Markdown 表格 ───────────────────────────────────────────────────────
      两个各自的毛病，在纯色背景上都看不出来：
        ① 表格是承载文字的面，自己却没有面 —— 壁纸直接透过单元格画出来，
@@ -850,6 +855,17 @@ const CSS_GLASS = `
      [data-vcp-rawhtml]：宿主的表格类名带构建哈希，docs/CODE-STRUCTURE.md §13
      判其稳定性为低，不许把用户可见行为挂在它上面。
      关闭表格可读底时，这组规则整体让回宿主。没有模糊载体，软件渲染共用这组规则。 */
+  /* The host already clips overflow on its Markdown table wrapper. Round that
+     clip so the collapsed-border table and its header are clipped together. */
+  body[data-we-glass-page][data-we-thinking-glass][data-we-table-readability] [data-chat-flow] div:has(> table:only-child) {
+    border-radius: var(--dsw-radius-md, 12px);
+  }
+  /* A breakout wrapper can be wider than its table, so clip the table's own
+     collapsed borders and cells at the edge of the refracting surface. */
+  body[data-we-glass-page][data-we-thinking-glass][data-we-table-readability] [data-chat-flow] div > table:only-child {
+    border-radius: var(--dsw-radius-md, 12px);
+    clip-path: inset(0 round var(--dsw-radius-md, 12px));
+  }
   body[data-we-glass-page][data-we-thinking-glass][data-we-table-readability] [data-chat-flow] table,
   body[data-we-glass-page][data-we-thinking-glass][data-we-table-readability] [data-vcp-rawhtml] table {
     background: color-mix(in srgb,
@@ -871,6 +887,12 @@ const CSS_GLASS = `
   body[data-we-glass-page][data-we-thinking-glass][data-we-table-readability] [data-chat-flow] table td,
   body[data-we-glass-page][data-we-thinking-glass][data-we-table-readability] [data-vcp-rawhtml] table td {
     border-bottom: 1px solid rgba(180, 180, 180, calc(var(--we-border-alpha, 0.35) * 0.9)) !important;
+  }
+  body[data-we-glass-page][data-we-thinking-glass][data-we-table-readability] [data-chat-flow] table :is(th, td):first-child {
+    padding-inline-start: 16px;
+  }
+  body[data-we-glass-page][data-we-thinking-glass][data-we-table-readability] [data-chat-flow] table :is(th, td):last-child {
+    padding-inline-end: 16px;
   }
   /* The two chat navigation buttons reuse capsule mist and frost.
      Local fill tokens preserve native hover/disabled states and hit areas. */
@@ -998,6 +1020,21 @@ const CSS_GLASS = `
     background-color: color-mix(in srgb, var(--we-readability-base) 92%, transparent) !important;
     -webkit-backdrop-filter: none !important;
     backdrop-filter: none !important;
+  }
+  /* While the toolbar sticks, the original top edge of the backing plate
+     scrolls away. Move the shared round clip to the visible edge so the
+     plate and scrolling code cannot show through the toolbar's corners. */
+  @supports (animation-timeline: view(block 0px)) and (animation-range: exit-crossing) {
+    body[data-we-glass-page][data-we-thinking-glass]:not([data-we-thinking-native])
+      [data-conversation-scroll] [data-chat-flow] .md-code-block:has(> * > [data-code-block-banner]) {
+      animation: we-code-block-clip auto linear both;
+      animation-timeline: view(block 0px);
+      animation-range: exit-crossing;
+    }
+    @keyframes we-code-block-clip {
+      from { clip-path: inset(0 round var(--dsl-code-block-border-radius, 12px)); }
+      to { clip-path: inset(100% 0 0 round var(--dsl-code-block-border-radius, 12px)); }
+    }
   }
   /* A user bubble already supplies the single glass plate and frost. */
   body[data-we-glass-page][data-we-thinking-glass] [data-chat-flow] [class*="_bubble_"]:not([role="tooltip"]) .md-code-block {

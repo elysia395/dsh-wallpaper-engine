@@ -217,6 +217,22 @@
         {
           "kind": "guard",
           "npm": null,
+          "file": "test/verify-glass-optics.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-glass-optics-browser.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
           "file": "test/verify-glass-compat.mjs",
           "args": [],
           "tier": "hard",
@@ -1215,6 +1231,22 @@
           "kind": "guard",
           "npm": null,
           "file": "test/verify-market-sticky.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-glass-optics.mjs",
+          "args": [],
+          "tier": "hard",
+          "probe": false
+        },
+        {
+          "kind": "guard",
+          "npm": null,
+          "file": "test/verify-glass-optics-browser.mjs",
           "args": [],
           "tier": "hard",
           "probe": false

@@ -1875,6 +1875,7 @@ function onSidebarCornerSquare(side, corner, square) {
   if (key) setSetting(key, square === true);
   emit();
 }
+const onGlassOptics = (e) => { setSetting("glassOptics", e.target.checked); emit(); };
 // 标题栏液态玻璃（titlebarGlass）：与左侧栏同一形状的**乙类**总开关 —— 门控属性挂在
 // 玻璃后端（现 packages/glass/src/glass.js，ADR-0016 第三刀出户；本文件只翻存储键，切换不重建任何东西）。
 function onTitlebarGlass(e) { setSetting("titlebarGlass", e.target.checked); emit(); }
