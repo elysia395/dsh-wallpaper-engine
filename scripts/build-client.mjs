@@ -568,6 +568,11 @@ const INLINE_MODULES = [
     markers: ['function selectionBlockedNote(w)', 'function playableInventory()', 'function flattenWallpaperFolders(folders, depth, out)', 'function revalidateSelection()'],
   },
   {
+    file: 'src/client/library-tab-handlers.js',
+    why: 'src/client.js 正文的「壁纸库」页签处理器（搜索/分页/下钻/选择/批量操作/素材目录编辑态，渲染器只读值 + 调这些）—— 构建期内联在正文之前，同处一个扁平作用域',
+    markers: ['function setPickerOpener(el) { pickerOpener = el; }', 'function onTogglePropsPanel() {', 'function onWeAssetsDirDraft(e)', 'function onCancelEditWeAssetsDir()'],
+  },
+  {
     // 跨包浏览器半边的**显式键集契约表**（ADR-0014 S5.1 / S5.4）：71 个 getter 挂到 module.exports。
     // 必须排在内联清单**末尾**：表顶层读 `DEFAULTS`（lib/settings-schema.js 的内联件）⇒ 要排在它之后；
     // 正文里的函数声明在工厂体内提升、getter 又是惰性求值 ⇒ 与正文的先后无关。
