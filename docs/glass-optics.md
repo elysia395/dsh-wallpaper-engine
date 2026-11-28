@@ -8,7 +8,7 @@ The toggle is disabled in software rendering mode. The GTX 1650 is the approxima
 
 Existing material tint and blur remain in place on panels. Short, single-line code uses a clearer lens profile on an independent background leaf: glyphs are not filtered or duplicated. Wrapped inline code keeps the native line boxes and does not receive a rectangular backdrop over neighboring prose (see #197). Nested surfaces and explicit native-preserve regions are excluded.
 
-Maps are shared by geometry, capped at 560 pixels per dimension and retained in a bounded unused cache. Surfaces near the vertical edge of a scrollport get their maps before entering view, with preparation spread across frames. On nested scroll, only the affected surfaces refresh their positions. Pointer-only frames use cached rectangles and update coordinates through CSSOM. Refraction stays enabled while scrolling. With a live Scene wallpaper, inline code keeps its native glass material to avoid compositing a separate lens for each snippet. Code blocks and the composer still refract.
+Maps are shared by geometry, capped at 560 pixels per dimension and retained in a bounded unused cache. Surfaces near the vertical edge of a scrollport get their maps before entering view, with preparation spread across frames. On nested scroll, only the affected surfaces refresh their positions. Pointer-only frames use cached rectangles and update coordinates through CSSOM. Refraction stays enabled while scrolling. Dense inline code and animated wallpaper still incur backdrop compositing cost.
 
 Run:
 

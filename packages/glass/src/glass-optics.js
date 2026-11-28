@@ -16,7 +16,6 @@ function installGlassOptics() {
   // A breakout table can have a scroll wrapper wider than the table itself.
   const chatTable = '[data-chat-flow] div > table:only-child';
   const subagentMaterial = '[data-subagent-panel][data-menu-material="translucent"] > [aria-hidden="true"][class*="_material_"]';
-  const liveSceneFrame = '.we-layer iframe.we-live-iframe[src*="/scene-live/index.html?type=scene"]';
   const selector = [
     'body[data-we-glass-page][data-we-left-sidebar] [data-we-surface-plate="left-sidebar"]',
     'body[data-we-glass-chat][data-we-glass-page] [data-composer-card]',
@@ -44,7 +43,7 @@ function installGlassOptics() {
   const leafProperties = ['--we-optics-left', '--we-optics-top', '--we-optics-width', '--we-optics-height'];
   const generation = Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   let closed = false, scheduled = 0, serial = 0, assetSerial = 0, point = null, pointerReported = false;
-  let rectsDirty = true, lightsDirty = false, cachePixels = 0, liveScene = false;
+  let rectsDirty = true, lightsDirty = false, cachePixels = 0;
   const status = { generation, surfaces: 0, maps: 0, updates: 0, pointer: false, errors: 0,
     pixels: 0, buildMs: 0, cacheHits: 0, layoutReads: 0, lightWrites: 0, scans: 0 };
   let svg, defs, style, resize, intersection, codeIntersection, mutation, compactRoot;
@@ -302,16 +301,7 @@ function installGlassOptics() {
   }
   function discover(resample, roots = [doc.body]) {
     status.scans++;
-    const hasLiveScene = Boolean(doc.querySelector(liveSceneFrame));
-    // Each inline lens samples the animated iframe separately. Keep native code
-    // material for this wallpaper path and restore lenses when its iframe leaves.
-    if (hasLiveScene !== liveScene) {
-      liveScene = hasLiveScene;
-      roots = [doc.body];
-    }
-    for (const el of [...seats.keys()]) {
-      if (!el.isConnected || !el.matches(selector) || (liveScene && el.tagName === 'CODE')) detach(el);
-    }
+    for (const el of [...seats.keys()]) if (!el.isConnected || !el.matches(selector)) detach(el);
     const candidates = new Set();
     for (const root of resample ? [doc.body] : roots) {
       if (!root.isConnected) continue;
@@ -319,7 +309,6 @@ function installGlassOptics() {
       root.querySelectorAll(selector).forEach(el => candidates.add(el));
     }
     for (const el of candidates) {
-      if (liveScene && el.tagName === 'CODE') continue;
       if (el.closest('[data-we-surface-preserve]') || el.parentElement?.closest(selector)) continue;
       if (!seats.has(el)) {
         const seat = { id: serial++, mode: el.hasAttribute('data-we-surface-runtime') ? 'local' : el.matches('[data-composer-card]') ? 'pseudo' : 'direct', saved: new Map() };

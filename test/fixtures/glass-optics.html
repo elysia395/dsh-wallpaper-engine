@@ -51,8 +51,6 @@ const assertions=[];function check(value,message){if(!value)throw new Error(mess
  const fence=document.getElementById('fence'),bubble=document.getElementById('bubble');
  const originalCode=fence.innerHTML;
  const native=getComputedStyle(el,'::before').backdropFilter;
- const inlineCode=document.getElementById('inlineA');
- const nativeInlineFilter=getComputedStyle(inlineCode).backdropFilter;
  const release=installGlassOptics();
  // The compositor publishes visible maps over several frames.
  await waitFor(()=>window.__weGlassOptics?.maps>=10);
@@ -155,21 +153,6 @@ const assertions=[];function check(value,message){if(!value)throw new Error(mess
  fenceScroll.scrollTop=590;
  check(refracts(fastFence),'A large scroll jump reveals an already prepared code block');
  fenceScroll.remove();
- const sceneLayer=document.createElement('div');
- sceneLayer.className='we-layer';
- const sceneFrame=document.createElement('iframe');
- sceneFrame.className='we-live-iframe';
- sceneFrame.setAttribute('src','/wallpaper-engine/scene-live/index.html?type=scene');
- sceneFrame.srcdoc='';
- sceneLayer.append(sceneFrame);
- document.body.append(sceneLayer);
- check(await waitFor(()=>!inlineCode.hasAttribute('data-we-optics'))&&getComputedStyle(inlineCode).backdropFilter===nativeInlineFilter,
-   'Live Scene wallpaper restores the native inline material');
- check(refracts(fence)&&getComputedStyle(el,'::before').backdropFilter.includes('url('),
-   'Live Scene wallpaper keeps code block and composer refraction');
- sceneLayer.remove();
- check(await waitFor(()=>getLeaf(inlineCode)?.isConnected)&&getComputedStyle(getLeaf(inlineCode)).backdropFilter.includes('url('),
-   'Removing the live Scene restores inline code refraction');
  release();check(!document.querySelector('[data-we-optics],style[data-dsh-local-lens]'),'Dispose removes optics');
  check(getComputedStyle(el,'::before').backdropFilter===native,'Original native material restored');
  document.body.setAttribute('data-we-glass-chat','');
