@@ -4476,8 +4476,11 @@ setTimeout(async () => {
     // DSH_MUT_LIB 变异也能验到；负对照用同一个函数对变异文本判假。
     const hasInventoryFailureEarlyReturn = (src) => {
       const at = src.indexOf('if (next.error) {');
-      const seed = src.indexOf('selection.rotationSeeded = true;');
-      const disable = src.indexOf('selection.rotationEnabled = false;');
+      // ⚠️ 从 at 之后找这两句：构建期把 src/client/*.js 助手模块内联在**正文之前**，这些处理器
+      // （onToggleRotation 等）同样会写 rotationEnabled / rotationSeeded —— 从头找会把前置模块
+      // 里的那次写到前面去，判据随之恒假（2026-11-28 把播放处理器搬出正文后实测）。
+      const seed = src.indexOf('selection.rotationSeeded = true;', at);
+      const disable = src.indexOf('selection.rotationEnabled = false;', at);
       if (at < 0 || seed < 0 || disable < 0) return false;
       if (!(at < seed && at < disable)) return false;
       return /emit\(\);\s*return;/.test(src.slice(at, seed));
@@ -5184,7 +5187,9 @@ setTimeout(async () => {
 // ③ **行为**：拿真 `src/effects.js` 在带间谍的 DOM 替身上跑，live 档必须不读 getComputedStyle、
 // 不碰字体 / 场景音频，但照样写样式变量；同一份替身下无参调用必须**两样都做**（负对照）。
 {
-  const clientSrc = readFileSync(new URL('../src/client.js', import.meta.url), 'utf8');
+  // 取文口径：客户端正文族（正文 + src/client/*.js 助手模块）。播放/外观处理器搬出正文后，
+  // 按单文件读会让 declOf('onVideoVolume') 取到空串（判据恒假）。
+  const clientSrc = clientText();
   const effectsText = readFileSync(new URL('../src/effects.js', import.meta.url), 'utf8');
   const declOf = (name) => {
     const i = clientSrc.indexOf('function ' + name + '(') >= 0
@@ -5876,7 +5881,8 @@ setTimeout(async () => {
 // 判据口径：凡 `clampNum(…, DEFAULTS.<键>)` 的调用，取值域必须写成 `...schemaRange("<键>")`
 // （两处都要、且键名必须与被钳的那个键一致）⇒ 以后改 `KINDS` 不会再有第二处要改。
 {
-  const src = readFileSync(new URL('../src/client.js', import.meta.url), 'utf8');
+  // 取文口径：客户端正文族 —— 处理器搬进 src/client/*.js 后，单文件读会漏掉它们的取值域。
+  const src = clientText();
   // ⚠️ 正则要同时认得**两种形态**：修好的 `clampNum(v, ...schemaRange("k"), DEFAULTS.k)` 源码里只有
   //    三个实参（spread 在运行期展开成两个），而写手的旧形态是四个（`v, 0, 60, DEFAULTS.k`）。
   //    所以按"最后一个实参是 DEFAULTS.<键>"来切，把它前面的部分整体当"取值域"。
