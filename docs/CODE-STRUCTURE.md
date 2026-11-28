@@ -422,7 +422,7 @@ graph LR
 **客户端正文的助手模块**（`src/client/*.js`）**不在上表**：它们不是一族，而是从 `src/client.js` 正文里按职责搬出的助手（正文仍在 `src/client.js`，由 `clientSources()` 拼）。成员清单以 `scripts/build-client.mjs` 的 `INLINE_MODULES` 为准（本文不抄）；读法前缀 `src/client` 对 `src/client/handlers/` 与 `src/client/` 根一视同仁。
 | **点击与拖尾（「扩展」二号模块的两半）** | `fx-layer`（画布层：零 `ctx`、只读 `selection`、自带输入监听与内容驱动的 rAF） · `ext-fx`（扩展岛：收 `ctx`，动作走具名 `on*`） | 两者**互相零读取**（岛不读画布层的任何符号；画布层只在帧里现读 `selection`） | `packages/fx/src/`（两半随子包出户） |
 
-> 这批助手按职责分两个落点：处理器族住 `src/client/handlers/`（18 个 `*-handlers` / 取数 / 设置族），组件体与层助手留 `src/client/` 根。前缀族读法 `src/client` 对两层一视同仁（`clientText()` 不变），`move-src-module.mjs` 负责搬迁。
+> 这批助手按职责分两个落点：处理器族住 `src/client/handlers/`（`*-handlers` / 取数 / 设置族），组件体与层助手留 `src/client/` 根。前缀族读法 `src/client` 对两层一视同仁（`clientText()` 不变），`move-src-module.mjs` 负责搬迁。
 | **3D 纵深（「扩展」三号模块的两半）** | `parallax-layer`（行为层：零 `ctx`、只读 `selection`、不建 DOM，每帧把最终位移写进目标层自己的 `translate`；左栏与输入卡例外，走相对定位 `left`/`top`）与 `ext-parallax`（收 `ctx` 的扩展岛）。组结构、`STEP_DIV`、组选择器、气泡上限、插件组豁免的完整规则见 `packages/parallax/src/parallax-layer.js:1-60` 与 `src/styles/ext.js` 视差段 —— 本文不复制。 |
 | **设置与宿主通道** | `persistence` · `fontset-store` · `adapter` · `api-client` · `i18n` | 互读少 | `src/settings/` + `src/core/`（§3.4） |
 
@@ -970,7 +970,7 @@ bundle 是压缩产物，符号名（`me`/`Qb` 等）会随上游同步变化。
 
 1. `npm run build` 成功；`node test/verify-occlusion-hub.mjs` /
    `verify-scene-live-occlusion.mjs` / `verify-occlusion-client.mjs` 全过；
-2. `npm run verify` 全绿（现 40 项零回归）；`npm run verify:docs` 无新增告警；
+2. `npm run verify` 全绿；`npm run verify:docs` 无新增告警；
 3. `rects.js` 单测覆盖：裁剪、自底向上差集、多矩形、退化（空/全遮/零面积）；
 4. scene-serve 注入机检：真实请求 `/scene-live/index.html` 含桥 script（沿
    `test/verify-scene-live.mjs` Level E 真实请求模式）；

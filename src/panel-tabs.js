@@ -36,7 +36,7 @@
  *
  * 域模块的**节渲染器**按域住在同族兄弟模块（构建期内联在本文件之前，见 scripts/build-client.mjs 的
  * INLINE_MODULES）：src/panel-tabs/appearance.js / -mascot.js / -effects.js / -advanced.js；壁纸库的
- * 壁纸库 4 节 + 播放 2 节渲染器随子包走（packages/media-bridge/src/*），经面板节注册表挂回来。本文件只留八个 render*Tab
+ * 壁纸库 4 节 + 播放 2 节渲染器随子包走（packages/media-bridge/src/*），经面板节注册表挂回来。本文件只留 `render*Tab` 装配
  * （守卫与 src/client.js 的调用点都按名字取它们，导出名必须在**本文件**里有绑定）与
  * extensionModules()。主包内搬出的 render*Section / renderMascotFormCards 等仍是同一工厂作用域的
  * 自由名字（打包后同作用域；按文件 import 的台架按既有口径挂全局）；**子包**的渲染器
