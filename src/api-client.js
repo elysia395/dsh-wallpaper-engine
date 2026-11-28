@@ -11,8 +11,13 @@
  * 新代码必须走本模块，没有例外名单。
  *
  * ══ 契约 ══════════════════════════════════════════════════════════════════════
- * 需要的外界：**无**（`fetch` 由调用方或全局提供，便于单测注入）。
+ * 需要的外界：**无**（`fetch` 由调用方或全局提供，便于单测注入；挂载前缀取 `app-mount.js`，
+ * 独立模块形态下取不到 ⇒ 站点根）。
  * 对外提供：BASE / apiUrl(path) / apiFetch / apiJson / apiHead / apiPostJson / apiDelete。
+ *
+ * 挂载前缀（issue #409）：`apiUrl()` 会在路径前补上**反代子路径部署**的挂载前缀
+ *（探测在 `src/app-mount.js`，根路径部署下恒为空串）。宿主给回来的资源 URL 也一律
+ * 经 `apiUrl()` 归一化 —— 它们同样带 `/wallpaper-engine` 前缀，同样会被网关的站点根吞掉。
  *
  * 不变量：
  *   · **不吞错**：网络失败与非 2xx 都返回结构化结果（`{ ok, status, data, error }`），
@@ -35,15 +40,48 @@
 
 const BASE = '/wallpaper-engine';
 
-/** 拼出带前缀的 URL（path 允许已含前缀 / 已含查询串 / 是绝对或 data:/blob: URL —— 后者原样返回）。 */
-function apiUrl(path) {
+/**
+ * 应用挂载前缀（反代子路径部署，issue #409）。
+ *
+ * 前缀住 `src/app-mount.js`（唯一探测点：资源名 → document.baseURI → 站点根）。
+ * **根路径部署恒为空串** ⇒ 下面所有拼接与改动前逐字节相同。
+ * 独立模块形态（Node 单测直接 import 本文件）里没有内联作用域，按站点根处理 ——
+ * 这是 `typeof` 而不是直接调用的唯一理由，别把它"简化"掉。
+ */
+function apiMountPrefix() {
+  return typeof weAppBase === 'function' ? weAppBase() : '';
+}
+
+/**
+ * 纯拼接核：挂载前缀作为**入参**（前缀来源不参与拼接，于是可以在 Node 里逐条测）。
+ * `mount` 预期已由 app-mount 归一化（空串 = 站点根）；这里只做一次防御性去尾斜杠。
+ */
+function apiUrlWithMount(path, mount) {
   const p = String(path == null ? '' : path);
   // 绝对 URL = 带 scheme 的任何地址（含 dsh-app:// 等自定义协议）——只认 http(s) 的话，
   // 会把这类地址在自定义协议 origin 下重新拼接成畸形路径（实测症状：
   // 应用侧封面恒 404，而同路径 curl 200）。
   if (/^[a-z][a-z0-9+.-]*:/i.test(p) || p.startsWith('data:') || p.startsWith('blob:')) return p;
-  if (p.startsWith(BASE)) return p;
-  return BASE + (p.startsWith('/') ? p : '/' + p);
+  const m = String(mount == null ? '' : mount).replace(/\/+$/, '');
+  // 已经带挂载前缀的路径必须认得出来（apiUrl 会作用在宿主给的 URL 与二次处理的常量上，
+  // 不认就变成 /app/Harness/dsh/app/Harness/dsh/wallpaper-engine/...）。
+  if (m && p.startsWith(m + BASE)) return p;
+  if (p.startsWith(BASE)) return m + p;
+  return m + BASE + (p.startsWith('/') ? p : '/' + p);
+}
+
+/** 拼出带前缀的 URL（挂载前缀来自 app-mount；根路径部署下为空串 ⇒ 与改动前逐字节相同）。 */
+function apiUrl(path) {
+  return apiUrlWithMount(path, apiMountPrefix());
+}
+
+/** 响应是不是一页 HTML（网关的 404/405 页），而不是宿主的 JSON 信封。 */
+function responseIsHtml(response) {
+  try {
+    const headers = response && response.headers;
+    const ct = headers && typeof headers.get === 'function' ? String(headers.get('content-type') || '') : '';
+    return /text\/html/i.test(ct);
+  } catch { return false; }
 }
 
 function pickFetch(injected) {
@@ -82,6 +120,10 @@ async function apiFetch(path, options) {
   const ok = status >= 200 && status < 300;
   let data = null;
   let error = null;
+  // 归因（issue #409）：非 2xx 且响应是一页 HTML ⇒ 这不是宿主的接口，多半是反代丢了
+  // 挂载前缀、请求落到了站点根。**只标记事实**：不改判 ok、不自动换前缀重试 ——
+  // 重试要猜另一个前缀，猜错的代价（把正常 404 变成两次请求）比收益大。
+  const notHostEnvelope = !ok && (status === 404 || status === 405) && responseIsHtml(response);
   // `parse: 'always'` = 连非 2xx 的体也解析（读宿主给的 `{ error }` 用）；
   // 默认只在 2xx 解析 —— 两者都由调用点显式选择，本模块不替业务猜。
   if (o.parse === 'always' || (o.parse !== false && ok && o.parse !== 'none')) {
@@ -103,7 +145,7 @@ async function apiFetch(path, options) {
       error = 'parse:' + String((e && e.message) || e);
     }
   }
-  return { ok, status, data, error, response, url };
+  return { ok, status, data, error, response, url, mount: apiMountPrefix(), notHostEnvelope };
 }
 
 /** GET + 解析 JSON（最常用的一条）。 */
@@ -122,4 +164,4 @@ const apiPostJson = (path, payload, options) => apiFetch(path, Object.assign({
 /** DELETE（多数接口不返回体；需要时传 parse: true）。 */
 const apiDelete = (path, options) => apiFetch(path, Object.assign({ method: 'DELETE', parse: false }, options));
 
-export { BASE, apiUrl, apiFetch, apiJson, apiHead, apiPostJson, apiDelete };
+export { BASE, apiUrl, apiUrlWithMount, apiFetch, apiJson, apiHead, apiPostJson, apiDelete };

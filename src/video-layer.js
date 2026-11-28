@@ -373,7 +373,9 @@ let mediaInfoAbort = null;
  * `refreshMediaInfo` 采纳宿主"已有缓存"的回答都走它 —— 两处各拼一次字符串迟早漂移。
  */
 function transcodedUrlFor(token, fps) {
-  return "/wallpaper-engine/transcoded/" + encodeURIComponent(token) + "?fps=" + fps;
+  // 走 apiUrl：转码 URL 是**插件路由**，反代子路径部署时要带挂载前缀（issue #409）。
+  // 本机 / 根路径部署下拼出来的字符串与改动前逐字节相同。
+  return apiUrl("/transcoded/" + encodeURIComponent(token) + "?fps=" + fps);
 }
 async function refreshMediaInfo(force) {
   const token = selection.type === "video" && selection.url

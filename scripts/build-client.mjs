@@ -459,6 +459,14 @@ const INLINE_MODULES = [
     markers: ['const LIVE_FIRST_FRAME_MS = ', 'function syncLayers()', 'function toggleLiveDiag('],
   },
   {
+    // 挂载前缀（#409）：apiUrl 在**运行时**读它，函数声明提升保证内联顺序不承重；
+    // 放在本清单 api-client 之前只是为了读起来像依赖：前缀来源在 app-mount，消费在 apiUrl。
+    file: 'src/app-mount.js',
+    why: '反代子路径部署的挂载前缀探测（资源名 → document.baseURI → 站点根）；根路径部署恒为空串',
+    markers: ['const WE_APP_MOUNT_CACHE', 'function weMountFromResources(', 'function weAppMount(',
+      'function weAppBase(', 'function weAppMountReset('],
+  },
+  {
     file: 'src/api-client.js',
     why: '宿主 API 的唯一出入口（P2-9）：前缀 / 默认 no-store / 不吞错的结构化结果',
     markers: ['const BASE = ', 'function apiUrl(', 'function pickFetch(', 'async function apiFetch(',

@@ -152,6 +152,39 @@ function scenePreviewUrl(preview) {
   }
 }
 
+/**
+ * 宿主清单里的**资源 URL 字段**（issue #409）。
+ *
+ * 这些字段都是 `${BASE}/...` 形态（或宿主媒体源的绝对 URL），最终被塞进 `<img src>` /
+ * `<video src>` / iframe —— 它们**不经过 apiFetch**，所以 apiUrl 的挂载前缀不会自动落到
+ * 它们身上。反代把 DSH 挂在子路径下时，站点根的这批请求全部被网关吞掉：壁纸本体、
+ * 预览图、图集、属性面板一起 404，而面板只会说"宿主返回 404"。
+ *
+ * ⚠️ **token 类字段一律不在表里**：`sceneLiveSrc` 是宿主侧的文件绝对目录路径（Linux 家目录、
+ * Windows 盘符都可能出现），补前缀会直接把它打坏；`id` / `mediaToken` 同理。
+ */
+const WALLPAPER_URL_FIELDS = ["preview", "frameUrl", "media", "sceneVideo", "sceneAudio",
+  "slidesUrl", "liveFrame", "propsUrl", "webLiveSrc"];
+
+/** 逐条归一化（根路径部署下 apiUrl 原样返回 ⇒ 返回原对象，不做无谓复制）。 */
+function normalizeWallpaperUrls(list) {
+  if (!Array.isArray(list)) return list;
+  return list.map((w) => {
+    if (!w || typeof w !== "object") return w;
+    let out = null;
+    for (const key of WALLPAPER_URL_FIELDS) {
+      const value = w[key];
+      if (typeof value !== "string" || !value) continue;
+      const normalized = apiUrl(value);
+      if (normalized !== value) {
+        if (!out) out = { ...w };
+        out[key] = normalized;
+      }
+    }
+    return out || w;
+  });
+}
+
 // 出图来源阶段：GET frameUrl 由 host 从磁盘取（`<key>_gpu.png` 或用户导入的自定义画面），
 // img onload = 解码完成，元素随 commit 移入新层。空槽是 404（no-frame）→ preview 探测；
 // 422 只属于 v=4 自定义画面缺失。preview 也失败 → onFail 跳过。
@@ -291,7 +324,11 @@ function applySelection(id, opts) {
   }
   const savedVariant = Number(selection.frameVariants && selection.frameVariants[String(w.id)]) || 0;
   // 场景全屏占位和静态帧失败回退都需要原图。清单的卡片 URL 不变。
-  selection.previewUrl = w.type === "scene" ? scenePreviewUrl(w.preview) : w.preview || null;
+  // 网页壁纸的降级垫底也是**作者预览图**：与场景同一条 full=1 通路（issue #419 附件 1）。
+  // 以前 web 直接拿清单给的缩略图，远程端黑屏后垫出来的是一张糊图。
+  selection.previewUrl = (w.type === "scene" || w.type === "web")
+    ? scenePreviewUrl(w.preview)
+    : (w.preview || null);
   selection.url = w.type === "scene" ? frameUrlWithVariant(w.frameUrl, savedVariant) || selection.previewUrl : w.media;
   // 宿主 inventory 权威标记：已有自定义画面时同步进本地记忆（换机/清配置后恢复）。
   if (w.hasCustomFrame) {
@@ -397,7 +434,12 @@ function buildMedia(sel) {
   //   3. 静态帧 img (frameUrl) / 网页壁纸的裸 iframe 兼容路径
   const isLive = (sel.type === "scene" || sel.type === "web") && liveRenderEnabled(sel);
   const isSceneVideo = sel.type === "scene" && Boolean(sel.sceneVideo) && !isLive;
-  const isStill = sel.type === "image" || (sel.type === "scene" && !isLive && !isSceneVideo);
+  // 网页壁纸在 live 不可用（远程取不到载荷 / 首帧判定失败）时同样走静态垫底：
+  // 否则会掉进下面的「web 裸 iframe 兼容路径」，浏览器把封面 PNG 当**文档**加载，
+  // 按原始尺寸贴在左上角（issue #419 附件 2）。
+  const isStill = sel.type === "image"
+    || (sel.type === "scene" && !isLive && !isSceneVideo)
+    || (sel.type === "web" && !isLive);
   if (isLive) {
     reportClientDiag("live-build", "type=" + sel.type + " delay=" + sel.liveBootDelay + " boot=" + bootRestore);
     // 轮换提交不走这里：live 的领养是节点级（staging 容器整体转为新层，
