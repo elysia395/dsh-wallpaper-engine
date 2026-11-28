@@ -104,12 +104,12 @@ function weMountFromBaseURI(baseURI, origin) {
 function weMountOverride(search) {
   const q = String(search == null ? "" : search);
   if (!q) return null;
-  let raw = null;
+  let raw;
   try {
     const params = new URLSearchParams(q.charAt(0) === "?" ? q.slice(1) : q);
     raw = params.get("we-app-mount");
   } catch { return null; }
-  if (raw === null) return null;
+  if (raw == null) return null;
   const value = String(raw).trim();
   if (value === "" || /^(0|off|none|root)$/i.test(value)) return "";
   if (/^[a-z][a-z0-9+.-]*:/i.test(value) || value.startsWith("//") || value.includes("\\") || /\s/.test(value)) return null;
