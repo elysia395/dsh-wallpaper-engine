@@ -41,6 +41,7 @@ import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { dirname, join, relative, resolve, sep } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { blankStringLiterals, functionBodyOf, stripComments } from './tools/js-text.mjs';
+import { clientText as clientFamily } from './tools/src-scope.mjs';
 
 const ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '..');
 
@@ -94,7 +95,7 @@ const SRC_FILES = SRC.filter((f) => f.rel.startsWith('src/'));
 const PKG_FILES = SRC.filter((f) => f.rel.startsWith('packages/'));
 const FLOOR_SRC_FILES = 60;
 const FLOOR_PKG_FILES = 15;
-const REQUIRED_SRC = ['src/client.js', 'src/live-layer.js', 'src/media-prep.js', 'src/layer-core.js'];
+const REQUIRED_SRC = ['src/client.js', 'src/live-layer.js', 'src/media-prep.js', 'src/wallpaper/layer-core.js'];
 
 check('扫描面非空：src 面 ' + SRC_FILES.length + ' 个 .js（地板 ' + FLOOR_SRC_FILES + '）、packages/<pkg>/src 面 '
   + PKG_FILES.length + ' 个（地板 ' + FLOOR_PKG_FILES + '）',
@@ -201,7 +202,13 @@ const BODY_MOUNT_WHITELIST = Object.freeze({
   'src/media-prep.js': { count: 1, owner: 'rotation-staging' },
   'src/media-prep/probe.js': { count: 1, owner: 'rotation-staging' },
   'src/client/audio-playback.js': { count: 1, owner: 'scene-audio' },
-  'src/client.js': { count: 4, owner: 'transient-input|download-anchor|rope-dock|perf-float' },
+  'src/client/handlers/glass-preset-handlers.js': { count: 1, owner: 'download-anchor' },
+  // 导出预设的下载 <a> 自 2026-11-28 起随玻璃预设族搬进 src/client/handlers/glass-preset-handlers.js ⇒
+  // 正文那 4 处变成 3 处（一次性 <input type=file> / rope dock 宿主 / 性能悬浮窗宿主）。
+  // 2026-11-28：apply() 搬进 src/client/plugin-apply.js ⇒ rope dock 宿主与性能悬浮窗宿主那两处
+  // 挂载点随族搬走（成对拆除仍在同一函数体内），正文只剩 pickImageFile 的一次性 <input>。
+  'src/client/plugin-apply.js': { count: 2, owner: 'rope-dock|perf-float' },
+  'src/client.js': { count: 1, owner: 'transient-input' },
   'packages/fx/src/fx-layer.js': { count: 1, owner: 'pkg-own-host(fx overlay)' },
 });
 
@@ -274,9 +281,9 @@ check('P2.1 document.body 挂载白名单逐点归属（' + bodyAppendSites(SRC)
 
 // 负对照：白名单外新增一个挂载点 ⇒ 红。
 {
-  const mutated = SRC.concat([{ rel: 'src/video-layer.js', text: 'function x(){ document.body.appendChild(document.createElement("div")); }' }]);
+  const mutated = SRC.concat([{ rel: 'src/wallpaper/video-layer.js', text: 'function x(){ document.body.appendChild(document.createElement("div")); }' }]);
   const problems = bodyMountViolations(mutated);
-  negOk('白名单外的新 body 挂载点判红', problems.some((p) => /src\/video-layer\.js.*白名单/.test(p)), problems.join(' | '));
+  negOk('白名单外的新 body 挂载点判红', problems.some((p) => /src\/wallpaper\/video-layer\.js.*白名单/.test(p)), problems.join(' | '));
   const pkgHost = bodyMountViolations(SRC.concat([{
     rel: 'packages/parallax/src/bad-host.js',
     text: 'function h(){ const el = document.createElement("div"); document.body.appendChild(el); }',
@@ -481,7 +488,9 @@ function teardownViolations(cleanupBody) {
   return problems;
 }
 
-const clientSrc = fileOf('src/client.js');
+// P3 取文口径：客户端正文族 —— fiber cleanup 自 2026-11-28 起随 apply() 住 src/client/plugin-apply.js。
+  // P1/P2 那几条仍按单文件读（LAYER_ID / SCRIM_ID 声明确实钉在正文里）。
+  const clientSrc = { rel: 'src/client.js(族)', text: clientFamily() };
 check('P3.0 能从 src/client.js 定位到 fiber cleanup 段', clientSrc !== null);
 const cleanup = clientSrc ? extractCleanup(clientSrc.text) : null;
 check('P3.1 cleanup 段定位成功（return () => { disposed = true; … }）',
@@ -598,13 +607,13 @@ check('P4.1 iframe 创建点恰 5 处（3 文件）+ 创建函数体不直接挂
 // 负对照：合成源 + 变异函数体。
 {
   const badDirect = iframeViolations(SRC.concat([{
-    rel: 'src/video-layer.js',
+    rel: 'src/wallpaper/video-layer.js',
     text: 'function bad(sel){ const f = document.createElement("iframe"); document.body.appendChild(f); return f; }',
   }]));
   negOk('iframe 变量被 document.body.appendChild 直接挂上去判红',
     badDirect.some((p) => /iframe 变量 f 直接挂到 document\.body/.test(p)), badDirect.join(' | '));
   negOk('创建点分布漂移（新增第 6 处）判红',
-    iframeViolations(SRC.concat([{ rel: 'src/video-layer.js', text: 'const z = document.createElement("iframe");' }]))
+    iframeViolations(SRC.concat([{ rel: 'src/wallpaper/video-layer.js', text: 'const z = document.createElement("iframe");' }]))
       .some((p) => /分布漂移/.test(p)));
   const probeBodyBad = 'function prepareWebProbe(w, prep, onReady) { const f = document.createElement("iframe"); document.body.appendChild(f); }';
   const probeFake = {

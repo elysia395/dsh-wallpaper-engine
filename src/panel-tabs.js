@@ -17,7 +17,7 @@
  *     面板的 `sel` / 页签需要的局部视图状态 / 处理器。**多传字段无害，漏传会当场
  *     ReferenceError**（守卫会抓住）—— 这是刻意选的失败方式：响亮且可定位。
  *   · 页签**只做"读 + 组装 React 树"**，四类越界由 `test/verify-client.mjs` 的接缝判据钉住
- *     （与 `src/picker-modal.js` / `src/picker-props-panel.js` **同一条口径**）：
+ *     （与 `src/picker/picker-modal.js` / `src/picker/picker-props-panel.js` **同一条口径**）：
  *       ① 不得引用 `selection`（写入经 ctx 的 `setSetting` / `setTransient` 两个入口）；
  *       ② 不得调 `emit(`（通知归处理器）；
  *       ③ 不得改写 **ctx 别名**指向的东西（`editing` = `selection.editing`、`sel` = store 快照…）
@@ -36,7 +36,7 @@
  *
  * 域模块的**节渲染器**按域住在同族兄弟模块（构建期内联在本文件之前，见 scripts/build-client.mjs 的
  * INLINE_MODULES）：src/panel-tabs/appearance.js / -mascot.js / -effects.js / -advanced.js；壁纸库的
- * 壁纸库 4 节 + 播放 2 节渲染器随子包走（packages/media-bridge/src/*），经面板节注册表挂回来。本文件只留八个 render*Tab
+ * 壁纸库 4 节 + 播放 2 节渲染器随子包走（packages/media-bridge/src/*），经面板节注册表挂回来。本文件只留 `render*Tab` 装配
  * （守卫与 src/client.js 的调用点都按名字取它们，导出名必须在**本文件**里有绑定）与
  * extensionModules()。主包内搬出的 render*Section / renderMascotFormCards 等仍是同一工厂作用域的
  * 自由名字（打包后同作用域；按文件 import 的台架按既有口径挂全局）；**子包**的渲染器
@@ -108,7 +108,7 @@ function weComponentVisibleOf(components, name) {
   }
 
   // 「主题预设」+「玻璃 UI」节的**注册表占位桩**（ADR-0016 第二刀）：真渲染器住 packages/glass
-  // （它把自己的 render 登记进 src/extension-registry.js 的面板节注册表）。这里按 id 取出来、
+  // （它把自己的 render 登记进 src/extensions/extension-registry.js 的面板节注册表）。这里按 id 取出来、
   // 在内置位（第三节）上调它 —— 屏上顺序与搬迁前逐字一致，两种档面（设置页 / 侧栏）同一条路。
   // 注册表里没有 = 该子包没装 / 行被关 ⇒ 返回 null（React 对 null 子节点零渲染）⇒
   // **缺的是这一节，不是这一页**（D3①/D3③；fonts 那条尾部通道同款语义）。
@@ -119,7 +119,7 @@ function weComponentVisibleOf(components, name) {
   }
 
 
-  // 模块级 ↺ 的**薄包装**（issue #192）：真实现住在 `src/module-reset.js`（panel-tabs 与
+  // 模块级 ↺ 的**薄包装**：真实现住在 `src/ui/module-reset.js`（panel-tabs 与
   // glass-panel 共用，抽出来才能让挂载台 import 真实现）。这里只把"取词 + 处理器"两样外界
   // 喂给它 —— 中文因此留在本文件的 `weT(...)` 里（i18n 扫描器认这个形态；写进被调模块会
   // 被判成"裸中文"），各节调用点则保持 `moduleResetButton("模块名", onResetModule)` 这么短。
@@ -196,7 +196,7 @@ function weComponentVisibleOf(components, name) {
         sel.mascotError
           && React.createElement("div", { className: "we-picker__hint we-avatar-error", key: "rope-custom-err" }, sel.mascotError),
         // 吉祥物大小的**显示刻度**与存储刻度不同（ropeScale = 倍率，滑杆值本身也是倍率）：
-        // 右侧是 `Math.round(scale*100)+"%"` 的预格式化整串 ⇒ 保持只读回显（#255⑤ 明确保留）。
+        // 右侧是 `Math.round(scale*100)+"%"` 的预格式化整串 ⇒ 保持只读回显（明确保留）。
         SliderRow(weT("吉祥物大小"), ROPE_SCALE_MIN, ROPE_SCALE_MAX, ROPE_SCALE_STEP,
           sel.ropeScale, onRopeScaleChange, Math.round(sel.ropeScale * 100) + "%", "rope-scale"),
       ),
@@ -284,12 +284,12 @@ function weComponentVisibleOf(components, name) {
   //   · 模块**不得**自己写设置 / 发通知 / 持有状态：本文件是渲染器（契约见文件头），
   //     要动状态就把动作做成 src/client.js 的具名处理器、经 ctx 传进来。
   // 现有三项 —— **本文件不再枚举它们**（P-A 起）：
-  //   一号 = 自定义会话头像（src/ext-avatar.js + src/avatar-layer.js，会话界面上的 DOM 补丁），
+  //   一号 = 自定义会话头像（src/extensions/ext-avatar.js + src/extensions/avatar-layer.js，会话界面上的 DOM 补丁），
   //          **留在主包**，由 src/client.js 在模块作用域自登记；
   //   二号 = 点击效果与拖尾效果（packages/fx）、三号 = 3D 效果（packages/parallax）**各自
   //          是一个独立包** —— 三份 bundle 的求值顺序不保证，同一个工厂作用域里再也放不下
   //          一份"按数组顺序排好的清单"，于是"谁登记了什么"落在一张共享注册表上
-  //          （src/extension-registry.js；跨包通道见 ADR-0014 S5.1 / S5.4）。
+  //          （src/extensions/extension-registry.js；跨包通道见 ADR-0014 S5.1 / S5.4）。
   // ⚠️ **顺序即屏上顺序**：跨包顺序**不能**靠数组序（bundle 求值顺序不是契约），改由描述符的
   //    `order` 声明（avatar=1 / fx=2 / parallax=3），排序 = (order, 注册序)。
   //    加第四项 = 在它自己的包里调 `weRegisterExtensionModule(id, descriptor)`，本文件零改动。
@@ -480,7 +480,7 @@ function weComponentVisibleOf(components, name) {
   }
 
 
-  // ── 页签级重置（issue #192 用户口径：「每个选项卡后面加重置，重置指定选项卡」）──────────
+  // ── 页签级重置（用户口径：「每个选项卡后面加重置，重置指定选项卡」）──────────
   // 压在**每个页签内容的最末尾**，由 client.js 的渲染点在 renderActiveTab() 之后统一挂 ——
   // 六处渲染器各挂一遍必然漏一个，挂一处才是结构性的。
   // 走两步确认：整页设置量不小（外观页就有 60 个键）且不可撤销 ⇒ 与模块级 ↺ 分档
@@ -514,7 +514,7 @@ function weComponentVisibleOf(components, name) {
     );
   }
 
-  // ── 全局重置节（issue #192，压在「系统」页签末尾）──────────────────────────────
+  // ── 全局重置节（压在「系统」页签末尾）──────────────────────────────
   // 三档里的最高一档：**模块 < 页签 < 全局**。全局必须二次确认（不可撤销）。
   // 二次确认复用 client.js 既有的 `armConfirm` / `renderConfirmRow` 两步构件 ——
   // `selection.armedConfirm` 是单值 ⇒ 结构上同一时刻只有一个动作待确认。

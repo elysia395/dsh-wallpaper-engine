@@ -184,7 +184,7 @@ All changes target `main`. The plugin is **one natively cross-platform tree** (W
   - **本地链同样判新鲜度**：`test/verify-client-sync.mjs` 会重建、逐字节比对、并把文件**还原**（守卫不改工作树）⇒ 产物过期会在 **push 之前**就红。
 - **铁律二**：绝不手改 `lib/client.js`，下一次构建会抹掉。
 - **铁律三 —— 产物即契约**：多个守卫跑的是**产物**（`verify-readability`、`verify-softrender`、`verify-client`），另有一些**按行首锚点从产物里**取样式表。这就是 `src/styles.js` 禁止在自己注释里写反引号、也禁止复述那条声明语句的原因（实测踩到过：`verify-host-paint-scope` 报"裸反引号 489"）。
-- **陷阱 —— `src/**` 的注释会随包发给用户**：涉及行数 / 体积这类会漂的量，写**复算命令**而不是写数字（曾有两处模块头注释把 `src/client.js` 说成"9,500 行"，现已修掉 —— 别再写回去）。
+- **陷阱 —— `src/**` 的注释会随包发给用户**：涉及行数 / 体积这类会漂的量，写**复算命令**而不是写数字（曾有两处模块头注释给 `src/client.js` 写了一个具体行数，现已删掉 —— 别再写回去）。
 - **不要把它当巨石来"治理"**：它的体积就是 `src/**` 的体积，杠杆在源文件。
 
 ## Install a local dev build / 从本地源码安装（开发者）
@@ -241,11 +241,11 @@ npm run pack:release
 
 This builds clients and creates nine tarballs plus `release-set.json` under a unique `.test-cache/release/set-*` directory. The staged main manifest lists each of the eight child packages at its exact real version, with no pet or Electron dependency. Publish children first and the main package last, following `publishOrder`. This command never publishes anything. A raw root `npm pack` uses the development manifest, not the complete release set. Do not publish a test version without explicit approval.
 
-该命令构建客户端，在独立的 `.test-cache/release/set-*` 目录生成九个 tarball 和 `release-set.json`。发布形态主包将八个子包的真实精确版本列为运行依赖，不包含 pet 或 Electron。正式发布按 `publishOrder` 先子包、后主包。此命令不执行发布；源码根目录直接 `npm pack` 仍是开发清单，不能当成完整发布集。灰测阶段未经明确批准，不要发布 npm。
+该命令构建客户端，在独立的 `.test-cache/release/set-*` 目录生成全部包的 tarball 和 `release-set.json`。发布形态主包将全部子包的真实精确版本列为运行依赖，不包含 pet 或 Electron。正式发布按 `publishOrder` 先子包、后主包。此命令不执行发布；源码根目录直接 `npm pack` 仍是开发清单，不能当成完整发布集。灰测阶段未经明确批准，不要发布 npm。
 
 The full procedure — npm channel, GitHub Release assets, post-publish self-checks, mirror sync and rollback — is in the “Release procedure (maintainers)” section at the end of this file. Two rules are not negotiable: every child package must be on the registry at the same version before the main package is usable (`pnpm add` resolves the eight exact versions from the registry, so a main-only release fails with `ERR_PNPM_FETCH_404`), and a GitHub Release must carry all nine tarballs plus `release-set.json` — a main-only Release is an uninstallable package. For the offline release set use `npm run install:release -- --set <dir> --profile <name> --dsh-home <dir> --app-closed`, which pins the eight children to the sibling tarballs through profile `overrides`; never hand the desktop installer a single main tarball.
 
-完整发布流程（npm 通道、GitHub Release 资产、发布后自证、镜像同步与回滚）见本文末尾「发布流程（维护者）」节。两条规则不可让：主包可用的前提是八个子包已在同一版本上公开（主包把八个**精确版本**声明为运行依赖，只发主包会让用户的 `pnpm add` 以 `ERR_PNPM_FETCH_404` 失败）；GitHub Release 必须挂**九个 tarball + `release-set.json`**，只挂主包的 Release 是一个装不上的包。离线安装发布集用 `npm run install:release -- --set <目录> --profile <name> --dsh-home <目录> --app-closed`（它把八个子包钉到同目录 tarball 的 `overrides` 写进 profile），不要把单个主包 tarball 交给桌面安装器。
+完整发布流程（npm 通道、GitHub Release 资产、发布后自证、镜像同步与回滚）见本文末尾「发布流程（维护者）」节。两条规则不可让：主包可用的前提是全部子包已在同一版本上公开（主包把各子包的**精确版本**声明为运行依赖，只发主包会让用户的 `pnpm add` 以 `ERR_PNPM_FETCH_404` 失败）；GitHub Release 必须挂**全部包的 tarball + `release-set.json`**，只挂主包的 Release 是一个装不上的包。离线安装发布集用 `npm run install:release -- --set <目录> --profile <name> --dsh-home <目录> --app-closed`（它把全部子包钉到同目录 tarball 的 `overrides` 写进 profile），不要把单个主包 tarball 交给桌面安装器。
 
 On Windows, use a current patched Node.js release for packaging, and ensure npm uses the same Node.js runtime. Take the supported Node range from `package.json`'s `engines`, and CI's Node version from `setup-node` in the workflows — do not pin a version here.
 
@@ -307,7 +307,7 @@ CI 完整路径使用 `npm ci --omit=peer --ignore-scripts --no-audit --no-fund`
 - **UI 面清单棘轮**（`test/compat-harness-surfaces.mjs`）：已装 harness 的 `dsh-client-ui-*`
   表面与提交清单 `test/fixtures/harness-ui-surfaces.json` 做差，**新表面未登记即红** ——
   盖不盖由人裁定、裁定必须落盘；另对 `dsh-client-ui-sidebar-right` 真源码断言属性锚点与
-  隐藏机制 allowlist（#107 型回归的活判据）。
+  隐藏机制 allowlist（这类回归的活判据）。
 - **逐页 DOM/样式断言**（`test/compat-harness-pages.mjs`，档位 2）：零依赖 CDP 驱动无头
   浏览器进真 harness 走首页 → 会话页 → 设置页，对**计算样式**下判据（设置窗口玻璃的
   backdrop / sheen 渐变 / token 接管 + 五分区逐页走查 + 零插件错误）；`--dump` 是探查模式。
@@ -396,14 +396,14 @@ UI 改动还应说明实际测试过的 DSH 界面、浏览器或 DSH Desktop �
 > 发布是维护者的操作：规则只在 `Release set / 发布集` 一节给出摘要，完整流程以本节为准。
 
 
-本插件由**一个主包 + 八个子包**组成（多包形态的取舍见 [`adr/0013`](./adr/0013-bundle-multi-component-rows.md)
-与 [`adr/0014`](./adr/0014-subpackage-contract.md)），九个包版本锁步、主包把八个子包
+本插件由**一个主包 + 多个子包**组成（多包形态的取舍见 [`adr/0013`](./docs/adr/0013-bundle-multi-component-rows.md)
+与 [`adr/0014`](./docs/adr/0014-subpackage-contract.md)），全部包版本锁步、主包把全部子包
 声明成**精确版本运行依赖**。所以"发布"从来不是发一个包，而是发**一个发布集**：
 
 | 通道 | 用户侧入口 | 需要先满足 |
 |---|---|---|
-| npm（推荐，DSH 桌面"添加插件"直接可用） | 包名 `dsh-plugin-wallpaper-engine`（可带 `@<版本>`） | 九个包**同版本**全部在 registry 上 |
-| GitHub Release（镜像 / 离线） | 九个 tarball + `release-set.json` | Release 资产**必须是九件套**，离线安装用 `scripts/install-release.mjs` |
+| npm（推荐，DSH 桌面"添加插件"直接可用） | 包名 `dsh-plugin-wallpaper-engine`（可带 `@<版本>`） | 所有包**同版本**都在 registry 上 |
+| GitHub Release（镜像 / 离线） | 全部包的 tarball + `release-set.json` | Release 资产必须包含**全部包的 tarball + `release-set.json`**，离线安装用 `scripts/install-release.mjs` |
 
 两条通道共用同一份产物：`npm run pack:release`。
 
@@ -421,7 +421,7 @@ This error happened while installing the dependencies of dsh-plugin-wallpaper-en
 ```
 
 ```text
-# 探针 B：把九个 tarball 全部当顶层 file: 依赖一次装
+# 探针 B：把每个包的 tarball 都当顶层 file: 依赖一次装
 [ERR_PNPM_FETCH_404] GET https://registry.npmjs.org/dsh-plugin-wallpaper-engine-fonts: Not Found - 404
 ```
 
@@ -433,8 +433,8 @@ ALL 8 top-level packages present; createRequire(profile/cordis.yml).resolve() OK
 
 结论：
 
-- 顶层 `file:` **不能满足**传递依赖的 registry 版本范围（探针 B）⇒ "把九个 tgz 一次 `pnpm add`"不是安装办法。
-- 唯一能让离线九件套装上的机制是 profile 的 `overrides:`（探针 C2）。这也是 DSH 自己的兼容性
+- 顶层 `file:` **不能满足**传递依赖的 registry 版本范围（探针 B）⇒ "把所有 tgz 一次 `pnpm add`"不是安装办法。
+- 唯一能让离线发布集装上的机制是 profile 的 `overrides:`（探针 C2）。这也是 DSH 自己的兼容性
   实跑走的路（`test/compat-harness-live.mjs` 的 `main()`：tarball 通道把 `overrides` 段写进 profile 的
   `pnpm-workspace.yaml`）。
 
@@ -454,13 +454,13 @@ ALL 8 top-level packages present; createRequire(profile/cordis.yml).resolve() OK
 #### 2.2 生成发布集
 
 ```sh
-npm run pack:release                      # → .test-cache/release/set-<随机>/（九个 tgz + release-set.json）
+npm run pack:release                      # → .test-cache/release/set-<随机>/（全部包的 tgz + release-set.json）
 npm run pack:release -- --output <目录>    # 指定输出目录
 ```
 
 产物体积随版本变化，不在文档里记数：打包后用 `npm pack --dry-run` 看清单，或对
 `.test-cache/release/set-<随机>/` 下的 tgz 直接 `ls -l` 现场看。`release-set.json` 的
-`publishOrder` 即发布顺序：**八个子包在前，主包最后**。
+`publishOrder` 即发布顺序：**全部子包在前，主包最后**。
 
 `pack:release` 只打包、绝不发布；源码根目录直接 `npm pack` 得到的是**开发清单**（带 scripts 与
 devDependencies，`files` 不含子包），不能当发布集用。
@@ -471,10 +471,10 @@ devDependencies，`files` 不含子包），不能当发布集用。
 node test/verify-release-set.mjs
 ```
 
-它真打一次包、解开九个 tarball 的字节，判四件事（五条负对照共用同一判据）：
+它真打一次包、解开全部包的 tarball 的字节，判四件事（五条负对照共用同一判据）：
 
 1. 发布集 = 主包 + 仓库里每个子包各一个，名字与版本与源码清单逐字相等，主包在最后；
-2. 主包 tarball 的 `dependencies` 里八个子包值 = 子包真实版本、**不带 `^`/`~`/`*`**，且不多不少；
+2. 主包 tarball 的 `dependencies` 里全部子包值 = 子包真实版本、**不带 `^`/`~`/`*`**，且不多不少；
 3. 主包 tarball 不带 `packages/` `src/` `test/` `scripts/` `docs/` 等开发面目录，但必须有
    `lib/subpackage-boot.js` 与 `cordis.patch.yml`；
 4. 每个子包 tarball 都有 `lib/index.js`、`cordis.patch.yml`，声明 `dsh.client` 的还必须有
@@ -488,7 +488,7 @@ node test/verify-release-set.mjs
 
 ```sh
 set_dir=.test-cache/release/set-XXXXXX
-# 1) 八个子包
+# 1) 全部子包
 for f in $(node -e "console.log(require('./$set_dir/release-set.json').publishOrder.slice(0,-1).join(' '))"); do
   npm publish "$set_dir/$f" --access public
 done
@@ -505,12 +505,12 @@ Windows PowerShell 等价写法见 §5 的脚本片段（Git Bash 不可用时�
 看到的是"这个插件装不上"。已发布的主包**不能**靠重发同版本修好（同版本不可覆盖）——只能补发子包
 （补发后立刻恢复可用），或升版本重发主包。
 
-发布前先 `npm view <每个包>@<版本> version` 确认九个包都还没被占用；中断后恢复时只补发缺的。
+发布前先 `npm view <每个包>@<版本> version` 确认全部包都还没被占用；中断后恢复时只补发缺的。
 
 #### 3.3 发布后自证（三步都要过）
 
 ```sh
-# ① registry 上九个版本都在（VERSION 换成本次发布版本）
+# ① registry 上所有包的版本都在（VERSION 换成本次发布版本）
 VERSION=<本次版本>
 for p in dsh-plugin-wallpaper-engine dsh-plugin-wallpaper-engine-{about-notice,fonts,fx,glass,mascot-avatar,media-bridge,parallax,pet-link}; do
   npm view "$p@$VERSION" version || echo "MISSING $p"
@@ -527,7 +527,7 @@ node -e "const{createRequire}=require('node:module');const r=createRequire(proce
 ```
 
 ```sh
-# ③ DSH 桌面端到端：新建 profile → 添加插件 → 贴包名 → 装完后确认九个目录都在
+# ③ DSH 桌面端到端：新建 profile → 添加插件 → 贴包名 → 装完后确认所有包目录都在
 ls "<DSH_HOME>/profiles/<profile>/node_modules" | grep dsh-plugin-wallpaper-engine
 ```
 
@@ -541,7 +541,7 @@ DSH 安装源可选 `registry.npmjs.org` / `registry.npmmirror.com` / 自定义�
 
 ### 4. 通道 B：GitHub Release（镜像与离线安装）
 
-#### 4.1 资产必须是九件套 + 清单
+#### 4.1 资产必须是全部包的 tarball + 清单
 
 ```sh
 # VERSION 与 §3.3 同一个值
@@ -565,7 +565,7 @@ node scripts/install-release.mjs ... --dry-run     # 只打印将要写入的 ov
 它做四件事：校验发布集（清单 ↔ tarball 一一对应、主包在最后）→ 备份 profile 的 `package.json` 与
 `pnpm-workspace.yaml` → 把八条 `overrides`（子包名 → 同目录 tgz）写进 `pnpm-workspace.yaml` 并补上
 `nodeLinker: hoisted` / `autoInstallPeers: false` → `dsh plugin add <主包 tgz>`，最后逐个
-`require.resolve` 自证九个包（含 `dsh.client` 的 `./client` 入口）与版本。
+`require.resolve` 自证全部包（含 `dsh.client` 的 `./client` 入口）与版本。
 
 边界：profile 里**已有** `overrides:` 时脚本拒绝执行并打印要手工合并的行（两份 override 的交集不可
 自动合并）；它不发布、不改版本。
@@ -573,8 +573,8 @@ node scripts/install-release.mjs ... --dry-run     # 只打印将要写入的 ov
 #### 4.3 为什么不能指望 DSH UI 直接吃 Release 的 tgz
 
 DSH 插件管理器只执行 `pnpm add <spec>`（`parseInstallSpec` 接受 registry 包名 / git / tarball 路径 /
-本地目录）。贴主包 tgz → 探针 A；贴九个 tgz 也不会一次装（管理器要求这次 add **恰好改变一个**依赖，
-否则抛 `ambiguous-install`，而且顶层 `file:` 仍不满足传递范围）。所以离线九件套必须由脚本先把
+本地目录）。贴主包 tgz → 探针 A；把所有 tgz 一起 add 也不会一次装（管理器要求这次 add **恰好改变一个**依赖，
+否则抛 `ambiguous-install`，而且顶层 `file:` 仍不满足传递范围）。所以离线发布集必须由脚本先把
 overrides 落到 profile，再由管理器执行安装。
 
 ---
@@ -601,7 +601,7 @@ foreach ($file in $index.publishOrder) {
 | 子包发到一半中断 | 主包若已发 = 用户装不上 | 先补发缺的子包（立刻恢复），不要动已发版本 |
 | 用户装完只有主包 / 报 404 | 该版本子包缺失或镜像未同步 | `npm view` 查缺哪个；补发或等镜像同步 |
 | `ERR_PNPM_MISSING_TARBALL_INTEGRITY` | pnpm 11.0–11.8 在 hoisted 下对裸 URL 无 integrity | 用 11.9+（实测备注：本机 11.22.0 正常，仅作参考、不是版本要求）；离线装走 `install-release.mjs` |
-| DSH 报 `ambiguous-install` | 一次 add 改变了多个依赖 | 一次只装一个 spec；九件套用脚本 |
+| DSH 报 `ambiguous-install` | 一次 add 改变了多个依赖 | 一次只装一个 spec；全套用脚本 |
 | 装完界面出现重复行 | 子包被单独选成 bundle | 只选主包（`retainMainBundle` 逻辑，脚本已自动处理） |
 
 回滚：用 `npm deprecate <包>@<版本> "原因"` 宣告，**不要** `npm unpublish`；GitHub Release 可标记为
@@ -613,11 +613,11 @@ foreach ($file in $index.publishOrder) {
 
 - [ ] 九处版本锁步提升，`grep -r '"version"' package.json packages/*/package.json` 全一致
 - [ ] `npm run verify` 全绿（含 `test/verify-release-set.mjs`）
-- [ ] `npm run pack:release`，确认九个 tgz + `release-set.json`
-- [ ] 按 `publishOrder` 发八个子包 → 发主包
-- [ ] `npm view` 九个版本全部可查
-- [ ] 空白 profile 真装 + 九个 `require.resolve`
-- [ ] npmmirror 九个版本全部 200
+- [ ] `npm run pack:release`，确认全部包 tgz + `release-set.json`
+- [ ] 按 `publishOrder` 发全部子包 → 发主包
+- [ ] `npm view` 所有包版本可查
+- [ ] 空白 profile 真装 + 每个包 `require.resolve`
+- [ ] npmmirror 所有包版本 200
 - [ ] DSH 桌面新建 profile 端到端装一次
-- [ ] GitHub Release 挂**九件套**（+ `release-set.json`/`SHA256SUMS.txt`）
+- [ ] GitHub Release 挂**全部包 tarball**（+ `release-set.json`/`SHA256SUMS.txt`）
 - [ ] Release notes 写明"从源码装见 CONTRIBUTING §2 / 离线安装见本文 §4.2"

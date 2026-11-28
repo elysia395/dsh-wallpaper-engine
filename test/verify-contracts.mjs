@@ -8,7 +8,7 @@
  *    声明存在，且声明的**最低版本不低于代码真实用到的 API 所要求的下限**。
  *
  * ② **跨半边契约**：同一个词表在浏览器半边与宿主半边各写一份，而两边都由同一个用户操作驱动：
- *    · `BASE`（路径前缀）—— `lib/index.js` 与 `src/api-client.js` 各一份。不一致时**每一条**
+ *    · `BASE`（路径前缀）—— `lib/index.js` 与 `src/core/api-client.js` 各一份。不一致时**每一条**
  *      客户端请求 404（失败很响，但排查成本高）。
  *    · **上传 MIME** —— 客户端 `UPLOAD_TYPES` / 自定义画面的 accept 列表 vs 宿主 `UPLOAD_EXT` /
  *      `CUSTOM_FRAME_EXT`。不一致时选择器会收下一个宿主映射不出扩展名的文件 ⇒ **静默失败**。
@@ -23,7 +23,7 @@ import { readFileSync, readdirSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
-import { panelText } from './tools/src-scope.mjs';
+import { panelText, clientText } from './tools/src-scope.mjs';
 
 const ROOT = join(dirname(fileURLToPath(import.meta.url)), '..');
 const read = (rel) => readFileSync(join(ROOT, rel), 'utf8');
@@ -133,8 +133,10 @@ const hostSrc = read('lib/index.js') + '\n' + read('lib/host-boot.js') + '\n' + 
 //    `lib/media/media-dirs.js`（上游同名副本 `lib/asset-paths.js` 已不在 import 图上）⇒ 只改
 //    "读哪个文件"（下面 hostMimeKeys 的两个实参），判据与期望值一字未改。`hostSrc` 仍供 BASE 等其余判据。
 const hostAssetsSrc = read('lib/media/media-dirs.js');
-const apiSrc = read('src/api-client.js');
-const clientSrc = read('src/client.js');
+const apiSrc = read('src/core/api-client.js');
+// 取文口径：客户端正文族（正文 + src/client/*.js）。UPLOAD_TYPES 自 2026-11-28 起住
+// src/client/handlers/upload-handlers.js；按单文件读会让两侧 MIME 对账恒假。
+const clientSrc = clientText();
 const tabsSrc = panelText();
 
 {
@@ -188,7 +190,7 @@ const tabsSrc = panelText();
 
   const hostAvatar = hostMimeKeys(hostSrc, 'AVATAR_EXT');
   const hostMascot = hostMimeKeys(hostSrc, 'MASCOT_EXT');
-  // ⚠️ 两层的**真源**住在 `src/avatar-import.js`（纯函数模块，与选图腿同一条链）。
+  // ⚠️ 两层的**真源**住在 `src/extensions/avatar-import.js`（纯函数模块，与选图腿同一条链）。
   // 判据必须读真源、不能读产物或抄一份：抄的那份漂了判据照样绿。
 
   // 吉祥物**显示盒上限**的单源契约：`MASCOT_BOX_MAX_W/H` 只住在 lib/settings-schema.js
@@ -286,7 +288,7 @@ const tabsSrc = panelText();
   // （给一句可判定文案），宿主拿它做权威校验。两边必须引用**同一个常量**，谁也不许手抄字面量
   // （手抄就会漂：客户端放行、宿主拒收，反之亦然 —— 那是最难查的一类"看起来没反应"）。
   const kernel = read('lib/settings-schema.js');
-  const storeSrc = read('src/fontset-store.js');
+  const storeSrc = read('src/settings/fontset-store.js');
   const editorSrc = read('packages/fonts/src/fontset-editor.js');
   // P-A：字体集族已随子包行出户（packages/fonts/lib/routes/fontsets.js），判据跟着实现走。
   const routeSrc = read('packages/fonts/lib/routes/fontsets.js');
@@ -294,8 +296,8 @@ const tabsSrc = panelText();
   check('版本标记 = 前缀 + 版本常量，且定义在共享内核（判据非空转）',
     Boolean(tag) && /const\s+FONTSET_SCHEMA_VERSION\s*=\s*\d+/.test(kernel), tag ? tag[1] + 'N' : '(没解析到)');
   // 字面量只许出现在共享内核：其余会 import 的两半都只能写常量名。
-  const literalSites = ['lib/index.js', 'packages/fonts/lib/routes/fontsets.js', 'src/fontset-store.js',
-    'packages/fonts/src/fontset-editor.js', 'src/client.js', 'src/api-client.js']
+  const literalSites = ['lib/index.js', 'packages/fonts/lib/routes/fontsets.js', 'src/settings/fontset-store.js',
+    'packages/fonts/src/fontset-editor.js', 'src/client.js', 'src/core/api-client.js']
     .filter((f) => /dsh-we\/fontset@/.test(read(f)));
   check('字体集的版本字面量只出现在共享内核（两半都引用常量名，不手抄）',
     literalSites.length === 0, literalSites.join(',') || '零处手抄');

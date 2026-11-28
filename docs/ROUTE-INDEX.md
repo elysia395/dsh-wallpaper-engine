@@ -59,9 +59,9 @@
 | 40 | `/live-frame` | packages/media-bridge/lib/routes/live-frame.js:44 | 箭头 | disposers base mediaMap serveFile traceRequests liveFrameFile …(+3) | 3 |
 | 41 | `/scene-video` | packages/media-bridge/lib/routes/scene-media.js:57 | 箭头 | disposers base mediaMap serveFile ensureFrameCacheDir sceneVideoProbeKey …(+6) | 3 |
 | 42 | `/scene-audio` | packages/media-bridge/lib/routes/scene-media.js:141 | 箭头 | disposers base mediaMap serveFile ensureSceneAudio | 4 |
-| 43 | `/upload` | packages/media-bridge/lib/routes/upload.js:73 | 箭头 | disposers base tokenFor UPLOAD_EXT UPLOAD_MAX_BYTES ensureUploadDir …(+7) | 6 |
+| 43 | `/upload` | packages/media-bridge/lib/routes/upload.js:73 | 箭头 | disposers base tokenFor UPLOAD_EXT UPLOAD_MAX_BYTES ensureUploadDir …(+7) | 7 |
 | 44 | `/remove` | packages/media-bridge/lib/routes/upload.js:223 | 箭头 | disposers base CONTROL_JSON_MAX_BYTES ensureUploadDir removeUploadMeta resolveUploadFile …(+2) | 1 |
-| 45 | `/upload-dir` | packages/media-bridge/lib/routes/upload.js:280 | 箭头 | disposers base CONTROL_JSON_MAX_BYTES setUploadDir normalizeUserDir armBodyIdleTimeout …(+1) | 3 |
+| 45 | `/upload-dir` | packages/media-bridge/lib/routes/upload.js:280 | 箭头 | disposers base CONTROL_JSON_MAX_BYTES setUploadDir normalizeUserDir armBodyIdleTimeout …(+1) | 4 |
 | 46 | `/url-import` | packages/media-bridge/lib/routes/url-import.js:262 | 箭头 | disposers base lingerClose http | 1 |
 | 47 | `/occlusion` | packages/media-bridge/lib/routes/occlusion.js:52 | async 箭头 | disposers base hub http | 4 |
 | 48 | `/pet-link/official` | packages/pet-link/lib/routes/official-pet.js:49 | async 箭头 | disposers http | 6 |

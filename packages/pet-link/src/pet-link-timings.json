@@ -1,7 +1,7 @@
 {
   "fps": 24,
   "frameMs": 41.6667,
-  "source": "初始素材 时长表.json（素材方交付，2026-10-15）",
+  "source": "初始素材 时长表.json（素材方交付）",
   "entries": {
     "walkRight": {
       "asset": "通用-右侧螃蟹步",

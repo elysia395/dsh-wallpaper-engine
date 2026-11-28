@@ -2,11 +2,11 @@
  * wallpaper-uploads-section.js — 「壁纸库」页签第四节「自定义壁纸」的渲染器。
  *
  * 父页签 renderWallpaperTab 仍在主包组装点（`src/panel-tabs.js`），按面板节注册表
- * （`src/extension-registry.js`）的顺序续接本包的节（library / order 40）。
+ * （`src/extensions/extension-registry.js`）的顺序续接本包的节（library / order 40）。
  *
  * 归属（ADR-0013 D20）：随包走的是**渲染器**；上传目录 / 官方资源目录 / 上传列表 /
  * 确认令牌这些键、默认值、持久化与动作体全留主包，本文件只读 ctx 值 + 经 host 显式键集
- * 调主包动作。键集真源 = `src/host-bridge.js` 的 `HOST_BRIDGE_BINDINGS`（71 键；ADR-0014 S5.1），
+ * 调主包动作。键集真源 = `src/core/host-bridge.js` 的 `HOST_BRIDGE_BINDINGS`（键集真源，数量不抄；ADR-0014 S5.1），
  * 本包的申报表是 `WALLPAPER_SECTIONS_HOST_REQUIRED`（`packages/media-bridge/src/client.js`，
  * 源码留空表，构建期从同文件的 `} = host;` 解构逐键派生）。
  *

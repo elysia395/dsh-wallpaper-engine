@@ -2,7 +2,7 @@
  * 「外观」页签的节渲染器（从 src/panel-tabs.js 按域拆出）：主题 / 细节 /
  * 侧边栏圆角 / 全局 UI 配色，含 sidebarCornerGroup 一族。本节渲染器从 src/panel-tabs.js 按域搬出，函数体逐字未改。
  * ⚠️ P-C 之后第六节「全局字体」**不在本文件**：它住在 packages/fonts/src/appearance-font-section.js，
- *    由子包把渲染器登记进面板节注册表（src/extension-registry.js），节顺序见 src/panel-tabs.js。
+ *    由子包把渲染器登记进面板节注册表（src/extensions/extension-registry.js），节顺序见 src/panel-tabs.js。
  * 内联顺序见 scripts/build-client.mjs：本模块排在组装点之前（打包后同一工厂作用域）。
  */
   function renderAppearanceThemeSection(ctx) {
@@ -70,7 +70,7 @@
     const isSquare = (c) => sel[side + "SidebarSquare" + c.toUpperCase()] === true;
     // ⚠️ 四角单独开关的**视觉口径** = 「实色/深色底 = 这一角是圆角（跟随统一档），
     //    透明/描边 = 这一角被按成直角（0px 覆盖）」。与全仓「实色 = 开/被选中」一致；
-    //    此前反着画（实色 = 直角），2026-11-10 用户指正是反的。
+    //    实色 = 直角、描边 = 圆角（别画反）。
     const isRound = (c) => !isSquare(c);
     return React.createElement(React.Fragment, null,
       React.createElement("div", { className: "we-picker__ctl we-picker__ctl--wrap" },
@@ -180,7 +180,7 @@
         ),
         // ③ 光标颜色：**原「输入光标」节唯一的一行，整节撤销后并入本节**（用户口径：
         //    「输入光标这一栏目取消 …… 光标颜色 …… 并入里面可以调单独设置」）。
-        //    ⚠️ 它**不在** `custom` 门里：这一项从来是可用的可读性设置（#83），
+        //    ⚠️ 它**不在** `custom` 门里：这一项从来是可用的可读性设置，
         //       藏到总开关后面就是能力回退。也不吃 accent —— 它的空值语义是
         //       **跟随 dsh 原生光标色**（不注入任何规则），与上面五项"空 = 跟随全局配色"不同。
         swatchRow(weT("光标颜色"), CARET_COLOR_PRESETS, sel.caretColor, onCaretColor, {

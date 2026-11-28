@@ -1,5 +1,5 @@
 // state-only 探测：只回答「装没装 / 什么版本 / 在不在跑」，不做任何下载或写盘。
-// 2026-11-01 取代原 transaction.js（那套自研下载解包已整体移除：
+//取代原 transaction.js（那套自研下载解包已整体移除：
 // 它绕过 DSH 的依赖管理，与本地 link: 布局冲突，曾造成重复注册 / 误判未安装 / 启动崩溃）。
 import { existsSync, readFileSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';

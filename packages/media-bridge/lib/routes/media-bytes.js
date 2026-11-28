@@ -63,7 +63,7 @@ export function registerMediaBytesRoutes(webServer, c) {
           serveFile(abs, req, res, method === 'HEAD', { revalidate: true });
           return;
         }
-        // ── /preview（issue #240）：**图片走缩略图**，缺失/生成失败回落原图 ──────────
+        // ── /preview：**图片走缩略图**，缺失/生成失败回落原图 ──────────
         // 卡片只有 92px 高，此前让浏览器下载并解码整张原图（8064×5376 = 43 MP × 24 张/页）
         // ⇒ 整个渲染进程被解码/内存带宽拖住（翻页卡死数秒）。这里按需把源图缩到 320px 再发；
         // `ensureImagePreview` 失败一律回落原图（"慢一点但可用"），绝不返回 404。

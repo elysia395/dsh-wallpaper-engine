@@ -10,7 +10,7 @@
  *     （与宿主 graph row 的 id 逐字相等，客户端 require 才命中）。
  *
  * ⚠️ 本文件**不许**出现 require/import（所以这里没有那行 host 绑定）——
- *    test/verify-subpackage-purity.mjs 的放行清单已**收紧为零**（，ADR-0014 S5.1）：包内任何文件
+ *    test/verify-subpackage-purity.mjs 的放行清单已**收紧为零**（ADR-0014 S5.1）：包内任何文件
  *    都不许出现主包说明符（旧的 'dsh-plugin-wallpaper-engine/subpackage-boot.js' 叶子通道作废）。
  *    唯一例外是**客户端产物** packages/<pkg>/lib/client.<short>.js 里由构建期发出的
  *    require('dsh-plugin-wallpaper-engine')（判据 isClientArtifact）。源码面写 require 会判红。
@@ -22,7 +22,7 @@
  *    scripts/build-client.mjs 的 outline 里冻结 module.exports 之后逐字对齐；若改名，
  *    **只改本文件的解构那一段**，四个兄弟文件一个字不用动）。
  *
- * 键集的依据 = 两个基座/渲染器文件的**自由标识符**接缝（键集真源 = 主包 `src/host-bridge.js` 的 `HOST_BRIDGE_BINDINGS`）：
+ * 键集的依据 = 两个基座/渲染器文件的**自由标识符**接缝（键集真源 = 主包 `src/core/host-bridge.js` 的 `HOST_BRIDGE_BINDINGS`）：
  *   packages/fx/src/fx-layer.js : selection · weClampTo · weNow
  *   packages/fx/src/ext-fx.js   : weT · React · SliderRow · switchRow · ctlText
  *                                 · swatchRow · FX_BLEND_VALUES
@@ -36,7 +36,7 @@
  */
 /** 由构建期填充：scripts/build-client.mjs 从下方 `} = host;` 的解构逐键派生本表
  * （源码留空表只为 eslint/typecheck 可读；产物里是一份生成好的键数组）。
- * 手工加键的正确顺序：① src/host-bridge.js 的 HOST_BRIDGE_BINDINGS ② 本文件的解构名单。 */
+ * 手工加键的正确顺序：① src/core/host-bridge.js 的 HOST_BRIDGE_BINDINGS ② 本文件的解构名单。 */
 const FX_HOST_REQUIRED = [];
 for (const key of FX_HOST_REQUIRED) {
   if (!(key in host)) {
@@ -54,7 +54,7 @@ const {
 /* ===== 贡献（主 bundle 的 extensionModules() 改成读注册表，本包是首个贡献点）===== */
 
 // ① 「扩展」页签的二号模块描述符（order 2）。主包 panel-tabs 的 extensionModules() 只问注册表
-//    （`weExtensionModules()`，实现 src/extension-registry.js），本行登记即它的来源。
+//    （`weExtensionModules()`，实现 src/extensions/extension-registry.js），本行登记即它的来源。
 //    id='fx' 是**页签内**的模块 id（resetGroup 同为 'fx'），与包名无关。
 registerExtensionModule('fx', FX_EXTENSION_MODULE);
 

@@ -153,7 +153,7 @@ node test/tools/host-route-index.mjs --write   # 重算并写入 docs/ROUTE-INDE
 
 ## 3. 加一块浏览器端代码
 
-**落点**：`src/<语义名>.js`（默认平铺；建子目录有准入门槛，见 `CODE-STRUCTURE.md` §4）。
+**落点**：先问功能域目录（`CODE-STRUCTURE.md` §3.4：wallpaper / settings / extensions / picker / ui / core，或 `src/client/handlers/`），不属于任何域才落 `src/` 根；族目录与准入门槛见 §4。
 
 **两条硬约束**：
 
@@ -528,7 +528,7 @@ review 失去意义；真正的格式守卫是无尾随空白那两条（CI 的 
 
 **③ 扁平作用域里的跨片段写入 ⇒ `prefer-const` 是假阳性，靠行内豁免而不是关规则。**
 `src/**` 平铺进同一个 factory 作用域，写入点常在**另一个片段文件**里（如 `src/client.js` 的
-`let fadingLayerNode` 由 `src/layer-core.js` 写），ESLint 逐文件看不见 ⇒ 硬改 `const` 是运行期
+`let fadingLayerNode` 由 `src/wallpaper/layer-core.js` 写），ESLint 逐文件看不见 ⇒ 硬改 `const` 是运行期
 `TypeError`。约定：`// eslint-disable-next-line prefer-const -- 跨片段写入：<文件:行>`，
 **不许**因为几条假阳性就把整块规则关掉。
 
@@ -549,7 +549,8 @@ review 失去意义；真正的格式守卫是无尾随空白那两条（CI 的 
 - **不变量**（必须 / 不得）—— 写进文件头；
 - **契约**（需要什么外界、对外提供什么）—— 写进文件头，尤其 `src/**`（那一侧没有 `import`）；
 - **实测出处**（"实测 X ≈ Y"）—— 留在**被实测的那个位置附近**，这样它是可核对的出处；
-- **不要写**：日期、「曾经 / 旧实现」框定、踩坑复盘。
+- **不要写**：日期、issue / PR 编号、「曾经 / 旧实现」框定、踩坑**经过**的复盘叙事。
+  **要写**：坑本身（触发条件 + 后果 + 怎么避开）——去掉「哪次改动带来的」，保留「会踩到什么」。
 
 **决策**（有备选方案、有人付了代价的取舍）写进 [`adr/`](./adr/)，不写进文件头；
 格式与"什么不该写"见 [`adr/README.md`](./adr/README.md)。

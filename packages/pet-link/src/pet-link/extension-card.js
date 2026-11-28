@@ -102,7 +102,7 @@ function petLinkGuideRows(t, card, copied) {
     attrs: { className: 'we-pet-link__guide-link', href: PET_LINK_CARD_OFFICIAL_URL, target: '_blank', rel: 'noopener noreferrer' },
     children: [PET_LINK_CARD_OFFICIAL_URL],
   });
-  // 口径说明（2026-11-02）：联动包是"基于上游快照的改编版"，不跟随上游发布节奏。这条信息
+  // 口径说明）：联动包是"基于上游快照的改编版"，不跟随上游发布节奏。这条信息
   // 回答的是「我装的是什么」，所以放在**安装引导里**而不是「启用桌宠联动」开关行下方 ——
   // 开关行要与宿主设置行保持同款单行，且常驻小字会被误读成"开关本身有风险"。
   rows.push({
@@ -176,7 +176,7 @@ function petLinkCardView(snapshot, card, translate = value => value) {
   // 联动模式 / 版本过旧
   if (s.installed === true || s.mode) {
     let modeText;
-    // 口径提示（2026-11-02）：联动包是上游快照的改编版，版本过旧 / 服务未注册时把「为什么回落」
+    // 口径提示）：联动包是上游快照的改编版，版本过旧 / 服务未注册时把「为什么回落」
     // 连同「看哪里」一起给出，避免用户把降级误判成插件 bug。
     if (s.reason === 'runtime-too-old') modeText = t('运行时版本过旧（需升级 dshpet-dshwe）') + ' · ' + t('该联动包可能落后于本插件，详见安装说明');
     else if (s.mode === 'linked') modeText = t('联动已就绪（linked）');
@@ -191,7 +191,7 @@ function petLinkCardView(snapshot, card, translate = value => value) {
   }
 
   // 主按钮 + 图文引导面板。
-  // 2026-11-01：本插件**不再自己下载安装**（自研下载器绕过 DSH 依赖管理，会与 link: 布局
+  //本插件**不再自己下载安装**（自研下载器绕过 DSH 依赖管理，会与 link: 布局
   // 冲突，曾造成重复注册 / 误判未安装 / 启动崩溃）。改为引导用户走 DSH 官方入口，
   // 面板里给三步截图 + 包名 + 一键复制。
   // 引导面板优先用 **React 组件**：它自带 useState，点击只重画自己。

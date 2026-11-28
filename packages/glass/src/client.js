@@ -15,7 +15,7 @@
  *   · 唯一例外 = 产物里由构建循环 outline 发出的那一行 `const host = require('<主包名>');`（S5.2）。
  *
  * ## 消费侧契约（唯一跨包通道 = 主 bundle 的显式键集，ADR-0014 S5.1 / S5.4）
- * 下面的解构名单与主包 `src/host-bridge.js` 的 HOST_BRIDGE_BINDINGS 玻璃段**逐键一致**（缺键大声抛，
+ * 下面的解构名单与主包 `src/core/host-bridge.js` 的 HOST_BRIDGE_BINDINGS 玻璃段**逐键一致**（缺键大声抛，
  * 不许静默 undefined）；产物里的 GLASS_HOST_REQUIRED 由构建期从这份解构派生（源码里是空表）。
  * 键集依据 = 被搬文件（第二刀 glass-panel.js + 第三刀 glass.js /
  * glass-surfaces.js / glass-extra.js / glass-layer.js；S3 起「主题预设」块折出
@@ -46,7 +46,7 @@
  */
 /** 由构建期填充：scripts/build-client.mjs 从下方 `} = host;` 的解构逐键派生本表
  * （源码留空表只为 eslint/typecheck 可读；产物里是一份生成好的键数组）。
- * 手工加键的正确顺序：① src/host-bridge.js 的 HOST_BRIDGE_BINDINGS ② 本文件的解构名单。 */
+ * 手工加键的正确顺序：① src/core/host-bridge.js 的 HOST_BRIDGE_BINDINGS ② 本文件的解构名单。 */
 const GLASS_HOST_REQUIRED = [];
 for (const key of GLASS_HOST_REQUIRED) {
   if (!(key in host)) {
@@ -120,7 +120,7 @@ let glassRowMisses = 0; // 连续 404 计数（首启窗口：bundle 求值可�
  * 现场却被外部改掉」（宿主侧文档重建 / 别的 <style> 清理 / 行图重装窗口里的半次拆卸）——
  * 那种情况下 applyGlassRowState 根本不会被调用，状态位一直是 false、探测一直返回 200。
  * 实测：带外摘掉 sheet 后连续 45 轮 200 探测无一恢复，右栏与内容面整页裸壁纸，
- * 只有刷新页面才好（2026-10-30 PR #289 首启报障现场）。
+ * 只有刷新页面才好首启报障现场）。
  */
 function glassRowSceneIntact() {
   if (typeof document === 'undefined' || !document.body) return true; // 无文档无从谈起：按完好，探测外层自会守
@@ -289,7 +289,7 @@ function applyGlassRowState(disabled) {
     // ── 启用态的调和（reconcile）─────────────────────────────────────────────
     // 状态位是 false ≠ 现场完好：样式表 / 门控可能被**本状态机以外**的途径摘走
     // （宿主侧文档重建 / 行图重装窗口里的半次拆卸 / 任何未知来源的 <style> 清理）。
-    // PR #289 前玻璃 CSS 住主包 sheet（每次重挂 ensurePluginCss 都会重注 + 代际清理）
+    // 前玻璃 CSS 住主包 sheet（每次重挂 ensurePluginCss 都会重注 + 代际清理）
     // ⇒ 出户后本状态机是玻璃在页面里**唯一的管家**，只认"状态位没变"会把任何一次
     // 带外残缺变成**本页面余生的永久破损**（真机取证见 glassRowSceneIntact 的注释）。
     // 200 = 行活着的权威信号 ⇒ 就地核实、缺哪补哪；健康态这条路径**零写入**
@@ -375,14 +375,14 @@ async function probeGlassRowState() {
         } catch { /* 下一轮探测重试 */ }
       }
     } else if (res.status === 404) {
-      // 首启竞态（PR #289 报障的另一条腿）：bundle 求值可能早于宿主行路由注册 ——
+      // 首启竞态（报障的另一条腿）：bundle 求值可能早于宿主行路由注册 ——
       // 路由要等行 fiber 激活才存在，而页面/求值不等它。单次 404 不判停用，
       // 连续两轮（≥3s）仍 404 才认停用 ⇒ 行真被 prune 时停用语义照常到达，
       // 注册晚一拍的启动窗口不再造成"先撤光玻璃、3 秒后又整页弹回"的闪烁。
       if (++glassRowMisses >= 2) applyGlassRowState(true);
     } else {
       // 非 404 的应答（5xx = 宿主重启中 / 其它异常）必须打断“连续”语义：
-      // 404 → 5xx → 404 不是连续两次 404，不能据此判停用（#312 评审②）。
+      // 404 → 5xx → 404 不是连续两次 404，不能据此判停用（评审②）。
       glassRowMisses = 0;
     }
   } catch { glassRowMisses = 0; /* 本轮拿不到应答，同样不算连续 404；观感保持现状。 */ }
@@ -391,7 +391,7 @@ async function probeGlassRowState() {
 /**
  * 探测 / 轮询 / 首帧补建的安装点。**必须在三处跨包登记之后调用**（见文件末尾）。
  * 整包「关闭 → 再开启」时宿主可能直接重新求值本 bundle；若先装轮询再登记，重求值会
- * 先撞主包的面板节重复注册守卫（src/extension-registry.js:139，“同一份 bundle 求值两次”）
+ * 先撞主包的面板节重复注册守卫（src/extensions/extension-registry.js 的重复注册守卫，“同一份 bundle 求值两次”）
  * 抛错，而多出来的 3s 探测与 visibilitychange 监听已经装上了 ⇒ 每重求值一次就多一路轮询。
  * 先登记后安装：抛错发生在安装之前，页面按原样保留本实例，定时器/监听不重复；
  * globalThis 哨兵再兜一层（万一两次求值都走完登记，也只保留一路）。
@@ -460,6 +460,6 @@ registerGlassStatus({ status: () => (glassRowDisabled ? [] : weGlassSurfaceStatu
 /* ===== 行状态机安装点：三处跨包登记都成功之后才装探测/轮询 ===== */
 
 // 顺序即语义：本文件上面的 registerPanelSection / registerLayerHooks / registerGlassStatus
-// 在「同一份 bundle 被求值两次」时会由主包注册表抛错（src/extension-registry.js:139/:194）。
+// 在「同一份 bundle 被求值两次」时会由主包注册表抛错（src/extensions/extension-registry.js 的重复注册守卫）。
 // 抛错时旧实例仍继续服务（视觉最终一致），且这次求值没有装上任何定时器/监听 ⇒ 不泄漏。
 startGlassRowPolling();

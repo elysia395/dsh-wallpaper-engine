@@ -286,7 +286,7 @@ const declaredKeyViolations = ({ declarations, hostKeys }) => {
   }
   return bad;
 };
-const HOST_BRIDGE_SRC = 'src/host-bridge.js';
+const HOST_BRIDGE_SRC = 'src/core/host-bridge.js';
 const hostBridgeKeysOf = () => {
   const src = stripComments(read(HOST_BRIDGE_SRC));
   const at = src.indexOf('const HOST_BRIDGE_BINDINGS = {');
@@ -338,7 +338,7 @@ for (const p of usable) {
   if (text === null) continue;
   if (/const\s+[A-Z][A-Z0-9_]*_HOST_REQUIRED\s*=\s*\[\s*'/.test(stripComments(text))) nonEmptyTables.push(p.dir);
 }
-// 单一真源钉子：键表只许住 src/host-bridge.js。两边各留一份 = 改一处、另一处静默过期
+// 单一真源钉子：键表只许住 src/core/host-bridge.js。两边各留一份 = 改一处、另一处静默过期
 // （且产物里后声明者静默胜出），所以"正文里还有一张表"必须当场红。
 check('D-7 单一真源：HOST_BRIDGE_BINDINGS 表只在 ' + HOST_BRIDGE_SRC + '，src/client.js 不再复制一份',
   !stripComments(read('src/client.js')).includes('const HOST_BRIDGE_BINDINGS = {'),

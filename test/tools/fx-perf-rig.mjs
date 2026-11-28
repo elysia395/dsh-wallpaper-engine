@@ -6,7 +6,7 @@
  * 用来回答"变少了到底有没有用"。
  *
  * 加载什么：**真的 `src/fx-layer.js` 源文件**（它就是要被内联进产物的那一份），
- * 按 ES module 导入，配套 `src/we-base.js`。**不加载整份 `lib/client.js` 产物** ——
+ * 按 ES module 导入，配套 `src/core/we-base.js`。**不加载整份 `lib/client.js` 产物** ——
  * 那份要走宿主 `__ModuleLoader__` 的工厂交接（还要 React / localStorage / 一堆路由替身），
  * 装起来一大坨，而本装置只关心光效层的绘制成本。
  *
@@ -38,7 +38,7 @@ if (!FX_PATH || !existsSync(FX_PATH)) {
   process.exit(2);
 }
 const FX_SRC = readFileSync(FX_PATH, 'utf8');
-const WE_BASE = readFileSync(join(REPO, 'src', 'we-base.js'), 'utf8');
+const WE_BASE = readFileSync(join(REPO, 'src', 'core', 'we-base.js'), 'utf8');
 
 const BROWSERS = [
   'C:/Program Files/Google/Chrome/Application/chrome.exe',

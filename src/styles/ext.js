@@ -75,7 +75,7 @@ const CSS_EXT = `
   }
   .we-ext__module-head { display: flex; align-items: center; gap: 8px; }
   .we-ext__module-title { font-size: 0.85em; font-weight: 600; color: var(--we-ink, inherit); }
-  /* 模块级重置按钮（issue #192）↺：外观各节的节头与扩展模块头**共用同一枚**。
+  /* 模块级重置按钮↺：外观各节的节头与扩展模块头**共用同一枚**。
      margin-left: auto 把它推到行尾（两者都是 flex 行）。
      ⚠️ 与折叠三角同排时**必须让位**（见下面那条相邻选择器）：三角也靠 margin-left: auto
      推右，两个 auto 在同一 flex 行里会**均分**剩余空间 —— ↺ 于是停在行中间，而"主题"
@@ -108,7 +108,7 @@ const CSS_EXT = `
     font-size: 0.85em; font-weight: 600; color: var(--we-ink, inherit);
   }
 
-  /* ── 「扩展」页签 · 性能监控（we-perf，src/ext-perf.js）──────────────────
+  /* ── 「扩展」页签 · 性能监控（we-perf，src/extensions/ext-perf.js）──────────────────
      四项读数两列网格：窄壳（抽屉）自动变一列。数值用等宽数字位，避免每秒刷新
      时整行宽度跳动；标签与数值的主次靠字号而不是新颜色（与设置行同一口径）。
      ⚠️ 本段注释不许出现反引号：整套样式文本是模板字符串，一个反引号就拼断 JS。 */
@@ -237,7 +237,7 @@ const CSS_EXT = `
     color: var(--we-accent, #4f8cff); text-decoration: none;
   }
   .we-pet-link__guide-link:hover { text-decoration: underline; }
-  /* 口径说明（2026-11-02）：联动包是"基于上游快照的改编版"，不跟随上游发布节奏。
+  /* 口径说明：联动包是"基于上游快照的改编版"，不跟随上游发布节奏。
      常驻提示只做一行路标（.we-pet-link__note），完整说明放在安装引导面板内（.we-pet-link__guide-note），
      开关行保持与宿主设置行同款单行、不塞常驻小字。 */
   .we-pet-link__note {
@@ -280,7 +280,7 @@ const CSS_EXT = `
   }
 
 
-  /* ── 「扩展」页签一号模块：自定义会话头像（装饰层见 src/avatar-layer.js）──
+  /* ── 「扩展」页签一号模块：自定义会话头像（装饰层见 src/extensions/avatar-layer.js）──
      这一层是**宿主会话 DOM 的补丁**：给三类消息行（data-chat-flow-kind = user / steering /
      assistant-step）补一个 .we-avatar，并把行改成**两列 grid** —— 一列头像、一列内容。
      助手行头像在第 1 列（左），用户行在第 2 列（右）⇒「你的消息在右、助手在左」。
@@ -300,7 +300,7 @@ const CSS_EXT = `
      再按 order 排到正文后面：有正文 ⇒ 正文第 1 行、表情组第 2 行；没正文（内容根被
      第三方 display:none）⇒ 表情组自然落在第 1 行、紧跟头像，正是用户要的两种形态。
 
-     ⚠️ 内容那一格必须**穿透槽出口锚点**（issue #154）：宿主把节点渲染包在
+     ⚠️ 内容那一格必须**穿透槽出口锚点**（宿主把节点渲染包在
      div[data-slot="conversation.chat.node"] 里，并给它写死内联 style="display: contents"
      （宿主 renderer 的 ANCHOR_STYLE，注释明说要让 flex/grid 父级"看见槽自己的孩子"）⇒ 这层
      **没有盒子**：它既不是 grid item，也不接受 grid 属性。所以只写 > :not(.we-avatar) 是
@@ -360,8 +360,8 @@ const CSS_EXT = `
   .we-avatar__img { display: block; width: 100%; height: 100%; object-fit: cover; pointer-events: none; }
   .we-avatar__glyph { display: flex; align-items: center; justify-content: center; }
   .we-avatar__glyph svg { width: 62%; height: 62%; }
-  /* 连续同侧消息的后续行（issue #191 问题 2）：头像**只显示在第一条**。
-     ⚠️ 只做 visibility: hidden —— 节点始终留在 DOM 里（摘节点会踩 issue #154 的锚点塌陷）。
+  /* 连续同侧消息的后续行：头像**只显示在第一条**。
+     ⚠️ 只做 visibility: hidden —— 节点始终留在 DOM 里（摘节点会踩锚点塌陷）。
      助手侧的续行另外带 data-we-avatar-cont：该行退化成单列、列间距归零，隐藏的头像
      移出 grid 流（position:absolute），于是既不留 40px 空列、也不撑出 40px 行高，
      正文回到与折叠头同一条左边缘。用户侧不塌列（气泡本来就靠右）。 */
@@ -396,7 +396,7 @@ const CSS_EXT = `
   .we-avatar-preview__glyph { display: flex; align-items: center; justify-content: center; }
   .we-avatar-preview__glyph svg { width: 62%; height: 62%; }
   .we-avatar-error { font-size: 0.82em; opacity: 0.9; color: #e5534b; }
-  /* 上传裁切弹窗（issue #191 问题 1）：居中模态 + 方形取景框。
+  /* 上传裁切弹窗：居中模态 + 方形取景框。
      取景框 overflow: hidden 是"框外不显示"的唯一手段；框内那张图由 client.js 现算的
      几何定位（left/top 负偏移），**不用 transform** —— transform 会建合成层，
      而这里每拖一下都改值（见 styles-base.js 里"不常驻合成层"那条纪律）。 */

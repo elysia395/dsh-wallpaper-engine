@@ -32,7 +32,7 @@
    这正是「不像预设」的一个独立成因（与范围问题正交）。复算方式：
    对每个 `lib/glass-presets/*.json` 求 `GLASS_PRESET_KEYS` 的差集。
 
-3. **应用路径只做一次合并 + 一次落效。** `applyGlassPreset`（`src/preset-store.js`）
+3. **应用路径只做一次合并 + 一次落效。** `applyGlassPreset`（`src/settings/preset-store.js`）
    读回正文 → `sanitizeGlassPresetValues` → `Object.assign(selection, values)` →
    `persistSelection()` → `applyEffects()` → `emit()`。
 
@@ -60,7 +60,7 @@
    走共享读体器；`test/verify-body-caps.mjs` 对「收 body 的路由必须有上限」有棘轮。
    ⇒ 预设正文一旦携带 base64 资产，上限必须重新论证，不能沿用。
 
-9. **保存预设目前没有对话框。** `saveGlassPreset(name)` 直接 POST（`src/preset-store.js`），
+9. **保存预设目前没有对话框。** `saveGlassPreset(name)` 直接 POST（`src/settings/preset-store.js`），
    面板侧只有一行「名字 + 保存 / 取消」（`renderGlassPresetsBlock` 的 `saveRow`）。
    ⇒ D4 的资产勾选必须**新增**这一步，且要能表达"不勾会怎样"。
 
@@ -75,7 +75,7 @@
   `sanitizeFromSchema` 入口的 `migrateSettings` 会把已在新刻度上的值当旧档整批重写
   （实测 `glassAlpha` 70 → 100）。范围扩大后这条必须同样成立。
 - **两端同源消毒**：客户端保存前与宿主落盘前都过同一个 sanitize（见
-  `src/preset-store.js` 与 `lib/routes/presets.js` 的不变量段）。
+  `src/settings/preset-store.js` 与 `lib/routes/presets.js` 的不变量段）。
 - **`glassMode` 与 `GLASS_CHILDREN` 生成键必须继续自动跟随登记表**，不得手抄第二份。
 
 ## Decision
@@ -231,10 +231,10 @@ schema tag 升版后，**旧 tag 的预设文件一律读不出**：宿主按「
 - **导出**：`GET /glass-presets/<id>/export`，`Content-Disposition: attachment`，
   正文由**读到的值重建**（不照抄磁盘字节）—— 与 `packages/fonts/lib/routes/fontsets.js` 的
   `<id>/export` 逐条同形。走**普通链接**，不引入 blob / `showSaveFilePicker`
-  （本仓既有纪律，见 `src/preset-store.js` 的形态棘轮）。
+  （本仓既有纪律，见 `src/settings/preset-store.js` 的形态棘轮）。
 - **导入**：`POST /glass-presets/import`，本地预检三道（读不出 / 非 JSON / tag 不对各给
   一句可判定文案）后交宿主权威校验，再按占用情况分配新 id —— 照抄
-  `src/fontset-store.js` 的 `importFontSet` 与 `packages/fonts/lib/routes/fontsets.js` 的 `import` 段。
+  `src/settings/fontset-store.js` 的 `importFontSet` 与 `packages/fonts/lib/routes/fontsets.js` 的 `import` 段。
 - **导出对话框**：点「导出」先弹资产勾选对话框（D4 的三项 + 后果说明），确认后才发起下载。
 - ⚠️ **与 `lib/routes/presets.js` 文件头「没有 import/export」那条既有决策的关系**：
   该段原文要求「导出/导入若要做，应当连着『分享到市场』一起设计」。本 ADR **推翻它的

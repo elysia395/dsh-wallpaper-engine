@@ -23,7 +23,7 @@
  *      "D:/DSH Desktop/resources/app/node_modules/@deepseek-ai/dsh-client-ui-theme/lib/client.js"
  *
  * ⑤ **字重同样可细化**：39 个组件 CSS 里 `font-weight` 写死 **71 处、`!important` 零处**，每个
- *    角色在 design-platform 里都有细粒度令牌 `--dsw-font-<角色>-font-weight`（= 本表 `prefix`）
+ *    角色在 design-platform 里都有细粒度令牌 `--dsw-font-<角色>-font-weight`（=本表 `prefix`）
  *    ⇒ 角色级（组合式的字重前缀换成该令牌再覆盖）与组件级（与字号同一条 `[class*="_<模块>_"]`
  *    通道，零 `!important` ⇒ 等特异性即可压过）两条路径；官方值：角色级取自细粒度令牌，组件级取
  *    组件声明（写前先 getComputedStyle 取基线，与令牌层 `onBeforeFirstWrite` 同法）。⚠️ katex 与 `@font-face` 不碰。

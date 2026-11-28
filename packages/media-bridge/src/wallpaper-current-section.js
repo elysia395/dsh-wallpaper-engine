@@ -38,10 +38,10 @@
           // 失败/被过滤的原因说明包一层：抽屉里该层用 display:contents 展开成
           // grid 项（标题已独走第一行），靠这个包裹层保证「一行一项」。
           React.createElement("div", { className: "we-picker__current-sub" },
-          // 播放失败原因（#84）: 浏览器解不了的编码 / 解码失败等 —— 给出可读原因，
+          // 播放失败原因: 浏览器解不了的编码 / 解码失败等 —— 给出可读原因，
           // 配合下面的「播放」按钮重试（不是静默空白）。
           sel.videoError && React.createElement("div", { className: "we-picker__current-error" }, sel.videoError),
-          // 选择被过滤条件排除（#84）: 明确指出是哪一项过滤挡住了、怎么恢复
+          // 选择被过滤条件排除: 明确指出是哪一项过滤挡住了、怎么恢复
           sel.blockedNote && React.createElement("div", { className: "we-picker__current-error" }, sel.blockedNote),
           // 实时渲染失败原因（自动回退到旧链时显示）：让「为什么黑」可见 ——
           // 用户反馈时能直接说明，也提示了重试入口（重开「实时渲染」开关）。
@@ -76,7 +76,7 @@
         React.createElement("button", {
           className: "we-picker__btn", type: "button",
           onClick: onTogglePlay, disabled: !sel.url,
-          // 按钮显示真实状态（#84）: 播放失败时回到「播放」，就是用户要的「继续」。
+          // 按钮显示真实状态: 播放失败时回到「播放」，就是用户要的「继续」。
         }, playbackLive ? weT("暂停") : weT("播放", null, "play")),
         // 音乐开关：与「播放」同级的一键切换。只影响音轨，不动播放态 ——
         // 关掉后画面继续播放。仅对含音轨的壁纸类型显示（视频 / 场景内嵌 MP4）。

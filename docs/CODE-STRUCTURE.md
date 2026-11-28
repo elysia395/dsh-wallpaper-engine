@@ -348,8 +348,8 @@ graph LR
     subgraph SRC["src/**（手写真源，浏览器侧唯一真源）"]
         C["src/client.js<br/>正文"]
         A["src/styles/*.js + src/styles.js<br/>纯数据：样式域模板 + 组装点"]
-        B["src/panel-tabs.js（组装点）+ src/panel-tabs/*.js（域节渲染器）· src/picker-*.js · packages/fx/src/ext-fx.js · packages/parallax/src/ext-parallax.js · src/ext-avatar.js<br/>UI 面"]
-        D["src/live-layer.js · src/video-layer.js · packages/fx/src/fx-layer.js · packages/parallax/src/parallax-layer.js · src/avatar-layer.js · src/layer-core.js · src/media-prep.js<br/>行为面"]
+        B["src/panel-tabs.js（组装点）+ src/panel-tabs/*.js（域节渲染器）· src/picker/*.js · packages/fx/src/ext-fx.js · packages/parallax/src/ext-parallax.js · src/extensions/ext-avatar.js<br/>UI 面"]
+        D["src/live-layer.js · src/wallpaper/video-layer.js · packages/fx/src/fx-layer.js · packages/parallax/src/parallax-layer.js · src/extensions/avatar-layer.js · src/wallpaper/layer-core.js · src/media-prep.js<br/>行为面"]
         E["src/font/*<br/>字体系统"]
         F["lib/settings-schema.js<br/>唯一共享内核"]
     end
@@ -407,7 +407,7 @@ graph LR
 > 每个模块头只讲**自己**的契约，跨模块的这张分工表**只能靠读遍 20+ 个文件头重建**。
 
 **函数族（"这几块是一伙的"）—— 登记在这里；目录只是人类的提示。** `src/` 的目录不承载机器含义
-（§4 第 1 条），所以"谁和谁一伙"这件事以本表为准；目前 `src/font/`、`src/styles/`、`src/panel-tabs/`、`src/live-layer/`、`src/i18n/` 走目录（门槛见 §4 第 1 条）。
+（§4 第 1 条），所以"谁和谁一伙"这件事以本表为准；目前 `src/font/`、`src/styles/`、`src/panel-tabs/`、`src/live-layer/`、`src/i18n/` 走族目录（门槛见 §4 第 1 条）；其余模块按用户裁决归入功能域目录 `src/wallpaper/`、`src/settings/`、`src/extensions/`、`src/picker/`、`src/ui/`、`src/core/` 与 `src/client/handlers/`（收什么/不收什么见 §3.4；它们**不是**族目录，不承载前缀族读法）。
 判据是**家族内部**互相读取，不是文件名前缀，也不是被多少模块读（fan-in 高多半只是**门面装配耦合**）：
 
 | 族 | 成员 | 家族内耦合（方向） | 目录 |
@@ -415,26 +415,26 @@ graph LR
 | **字体子系统** | `font/apply` · `font/components` · `font/color-roles` · `font/typography` | `components → apply` · `→ color-roles` | ✅ `src/font/`（门槛①见 `test/verify-module-layout.mjs` 的 `SRC_DIR_MIN_MEMBERS` + 门槛② 本文 §3.3） |
 | **样式族** | `styles`（组装点 `src/styles.js` + 各域模块 `styles/{base,shell,chrome,settings,panel,quick,ext}.js`） | 组装点按 `INLINE_MODULES` 顺序相加；域模块**互相零读取** | ✅ `src/styles/`（组装点留根；`src-scope` 按前缀 `src/styles` 读 ⇒ 搬动改零判据，判据仍是"拼回 CSS 逐字节相同"） |
 | **词表族** | `i18n`（组装点 `src/i18n/i18n.js`）· `i18n-copy`（组装点 `src/i18n/i18n-copy.js` + 各域词表 `i18n/i18n-copy-{core,ext,font,glass,live,panel,pet-link,picker}.js`） | 域词表**互相零读取**；组装点按 `INLINE_MODULES` 顺序相加 | ✅ `src/i18n/`（组装点留根；成员同职责=域词表、每族 ≥3 成员；`src-scope` 前缀改成 `src/i18n/i18n-copy`，判据仍是「双向对账逐条相同」） |
-| **picker** | `picker-model`（纯函数、零外界） · `picker-modal` · `picker-props-panel` · `quick-panel` | `modal → model` | 平铺（见下） |
-| **渲染器层** | `panel-tabs`（族：组装点 + 各域模块，成员与内联顺序真源 = `scripts/build-client.mjs` 的 `INLINE_MODULES`，按 `src/panel-tabs.js` 前缀读） · `picker-modal` · `picker-props-panel` · `fontset-editor` · `ext-fx` · `ext-parallax` · `ext-avatar` | **互相零读取**（只读门面与纯函数工具） | ✅ `src/panel-tabs/`（组装点 `src/panel-tabs.js` 留根；`src-scope` 按前缀 `src/panel-tabs` 读 ⇒ 搬动零改判据） |
+| **picker** | `picker-model`（纯函数、零外界） · `picker-modal` · `picker-props-panel` · `quick-panel` | `modal → model` | ✅ `src/picker/`（§3.4；组件体仍住 `src/client/picker-component.js`） |
+| **渲染器层** | `panel-tabs`（族：组装点 + 各域模块，成员与内联顺序真源 = `scripts/build-client.mjs` 的 `INLINE_MODULES`，按 `src/panel-tabs.js` 前缀读） · `picker-modal`/`picker-props-panel`（现住 `src/picker/`）· `fontset-editor` · `ext-fx` · `ext-parallax` · `ext-avatar` | **互相零读取**（只读门面与纯函数工具） | ✅ `src/panel-tabs/`（组装点 `src/panel-tabs.js` 留根；`src-scope` 按前缀 `src/panel-tabs` 读 ⇒ 搬动零改判据） |
 | **媒体管线** | `live-layer`（组装点 `src/live-layer.js` + 各域模块 `live-layer/{diag,probe,watch,pointer,gate,underlay}.js`） · `video-layer` · `media-prep`（组装点 `src/media-prep.js` + 各域模块 `media-prep/{prepare,probe,budget}.js`） · `layer-core` · `effects` | `live-layer` → 家族内；`media-prep` 域模块按 `INLINE_MODULES` 顺序相加、彼此零读取 | ✅ `src/live-layer/`（组装点留根；`src-scope` 按前缀 `src/live-layer` 读 ⇒ 搬动零改判据）；`src/media-prep/`（组装点留根；判据走 bundle 文本与 `src/media-prep.js` 直读） |
 
-**客户端正文的助手模块**（`src/client-*.js` → `src/client/*.js`：`audio-playback` · `media-frame` · `rotation` · `rope-dock`）**不在上表**：
-它们不是一族，而是从 `src/client.js` 正文里按职责搬出的助手（正文仍在 `src/client.js`，由 `clientSources()` 拼）。搬进 `src/client/` 只是让"助手住哪"一眼可见，读法前缀 `src/client` 不变。
-| **点击与拖尾（「扩展」二号模块的两半）** | `fx-layer`（画布层：零 `ctx`、只读 `selection`、自带输入监听与内容驱动的 rAF） · `ext-fx`（扩展岛：收 `ctx`，动作走具名 `on*`） | 两者**互相零读取**（岛不读画布层的任何符号；画布层只在帧里现读 `selection`） | 平铺 |
+**客户端正文的助手模块**（`src/client/*.js`）**不在上表**：它们不是一族，而是从 `src/client.js` 正文里按职责搬出的助手（正文仍在 `src/client.js`，由 `clientSources()` 拼）。成员清单以 `scripts/build-client.mjs` 的 `INLINE_MODULES` 为准（本文不抄）；读法前缀 `src/client` 对 `src/client/handlers/` 与 `src/client/` 根一视同仁。
+| **点击与拖尾（「扩展」二号模块的两半）** | `fx-layer`（画布层：零 `ctx`、只读 `selection`、自带输入监听与内容驱动的 rAF） · `ext-fx`（扩展岛：收 `ctx`，动作走具名 `on*`） | 两者**互相零读取**（岛不读画布层的任何符号；画布层只在帧里现读 `selection`） | `packages/fx/src/`（两半随子包出户） |
+
+> 这批助手按职责分两个落点：处理器族住 `src/client/handlers/`（`*-handlers` / 取数 / 设置族），组件体与层助手留 `src/client/` 根。前缀族读法 `src/client` 对两层一视同仁（`clientText()` 不变），`move-src-module.mjs` 负责搬迁。
 | **3D 纵深（「扩展」三号模块的两半）** | `parallax-layer`（行为层：零 `ctx`、只读 `selection`、不建 DOM，每帧把最终位移写进目标层自己的 `translate`；左栏与输入卡例外，走相对定位 `left`/`top`）与 `ext-parallax`（收 `ctx` 的扩展岛）。组结构、`STEP_DIV`、组选择器、气泡上限、插件组豁免的完整规则见 `packages/parallax/src/parallax-layer.js:1-60` 与 `src/styles/ext.js` 视差段 —— 本文不复制。 |
-| **设置与宿主通道** | `persistence` · `fontset-store` · `adapter` · `api-client` · `i18n` | 互读少 | 平铺 |
+| **设置与宿主通道** | `persistence` · `fontset-store` · `adapter` · `api-client` · `i18n` | 互读少 | `src/settings/` + `src/core/`（§3.4） |
 
-**为什么不给上表其余族建目录**（用户裁决：`styles` / `panel-tabs` / `live-layer` / `i18n` 四族先走目录 —— 成员同职责、互相零读取、每族 ≥3 成员；其余仍不建，理由如下）：
+**目录决策**：上表里「不建目录」的几族已归入 §3.4 的功能域目录 ——
+`picker` → `src/picker/`；媒体管线的其余成员 → `src/wallpaper/`；设置与宿主通道 → `src/settings/` + `src/core/`；
+「扩展」两半（头像 / 扩展岛 / 性能）→ `src/extensions/`（`fx` / `parallax` 的**实现**仍住 `packages/<pkg>/src/`，
+只有主包侧的处理器与注册表入口进 `src/extensions/`）。
 
-| 族 | 不建的理由 |
-|---|---|
-| **picker** | 门槛②需要**新建一份权威文档**（本文 §3.3 的对应物）；成员里 `picker-model` 是纯数据层、`quick-panel` 是组件，**形态不同**，是否同收取决于"选择器"被定义为数据 + 视图还是再加一层外壳。收益上限只是"一眼看出是一伙的"，而成本见 §4 第 1 条的"搬动的成本" |
-| **渲染器层** | 它是同一**架构层**，不是一伙人（成员**互相零读取**）。且与 picker **归属冲突**（`picker-modal` / `picker-props-panel` 同属两族），而规则没写优先级 ⇒ **同一优先级只开一个** |
-| **媒体管线** | （`live-layer` 族已单列目录，见上表；以下针对其余成员）`src/video-layer.js` 头注释写明它独立的**全部理由**就是"**不**在实时那条路里"（真机踩过十几秒纯色帧）；`src/layer-core.js` 的围栏专门钉"与壁纸类型无关"。把它们与 `live-layer` 收进同一目录**正好从目录上抹掉这条边界** |
-| **点击与拖尾** | 同上一条：`fx-layer` 零 `ctx`、`ext-fx` 收 `ctx`，两半跨两张角色清单。共同点同样由**文件名前缀（`fx-`）+ 设置键前缀（`fx*`）+ 扩展岛**表达；额外理由：画布层是**纯客户端**的（不读任何宿主路由），与宿主那半边毫无关系，收成目录反而会暗示"这两半要一起改" |
-| **3D 纵深** | `parallax-layer`（零 `ctx`、不建 DOM，只写目标层 `translate`）+ `ext-parallax`（收 `ctx`）：共同点由文件名前缀 + 设置键前缀 + 扩展岛表达；行为层与岛连"运行时对象"都不共享，收成目录只会暗示必须一起改 |
-| **设置与宿主通道** | `src/fontset-store.js` 头注释写明"**另立一条**而不是并进 `persistence.js`"（真源/键集/失败语义都不同）；目录名会传递"这些是一回事"的**误读** |
+决策依据：`src/` 根与 `src/client/` 的平铺文件已到「靠文件名前缀才找得到」的规模（计数现算，见
+`verify-module-layout` ⑥ 的打印），而目录在这一侧**不承载机器含义**（§1），搬迁成本只剩路径引用面、
+收益是读者能按域定位。§3.4 的边界仍按这三条判据划：形态不同 / 互相零读取 / 归属冲突；
+分的是**功能域，不是架构层**。
 
 **四条通用反例**（同样适用于今后新增的族）：按**文件名前缀**机械分组（`video-layer` 与 `live-layer`
 前缀相同却是两条**刻意分开**的通道）· 按 **fan-in/cluster** 聚类 · 把"**不读 `selection`**"当分组依据
@@ -492,13 +492,12 @@ graph LR
 
 **值的真源在哪（与三个通道正交）**：真源是 `fontsets/<活动 id>.json`（随包 `lib/fontsets/` 只读 + 用户层
 `<pluginDataDir>/fontsets/`，同 id 用户层胜；改随包那份会写时复制成用户层）。`config.json` 只留根字段，字体键的
-kind 元数据在 `lib/settings-schema.js` 的 `FONTSET_KEYS`，客户端 `src/fontset-store.js` 与宿主
+kind 元数据在 `lib/settings-schema.js` 的 `FONTSET_KEYS`，客户端 `src/settings/fontset-store.js` 与宿主
 `packages/fonts/lib/routes/fontsets.js` 共用同一份消毒。**加键是加性的**（老文件缺键回落默认，
 `FONTSET_SCHEMA_VERSION` 不随加键升）。导入导出按整份 `.json`、写回只落当前这一套 —— 详见
-`lib/settings-schema.js:1581` 与 `src/fontset-store.js` 文件头。
+`lib/settings-schema.js` 的 `FONTSET_KEYS` 与 `src/settings/fontset-store.js` 文件头。
 
-**字族的两类值与「全局」槽**（完整口径见 `src/system-fonts.js:1-16`、`src/font/typography.js:1-16`、
-`src/font/apply.js:130-168` 与 `lib/settings-schema.js:1512` 的文件头）。
+**字族的两类值与「全局」槽**（完整口径见 `src/settings/system-fonts.js`、`src/font/typography.js`、`src/font/apply.js` 的文件头与 `lib/settings-schema.js` 的字体段）。
 
 - 取值域 = **内置族键**（`FONT_FAMILY_VALUES`，CSS 栈写死在客户端）+ **本机字体键 `sys:<族名>`**
   （宿主枚举，见 `packages/fonts/lib/routes/system-fonts.js` 与 [`adr/0009`](./adr/0009-system-fonts-from-the-os.md)）；
@@ -532,6 +531,26 @@ DSH 升级后**重取角色表**的命令写在 [`typography.js`](../src/font/ty
 **这些模块怎么进浏览器包**：目录内模块由 `scripts/build-client.mjs` 的 `INLINE_MODULES` 构建期内联（机制见 §3 与 `scripts/build-client.mjs:1-26`）。⚠️ 漏登记**不报错**、只是那个文件永远不进产物；`verify-component-fonts.mjs` 按「模块在位 + 已内联 + 不在正文」三件套断言 `apply.js`。
 > 目录语义与准入门槛见 §4。
 
+### 3.4 功能域目录（`src/` 根下的归并结果）
+
+> 本节就是 §4 第 1 条 ② 要求的那份「点名目录」的文档：**新增 / 改名目录时同一次改动里更新本表**。
+> 这些目录**不是族目录**（没有组装点、不进 `src-scope` 的前缀族语义）；它们的唯一作用是「让人一眼看出这几块是一伙的」。
+
+| 目录 | 收什么 | 不收什么 |
+|---|---|---|
+| `src/wallpaper/` | 壁纸运行时：视频层、层内核、遮挡、焦点交还、子路径挂载 | 样式（`src/styles/`）、宿主路由（`lib/routes/`） |
+| `src/settings/` | 设置 / 字体集 / 预设 / 系统字体的 **store 与持久化**、适配器判定 | schema 真源（`lib/settings-schema.js`）、面板渲染器 |
+| `src/extensions/` | 「扩展」页签与跨包注册表：头像导入与装饰层、扩展岛描述符、性能模块 | 子包自身实现（`packages/<pkg>/src/`） |
+| `src/picker/` | 选择器模型、模态渲染器、属性面板渲染器 | 选择器组件体（`src/client/picker-component.js`） |
+| `src/ui/` | 宿主 UI 接入（右栏 / 导航图标）与共用构件（节头、模块重置）、快捷播放面板 | 页签族（`src/panel-tabs/`） |
+| `src/core/` | 地基：`we-base` 工具、`we-cond` 求值器、宿主接口客户端、跨包桥表 | 业务处理器（`src/client/handlers/`） |
+| `src/client/handlers/` | 客户端正文的处理器族（`*-handlers.js` 与取数 / 设置族） | 组件体、层助手、启动入口（留 `src/client/` 根） |
+
+三条口径：
+
+1. 成员门槛同 §4 第 1 条 ①（`.js` **递归**计数 ≥ 门槛，数值真源在 `test/verify-module-layout.mjs` 的 `SRC_DIR_MIN_MEMBERS`，本文不抄）。
+2. 目录**不承载机器含义**（`src/` 无 `import`、构建期拍平）：搬目录只改路径，**不得**趁机重排 `INLINE_MODULES`（顺序承载 TDZ 与组装点）。
+3. 搬迁走机械流程：`node test/tools/move-src-module.mjs <old> <new> --apply` → 改本节与其它现行文档 → `npm run build` → 守卫链 → 重算生成物。
 ---
 
 ## 4. 新文件放哪（决策程序）
@@ -541,13 +560,16 @@ DSH 升级后**重取角色表**的命令写在 [`typography.js`](../src/font/ty
 1. **要在浏览器里跑吗？**
    → `src/**`，**并且必须登记进 `scripts/build-client.mjs` 的 `INLINE_MODULES`**（含 `markers` 锚点）。
    ⚠️ 忘了登记**不会报错**，只是这个文件永远不进产物（本仓踩过一次）。
-   **`src/` 默认平铺**：根目录就是默认落点。只有当一个子系统**同时**满足两条时，才为它建子目录
+   **落点先问功能域**（§3.4）：不属于任何功能域才落 `src/` 根。**族目录**（有组装点、有前缀族读法）另有更高门槛：
+   只有当一个子系统**同时**满足下面两条时，才为它建族目录
    （现有族目录：`src/font/`、`src/styles/`、`src/panel-tabs/`、`src/live-layer/`、`src/media-prep/`、`src/i18n/`，
-   见 §3.1 函数族表；`src/client/` **不是族目录**，是客户端正文助手（§3.1 中段），不受门槛②约束）：
+   见 §3.1 函数族表；`src/client/` **不是族目录**，是客户端正文助手（§3.1 中段），不受门槛②约束；
+   **功能域目录**（非族目录、无组装点）见 **§3.4**：`src/wallpaper/`、`src/settings/`、`src/extensions/`、
+   `src/picker/`、`src/ui/`、`src/core/`，以及 `src/client/handlers/`）：
    - ① **成员数达到准入门槛**（`.js 计数，含嵌套`）—— 门槛的**唯一真源**是守卫里的
      `SRC_DIR_MIN_MEMBERS`（`test/verify-module-layout.mjs`），本文不抄那个数字；
      同一条守卫过去还挂着**顶层文件数棘轮** `SRC_TOP_LEVEL_MAX`（软档、只许缩小）——
-     2026-11-22 撤除：新增一个顶层模块就要回填数字并写一段理由，失败动作是"改数字"，
+     已撤除：新增一个顶层模块就要回填数字并写一段理由，失败动作是"改数字"，
      按 [ADR-0007](./adr/0007-machine-checks-target-code-not-prose.md) 不设判据。
      现行口径：**顶层 `.js` 数量不设上限，靠评审** —— 新增顶层模块要么并进已有族目录，
      要么说清它为什么自成一族；守卫只把顶层计数**现算打印**（`verify-module-layout` ⑥），
@@ -640,7 +662,7 @@ DSH 升级后**重取角色表**的命令写在 [`typography.js`](../src/font/ty
 
 - **能搬** —— 它只读**模块级单例**（`selection` 一族）、只调**模块级函数**，不引用原作用域的局部名
   （`src/` 模块间"同一作用域"⇒ 这些是自由变量，可以解析）。提到模块级后身份反而**稳定**
-  （原先跟着渲染每次重建一份 ⇒ 函数 / 对象身份每次都变）。
+  （反例：跟着渲染每次重建一份 ⇒ 函数 / 对象身份每次都变）。
 - **不能搬（反判据）** —— 读**可变** store 算出的**派生值**（例：`group` / `candidates`）。
   提到模块级会退化成"只在模块初始化时算一次"的**冻结快照**，必须留在消费点每次重算。
 - 同一条界线要能**双向**判：守卫既断言"该在模块级的名字在组件 / 函数**之前**声明"，也带一条
@@ -710,7 +732,7 @@ DSH 升级后**重取角色表**的命令写在 [`typography.js`](../src/font/ty
 |---|---|---|
 | 内联模块浏览器安全 / `markers` 在位 / 名字不与正文冲突 | ✅ `scripts/build-client.mjs`（构建期硬失败） | — |
 | `files` 覆盖 `lib/`；具名入口在位；相对导入目标都在磁盘上；依赖无死声明；工具链零裸依赖；**发布面无 BOM**；内联产物可被 `node --check` 解析 | ✅ `test/verify-package-files.mjs` P1–P8（**其中六条各带负对照**；P1/P3 复用 P2 的判据，不另设对照） | — |
-| **发布面自洽（npm 方向）**：可达闭包 ⊆ `files` 且闭包目标在磁盘上在位；发布集无开发目录（白名单为空）；发布文本无**同步机器**的用户目录路径；`dependencies` 每条都被**活的代码**加载；入口/导出目标都在包里；发布出去的 `lib/client.js` 是加载器形态且可解析；**安装期不得跑任何仓库脚本**（无 `prepare`/`preinstall`/`install`/`postinstall` 构建钩子 —— git 直装不得要求 allowBuilds，issue #141；构建挂 `prepack`） | ✅ `test/verify-package-publish.mjs`（**七组，六组带负对照**；"入口与导出目标"那组是正断言） | — |
+| **发布面自洽（npm 方向）**：可达闭包 ⊆ `files` 且闭包目标在磁盘上在位；发布集无开发目录（白名单为空）；发布文本无**同步机器**的用户目录路径；`dependencies` 每条都被**活的代码**加载；入口/导出目标都在包里；发布出去的 `lib/client.js` 是加载器形态且可解析；**安装期不得跑任何仓库脚本**（无 `prepare`/`preinstall`/`install`/`postinstall` 构建钩子 —— git 直装不得要求 allowBuilds；构建挂 `prepack`） | ✅ `test/verify-package-publish.mjs`（**七组，六组带负对照**；"入口与导出目标"那组是正断言） | — |
 | `lib/client.js` 新鲜度 + 产物不入库 | ✅ `test/verify-client-sync.mjs` —— **`verify` 链首条**：真跑构建、折行尾后逐字节比对（不用 git）+ `git ls-files` 判产物未被跟踪（带正/负对照）；CI 另有同名「产物不入库」步，打包面由 `prepack` 现建 | — |
 | **`src/` 无孤儿**：除 `src/client.js` 外每个文件都必须在 `INLINE_MODULES` 里 | ✅ `test/verify-module-layout.mjs` ①（全量扫描 + 负对照）・**软档** | — |
 | **依赖方向单向**：`lib/**` 不得 import `src/**` | ✅ 同守卫 ②（零容忍，不需要棘轮）・**软档** | — |
@@ -732,7 +754,7 @@ DSH 升级后**重取角色表**的命令写在 [`typography.js`](../src/font/ty
 | **设置的全部键**（默认值 / 范围 / 枚举） | `lib/settings-schema.js` | 宿主 **和** 客户端 | 构建期内联给浏览器（唯一共享内核）。⚠️ **但文字颜色角色的 id、排版角色的 id 与字号上下限各有一份逐字副本**在 `src/font/color-roles.js` / `src/font/typography.js` —— 因为宿主也 `import` schema，而 `src/font/**` 只进浏览器包（该文件自己的注释原话："两份必须一致"）⇒ **改角色必须同时改两份**，由 `verify-theme-layer` / `verify-component-fonts` 机械对账。**副本的条数与取值一律看这两处源码**，本文不抄 |
 | **持久化的值** | 宿主 `config.json` | 宿主写；客户端读 inventory、写经保存接口 **+ 根字段端点**（`/we-assets-dir` · `/upload-dir` · `/fontsets` 的 `activate`） | 客户端 `localStorage` = 设置的**缓存** + **设备本地字段**（`rope-pos` / `picker-tab` / `qp-view` / `weLive*` —— 这些**不落 `config.json`**，也不在 schema 白名单里） |
 | **界面语言 + 译词表** | **宿主 locale 服务**的 `getSnapshot().active`（不是插件设置，缺省 `zh`，`?we-lang` 可覆盖） | `src/i18n/i18n.js` 订阅广播 ⇒ 客户端 `weT(...)`；非 React 的 DOM 补丁走 `weOnLocaleChange` | 词表住 `src/i18n/i18n-copy.js` 两张（客户端 / 宿主）；键集由 `verify-i18n` **双向对账**（漏译、孤儿键、`weT` 未包的中文各一条判据）。**不落 `config.json`** |
-| **活动字体集** | `config.json` 的根字段 `fontSetId` ⇒ `lib/fontsets/*.json`（随包只读预设）+ `pluginDataDir()/fontsets`（用户层，写时复制） | 宿主路由 `/fontsets`；客户端 `src/fontset-store.js` | **与设置平行的另一条真源**（`build-client.mjs` 的 `why` 原话）—— 字体键**不在** settings 白名单里；`localStorage` 的 `we-fontset-active` 只是缓存 |
+| **活动字体集** | `config.json` 的根字段 `fontSetId` ⇒ `lib/fontsets/*.json`（随包只读预设）+ `pluginDataDir()/fontsets`（用户层，写时复制） | 宿主路由 `/fontsets`；客户端 `src/settings/fontset-store.js` | **与设置平行的另一条真源**（`build-client.mjs` 的 `why` 原话）—— 字体键**不在** settings 白名单里；`localStorage` 的 `we-fontset-active` 只是缓存 |
 | **路由表** | `docs/ROUTE-INDEX.md`（生成物） | 人 + 守卫 | 由 `test/tools/host-route-index.mjs` 复算 |
 | **子包行 / 跨包服务面** | 根 `cordis.patch.yml`（行集唯一真源）+ `lib/subpackage-boot.js` 的 `SUBPACKAGE_KEY_TABLE` | 主包 `apply()` 的启动自检 + 各子包 `inject` | 服务名 `wallpaperEngineHost`，冻结七键；契约 = [`adr/0014`](./adr/0014-subpackage-contract.md) S5.4；判据 = `verify-subpackage-boot` / `verify-inject-contracts` / `verify-subpackage-manifests` |
 | **客户端产物（主包 + 子包）** | `scripts/build-client.mjs`（主包 `INLINE_MODULES`）+ 各子包的 `client.build.json` 配方 | 构建 + `verify-client-sync` | 产物集合**不在文档里写死**：构建打印清单，守卫重建后逐字节比对并判不入库 |
@@ -851,7 +873,7 @@ bundle 是压缩产物，符号名（`me`/`Qb` 等）会随上游同步变化。
         ↓  HTTP 轮询（沿插件既有 client↔host 模式）
 [packages/media-bridge/lib/routes/occlusion.js]  GET /wallpaper-engine/occlusion
         ↓  1Hz 轮询（仅 live 层挂载且页面可见时）
-[src/occlusion.js] 像素→CSS 换算 → postMessage 进 .we-live-iframe
+[src/wallpaper/occlusion.js] 像素→CSS 换算 → postMessage 进 .we-live-iframe
         ↓  {__weLive:1, op:'setOcclusion'|'clearOcclusion', …}
 [lib/webwallgl/occlusion-bridge.js]（scene-live 页内注入脚本）
         ↓  window.__weSetOcclusion(payload)
@@ -934,7 +956,7 @@ bundle 是压缩产物，符号名（`me`/`Qb` 等）会随上游同步变化。
 
 #### 9.5.3 客户端（`src/`，构建产物 `lib/client.js`）
 
-- 新文件 `src/occlusion.js`：
+- 新文件 `src/wallpaper/occlusion.js`：
   - **轮询**：1Hz `GET /wallpaper-engine/occlusion`（走既有 api-client 鉴权通道）；
     仅当 live 层挂载且 `!document.hidden` 时轮询，其余时候停；
   - **变换**：`scale = innerWidth / own.w`（防御 0/NaN），`occluders = rects.map(r => r*scale)`；
@@ -948,7 +970,7 @@ bundle 是压缩产物，符号名（`me`/`Qb` 等）会随上游同步变化。
 
 1. `npm run build` 成功；`node test/verify-occlusion-hub.mjs` /
    `verify-scene-live-occlusion.mjs` / `verify-occlusion-client.mjs` 全过；
-2. `npm run verify` 全绿（现 40 项零回归）；`npm run verify:docs` 无新增告警；
+2. `npm run verify` 全绿；`npm run verify:docs` 无新增告警；
 3. `rects.js` 单测覆盖：裁剪、自底向上差集、多矩形、退化（空/全遮/零面积）；
 4. scene-serve 注入机检：真实请求 `/scene-live/index.html` 含桥 script（沿
    `test/verify-scene-live.mjs` Level E 真实请求模式）；
@@ -1032,7 +1054,7 @@ bundle 是压缩产物，符号名（`me`/`Qb` 等）会随上游同步变化。
 只给开发者：媒体供给、抓帧、空帧门禁与主题取色的实现口径。用户可见行为与入口在
 [`HOW-IT-WORKS.md`](./HOW-IT-WORKS.md)，本文不重复「为什么」。
 
-**独立 loopback 媒体源**（`lib/media-origin.js` + `lib/media-origin/*`）：为什么存在 —— DSH Desktop 给
+**独立 loopback 媒体源**（`lib/media-origin.js`）：为什么存在 —— DSH Desktop 给
 每条插件路由套能力头栅栏（`x-dsh-desktop-renderer`，只注入给同源 frame 的请求），严格沙箱 iframe 是
 不透明源、拿不到该头 ⇒ 壁纸入口恒 `403`（症状：预览图正常、随后全黑）。因此网页壁纸入口 HTML 与全部
 子资源、以及场景 `scene.pkg` 都改由宿主自建的随机端口媒体源供给；媒体源不经过栅栏，第三方 HTML
@@ -1235,7 +1257,7 @@ graph LR
 > `test/tools/` 的磁盘枚举才是权威 —— 新增工具不必登记，**漏登与落后都允许**；看到本表与磁盘不符就顺手删表或改表，不必补齐。
 > 与判据的登记关系见 [`DEV-GUIDE.md`](./DEV-GUIDE.md) §4.7 约定 4：守卫按域判定，**没有登记动作**（`test/tools/*.mjs` 与 `test/compat-*.mjs` 亦然）。
 >
-> 本节原为 [`DEV-GUIDE.md`](./DEV-GUIDE.md) §4.6，整节拆出（正文未改写）：工具很多，放在主指南里会把「怎么加一个 X」的正文挤到很后面；原 `docs/TOOLS.md` 也已并入。
+> 工具很多，放在主指南里会把「怎么加一个 X」的正文挤到很后面。
 
 | 工具 | 回答什么 | 怎么跑 |
 |---|---|---|
@@ -1259,6 +1281,8 @@ graph LR
 | `i18n-scan.mjs` | 源码里的**中文字面量**扫描（判"进没进 `weT(...)`"；迁移与 `verify-i18n` 共用同一实现） | `node test/tools/i18n-scan.mjs [--json] [paths…]` · `selftest` |
 | `js-text.mjs` | JS/TS 源码的**文本级**工具（字符串 / 正则感知的剥注释） | `node test/tools/js-text.mjs selftest` |
 | `m2-facade-code-share.mjs` | **门面「非装配代码」占比（M2 口径）的复算**：逐字符扫描（跳过字符串 / 模板串 / 注释 / 正则）求出每行净括号增量 ⇒ 把**顶层语句**分成 `assembly`（体内出现 `ctx.` 或 `registerXxxRoutes(`）/ `code` / `other`，报 `nonAssemblyShare` 等四数。段窗走**内容锚点**（锚点全缺即非 0 退出 —— 宁可不算，也不输出一份可能误导的段表）；`--plan-legacy` 复现计划时代的硬编码段窗 | `node test/tools/m2-facade-code-share.mjs [文件] [--list] [--plan-legacy] [--self-check]` |
+| `audit-docs.mjs` | **文档/注释审计（人工工具，不进 CI）**：现行文档与源码注释里的失效路径、断链、超界行号锚、会漂的数值、中英不成对；按 `current / generated / comment / ledger` 分类，账本类只统计不改写。豁免表逐条写理由（ADR-0007 第 1/2 问） | `node test/tools/audit-docs.mjs [--json]` |
+| `move-src-module.mjs` | **机械搬迁的唯一入口**：把 `src/` 下一个模块搬到新路径 —— 改 `INLINE_MODULES` 条目（**保序**）、改写 `test/` `scripts/` `src/` 里的完整路径与「`'src', '<文件名>'`」分段写法，并列出 `docs/` 现行文档命中（历史文档按 ADR-0017 排除）。不改函数体、不重排内联清单 | `node test/tools/move-src-module.mjs <old> <new> [--apply]` |
 | `multi-source-mutants.mjs` | **多源变异体加载器**（守卫共用的基础设施）：一条负对照可能横跨多个模块，本工具按"源键 → 文件 / 工厂导出名"把 `[源键, find, replace]` 的编辑打在该源的文本上，并内置三件纪律 —— **命中自检**（锚点落空 / 空转编辑 / 未知源键 / 取不到工厂导出都即抛，防"变异体 = 原版 ⇒ 负对照假绿"）、源码先归一 LF（锚点写的是 `\n`）、相对说明符改写成绝对 `file:` URL（变异体住 `.test-cache/` 仍能 import 真源模块）。消费者：`verify-asset-paths` / `verify-cache-prune` | `import { makeMultiSourceMutants } from './tools/multi-source-mutants.mjs'`（库，无 CLI） |
 | `official-performer.mjs` | **官方 pet 演出的三个夹具**（`clientEntryFixture` / `performerFixture` 一族）：把 `packages/pet-link/src/official-pet.js` + `pet-link.js` 的源码拼成工厂、喂一份假 facade 求值，得到可驱动的 `createOfficialPetPerformer`；时间与锁／播放态全部捏在夹具手里（不连官方插件、不起宿主）。消费者：`verify-pet-official` / `verify-pet-hotplug-client` / `verify-pet-hotplug-integration` / `verify-pet-tuner` | 守卫 `import` 消费，无 CLI |
 | `official-pet-case.mjs` | **官方 pet 路由的端到端台架**（真 `node:http` 服务 + 真路由注册）：起一个只认官方 pet 协议（`config` / `lock` / `play` / `position` 一族）的桩服务，把 `verifyOfficialPet` 喂给守卫，断言协调器在锁冲突、进度缺失、动作失败下的排播与退场 | 守卫 `import` 消费（`test/verify-pet-hotplug-host.mjs`），无 CLI |
@@ -1270,7 +1294,7 @@ graph LR
 | `src-scope.mjs` | **构建期内联族**（组装点 + 域模块）的按序读法：清单从 `scripts/build-client.mjs` 的 `INLINE_MODULES` 现算（单一真源），供守卫读"同族并集"：`parseInlineModules()` / `scopeFiles(prefix)` / `scopeText(prefix, sep?)`（API 已冻结，空族抛错防静默全绿） | 守卫 `import` 消费，无 CLI |
 | `token-contract.mjs` | **`--dsw-*` 令牌契约的生成与核对**（共存审计 S2）：从 `src/styles.js` 的 CSS 模板现算「改写了哪些 token、在哪个门控下」，`--write` 重算生成物 `docs/TOKEN-CONTRACT.md`（守卫 `verify-token-contract` 逐字节比对） | `node test/tools/token-contract.mjs [--write] [--stats]` |
 | `underlay-pixel-rig.mjs` | **画布兜底色**的真浏览器像素对照：壁纸的像素没送到屏上时，页面自己画的是什么颜色（掉层 → 白闪还是同色底） | `node test/tools/underlay-pixel-rig.mjs <bundle.js> [label]` |
-| `fx-perf-rig.mjs` | **光效层帧耗时对照**（issue #190）：真浏览器里跑真的 `packages/fx/src/fx-layer.js`，灌固定指针轨迹 + 周期性点击，报帧间隔 mean / p50 / p95 / max。A/B 走两份 `fx-layer.js` | `node test/tools/fx-perf-rig.mjs <fx-layer.js> [label]` |
+| `fx-perf-rig.mjs` | **光效层帧耗时对照**：真浏览器里跑真的 `packages/fx/src/fx-layer.js`，灌固定指针轨迹 + 周期性点击，报帧间隔 mean / p50 / p95 / max。A/B 走两份 `fx-layer.js` | `node test/tools/fx-perf-rig.mjs <fx-layer.js> [label]` |
 | `weT-shim.mjs` | 给**单独 import `src/**`** 的守卫装身份译文层（`weT(k) === k`，与 bundle 里中文态逐字一致） | `node test/tools/weT-shim.mjs` |
 
 > 其中 `host-route-index.mjs` / `js-text.mjs` / `css-text.mjs` / `branch-notify.mjs` / `guard-chain.mjs` /
@@ -1330,9 +1354,9 @@ DSH 桌面端把整份客户端 + node 宿主打进 `resources/app.asar`（Elect
 | `--dsw-specific-input-major` / `--dsw-specific-bubble` | `dsh-client-ui-chat` 等 | 输入卡片 / 消息气泡的透明底 |
 | `--dsw-alias-turn-trigger-bg`（+ `-hover`） | `dsh-client-ui-chat` + `-theme` | 思考触发条的**专属底色**（本插件接管，见 §3） |
 | `--dsw-static-neutral-bluish-*` | `dsh-client-ui-theme` | 浅/深底色的取值来源 |
-| `--dsw-mask-blur` | `dsh-client-ui-theme`（在**裸 `body`** 上定义，默认 `none`）→ 消费方 `dsh-client-ui-primitives` 的 Modal 遮罩（`.mask{backdrop-filter:var(--dsw-mask-blur)}`） | 宿主**自己的**浮层模糊通道：在 `body[data-we-glass-page]` 上重声明一次，就能一次覆盖该通道上的所有宿主浮层（#156① 的修法）。⚠️ 调用方若显式传 `backdropBlur=false`，遮罩上会带**行内** `backdropFilter:none`，那条能压过非 `!important` 的样式表规则 |
-| `--dsw-alias-markdown-code-block-banner` | `dsh-client-ui-primitives`（声明在 `.md-code-block` 根上，`.banner` 消费） | 代码块吸顶条的内层底色。⚠️ 真正的吸顶载体是**外层 `.bannerWrap`**，它的底板读 `--dsw-alias-bg-base`（被本插件置成 `transparent`）⇒ 光改这个令牌铺不出板（#156④） |
-| `--dsw-alias-scrollbar-bg-l1/l2` · `--dsw-alias-scrollbar-hover-l1/l2` | `dsh-client-ui-theme`（主题块里定义成静态中性色；`body` 上的滚动条基座把它们接成 `--dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l1)` 等） | 滚动条拇指色（#157）。**关键结构性事实**：宿主另有多处局部重声明，写的都是 `--dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2)` 这一层**间接**（例：`agent-preset` / `conversation` / `plugin-manager` / `input-trigger` / `primitives`；条数与归属按 §0 的 asar 直读 + 偏移→包索引复算，搜这条声明即可）⇒ 在 `body[data-we-glass-page]` 上换掉这四个**底层** `--dsw-*` 令牌，全部局部重声明都会解析到本插件的值（自定义属性按**元素**解析，不是按声明处），一处覆盖全应用、不需要逐锚点补。⚠️ `--dsh-scrollbar-*` 是宿主自己那一层（宽度 / 边框 / 轨道留白），**不在**接口棘轮的抽取口径里（`test/compat-harness-surfaces.mjs` 的正则只收 `--dsw-`） |
+| `--dsw-mask-blur` | `dsh-client-ui-theme`（在**裸 `body`** 上定义，默认 `none`）→ 消费方 `dsh-client-ui-primitives` 的 Modal 遮罩（`.mask{backdrop-filter:var(--dsw-mask-blur)}`） | 宿主**自己的**浮层模糊通道：在 `body[data-we-glass-page]` 上重声明一次，就能一次覆盖该通道上的所有宿主浮层（一次声明覆盖该通道）。⚠️ 调用方若显式传 `backdropBlur=false`，遮罩上会带**行内** `backdropFilter:none`，那条能压过非 `!important` 的样式表规则 |
+| `--dsw-alias-markdown-code-block-banner` | `dsh-client-ui-primitives`（声明在 `.md-code-block` 根上，`.banner` 消费） | 代码块吸顶条的内层底色。⚠️ 真正的吸顶载体是**外层 `.bannerWrap`**，它的底板读 `--dsw-alias-bg-base`（被本插件置成 `transparent`）⇒ 光改这个令牌铺不出板 |
+| `--dsw-alias-scrollbar-bg-l1/l2` · `--dsw-alias-scrollbar-hover-l1/l2` | `dsh-client-ui-theme`（主题块里定义成静态中性色；`body` 上的滚动条基座把它们接成 `--dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l1)` 等） | 滚动条拇指色。**关键结构性事实**：宿主另有多处局部重声明，写的都是 `--dsh-scrollbar-thumb: var(--dsw-alias-scrollbar-bg-l2)` 这一层**间接**（例：`agent-preset` / `conversation` / `plugin-manager` / `input-trigger` / `primitives`；条数与归属按 §0 的 asar 直读 + 偏移→包索引复算，搜这条声明即可）⇒ 在 `body[data-we-glass-page]` 上换掉这四个**底层** `--dsw-*` 令牌，全部局部重声明都会解析到本插件的值（自定义属性按**元素**解析，不是按声明处），一处覆盖全应用、不需要逐锚点补。⚠️ `--dsh-scrollbar-*` 是宿主自己那一层（宽度 / 边框 / 轨道留白），**不在**接口棘轮的抽取口径里（`test/compat-harness-surfaces.mjs` 的正则只收 `--dsw-`） |
 
 **稳定性判定：高。** 令牌是宿主"给主题用的公开面"，改名会比改类名慎重得多；但**语义**（某令牌代表哪一层）
 仍可能被宿主重新分配 ⇒ 只对"值"稳定，不对"观感"作保。
@@ -1345,15 +1369,15 @@ DSH 桌面端把整份客户端 + node 宿主打进 `resources/app.asar`（Elect
 | `data-chat-flow-kind`（+ `data-chat-*` 一族） | ✅ | `dsh-client-ui-schedule` | 聊天流条目盒子上的**语义化**锚点；取值来自节点种类（`user` / `steering` / `context` / `turn-trigger` / `turn-process` / `assistant-text` …）⇒ `user` / `steering` 即用户气泡那一行，**稳**（类名是构建哈希，只能兜底） |
 | `data-question-key` / `data-plan-review-key` / `data-approval-key` | ✅ | `dsh-client-ui-user-questions` / `-approval` / `-conversation` | 工具弹卡的**容器**属性，稳 |
 | `data-turn-trigger` | ✅ | `dsh-client-ui-chat`（`TurnTriggerNodeView`） | 思考触发条的锚点，稳 |
-| `data-composer-seat`（+ `data-conversation-region="composer"`、`data-content-phase`、`data-phase`） | ✅ | `dsh-client-ui-conversation` | 输入**座位**（sticky 底板）的锚点，稳。⚠️ 它和 `[data-chat-flow]` **不在同一棵子树**里（座位是 ChatView 那一列在 `[data-conversation-scroll]` 里的兄弟）⇒ 会话流作用域在这一面用不了（#156③）。**玻璃底板不用它**（输入座位不铺底板，`verify-glass-surfaces` 有反向棘轮）；**UI 配色以它为作用域**（`src/styles/base.js` 的 `body[data-we-ui-color] [data-composer-seat]`，给发送键令牌定作用域 —— 纯配色、不画釉层，所以不算玻璃子面）。宿主里这个锚点仍在 |
+| `data-composer-seat`（+ `data-conversation-region="composer"`、`data-content-phase`、`data-phase`） | ✅ | `dsh-client-ui-conversation` | 输入**座位**（sticky 底板）的锚点，稳。⚠️ 它和 `[data-chat-flow]` **不在同一棵子树**里（座位是 ChatView 那一列在 `[data-conversation-scroll]` 里的兄弟）⇒ 会话流作用域在这一面用不了。**玻璃底板不用它**（输入座位不铺底板，`verify-glass-surfaces` 有反向棘轮）；**UI 配色以它为作用域**（`src/styles/base.js` 的 `body[data-we-ui-color] [data-composer-seat]`，给发送键令牌定作用域 —— 纯配色、不画釉层，所以不算玻璃子面）。宿主里这个锚点仍在 |
 | `data-composer-stats`（+ `data-composer-card` / `data-composer-input` … 一族） | ✅ | `dsh-client-ui-chat` | 底部统计行 / 输入卡片的锚点，稳 |
-| `data-install-registry` | ✅ | `dsh-client-ui-plugin-manager` | 插件源浮层：写在 `<fieldset>` 上、portal 到 `document.body` ⇒ **body 的直接子节点**（不在 `[data-chat-flow]` 里，也不走宿主的半透明菜单通道 `[data-menu-material]`）（#156②） |
-| `data-code-block-banner` | ✅ | `dsh-client-ui-primitives`（`CodeBlock` 的 `.banner`） | 代码块吸顶条的内层行；**吸收顶的是它的父 `.bannerWrap`**（只有哈希类、没有 data-*）⇒ 用 `.md-code-block > :has(> [data-code-block-banner])` 认父（#156④） |
+| `data-install-registry` | ✅ | `dsh-client-ui-plugin-manager` | 插件源浮层：写在 `<fieldset>` 上、portal 到 `document.body` ⇒ **body 的直接子节点**（不在 `[data-chat-flow]` 里，也不走宿主的半透明菜单通道 `[data-menu-material]`） |
+| `data-code-block-banner` | ✅ | `dsh-client-ui-primitives`（`CodeBlock` 的 `.banner`） | 代码块吸顶条的内层行；**吸收顶的是它的父 `.bannerWrap`**（只有哈希类、没有 data-*）⇒ 用 `.md-code-block > :has(> [data-code-block-banner])` 认父 |
 | `data-sidebar-right-panel` / `data-sidebar-right-open` | ✅ | `dsh-client-ui-sidebar-right` | **既有**右栏适配的落点，稳（上游曾改过隐藏机制，见 `test/compat-harness-surfaces.mjs` 的活判据） |
 | `data-slot`（**值由宿主槽注册表决定**） | ✅ 属性存在；`settings.section` ✅ | `dsh-client-ui-renderer` 写出口 | **这是"槽出口"，不是普通属性** —— 见 §3；出口自己写死 `display: contents`（**不生成盒子**），**不能**拿它当位移 / 定位的落点 —— 见 §3.5 |
 | `data-windows-titlebar`（在 `html` 上） | ✅ 桌面壳写 | **桌面壳**（不在客户端产物里） | Windows 标题栏形态门：壳把窗口切到"自绘标题栏"布局（顶栏高度进 CSS 变量 `--dsh-windows-titlebar-height`）时挂在 `html` 上。本插件抄左栏那条玻璃规则时用它当**形态门**，与 `data-we-adapter^="desktop-"` 两道门同时成立才生效 |
 | `data-shell-overlay` | ✅ | `dsh-client-ui-layout`（AppFrame 的 `.overlayLayer`） | **AppFrame 本体的稳定锚点**：写在 AppFrame 的**直接子节点**上 ⇒ `:has(> [data-shell-overlay])` 认父（宿主自己的壳层 CSS 也用它上底）。壁纸让位用它清 AppFrame 底；不要用哈希类 `_frame` 拼直系路径（AppFrame 外面可能有包装层，直系选择器会静默失效） |
-| `data-dsh-desktop-mode` | ❌ 客户端产物 0 命中 | 桌面壳的 **URL 查询参数**，由本插件的 `src/adapter.js` 写到 body | **不是 DSH 客户端接口**（见 §3） |
+| `data-dsh-desktop-mode` | ❌ 客户端产物 0 命中 | 桌面壳的 **URL 查询参数**，由本插件的 `src/settings/adapter.js` 写到 body | **不是 DSH 客户端接口**（见 §3） |
 | `data-dsh-better-sidebar` / `.dsh-browser-seat-wrap` | ❌ 0 命中 | **第三方插件**（better-sidebar / dsh-webui） | 不在 DSH 保证范围内 |
 
 #### 2.3 类名后缀（`[class*="_x"]`）——**一半是第三方的**
@@ -1377,7 +1401,7 @@ DSH 桌面端把整份客户端 + node 宿主打进 `resources/app.asar`（Elect
 **⚠️ 后缀会撞车：`_bubble` 同时是宿主 Tooltip 的类名**（`dsh-client-ui-primitives` 的
 `Tooltip.module.css`，编译名 `_bubble_<hash>`）。Tooltip 是 `position:fixed` + portal 到 body 的
 浮层、**不在 `[data-chat-flow]` 里**，于是任何"按 `_bubble` 后缀刷气泡玻璃"的规则都会顺手把它刷成
-半透明浅底 —— 而它的文字是近白色 ⇒ 几乎不可读（#161 的根因）。
+半透明浅底 —— 而它的文字是近白色 ⇒ 几乎不可读。
 ⇒ 认气泡**不能只看类名后缀**，必须带一个与 DOM 位置无关的排除式：`[class*="_bubble_"]:not([role="tooltip"])`
 （`role="tooltip"` 是该气泡元素上宿主写死的 ARIA 属性；用 `[data-chat-flow]` 作用域也行，但那条依赖
 "tooltip 一定在流外"这个未被产物证实的假设）。语义化锚点（`data-chat-flow-kind`）是更稳的第一选择。
@@ -1408,7 +1432,7 @@ DSH 桌面端把整份客户端 + node 宿主打进 `resources/app.asar`（Elect
 ⚠️ 统计口径的一个坑：`lib/**` 里还有 `ctx.canvas` / `ctx.drawImage` / `ctx.getImageData` / `ctx.fit` ——
 那些是**我们自己的渲染上下文**（canvas 2D / 内部渲染 ctx），不是 cordis 注入面。审计时别把两者混成一类。
 
-### 3. 与预想不同的几条（本次核查的主要产出）
+### 3. 与预想不同的几条
 
 #### 3.1 DSH 有一套**正式的、带文档的槽系统**，而我们钉的是"渲染后的 DOM"
 
@@ -1450,7 +1474,7 @@ DSH 桌面端把整份客户端 + node 宿主打进 `resources/app.asar`（Elect
    （出处：桌面壳自己的 `index.js`；本机这一半**不在**上文审计的那个产物里，而在另一处安装中 ⇒ 复算要按
    "壳安装目录"再查一遍）；
 2. **客户端产物侧**：0 命中（所以"客户端产物里没有"**不等于**"这条接口不存在"）；
-3. **页面侧**：本插件 `src/adapter.js` 从 `window.location.search` 读 `dsh-desktop-mode` /
+3. **页面侧**：本插件 `src/settings/adapter.js` 从 `window.location.search` 读 `dsh-desktop-mode` /
    `dsh-desktop-mica`，再写到 `document.body` 上，CSS 才按它分档。
 
 ⚠️ **反直觉的一点**：桌面壳自己的客户端 CSS **读** body 上的 `[data-dsh-desktop-mode="extended"|"advanced"]`，
@@ -1464,7 +1488,7 @@ DSH 桌面端把整份客户端 + node 宿主打进 `resources/app.asar`（Elect
 这三类稳定性差一个量级，但它们在 `src/styles.js` 里长得一样（都是选择器）。
 清账的价值就在这里：**升级前只需要重点复核低稳定度的那一类**。
 
-#### 3.4 宿主**自带权威文档**（这是本次核查最大的收获）
+#### 3.4 宿主**自带权威文档**
 
 asar 里带着宿主自己的插件编写文档：`@deepseek-ai/dsh-agent-preset/references/` 下有一组
 （`host-plugin.md` bundle 与宿主插件 · `ui-plugin.md` **Web 页里的 UI 插件** · `practices.md` 插件实践 · `verification.md` 等）。
@@ -1526,7 +1550,7 @@ asar 里带着宿主自己的插件编写文档：`@deepseek-ai/dsh-agent-preset
   `data-chat-flow-kind` 的值来自节点种类（`user` / `steering` / `context` / `turn-trigger` / `turn-process` /
   `assistant-text` …）⇒ **`[data-chat-flow-kind="user"]`（+ `"steering"`）就是用户气泡那一行的锚点**，
   而 `…_userRow` / `…_bubble` 这类类名是构建哈希、只能兜底。
-- **"哪条助手行现在看得见"要靠三个属性合判**（issue #231 的频率口径）：① `data-chat-turn`（同一回合
+- **"哪条助手行现在看得见"要靠三个属性合判**（频率口径）：① `data-chat-turn`（同一回合
   的助手行只配一张脸）；② `data-turn-process-hidden`（这一行属于**折叠中的**过程窗口 ⇒ 它现在不可见，
   不该占"段首"）；③ 祖先里的 `[data-step-process-body][hidden]`（过程组整组折叠时，成员行自己不带
   `hidden`，是整个 body 被藏起来）。三者都是 `ChatNodeSeat` / `ChatGroupSeat` 直接写在流条目上的
@@ -1543,7 +1567,7 @@ asar 里带着宿主自己的插件编写文档：`@deepseek-ai/dsh-agent-preset
   见 `src/styles.js` 里那段注释）。
   ⇒ 要动左栏只能走**相对定位**（`position: relative` + `left` / `top`）：它**不**建立包含块，就不会换掉任何
   fixed 后代的锚点。本插件「3D 效果」的界面跟随正是这么做的（`parallaxGroupOffsets()`）。
-  **输入卡片也走同一条相对偏移路径**（#257）：它可能在视差已落位后才挂载 fixed 浮层，
+  **输入卡片也走同一条相对偏移路径**：它可能在视差已落位后才挂载 fixed 浮层，
   或因子树超过扫描上限而跳过 fixed 后代检查。相对偏移不依赖扫描时机，保留输入卡的跟随距离，
   同时避免浮层改锚后额外增加滚动范围。**并非卡片零溢出承诺**：正向 `left/top` 仍可扩大卡片自身
   的滚动范围；负向偏移不扩大正向滚动边界。本修复保留双向跟随，不裁剪浮层，也不修改跟随距离。
@@ -1598,7 +1622,7 @@ asar 里带着宿主自己的插件编写文档：`@deepseek-ai/dsh-agent-preset
 （`PARALLAX_GROUP_DEPTH_MIN` / `_MAX`）钳一次范围，存档里的越界值不会显示成域外的数。**已知代价**：① 运行期
 分不清归属 ⇒ 宿主自己的界面槽也会出现在「插件前端」那一栏里，用户把它设 0 即可（面板里每一行就是一个真实
 槽键，认得出来源的人能自己判断）；② 组里有 `position: fixed` 后代时**整组不动**（层的写法是"宁可不动"：
-`translate` 会让该组变成那些后代的包含块，见 §3.5 与 #89 那条）—— 这一条要遍历子树、只在帧外做，面板不筛，
+`translate` 会让该组变成那些后代的包含块，见 §3.5）—— 这一条要遍历子树、只在帧外做，面板不筛，
 改成写进每一行的 tooltip 与那一卡上方那句说明里（认到槽位时显示的那一句 hint —— 它同时也说明"槽名就是身份"）。
 
 ⚠️ **§3.5 这四条**都属于 §2.3 说的"低稳定度那一类"：主机重建后**属性名**多半还在，但 `_viewArea` 这类后缀随时可改

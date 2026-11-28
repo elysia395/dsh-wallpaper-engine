@@ -3,7 +3,7 @@
  * verify-adapter.mjs — 适配器模式：三档判定表、手选优先级与四处行为落点。
  *
  * 为什么要有这一层：适配目标是**跨两侧的契约** —— 宿主按请求头/UA 观测（lib/index.js
- * 的 observeAdapter），客户端拿上报值 + 本地信号兜底（src/adapter.js），两边用同一套
+ * 的 observeAdapter），客户端拿上报值 + 本地信号兜底（src/settings/adapter.js），两边用同一套
  * 字面量。判定与行为各改各的不会有任何报错，只会在某个宿主形态下安静地出事：
  * 载荷走错源（网页壁纸 403 黑屏）、外壳材质规则吃进浏览器形态、失焦暂停定格可见画面。
  * 所以本守卫分两层断言：**行为**（打真路由读响应、比 inventory 的入口 URL 形态）与
@@ -11,7 +11,7 @@
  *
  * 分节：
  *   ① schema：四字面量 + 默认 auto + enum 接到同一张表 + 缺键/越界回落
- *   ② 客户端判定（src/adapter.js）：手选 > 宿主上报 > 本地信号、能力矩阵、文案
+ *   ② 客户端判定（src/settings/adapter.js）：手选 > 宿主上报 > 本地信号、能力矩阵、文案
  *      —— 直接 import 该文件，把它的两个自由变量挂到 globalThis 上（等价于构建期
  *      的同作用域拼接），每种初值用**新 URL 重新 import** 以拿到干净的缓存
  *   ③ 宿主判定表（行为）：三种请求 → 三档；闩锁只增不减；能力头优先于 Electron UA；
@@ -103,7 +103,7 @@ check('负对照：值表改一个字 ⇒ 判据变假',
   && sameTable(EXPECTED.slice(1)) === false);
 check('正对照：判据对真表为真（不是恒假）', sameTable(EXPECTED) === true);
 
-// ═══ ② 客户端判定（src/adapter.js）═══════════════════════════════════════════
+// ═══ ② 客户端判定（src/settings/adapter.js）═══════════════════════════════════════════
 console.log('\n② 客户端判定：手选 > 宿主上报 > 本地信号');
 // 该文件按构建期契约以**同作用域**内联（ADAPTER_TARGET_VALUES 与 selection 都是
 // 外部作用域的自由变量）。Node 里把这两个名字挂到 globalThis 上即可复现同一形态。
@@ -121,7 +121,7 @@ async function freshAdapter({ picked = 'auto', host = null, search = '', ua = 'M
     configurable: true, writable: true,
   });
   Object.defineProperty(globalThis, 'navigator', { value: { userAgent: ua }, configurable: true, writable: true });
-  const mod = await import(pathToFileURL(join(root, 'src', 'adapter.js')).href + '?case=' + (++importSeq));
+  const mod = await import(pathToFileURL(join(root, 'src', 'settings', 'adapter.js')).href + '?case=' + (++importSeq));
   if (host) mod.setAdapterFromHost(host);
   return mod;
 }
@@ -346,8 +346,8 @@ const effectsSrc = read('src/effects.js');
 const stylesSrc = styleText() + readFileSync(new URL('../packages/glass/src/glass-css.js', import.meta.url), 'utf8');
 const tabsSrc = panelText();
 const clientSrc = read('src/client.js');
-const persistSrc = read('src/persistence.js');
-const adapterSrc = read('src/adapter.js');
+const persistSrc = read('src/settings/persistence.js');
+const adapterSrc = read('src/settings/adapter.js');
 
 /** 判据只看真实规则行：注释由共享的 `stripComments`（字符串感知）剥掉。
  *  样式表住在主包样式域模块与 `packages/glass/src/glass-css.js` 的模板字面量里，而共享实现按设计**不剥模板内容** ⇒ 先把模板
@@ -394,7 +394,7 @@ check('persistence 把宿主上报交给 adapter（缺字段不抛）',
 check('判定优先级写在 resolveAdapterTarget 里（手选先返回）',
   /function resolveAdapterTarget\(\) \{[\s\S]{0,200}if \(picked !== 'auto'\) return picked;/.test(adapterSrc));
 check('适配目标已注册进内联清单（否则永远不进产物）',
-  read('scripts/build-client.mjs').includes("file: 'src/adapter.js'"));
+  read('scripts/build-client.mjs').includes("file: 'src/settings/adapter.js'"));
 
 console.log('\n' + (failed ? 'ADAPTER CHECKS FAILED — ' + failed + ' failed' : 'ALL ADAPTER CHECKS PASSED'));
 process.exit(failed ? 1 : 0);

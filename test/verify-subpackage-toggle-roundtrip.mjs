@@ -666,7 +666,7 @@ function panelSectionProblems(reg, panelId, sectionId) {
   if (!reg || typeof reg !== 'object') return ['面板节注册表模块装载不到'];
   const bad = [];
   for (const fn of ['weRegisterPanelSection', 'wePanelSectionsOf', 'weSetPanelSectionListener']) {
-    if (typeof reg[fn] !== 'function') bad.push('src/extension-registry.js 没导出 ' + fn + '（P-C 契约 §2.1 冻结接口）');
+    if (typeof reg[fn] !== 'function') bad.push('src/extensions/extension-registry.js 没导出 ' + fn + '（P-C 契约 §2.1 冻结接口）');
   }
   if (bad.length) return bad;
   const fresh = reg.wePanelSectionsOf(panelId);
@@ -823,10 +823,10 @@ function fontsSectionOwnershipProblems(t) {
 
     // ② 运行时：真注册表模块（fresh 实例 = "字体产物还没装载"的初始态）
     let reg = null, regErr = null;
-    try { reg = await import(pathToFileURL(join(ROOT, 'src/extension-registry.js')).href + '?fonts-instance=' + Date.now()); }
+    try { reg = await import(pathToFileURL(join(ROOT, 'src/extensions/extension-registry.js')).href + '?fonts-instance=' + Date.now()); }
     catch (e) { regErr = e; }
     const regProbs = regErr
-      ? ['装载 src/extension-registry.js 失败：' + String(regErr.message || regErr).split('\n')[0]]
+      ? ['装载 src/extensions/extension-registry.js 失败：' + String(regErr.message || regErr).split('\n')[0]]
       : panelSectionProblems(reg, PANEL_ID, FONTS_SECTION_ID);
     check('字体实例②：外观页签的字体节只能经面板节注册表显形（初始态无此节 / 装上后可见 / 订阅者被通知 / 注册期不读译文 / 同页二次注册原子抛错 / §2.1 ①缺什么抛什么且原子 / 顺序 = (order, 注册序)）',
       regProbs.length === 0, regProbs.join('\n      '));

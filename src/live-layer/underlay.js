@@ -19,7 +19,7 @@
 // 放弃并保持作者配色那条腿，绝不抛。
 const UNDERLAY_SAMPLE_DELAY_MS = 6000;   // 首帧后的复采：视频常有黑场淡入，首帧不足以代表画面
 // 视频首采延后到空闲：从 `<video>` 的 64×64 画布做 getImageData 实测会触发一次
-// **103ms** 的视频纹理回读（trace 2026-10-30 的 loadeddata 长任务来源）—— 兜底色只是
+// **103ms** 的视频纹理回读（loadeddata 长任务来源）—— 兜底色只是
 // "像素没上屏时垫一层代表色"，晚一拍算出来不影响功能，绝不能阻塞首帧呈现。
 const UNDERLAY_IDLE_TIMEOUT_MS = 800;
 let underlaySampleTask = 0;            // requestIdleCallback 句柄或 setTimeout id

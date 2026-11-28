@@ -31,14 +31,14 @@
  *     附近来回磨，没迟滞就会两帧之间把 0 与 1 个设备像素翻来翻去 —— 用户口径 m01915-② 说的
  *     抖动就是它，见 PARALLAX_GROUP_DEAD_PX / parallaxSnapAxis()）；
  *     ② 位移归零时**把 `translate` 摘掉**。只要它存在（哪怕 0px），这个元素就成了 `position:
- *     fixed` 后代的**包含块** —— 那是本仓 #89 的坑（卡片里挂着第三方插件的座位，包含块一换
+ *     fixed` 后代的**包含块** —— 那是本仓 坑（卡片里挂着第三方插件的座位，包含块一换
  *     就跑到卡片角上）；组里真有 fixed 后代时整组不动，见 parallaxGroupBlocked()。
  *     **左栏与输入卡片是例外**：左栏里长着宿主自己的 fixed 标题栏按钮（Windows 标题栏模式下的
  *     「收起 / 展开侧边栏」钉在标题栏左上角，见 docs/CODE-STRUCTURE.md §13），加 `translate`
  *     会把按钮整体推下去一个标题栏高度（用户口径 m01915-③，与本仓 #131 同一类事故）⇒
  *     两者改用 `position: relative` + `left`/`top`：相对定位**不是** fixed 后代的包含块，
  *     按钮照旧钉在视口上（见 parallaxTargetOffset()）。输入卡片也会动态挂载 fixed 浮层：
- *     扫描之后才挂载或子树超过扫描上限时，检查后代不能保证安全（#257）。复用相对偏移，
+ *     扫描之后才挂载或子树超过扫描上限时，检查后代不能保证安全。复用相对偏移，
  *     不靠重扫时机保护其锚点；代价是这两组每帧多一次布局；
  *     正向 left/top 仍可能扩张卡片自身的滚动边界，不承诺零溢出。给原本 static 的卡片
  *     补 relative 也会建立 absolute 后代的包含块；宿主新增此类装饰时须核对其预期锚点。
@@ -272,7 +272,7 @@ let parallaxDebugCheckMs = 0;
 let parallaxDebugStats = null;
 let parallaxDebugLastMs = 0;
 
-/* `weNow()` / `weClampTo()` 的唯一实现见 src/we-base.js（内联后同作用域）。 */
+/* `weNow()` / `weClampTo()` 的唯一实现见 src/core/we-base.js（内联后同作用域）。 */
 
 /**
  * 设置快照（每帧现读 ⇒ 拖滑块不需要 emit 就能看到反馈）。
@@ -356,7 +356,7 @@ function parallaxMaxPercent(st) {
   return max;
 }
 
-/* `weBody()`（写样式 / 属性的落点）的唯一实现见 src/we-base.js；没有 DOM 的环境一律 null。 */
+/* `weBody()`（写样式 / 属性的落点）的唯一实现见 src/core/we-base.js；没有 DOM 的环境一律 null。 */
 
 /** 写一条**元素级**的样式（只在真的变了的时候写，比的是自己攒的快照，不读回 DOM）。
  *  两个能力都先探再调：挂载台（`test/verify-client.mjs`）的 style 只实现了 setProperty。 */
@@ -661,7 +661,7 @@ function parallaxGroupNodes(el) {
  * "钉在视口上"变成"钉在这个盒子上"（本仓 #89：第三方插件把座位挂在输入卡片里，包含块一换
  * 就跑到卡片角上、还多出幽灵溢出）。
  * 只在**重扫路径**上跑（帧里绝不碰），而且**只枚举一次子树**：节点数超过
- * PARALLAX_GROUP_SCAN_MAX（= 400）就认作"没验完"（照动）—— 会话流动辄几千节点，每 250ms 全量
+ * PARALLAX_GROUP_SCAN_MAX（=400）就认作"没验完"（照动）—— 会话流动辄几千节点，每 250ms 全量
  * getComputedStyle 是不行的。
  * ⚠️ 超限那一步自己也有成本：枚举整棵子树不比 `getComputedStyle` 便宜多少 ⇒ 枚举走
  * parallaxGroupNodes 的缓存（超限的组合在 1s 内**连数都不数**）；要验的那些组直接

@@ -35,10 +35,10 @@
  *     `verify-client.mjs str` 求值器变量域、`verify-scene-live.mjs` 深度表）。
  * 残差两条**真**死状态（task-13 第二步的处置，已按 Lead 裁定办）：
  *   · `test/verify-scene-live.mjs onAvatarName` —— **已删**：真实调用点（`src/client.js`）与岛
- *     （`src/ext-avatar.js` 的解构）都只取 5 个 `onAvatar*`，全仓再无 `onAvatarName`；
+ *     （`src/extensions/ext-avatar.js` 的解构）都只取 5 个 `onAvatar*`，全仓再无 `onAvatarName`；
  *     删后 `verify-scene-live` 改前/改后 exit 0 + 末行 `ALL SCENE-LIVE CHECKS PASSED (642)` 逐字一致。
  *   · `test/verify-scene-live.mjs avatarUserName` —— **保留**：这是有意喂给 SUT 的**未知字段**
- *     （`src/avatar-layer.js/275/276` 只按名读 enabled/size/radius），同一条 check 里断言节点
+ *     （`src/extensions/avatar-layer.js/275/276` 只按名读 enabled/size/radius），同一条 check 里断言节点
  *     仍只有一枚 `.we-avatar__glyph` 子节点 ⇒ "设置里多一个名字字段也不会长出名字节点"。
  *     行内有理由注释；补齐 7 条动态边界后它归入 `global-assign`（`globalThis.selection = {…}`）。
  * ⇒ 收盘时 **B1 的真死残差 = 0**（剩下的 8 条全是六类结构性假阳）；立守卫只能靠"同形于合法

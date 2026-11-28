@@ -67,7 +67,7 @@ const WE_I18N_EN_FONT = {
   "把当前这套字体外观存成一份新的集，并切换过去（名字之后可以改）": "Save the current font appearance as a new set and switch to it (the name can be changed later)",
   "刷新": "Refresh",
 
-  // ── src/fontset-store.js ──
+  // ── src/settings/fontset-store.js ──
   "宿主里没有字体集路由：重启 DSH 后再试（改过宿主代码要重挂，刷新页面不够）": "The host has no font set route: restart DSH and try again (if you changed host code it must be re-mounted; refreshing the page is not enough)",
   "宿主没有活动字体集": "The host has no active font set",
   "字体集不可用": "Font set unavailable",

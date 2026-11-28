@@ -8,7 +8,7 @@
  * `ts` 新鲜度，不关心底下是 X11 还是 Wayland —— hub 把这两件事隔开，让将来的
  * Wayland 适配器（KWin 脚本 / sway IPC / portal）只是**换一个 createAdapter**。
  *
- * ══ 快照契约（消费方：packages/media-bridge/lib/routes/occlusion.js → 主包 src/occlusion.js → WebWallGL）═══
+ * ══ 快照契约（消费方：packages/media-bridge/lib/routes/occlusion.js → 主包 src/wallpaper/occlusion.js → WebWallGL）═══
  *   `{ ok:1, backend:'x11', epoch, gen, own:{w,h}, rects:[[x,y,w,h]…], ts }`
  *   · `rects` 已**相对自窗客户区原点**、单位是自窗像素（客户端按 innerWidth/own.w
  *     缩放到画布 CSS 像素）；`epoch` 标识坐标系来源，变 epoch ⇒ 渲染器全量重置；

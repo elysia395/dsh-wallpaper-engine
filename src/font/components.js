@@ -37,7 +37,7 @@
  *          probeComponentTargets / buildComponentCss / buildDslBlocks / selectorFor。
  *
  * 不变量（守卫逐条断言）：
- *   · **`id` 与 `prefix` 是两件事，不许合并**：`id` 是设置键（= 面板一行 = 持久化字段），
+ *   · **`id` 与 `prefix` 是两件事，不许合并**：`id` 是设置键（=面板一行 = 持久化字段），
  *     **永不随 DSH 变**（改名 = 用户设置迁移）；`prefix` 是打包器产物里的模块名，会随 DSH 变。
  *   · 生成的选择器**只能是** `body [class*="_<白名单 prefix>_"]` 形态 —— 不许裸类名、不许标签、
  *     不许 `:has()`/祖先关联（白闪红线 1：作用域只能"直接命中"）。
@@ -158,7 +158,7 @@ function componentScopeSelector(id, hookScopes) {
 }
 /**
  * 选择器形态的唯一合法模板：**只能**由白名单里的 id 生成。
- * @param id 组件 id（= 设置键），**不是**模块名 —— 模块名不许从外部传进来。
+ * @param id 组件 id（=设置键），**不是**模块名 —— 模块名不许从外部传进来。
  */
 function selectorFor(id) {
   const t = targetById(id);

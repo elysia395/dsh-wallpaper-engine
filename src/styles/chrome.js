@@ -1,7 +1,7 @@
 /**
  * styles-chrome.js —— 样式域模块 **CHROME**。
  *
- * 内容（ADR-0016 第四刀玻璃段出户后）：统一控件 token · DSH corner-shape 兼容(#74)。整窗玻璃与插件源浮层随玻璃包走。
+ * 内容（ADR-0016 第四刀玻璃段出户后）：统一控件 token · DSH corner-shape 兼容。整窗玻璃与插件源浮层随玻璃包走。
  *
  * 拼装契约（样式族 7 个域模块共享，组装点见 src/styles.js）：
  *   · 构建期按 INLINE_MODULES 顺序把族内文件**原样内联进同一工厂作用域**，模块之间不 import，靠扁平符号协作
@@ -20,7 +20,7 @@
  */
 const CSS_CHROME = `  /* Picker chrome. */
   .we-picker {
-    /* issue #127：设置窗整窗规则把 --we-accent 掐成 initial（不泄漏给窗内第三方
+    /* ：设置窗整窗规则把 --we-accent 掐成 initial（不泄漏给窗内第三方
        分区）—— 我们的 picker 子树在这里从 body 的原件重新别名，消费面不变。 */
     --we-accent: var(--we-accent-src, #4f8cff);
     /* ── 统一控件 token：一套高度/圆角/墨色词汇贯穿全部控件 ──

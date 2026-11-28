@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * verify-occlusion-client.mjs — Linux 遮挡**客户端投递器**（src/occlusion.js）的行为
+ * verify-occlusion-client.mjs — Linux 遮挡**客户端投递器**（src/wallpaper/occlusion.js）的行为
  * 与接线守卫。src/ 是浏览器安全的无模块脚本（build 内联纪律），所以在 node:vm 沙箱
  * 里装 **api-client 前导 + occlusion 模块**，用可手动驱动的假定时器与假 iframe 跑真源码。
  *
@@ -46,8 +46,8 @@ const checkAsync = async (name, fn) => {
   }
 };
 
-const API_CLIENT_SRC = readFileSync(join(ROOT, 'src/api-client.js'), 'utf8');
-const OCCLUSION_SRC = readFileSync(join(ROOT, 'src/occlusion.js'), 'utf8');
+const API_CLIENT_SRC = readFileSync(join(ROOT, 'src/core/api-client.js'), 'utf8');
+const OCCLUSION_SRC = readFileSync(join(ROOT, 'src/wallpaper/occlusion.js'), 'utf8');
 const LIVE_SRC = liveText();
 const BUILT = readFileSync(join(ROOT, 'lib/client.js'), 'utf8');
 
@@ -308,7 +308,7 @@ check('S1 live-layer 钩子：scene-only 启动 + stopLiveWatch 必停', () => {
 });
 check('S2 build 内联：INLINE_MODULES 登记 + 产物含模块', () => {
   const build = readFileSync(join(ROOT, 'scripts/build-client.mjs'), 'utf8');
-  assert.match(build, /file: 'src\/occlusion\.js'/);
+  assert.match(build, /file: 'src\/wallpaper\/occlusion\.js'/);
   assert.ok(BUILT.includes('function startOcclusionPolling('), '产物必须含投递器');
   assert.ok(BUILT.includes('function stopOcclusionPolling('));
 });

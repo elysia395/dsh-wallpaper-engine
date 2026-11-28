@@ -429,11 +429,11 @@ section('⑤ 客户端通道：登记进产物 / 浏览器安全 / 只碰自己�
 {
   const read = (p) => readFileSync(join(root, p), 'utf8');
   const build = read('scripts/build-client.mjs');
-  const mod = read('src/system-fonts.js');
+  const mod = read('src/settings/system-fonts.js');
   const modCode = stripComments(mod);
 
-  check('src/system-fonts.js 已登记进 INLINE_MODULES（漏登记=静默不生效）',
-    /file:\s*'src\/system-fonts\.js'/.test(build) && /markers:\s*\[[^\]]*readCachedSystemFonts/.test(build));
+  check('src/settings/system-fonts.js 已登记进 INLINE_MODULES（漏登记=静默不生效）',
+    /file:\s*'src\/settings\/system-fonts\.js'/.test(build) && /markers:\s*\[[^\]]*readCachedSystemFonts/.test(build));
   check('浏览器安全：无 import / require( / process.* / __dirname',
     !/(^|\n)\s*import\s/.test(modCode) && !/\brequire\(/.test(modCode)
     && !/\bprocess\./.test(modCode) && !/__dirname|__filename/.test(modCode));
@@ -453,7 +453,7 @@ section('⑤ 客户端通道：登记进产物 / 浏览器安全 / 只碰自己�
     && writtenFields('selection.systemFonts = [];').every((k) => allowed.includes(k)));
 
   const client = stripComments(read('src/client.js'));
-  const qp = stripComments(read('src/quick-panel.js'));
+  const qp = stripComments(read('src/ui/quick-panel.js'));
   check('清单初始化**先吃本地缓存**（否则已选中的本机字体首帧显示成"跟随"）',
     /systemFonts:\s*readCachedSystemFonts\(\)/.test(client));
   // ⚠️ 触发点随字体节迁到侧栏（设置页外观已没有字体 UI，在那边拉是白付
@@ -478,7 +478,7 @@ section('⑤ 客户端通道：登记进产物 / 浏览器安全 / 只碰自己�
 // ── ⑥ 本浏览器能否匹配那道筛（合成"浏览器"判它：同一判据三种输入）────────────
 section('⑥ 过滤"本浏览器取不到的族名"：合成浏览器判它（量不到时必须原样放行）');
 {
-  const mod = await import(new URL('../src/system-fonts.js', import.meta.url).href);
+  const mod = await import(new URL('../src/settings/system-fonts.js', import.meta.url).href);
   const { filterUsableSystemFonts } = mod;
   /**
    * 合成一个"浏览器"：给每个族名一个宽度（`null` = 这个族名匹配不上 ⇒ 走后面的兜底字体，

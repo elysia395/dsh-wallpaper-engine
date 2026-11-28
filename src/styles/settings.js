@@ -89,7 +89,7 @@ const CSS_SETTINGS = `  /* ── 预设方案：两行四列的圆角表格（�
   .we-picker__playlist-select { flex: 1; min-width: 0; }
   .we-picker__filter-row { flex-wrap: wrap; flex-shrink: 0; }
   .we-picker__filter-row .we-picker__playlist-select { flex: 1 1 130px; }
-  /* 内容分级：下拉 + 多档勾选（v7 起 contentRatingFilter 是数组）。2026-10-30 用户口径：
+  /* 内容分级：下拉 + 多档勾选（contentRatingFilter 是数组）。用户口径：
      四枚胶囊铺在筛选行里观感差 ⇒ 收进下拉。summary 去掉原生三角；勾选行复用「弹层行」
      的两枚令牌（--we-popup-row-bg / -ink，深色档由 effects.js 按主题挑）。 */
   .we-picker__rating-menu, .we-picker__type-menu, .we-picker__folder-menu { position: relative; flex: 0 1 auto; min-width: 0; }
@@ -111,7 +111,7 @@ const CSS_SETTINGS = `  /* ── 预设方案：两行四列的圆角表格（�
   /* 文件夹：摘要显示夹子名，比档名长 ⇒ 宽一档。 */
   .we-picker__folder-btn { width: 150px; }
   /* 摘要文字是 flex 项：必须给 min-width:0 + 省略号，否则长档名会把按钮撑宽
-     （用户口径 2026-10-30：候选框限宽 + 文字省略）。 */
+     （候选框限宽 + 文字省略）。 */
   .we-picker__rating-text, .we-picker__folder-text {
     flex: 1 1 auto; min-width: 0; overflow: hidden;
     text-overflow: ellipsis; white-space: nowrap;
@@ -203,7 +203,7 @@ const CSS_SETTINGS = `  /* ── 预设方案：两行四列的圆角表格（�
   }
   /* 选中行单钉：UA 用 Highlight 蓝画 option:checked，不吃上面那对行令牌。填充读
      --we-accent-src 而**不是** --we-accent —— 设置窗那个作用域块末尾把 --we-accent 主动
-     掐成 initial、块内既有消费一律走 -src，而 #164 的复现入口恰在窗内：读 --we-accent
+     掐成 initial、块内既有消费一律走 -src，而复现入口恰在窗内：读 --we-accent
      会恒落到兜底色，既与用户配色脱钩、又与**跟随用户的**墨色错配。墨读
      --we-popup-row-checked-ink，由 effects.js 的 weCheckedRowInk 按**实算对比度取大**
      在纯黑 / 纯白之间下发（刻意不沿用按钮那条 0.45 阈值：中亮度 accent 上白字只有
@@ -358,7 +358,7 @@ const CSS_SETTINGS = `  /* ── 预设方案：两行四列的圆角表格（�
     gap: 12px; min-height: 32px;
   }
   .we-picker__ctl--wrap { flex-wrap: wrap; row-gap: 8px; }
-  /* ── 分段控件在「左说明 / 右控件」行里的取宽口径（#253）────────────────────────
+  /* ── 分段控件在「左说明 / 右控件」行里的取宽口径────────────────────────
      说明可以是长句（max-content 会吃满整行），若控件仍用 flex:1（basis 0）就只能分到
      「剩余宽度」⇒ 三元组被压成几像素宽的窄格、文字互相截断。两条口径：
        · 普通段（2~5 键：播放速度 / 帧率档 / 圆角）：按内容等分，整组靠右，不被说明挤扁；
@@ -383,7 +383,7 @@ const CSS_SETTINGS = `  /* ── 预设方案：两行四列的圆角表格（�
   .we-picker__ctl--wrap > .we-picker__seg.we-picker__seg--corners-eq {
     grid-auto-columns: minmax(max-content, 1fr);
   }
-  /* 色板行独占整行、行内左对齐（#253）：与说明同排时短说明会把色板推到右端、长说明又把它
+  /* 色板行独占整行、行内左对齐：与说明同排时短说明会把色板推到右端、长说明又把它
      挤到下一行；右侧「自定义」在 564px 内容宽下会顶出面板。 */
   .we-picker__ctl--wrap > .we-picker__swatches { flex: 1 0 100%; }
   /* 禁用态的一整行（「全局 UI 配色」的「全局配色」行：开了「UI 配色自定义」后不由它说了算）。
@@ -397,7 +397,7 @@ const CSS_SETTINGS = `  /* ── 预设方案：两行四列的圆角表格（�
     overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
   }
   .we-picker__ctl-hint {
-    /* 说明**允许换行**（#253）：564px 内容宽下 nowrap 会把长句截成省略号，用户看不到
+    /* 说明**允许换行**：564px 内容宽下 nowrap 会把长句截成省略号，用户看不到
        后半句；换行后行高由内容撑开，标签仍单行（控件列宽度因此可预期）。 */
     font-size: 0.7em; color: var(--we-ink-3, rgba(128, 128, 128, 0.65));
     overflow-wrap: anywhere; max-width: 100%;

@@ -7,7 +7,7 @@
     const { onLayoutChange, sel } = ctx;
     return React.createElement(React.Fragment, null,
     // ── 浏览方式：紧凑 CD 架 vs 常规分页网格 ──
-    // 本节只有一条设置 ⇒ 不再套「节标题 + 一行」两层（#253）：外层 .we-picker__section 留作
+    // 本节只有一条设置 ⇒ 不再套「节标题 + 一行」两层：外层 .we-picker__section 留作
     // 分隔线，行标签「紧凑布局」自己承担标题。
     React.createElement("div", { className: "we-picker__section" },
       // Card style: classic (WE's original aspect-ratio 16/9 cards — the CD-like
@@ -24,7 +24,7 @@
     const { onEdgeCompatChange, sel } = ctx;
     return React.createElement(React.Fragment, null,
     // ── 兼容性 ──
-    // 同「浏览方式」：只有一条设置，不重复两层标题（#253）。
+    // 同「浏览方式」：只有一条设置，不重复两层标题。
     React.createElement("div", { className: "we-picker__section" },
       // Edge 兼容渲染开关：仅在 Edge 中生效（canvas 渲染，避免浏览器自带的
       // 「下载 / 投屏」悬浮工具栏）。
@@ -43,7 +43,7 @@
     // 检测事实来源在宿主侧（能力头 / UA，见 lib/index.js 的 3c-0），客户端拿
     // 上报值 + 本地信号兜底；手选优先于检测，是检测不准时的自救。
     // 本节的「适配」节标题与「适配目标」行说同一件事 ⇒ 删节标题，把原来挂在标题上的长说明
-    // 挪进行标签的 tooltip（#253：不占版面，鼠标停上去仍看得到四件事）。
+    // 挪进行标签的 tooltip（不占版面，鼠标停上去仍看得到四件事）。
     React.createElement("div", { className: "we-picker__section" },
       React.createElement("div", { className: "we-picker__ctl" },
         ctlText(weT("适配目标"), weT("自动检测 · 手选可覆盖"),
@@ -98,7 +98,7 @@
           note: sel.pauseOnBlur ? weT("（当前已开启，本目标下不生效，切到浏览器目标后恢复）") : "",
         })),
       switchRow(weT("使用电池时暂停"), sel.pauseOnBattery, onPauseOnBattery, { key: "pause-battery" }),
-      // 启动时暂停（#349）：每次重启都先停住，不动已选壁纸 —— 与上面的遮挡暂停不同，
+      // 启动时暂停：每次重启都先停住，不动已选壁纸 —— 与上面的遮挡暂停不同，
       // 它只在**启动**那一刻决定播放意图，运行中不停不碰（点「播放」本次会话照常播）。
       switchRow(weT("启动时暂停"), sel.startPaused, onStartPaused, {
         key: "start-paused",

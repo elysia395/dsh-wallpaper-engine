@@ -9,7 +9,7 @@
  */
 /** 由构建期填充：scripts/build-client.mjs 从下方 `} = host;` 的解构逐键派生本表
  * （源码留空表只为 eslint/typecheck 可读；产物里是一份生成好的键数组）。
- * 手工加键的正确顺序：① src/host-bridge.js 的 HOST_BRIDGE_BINDINGS ② 本文件的解构名单。 */
+ * 手工加键的正确顺序：① src/core/host-bridge.js 的 HOST_BRIDGE_BINDINGS ② 本文件的解构名单。 */
 const PET_LINK_HOST_REQUIRED = [];
 for (const key of PET_LINK_HOST_REQUIRED) {
   if (!(key in host)) throw new Error('[wallpaper-engine-pet-link] 主 bundle 键集缺少 "' + key + '"');
@@ -133,7 +133,7 @@ let petLinkContext = null;
 /**
  * 联动开关（M7）：开=linked 优先，关=强制 native。
  *
- * 2026-11-02：从「纯内存态」改成 localStorage 持久化（键 `dsh-we-pet-link-enabled-v1`，
+ *从「纯内存态」改成 localStorage 持久化（键 `dsh-we-pet-link-enabled-v1`，
  * 值 `1` / `0`）。此前关掉后刷新页面或重开设置页会变回开——内存里没人记住用户的决定。
  * 仍然遵守主包零改动：不写主包设置，只写 pet-link 自己的键；存储不可用（隐私模式/配额）
  * 时退化为内存态，本次会话仍然生效。
@@ -271,7 +271,7 @@ const petLink = createPetLink({
    * 该规则由 PET 侧 `link.surface`（`resolveSurface`）解析好，这里照读；旧运行时无该字段则回落
    * `web`（`petLinkSurface()`），与原来写死 `surface=web` 的行为一致。
    *
-   * `name` 必须是运行时动画池里的名字（`DSHWE` 池由宿主半 `lib/provision.js` 追加进去）——
+   * `name` 必须是运行时动画池里的名字（`DSHWE` 池由 `dsh-pet-dshwe` 包自带，本仓装载期不注入）——
    * 池里没有的名字会被判 `unknown-animation`，绝不回落成"随便播一个"。
    */
   async playAnim(petId, name, facing) {

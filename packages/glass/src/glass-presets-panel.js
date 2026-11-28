@@ -1,5 +1,5 @@
 /**
- * glass-presets-panel.js — 「主题预设」独立节的渲染器（2026-11-07 从 glass-panel.js 纯搬移折出）。
+ * glass-presets-panel.js — 「主题预设」独立节的渲染器从 glass-panel.js 纯搬移折出）。
  *
  * 为什么单独一层：预设块的形态纪律（出厂名字走词表、破坏性动作两步确认、坏预设「禁用但可删」、
  * 资产勾选对话框）与「玻璃 UI」节的四件套旋钮是**两类东西** —— 前者是整机快照的读写入口，
@@ -54,14 +54,14 @@
  * **保存与导出都先过这道对话框**（ADR 修订版第③条）：保存 = 名字行 → 勾选 → 「保存预设」；
  * 导出 = 每行「导出」→ 同一组勾选 → 「下载 .json」。勾选的每一项只在**本机确实有那份
  * 资产**时才可勾（宿主按名单内嵌，没有的东西内嵌不出段；行的说明会写明）。
- * 本渲染器**只画**：网络与状态全部经 ctx（store 在 src/preset-store.js，接线在 client.js 的
+ * 本渲染器**只画**：网络与状态全部经 ctx（store 在 src/settings/preset-store.js，接线在 client.js 的
  * glassPresetCtx）。
  */
 /**
  * 导入用的隐藏 file input 的**模块级 ref**（与 packages/fonts/src/fontset-editor.js 同形：模块级变量 +
  * 按钮去 `.click()`；⚠️ 名字不能撞 —— fontset-editor 已占 `importInput`，平铺进 bundle
  * 后是同一作用域，撞名 = SyntaxError，构建期会红）。只做"选文件"，读文件与三道
- * 本地预检在 `importGlassPreset`（src/preset-store.js）。
+ * 本地预检在 `importGlassPreset`（src/settings/preset-store.js）。
  */
 let gpImportInput = null;
 
@@ -163,7 +163,7 @@ function renderGlassPresetsBlock(gp) {
   );
   // 两行四列的圆角表格（用户口径）：每格 = 预设名（点击应用，占满）
   // + 右侧固定删除键；出厂行在前（不占用户名额），用户槽固定 8 个、空位画虚框 ——
-  // 「你自己最多 8 套」直接看得见（#219 把这条上限从"总量 8"拆成"用户 8"）。
+  // 「你自己最多 8 套」直接看得见（把这条上限从"总量 8"拆成"用户 8"）。
   // ⚠️ armedId 是 **裸 id**（armedIdOf("gpreset") 已把族前缀剥掉，与 fontset-editor
   //    同一口径）—— 拿它和带前缀的令牌串比较永远不等 ⇒ 确认行永远不渲染
   //    （实测："点删除没反应"就是这个）。行为守卫：verify-presets ④。
@@ -307,7 +307,7 @@ function renderGlassPresetsBlock(gp) {
       }, weT("不再提示")),
     )
     : null;
-  // ── 「已隐藏的出厂预设」恢复区（#219）：删除 = 隐藏之后，这条路把它放回来 ────────
+  // ── 「已隐藏的出厂预设」恢复区：删除 = 隐藏之后，这条路把它放回来 ────────
   // 只在确实有隐藏项时出现（hiddenBuiltin 默认空/缺席 ⇒ 整行不渲染）。
   const hiddenRows = Array.isArray(hiddenBuiltin) ? hiddenBuiltin : [];
   const hiddenRow = hiddenRows.length

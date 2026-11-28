@@ -7,7 +7,7 @@
  * 只读不写：纯数据，不得有可执行语句。守卫判据见 `test/verify-i18n.mjs`（族读法 test/tools/src-scope.mjs）。
  */
 const WE_I18N_EN_GLASS = {
-  // ── 思考块液态玻璃（PR #130）──
+  // ── 思考块液态玻璃──
   "思考块液态玻璃": "Thinking-block liquid glass",
   "表格可读底": "Table readability background",
   "关闭后，表格恢复宿主样式，壁纸可透过表格。": "Turn off to use the host’s table style and let the wallpaper show through.",
@@ -68,7 +68,7 @@ const WE_I18N_EN_GLASS = {
   "第三方弹窗不透明底": "Opaque base for third-party dialogs",
   "给第三方插件的弹窗补实底": "Give third-party plugin dialogs a solid base",
   "打开（默认）：第三方插件（任务看板等）的弹窗与确认框补一层不透明底，背后的页面内容与兄弟弹窗不再透上来；宿主自己的设置窗、输入卡与菜单保持原样，宿主的确认 / 审批卡会一并变实底（它们此前同样在漏）。关闭：恢复宿主原生的半透明观感": "On (default): dialogs and confirm boxes from third-party plugins (task boards and the like) get an opaque base, so the page behind them and sibling dialogs no longer bleed through; the host's own settings window, composer and menus stay as they are, while the host's own confirm / approval cards also become opaque (they were leaking too). Off: restore the host's native translucent look",
-  // ── 宿主悬停信息卡（hoverCard 面，2026-11-17；补上上一版漏掉的英文词条）──
+  // ── 宿主悬停信息卡（hoverCard 面）──
   "悬停卡玻璃·独立配置": "Hover card glass · independent config",
   "悬停卡玻璃·玻璃透明度": "Hover card glass · glass opacity",
   "悬停卡玻璃·雾化": "Hover card glass · blur",
@@ -87,7 +87,7 @@ const WE_I18N_EN_GLASS = {
   "打开后**紧接在本行下方**出现这一项自己的独立配置，**完全覆盖**上面的全局配置；关闭则回到继承全局": "When on, this item’s own independent config appears **directly below this row** and **fully overrides** the global config above; when off it goes back to inheriting the global one.",
   "打开后**紧接在本行下方**出现左侧栏自己的两项（玻璃透明度 / 雾化），**完全覆盖**「玻璃 UI」里的全局配置；关闭则回到继承全局。": "When on, the left sidebar’s own two controls (glass opacity / blur) appear **directly below this row** and **fully override** the global config in Glass UI; when off it goes back to inheriting the global one.",
   "打开后**紧接在本行下方**出现标题栏自己的两项（玻璃透明度 / 雾化），**完全覆盖**「玻璃 UI」里的全局配置；关闭则回到继承全局（与左侧栏同一数值 ⇒ 同一观感）。": "When on, the title bar’s own two controls (glass opacity / blur) appear **directly below this row** and **fully override** the global config in Glass UI; when off it goes back to inheriting the global one — the same value as the left sidebar gives the same look.",
-  // ── 本机字体（src/system-fonts.js · panel-tabs 字体节）──
+  // ── 本机字体（src/settings/system-fonts.js · panel-tabs 字体节）──
   "侧栏玻璃跟随全局": "Sidebar glass follows the global settings",
   "模糊 / 透明度 / 底色都跟随全局玻璃": "Blur, transparency and base tint all follow the global glass",
   "打开：侧栏玻璃跟随「玻璃 / 玻璃透明度 / 玻璃颜色」（与原生左栏同一条配方，两侧栏一致）；关闭：用下面三个旋钮单独调侧栏": "On: the sidebar glass follows Frost / Glass opacity / Glass color (the same recipe as the native left column, so both sidebars match). Off: tune the sidebar with the three knobs below.",
@@ -108,7 +108,7 @@ const WE_I18N_EN_GLASS = {
   "没读到本机字体清单": "No installed fonts were read",
   "宿主里没有本机字体路由：重启 DSH 后再试（改过宿主代码要重挂，刷新页面不够）": "The host has no installed-fonts route: restart DSH and try again (host-side changes need a remount; refreshing the page is not enough)",
 
-  // ── 玻璃预设（src/preset-store.js / packages/glass/src/glass-panel.js）────────────────────
+  // ── 玻璃预设（src/settings/preset-store.js / packages/glass/src/glass-panel.js）────────────────────
   "宿主里没有玻璃预设路由：重启 DSH 后再试（改过宿主代码要重挂，刷新页面不够）": "No glass-preset routes in the host: restart DSH and try again (changed host code needs a remount — refreshing the page is not enough)",
   "这份出厂预设已被删除 —— 刷新清单后会从列表里消失": "This built-in preset was deleted — refresh the list and it will drop out of it",
   "这份预设不存在了 —— 可能已被删掉，刷新清单后再选一份": "This preset no longer exists — it may have been deleted; refresh the list and pick another",

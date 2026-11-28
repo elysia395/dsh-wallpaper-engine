@@ -73,7 +73,11 @@
 写新 ADR 前先读 [`adr/README.md`](./adr/README.md)：那里有该写什么 / 不该写什么、
 头部格式、以及**为什么文档只引用源码而不复制数值**（与 ADR-0017 同口径）。
 
-完整的 18 条索引（编号、一句话决定、当前状态 Accepted / Superseded / Amended）维护在
+**维护口径**：ADR **不是账本** —— 方针与取舍（`Decision` / `Consequences` / 触发线）不改，
+推翻走新 ADR + `Status`；但**结论类内容**（文件路径、符号、「现状是 X」的断言）允许按现状校正。
+拿不准就按方针处理：**不改**。
+
+完整索引（编号、一句话决定、当前状态 Accepted / Superseded / Amended）维护在
 [`adr/README.md`](./adr/README.md#索引)——本文件不再复制这张表：同一份名单在两处维护必然漂（ADR-0017 D2）。
 
 ## 已归档（`archive/`，只作记录）

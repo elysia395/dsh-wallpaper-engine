@@ -65,7 +65,7 @@ try {
   }
 } finally { off(); cleanup(); }
 assert.equal(routes.size, 0);
-const side = readFileSync(new URL('src/sidebar-right.js', root), 'utf8');
+const side = readFileSync(new URL('src/ui/sidebar-right.js', root), 'utf8');
 const sideEnd = side.indexOf('// 定时器一律走 window.');
 const calls = [];
 const native = new Function('drawer', side.slice(0, sideEnd) + ';ropeDrawerControl=drawer;return [wallSidebarOpen(),wallSidebarClose(),wallSidebarToggle()];')({

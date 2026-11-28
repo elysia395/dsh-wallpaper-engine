@@ -82,7 +82,7 @@
  * ⇒ 没有一条是"真死声明"，它们全是**只把名字写在非引用位置上的空导出面**。
  * 因此清理一律**只删 `export` 关键字或 `export { … }` 里的 specifier，声明本体与文件内
  * 自用一字不动**（逐条清单与批次属历史，见 [`CHANGELOG.md`](../docs/CHANGELOG.md)）。
- * 唯一例外是 `src/avatar-layer.js::avatarGlyphSvgString`：它被 `test/verify-scene-live.mjs`
+ * 唯一例外是 `src/extensions/avatar-layer.js::avatarGlyphSvgString`：它被 `test/verify-scene-live.mjs`
  * 的精确集合 golden（5 名集 → 4 名集）钉着，必须与该 golden 同一笔提交落刀（Lead 执行）。
  * 这正是"字面量不是引用"必须写进口径的原因：只有把字面量掩掉，空导出面才会现形。
  *
