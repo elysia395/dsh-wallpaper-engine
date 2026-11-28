@@ -46,7 +46,7 @@ function installGlassOptics() {
   let rectsDirty = true, lightsDirty = false, cachePixels = 0;
   const status = { generation, surfaces: 0, maps: 0, updates: 0, pointer: false, errors: 0,
     pixels: 0, buildMs: 0, cacheHits: 0, layoutReads: 0, lightWrites: 0, scans: 0 };
-  let svg, defs, style, resize, intersection, mutation, compactRoot;
+  let svg, defs, style, resize, intersection, codeIntersection, mutation, compactRoot;
   const variableNames = ['--we-optics-filter', '--we-optics-native', '--we-optics-bg', '--we-optics-shadow', '--we-optics-x', '--we-optics-y'];
   function report(event, detail) { try { reportGlassOptics('local-lens-v2-' + event, detail); } catch {} }
   function trimCache() {
@@ -76,7 +76,7 @@ function installGlassOptics() {
     const seat = seats.get(el);
     if (!seat) return;
     deactivate(el, seat);
-    resize?.unobserve(el); intersection?.unobserve(el);
+    resize?.unobserve(el); intersection?.unobserve(el); codeIntersection?.unobserve(el);
     seats.delete(el); visible.delete(el); dirty.delete(el);
   }
   function dispose() {
@@ -316,7 +316,8 @@ function installGlassOptics() {
         seat.wideEdge = seat.subagent || el.matches(chatTable);
         variableNames.forEach(name => seat.saved.set(name, { value: el.style.getPropertyValue(name), priority: el.style.getPropertyPriority(name) }));
         seats.set(el, seat); dirty.add(el);
-        resize.observe(el); intersection.observe(el);
+        const observer = el.matches('.md-code-block') && el.closest('[data-conversation-scroll]') ? codeIntersection : intersection;
+        resize.observe(el); observer.observe(el);
       } else if (resample) { const seat = seats.get(el); if (seat.sampled) sample(el, seat); dirty.add(el); }
     }
     rectsDirty = true; lightsDirty = true;
@@ -359,15 +360,20 @@ function installGlassOptics() {
     resize = new win.ResizeObserver(guard(entries => {
       entries.forEach(entry => dirty.add(entry.target)); rectsDirty = true; lightsDirty = true; schedule();
     })); cleanup.push(() => resize.disconnect());
-    intersection = new win.IntersectionObserver(guard(entries => {
+    const onIntersection = guard(entries => {
       for (const entry of entries) {
         if (entry.isIntersecting) { visible.add(entry.target); dirty.add(entry.target); }
         else { visible.delete(entry.target); const seat = seats.get(entry.target); if (seat?.sampled) deactivate(entry.target, seat); }
       }
       lightsDirty = true;
       schedule();
-      // Prepare the filter before the element crosses a nested scroller's clip.
-    }), { scrollMargin: '128px 0px' }); cleanup.push(() => intersection.disconnect());
+    });
+    // Conversation fences carry their filter on the block itself, so the scrollport
+    // clips the lookahead. Warm enough for a large scroll step without extending
+    // the range of fixed overlays and positioned inline-code leaves.
+    intersection = new win.IntersectionObserver(onIntersection, { scrollMargin: '128px 0px' });
+    codeIntersection = new win.IntersectionObserver(onIntersection, { scrollMargin: '640px 0px' });
+    cleanup.push(() => intersection.disconnect(), () => codeIntersection.disconnect());
     let mutationTimer = 0, pendingResample = false;
     const pendingRoots = new Set();
     mutation = new win.MutationObserver(guard(records => {

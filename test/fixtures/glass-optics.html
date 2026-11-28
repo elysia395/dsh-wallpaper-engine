@@ -137,6 +137,22 @@ const assertions=[];function check(value,message){if(!value)throw new Error(mess
  check(unrelatedReads===0,'Nested scrolling does not measure unrelated glass');
  delete picker.getBoundingClientRect;
  scroller.remove();
+ const fenceScroll=document.createElement('section');
+ fenceScroll.setAttribute('data-conversation-scroll','');
+ fenceScroll.style.cssText='position:fixed;top:300px;left:560px;width:340px;height:200px;overflow:auto';
+ fenceScroll.innerHTML='<div data-chat-flow style="position:relative;height:1700px">'+
+   '<div id="fast-fence" class="md-code-block" style="position:absolute;top:610px;margin:0;width:300px;height:80px">First jump</div>'+
+   '<div id="far-fence" class="md-code-block" style="position:absolute;top:1400px;margin:0;width:300px;height:80px">Far below</div></div>';
+ document.body.append(fenceScroll);
+ const fastFence=fenceScroll.querySelector('#fast-fence'),farFence=fenceScroll.querySelector('#far-fence');
+ const refracts=block=>getComputedStyle(block).backdropFilter.includes('url(');
+ check(fastFence.getBoundingClientRect().top-fenceScroll.getBoundingClientRect().bottom>128,
+   'First fast-scroll code block starts beyond the short lookahead');
+ check(await waitFor(()=>refracts(fastFence)),'A chat code block is ready before a fast scroll exposes it');
+ check(!refracts(farFence),'Distant code blocks stay outside the lookahead');
+ fenceScroll.scrollTop=590;
+ check(refracts(fastFence),'A large scroll jump reveals an already prepared code block');
+ fenceScroll.remove();
  release();check(!document.querySelector('[data-we-optics],style[data-dsh-local-lens]'),'Dispose removes optics');
  check(getComputedStyle(el,'::before').backdropFilter===native,'Original native material restored');
  document.body.setAttribute('data-we-glass-chat','');
