@@ -233,7 +233,7 @@ wallpaper stays on screen — what the user sees is "I clicked and nothing happe
 different wallpaper than the screen".
 
 **Current state**: the video channel has a **bounded** fallback — it re-checks every `VIDEO_POSTER_BUDGET_MS`
-(see `src/video-layer.js`) and only reveals when something is really on screen; at `VIDEO_STALL_GIVE_UP_MS`
+(see `src/wallpaper/video-layer.js`) and only reveals when something is really on screen; at `VIDEO_STALL_GIVE_UP_MS`
 with still no picture it **keeps the old wallpaper** and writes one `video-stall` warn to the diagnostic
 archive. **"Release to the theme colour / base colour on timeout" was explicitly rejected** — that is exactly
 the shape of the solid-colour bug (the gate releasing while `readyState = 0` ⇒ the user stares at a full block

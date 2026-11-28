@@ -95,7 +95,7 @@ const SRC_FILES = SRC.filter((f) => f.rel.startsWith('src/'));
 const PKG_FILES = SRC.filter((f) => f.rel.startsWith('packages/'));
 const FLOOR_SRC_FILES = 60;
 const FLOOR_PKG_FILES = 15;
-const REQUIRED_SRC = ['src/client.js', 'src/live-layer.js', 'src/media-prep.js', 'src/layer-core.js'];
+const REQUIRED_SRC = ['src/client.js', 'src/live-layer.js', 'src/media-prep.js', 'src/wallpaper/layer-core.js'];
 
 check('扫描面非空：src 面 ' + SRC_FILES.length + ' 个 .js（地板 ' + FLOOR_SRC_FILES + '）、packages/<pkg>/src 面 '
   + PKG_FILES.length + ' 个（地板 ' + FLOOR_PKG_FILES + '）',
@@ -281,9 +281,9 @@ check('P2.1 document.body 挂载白名单逐点归属（' + bodyAppendSites(SRC)
 
 // 负对照：白名单外新增一个挂载点 ⇒ 红。
 {
-  const mutated = SRC.concat([{ rel: 'src/video-layer.js', text: 'function x(){ document.body.appendChild(document.createElement("div")); }' }]);
+  const mutated = SRC.concat([{ rel: 'src/wallpaper/video-layer.js', text: 'function x(){ document.body.appendChild(document.createElement("div")); }' }]);
   const problems = bodyMountViolations(mutated);
-  negOk('白名单外的新 body 挂载点判红', problems.some((p) => /src\/video-layer\.js.*白名单/.test(p)), problems.join(' | '));
+  negOk('白名单外的新 body 挂载点判红', problems.some((p) => /src\/wallpaper\/video-layer\.js.*白名单/.test(p)), problems.join(' | '));
   const pkgHost = bodyMountViolations(SRC.concat([{
     rel: 'packages/parallax/src/bad-host.js',
     text: 'function h(){ const el = document.createElement("div"); document.body.appendChild(el); }',
@@ -607,13 +607,13 @@ check('P4.1 iframe 创建点恰 5 处（3 文件）+ 创建函数体不直接挂
 // 负对照：合成源 + 变异函数体。
 {
   const badDirect = iframeViolations(SRC.concat([{
-    rel: 'src/video-layer.js',
+    rel: 'src/wallpaper/video-layer.js',
     text: 'function bad(sel){ const f = document.createElement("iframe"); document.body.appendChild(f); return f; }',
   }]));
   negOk('iframe 变量被 document.body.appendChild 直接挂上去判红',
     badDirect.some((p) => /iframe 变量 f 直接挂到 document\.body/.test(p)), badDirect.join(' | '));
   negOk('创建点分布漂移（新增第 6 处）判红',
-    iframeViolations(SRC.concat([{ rel: 'src/video-layer.js', text: 'const z = document.createElement("iframe");' }]))
+    iframeViolations(SRC.concat([{ rel: 'src/wallpaper/video-layer.js', text: 'const z = document.createElement("iframe");' }]))
       .some((p) => /分布漂移/.test(p)));
   const probeBodyBad = 'function prepareWebProbe(w, prep, onReady) { const f = document.createElement("iframe"); document.body.appendChild(f); }';
   const probeFake = {

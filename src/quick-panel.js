@@ -304,7 +304,7 @@
     // ── 行：一张可快切的壁纸 ──
     return React.createElement("div", {
       key: w.id,
-      // 卡片自报身份：视频壁纸的提交前预热靠它（见 src/video-layer.js 的 warmVideoForPointer）。
+      // 卡片自报身份：视频壁纸的提交前预热靠它（见 src/wallpaper/video-layer.js 的 warmVideoForPointer）。
       "data-we-id": String(w.id),
       className: "we-qp__item" + (w.id === sel.id ? " we-qp__item--current" : ""),
       role: "option",

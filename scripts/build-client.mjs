@@ -389,7 +389,7 @@ const INLINE_MODULES = [
     markers: ['function qpFindScroller(', 'function qpVirtWindow(', 'function qpTypeLabel(', 'function QuickPanel(props)'],
   },
   {
-    file: 'src/video-layer.js',
+    file: 'src/wallpaper/video-layer.js',
     why: '视频壁纸通道：海报已加载/首帧/预算的就绪判据（实测：一律等首帧会把切换推到十几秒）',
     markers: ['function probeVideoPoster(', 'function videoContentReady(', 'VIDEO_POSTER_BUDGET_MS', 'let mediaInfoToken = ', 'function clearUpgradePoll(', 'async function refreshMediaInfo(', 'function abortTranscodeUpgrade(', 'function maybeUpgradeToTranscoded(', 'function invalidateMediaInfoProbe('],
   },
@@ -414,12 +414,12 @@ const INLINE_MODULES = [
     markers: ['function prepareSceneLiveStage(', 'function prepareSceneStaticStage(', 'function applySelection(', 'function buildMedia('],
   },
   {
-    file: 'src/layer-core.js',
+    file: 'src/wallpaper/layer-core.js',
     why: '两条通道共用的切换核心：层退役/延迟移除、过场内联样式、可见性复推（不得引用实时符号）',
     markers: ['function retireFadingLayer(', 'function scheduleFadingLayerRemoval(', 'function nudgeWallpaperRepaint('],
   },
   {
-    file: 'src/focus-handback.js',
+    file: 'src/wallpaper/focus-handback.js',
     why: '#148 宿主侧：焦点被（无手势地）搬进壁纸帧时交还给用户本来在用的元素 —— 与 lib/we-focus-guard.js 分工的另一半',
     markers: ['function installFocusHandback(', 'function weIsWallpaperFrame(', 'GESTURE_WINDOW_MS', 'window.__weFocusHandback'],
   },
@@ -461,7 +461,7 @@ const INLINE_MODULES = [
   {
     // 挂载前缀（#409）：apiUrl 在**运行时**读它，函数声明提升保证内联顺序不承重；
     // 放在本清单 api-client 之前只是为了读起来像依赖：前缀来源在 app-mount，消费在 apiUrl。
-    file: 'src/app-mount.js',
+    file: 'src/wallpaper/app-mount.js',
     why: '反代子路径部署的挂载前缀探测（资源名 → document.baseURI → 站点根）；根路径部署恒为空串',
     markers: ['const WE_APP_MOUNT_CACHE', 'function weMountFromResources(', 'function weAppMount(',
       'function weAppBase(', 'function weAppMountReset('],
@@ -477,7 +477,7 @@ const INLINE_MODULES = [
     // → innerWidth/own.w 缩放到画布 CSS 像素 → postMessage 给 scene-live 遮挡桥。
     // 顶层只声明函数与 var 状态、apiJson 在调用期解引用（无 TDZ 交互），跟随
     // api-client 之后内联。
-    file: 'src/occlusion.js',
+    file: 'src/wallpaper/occlusion.js',
     why: '遮挡投递：/occlusion 轮询 + 缩放 + postMessage（1Hz，含退避与可见性暂停）',
     markers: ['var OCCLUSION_POLL_MS = ', 'function startOcclusionPolling(', 'function stopOcclusionPolling(',
       'function occlusionTick(', 'function deliverOcclusionSnapshot('],

@@ -1395,7 +1395,7 @@ const liveFlagChecks = (() => {
       && !/function\s+liveHeartbeatReady/.test(body),
     // `src/live-layer.js` 的 `export { … }` 块里**只许出现本文件真的声明过的名字**。
     // 背景（本轮顺手发现的既存缺陷）：`retireFadingLayer` / `nudgeWallpaperRepaint` 两个名字
-    // 其实住在 `src/layer-core.js`，却被抄进了这张导出表 —— 内联构建把整块 `export` 剥掉、
+    // 其实住在 `src/wallpaper/layer-core.js`，却被抄进了这张导出表 —— 内联构建把整块 `export` 剥掉、
     // 又把两个文件并进同一个作用域，所以调用点照样解析、`lib/client.js` 一切正常；
     // 但"导出自己没声明的名字"在任何**真** ESM 语境下都是链接期错误
     // （`node --check src/live-layer.js` 报 `Export 'nudgeWallpaperRepaint' is not defined in module`）。
@@ -2029,13 +2029,13 @@ for (const [name, ok] of clientChecks) check(name, ok);
     // P4-15：入口调用点从 panel-tabs.js 挪进 client.js 的 `onToggleLiveDiag`（渲染器只调处理器）。
     && /function onToggleLiveDiag\(\) \{ toggleLiveDiag\(\); emit\(\); \}/.test(src)
     && /onToggleLiveDiag/.test(tabsSrc));
-  // ── 视频壁纸走**独立通道**（`src/video-layer.js`），不走实时那条路 ──────────────────
+  // ── 视频壁纸走**独立通道**（`src/wallpaper/video-layer.js`），不走实时那条路 ──────────────────
   // 现场（实测）：视频档此前过实时管线的切层内容闸门 ⇒ 整次切换（含过场）被推迟到首个
   // 可解码帧（源越大 / 帧率上限越高越久，十几秒）。正解不是调阈值，而是给视频一条自己的
   // 通道：就绪判据 = 海报**已加载** / 首帧 / 预算，且没画面时旧壁纸留屏（绝不露层底色 ——
   // 改成"poster 属性存在即放行"时出现过"十几秒纯色"，那正是这条注释要防的）。
   {
-    const CH = readFileSync(new URL('../src/video-layer.js', import.meta.url), 'utf8');
+    const CH = readFileSync(new URL('../src/wallpaper/video-layer.js', import.meta.url), 'utf8');
     const LIVE = liveText();
     check('视频通道有独立的就绪判据 videoContentReady（海报已加载 / 首帧）',
       CH.includes('function videoContentReady(video)')
@@ -2161,7 +2161,7 @@ const hostLib = hostLibComposed;
     //   · 围栏 —— 通道文件里不得出现清单里的任何符号；
     //   · **反空转地板** —— 清单里的符号必须仍真实存在于实时模块（否则有人改名之后，
     //     围栏就成了"查一堆不存在的名字"，永远绿）。
-    const CHANNEL_FILES = ['../src/video-layer.js', '../src/layer-core.js'];
+    const CHANNEL_FILES = ['../src/wallpaper/video-layer.js', '../src/wallpaper/layer-core.js'];
     const LIVE_ONLY = [
       'liveRenderEnabled', 'liveRenderUrl', 'applyLiveControls', 'startLiveWatch', 'stopLiveWatch',
       'liveFail', 'liveFrameEl', 'buildLivePoster', 'scheduleLiveMount', 'createLiveFrame',
@@ -2192,13 +2192,13 @@ const hostLib = hostLibComposed;
     // 并入的 transcode.js —— 免得以后"扩容"成一份过期名单（那种名单会静静地不再看守）。
     check('⑦ 围栏名单恰好覆盖视频通道（通道 + 共用核心，不含已并入的 transcode.js）',
       CHANNEL_FILES.length === 2
-      && CHANNEL_FILES.includes('../src/video-layer.js')
-      && CHANNEL_FILES.includes('../src/layer-core.js')
+      && CHANNEL_FILES.includes('../src/wallpaper/video-layer.js')
+      && CHANNEL_FILES.includes('../src/wallpaper/layer-core.js')
       && !CHANNEL_FILES.some((f) => f.includes('transcode')));
   }
     // 搬移要**真的发生**：符号在核心里有定义，且原处不再有副本（否则只是复制一份、
     // 两条通道各留一个 —— 改一边另一边不动，那比不搬更坏）。
-    const coreSrc = readFileSync(new URL('../src/layer-core.js', import.meta.url), 'utf8');
+    const coreSrc = readFileSync(new URL('../src/wallpaper/layer-core.js', import.meta.url), 'utf8');
     const liveSrc = liveText();
     const movedBlocks = ['nudgeWallpaperRepaint', 'onScreenBrief', 'retireFadingLayer', 'startLayerTransition', 'layerKeyDiff', 'switchTransitionOf', 'releaseLayerMedia', 'openRotationAudioGate', 'mediaFramesOf',
       'scheduleFadingLayerRemoval', 'applyInlineStyle'];
@@ -2208,7 +2208,7 @@ const hostLib = hostLibComposed;
       movedBlocks.map((n) => n + ':' + defsInFile(coreSrc, n) + '/' + defsInFile(liveSrc, n)).join(' '));
     // ③ 的搬移同理：视频档的媒体构建必须在**视频通道**里，media-prep 只留委托。
     const prepSrc = readFileSync(new URL('../src/media-prep.js', import.meta.url), 'utf8');
-    const videoSrc = readFileSync(new URL('../src/video-layer.js', import.meta.url), 'utf8');
+    const videoSrc = readFileSync(new URL('../src/wallpaper/video-layer.js', import.meta.url), 'utf8');
     check('③ 视频档的媒体构建在视频通道里，media-prep 里不再有副本（只剩委托）',
       defsInFile(videoSrc, 'buildVideoMedia') === 1
       && defsInFile(prepSrc, 'buildVideoMedia') === 0
@@ -7349,7 +7349,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
   // ── #254 随机过场 / 随机方向：只在换层那一跳抽，池里排除硬切 ─────────────────
   // issue 的验收是统计性的（6000 次里 6 种非硬切过场各约 1000、从不含 cut、时长恒 > 0；
   // 方向 4000 次四向均匀）。这里用**真源码**装出 switchTransitionOf：常量块取自
-  // src/client.js（与界面同源），函数体取自 src/layer-core.js；再把 Math.random 换成
+  // src/client.js（与界面同源），函数体取自 src/wallpaper/layer-core.js；再把 Math.random 换成
   // 常量跑一遍，证明同一判据会判红（负对照）。
   {
     const src = clientText();
@@ -7367,7 +7367,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     check('#254 随机过场源码可装配（8 个过场 / 5 个方向）',
       ids.length === 8 && ids.includes('random') && dirs.length === 5 && dirs.includes('random'),
       '过场=[' + ids.join(',') + '] 方向=[' + dirs.join(',') + ']');
-    const coreSrc = readFileSync(new URL('../src/layer-core.js', import.meta.url), 'utf8');
+    const coreSrc = readFileSync(new URL('../src/wallpaper/layer-core.js', import.meta.url), 'utf8');
     const fnSrc = fnBody(coreSrc, 'switchTransitionOf') + '\n}'; // fnBody 切到 '\n}' 之前，补回闭合括号
     const factory = new Function('DEFAULTS', [
       'const weT = (s) => s;',

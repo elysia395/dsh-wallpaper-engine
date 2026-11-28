@@ -105,7 +105,7 @@ function apply(ctx) {
           ocListeners.push(t);
         }
       }
-      // 视频壁纸的**提交前预热**：指针按到/停在卡片上时就把它预到元数据（见 src/video-layer.js
+      // 视频壁纸的**提交前预热**：指针按到/停在卡片上时就把它预到元数据（见 src/wallpaper/video-layer.js
       // 的 warmVideoUrl）—— 点击发生在抬手，按下→抬手、以及鼠标停在卡片上的这段时间都是白捡的
       // 窗口（手动点选没有准备链）。capture + passive：不拦事件、不进冒泡链。
       const onWarmPointerDown = (ev) => { try { warmVideoForPointer(ev, true); } catch { /* ignore */ } };

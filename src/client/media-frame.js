@@ -529,7 +529,7 @@ function startMediaSync(frame) {
     if (wantSpectrum && !mediaFetchBusy && mediaSpectrumGate % spectrumEvery === 0) {
       mediaFetchBusy = true;
       // 2s 看门狗：宿主挂起 / socket 半开时 mediaFetchBusy 会永久锁死频谱（#416）。
-      // 手法照抄 src/occlusion.js：AbortSignal 缺失（单测沙箱 / 老引擎）时退化为无超时。
+      // 手法照抄 src/wallpaper/occlusion.js：AbortSignal 缺失（单测沙箱 / 老引擎）时退化为无超时。
       const spectrumOpts = typeof AbortSignal !== "undefined" && AbortSignal.timeout
         ? { signal: AbortSignal.timeout(2000) } : undefined;
       apiJson("/audio-spectrum", spectrumOpts)

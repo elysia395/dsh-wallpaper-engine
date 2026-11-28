@@ -16,7 +16,7 @@
  * 对外提供：BASE / apiUrl(path) / apiFetch / apiJson / apiHead / apiPostJson / apiDelete。
  *
  * 挂载前缀（issue #409）：`apiUrl()` 会在路径前补上**反代子路径部署**的挂载前缀
- *（探测在 `src/app-mount.js`，根路径部署下恒为空串）。宿主给回来的资源 URL 也一律
+ *（探测在 `src/wallpaper/app-mount.js`，根路径部署下恒为空串）。宿主给回来的资源 URL 也一律
  * 经 `apiUrl()` 归一化 —— 它们同样带 `/wallpaper-engine` 前缀，同样会被网关的站点根吞掉。
  *
  * 不变量：
@@ -43,7 +43,7 @@ const BASE = '/wallpaper-engine';
 /**
  * 应用挂载前缀（反代子路径部署，issue #409）。
  *
- * 前缀住 `src/app-mount.js`（唯一探测点：资源名 → document.baseURI → 站点根）。
+ * 前缀住 `src/wallpaper/app-mount.js`（唯一探测点：资源名 → document.baseURI → 站点根）。
  * **根路径部署恒为空串** ⇒ 下面所有拼接与改动前逐字节相同。
  * 独立模块形态（Node 单测直接 import 本文件）里没有内联作用域，按站点根处理 ——
  * 这是 `typeof` 而不是直接调用的唯一理由，别把它"简化"掉。

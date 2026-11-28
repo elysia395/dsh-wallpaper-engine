@@ -217,7 +217,7 @@ desktop update: Host did not complete graceful task teardown
 切层内容闸门只在"新层**真的有画面**"或"这一级判失败"时放行。若媒体请求**挂住**（既不成功也不失败），
 新层就一直待显影，屏上是旧壁纸 —— 用户看到的形态是"点了没反应 + 设置里显示的与屏上不是同一张"。
 
-**现状**：视频档已有**有界**兜底 —— 每 `VIDEO_POSTER_BUDGET_MS` 复查一次（见 `src/video-layer.js`），
+**现状**：视频档已有**有界**兜底 —— 每 `VIDEO_POSTER_BUDGET_MS` 复查一次（见 `src/wallpaper/video-layer.js`），
 只有屏上真有东西才放行；到 `VIDEO_STALL_GIVE_UP_MS` 仍无画面就**继续留旧壁纸**，并在诊断档案里记一条
 `video-stall` warn。**"超时后放行到主题色 / 底色"这条被明确否决** —— 那正是"纯色帧"那个 bug 的形态
 （闸门在 `readyState = 0` 时被预算放行 ⇒ 用户盯着整块底色一两秒）。

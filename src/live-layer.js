@@ -625,7 +625,7 @@ function toggleLiveDiag() {
   return liveDiagOn;
 }
 // ⚠️ 这张表只许列**本文件真的声明过**的名字。`retireFadingLayer` / `nudgeWallpaperRepaint`
-// 住在 `src/layer-core.js`（内联构建把整块 `export` 剥掉、两个文件并进同一作用域 ⇒ 抄错了
+// 住在 `src/wallpaper/layer-core.js`（内联构建把整块 `export` 剥掉、两个文件并进同一作用域 ⇒ 抄错了
 // 也照样解析），但"导出自己没声明的名字"在任何真 ESM 语境下都是链接期错误
 // （`node --check` 报 `Export '…' is not defined in module`），故不列于此。
 export {

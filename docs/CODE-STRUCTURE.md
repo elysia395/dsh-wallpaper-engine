@@ -349,7 +349,7 @@ graph LR
         C["src/client.js<br/>正文"]
         A["src/styles/*.js + src/styles.js<br/>纯数据：样式域模板 + 组装点"]
         B["src/panel-tabs.js（组装点）+ src/panel-tabs/*.js（域节渲染器）· src/picker-*.js · packages/fx/src/ext-fx.js · packages/parallax/src/ext-parallax.js · src/extensions/ext-avatar.js<br/>UI 面"]
-        D["src/live-layer.js · src/video-layer.js · packages/fx/src/fx-layer.js · packages/parallax/src/parallax-layer.js · src/extensions/avatar-layer.js · src/layer-core.js · src/media-prep.js<br/>行为面"]
+        D["src/live-layer.js · src/wallpaper/video-layer.js · packages/fx/src/fx-layer.js · packages/parallax/src/parallax-layer.js · src/extensions/avatar-layer.js · src/wallpaper/layer-core.js · src/media-prep.js<br/>行为面"]
         E["src/font/*<br/>字体系统"]
         F["lib/settings-schema.js<br/>唯一共享内核"]
     end
@@ -431,7 +431,7 @@ graph LR
 |---|---|
 | **picker** | 门槛②需要**新建一份权威文档**（本文 §3.3 的对应物）；成员里 `picker-model` 是纯数据层、`quick-panel` 是组件，**形态不同**，是否同收取决于"选择器"被定义为数据 + 视图还是再加一层外壳。收益上限只是"一眼看出是一伙的"，而成本见 §4 第 1 条的"搬动的成本" |
 | **渲染器层** | 它是同一**架构层**，不是一伙人（成员**互相零读取**）。且与 picker **归属冲突**（`picker-modal` / `picker-props-panel` 同属两族），而规则没写优先级 ⇒ **同一优先级只开一个** |
-| **媒体管线** | （`live-layer` 族已单列目录，见上表；以下针对其余成员）`src/video-layer.js` 头注释写明它独立的**全部理由**就是"**不**在实时那条路里"（真机踩过十几秒纯色帧）；`src/layer-core.js` 的围栏专门钉"与壁纸类型无关"。把它们与 `live-layer` 收进同一目录**正好从目录上抹掉这条边界** |
+| **媒体管线** | （`live-layer` 族已单列目录，见上表；以下针对其余成员）`src/wallpaper/video-layer.js` 头注释写明它独立的**全部理由**就是"**不**在实时那条路里"（真机踩过十几秒纯色帧）；`src/wallpaper/layer-core.js` 的围栏专门钉"与壁纸类型无关"。把它们与 `live-layer` 收进同一目录**正好从目录上抹掉这条边界** |
 | **点击与拖尾** | 同上一条：`fx-layer` 零 `ctx`、`ext-fx` 收 `ctx`，两半跨两张角色清单。共同点同样由**文件名前缀（`fx-`）+ 设置键前缀（`fx*`）+ 扩展岛**表达；额外理由：画布层是**纯客户端**的（不读任何宿主路由），与宿主那半边毫无关系，收成目录反而会暗示"这两半要一起改" |
 | **3D 纵深** | `parallax-layer`（零 `ctx`、不建 DOM，只写目标层 `translate`）+ `ext-parallax`（收 `ctx`）：共同点由文件名前缀 + 设置键前缀 + 扩展岛表达；行为层与岛连"运行时对象"都不共享，收成目录只会暗示必须一起改 |
 | **设置与宿主通道** | `src/settings/fontset-store.js` 头注释写明"**另立一条**而不是并进 `persistence.js`"（真源/键集/失败语义都不同）；目录名会传递"这些是一回事"的**误读** |
@@ -873,7 +873,7 @@ bundle 是压缩产物，符号名（`me`/`Qb` 等）会随上游同步变化。
         ↓  HTTP 轮询（沿插件既有 client↔host 模式）
 [packages/media-bridge/lib/routes/occlusion.js]  GET /wallpaper-engine/occlusion
         ↓  1Hz 轮询（仅 live 层挂载且页面可见时）
-[src/occlusion.js] 像素→CSS 换算 → postMessage 进 .we-live-iframe
+[src/wallpaper/occlusion.js] 像素→CSS 换算 → postMessage 进 .we-live-iframe
         ↓  {__weLive:1, op:'setOcclusion'|'clearOcclusion', …}
 [lib/webwallgl/occlusion-bridge.js]（scene-live 页内注入脚本）
         ↓  window.__weSetOcclusion(payload)
@@ -956,7 +956,7 @@ bundle 是压缩产物，符号名（`me`/`Qb` 等）会随上游同步变化。
 
 #### 9.5.3 客户端（`src/`，构建产物 `lib/client.js`）
 
-- 新文件 `src/occlusion.js`：
+- 新文件 `src/wallpaper/occlusion.js`：
   - **轮询**：1Hz `GET /wallpaper-engine/occlusion`（走既有 api-client 鉴权通道）；
     仅当 live 层挂载且 `!document.hidden` 时轮询，其余时候停；
   - **变换**：`scale = innerWidth / own.w`（防御 0/NaN），`occluders = rects.map(r => r*scale)`；

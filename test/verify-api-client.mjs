@@ -136,12 +136,12 @@ console.log('\n② URL 前缀 / 默认值');
 }
 
 // ── ②b 挂载前缀（反代子路径部署，issue #409）────────────────────────────────────
-// 前缀探测住 src/app-mount.js：资源名 → document.baseURI → 站点根。判据的口径同文件头：
+// 前缀探测住 src/wallpaper/app-mount.js：资源名 → document.baseURI → 站点根。判据的口径同文件头：
 // **宁可不补，也不乱补** —— 根路径部署必须逐字节退回现状。
 console.log('\n②b 挂载前缀（#409）');
 {
   const { weAppMount, weNormalizeMount, weAppBase, weAppMountReset } = await import(
-    new URL('../src/app-mount.js', import.meta.url).href);
+    new URL('../src/wallpaper/app-mount.js', import.meta.url).href);
 
   check('根路径部署：baseURI 为 / ⇒ 空串（apiUrl 与改动前逐字节一致）',
     weAppMount({ baseURI: 'http://h:1/', origin: 'http://h:1' }) === '');
@@ -200,7 +200,7 @@ console.log('\n②b 挂载前缀（#409）');
 // ── ②b' ?we-app-mount= 逃生舱（探测出错时唯一的人工干预口子）──────────────────
 console.log("\n②b' 挂载覆盖（?we-app-mount=）");
 {
-  const { weAppMount } = await import(new URL('../src/app-mount.js', import.meta.url).href);
+  const { weAppMount } = await import(new URL('../src/wallpaper/app-mount.js', import.meta.url).href);
   const sub = '/app/Harness/dsh';
   check('显式指定优先于资源名与 baseURI 证据（含尾斜杠归一化）',
     weAppMount({ search: '?we-app-mount=' + sub + '/', resources: ['/x/assets/a.js'], baseURI: 'http://h:1/x/' }) === sub

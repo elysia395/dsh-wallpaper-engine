@@ -338,7 +338,7 @@ function applySelection(id, opts) {
   }
   selection.type = w.type;
   // 真实容器后缀（宿主 inventory 的 mediaExt）：媒体 URL 是 token 形态、没有扩展名，
-  // 「浏览器原生可解」那条判据（见 src/video-layer.js 的 isNativelyPlayableSource）必须靠它。
+  // 「浏览器原生可解」那条判据（见 src/wallpaper/video-layer.js 的 isNativelyPlayableSource）必须靠它。
   selection.mediaExt = w.mediaExt || null;
   // 图片 / 幻灯片壁纸的图集入口（宿主 inventory 的 slidesUrl = `/slides/<token>`；只有
   // 图集 ≥2 张时才给）。它只是「这张图之上还有几张可以淡入淡出」的附加层，底层首图仍走
@@ -465,7 +465,7 @@ function buildMedia(sel) {
   const fitClass = " we-media--fit";
   let media;
   if (sel.type === "video") {
-    // 视频档的媒体构建归**视频通道**（见 src/video-layer.js 的 buildVideoMedia）：
+    // 视频档的媒体构建归**视频通道**（见 src/wallpaper/video-layer.js 的 buildVideoMedia）：
     // Edge 那条腿会在通道里返回 [media, canvas]（镜像画布）⇒ 这里照原样把两条腿返回出去。
     const builtVideo = buildVideoMedia(sel, fitClass);
     if (Array.isArray(builtVideo)) return builtVideo;

@@ -3966,7 +3966,7 @@ setTimeout(async () => {
             + '由 ensureSystemFonts 的取数生命周期写入，面板渲染期读取（client.js selection 初始化处有同段注释）',
           fields: ['systemFonts', 'systemFontsApproximate', 'systemFontsAt', 'systemFontsError', 'systemFontsLoading'],
         },
-        'src/video-layer.js': {
+        'src/wallpaper/video-layer.js': {
           why: '视频通道拥有这三个字段的写入权（client.js 那段注释写明）；进度由 /transcode-progress 轮询驱动，'
             + '源码在 syncLayers 内部明确标注 "no emit() here"',
           fields: ['mediaInfo', 'transcodeProgress', 'transcodeReady', 'transcodeState'],
@@ -5445,10 +5445,10 @@ setTimeout(async () => {
 //      focusout 来自别的元素）；
 //   ③ 两道保险（记住项过期 / 交还频率）各自负对照；
 //   ④ 拆除函数摘干净、可重装，且重复安装不叠加。
-// 全部走**真 src/focus-handback.js**（`with` + Proxy 的同一套挂载台；未知自由名直接抛，
+// 全部走**真 src/wallpaper/focus-handback.js**（`with` + Proxy 的同一套挂载台；未知自由名直接抛，
 // 漏抄依赖清单会响亮地红）。
 {
-  const fhSrc = readFileSync(new URL('../src/focus-handback.js', import.meta.url), 'utf8');
+  const fhSrc = readFileSync(new URL('../src/wallpaper/focus-handback.js', import.meta.url), 'utf8');
   const buildFh = (source) => {
     const listeners = [];
     const focused = [];

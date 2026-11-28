@@ -45,7 +45,7 @@ const clientSrc = clientText();
 const avatarSrc = read('src/extensions/avatar-layer.js');
 const extAvatarSrc = read('src/extensions/ext-avatar.js');
 const tabsSrc = read('packages/media-bridge/src/wallpaper-rotation-section.js');
-const videoSrc = read('src/video-layer.js');
+const videoSrc = read('src/wallpaper/video-layer.js');
 
 // ── ① avatarAiRepeatRows 四处齐 + 面板滑块 + 装饰层现读 ──────────────────────
 {

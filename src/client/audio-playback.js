@@ -177,7 +177,7 @@ function applyVideoPlayback(video) {
 }
 
 // ── 源元数据 + 抽帧转码（抽帧转码 / 帧率上限）────────────────────────────────
-// 这一族的实现住在 **`src/video-layer.js`**（探测 → 决策 → 进度轮询 → 落地/回退；
+// 这一族的实现住在 **`src/wallpaper/video-layer.js`**（探测 → 决策 → 进度轮询 → 落地/回退；
 // 构建期内联回本作用域，调用点无需改动）。它拥有 `selection.mediaInfo` / `transcodeState` /
 // `transcodeProgress` 三个字段的写入权；依赖清点、入口与不变量见该文件头。
 function codecLabel(codec) {

@@ -355,7 +355,7 @@ const selection = {
   previewUrl: null,
   // Transient: real container suffix of the media (host inventory `mediaExt`, e.g. "mp4").
   // The media URL is token-shaped (`/media/<base64url>`) with no extension, so the
-  // "browser can play this natively" decision (see src/video-layer.js) needs this field.
+  // "browser can play this natively" decision (see src/wallpaper/video-layer.js) needs this field.
   mediaExt: null,
   // Transient: 图片 / 幻灯片壁纸的图集入口（host inventory `slidesUrl`，形如
   // `/wallpaper-engine/slides/<token>`；只有图集 ≥2 张时才给）。`buildMedia` 据此在底层

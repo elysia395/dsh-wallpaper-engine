@@ -17,7 +17,7 @@ import { readFileSync } from 'node:fs';
 import { createCheck } from './tools/assert-harness.mjs';
 
 const { check, stats } = createCheck();
-const RAW = readFileSync(new URL('../src/layer-core.js', import.meta.url), 'utf8');
+const RAW = readFileSync(new URL('../src/wallpaper/layer-core.js', import.meta.url), 'utf8');
 const BODY = RAW.replace(/export\s*\{[\s\S]*?\};?/g, ' ');
 
 /** 在 mock DOM 上跑真 nudge/onScreenBrief。 */
