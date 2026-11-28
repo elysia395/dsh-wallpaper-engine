@@ -33,8 +33,6 @@ function check(name, ok, detail) {
 }
 
 const SRC = readFileSync(new URL('../src/client/media-frame.js', import.meta.url), 'utf8');
-const FPS_CAP = 30;
-const FRAME_MS = 1000 / FPS_CAP;
 
 // ── S1. 静态判据 ────────────────────────────────────────────────────────────
 check('S1 常量 WE_DRAW_FPS_CAP = 30 存在', /const WE_DRAW_FPS_CAP = 30;/.test(SRC));
