@@ -1262,7 +1262,9 @@ function syncRotationTimer() {
 // 到点 → beginRotationPrepare：后台探测下一张壁纸的就绪信号，ready 才 commit
 // （applySelection + 交叉淡化），fail 则跳过该候选链式尝试下一个（有界于候选
 // 数，全灭则 re-arm 定时器下轮重来）。手动切换/关闭轮换会取消进行中的准备。
+// eslint-disable-next-line prefer-const -- 跨片段写入：src/media-prep/prepare.js 与 src/client/rotation.js 的 `rotationPrep`
 let rotationPrep = null; // { id, fromId, excluded, cancelled, settled, timers, staged, probeMedia, readyEl, kind }
+// eslint-disable-next-line prefer-const -- 跨片段写入：src/live-layer.js 与 src/client/handlers/media-prep-handlers.js 的 `pendingRotationFade`
 let pendingRotationFade = false; // commit 置位，syncLayers 消费后清零
 // eslint-disable-next-line prefer-const -- 跨片段写入：layer-core.js 与 live-layer.js 的 `fadingLayerNode`
 let fadingLayerNode = null;      // 正在淡出的旧壁纸层（渐变结束移除）
@@ -1271,10 +1273,12 @@ let fadingLayerNode = null;      // 正在淡出的旧壁纸层（渐变结束�
 // 浏览上下文销毁重建，首帧 15s 预算重启，大包必超时）—— 所以 live/web 探测
 // 的 staging 容器在 commit 时【整体转为新层】，iframe 全程不移动，渲染状态
 // 零扰动。img/video 无此问题，仍走元素级领养（preparedMediaEl）。
+// eslint-disable-next-line prefer-const -- 跨片段写入：src/live-layer.js 与 src/client/handlers/media-prep-handlers.js 的 `pendingStagedLayerNode`
 let pendingStagedLayerNode = null;
 // 已就绪、等待被 buildMedia 领养进新层的媒体元素（img/video）。就绪态随元素
 // 走：探测用的就是最终上屏的元素，杜绝"探测就绪了但层里另建空白元素重新
 // 加载"的黑屏闪烁。
+// eslint-disable-next-line prefer-const -- 跨片段写入：src/client/rotation.js 与 src/client/handlers/media-prep-handlers.js 的 `preparedMediaEl`
 let preparedMediaEl = null;
 const ROTATION_PREP_TIMEOUT_MS = 20000; // 单阶段就绪探测上限（超时走兜底，不卡死轮换）
 // 交叉淡化时长 ROTATION_FADE_MS 随「切换过场」族搬进 src/client/handlers/transition-handlers.js
@@ -1362,6 +1366,7 @@ const IS_EDGE = typeof navigator !== "undefined" && /Edg\//.test(navigator.userA
 // 构建期由 scripts/build-client.mjs 内联回本作用域 —— 扁平作用域不变，调用点无需改动。
 // 面板标记仍住 src/picker/picker-props-panel.js（ctx 在本文件调用点组装）。
 
+// eslint-disable-next-line prefer-const -- 跨片段写入：src/client/plugin-apply.js 的 `weBattery`
 let weBattery = null; // BatteryManager from navigator.getBattery (if available)
 /**
  * `pauseOnHidden` 的**持续期防抖**。
@@ -1376,6 +1381,7 @@ let weBattery = null; // BatteryManager from navigator.getBattery (if available)
  * 判定源仍只有一个：`occlusionReason()` 读这个布尔，`occlusionActive()` 由它派生。
  */
 const HIDDEN_PAUSE_DEBOUNCE_MS = 1200;
+// eslint-disable-next-line prefer-const -- 跨片段写入：src/client/plugin-apply.js 的 `hiddenHoldActive`
 let hiddenHoldActive = false;
 // 遮挡原因（可读文案；空串 = 没被遮挡）。occlusionActive 由它派生，保证「是谁把
 // 渲染页停掉的」只有一个判定源 —— 诊断日志直接引用；失焦档再经适配目标门控（桌面壳失焦时壁纸多半仍整块可见，按失焦暂停会定格**可见**画面，见 adapterCaps）。
@@ -1818,6 +1824,7 @@ function VinylRecord(props) {
 // pickerOpener: the「选择壁纸」button — focus returns here when the library
 // view closes. pickerFocusPending: one-shot flag so the view's initial focus
 // lands exactly once on open (an inline ref callback would re-fire every render).
+// eslint-disable-next-line prefer-const -- 跨片段写入：src/client/handlers/library-tab-handlers.js 的 `pickerOpener`
 let pickerOpener = null;
 // eslint-disable-next-line prefer-const -- 跨片段写入：src/panel-tabs/effects.js 的 `customFrameInput`
 let customFrameInput = null;

@@ -20,7 +20,7 @@
  * Usage: node test/tools/audit-docs.mjs [--json] [--max 200]
  * 只读：不写盘、不改任何文件。
  */
-import { readFileSync, readdirSync, existsSync, statSync } from 'node:fs';
+import { readFileSync, readdirSync, existsSync } from 'node:fs';
 import { dirname, join, relative } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -159,7 +159,7 @@ for (const abs of docsFiles) {
           const pm = file.match(/^packages\/([^/]+)\//);
           if (pm) cand.push(join(ROOT, 'packages', pm[1], p));
           const real = cand.find((c) => existsSync(c));
-          let lines = 0;
+          let lines;
           try { lines = readFileSync(real, 'utf8').split(/\r?\n/).length; } catch { lines = 0; }
           if (lines > 0 && n > lines) add('staleAnchor', file, i + 1, m[0], { cat });
         }
@@ -213,7 +213,7 @@ for (const name of USER_DOCS) {
 
 const summary = Object.fromEntries(Object.entries(findings).map(([k, v]) => [k, v.length]));
 const byCat = {};
-for (const [kind, list] of Object.entries(findings)) for (const it of list) byCat[it.cat] = (byCat[it.cat] || 0) + 1;
+for (const list of Object.values(findings)) for (const it of list) byCat[it.cat] = (byCat[it.cat] || 0) + 1;
 
 if (JSON_OUT) {
   console.log(JSON.stringify({ summary, byCat, findings }, null, 2));
