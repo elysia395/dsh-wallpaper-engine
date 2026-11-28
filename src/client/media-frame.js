@@ -26,6 +26,47 @@ const WE_DRAW_FPS_CAP = 30;
 const WE_DRAW_MIN_INTERVAL_MS = 1000 / WE_DRAW_FPS_CAP - 0.5;
 /** 上一笔 drawImage 的时间戳；0 = 还没有首绘（首绘不许被节流吃掉）。 */
 let weLastDrawAt = 0;
+
+// ── 软渲染下再降一档（#411：Video 缺降级能力）────────────────────────────────
+// 为什么在这里：#383 的 30fps 上限治的是「canvas 路径本身贵」；软件渲染
+// （SwiftShader / llvmpipe / Microsoft Basic Render…）下这笔回读 + 上传没有 GPU
+// 帮忙，2K60 源即使 30fps 也仍然吃满 CPU，所以再压到 15fps。
+//
+// 判定**复用** `src/live-layer/probe.js` 的 `liveSoftRenderProbeNow()`，不新写探测：
+//   · build-client.mjs 的 INLINE_MODULES 里 probe.js 先于本文件内联，函数声明同作用域可见；
+//   · 手动逃生舱沿用同一个 URL 开关（`?we-softrender=0`）。
+//
+// 只压绘制频率，**不暂停原生 `<video>`**：原生腿没有这笔回读开销，去暂停它
+// 等于给正常路径加复杂度（#411 维护者确认的范围）。
+const SOFT_RENDER_DRAW_FPS = 15;
+/** 软渲染档的最小间隔：与 30fps 档同样的 0.5ms 浮点容差。 */
+const SOFT_RENDER_MIN_INTERVAL_MS = 1000 / SOFT_RENDER_DRAW_FPS - 0.5;
+
+/** 软渲染时是否把绘制压到 SOFT_RENDER_DRAW_FPS。取不到判定 ⇒ 视为硬件（不改变既有行为）。 */
+function isSoftRenderThrottled() {
+  try {
+    return typeof liveSoftRenderProbeNow === "function" && liveSoftRenderProbeNow() === true;
+  } catch {
+    return false;
+  }
+}
+/** 降档只留一条现场证据：用户报「视频变卡 / 变抽」时，日志要能回答是不是这一档生效的。
+ *  同一个页面会话只打一条 —— 每帧都打会把诊断环形缓冲刷满（与 #270 的 soft-render-pause
+ *  同一条通路：liveLog → host /diag）。 */
+let softRenderThrottleLogged = false;
+function noteSoftRenderThrottle() {
+  if (softRenderThrottleLogged) return;
+  softRenderThrottleLogged = true;
+  try {
+    if (typeof liveLog !== "function") return;
+    // 这里刻意用 ASCII 兜底名：src/** 的中文字面量必须进 weT(...)（verify-i18n ①），
+    // 而这条只是诊断里给渲染器占位的标签，不值得为它加一条界面文案。
+    const renderer = typeof liveSoftRenderName === "string" && liveSoftRenderName
+      ? liveSoftRenderName : "no-WebGL";
+    liveLog("video-softrender-throttle",
+      "canvas 绘制压到 " + SOFT_RENDER_DRAW_FPS + "fps（" + renderer + "）", "info");
+  } catch { /* 诊断失败不影响绘制 */ }
+}
 function weStopDraw() {
   const v = weDrawCtx && weDrawCtx.video;
   if (weVfHandle && v && v.cancelVideoFrameCallback) {
@@ -82,7 +123,11 @@ function weDrawTick() {
   const now = performance.now();
   // 首绘直接画；之后只画「距上一笔够一帧」的那些，其余帧只重挂回调。
   // 节流只决定「这一帧画不画」，rVFC / rAF 的重挂节奏不变（视频照常解码）。
-  if (weLastDrawAt === 0 || now - weLastDrawAt >= WE_DRAW_MIN_INTERVAL_MS) {
+  // #411：软渲染再降一档（15fps）；硬件路径仍是 #383 的 30fps 上限。
+  const softRender = isSoftRenderThrottled();
+  if (softRender) noteSoftRenderThrottle();
+  const minInterval = softRender ? SOFT_RENDER_MIN_INTERVAL_MS : WE_DRAW_MIN_INTERVAL_MS;
+  if (weLastDrawAt === 0 || now - weLastDrawAt >= minInterval) {
     weLastDrawAt = now;
     weDrawFrame();
   }
@@ -193,6 +238,14 @@ let mediaAudioInstalled = false;   // 音频桥当前是否已装进渲染页
 let mediaNpKey = "";
 let mediaFetchBusy = false;
 let mediaNpTick = 0;
+// #416：这条链路原来只有「帧还在不在」一个判据 —— 暂停 / 隐藏 / 被遮挡时照打 20Hz，
+// 每拍都 touch() 给 media-bridge 续命，15 分钟的 idle-stop 于是永远到不了期。
+// 现在三样状态：消费者还在不在（早退）、宿主有没有可用采集（running=false 时降 1Hz）、
+// 以及桥态 / 场景身份（音频反应层只在翻转或换场景时收敛，不再每拍遍历整层）。
+let mediaHostRunning = null;   // null = 还没拿到过宿主判定
+let mediaSpectrumGate = 0;     // 频谱节拍计数器（1Hz 降频用）
+let mediaBridgeRunning = null; // 上一次收敛图层时的 running
+let mediaSceneRef = null;      // 上一次收敛图层时的渲染页 __scene（重建 / 换包即换对象）
 // 封面：宿主给的是插件路由 /now-playing/artwork，**沙箱网页壁纸取不到它** ——
 // DSH Desktop 的能力头栅栏按 frame.origin 放行，不透明源一律 403（同一条栅栏也挡住黑屏
 // 那条路）。所以由主页面（同源、有权限）取回、降采样成 **data URL**
@@ -329,8 +382,16 @@ function syncAudioBridge(frame, running) {
       wp.setAudioBridge(null);
       mediaAudioInstalled = false;
     }
-    // 与桥同拍：采集不可用时收起那些「没有频谱就只是一块空矩形」的层（见上）
-    syncAudioReactiveLayers(frame, running);
+    // 采集不可用时收起那些「没有频谱就只是一块空矩形」的层（见上）。
+    // #416：只在**桥态翻转**或**场景换新**时收敛 —— 20Hz 重跑整层遍历是纯浪费。
+    // 场景重建（live-frame-rebuilt）与换包都会换掉渲染页的 __scene 对象，靠它的身份变化
+    // 在这里补一次收集，与原「每次同步都重跑」等价（层对象换新后旧集合自动失效）。
+    const scene = frame.contentWindow && frame.contentWindow.__scene;
+    if (mediaSceneRef !== scene || mediaBridgeRunning !== running) {
+      mediaSceneRef = scene;
+      mediaBridgeRunning = running;
+      syncAudioReactiveLayers(frame, running);
+    }
   } catch { /* ignore */ }
 }
 
@@ -429,6 +490,10 @@ function stopMediaSync(frame) {
   mediaArtTries = 0;
   mediaArtDiag = { fail: "", slow: "", ok: "" };
   mediaAudioInstalled = false;
+  mediaHostRunning = null;
+  mediaSpectrumGate = 0;
+  mediaBridgeRunning = null;
+  mediaSceneRef = null;
   mediaControlInstalled = false;
   mediaControlWin = null;
   mediaControlFails = 0;
@@ -451,20 +516,34 @@ function startMediaSync(frame) {
     if (!frame.isConnected || !selection.sceneLiveActive) return;
     // 控制面与「有没有在播」无关（见 syncMediaControl），但和数据面同一道设置闸：
     // 关掉「媒体信息」= 不接系统媒体，壁纸按钮便回落渲染页自己的模拟源。
+    // **放在早退之前**：控制面是一次性安装（装成功后每拍只做一次身份比较，不发请求），
+    // 「启动即暂停」或暂停中换壁纸时也得在位，否则壁纸里的播放按钮会掉回渲染页的模拟源。
     if (wantNp) syncMediaControl(frame);
-    if (wantSpectrum && !mediaFetchBusy) {
+    // #416：暂停 / 隐藏 / 被遮挡时这条 20Hz 链路没有消费者 —— 早退。
+    // 不停的话每一拍都会 touch() 刷新 media-bridge 的 lastUsedAt，15 分钟的 idle-stop 永不到期。
+    if (document.hidden || !isEffectivelyPlaying()) return;
+    // 宿主回 running=false（没有可用采集，例如 Windows 回落 legacy 的 audio.status=unavailable）
+    // 时频谱退到 1Hz：没有频谱可给，20Hz 请求只是空转；running 翻真立刻回 50ms（#416）。
+    mediaSpectrumGate += 1;
+    const spectrumEvery = mediaHostRunning === false ? 20 : 1;
+    if (wantSpectrum && !mediaFetchBusy && mediaSpectrumGate % spectrumEvery === 0) {
       mediaFetchBusy = true;
-      apiJson("/audio-spectrum")
+      // 2s 看门狗：宿主挂起 / socket 半开时 mediaFetchBusy 会永久锁死频谱（#416）。
+      // 手法照抄 src/occlusion.js：AbortSignal 缺失（单测沙箱 / 老引擎）时退化为无超时。
+      const spectrumOpts = typeof AbortSignal !== "undefined" && AbortSignal.timeout
+        ? { signal: AbortSignal.timeout(2000) } : undefined;
+      apiJson("/audio-spectrum", spectrumOpts)
         .then((res) => {
           const d = res.data;
           if (!d || !d.ok) return;
+          mediaHostRunning = d.running === true;
           if (Array.isArray(d.bands) && d.bands.length) {
             const arr = new Float32Array(d.bands.length);
             for (let i = 0; i < d.bands.length; i++) arr[i] = (d.bands[i] || 0) / 255;
             mediaSpectrum = arr;
           }
           // 装桥的时机交给宿主的 running（见 syncAudioBridge 的说明）
-          syncAudioBridge(frame, d.running === true);
+          syncAudioBridge(frame, mediaHostRunning);
         })
         .catch(() => { /* 静默：保持现状，回落模拟源 */ })
         .finally(() => { mediaFetchBusy = false; });

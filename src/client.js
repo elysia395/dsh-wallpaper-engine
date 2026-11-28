@@ -903,7 +903,13 @@ function renderConfirmRow(armed, token, question, onConfirm, onDisarm) {
 function hostFailureReason(res) {
   if (!res || !res.status) return weT("宿主不可达（请求未完成）");
   const data = res.data;
-  return (data && data.error) || weT("宿主返回 {status}", { status: res.status });
+  if (data && data.error) return data.error;
+  // 非 2xx 且拿到的是 HTML 页 ⇒ 这不是宿主的接口（反代把挂载前缀丢了，issue #409）。
+  // 把"404 归因不清"说成一句可执行的话：以前只显示"宿主返回 404"，用户看不出是前缀问题。
+  if (res.notHostEnvelope) {
+    return weT("宿主返回 {status}：响应不是插件的接口，检查 DSH 是否挂在子路径下", { status: res.status });
+  }
+  return weT("宿主返回 {status}", { status: res.status });
 }
 let inventorySeq = 0;
 /**
@@ -958,7 +964,9 @@ async function loadInventory(opts) {
       sceneMediaBase: typeof data.sceneMediaBase === "string" ? data.sceneMediaBase : "",
       // 本机真实存在的 WallpaperMachine 库根数（宿主实测）。0 = 不轮询 —— 见 invWatch 的门控。
       wallpaperMachineRoots: Number(data.wallpaperMachineRoots) || 0,
-      wallpapers: data.wallpapers || [],
+      // 宿主给的资源 URL 在这里**一次性**补挂载前缀（#409）：消费点全是 <img>/<video>/iframe，
+      // 不走 apiFetch，补在这里才能同时盖住选择器卡片、属性面板与轮播。
+      wallpapers: normalizeWallpaperUrls(data.wallpapers || []),
       total: data.total || 0,
       portableCount: data.portableCount || 0,
       playlists: Array.isArray(data.playlists) ? data.playlists : [],

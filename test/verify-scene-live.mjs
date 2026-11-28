@@ -1616,8 +1616,9 @@ const clientChecks = [
   ['live fps probe reports ui / web / rnd to the diag channel',
     liveSrc.includes('function reportLiveFps') && liveSrc.includes('"live-fps"')
       && liveSrc.includes('function takeUiFps') && liveSrc.includes('wstate.webFps')],
-  // 网页壁纸的 src 直用 host 给的绝对 URL（媒体源）；相对形态仅作回落。
-  ['web live src reuses the absolute media-origin URL', liveSrc.includes('const webEntry = String(selLike.webLiveSrc || "")')
+  // 网页壁纸的入口仍从 host 给的 webLiveSrc 出发（**绝对 URL 是本机主路径**，见 #419 块：
+  // 远程页面才剥成相对路径）。
+  ['web live src is derived from the host-provided webLiveSrc', liveSrc.includes('const webEntry = String(selLike.webLiveSrc || "")')
     && liveSrc.includes('/^https?:\\/\\//i.test(webEntry)')],
   // **实测**症状：「场景类壁纸正常几秒就失效」「网页也是」「失效以后是静态的」
   // 「只有扩展模式」「网页类是预览图」。成因是 extended 的「首帧后延迟 8000ms 换元」自救：
@@ -1630,6 +1631,73 @@ const clientChecks = [
     && /if \(desktopWindowMode\(\) === "extended" && !liveFrameRebuildTimer && useExtendedFrameSwap\(\)\) \{/.test(liveSrc)],
 ];
 for (const [name, ok] of clientChecks) check(name, ok);
+
+// ── #409 / #419：挂载前缀与远程端 web 入口 ──────────────────────────────────────
+{
+  // #419 主修：网页壁纸的 iframe src 必须经 webLiveSrcFor —— 宿主给的是**媒体源 loopback
+  // 绝对 URL**，非本机客户端打它就是打自己（症状：先闪作者预览图、随后整块黑）。
+  const webEntryOk = (s) => s.includes('const src = isWeb ? webLiveSrcFor(webEntry) : selLike.sceneLiveSrc')
+    && s.includes('function webLiveSrcFor(')
+    && s.includes('function remoteLoopbackPath(')
+    && s.includes('if (remoteRel) return apiUrl(remoteRel);');
+  check('#419 远程 web 入口：loopback 绝对 URL 剥成相对路径（经代理回主端口）', webEntryOk(liveSrc));
+  check('#419 负对照：直接把绝对 webLiveSrc 当 iframe src（黑屏病因）会被判红',
+    webEntryOk(liveSrc)
+    && !webEntryOk(liveSrc.replace('const src = isWeb ? webLiveSrcFor(webEntry) : selLike.sceneLiveSrc',
+      'const src = isWeb ? webEntry : selLike.sceneLiveSrc')));
+  // #409：渲染页 iframe 自身也是站点根下的插件路由 ⇒ 必须带挂载前缀。
+  check('#409 渲染页 iframe URL 经 apiUrl（带挂载前缀）',
+    liveSrc.includes('return apiUrl("/wallpaper-engine/scene-live/index.html?type="'));
+  // #409：场景载荷基址的两支必须分开 —— 宿主媒体源的路由就在 BASE 下（**不带**挂载前缀），
+  // 应用源回落是相对路径（**必须**带挂载前缀）。
+  const sceneBase = (liveSrc.match(/function resolveSceneMediaBase\(\) \{[\s\S]{0,900}?\n\}/) || [''])[0];
+  const sceneBaseOk = (s) => s.includes('hostSceneBase + SCENE_FILES_PATH')
+    && s.includes('return apiUrl(SCENE_FILES_PATH);');
+  check('#409 场景载荷基址：宿主源直拼路由、应用源回落走 apiUrl',
+    sceneBaseOk(sceneBase), sceneBase.replace(/\s+/g, ' ').slice(0, 110));
+  check('#409 负对照：应用源回落直拼 origin+路由（不带挂载前缀）会被判红',
+    sceneBaseOk(sceneBase)
+    && !sceneBaseOk(sceneBase.replace('return apiUrl(SCENE_FILES_PATH);',
+      'return (typeof location !== "undefined" && location.origin ? location.origin : "") + SCENE_FILES_PATH;')));
+  // #419 附带的两处降级（media-prep）：web 垫底图取原图、live 不可用时走静态图。
+  const prep = readFileSync(new URL('../src/media-prep.js', import.meta.url), 'utf8');
+  check('#419 降级：web 的 previewUrl 走 scenePreviewUrl（full=1 原图）',
+    prep.includes('selection.previewUrl = (w.type === "scene" || w.type === "web")'));
+  check('#419 降级：web 且 live 不可用时按静态图建层（不再是裸 iframe）',
+    prep.includes('|| (sel.type === "web" && !isLive)'));
+  check('#419 负对照：把 web 从 isStill 里去掉，同一条判据为假',
+    !prep.replace('|| (sel.type === "web" && !isLive)', '').includes('|| (sel.type === "web" && !isLive)'));
+
+  // 行为级（结构判据看不出"远程才剥、本机不剥"）：把两个纯函数抠进 vm，各喂一遍环境。
+  // 抽取面 = originIsRemoteHttp … webLiveSrcFor（到 liveRenderUrl 之前），不含 selection 读取。
+  {
+    const from = liveSrc.indexOf('function originIsRemoteHttp(origin) {');
+    const to = liveSrc.indexOf('function liveRenderUrl(');
+    const fns = from >= 0 && to > from ? liveSrc.slice(from, to) : '';
+    const load = (pageOrigin, text) => runInNewContext(
+      text + '\n({ webLiveSrcFor, remoteLoopbackPath });',
+      { location: { origin: pageOrigin }, URL, apiUrl: (p) => '/MOUNT' + p });
+    const LOOPBACK = 'http://127.0.0.1:52341/wallpaper-engine/scene-files/tok/index.html';
+    const REMOTE_PAGE = 'http://10.0.0.5:8080';
+    const ok = (() => {
+      if (!fns) return false;
+      const remote = load(REMOTE_PAGE, fns);
+      const local = load('http://127.0.0.1:65415', fns);
+      return remote.webLiveSrcFor(LOOPBACK) === '/MOUNT/wallpaper-engine/scene-files/tok/index.html'
+        && local.webLiveSrcFor(LOOPBACK) === LOOPBACK
+        && remote.webLiveSrcFor('https://cdn.example.com/a/index.html') === 'https://cdn.example.com/a/index.html'
+        && remote.webLiveSrcFor('/wallpaper-engine/scene-files/t/i.html') === '/MOUNT/wallpaper-engine/scene-files/t/i.html'
+        && remote.remoteLoopbackPath('http://localhost:9/x') === '/x'
+        && remote.remoteLoopbackPath('https://10.0.0.5:9/x') === '';
+    })();
+    check('#419 行为：远程页面剥 loopback（补挂载前缀）、本机与公网绝对 URL 原样', ok, fns ? '' : '抠不到函数');
+    // 负对照：把剥离分支短路掉（= 回到 #419 的病因），同一组断言必须为假。
+    const broken = load(REMOTE_PAGE, fns.replace('if (remoteRel) return apiUrl(remoteRel);', 'if (false && remoteRel) return apiUrl(remoteRel);'));
+    check('#419 负对照：短路剥离分支后（原病因）行为判据变假',
+      broken.webLiveSrcFor(LOOPBACK) === LOOPBACK
+      && broken.webLiveSrcFor(LOOPBACK) !== '/MOUNT/wallpaper-engine/scene-files/tok/index.html');
+  }
+}
 
 // ── #248：UI 受压时给实时渲染页降帧 ─────────────────────────────────────────────
 // 现场是「Scene 60fps + 液态玻璃 + 大页面」时整窗卡 10s、流式输出期间 1.2s+ 主线程停顿；
@@ -2860,9 +2928,9 @@ check('宿主端出场景载荷的源，且按 sceneLive 门控（没有场景�
 // 那是恒真式判据，属于 P3-16 点名的形态）。所以抠出 mediaBase 的赋值再断言它消费宿主值
 // —— 场景路径消费 resolveSceneMediaBase()（issue #129：那里同时决定远程页面回落自身
 // origin；宿主源是 127.0.0.1 loopback，远程客户端打它等于打自己）。
-const mbAssign = (liveSrc.match(/const mediaBase = [\s\S]{0,220}?;/) || [''])[0];
+const mbAssign = (liveSrc.match(/const mediaBase = [\s\S]{0,400}?;/) || [''])[0];
 check('客户端场景 mediaBase 的**赋值表达式**消费宿主给的源（经 resolveSceneMediaBase）',
-  /isWeb \? /.test(mbAssign) && /resolveSceneMediaBase\(\)/.test(mbAssign)
+  /isWeb\s*\?/.test(mbAssign) && /resolveSceneMediaBase\(\)/.test(mbAssign)
     && !/const mediaBase = location\.origin/.test(mbAssign),
   mbAssign.replace(/\s+/g, ' ').slice(0, 90));
 check('该源来自宿主载荷 inventory.sceneMediaBase',
@@ -3035,10 +3103,15 @@ check('client 按曲目缓存封面并重试（宿主下载封面是异步的）
   src.includes('function scheduleArtworkFetch(') && src.includes('MEDIA_ART_MAX_TRIES'));
 check('client 不再向渲染页透传歌词（lyrics 字段与 push key 里的歌词版本都已移除）',
   !src.includes('m.lyrics') && !src.includes('lyrRev') && src.includes('albumArtist: m.albumArtist || ""'));
-check('音频桥按宿主 running 装卸（装了桥 = 渲染页放弃自带音频源）',  src.includes('function syncAudioBridge(frame, running)') && src.includes('syncAudioBridge(frame, d.running === true)'));
+// #416：running 判定先落到 mediaHostRunning（同一个原子值同时供 1Hz 降频与装桥用），
+// 判据跟着钉这条链，而不是钉某一次调用的字面量。
+check('音频桥按宿主 running 装卸（装了桥 = 渲染页放弃自带音频源）',
+  src.includes('function syncAudioBridge(frame, running)')
+  && src.includes('mediaHostRunning = d.running === true;')
+  && src.includes('syncAudioBridge(frame, mediaHostRunning)'));
 // 无真实频谱时收起「靠频谱才有内容」的合成层（#167）：没有音频输入时，音频可视化层
 // 退化成一整块**空矩形**，而作者叠在其上的 scroll 照跑 ⇒ 屏幕上是一条匀速横爬的带子，
-// 用户只会当成渲染故障。四条缺一不可：与桥**同拍**调用（否则永不生效）、两条收层判据
+// 用户只会当成渲染故障。四条缺一不可：随桥态 / 场景身份**收敛**（#416 起不再每拍重跑，但翻转与换场景必须补）、两条收层判据
 // 各自在场（合成层 / 频谱特效）、以及**可逆**（恢复采集要逐层还原，不能永久改场景）。
 {
   const fnBody = (text, name) => {
@@ -3055,12 +3128,125 @@ check('音频桥按宿主 running 装卸（装了桥 = 渲染页放弃自带音�
       && /const wantHide = !running;/.test(body)
       && /layer\.visible = true;/.test(body);
   };
-  check('音频桥同拍收敛音频反应层（合成层 + 频谱特效两条判据都在）',
+  check('音频桥收敛音频反应层（合成层 + 频谱特效两条判据都在）',
     /syncAudioReactiveLayers\(frame, running\)/.test(fnBody(src, 'syncAudioBridge')) && reactiveWiring(src),
     '#167：没频谱 → 那层只是一块空矩形 + 作者的 scroll 平移');
+  // #416：收敛从「与桥同拍（20Hz）」改成「桥态翻转 / 场景换新」时才跑。判据不能只钉
+  // 「有调用」—— 那样把门去掉也能过；要连门、场景身份刷新、调用三件一起钉住。
+  const bridgeGate = (text) => {
+    const body = fnBody(text, 'syncAudioBridge');
+    return /const scene = frame\.contentWindow && frame\.contentWindow\.__scene;/.test(body)
+      && /mediaSceneRef !== scene \|\| mediaBridgeRunning !== running/.test(body)
+      && /mediaSceneRef = scene;/.test(body)
+      && /syncAudioReactiveLayers\(frame, running\);/.test(body);
+  };
+  check('音频层收敛只在「桥态翻转 / 场景换新」时发生（#416：不再 20Hz 遍历整层）',
+    bridgeGate(src), '40 层场景 × 20Hz = 每秒 800 次字符串匹配，纯浪费');
+  check('negative control: 去掉收敛门 ⇒ 判红',
+    !bridgeGate(src.replace('mediaSceneRef !== scene || mediaBridgeRunning !== running', 'true')));
+  check('negative control: 去掉场景身份刷新（换场景不再重收）⇒ 判红',
+    !bridgeGate(src.replace('mediaSceneRef = scene;', '')));
   check('negative control: 放宽成「所有合成层」或去掉可逆分支都会被判出',
     !reactiveWiring(src.replace(/layer\.image\.indexOf\("composelayer"\) < 0/g, 'false'))
       && !reactiveWiring(src.replace('layer.visible = true;', '')));
+}
+
+// ── #416：频谱轮询的消费者判据 / 降频 / 超时看门狗 ────────────────────────────
+// 原实现只有「帧还在不在」一个判据：暂停、隐藏、包内没音频层时照打 20Hz，每拍
+// touch() 给 media-bridge 续命，15 分钟的 idle-stop 永远到不了期（实测暂停后仍 19.6 次/秒）。
+{
+  const fnBody = (text, name) => {
+    const i = text.indexOf('function ' + name + '(');
+    if (i < 0) return '';
+    const j = text.indexOf('\n}', i);
+    return j < 0 ? text.slice(i) : text.slice(i, j);
+  };
+  const pollGates = (text) => {
+    const body = fnBody(text, 'startMediaSync');
+    return /if \(document\.hidden \|\| !isEffectivelyPlaying\(\)\) return;/.test(body)
+      && /const spectrumEvery = mediaHostRunning === false \? 20 : 1;/.test(body)
+      && /AbortSignal\.timeout\(2000\)/.test(body);
+  };
+  check('频谱轮询在隐藏 / 暂停 / 遮挡时早退（#416：不再给 media-bridge 续命）', pollGates(src));
+  check('negative control: 去掉 hidden/播放态早退 ⇒ 判红',
+    !pollGates(src.replace('if (document.hidden || !isEffectivelyPlaying()) return;', '')));
+  check('negative control: 去掉 running=false 的 1Hz 降频 ⇒ 判红',
+    !pollGates(src.replace('mediaHostRunning === false ? 20 : 1', '1')));
+  check('negative control: 去掉 2s 超时看门狗 ⇒ 判红',
+    !pollGates(src.replaceAll('AbortSignal.timeout(2000)', 'undefined')));
+}
+
+// ── #416 行为面：真跑一遍定时回调，数每秒请求数（静态判据证明不了「到底发了几次」）──
+// 口径：一个 tick = 50ms。播放中 100 tick = 5s ⇒ 频谱 100 次（20Hz）、Now Playing 5 次（1Hz）；
+// 隐藏 / 暂停 ⇒ 0 次；宿主 running=false ⇒ 首拍之后按 1Hz 降频（5s 内个位数）。
+{
+  const mediaFrameSrc = readFileSync(join(root, 'src', 'client', 'media-frame.js'), 'utf8');
+  const bootMedia = (opts = {}) => {
+    const state = { playing: true, hostRunning: true, ...opts };
+    const calls = [];
+    let tick = null;
+    const frame = {
+      isConnected: true,
+      contentWindow: { __wp: { setAudioBridge() {}, setMedia() {}, setMediaControl() {} }, __scene: { layers: [] } },
+    };
+    const sandbox = {
+      document: { hidden: false, body: {} },
+      window: { devicePixelRatio: 1 },
+      performance: { now: () => 0 },
+      AbortSignal,
+      setInterval: (fn) => { tick = fn; return 1; },
+      clearInterval: () => {},
+      setTimeout: () => 1,
+      clearTimeout: () => {},
+      requestAnimationFrame: () => 1,
+      cancelAnimationFrame: () => {},
+      selection: { audioSource: 'auto', mediaIntegration: true, sceneLiveActive: true },
+      isEffectivelyPlaying: () => state.playing,
+      apiJson: (path, o) => {
+        calls.push({ path, opts: o });
+        return Promise.resolve({ ok: true, status: 200, data: { ok: true, running: state.hostRunning, bands: [1, 2, 3] } });
+      },
+      apiFetch: async () => ({ ok: true }),
+      apiPostJson: async () => ({ ok: true }),
+      syncMediaControl: () => {},
+      syncAudioBridge: () => {},
+      syncAudioReactiveLayers: () => {},
+      reportClientDiag: () => {},
+      liveWatch: null,
+    };
+    const api = runInNewContext(mediaFrameSrc + '\n;({ startMediaSync });', sandbox, { filename: 'media-frame.js' });
+    api.startMediaSync(frame);
+    return {
+      calls,
+      setHidden(v) { sandbox.document.hidden = v; },
+      setPlaying(v) { state.playing = v; },
+      setHostRunning(v) { state.hostRunning = v; },
+      async ticks(n) {
+        for (let i = 0; i < n; i += 1) { tick(); await new Promise((r) => { setImmediate(r); }); }
+      },
+    };
+  };
+  const count = (h, path) => h.calls.filter((c) => c.path === path).length;
+  const baseline = bootMedia();
+  await baseline.ticks(100);
+  check('播放中频谱 ≈20 次/秒、Now Playing 1 次/秒（#416 基线）',
+    count(baseline, '/audio-spectrum') === 100 && count(baseline, '/now-playing') === 5,
+    'spectrum=' + count(baseline, '/audio-spectrum') + ' nowPlaying=' + count(baseline, '/now-playing'));
+  check('频谱请求带 2s 超时看门狗（signal 在 init 里）',
+    Boolean(baseline.calls[0] && baseline.calls[0].opts && baseline.calls[0].opts.signal));
+  const hiddenCase = bootMedia();
+  hiddenCase.setHidden(true);
+  await hiddenCase.ticks(100);
+  const pausedCase = bootMedia({ playing: false });
+  await pausedCase.ticks(100);
+  check('页面隐藏 / 壁纸暂停时频谱请求为 0（#416 主判据：不再给 media-bridge 续命）',
+    count(hiddenCase, '/audio-spectrum') === 0 && count(pausedCase, '/audio-spectrum') === 0,
+    'hidden=' + count(hiddenCase, '/audio-spectrum') + ' paused=' + count(pausedCase, '/audio-spectrum'));
+  const degraded = bootMedia({ hostRunning: false });
+  await degraded.ticks(100);
+  const degradedCount = count(degraded, '/audio-spectrum');
+  check('宿主 running=false 时频谱退到 1Hz（5s 内个位数，不是 100 次）',
+    degradedCount >= 4 && degradedCount <= 7, 'spectrum=' + degradedCount);
 }
 // 媒体控制面（控制反转）：场景壁纸里 Now Playing 组件的按钮由渲染页推断成动作，
 // 打到宿主注入的控制面 → POST /media-control → 中间件真控播放器。判据按**源码形态**

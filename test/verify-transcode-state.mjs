@@ -531,6 +531,8 @@ function stateMachineHarness(parts) {
   };
   const context = vm.createContext({
     selection, AbortController, LAYER_ID: 'fixture-layer', IS_EDGE: false,
+    // #409：transcodedUrlFor 现在经 apiUrl 拼（挂载前缀）。本台只测状态机，前缀恒为空。
+    apiUrl: (path) => String(path),
     // #363：buildVideoMedia 里挂的右键菜单抑制器（本台只测选择状态机，给它一个空实现）
     suppressVideoContextMenu() {},
     document: { getElementById: () => null, createElement: makeVideo },

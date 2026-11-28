@@ -35,6 +35,8 @@ const WE_I18N_EN_CORE = {
   "取消": "Cancel",
   "宿主不可达（请求未完成）": "Host unreachable (request did not complete)",
   "宿主返回 {status}": "Host returned {status}",
+  // 反代子路径部署（#409）：响应是网关的 HTML 页而不是宿主信封 ⇒ 说清"这不是接口在报错"。
+  "宿主返回 {status}：响应不是插件的接口，检查 DSH 是否挂在子路径下": "Host returned {status}: the response is not this plugin's API — check whether DSH is mounted under a sub-path",
   "当前壁纸已不在列表里（可能已被移除或隐藏）": "The current wallpaper is no longer in the list (it may have been removed or hidden)",
   "这张壁纸没有可播放的媒体文件": "This wallpaper has no playable media file",
   "这张壁纸的内容分级不在勾选的分级里 —— 在「内容分级」里勾上它所在的档即可播放": "This wallpaper's content rating is not in your checked ratings — tick its tier under Content rating to play it",
