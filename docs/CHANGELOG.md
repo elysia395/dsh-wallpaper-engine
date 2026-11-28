@@ -14,7 +14,13 @@
 > 完整逐提交历史见 GitHub Commits / Releases；升级前置条件见 [`UPGRADING.md`](./UPGRADING.md)。
 > `test/verify-scene-live.mjs` 这一类判据条数**只记该条写作当时的实测总数**（如 466 / 465），不是现在的总数 —— 后续条目会往上加（现为 502）；照原文保留，好让它与当次提交对得上。
 
-### 未发布（镜面高光强度 · 悬停卡唯一子 div · 深色孪生 · macOS 壁纸库 · 表格可读底 · 视频软渲染降档，2026-11-27）
+### 未发布（子路径部署与远程 web 壁纸 · 镜面高光强度 · 悬停卡唯一子 div · 深色孪生 · macOS 壁纸库 · 表格可读底 · 视频软渲染降档，2026-11-28）
+
+- **修：DSH 交给反向代理挂在子路径下时，插件所有接口 404（#409）**。客户端把插件路由基址写死成站点根 `/wallpaper-engine`；反代剥掉前缀再转发后，浏览器发出的请求落到网关的站点根，拿回的是网关的 404 / 405 HTML 页 —— 设置页只说「宿主返回 404」，换成根路径访问又一切正常。现新增 `src/app-mount.js` 在运行时探测挂载前缀：已加载资源名（`<mount>/assets/…`、`<mount>/plugins/…`，全部一致才采信）→ `document.baseURI`（认 `/app/<应用>[/<子路径>]` 两级前缀与目录形态）→ 站点根；`apiUrl()` 统一补前缀且幂等，宿主清单里的 9 个资源 URL 字段（`preview` / `frameUrl` / `media` / `sceneVideo` / `sceneAudio` / `slidesUrl` / `liveFrame` / `propsUrl` / `webLiveSrc`）在入库时一次性归一化，渲染页 iframe、场景载荷基址、转码 URL 一并收口；子包 glass / pet-link 走的是主包注入的 `apiUrl`，随之生效。**探不出就按站点根、不猜** —— 根路径部署逐字节维持现状；探测错或探不到时用 `?we-app-mount=/app/Harness/dsh` 强制指定、`?we-app-mount=0` 强制回到站点根（畸形值一律忽略）。非 2xx 且响应是 HTML 页时，面板不再只说「宿主返回 {status}」，而是「响应不是插件的接口，检查 DSH 是否挂在子路径下」。`verify-api-client` 新增 ②b / ②b' / ②c，均带负对照。
+
+- **修：手机等远程客户端打开 web 壁纸整块黑（#419）**。宿主给的 `webLiveSrc` 是宿主媒体源（独立 loopback 端口）的绝对 URL，非本机客户端打它就是打自己（`ERR_CONNECTION_REFUSED`）：症状是先闪出作者预览图、随后整块黑。场景分支早在 #129 就处理过这件事，web 分支没有。现在远程页面（页面自身在非本机 http(s)）把它剥成相对路径并补挂载前缀，由浏览器按代理 origin 解析回主端口；本机 / `dsh-app://` / 非 loopback 的绝对 URL 一律原样（带宽主路径不变），沙箱未放宽（仍 `allow-scripts` 不透明源）。顺带修两处降级：web 的 `previewUrl` 与场景同走 `?full=1`（不再垫一张糊图），live 不可用时按静态图建层、不再掉进裸 iframe 把封面 PNG 当文档加载。`verify-scene-live` 新增结构判据，并把三个纯函数抠进 vm 做行为用例（含「短路剥离分支 ⇒ 必须判红」的负对照）。
+
+- **整理：删掉 `test/verify-video-canvas-fps.mjs` 里两个死变量（`FPS_CAP` / `FRAME_MS`）**。`no-unused-vars` 基线是 0 ⇒ **main 上的 `verify:static` 本来就是红的**（该门禁不在 `verify:all` 链上，所以 CI 一直绿）。
 
 - **新增：玻璃表面的镜面高光（釉光）可单独调弱或关掉（#404）**。「玻璃 UI」新增「镜面高光」滑杆（`glassSheenStrength`，0–100，默认 100 = 现状）：0 时主块三档 `--we-panel-sheen-*`（左侧栏 / 标题栏 / 各面板）与右侧栏由透明度派生的 `--we-sidebar-sheen` 一起归零，只保留底与霜；100 与接线前逐值相同。滑杆值由 `glass-layer.js` 写成 `--we-sheen-scale`（0–1），`glass-css.js` 的主块三档与 `glass.js` 的侧栏写入点乘同一个系数；旧配置与七套出厂预设缺键时按 100 处理。`verify-glass-surfaces` 新增 ㉘ 组（两条通道 + 负对照）。
 

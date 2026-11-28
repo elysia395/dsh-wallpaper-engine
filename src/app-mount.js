@@ -92,11 +92,39 @@ function weMountFromBaseURI(baseURI, origin) {
 }
 
 /**
+ * `?we-app-mount=` 逃生舱（探测出错时唯一的人工干预口子）。
+ *
+ *   · `?we-app-mount=/app/Harness/dsh` —— 强制这个前缀（探测不到、或层级猜错时手填）；
+ *   · `?we-app-mount=0` / `off` / `root` / 空值 —— 强制站点根（探测误判出前缀时关掉）；
+ *   · 畸形值（带 scheme、`//host`、反斜杠、空白）—— **忽略**，回退自动探测，绝不把请求
+ *     指到另一个源上去。
+ *
+ * @returns {string|null} null = 没有这个参数（走探测）；`""` = 显式站点根。
+ */
+function weMountOverride(search) {
+  const q = String(search == null ? "" : search);
+  if (!q) return null;
+  let raw = null;
+  try {
+    const params = new URLSearchParams(q.charAt(0) === "?" ? q.slice(1) : q);
+    raw = params.get("we-app-mount");
+  } catch { return null; }
+  if (raw === null) return null;
+  const value = String(raw).trim();
+  if (value === "" || /^(0|off|none|root)$/i.test(value)) return "";
+  if (/^[a-z][a-z0-9+.-]*:/i.test(value) || value.startsWith("//") || value.includes("\\") || /\s/.test(value)) return null;
+  return weNormalizeMount(value);
+}
+
+/**
  * 纯函数入口：给定环境读数返回挂载前缀（`""` = 站点根）。
- * 证据优先级：资源名（最硬）→ baseURI（次之）→ 站点根。
+ * 证据优先级：`?we-app-mount=` 显式指定（唯一的人工干预）→ 资源名（最硬）→ baseURI（次之）
+ * → 站点根。
  */
 function weAppMount(env) {
   const e = env || {};
+  const forced = weMountOverride(e.search);
+  if (forced !== null) return forced;
   const fromResources = weMountFromResources(e.resources);
   if (fromResources !== null) return fromResources;
   return weMountFromBaseURI(e.baseURI, e.origin);
@@ -113,9 +141,11 @@ function weAppBase() {
     } catch { resources = []; }
     let baseURI = "";
     let origin = "";
+    let search = "";
     try { if (typeof document !== "undefined" && document.baseURI) baseURI = document.baseURI; } catch { baseURI = ""; }
     try { if (typeof location !== "undefined" && location.origin) origin = location.origin; } catch { origin = ""; }
-    WE_APP_MOUNT_CACHE.value = weAppMount({ resources, baseURI, origin });
+    try { if (typeof location !== "undefined" && location.search) search = location.search; } catch { search = ""; }
+    WE_APP_MOUNT_CACHE.value = weAppMount({ resources, baseURI, origin, search });
   }
   return WE_APP_MOUNT_CACHE.value;
 }

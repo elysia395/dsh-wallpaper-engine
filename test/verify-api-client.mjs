@@ -197,6 +197,33 @@ console.log('\n②b 挂载前缀（#409）');
     && apiSrcTxt.includes('apiUrlWithMount(path, apiMountPrefix())'));
 }
 
+// ── ②b' ?we-app-mount= 逃生舱（探测出错时唯一的人工干预口子）──────────────────
+console.log("\n②b' 挂载覆盖（?we-app-mount=）");
+{
+  const { weAppMount } = await import(new URL('../src/app-mount.js', import.meta.url).href);
+  const sub = '/app/Harness/dsh';
+  check('显式指定优先于资源名与 baseURI 证据（含尾斜杠归一化）',
+    weAppMount({ search: '?we-app-mount=' + sub + '/', resources: ['/x/assets/a.js'], baseURI: 'http://h:1/x/' }) === sub
+    && weAppMount({ search: '?we-app-mount=' + sub }) === sub);
+  check('不写前导斜杠也认（归一化补上）', weAppMount({ search: '?we-app-mount=app/Harness/dsh' }) === sub);
+  check('显式回到站点根：0 / off / root / none / 空值 —— 覆盖探测结果',
+    ['0', 'off', 'root', 'none', ''].every((v) => weAppMount({
+      search: '?we-app-mount=' + v,
+      baseURI: 'http://h:1' + sub + '/',
+      resources: [{ name: sub + '/assets/a.js' }],
+    }) === ''));
+  // 负对照：畸形值一律**忽略**（回退探测），绝不把请求指到别的源上。
+  const detection = weAppMount({ baseURI: 'http://h:1' + sub + '/' });
+  check('负对照：畸形值不生效，回退自动探测（//host / scheme / 反斜杠 / 空白）',
+    detection === sub
+    && ['?we-app-mount=//evil.example.com/x', '?we-app-mount=https://evil.example.com',
+      '?we-app-mount=a\\b', '?we-app-mount=/a b'].every((search) =>
+      weAppMount({ search, baseURI: 'http://h:1' + sub + '/' }) === detection));
+  check('没有这个参数 ⇒ 行为与改动前一致（走探测）',
+    weAppMount({ search: '?we-lang=en', baseURI: 'http://h:1' + sub + '/' }) === sub
+    && weAppMount({ search: '', baseURI: 'http://h:1/' }) === '');
+}
+
 // ── ②c 404 归因：响应不是宿主信封（issue #409）─────────────────────────────────
 console.log('\n②c 非 2xx 归因（网关 HTML 页 vs 宿主 JSON 信封）');
 {
