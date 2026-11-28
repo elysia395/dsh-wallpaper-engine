@@ -1354,7 +1354,9 @@ await runScenario('X1. web 壁纸：宿主发的 liveFrame 成为垫底图第 1 
   selection: selSeed(['w1'], 'w1'),
 }, (t) => {
   const frameSrc = '/wallpaper-engine/live-frame/w1';
-  const previewSrc = '/wallpaper-engine/preview/w1';
+  // 预览图候选带 `?full=1`：web 与场景同一条通路（#419 —— 降级垫底要用作者原图）。
+  // 与场景那几条（`/preview/s1?full=1`）同一口径；候选表与探针读的是同一个 URL。
+  const previewSrc = '/wallpaper-engine/preview/w1?full=1';
   const cold = webFrameFacts(t, frameSrc, previewSrc);
   check('① web 支的候选表首项是**宿主发的实时帧**（不是作者预览图）',
     cold.head === frameSrc, 'head=' + cold.head);
@@ -1379,7 +1381,7 @@ await runScenario('X2. 负对照：宿主没发 liveFrame ⇒ web 支没有帧�
   selection: selSeed(['w1'], 'w1'),
 }, (t) => {
   const frameSrc = '/wallpaper-engine/live-frame/w1';
-  const previewSrc = '/wallpaper-engine/preview/w1';
+  const previewSrc = '/wallpaper-engine/preview/w1?full=1';
   const cold = webFrameFacts(t, frameSrc, previewSrc);
   check('① 首项退到作者预览图（这一档确实没有实时帧候选）',
     cold.head === previewSrc, 'head=' + cold.head);
