@@ -46,7 +46,7 @@ import { fileURLToPath } from 'node:url';
 // 共享实现（`new Function` 装入源码文本前必须先剥掉 `export { … }`）——别在这里再抄一份正则。
 import { stripExportBlocks } from './tools/js-text.mjs';
 // 刀3：样式族取文（8 个域模板 + 组装点）——源码侧用 styleText()，产物侧用 cssBodyOf()。
-import { styleText, cssBodyOf, cssPartsOf, panelText, liveText, parseInlineModules } from './tools/src-scope.mjs';
+import { styleText, cssBodyOf, cssPartsOf, panelText, liveText, parseInlineModules, clientText } from './tools/src-scope.mjs';
 // 可读性下限常量（ADR-0016 第四刀起随玻璃 CSS 出户）的唯一读法：match 失败即 throw，不返回 NaN。
 import { readabilityFloors } from './tools/readability-floors.mjs';
 
@@ -253,6 +253,7 @@ const MODE_MARKERS = new Set(['data-ds-dark-theme', 'data-sidebar-right-open', '
 // ── 从产物取样式表 ───────────────────────────────────────────────────────────
 // 与 `verify-glass-compositing` 同一口径：先把模板**求值**（带上源码声明的常量），
 // 得到的才是插件真正注入的那份 CSS；再剥注释。
+// 这份 SRC 是**样式取文本体**（cssBodyOf(SRC + 玻璃产物)）—— 与客户端正文族无关，必须保持单文件。
 const SRC = readFileSync(CLIENT, 'utf8');
 
 // 可读性下限常量随玻璃 CSS 出户（ADR-0016 第四刀）⇒ 从玻璃包源读（test/tools/readability-floors.mjs，
@@ -435,7 +436,7 @@ const EFFECTS = GLASS_SRC + '\n' + EFFECTS_SRC + '\n' + GLASS_LAYER_SRC;
 // 刀3：样式族已按域拆成 8 个模块 + 组装点 ⇒ 这里取**整族源码文本**（构建序拼接），判据文本不变。
 const STYLES_TEXT = styleText() + readFileSync(join(ROOT, 'packages', 'glass', 'src', 'glass-css.js'), 'utf8');
 // 「玻璃 UI」开关的读数/翻转处理器都住在 client.js（不在 effects.js）—— 第 ⑧ 组要看它。
-const CLIENT_SRC = readFileSync(join(ROOT, 'src', 'client.js'), 'utf8');
+const CLIENT_SRC = clientText();
 // 「独立配置」开关的**两个落点**：登记表子项由 glass-panel 自动渲染，既有面（左侧栏 / 侧栏 /
 // 内容面）的开关手写在 panel-tabs。第 ⑧ 组的"mode 可达性"判据要同时看这两处。
 const GLASS_PANEL_SRC = readFileSync(join(ROOT, 'packages', 'glass', 'src', 'glass-panel.js'), 'utf8')

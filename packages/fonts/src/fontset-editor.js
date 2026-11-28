@@ -3,12 +3,12 @@
  *
  * ⚠️ 归属（§6.1 = A / ADR-0013 D20）：本文件只渲染 + 抛意图。字体集的**状态与真源**仍在主包
  *    （键定义 `lib/settings-schema.js` 的 `FONTSET_KEYS`、落盘 `fontsets/<id>.json`、
- *    读写 `src/fontset-store.js`）⇒ 本文件**不持键、不持久化、不注册 settings 段**。
+ *    读写 `src/settings/fontset-store.js`）⇒ 本文件**不持键、不持久化、不注册 settings 段**。
  *
  * 为什么单独一个模块、而且只做渲染：面板要能被判据**驱动**（点「切换」是否真的调切换、
  * 点「删除」是否先过 confirm）—— 渲染与副作用分开之后，挂载台给一组记录用的回调就能把
- * "哪个按钮对应哪个意图"钉死；真正的网络调用住在 `src/fontset-store.js`。
- * 这与 `src/picker-props-panel.js` 的分工同形（渲染 + 意图回调，副作用住调用点）。
+ * "哪个按钮对应哪个意图"钉死；真正的网络调用住在 `src/settings/fontset-store.js`。
+ * 这与 `src/picker/picker-props-panel.js` 的分工同形（渲染 + 意图回调，副作用住调用点）。
  *
  * 契约：`renderFontSetEditor(ctx)`；`ctx` 里是**这一屏用到的一切**：
  *   · `fontSets`        宿主清单 `[{ id, name, origin, active, overrides?, broken? }]`
@@ -48,7 +48,7 @@
 
 /**
  * 导入用的隐藏 file input（与自定义画面的导入同形：模块级 ref + 一个按钮去 `.click()`）。
- * 只做"选文件"，读文件与校验在 `importFontSet`（src/fontset-store.js）里。
+ * 只做"选文件"，读文件与校验在 `importFontSet`（src/settings/fontset-store.js）里。
  */
 let importInput = null;
 

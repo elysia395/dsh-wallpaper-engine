@@ -39,7 +39,9 @@ export const NOTICE_MARK_BEGIN = 'UPDATE NOTICE COPY（begin）';
 export const NOTICE_MARK_END = 'UPDATE NOTICE COPY（end）';
 
 /** 允许被公告快通道覆盖的文件（**只允许这两个**；多了就是放行了别的代码）。 */
-export const NOTICE_FILES = ['src/client.js', 'src/i18n/i18n-copy-ext.js'];
+// 公告区块自 2026-11-28 起住 src/client/update-notice.js（原先在 src/client.js 正文里）。
+// 快通道按**文件**判定改动面，所以登记文件必须跟着搬 —— 否则一次纯公告改动的 PR 不再走 notice 作业。
+export const NOTICE_FILES = ['src/client/update-notice.js', 'src/i18n/i18n-copy-ext.js'];
 
 /** 差异条目超过这个数就直接 full（防"大范围改动被分类成文档"）。 */
 export const DIFF_FLOOR = 300;

@@ -1,5 +1,5 @@
 /**
- * i18n-copy-core.js — 英文词表域：客户端外壳（src/adapter.js · src/client.js · 更新公告）
+ * i18n-copy-core.js — 英文词表域：客户端外壳（src/settings/adapter.js · src/client.js · 更新公告）
  *
  * 本域词条**原样搬自** `src/i18n/i18n-copy.js`（拆分属纯搬移：中文键与英文值一行未改、顺序未动）。
  * 组装点在同族的 `src/i18n/i18n-copy.js`（composer）；域模块必须排在 composer **之前**登记进
@@ -7,7 +7,7 @@
  * 只读不写：纯数据，不得有可执行语句。守卫判据见 `test/verify-i18n.mjs`（族读法 test/tools/src-scope.mjs）。
  */
 const WE_I18N_EN_CORE = {
-  // ── src/adapter.js ──
+  // ── src/settings/adapter.js ──
   "自动检测": "Auto-detect",
   "原生浏览器": "Plain browser",
   "非官方桌面端": "Third-party desktop shell",
@@ -35,7 +35,7 @@ const WE_I18N_EN_CORE = {
   "取消": "Cancel",
   "宿主不可达（请求未完成）": "Host unreachable (request did not complete)",
   "宿主返回 {status}": "Host returned {status}",
-  // 反代子路径部署（#409）：响应是网关的 HTML 页而不是宿主信封 ⇒ 说清"这不是接口在报错"。
+  // 反代子路径部署：响应是网关的 HTML 页而不是宿主信封 ⇒ 说清"这不是接口在报错"。
   "宿主返回 {status}：响应不是插件的接口，检查 DSH 是否挂在子路径下": "Host returned {status}: the response is not this plugin's API — check whether DSH is mounted under a sub-path",
   "当前壁纸已不在列表里（可能已被移除或隐藏）": "The current wallpaper is no longer in the list (it may have been removed or hidden)",
   "这张壁纸没有可播放的媒体文件": "This wallpaper has no playable media file",

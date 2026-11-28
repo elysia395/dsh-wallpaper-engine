@@ -17,7 +17,7 @@
  *     test/verify-subpackage-purity.mjs 判红（只放行产物、只放行主包名出现在本包 lib/client*.js 里）。
  *
  * ## 消费侧契约（唯一跨包通道 = 主 bundle 的显式键集，ADR-0014 S5.1 / S5.4）
- * 下面的解构名单与主包 `src/host-bridge.js` 的 HOST_BRIDGE_BINDINGS 字体段**逐键一致**（缺键大声抛，
+ * 下面的解构名单与主包 `src/core/host-bridge.js` 的 HOST_BRIDGE_BINDINGS 字体段**逐键一致**（缺键大声抛，
  * 不许静默 undefined）；产物里的 FONTS_HOST_REQUIRED 由构建期从这份解构派生（源码里是空表）。
  * 键集的依据 = 两个渲染器文件里的**自由标识符**逐个点名；
  * **逐键清单以主包 `HOST_BRIDGE_BINDINGS` 为准**，本注释不复制清单（ADR-0017 D1）。
@@ -35,7 +35,7 @@
  */
 /** 由构建期填充：scripts/build-client.mjs 从下方 `} = host;` 的解构逐键派生本表
  * （源码留空表只为 eslint/typecheck 可读；产物里是一份生成好的键数组）。
- * 手工加键的正确顺序：① src/host-bridge.js 的 HOST_BRIDGE_BINDINGS ② 本文件的解构名单。 */
+ * 手工加键的正确顺序：① src/core/host-bridge.js 的 HOST_BRIDGE_BINDINGS ② 本文件的解构名单。 */
 const FONTS_HOST_REQUIRED = [];
 for (const key of FONTS_HOST_REQUIRED) {
   if (!(key in host)) {
@@ -55,7 +55,7 @@ const {
 /* ===== 唯一的跨包登记：外观页签第六节「全局字体」===== */
 
 // 主包 src/panel-tabs.js 的 `renderAppearanceTab(ctx)` 画完五个内置节之后，按注册表续接本包登记的节
-// （`wePanelSectionsOf('appearance')`，见 src/extension-registry.js）。两个硬口径：
+// （`wePanelSectionsOf('appearance')`，见 src/extensions/extension-registry.js）。两个硬口径：
 //   ① `title` 必须是 **getter**：注册发生在 bundle 求值期，那时 i18n 表/`weT` 都还没到位，
 //      注册期读词会把 `weT` 拉到求值期（fx/parallax 的 `title` getter 同款理由）。
 //   ② 不写 `order` ⇒ 落到默认位 100，排在**所有显式 order 的节之后**：今天屏上就是这个位置

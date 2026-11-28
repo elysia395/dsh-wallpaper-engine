@@ -348,7 +348,7 @@ export function registerFontsetsRoutes(webServer, c) {
             json(400, { error: '不能删除正在使用的字体集（先切换到别的集）' });
             return;
           }
-          // 只有**用户层**的文件可删。删掉一份覆盖 ⇒ 随包那份重新可见（= 恢复原样）。
+          // 只有**用户层**的文件可删。删掉一份覆盖 ⇒ 随包那份重新可见（=恢复原样）。
           const userAbs = fontSetPath(userDir(c), first);
           const inUser = readFontSetAt(userDir(c), first, c.schema).reason !== 'missing';
           if (inUser) {

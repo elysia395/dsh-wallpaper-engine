@@ -2,7 +2,7 @@
  * we-wproperties.js — 只读导入 Wallpaper Engine 安装目录 `config.json` 里的
  * **用户当前属性值**（`wproperties.<壁纸路径>.<MonitorN>.<属性名>`）。
  *
- * 与 `project.json` 的 `general.properties` 的区别（这也是 issue #341 的全部动机）：
+ * 与 `project.json` 的 `general.properties` 的区别（这也是 的全部动机）：
  *   · `project.json` 存作者导出的**默认值**；
  *   · WE 安装根的 `config.json` 存**这台机器上用户当前选的值**（用户在 WE 里把
  *     「时间组件」关掉就只在这里体现）；

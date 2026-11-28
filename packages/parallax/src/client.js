@@ -12,7 +12,7 @@
  *    循环 outline 在正文与内联件之前发出：`const host = require('dsh-plugin-wallpaper-engine');`。
  *    下面的 prelude 是消费侧契约。
  *
- * 键集的依据 = 两个基座/渲染器文件的**自由标识符**（键集真源 = 主包 `src/host-bridge.js` 的 `HOST_BRIDGE_BINDINGS`）：
+ * 键集的依据 = 两个基座/渲染器文件的**自由标识符**（键集真源 = 主包 `src/core/host-bridge.js` 的 `HOST_BRIDGE_BINDINGS`）：
  *   packages/parallax/src/parallax-layer.js : selection · weClampTo · weNow · weBody
  *   packages/parallax/src/ext-parallax.js   : weT · React · SliderRow · switchRow
  *   ⚠️ PARALLAX_PLUGIN_DEFAULT / PARALLAX_GROUP_DEPTH_MIN / PARALLAX_GROUP_DEPTH_MAX
@@ -23,7 +23,7 @@
 /** 缺键**大声失败**，不许静默 undefined（ADR-0014 S5.1 / S5.4 服务面显式键集 + ADR-0013 D3③「宁可显示、不可静默消失」）。理由同 packages/fx/src/client.js。 */
 /** 由构建期填充：scripts/build-client.mjs 从下方 `} = host;` 的解构逐键派生本表
  * （源码留空表只为 eslint/typecheck 可读；产物里是一份生成好的键数组）。
- * 手工加键的正确顺序：① src/host-bridge.js 的 HOST_BRIDGE_BINDINGS ② 本文件的解构名单。 */
+ * 手工加键的正确顺序：① src/core/host-bridge.js 的 HOST_BRIDGE_BINDINGS ② 本文件的解构名单。 */
 const PARALLAX_HOST_REQUIRED = [];
 for (const key of PARALLAX_HOST_REQUIRED) {
   if (!(key in host)) {
@@ -41,13 +41,13 @@ const {
 
 // ① 「扩展」页签的三号模块描述符（id='parallax'，resetGroup 同为 'parallax'，与包名无关）。
 //    主包 src/panel-tabs.js 不再硬编码清单：extensionModules() 只问注册表
-//    （`weExtensionModules()`，实现 src/extension-registry.js），这一行就是它的来源。
+//    （`weExtensionModules()`，实现 src/extensions/extension-registry.js），这一行就是它的来源。
 registerExtensionModule('parallax', PARALLAX_EXTENSION_MODULE);
 
 // ② 行为层生命周期 + 插件槽位发现。主包 src/client.js 的作用域里**没有**这些裸名 ——
 //    主包只按注册表调用：挂载期订阅（`attachLayer` 里 `subscribe(hooks.sync)`）、挂载后首次对时、
 //    拆卸期 `hooks.dispose()`（并退订）；插件槽位在 `sync` 里经 host 键取
-//    `parallaxPluginSlots`（= `weDiscoveredGroupsOf('parallax').sort()`）。
+//    `parallaxPluginSlots`（=`weDiscoveredGroupsOf('parallax').sort()`）。
 //    ⇒ discoveredGroups 与 sync/dispose 一起注册（主包只调用、不接管实现）。
 registerLayerHooks('parallax', {
   sync: syncParallaxLayer,

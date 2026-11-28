@@ -15,7 +15,7 @@
  *   SCRIM_ID                     ← scrim 元素的固定 id（顶层 const）
  *   syncSceneAudio(selLike)      ← 场景音轨同步（顶层 function）
  *   detectMicaSupport()          ← 惰性探针：Mica 支持
- *   adapterCaps()                ← src/adapter.js（适配目标能力矩阵 → body 属性）
+ *   adapterCaps()                ← src/settings/adapter.js（适配目标能力矩阵 → body 属性）
  *   applyComponentFonts()        ← src/font/apply.js（字体：组件作用域）
  *   removeComponentFonts()       ← 同上
  *   snapshotHostFontDefaults()   ← 同上（宿主角色色快照）
@@ -28,7 +28,7 @@
  *     本文件只负责呈现。
  *   · **唯一例外是 `clearEffects()`**（卸载 / 清空壁纸那条路）：它把"当前壁纸的播放态"复位成
  *     空态（`videoPlaying` / `videoError` / `blockedNote` / `sceneAudioUrl` / `sceneHasAudio`），
- *     否则禁用插件后屏上会留着上一张壁纸的播放错误与被过滤提示（#84）。它同样**不写任何设置、
+ *     否则禁用插件后屏上会留着上一张壁纸的播放错误与被过滤提示。它同样**不写任何设置、
  *     不落盘** —— 这条边界是"呈现层不拥有设置"，不是"呈现层不碰 selection"。判据只许按
  *     "`applyEffects` 的函数体里没有对 selection 的赋值"来写，别写成"本文件不写 selection"。
  *   · 内联样式只写自己拥有的属性（`--we-*` 与少数原生属性），清理时必须成对（clearEffects）。
@@ -49,7 +49,7 @@ let lastFadeBg = "";
 // #159①：让上面那份缓存在宿主切深浅主题时失效的观察者（见 armFadeBgThemeWatch）。
 let fadeBgThemeWatch = null;
 
-// ── 输入光标颜色注入（#83）──────────────────────────────────────────────────
+// ── 输入光标颜色注入──────────────────────────────────────────────────
 // <style id="we-caret-patch"> 把 body 上的 --we-caret-color 应用到所有文本
 // 输入位（textarea / input / contenteditable）。caret-color 可继承，覆盖到
 // contenteditable 的子节点无需逐个枚举；!important 压过宿主可能存在的显式
@@ -113,7 +113,7 @@ function writeWallpaperFadeBg() {
 }
 
 // ── #159① + #194②：宿主切深浅主题 ⇒ 失效缓存**并当场重算** ─────────────────────
-// 事故（#159①）：`lastFadeBg` 只在 applyEffects 里重算，而宿主切主题（翻转 body 的
+// 事故：`lastFadeBg` 只在 applyEffects 里重算，而宿主切主题（翻转 body 的
 // `data-ds-dark-theme`）**不会**调用我们；本仓唯一的主题订阅在 src/theme-follow.js，
 // 由 `themeFollow` 开关门控、默认关 ⇒ 缓存会一直停在旧主题的底色上。它的消费者是
 // `.we-layer` 那块 z-index −2 的衬底（给 backdrop-filter 提供底色）⇒ 过期值会给
@@ -136,8 +136,8 @@ function armFadeBgThemeWatch() {
   if (fadeBgThemeWatch || typeof MutationObserver !== "function") return;
   try {
     fadeBgThemeWatch = new MutationObserver(() => {
-      lastFadeBg = "";   // ① 失效（#159①：防止拖动档继续拿旧值）
-      // ② 当场重算并写回（#194②）。观察者回调里抛错会冒到宿主 ⇒ 自己收干净；
+      lastFadeBg = "";   // ① 失效（防止拖动档继续拿旧值）
+      // ② 当场重算并写回。观察者回调里抛错会冒到宿主 ⇒ 自己收干净；
       //    重算失败也只是"这一次没跟上"，绝不动已经写在 body 上的值。
       try {
         if (writeWallpaperFadeBg() && document.body) {
@@ -164,7 +164,7 @@ function disarmFadeBgThemeWatch() {
 }
 
 // ── accent 墨色：任意用户配色上的可读前景（黑/白）────────────────────────────
-// issue #127：宿主的 primary 控件契约是「填充 × label-primary-foreground 反色墨」
+// 宿主的 primary 控件契约是「填充 × label-primary-foreground 反色墨」
 //（dsh-client-ui-primitives/Button.module.css，两值都随主题翻转、永远互为反色）。
 // 我们把填充重映射成**任意亮度**的用户配色后，主题静态墨色不再保证可读 ——
 // 浅色配色（黄）× 浅色主题墨（白）≈ 1.5:1，小字号下就是「文字与背景同色」。
@@ -182,9 +182,9 @@ function weAccentInk(hex) {
 
 // ── #334：深色孪生块的「保留比例」───────────────────────────────────────────
 // #239 为了让暗 accent 在深色底上可读，把深色块的三处令牌**一律**往白里掺 45%。方向对，
-// 但一刀切把本来就够亮的 accent 也洗淡了（#334 现场 #F1717F → ≈#F7B1B9，饱和度掉一半）。
+// 但一刀切把本来就够亮的 accent 也洗淡了（现场 #F1717F → ≈#F7B1B9，饱和度掉一半）。
 // 这里按 WCAG 相对亮度分流：亮于阈值 ⇒ 100%（原色直出），否则 55% —— 55% 色 + 45% 白
-// 正是 #239 的现状，所以默认 accent #4f8cff 与 #239 现场（#2050a0 / #242424）逐位不变。
+// 正是 现状，所以默认 accent #4f8cff 与 现场（#2050a0 / #242424）逐位不变。
 // 阈值 0.3 按「深色面板 #1e1f26 上已达 ~5:1」取：#F1717F(0.320)、#7aaaff(0.401) 走原色，
 // #4176e6(0.198)、#2050a0(0.086)、#242424(0.018) 仍按 55% 提亮。返回 color-mix 的单侧
 // 百分比字符串（单侧 % 由 color-mix 自动补足另一侧，不需要 calc）。纯函数、无 DOM。
@@ -197,7 +197,7 @@ function weUiDarkKeep(hex) {
   return lum >= 0.3 ? "100%" : "55%";
 }
 // 微光伴生色（-shimmer）比主色再往白里提一档：亮 accent 只提一点（82% 保留）以留住
-// 饱和度；暗 accent 维持 #239 的 70%（比主色的 55% 更亮，仍是「深度求索中…」的微光）。
+// 饱和度；暗 accent 维持 70%（比主色的 55% 更亮，仍是「深度求索中…」的微光）。
 function weUiDarkShimmerKeep(hex) {
   return weUiDarkKeep(hex) === "100%" ? "82%" : "70%";
 }
@@ -291,7 +291,7 @@ function wePopupRowPair(inkHex) {
 // 两处数字必须同步改。纯函数：verify-readability 会从 bundle 里抽出本函数复算网格。
 //
 // 第三参 fidelity（0–1，缺省 1 = 完整红线）：玻璃保真度滑杆（glassFidelity）
-// 的数学入口。语义是**两段式**：先用满档地板跑一遍完整红线的钳制（= f=1 的现状，
+// 的数学入口。语义是**两段式**：先用满档地板跑一遍完整红线的钳制（=f=1 的现状，
 // 逐位），再把结果向用户原色线性回退 —— f=1 逐位现状、f=0 原色直出，中间档单调，
 // 不存在「降保真度反而更黑/更白」的悬崖。地板层覆盖度的减薄在 glass-css.js
 //（--we-readability-floor = 常量 × --we-glass-fidelity），两处同一滑杆、各管一半：
@@ -344,7 +344,7 @@ function weClampSurfaceColor(hex, theme, fidelity) {
 }
 
 /**
- * 按主题取「玻璃颜色」（#159② 分主题玻璃色）。
+ * 按主题取「玻璃颜色」（分主题玻璃色）。
  *
  * 存储形态永远是一对 `{light, dark}`（见 lib/settings-schema.js 的 readGlassColors），但开关
  * 「深色单独设置」关着时两侧同值（面板就是那么写的）⇒ 取色只要按主题挑一侧。这里**刻意再兜一层**：
@@ -435,7 +435,7 @@ function applyEffects(opts) {
     if (zoomed) s.setProperty("--we-layer-scale", String(lsc / 100));
     else s.removeProperty("--we-layer-scale");
   }
-  // 壁纸透明度（#82）：越大越透 —— 0% 时不设变量，保持 identity opacity
+  // 壁纸透明度：越大越透 —— 0% 时不设变量，保持 identity opacity
   // （Blink 对 opacity:1 不建合成层，设置了反而给 kiosk 窗口多一层常驻合成）。
   // 渲染引擎约束（实测）：DSH 页面底色是透明的，壁纸层一旦整体
   // 半透明，玻璃表面 backdrop-filter 的取样背景出现大面积透明像素，本
@@ -448,7 +448,7 @@ function applyEffects(opts) {
     s.setProperty("--we-wallpaper-opacity", String((100 - selection.wallpaperOpacity) / 100));
     // 拖动期沿用缓存（见函数头的 live 说明）：resolveWallpaperFadeBg 里那次
     // getComputedStyle 是**强制同步样式计算**，每格一次会把拖动拖垮。
-    // 缓存会在宿主切深浅主题时由 armFadeBgThemeWatch 的观察者**当场刷新**（#159① +
+    // 缓存会在宿主切深浅主题时由 armFadeBgThemeWatch 的观察者**当场刷新**（+
     // #194②）；观察者只挂一次，挂在"这个变量真的在用"的分支里。
     armFadeBgThemeWatch();
     if (live && lastFadeBg) s.setProperty("--we-wallpaper-fade-bg", lastFadeBg);
@@ -466,7 +466,7 @@ function applyEffects(opts) {
   //   reads --we-accent first, so the 配色 control restyles the whole picker
   //   and glass highlights without touching the shell theme.
   // - ⚠️ 设置窗内部**不吃** body 这份 --we-accent（styles.js 的整窗规则把它
-  //   `initial` 掉，见那里的 issue #127 注释）—— 第三方 settings 分区若拿
+  //   `initial` 掉，见那里的注释）—— 第三方 settings 分区若拿
   //   var(--we-accent) 当文字色、又恰好落在我们重映射成 accent 的填充上，
   //   文字与底就逐像素同色（黄底黄字）。窗内消费一律改读 --we-accent-src，
   //   由 .we-picker 根重新别名；body 这份只服务窗外的消费者（快捷面板 / 拉绳）。
@@ -498,7 +498,7 @@ function applyEffects(opts) {
   s.setProperty("--we-ui-deep-diving", uiColor("uiColorDeepDiving"));
   // - #334：深色孪生块的掺白比例改为按相对亮度分流（见 weUiDarkKeep 的注释与
   //   styles/base.js 深色块）。亮 accent 写 100%（原色直出）、暗 accent 写 55%
-  //   （= #239 的掺白 45% 逐位不变）。这四条**恒定义**，由样式表只在深色块消费；
+  //   （=掺白 45% 逐位不变）。这四条**恒定义**，由样式表只在深色块消费；
   //   浅色块不读，所以关掉/换主题都不会留下半份派生值。
   s.setProperty("--we-ui-keep-link", weUiDarkKeep(uiColor("uiColorLink")));
   s.setProperty("--we-ui-keep-deep-diving", weUiDarkKeep(uiColor("uiColorDeepDiving")));
@@ -540,13 +540,13 @@ function applyEffects(opts) {
   //    同一条链先后各跑一次）。本文件只剩**非玻璃**效果（accent / 可读性弹层墨 /
   //    壁纸 / 光标 / 字体 / 音频 / scrim）。
 
-  // 适配目标钩子（src/adapter.js）：把最终目标挂到 <body>，外壳材质类选择器
+  // 适配目标钩子（src/settings/adapter.js）：把最终目标挂到 <body>，外壳材质类选择器
   // 一律经 [data-we-adapter^="desktop-"] 门控 —— 原生浏览器形态永远不吃桌面壳
   // 的材质规则。取值恒为三档之一（auto 在 resolve 里已被消解），手选改动后
   // 下一次 applyEffects 就换值；与其它 body 钩子一样成对清理。
   document.body.setAttribute("data-we-adapter", adapterCaps().target);
 
-  // 左侧工作区（增强模式）的 Mica 能力钩子（#73，见 detectMicaSupport）：Windows
+  // 左侧工作区（增强模式）的 Mica 能力钩子（见 detectMicaSupport）：Windows
   // 上无 Mica（Win10 / build < 22621 / 探测不到）时挂 data-we-mica="off"，CSS 用
   // 插件自己的近不透明玻璃面接管 .dshDesktopSidebarSurface，替代对系统材质的依赖；
   // 支持或不适用（非 Windows）时移除，保持原生。探测结果缓存，这里只做同步读写。
@@ -567,7 +567,7 @@ function applyEffects(opts) {
     }
   }
 
-  // 输入光标颜色（#83）：空 = 跟随 dsh 原生（清空变量 + 不注入样式表）；
+  // 输入光标颜色：空 = 跟随 dsh 原生（清空变量 + 不注入样式表）；
   // 选定颜色后经 we-caret-patch 以 !important 覆盖所有文本输入位。与壁纸
   // 是否启用无关 —— 这是独立的可读性设置，壁纸关掉后依然生效。
   if (selection.caretColor) {
@@ -646,7 +646,7 @@ function clearEffects() {
   const scrim = document.getElementById(SCRIM_ID);
   if (scrim) scrim.style.background = "";
   lastScrimCss = "";
-  // 插件卸载（禁用 / HMR）后不该留下上一张壁纸的播放错误 / 被过滤提示（#84）。
+  // 插件卸载（禁用 / HMR）后不该留下上一张壁纸的播放错误 / 被过滤提示。
   selection.videoPlaying = true;
   selection.videoError = "";
   selection.blockedNote = "";

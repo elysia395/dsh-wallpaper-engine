@@ -166,7 +166,7 @@ export function applyImpl(root, _rawConfig, c) {
     // `disposers` **只用本组件会话的**（S7.1 行级开关：组件被关时只回滚它自己登记的这 21 条，
     // 不碰主包其它族）；`http` 面按需显式带上（S5b 同款，`verify-json-response` 来路 c）。
     // ⚠️ 这里**不能**再显式覆盖 `serveFile` / `mediaMap` / `tokenFor`：它们来自 `...keys` 的
-    // `apply:` 面（= 主包本次 apply 会话的同一份实例，R1 token 域单主权）；覆盖成本组件会话
+    // `apply:` 面（=主包本次 apply 会话的同一份实例，R1 token 域单主权）；覆盖成本组件会话
     // 那份会让 token 查不到（组件会话自建第二张 mediaMap）。
 
     // 1. 壁纸清单 JSON（`/inventory`）→ 本包 `lib/routes/inventory.js`。

@@ -53,7 +53,7 @@ const INLINE_MODULES = [
   {
     // 纯数据、零依赖 ⇒ 放最前：后面任何模块都能直接读（也不可能有 TDZ 交互）。
     file: 'src/about-assets.js',
-    why: '「关于」页签与更新公告的静态数据：仓库地址 + 随包图的路由路径（图本体在 lib/about/，见 lib/routes/about-qr.js 白名单）',
+    why: '「关于」页签与更新公告的静态数据：仓库地址 + 随包图的路由路径（图本体在 lib/about/，见 packages/about-notice/lib/routes/about-qr.js 白名单）',
     markers: ['const ABOUT_REPO_URL = "https://github.com/elysia395/dsh-wallpaper-engine"',
       'const ABOUT_QR_QQ_PATH = "/about-qr/qq-group.png"',
       'const ABOUT_QR_DOUYIN_PATH = "/about-qr/douyin-group.png"',
@@ -62,7 +62,7 @@ const INLINE_MODULES = [
   {
     // 零依赖的纯工具 ⇒ 紧随纯数据之后：三个层模块（fx / parallax / avatar）都要读，
     // 排在它们之前即可（本身无依赖，何处都无 TDZ 交互）。
-    file: 'src/we-base.js',
+    file: 'src/core/we-base.js',
     why: '浏览器半边的最小地基：三枚到处都用的纯工具（唯一实现）—— 钳位 `weClampTo` · 单调时钟 `weNow` · body 根 `weBody`；零依赖 + 零顶层可执行语句，故可排在内联清单最前',
     markers: ['function weClampTo(', 'function weNow(', 'function weBody('],
   },
@@ -165,13 +165,13 @@ const INLINE_MODULES = [
       'export { CSS };'],
   },
   {
-    file: 'src/nav-icon.js',
+    file: 'src/ui/nav-icon.js',
     why: '「壁纸引擎」SVG 图标（几何唯一真源）+ 设置导航图标 DOM 补丁（官方 nav 硬编码兜底齿轮）',
     markers: ['const WE_ICON_PARTS = [', 'function renderWeIcon(',
       'function weIconSvgString(', 'function installWeNavIcon('],
   },
   {
-    file: 'src/sidebar-right.js',
+    file: 'src/ui/sidebar-right.js',
     why: '官方右侧栏接入（能力门 + 两段注册）+ 侧边栏触达模式真源 + 「壁纸引擎设置」DOM 入口',
     markers: ['function sidebarRightMode(', 'function sidebarRightOpen(',
       'function installSidebarRight(', 'function openSettingsSection('],
@@ -188,14 +188,14 @@ const INLINE_MODULES = [
     // `function settingsDefaults(` 曾是第 3 个锚点，但它全仓零调用点、已按死代码删除
     // （settings-schema 的零消费者导出面清理）。按"锚点只能换、不能减"的规矩，换成
     // `function sanitizePresetValues(`：同为**顶层函数声明**，且客户端半边
-    // （`src/preset-store.js`）与宿主半边（`lib/routes/presets.js`）都在调它 ⇒
+    // （`src/settings/preset-store.js`）与宿主半边（`lib/routes/presets.js`）都在调它 ⇒
     // 它不可能被单独删掉，作结构锚比原锚更稳。
     markers: ['const KINDS = {', 'function sanitizeFromSchema(', 'function sanitizePresetValues(',
       'function serializeSettings(', 'const DEFAULTS = {'],
   },
   {
     // 排在 settings-schema 之后：本文件的判定值域就是那里的 ADAPTER_TARGET_VALUES。
-    file: 'src/adapter.js',
+    file: 'src/settings/adapter.js',
     why: '适配器模式：宿主形态判定（手选 > 宿主上报 > 本地信号）与能力矩阵',
     markers: ['const ADAPTER_LABELS = {', 'function setAdapterFromHost(',
       'function resolveAdapterTarget(', 'function adapterCaps('],
@@ -207,7 +207,7 @@ const INLINE_MODULES = [
       'function themeFollowModeColorOf(', 'function themeFollowAttach('],
   },
   {
-    file: 'src/we-cond.js',
+    file: 'src/core/we-cond.js',
     why: 'WE 条件求值器（纯计算、零外界依赖，独立可测，见 P1-7）',
     markers: ['const WE_COND_OPS = [', 'function weEvalCondition(', 'function weCondTokenize('],
   },
@@ -230,26 +230,26 @@ const INLINE_MODULES = [
       'function removeFontStyles()'],
   },
   {
-    file: 'src/persistence.js',
+    file: 'src/settings/persistence.js',
     why: '设置持久化层：debounce 写 / 脏标记重试 / 宿主→本地迁移 / 在途 GET 竞态守卫',
     markers: ['function readPersisted()', 'function serializeSelection()', 'function pushPersisted()',
       'function schedulePersist()', 'async function loadPersisted()', 'function cancelPendingPersist()'],
   },
   {
-    file: 'src/fontset-store.js',
+    file: 'src/settings/fontset-store.js',
     why: '字体集通道（F3 阶段 2）：活动集正文的加载 / 原子采用 / debounce 落盘 / 本地缓存（与设置平行但另一条真源）',
     markers: ['const FONTSET_CACHE_KEY = ', 'function readCachedFontSet()', 'function setFontValues(patch)',
       'async function loadFontSet()', 'function scheduleFontSet()', 'function cancelPendingFontSet()'],
   },
   {
-    file: 'src/preset-store.js',
+    file: 'src/settings/preset-store.js',
     why: '玻璃预设通道：清单加载 / 整快照应用（走设置通道落效）/ 保存 / 删除（重名由宿主裁决）',
     markers: ['const gpFetch = ', 'function glassPresetFailureReason(res)', 'async function applyGlassPreset(id)',
       'async function saveGlassPreset(name)', 'async function deleteGlassPreset(id)'],
   },
   // P-C：字体集编辑器面板 + 外观页签字体节**已搬进 packages/fonts**（本包自己的 inline 表），
   // 主 bundle 不再内联它们；两条通道各有配方（packages/fonts/client.build.json）。
-  // 顺序注记：这两条原先排在 `src/preset-store.js` 之后、`src/section-head.js` 之前，搬走后
+  // 顺序注记：这两条原先排在 `src/settings/preset-store.js` 之后、`src/ui/section-head.js` 之前，搬走后
   // 本数组里 `preset-store → section-head` 的相邻关系不变（各模块都按名字引用，顺序不承载语义）。
   {
     // 面板各节的统一节头构件（二次修订：**两档都支持隐藏**）。
@@ -257,16 +257,16 @@ const INLINE_MODULES = [
     //    虽然函数声明有提升、顺序其实不致命，但排在调用方前面才读得出依赖方向 —— 与
     //    `we-base.js` 排最前是同一条理由。（ADR-0016 第二刀起 glass-panel 那份经主 bundle
     //    的 HOST_BRIDGE 键 `sectionHead` 取同一实现，不再本表内联。）
-    file: 'src/section-head.js',
+    file: 'src/ui/section-head.js',
     why: '节头构件（可折叠）：panel-tabs 用；packages/glass 经桥接键 sectionHead 取同一份，抽出来是为了让挂载台能 import 真实现',
     markers: ['function sectionHead(label, open, onToggle, action) {',
       'className: "we-picker__section-head we-picker__section-head--toggle"'],
   },
   {
-    // 模块级重置按钮（issue #192 的 ↺）：与 section-head 同一条理由抽出来 ——
+    // 模块级重置按钮（↺）：与 section-head 同一条理由抽出来 ——
     // panel-tabs（外观各节 + 扩展模块头）在主 bundle 用；packages/glass（玻璃 UI）经桥接键
     // moduleResetButtonNode 取同一实现（ADR-0016 第二刀起不再本表内联）。
-    file: 'src/module-reset.js',
+    file: 'src/ui/module-reset.js',
     why: '模块级重置按钮（↺）：panel-tabs 用；packages/glass 经桥接键 moduleResetButtonNode 取同一份；模块名查 RESET_MODULES 取键集',
     markers: ['function moduleResetButtonNode(moduleName, onResetModule, labels) {',
       'className: "we-mod-reset"'],
@@ -279,15 +279,15 @@ const INLINE_MODULES = [
   //    差量只有 outline 的 host 绑定与空 apply/inject。
   // ── P-A 起：点击拖尾与 3D 两份「画布层 + 描述符」**已迁出主 bundle**，各自住自己的包
   //    （packages/fx、packages/parallax），由各包自己的 `client.build.json` 配方各出一份产物；主包只留
-  //    `src/extension-registry.js` 这张收件箱（谁登记了什么只能问它）。
+  //    `src/extensions/extension-registry.js` 这张收件箱（谁登记了什么只能问它）。
   //    迁出的等价性证据：两个子包产物里的 fx-layer/ext-fx/parallax-layer/ext-parallax 与迁出前
   //    逐字节相同（`git diff --no-index` 可复核），差量只有 outline 的 host 绑定与空 apply/inject。
   {
-    // 头像导入的两道闸 + 零解码尺寸探针（#185 后续）。**纯函数**，因此是本仓少数几个
+    // 头像导入的两道闸 + 零解码尺寸探针。**纯函数**，因此是本仓少数几个
     // 能被守卫**直接执行**的模块之一（用真字节喂真函数 —— 位域读错一位那种错，
     // "源码里有没有这行字"测不出来）。排在 avatar-layer / ext-avatar / client 正文之前：
     // 那几处的调用点直接按名引用这些常量与函数。
-    file: 'src/avatar-import.js',
+    file: 'src/extensions/avatar-import.js',
     why: '头像导入的两道闸（边长 1024 / 体积 4 MiB）、零解码的文件头尺寸探针（PNG/JPEG/GIF/BMP/WebP/SVG）与两层 MIME 清单（直传 / 仅光栅化）',
     markers: ['const AVATAR_IMPORT_MAX_EDGE = ', 'const AVATAR_IMPORT_MAX_BYTES = ',
       'const IMAGE_DIRECT_ACCEPT = ', 'const IMAGE_RASTER_ACCEPT = ',
@@ -297,37 +297,37 @@ const INLINE_MODULES = [
   {
     // 「扩展」页签**一号模块**（自定义会话头像）：与前面两份不同 —— 它的"本体"既不是画布层
     // 也不是纯变量层，而是**会话界面上的 DOM 补丁**（给宿主的消息行补头像节点 + 一个
-    // 观察者），所以行为层是 src/avatar-layer.js。排在 panel-tabs 之前（它要在渲染时取
+    // 观察者），所以行为层是 src/extensions/avatar-layer.js。排在 panel-tabs 之前（它要在渲染时取
     // 得到 AVATAR_EXTENSION_MODULE 与那几张默认头像的零件表）。
-    file: 'src/avatar-layer.js',
+    file: 'src/extensions/avatar-layer.js',
     why: '「自定义会话头像」的装饰层：按 data-chat-flow-kind 给消息行补头像节点（观察者 + 就地更新；基座模块：只读 selection、零 ctx），并供面板预览复用同一条 URL 与同一张默认头像零件表',
     markers: ['const AVATAR_FLOW_SIDES = ', 'const AVATAR_GLYPH_PARTS = ',
       'function syncAvatarLayer()', 'function disposeAvatarLayer()'],
   },
   {
-    file: 'src/ext-avatar.js',
+    file: 'src/extensions/ext-avatar.js',
     why: '「扩展」页签第一个模块的描述符（渲染该扩展岛；动作一律经 ctx 里的具名 on* 处理器）',
     markers: ['const AVATAR_EXTENSION_MODULE = {', 'function renderAvatarIsland(ctx)'],
   },
   {
-    file: 'src/ext-perf.js',
+    file: 'src/extensions/ext-perf.js',
     why: '「扩展」页签第四个模块：性能监控岛（场景/网页读渲染页帧率、视频读解码帧、静态图说明没有渲染帧，界面帧率与 CPU 另采）',
     markers: ['const PERF_EXTENSION_MODULE = {', 'function renderPerfIsland(ctx)'],
   },
   {
-    file: 'src/system-fonts.js',
+    file: 'src/settings/system-fonts.js',
     why: '本机字体清单的客户端通道：宿主那次进程扫描的唯一读者（清单 / 缓存 / 失败文案 / 本浏览器能否匹配的探针），与字体集通道同形',
     markers: ['const SYSTEM_FONTS_CACHE_KEY = ', 'function readCachedSystemFonts()',
       'async function ensureSystemFonts(', 'function systemFontKeyList(',
       'function filterUsableSystemFonts('],
   },
   {
-    // ── P-A 起：跨包「扩展模块 / 层钩子」注册表（src/extension-registry.js）。三项扩展里
+    // ── P-A 起：跨包「扩展模块 / 层钩子」注册表（src/extensions/extension-registry.js）。三项扩展里
     //    有**两项**（点击拖尾 packages/fx、3D packages/parallax）从 P-A 起各自住在自己的包
     //    里，三份 bundle 的求值顺序不保证 ⇒ 谁登记了什么只能落在一张共享注册表上：
     //    panel-tabs 只问它（屏上顺序 = (order, 注册序)）、client.js 只问它（挂载期接 sync /
     //    拆卸期交 dispose）。零依赖、浏览器安全。必须排在 panel-tabs 与 client.js 正文之前。
-    file: 'src/extension-registry.js',
+    file: 'src/extensions/extension-registry.js',
     why: '跨包扩展模块/层钩子注册表：登记与排序（order）扩展模块描述符、登记层的 sync/dispose、迟到注册的补接与重画回调',
     markers: ['const weExtensionModuleTable = ', 'const weLayerHookTable = ',
       'function weRegisterExtensionModule(', 'function weExtensionModules()',
@@ -362,7 +362,7 @@ const INLINE_MODULES = [
       'renderWallpaperTab, renderAppearanceTab, renderAudioTab, renderMascotTab, renderEffectsTab, renderAdvancedTab,'],
   },
   {
-    file: 'src/picker-model.js',
+    file: 'src/picker/picker-model.js',
     why: '选择器模型层：过滤判定 + 派生数据 + 分页切片（纯函数 / 显式入参 / 零 DOM）',
     markers: ['function ratingOf(w)', 'function isPlayableType(w)',
       'function isRotatableWallpaper(w, ratingFilter, typeFilter)',
@@ -370,26 +370,26 @@ const INLINE_MODULES = [
       'function pageSlice(list, page)', 'function pickerModel(input)'],
   },
   {
-    file: 'src/picker-modal.js',
+    file: 'src/picker/picker-modal.js',
     why: '选择器库视图的渲染器（整棵 we-picker__modal 子树；页内下钻，不再是弹框）—— 显式 ctx 取外界，标记逐字搬',
     markers: ['function renderPickerModal(ctx)',
       'className: "we-picker__modal"',
       'className: "we-picker__modal-head"', 'className: "we-picker__grid"'],
   },
   {
-    file: 'src/picker-props-panel.js',
+    file: 'src/picker/picker-props-panel.js',
     why: '选择器「壁纸属性」面板的渲染器（整棵 we-picker__props 子树 + 每个 ptype 的控件分支）—— 显式 ctx 取外界，标记逐字搬',
     markers: ['function renderPickerPropsPanel(ctx)', 'function renderUserPropRow(p, onPropInput)',
       'className: "we-picker__props"', 'className: "we-picker__props-row"',
       'className: "we-picker__props-section"'],
   },
   {
-    file: 'src/quick-panel.js',
+    file: 'src/ui/quick-panel.js',
     why: '快捷播放面板（官方侧栏 tab 与低版本抽屉共用同一份内容）：当前壁纸 + 轮播 + 列表快切 + 声音 + 设置入口。列表虚拟滚动（spacer + 可视窗口）',
     markers: ['function qpFindScroller(', 'function qpVirtWindow(', 'function qpTypeLabel(', 'function QuickPanel(props)'],
   },
   {
-    file: 'src/video-layer.js',
+    file: 'src/wallpaper/video-layer.js',
     why: '视频壁纸通道：海报已加载/首帧/预算的就绪判据（实测：一律等首帧会把切换推到十几秒）',
     markers: ['function probeVideoPoster(', 'function videoContentReady(', 'VIDEO_POSTER_BUDGET_MS', 'let mediaInfoToken = ', 'function clearUpgradePoll(', 'async function refreshMediaInfo(', 'function abortTranscodeUpgrade(', 'function maybeUpgradeToTranscoded(', 'function invalidateMediaInfoProbe('],
   },
@@ -414,12 +414,12 @@ const INLINE_MODULES = [
     markers: ['function prepareSceneLiveStage(', 'function prepareSceneStaticStage(', 'function applySelection(', 'function buildMedia('],
   },
   {
-    file: 'src/layer-core.js',
+    file: 'src/wallpaper/layer-core.js',
     why: '两条通道共用的切换核心：层退役/延迟移除、过场内联样式、可见性复推（不得引用实时符号）',
     markers: ['function retireFadingLayer(', 'function scheduleFadingLayerRemoval(', 'function nudgeWallpaperRepaint('],
   },
   {
-    file: 'src/focus-handback.js',
+    file: 'src/wallpaper/focus-handback.js',
     why: '#148 宿主侧：焦点被（无手势地）搬进壁纸帧时交还给用户本来在用的元素 —— 与 lib/we-focus-guard.js 分工的另一半',
     markers: ['function installFocusHandback(', 'function weIsWallpaperFrame(', 'GESTURE_WINDOW_MS', 'window.__weFocusHandback'],
   },
@@ -459,15 +459,15 @@ const INLINE_MODULES = [
     markers: ['const LIVE_FIRST_FRAME_MS = ', 'function syncLayers()', 'function toggleLiveDiag('],
   },
   {
-    // 挂载前缀（#409）：apiUrl 在**运行时**读它，函数声明提升保证内联顺序不承重；
+    // 挂载前缀：apiUrl 在**运行时**读它，函数声明提升保证内联顺序不承重；
     // 放在本清单 api-client 之前只是为了读起来像依赖：前缀来源在 app-mount，消费在 apiUrl。
-    file: 'src/app-mount.js',
+    file: 'src/wallpaper/app-mount.js',
     why: '反代子路径部署的挂载前缀探测（资源名 → document.baseURI → 站点根）；根路径部署恒为空串',
     markers: ['const WE_APP_MOUNT_CACHE', 'function weMountFromResources(', 'function weAppMount(',
       'function weAppBase(', 'function weAppMountReset('],
   },
   {
-    file: 'src/api-client.js',
+    file: 'src/core/api-client.js',
     why: '宿主 API 的唯一出入口（P2-9）：前缀 / 默认 no-store / 不吞错的结构化结果',
     markers: ['const BASE = ', 'function apiUrl(', 'function pickFetch(', 'async function apiFetch(',
       'const apiJson = ', 'const apiHead = '],
@@ -477,7 +477,7 @@ const INLINE_MODULES = [
     // → innerWidth/own.w 缩放到画布 CSS 像素 → postMessage 给 scene-live 遮挡桥。
     // 顶层只声明函数与 var 状态、apiJson 在调用期解引用（无 TDZ 交互），跟随
     // api-client 之后内联。
-    file: 'src/occlusion.js',
+    file: 'src/wallpaper/occlusion.js',
     why: '遮挡投递：/occlusion 轮询 + 缩放 + postMessage（1Hz，含退避与可见性暂停）',
     markers: ['var OCCLUSION_POLL_MS = ', 'function startOcclusionPolling(', 'function stopOcclusionPolling(',
       'function occlusionTick(', 'function deliverOcclusionSnapshot('],
@@ -518,12 +518,136 @@ const INLINE_MODULES = [
     markers: ['function RopeDock() {', 'ropeDrawerControl = {'],
   },
   {
+    file: 'src/client/handlers/props-panel.js',
+    why: 'src/client.js 正文的「壁纸属性」（WE 用户属性）状态与处理器（打开/收起、载入定义、覆盖写入、从 WE 只读导入、热更新、重启回放，含 180ms 去抖计时器）—— 构建期内联在正文之前，同处一个扁平作用域',
+    markers: ['let propsPanelOpen = false;', 'function loadUserPropDefs(', 'function applyUserProps(',
+      'function applyStoredUserProps(', 'const USER_PROPS_COMMIT_MS = 180;'],
+  },
+  {
+    file: 'src/client/handlers/image-assets.js',
+    why: 'src/client.js 正文的用户图片资产导入共用腿（会话头像取景/裁切出图与确认、吉祥物立绘选择/上传/清除）—— 构建期内联在正文之前，同处一个扁平作用域',
+    markers: ['function avatarCropGeometry(', 'function cropAvatarToBlob(', 'function onAvatarCropConfirm(',
+      'const MASCOT_BOX_MIN_SIDE = 28;', 'async function uploadMascotFile('],
+  },
+  {
+    file: 'src/client/handlers/avatar-ext-handlers.js',
+    why: 'src/client.js 正文的「扩展」页签一号模块（自定义会话头像）处理器：开关/滑块/出现间隔、图片选择与自动压缩、裁切弹窗开关（含 AVATAR_CROP_VIEW 与两份 pending 状态）—— 构建期内联在正文之前，同处一个扁平作用域',
+    markers: ['const AVATAR_CROP_VIEW = 260;', 'let avatarCropPending = null;', 'let avatarOverflowPending = null;',
+      'async function onAvatarFileChosen(', 'async function openAvatarCrop(', 'function closeAvatarCrop()'],
+  },
+  {
+    file: 'src/client/handlers/playback-handlers.js',
+    why: 'src/client.js 正文的播放控制处理器（播放/暂停、静音、音量 live 档、清除壁纸、清 live 失败记忆、换组、开停轮播、下一张）—— 构建期内联在正文之前，同处一个扁平作用域',
+    markers: ['function onTogglePlay()', 'function onToggleAudio()', 'function onVideoVolume(pct, live)',
+      'function onClear()', 'function onNextWallpaper()'],
+  },
+  {
+    file: 'src/client/handlers/library-handlers.js',
+    why: 'src/client.js 正文的壁纸库/库视图模块级处理器（刷新、四类筛选、布局/兼容、轮播间隔与触发、过场、Rope 显隐形态比例、立绘两步确认、关闭选择器、INTERVALS 档位表）—— 构建期内联在正文之前，同处一个扁平作用域',
+    markers: ['const onRefresh = () => loadInventory();', 'const onRatingFilterToggle = (tier, on) => {',
+      'const onGroupTrigger = (e) => {', 'const onMascotFormConfirm = () => {', 'const INTERVALS = [1, 5, 10, 30, 60, 120];'],
+  },
+  {
+    file: 'src/client/handlers/glass-preset-handlers.js',
+    why: 'src/client.js 正文的玻璃预设接线（资产可用位三态 + 预设 ctx：保存/应用/引导/导出/导入/删除两步确认；含导出预设的一次性下载 <a>）—— 构建期内联在正文之前，同处一个扁平作用域',
+    markers: ['function presetAssetChecksNow()', 'function glassPresetCtx()', 'onExportCommit:', 'onImportFile: (file) =>'],
+  },
+  {
+    file: 'src/client/handlers/url-source.js',
+    why: 'src/client.js 正文的图片 URL 源（草稿输入、导入、手动刷新、Bing/直链两枚入口）—— 构建期内联在正文之前，同处一个扁平作用域',
+    markers: ['function onUrlDraft(e)', 'async function importUrlWallpaper(kind)', 'async function refreshUrlWallpaper(id)', 'function addBingWallpaper()'],
+  },
+  {
+    file: 'src/client/handlers/dir-settings.js',
+    why: 'src/client.js 正文的三个目录设置处理器（上传目录 / 缓存目录 / WE 素材目录：编辑态、浏览、迁移、保存与失败文案，含四个路由常量）—— 构建期内联在正文之前，同处一个扁平作用域',
+    markers: ['const UPLOAD_DIR_URL = "/wallpaper-engine/upload-dir";', 'async function changeUploadDir(dir, migrate)', 'async function changeCacheDir(dir, migrate)', 'async function changeWeAssetsDir(dir)'],
+  },
+  {
+    file: 'src/client/handlers/selection-filters.js',
+    why: 'src/client.js 正文的内容分级/类型筛选调用点（收窄后的候选池、目录扁平化、当前选择重新校验与提示）—— 构建期内联在正文之前，同处一个扁平作用域',
+    markers: ['function selectionBlockedNote(w)', 'function playableInventory()', 'function flattenWallpaperFolders(folders, depth, out)', 'function revalidateSelection()'],
+  },
+  {
+    file: 'src/client/handlers/library-tab-handlers.js',
+    why: 'src/client.js 正文的「壁纸库」页签处理器（搜索/分页/下钻/选择/批量操作/素材目录编辑态，渲染器只读值 + 调这些）—— 构建期内联在正文之前，同处一个扁平作用域',
+    markers: ['function setPickerOpener(el) { pickerOpener = el; }', 'function onTogglePropsPanel() {', 'function onWeAssetsDirDraft(e)', 'function onCancelEditWeAssetsDir()'],
+  },
+  {
+    file: 'src/client/handlers/color-handlers.js',
+    why: 'src/client.js 正文的 UI 配色与玻璃颜色参数处理器（全局 UI 配色的自定义开关/元素色、玻璃明暗分离/透明度/遮罩浓度/保真度/釉光/表面策略/补雾化选择器、主题随壁纸开关）—— 构建期内联在正文之前，同处一个扁平作用域',
+    markers: ['const onToggleUiColorCustom = (v) => {', 'const onUiColorElement = (field, hex, live) => {',
+      'const onGlassSheenStrength = (pct, live) =>', 'const onToggleThemeFollow = (v) => {'],
+  },
+  {
+    file: 'src/client/handlers/reset-and-accent-handlers.js',
+    why: 'src/client.js 正文的重置处理器（模块级 ↺ / 页签级 / 全局恢复默认）—— 构建期内联在正文之前，同处一个扁平作用域',
+    markers: ['function resetKeysToDefault(keys)', 'const onResetModule = (groupName) => {', 'const onResetTab = (tabId) => {', 'const onResetAll = () => {'],
+  },
+  {
+    file: 'src/client/handlers/settings-toggle-handlers.js',
+    why: 'src/client.js 正文的设置开关处理器（玻璃子项「独立配置」/ 场景实时开关与档位 / 播放倍速与限帧 / 镜像 / 适配目标 / 三种暂停与启动暂停 / live 诊断）—— 构建期内联在正文之前，同处一个扁平作用域',
+    markers: ['function onToggleChildIndependent(id, on) {', 'function onSceneLiveFps(f) {',
+      'function onPlaybackRate(rate) {', 'function onStartPaused(e) {'],
+  },
+  {
+    file: 'src/client/handlers/star-count.js',
+    why: 'src/client.js 正文的仓库 star 数取数（关于页签那行「⭐ 当前 N star」：缓存、陈旧标注、失败降级）—— 构建期内联在正文之前，同处一个扁平作用域',
+    markers: ['const STAR_COUNT_TTL = 10 * 60 * 1000;', 'function loadStarCount(force)', 'function starCountLabel()'],
+  },
+  {
+    file: 'src/client/pet-link-facade.js',
+    why: 'src/client.js 正文的桌宠联动宿主侧门面（petLinkWiring：登记、补接线、warmup/dispose 转发与缺席语义）—— 构建期内联在正文之前，同处一个扁平作用域',
+    markers: ['const petLinkWiring = {', 'petLinkWireAttach', 'warmup() {', 'dispose() {'],
+  },
+  {
+    file: 'src/client/handlers/upload-handlers.js',
+    why: 'src/client.js 正文的自定义上传处理器（读文件/校验/命名/写入、删除与刷新清单）—— 构建期内联在正文之前，同处一个扁平作用域',
+    markers: ['const UPLOAD_URL = "/wallpaper-engine/upload";', 'const UPLOAD_TYPES = ["image/jpeg", "image/png", "image/webp", "video/mp4"];',
+      'async function uploadWallpaperFile(file) {', 'async function removeUploadWallpaper(id) {'],
+  },
+  {
+    file: 'src/client/handlers/rotation-crud.js',
+    why: 'src/client.js 正文的轮播组 CRUD（新建/改名/删除/成员增删的草稿式编辑器与两步确认）—— 构建期内联在正文之前，同处一个扁平作用域',
+    markers: ['function startEditGroup(id) {', 'function saveEditingGroup() {',
+      'function deleteGroup(id) {', 'function importPlaylistIntoDraft(playlist) {'],
+  },
+  {
+    file: 'src/client/handlers/media-prep-handlers.js',
+    why: 'src/client.js 正文的媒体准备处理器（预准备、构建、选中项落地）—— 构建期内联在正文之前，同处一个扁平作用域',
+    markers: ['function commitRotationSwitch(prep) {'],
+  },
+  {
+    file: 'src/client/handlers/transition-handlers.js',
+    why: 'src/client.js 正文的切换过场档位表与几何（SWITCH_TRANSITIONS / SWITCH_SPEEDS / SWITCH_DIRECTIONAL / wipeInset）—— 构建期内联在正文之前，同处一个扁平作用域',
+    markers: ['const SWITCH_TRANSITIONS = [', 'const SWITCH_SPEEDS = [', 'const SWITCH_BARS_TEETH = 7;', 'function wipeInset(dir)'],
+  },
+  {
+    file: 'src/client/update-notice.js',
+    why: 'src/client.js 正文的更新公告组件（NOTICE_VERSION 哨兵、配图就绪探针节奏、UpdateNotice 组件与文案块）—— 构建期内联在正文之前，同处一个扁平作用域',
+    markers: ['const NOTICE_VERSION', 'function UpdateNotice()', 'UPDATE NOTICE COPY（end）', 'we-update-notice__btn'],
+  },
+  {
+    file: 'src/client/picker-tabs.js',
+    why: 'src/client.js 正文的可见页签表（按子包注册表现存性现算）+ 页签记忆读写（localStorage 键与旧值迁移）—— 构建期内联在正文之前，同处一个扁平作用域',
+    markers: ['function readSavedPickerTab()', 'PICKER_TAB_LEGACY', 'PICKER_TAB_KEY'],
+  },
+  {
+    file: 'src/client/picker-component.js',
+    why: 'src/client.js 正文的壁纸选择器组件 WallpaperPicker（组件行状态、虚拟滚动窗口、上下文组装与渲染接线）—— 构建期内联在正文之前，同处一个扁平作用域（函数声明提升）',
+    markers: ['function WallpaperPicker() {', 'useWeLocale(); // 设置页壁纸库', 'return React.createElement('],
+  },
+  {
+    file: 'src/client/plugin-apply.js',
+    why: 'src/client.js 正文的浏览器半边插件入口 apply(ctx)（fiber 生命周期与清理链、启动链、宿主服务接线）—— 构建期内联在正文之前，同处一个扁平作用域（函数声明提升，exports.apply 文本不变）',
+    markers: ['function apply(ctx) {', 'prefetchFontSetList();', 'loadPersisted()', 'afterFirstPaint'],
+  },
+  {
     // 跨包浏览器半边的**显式键集契约表**（ADR-0014 S5.1 / S5.4）：71 个 getter 挂到 module.exports。
     // 必须排在内联清单**末尾**：表顶层读 `DEFAULTS`（lib/settings-schema.js 的内联件）⇒ 要排在它之后；
     // 正文里的函数声明在工厂体内提升、getter 又是惰性求值 ⇒ 与正文的先后无关。
     // （原先住 src/client.js 正文底部，搬出来只为让"改一个键要同时对账 6 处解构名单"
     // 的契约表有个能一眼找到的家；产物行为逐字不变 —— verify 链与 golden 快照会兜住这一点。）
-    file: 'src/host-bridge.js',
+    file: 'src/core/host-bridge.js',
     why: '跨包浏览器半边契约表：子包经 require(主包名) 取到的显式键集 + 冻结的 exports.hostBridgeKeys；改一个键要同时对账 6 处解构名单（产物里的 *_HOST_REQUIRED 由本构建器从解构派生，test/verify-subpackage-client-half.mjs D-7 对账）',
     markers: ['const HOST_BRIDGE_BINDINGS = {',
       'const HOST_BRIDGE_KEYS = Object.keys(HOST_BRIDGE_BINDINGS);',
@@ -649,7 +773,7 @@ function readNormalized(abs) {
  * 的全作用域重复判据**共用这一份**（两份口径写着写着必然漂移，而这两条判据判的正是同一件事）。
  * ⚠️ 判据是"缩进 == 本文件声明的最小缩进"，不是"行首"也不是任意缩进：
  *   · 要求行首（原实现 `^(?:const|let|var|function)`)会**静默漏掉**把顶层声明写了一层缩进的模块
- *     （本仓真实形态：`src/picker-modal.js` / `src/picker-props-panel.js` / `src/quick-panel.js`）
+ *     （本仓真实形态：`src/picker/picker-modal.js` / `src/picker/picker-props-panel.js` / `src/ui/quick-panel.js`）
  *     ⇒ 撞名不被判出，平铺后就是运行期 SyntaxError；
  *   · 只写 `^\s*` 又会把**嵌套**声明（函数内 const/let）全收进来 ⇒ 遍地假撞名。
  */
@@ -834,11 +958,11 @@ function readInlinedPrelude(modules, baseDir, bodySrc, label = '') {
 }
 
 /**
- * 立绘（rope art）载荷的**外置**与构建期对账（2026-10-30 启动性能）。
+ * 立绘（rope art）载荷的**外置**与构建期对账（启动性能）。
  *
  * ## 为什么不再内联
  * 10 张立绘以前在构建期以 base64 注入主产物：2,369,676 字符 = 4.2MB bundle 的 56%，
- * 而渲染主线程实测下载 178ms、`v8.compile` 25ms（DevTools trace 2026-10-30）。立绘不是
+ * 而渲染主线程实测下载 178ms、`v8.compile` 25ms（DevTools trace）。立绘不是
  * 启动必需数据 —— 桌面只画**当前形态**一张，其余只在吉祥物面板里出现。现在字节仍住
  * `assets/rope/<name>.png`（随 npm 包发布），由宿主只读路由
  * `/wallpaper-engine/rope-art/<name>.png` 按需直出，客户端只拿 URL（`ROPE_IMG_*`）。
@@ -986,7 +1110,7 @@ function stripHeader(srcText) {
  *     const { React, weT, … } = host;           // 唯一真源：本文件解了哪些键，产物就申报哪些键
  *
  * 构建期在这里把 `[]` 换成从解构名单派生的字面量数组，并**当场断言**每个名字都在
- * `src/host-bridge.js` 的 HOST_BRIDGE_BINDINGS 里 —— 少给键的报错从「用户机器上运行期抛」
+ * `src/core/host-bridge.js` 的 HOST_BRIDGE_BINDINGS 里 —— 少给键的报错从「用户机器上运行期抛」
  * 提前到「构建红」，且报错文案直接点名该补哪张表。
  *
  * 保留运行期检查的理由（不因构建期断言而删）：九包各自独立发版，用户机器上可能出现
@@ -998,16 +1122,16 @@ function stripHeader(srcText) {
 function hostBridgeKeys() {
   const self = /** @type {{ cache?: string[] }} */ (hostBridgeKeys);
   if (self.cache) return self.cache;
-  const src = readNormalized(resolve(root, 'src', 'host-bridge.js'));
+  const src = readNormalized(resolve(root, 'src', 'core', 'host-bridge.js'));
   const at = src.indexOf('const HOST_BRIDGE_BINDINGS = {');
   if (at < 0) {
-    console.error('[build-client] src/host-bridge.js 里找不到 `const HOST_BRIDGE_BINDINGS = {`：'
+    console.error('[build-client] src/core/host-bridge.js 里找不到 `const HOST_BRIDGE_BINDINGS = {`：'
       + '子包申报表无法派生，产物会带一张空键表（运行期缺键检查全部空转）。');
     process.exit(1);
   }
   const end = src.indexOf('\n};', at);
   if (end < 0) {
-    console.error('[build-client] src/host-bridge.js 的 HOST_BRIDGE_BINDINGS 没有收尾 `\\n};`（形状变了？）。');
+    console.error('[build-client] src/core/host-bridge.js 的 HOST_BRIDGE_BINDINGS 没有收尾 `\\n};`（形状变了？）。');
     process.exit(1);
   }
   const keys = [...src.slice(at, end).matchAll(/^ {2}([A-Za-z_$][\w$]*):/gm)].map((m) => m[1]);
@@ -1060,7 +1184,7 @@ function deriveHostRequiredTable(bodySrc, entryLabel) {
   const missing = keys.filter((k) => !hostKeys.includes(k));
   if (missing.length > 0) {
     console.error(`[build-client] ${entryLabel} 从 host 解构了主 bundle 没有的键：${missing.join(', ')}。\n`
-      + '  要么在 src/host-bridge.js 的 HOST_BRIDGE_BINDINGS 里补键（并在 src/client.js 正文给出同名绑定），\n'
+      + '  要么在 src/core/host-bridge.js 的 HOST_BRIDGE_BINDINGS 里补键（并在 src/client.js 正文给出同名绑定），\n'
       + '  要么从本文件的解构里去掉（ADR-0014 S5.1：多一个键就是多一条隐式契约）。');
     process.exit(1);
   }

@@ -96,7 +96,7 @@ const WE_I18N_EN_EXT = {
   "缓动平滑": "Easing smoothness",
   "0 = 立刻跟手，越大越柔和（跟得越慢、停下后还会飘一小段才归位）": "0 = follows the cursor instantly; higher values are softer (it trails behind and keeps drifting a little after the cursor stops)",
 
-  // ── src/ext-perf.js · 「扩展」页签四号模块（性能监控，#263 重做版）──
+  // ── src/extensions/ext-perf.js · 「扩展」页签四号模块（性能监控，#263 重做版）──
   //    四项读数的标签里，`平均帧时间` / `本进程 CPU` 与属性面板旧版共用，登记在
   //    i18n-copy-panel.js 那一段；`视频` / `实时渲染` 也是既有词条。这里只登记新键。
   "性能监控": "Performance monitor",
@@ -114,7 +114,7 @@ const WE_I18N_EN_EXT = {
   "显示悬浮窗": "Show floating window",
   "关闭悬浮窗": "Close floating window",
 
-  // ── src/ext-avatar.js · 「扩展」页签**第一个**模块（自定义会话头像）──
+  // ── src/extensions/ext-avatar.js · 「扩展」页签**第一个**模块（自定义会话头像）──
   //    范围/默认值不在这里写死：真源是 lib/settings-schema.js 的五个 `avatar*` 键。
   //    与别的模块共用的键（清除那种）**不重复登记** —— 上面已经有的直接复用。
   "自定义会话头像": "Custom session avatars",

@@ -4,7 +4,7 @@
  *
  * 为什么需要它：`verify-scene-live` 的渲染台会把 QuickPanel 的自由变量**替身化**，
  * 因此它天然发现不了**作用域**错误 —— 面板渲染器曾经是 `apply()` 里的闭包，而
- * `src/sidebar-right.js` 是 prelude（在 `apply()` 之前求值），真机上一渲染就抛
+ * `src/ui/sidebar-right.js` 是 prelude（在 `apply()` 之前求值），真机上一渲染就抛
  * `ReferenceError: renderUserPropsPanel is not defined`、React 卸载整棵树 ⇒ **整个页面空白**；
  * 而替身台一路绿灯（它自己把那个名字塞进了作用域）。本台走**真实链路**：
  *   `window.__ModuleLoader__.load` → `factory(require)` → `apply(ctx)`

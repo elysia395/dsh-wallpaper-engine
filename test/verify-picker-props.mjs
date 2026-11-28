@@ -18,7 +18,7 @@
  *   ③ 改动落地：勾选 / 滑块 / 下拉 / 颜色都写进设置（`userProps`，按 token 存，200ms 去抖），
  *      **拖动中（silent）不重渲染**，「恢复默认」清掉该 token 的全部覆盖；
  *   ④ 标记等价：面板子树的 class 序列（深度优先 + 深度前缀）与搬迁前录下的 golden 逐字相同
- *      —— 它此后与渲染器所在文件（`src/picker-props-panel.js`）解耦：搬走这段标记时，
+ *      —— 它此后与渲染器所在文件（`src/picker/picker-props-panel.js`）解耦：搬走这段标记时，
  *      这里必须原样通过。
  *
  * 判据纪律（docs/DEV-GUIDE.md §4.7 约定 5）：每条判据只定义一次（命名函数 / 命名常量），
@@ -427,7 +427,7 @@ await sleep(80); // 等 loadPersisted → loadInventory → revalidateSelection 
 
 // ── 标记等价 golden ──────────────────────────────────────────────────────────
 // 搬迁**前**从入库产物（lib/client.js）录下的面板子树 class 序列：面板从 WallpaperPicker
-// 体内搬进 `src/picker-props-panel.js` 时，标记必须逐字未变（含嵌套层级）。序列按**节点**
+// 体内搬进 `src/picker/picker-props-panel.js` 时，标记必须逐字未变（含嵌套层级）。序列按**节点**
 // 分组，每行一个节点，令牌形如 `深度:类名`。
 const EXPECTED_PROPS_GOLDEN = [
   // 面板骨架：头部（标题 / 状态说明 / 恢复默认）+ 实时渲染提示

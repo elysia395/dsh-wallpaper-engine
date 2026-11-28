@@ -219,7 +219,7 @@ function buildLivePoster(sel) {
   // 一次都不该成为屏上那张，哪怕它先解码完）；高权威级判失败 ⇒ 已就绪的低权威级此刻补上
   // （它就是"这一级不存在"的兜底）；全部判失败 ⇒ 停在主题色兜底。级号越小越权威（见 candidates）。
   const loadedRank = candidates.map(() => ""); // 已就绪的候选（可能仍被更权威的级挡在屏外）
-  const failedRank = candidates.map(() => false); // 每一级是否已**判失败**（= 这一级不存在）
+  const failedRank = candidates.map(() => false); // 每一级是否已**判失败**（=这一级不存在）
   const noneAbove = (rank) => {
     for (let i = 0; i < rank; i++) if (!failedRank[i]) return false; // 更权威的级未判失败 ⇒ 挡住
     return true;

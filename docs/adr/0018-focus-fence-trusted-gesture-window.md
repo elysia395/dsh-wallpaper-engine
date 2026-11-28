@@ -5,7 +5,7 @@
 - **Deciders**: Y1X1n（起草）；沿用 #148 / #169 维护者已定的方向
 - **Related**: #148（网页壁纸周期性抢焦点）、#169（§3 残留收口）
 - **Source of truth**: `lib/we-focus-guard.js` 的文件头注释（机制与射程）、
-  `src/focus-handback.js` 的文件头注释（宿主半的三条判据）、
+  `src/wallpaper/focus-handback.js` 的文件头注释（宿主半的三条判据）、
   `test/verify-scene-live.mjs`（围栏判据）、`test/verify-client.mjs` 的 A3-F 段（交还判据）
 
 ## Context
@@ -73,6 +73,6 @@
 ## 参考
 
 - 机制与射程的现行描述：`lib/we-focus-guard.js` 文件头注释
-- 宿主半的三条交还判据：`src/focus-handback.js` 文件头注释
+- 宿主半的三条交还判据：`src/wallpaper/focus-handback.js` 文件头注释
 - 判据：`test/verify-scene-live.mjs`（围栏，含负对照）、`test/verify-client.mjs` 的 A3-F 段（交还）
 - 相关决策：`docs/adr/0007-machine-checks-target-code-not-prose.md`（判据只针对代码与磁盘）

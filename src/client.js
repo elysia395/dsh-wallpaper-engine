@@ -39,7 +39,7 @@ const PROPS_URL = "/wallpaper-engine/props";
 const INVENTORY_URL = "/wallpaper-engine/inventory";
 // ── 组件行状态面（ADR-0013 D3②/D3③）────────────────────────────────────────
 // 「关掉一个组件行 ⇒ 该组件的浏览器可见面整块不渲染」的**唯一判据**。状态面就是宿主行状态
-// （`/inventory` 的 `components` 字段，产出点见 lib/routes/inventory.js）：浏览器半边**只读**，
+// （`/inventory` 的 `components` 字段，产出点见 packages/media-bridge/lib/routes/inventory.js）：浏览器半边**只读**，
 // 不写第二份"组件名 → UI"清单 —— 可见面落点由宿主侧的声明表 + 对账守卫双向钉住。
 // 三态口径（顺序即优先级）：
 //   ① `components` 整块读不到（字段缺席 / 不是对象：老宿主、探针没起来）⇒ **可用**
@@ -177,7 +177,7 @@ const FONT_FAMILY_LABELS = [
 ];
 // 依持久化值取应用字体栈。取值域有两类**族键**（都只存键、不存栈）：
 //   · 内置键：FONT_FAMILY_STACKS 里的那些（栈写死在这里，含中文 fallback 链）；
-//   · 本机字体键 `sys:<族名>`：清单来自宿主枚举（src/system-fonts.js），栈在这里现拼。
+//   · 本机字体键 `sys:<族名>`：清单来自宿主枚举（src/settings/system-fonts.js），栈在这里现拼。
 // 另有一类**历史值**：组件字体可能存的是"解析后的 CSS 栈"（见 onComponentFamily 的注释）
 // —— 那种值原样可用，因此解析侧两条都认（老字体集零迁移）。
 const FONT_FAMILY_BY_STACK = Object.create(null);
@@ -200,7 +200,7 @@ function systemFontStack(key) {
   const name = systemFontNameOf(key);
   return name ? '"' + name + '"' : "";
 }
-/** 族键 / 历史栈 → 可用的 CSS 栈；空、`inherit`、未知一律 `inherit`（= 不覆盖官方外观）。 */
+/** 族键 / 历史栈 → 可用的 CSS 栈；空、`inherit`、未知一律 `inherit`（=不覆盖官方外观）。 */
 function fontFamilyStack(v) {
   const key = typeof v === "string" ? v.trim() : "";
   if (!key || key === "inherit") return "inherit";
@@ -280,7 +280,7 @@ function sanitizeSettings(o) {
   return sanitizeFromSchema(o, "client");
 }
 
-// `readPersisted()` 已随持久化层抽到 src/persistence.js（store 初始化仍在下面调用它）。
+// `readPersisted()` 已随持久化层抽到 src/settings/persistence.js（store 初始化仍在下面调用它）。
 
 // ── Shared selection store (React + DOM layer share it) ────────────────────
 const selection = {
@@ -298,7 +298,7 @@ const selection = {
   //      没有时它返回的就是①那份兜底。宿主回了真值再由 loadFontSet() 覆盖。
   ...fontValueDefaults(),
   ...readCachedFontSetValues(),
-  // 本机字体清单（src/system-fonts.js）：**首帧就用缓存那份** —— 否则一个已选中的本机字体
+  // 本机字体清单（src/settings/system-fonts.js）：**首帧就用缓存那份** —— 否则一个已选中的本机字体
   // 在下拉里会先显示成"跟随"，等宿主回话才跳回来。`systemFontsAt: 0` 让它照样算过期，
   // 打开字体设置时该重扫还是会重扫（缓存只是"先有个能显示的名字"）。
   systemFonts: readCachedSystemFonts(),
@@ -332,7 +332,7 @@ const selection = {
   // 对话框第一行（名字）的视图态；busy 是任何在途动作（应用/保存/导入/删除/清单）；
   // assetChecks 是保存对话框的资产勾选态（ADR-0011 D4：字体/吉祥物默认勾、头像默认不勾，
   // 且只有本机有那份资产时才可勾）；note 是导入成功这类一次性提示（成功与失败不同屏）。
-  // store 见 src/preset-store.js。
+  // store 见 src/settings/preset-store.js。
   glassPresets: [],
   glassPresetError: "",
   glassPresetBusy: false,
@@ -348,14 +348,14 @@ const selection = {
   // 误当成"用户没存过"），以及引导当前挂着的目标 id（空串 = 不显示引导）。
   glassPresetsLoaded: false,
   glassPresetGuideTargetId: "",
-  // 「已隐藏的出厂预设」清单（#219）：随包层被墓碑遮蔽的那些，供面板画恢复区。
+  // 「已隐藏的出厂预设」清单：随包层被墓碑遮蔽的那些，供面板画恢复区。
   glassPresetHidden: [],
   url: null,
   type: null,
   previewUrl: null,
   // Transient: real container suffix of the media (host inventory `mediaExt`, e.g. "mp4").
   // The media URL is token-shaped (`/media/<base64url>`) with no extension, so the
-  // "browser can play this natively" decision (see src/video-layer.js) needs this field.
+  // "browser can play this natively" decision (see src/wallpaper/video-layer.js) needs this field.
   mediaExt: null,
   // Transient: 图片 / 幻灯片壁纸的图集入口（host inventory `slidesUrl`，形如
   // `/wallpaper-engine/slides/<token>`；只有图集 ≥2 张时才给）。`buildMedia` 据此在底层
@@ -437,7 +437,7 @@ const selection = {
   // 类型筛选与设置页共用持久化键 `typeFilter`（"两处同步、不做单独的"是用户口径）。
   qpSearch: "",
   // Transient: 侧栏底栏的深链请求 —— "打开设置页后停在哪一页"（`""` = 无请求）。
-  // 由 WallpaperPicker 的一个 effect 消费一次即清（见 src/sidebar-right.js 的
+  // 由 WallpaperPicker 的一个 effect 消费一次即清（见 src/ui/sidebar-right.js 的
   // openSettingsSection 与 client.js 的「侧栏深链」段）。
   settingsTabRequest: "",
   // 破坏性动作的「面板内确认」令牌 —— **所有族共用这一个真源**（`""` = 没有动作待确认）。
@@ -571,7 +571,7 @@ function exitSkinYield(reason, opts) {
 
 /**
  * 排定一次退场：对方**启动上妆**（它的运行时在我们的标记到达前先按持久化选择上妆）会在自己的
- * `refresh()` 里被自纠，是一次**瞬时翻转**；而用户显式动作（#49）会一直亮着（它的让路宽限 1.5s
+ * `refresh()` 里被自纠，是一次**瞬时翻转**；而用户显式动作会一直亮着（它的让路宽限 1.5s
  * 才回收）。所以只认"过一拍还在"的出现：宽限结束时 DOM 仍带标记、且我方确实有要退的东西
  * （壁纸在台 ⇒ 清层；或**无壁纸**且设置已就位 ⇒ 只剩玻璃要让）⇒ 才是动作。
  * ⚠️ 450ms 必须显著短于对方的 1500ms 宽限，否则真实动作会在我们确认前被它回收。
@@ -764,7 +764,7 @@ function useStore() {
 // （"改了不生效 / 刷新后回退"，且没有任何判据会红）。收成三个入口后：
 //   · setSetting(field, value)   改**设置**并落盘（唯一入口）
 //   · setFontValues(patch)       改**字体值**并落盘（唯一入口；真源是 fontsets/<id>.json，
-//     见 src/fontset-store.js —— 这些键已退出 settings 的持久化白名单）
+//     见 src/settings/fontset-store.js —— 这些键已退出 settings 的持久化白名单）
 //   · setTransient(field, value) 改**瞬态**字段（上传中/编辑中/加载中…），不落盘 ——
 //     它们不在 schema 白名单里，落盘只会白跑一次 debounce。
 // 页签（src/panel-tabs.js）通过 ctx 拿到前两个入口，因此**完全不碰** `selection`。
@@ -791,7 +791,7 @@ function setTransient(field, value) {
 //     重活，样式变量照旧全量写），**不 emit** —— 面板不重渲染，数值回显由控件自己就地更新
 //     （SliderRow 的 --we-fill / 原生色块的自身外观）；
 //   · 抬手（change）：走完整的一次 —— `emit()`（applyEffects 是它的订阅者，全量那一次照旧）。
-// 与「壁纸属性」面板的 silent 拖动同一条口径（src/picker-props-panel.js 的 onPropInput）。
+// 与「壁纸属性」面板的 silent 拖动同一条口径（src/picker/picker-props-panel.js 的 onPropInput）。
 // 拖动期的中间值**照样会落盘**（setSetting → debounce 200ms），所以中途关窗也不丢最后一次值。
 function commitLiveSetting(field, value, live) {
   setSetting(field, value);
@@ -861,7 +861,7 @@ const armedIdOf = (family) => {
  * `armed` 是**读值**，`onConfirm` / `onDisarm` 是**回调** —— 由组件经 ctx 交给渲染器，
  * 渲染器自己不写 `selection`（两个渲染器的文件头契约）。问句文本由**调用点**现算（"选中的
  * N 张"这类计数跟着当前状态走），所以渲染器不许把它当常量缓存。
- * 4 处使用点（src/panel-tabs.js 两处 / src/picker-modal.js 两处）共用这一份标记：抄四份会让
+ * 4 处使用点（src/panel-tabs.js 两处 / src/picker/picker-modal.js 两处）共用这一份标记：抄四份会让
  * "两字的按钮等宽""置灰不塌位"这类形态约束各走各的。
  *
  * ⚠️ `!token` 这一支是**必须的**，不是防御性编程：令牌由当前对象现算，对象没了就退化成 `""`
@@ -884,11 +884,11 @@ function renderConfirmRow(armed, token, question, onConfirm, onDisarm) {
 }
 
 // ── 设置持久化（debounce / 迁移 / 重试 / 启动加载）────────────────────────────
-// 这一族的实现已抽到 **src/persistence.js**。构建期内联回本作用域，
+// 这一族的实现已抽到 **src/settings/persistence.js**。构建期内联回本作用域，
 // 调用点（persistSelection / flushPersist / onPageHideFlush / …）无需改动。
 // 契约：8 个出向依赖的清单、入口与不变量 —— 见该文件头。
 // ⚠️ **字体值不走这条通道**：那些键住 `fontsets/<活动 id>.json`，通道在
-// **src/fontset-store.js**（同形的 debounce + 脏标记 + 重试，但真源、键集与失败语义都不同）。
+// **src/settings/fontset-store.js**（同形的 debounce + 脏标记 + 重试，但真源、键集与失败语义都不同）。
 
 // Concurrency guard: 刷新 / 上传完成 / 移除 / 改目录 all call loadInventory(),
 // and two overlapping requests used to resolve in arbitrary order — an older,
@@ -904,7 +904,7 @@ function hostFailureReason(res) {
   if (!res || !res.status) return weT("宿主不可达（请求未完成）");
   const data = res.data;
   if (data && data.error) return data.error;
-  // 非 2xx 且拿到的是 HTML 页 ⇒ 这不是宿主的接口（反代把挂载前缀丢了，issue #409）。
+  // 非 2xx 且拿到的是 HTML 页 ⇒ 这不是宿主的接口（反代把挂载前缀丢了）。
   // 把"404 归因不清"说成一句可执行的话：以前只显示"宿主返回 404"，用户看不出是前缀问题。
   if (res.notHostEnvelope) {
     return weT("宿主返回 {status}：响应不是插件的接口，检查 DSH 是否挂在子路径下", { status: res.status });
@@ -915,9 +915,9 @@ let inventorySeq = 0;
 /**
  * 库存预取：`/inventory` 与设置无关，启动链却把它排在 settings → fontsets → fontsets/<id>
  * 之后（见 apply 末尾的链）。链走到 inventory 前发出这一次请求，好让扫描和字体集那几步
- * 并行（trace 2026-10-30：inventory 请求 971→1036ms，纯串行浪费）。
+ * 并行（inventory 请求 971→1036ms，纯串行浪费）。
  *
- * ⚠️ **发起时机在首帧之后**（#158）：插件激活期就发会让大库的整轮扫描和宿主启动抢 I/O；
+ * ⚠️ **发起时机在首帧之后**：插件激活期就发会让大库的整轮扫描和宿主启动抢 I/O；
  * 现在由启动链在 `afterFirstPaint()` 放行后调用，见 apply 末尾。
  * 只预取一次；`loadInventory` 消费后清空，手动刷新 / 轮播补拉仍走自己的请求。
  *
@@ -958,13 +958,13 @@ async function loadInventory(opts) {
       cacheDir: data.cacheDir || null,
       weAssetsDir: data.weAssetsDir || null,
       weAssetsAvailable: Boolean(data.weAssetsAvailable),
-      // 来源（#386）：'env' / 'config' / 'auto' / null —— 'auto' 表示从探测到的安装目录带出。
+      // 来源：'env' / 'config' / 'auto' / null —— 'auto' 表示从探测到的安装目录带出。
       weAssetsSource: data.weAssetsSource || null,
       // 场景载荷的源（独立壁纸媒体源的 origin；空串 = 回落应用源，见 live-layer 的 liveRenderUrl）。
       sceneMediaBase: typeof data.sceneMediaBase === "string" ? data.sceneMediaBase : "",
       // 本机真实存在的 WallpaperMachine 库根数（宿主实测）。0 = 不轮询 —— 见 invWatch 的门控。
       wallpaperMachineRoots: Number(data.wallpaperMachineRoots) || 0,
-      // 宿主给的资源 URL 在这里**一次性**补挂载前缀（#409）：消费点全是 <img>/<video>/iframe，
+      // 宿主给的资源 URL 在这里**一次性**补挂载前缀：消费点全是 <img>/<video>/iframe，
       // 不走 apiFetch，补在这里才能同时盖住选择器卡片、属性面板与轮播。
       wallpapers: normalizeWallpaperUrls(data.wallpapers || []),
       total: data.total || 0,
@@ -983,7 +983,7 @@ async function loadInventory(opts) {
     // 随后这次 render 才不会在"行已停用但玻璃还在"的中间态上画一帧。
     reclaimGlassResidue(data.components);
   } catch (err) {
-    // 失败分支**不许**用一份空库存顶掉手里那一份（#379）：请求失败只说明"这次没拿到新
+    // 失败分支**不许**用一份空库存顶掉手里那一份：请求失败只说明"这次没拿到新
     // 数据"，不说明"用户的库空了"。这里一旦换成 `wallpapers: []`，后面任何一次
     // revalidateSelection() 都会把当前选择判成"壁纸已被移除" → `setSetting("id", "")`
     // 落盘 ⇒ 背景当场变黑、重启也回不来（用户视角就是数据丢失）。
@@ -1015,7 +1015,7 @@ async function loadInventory(opts) {
   setTransient("loading", false);
   setTransient("loaded", true);
   if (next.error) {
-    // 失败时**不重算选择**（同上：#379 的落盘点就在 revalidateSelection 里）。校验"选中的
+    // 失败时**不重算选择**（同上：落盘点就在 revalidateSelection 里）。校验"选中的
     // id 还在不在库里"只在真拿到新库存时有意义 —— 拿不到库存时库里有什么我们并不知道。
     // 背景保持现状，面板顶部照常显示 next.error。
     // 静默轮询下同一个错误只报一次：每 30s 重刷一次错误横幅只是噪音（换一条错误要报）。
@@ -1040,7 +1040,7 @@ async function loadInventory(opts) {
   }
   // 轮询（silent）且清单没变 ⇒ 到此为止：不重算选择、不 emit。
   // revalidateSelection → applySelection 会 cancelRotationPrepare() + disposePreparedMedia()，
-  // 每 30s 一次会把正在准备的轮播过场掐掉；面板也会跟着重渲染（#396 评审）。
+  // 每 30s 一次会把正在准备的轮播过场掐掉；面板也会跟着重渲染（评审）。
   if (silent && prevIds === nextIds) return;
 
   // Rotation groups: validate the active one and seed a first group from a
@@ -1104,109 +1104,9 @@ function scheduleSceneVideoResync() {
   }, SCENE_VIDEO_RESYNC_MS);
 }
 
-// ── Content-rating + type filters ───────────────────────────────────────────
-// 判定本身（`ratingOf` / `matchesRatingFilter` / `matchesTypeFilter` /
-// `isPlayableType` / `isRotatableWallpaper` / `isHiddenWallpaper`）与它们的分级正则已抽到
-// **src/picker-model.js** —— 网格、轮换编辑器、轮换候选、自动选择与两个下拉的计数共用
-// 同一份判定，判定留在本文件就会长出第二个真源。这里是**调用点**：两个过滤档从
-// `selection` 显式传入，模型自己不读任何模块级状态。
-
-// 选择被拒 / 被丢弃时的可读原因（`""` = 没有可解释的原因，正常应用）：壁纸层不渲染、
-// 播放按钮因 !sel.url 变灰时，卡片上至少给出原因。类型档不在原因表里：它只筛选择器网格
-// 的显示，不拦播放、也不影响轮播与「下一张」（keepPlayingWallpaper / isRotationEligible）。
-function selectionBlockedNote(w) {
-  if (!w) return weT("当前壁纸已不在列表里（可能已被移除或隐藏）");
-  if (!isPlayableType(w)) return weT("这张壁纸没有可播放的媒体文件");
-  if (!matchesRatingFilter(w, selection.contentRatingFilter)) return weT("这张壁纸的内容分级不在勾选的分级里 —— 在「内容分级」里勾上它所在的档即可播放");
-  return "";
-}
-
-function playableInventory() {
-  return playableWallpapers(
-    selection.inventory.wallpapers, selection.contentRatingFilter, selection.typeFilter, selection.hiddenIds,
-  );
-}
-
-/**
- * 把宿主的 WE 文件夹树摊平成选择器下拉的选项（层级用 `depth` 表达，渲染侧画缩进）。
- *
- * 为什么摊平：`<details>` 里的候选行是一维的，而层级信息只在树的形状里 —— 摊平后每项
- * 自带 `depth`，既保住"子夹缩进"的观感，也让"当前选中夹子的成员集"只有一个查法
- * （`find`）。过滤与计数都用**含后代**的并集（`deepWallpaperIds` / `deepUnresolvedCount`）：
- * WE 的树是"父夹包含子夹"，选中父夹要连子夹一起看。
- */
-function flattenWallpaperFolders(folders, depth, out) {
-  for (const folder of folders || []) {
-    if (!folder || typeof folder !== "object" || !folder.id) continue;
-    const deepIds = Array.isArray(folder.deepWallpaperIds)
-      ? folder.deepWallpaperIds
-      : (Array.isArray(folder.wallpaperIds) ? folder.wallpaperIds : []);
-    out.push({
-      id: folder.id,
-      name: typeof folder.name === "string" ? folder.name : "",
-      depth,
-      wallpaperIds: deepIds,
-      // 下拉里显示的是「夹子（含子夹）里有多少张**能落到清单里**的壁纸」；`unresolvedCount`
-      // 是 WE 记着、清单里却没有的那部分（卸载残留），>0 时显示「6/11」。
-      count: deepIds.length,
-      unresolvedCount: typeof folder.deepUnresolvedCount === "number"
-        ? folder.deepUnresolvedCount
-        : (typeof folder.unresolvedCount === "number" ? folder.unresolvedCount : 0),
-    });
-    flattenWallpaperFolders(folder.subfolders, depth + 1, out);
-  }
-  return out;
-}
-
-// 「下一张」在轮播关闭时的池：与轮播候选同一份入选判据（内容安全 ∧ 可播放，不读类型档），
-// 免得「类型档只筛显示」这条口径在轮播关闭的分支里漏掉一处。
-function rotationPoolAll() {
-  return selection.inventory.wallpapers.filter((w) =>
-    isRotationEligible(w, selection.contentRatingFilter)
-    && !isHiddenWallpaper(w.id, selection.hiddenIds));
-}
-
-// Re-validate the active selection against the current inventory + filters.
-// Called after a refresh AND after changing the rating/type filter. 丢弃闸门是
-// keepPlayingWallpaper：分级是内容闸门（勾选集合：勾上的档才允许播）；类型档只筛选择器
-// 网格的**显示**，既不得把正在应用的壁纸干掉，也不得改变轮播成员与「下一张」（用户口径
-// 2026-10-30 / issue #294）。轮播在场时拿不到候选就换下一张；当前壁纸被勾选集合挡掉
-// 时**立即换台**（用户口径 2026-10-30：「换得了就换，换不了才提示」）。
-function revalidateSelection() {
-  // 被过滤条件丢弃的选择要留下原因：先取下来，applySelection("") 会清掉
-  // blockedNote，故在其之后写回 —— 否则用户改一次过滤条件，壁纸就无声变空白。
-  let droppedNote = "";
-  const cur = selection.id ? selection.inventory.wallpapers.find((w) => w.id === selection.id) : null;
-  const keepCurrent = keepPlayingWallpaper(cur, selection.contentRatingFilter);
-  // 「被勾选集合挡掉」这一支要区分于「壁纸被移除 / 已不在列表」：只有前者才自动换台。
-  const droppedByRating = Boolean(cur) && isPlayableType(cur)
-    && !matchesRatingFilter(cur, selection.contentRatingFilter);
-  if (selection.id && !keepCurrent) {
-    droppedNote = selectionBlockedNote(cur);
-    setSetting("id", "");
-  }
-  // 轮播在场时：当前壁纸不在候选里就换下一张。候选判据（isRotationEligible：可播放 ∧
-  // 勾选集合）不含类型档 ⇒ 切类型档既不会把人踢下台，也不会改变轮播成员与「下一张」。
-  if (selection.rotationEnabled && selection.id
-    && !rotationCandidates().some((w) => w.id === selection.id)) {
-    const first = rotationCandidates()[0];
-    setSetting("id", first ? first.id : "");
-  }
-  if (!selection.id && selection.rotationEnabled) {
-    const first = rotationCandidates()[0];
-    if (first) selection.id = first.id;
-  }
-  // 收窄分级档把当前壁纸挡掉 ⇒ 立即换到当前档内第一张可播候选（轮播分支上面已接手，
-  // 这里兜「轮播关闭」与「轮播在场但候选为空」两种）；一张都找不到才留提示。
-  if (!selection.id && droppedByRating) {
-    const first = playableInventory()[0];
-    if (first) selection.id = first.id;
-  }
-  applySelection(selection.id);
-  // 仍然没有可播壁纸 → 把被排除的原因显示出来（有接手则不打扰）。
-  if (droppedNote && !selection.id) setTransient("blockedNote", droppedNote);
-  emit();
-}
+// ── 内容分级 / 类型筛选的调用点已按族搬出 ────────────────────────────────────
+// selectionBlockedNote / playableInventory / 目录扁平化 / 轮播候选池 / 收窄后的重新校验
+// 整段住 src/client/handlers/selection-filters.js；判定本体仍在 src/picker/picker-model.js。
 
 // ── Rotation groups (user-defined carousel lists) ───────────────────────────
 function activeRotationGroup() {
@@ -1327,7 +1227,7 @@ function syncRotationTimer() {
   if (!selection.rotationEnabled || !selection.id) return;
   if (rotationCandidates().length < 2) return;
   const group = activeRotationGroup();
-  // 「当前视频播完就换」档（issue #230 后续诉求）：**不计时** —— 推进由视频的 ended
+  // 「当前视频播完就换」档：**不计时** —— 推进由视频的 ended
   // 事件驱动（watchVideoState 里那一支）。这里只把上一次留下的计时收掉（上面已调
   // clearRotationTimer），于是切回「按间隔」档时由下一次 sync 重新 arm。
   const trigger = group && group.trigger === "videoEnd" ? "videoEnd" : "interval";
@@ -1377,209 +1277,22 @@ let pendingStagedLayerNode = null;
 // 加载"的黑屏闪烁。
 let preparedMediaEl = null;
 const ROTATION_PREP_TIMEOUT_MS = 20000; // 单阶段就绪探测上限（超时走兜底，不卡死轮换）
-// 交叉淡化时长（新层淡入 + 旧层宽限移除的基准）。切换过场表（SWITCH_TRANSITIONS）
-// 里 fade 的基准毫秒直接引用本常量，所以「调交叉淡化时长」只需要改这里一处。
-const ROTATION_FADE_MS = 1800;
-// ── 切换过场（手动点选与自动轮播共用）──────────────────────────────────────
-// 每种过场只动 transform / opacity / clip-path —— 全是合成器友好属性。（本插件在
-// <video> 与 live <iframe> 上踩过 mask / filter 掉出合成层的坑，故一律不用。）
-// 所有过场都守同一条铁律：**旧层保持不透明垫在新层之下**，新层在它之上入场 ——
-// 玻璃的 backdrop-filter 采样到透明背景会静默失效（见 applyEffects 内注释），
-// 所以这里没有「淡到黑再淡出」那种中间态透明的方案。
-// ms = 基准毫秒 × 速度档乘子（SWITCH_SPEEDS）。基准在快档也不为 0，避免「点了没反应」。
-const SWITCH_TRANSITIONS = [
-  { id: "cut", get label() { return weT("硬切"); }, ms: 0 },
-  { id: "fade", get label() { return weT("交叉淡化"); }, ms: ROTATION_FADE_MS },
-  { id: "push", get label() { return weT("推移"); }, ms: 700 },
-  { id: "wipe", get label() { return weT("擦除"); }, ms: 700 },
-  { id: "iris", get label() { return weT("光圈"); }, ms: 800 },
-  { id: "zoom", get label() { return weT("缩放"); }, ms: 900 },
-  { id: "bars", get label() { return weT("条带"); }, ms: 800 },
-  // 随机（#254）：真正换层那一刻才从非硬切池里抽一个；ms 只是面板代表值（按池内最长算）。
-  { id: "random", get label() { return weT("随机"); }, ms: 0 },
-];
-const SWITCH_SPEEDS = [
-  { id: "fast", get label() { return weT("快"); }, factor: 0.6 },
-  { id: "normal", get label() { return weT("标准"); }, factor: 1 },
-  { id: "slow", get label() { return weT("慢"); }, factor: 1.6 },
-];
-const SWITCH_DIR_LABELS = {
-  get left() { return weT("左"); },
-  get right() { return weT("右"); },
-  get up() { return weT("上"); },
-  get down() { return weT("下"); },
-  get random() { return weT("随机"); },
-};
-// 只有方向型过场听 switchTransitionDir（条带用它决定竖条 / 横条）。
-const SWITCH_DIRECTIONAL = ["push", "wipe", "bars"];
-// 条带（百叶窗）：板数。横向过场时是 N 块横板，纵向时是 N 块竖板；板数决定缝的
-// 密度 —— 5 块太粗、9 块以上在 4K 上偏碎，7 块实测最像百叶窗。点数恒定
-// （4N+1），polygon() 才可插值 → 动画连续。
-const SWITCH_BARS_TEETH = 7;
+// 交叉淡化时长 ROTATION_FADE_MS 随「切换过场」族搬进 src/client/handlers/transition-handlers.js
+// （档位表的 fade 项在模块初始化时读它，留在正文会撞 TDZ）。
+// ── 切换过场的档位表与几何已按族搬出 ────────────────────────────────────────
+// SWITCH_TRANSITIONS / SWITCH_SPEEDS / SWITCH_DIR_LABELS / SWITCH_DIRECTIONAL / SWITCH_BARS_TEETH
+// 与 wipeInset 整段住 src/client/handlers/transition-handlers.js；条带几何 barsPolygon 住 src/client/rotation.js。
 
-/** 当前生效的过场（类型 + 方向 + 实测算出的毫秒）。cut = 不动画。 */
-
-/** 擦除的起始 inset：从新画面「进入」的那一侧长出来（left = 新画面自右进入）。 */
-function wipeInset(dir) {
-  if (dir === "right") return "inset(0 100% 0 0)";
-  if (dir === "up") return "inset(100% 0 0 0)";
-  if (dir === "down") return "inset(0 0 100% 0)";
-  return "inset(0 0 0 100%)"; // left
-}
-
-/**
- * 条带 / 百叶窗：N 块**独立的板**从「进入侧」一起长出来，板间留缝 —— 这才看得出是条带。
- * ⚠️ 必须是独立板（有缝、两端不收拢）：实测做成连续锯齿扫过时，肉眼与「擦除」
- * 分不出来，等于白做。
- *
- * 记法：outer = 进入侧（left/up 取 1，right/down 取 0），t 轴是与扫过方向垂直的轴
- * （left/right 时板是**横板**，up/down 时是竖板）。每块板厚 slat = p/N，深度
- * depth = p：p=0 时全塌在进入侧边缘（零面积），p=1 时板厚刚好铺满一个周期
- * （slat = period）→ 缝隙闭合、合成完整矩形。
- *
- * ⚠️ clip-path: polygon() 只能画**一个连通区域**，而 N 块板彼此不相连 —— 用一条
- * 贴在进入侧边缘、宽度 spine（≤0.4%，且随 depth 从 0 一起长起）的「脊」把板串起来。
- * 脊落在已经露出新画面的那一侧，所以视觉上完全看不出来。
- *
- * 点数恒定（4N+1），polygon() 才能平滑插值。
- */
+// 条带几何（barsPolygon）的说明随函数住在 src/client/rotation.js。
 // ── 轮换 / 媒体生命周期助手已按族搬出（构建期内联在正文之前，同一扁平作用域）────────────
 // 声明在 src/client/rotation.js：过场几何（barsPolygon / switchFrames）、探测元素的领养与释放、
 // 隐藏期轮换推迟与可见时补做。LIVE_FIRST_FADE_MS 与两个隐藏态标记随声明一起搬走（初始化式不读模块状态）。
 
-// ── 媒体准备（预准备 / 构建 / 选中项落地）────────────────────────────────────
-// 这一族的实现已抽到 **src/media-prep.js**（跨三个不相邻区段：预准备与轮换预挂载、
-// applySelection、buildMedia）。构建期内联回本作用域，调用点无需改动。
-// 契约：出向依赖清单 / 入口 / 不变量 —— 见该文件头（清单只在那里维护，此处不复述数量）。
+// ── 媒体准备处理器已按族搬出 ───────────────────────────────────────────────
+// 预准备、构建与选中项落地整段住 src/client/handlers/media-prep-handlers.js；构建期内联回本作用域。
 
-function commitRotationSwitch(prep) {
-  rotationPrep = null;
-  for (const t of prep.timers) { try { clearTimeout(t); } catch { /* ignore */ } }
-  prep.timers = [];
-  releaseProbeMedia(prep);
-  const staged = prep.staged;
-  prep.staged = null;
-  const w = wallpaperById().get(prep.id);
-  const valid = selection.rotationEnabled && selection.id === prep.fromId
-    && w && isRotationEligible(w, selection.contentRatingFilter)
-    && !isHiddenWallpaper(w.id, selection.hiddenIds);
-  liveLog("rotation-commit", "wid=" + prep.id + " from=" + prep.fromId + " kind=" + (prep.kind || "-")
-    + " valid=" + valid + " " + liveStateBrief());
-  if (!valid) {
-    if (staged) { try { staged.div.remove(); } catch { /* ignore */ } }
-    if (prep.readyEl) disposeMediaEl(prep.readyEl);
-    syncRotationTimer();
-    return;
-  }
-  // 就绪元素随提交走，分两条通道：
-  // - iframe 类（live 渲染页 / 旧链网页）：staging 容器整体转为新层（节点级
-  //   领养）—— 同源 iframe 同文档 reparent 会重载文档，绝不能让 iframe 移动；
-  // - img/video：元素级领养，buildMedia 直接收编进新层。
-  if ((prep.kind === "live" || prep.kind === "web") && staged && staged.div && prep.readyEl) {
-    pendingStagedLayerNode = staged.div;
-    prep.readyEl = null; // iframe 留在容器里，不拆散
-  } else {
-    preparedMediaEl = prep.readyEl || null;
-    prep.readyEl = null;
-    if (staged) { try { staged.div.remove(); } catch { /* ignore */ } }
-  }
-  pendingRotationFade = true;
-  applySelection(prep.id, { fromRotation: true, kind: prep.kind });
-  // 领养保险丝：applySelection 的 emit 未消费节点级领养（理论上不可达 ——
-  // 准备期前提与领养条件一致，此处仅兜底）时 staging 容器不能泄漏。
-  if (pendingStagedLayerNode) {
-    const div = pendingStagedLayerNode;
-    pendingStagedLayerNode = null;
-    try {
-      const f = div.querySelector && div.querySelector("iframe");
-      if (f) disposeMediaEl(f);
-    } catch { /* ignore */ }
-    try { div.remove(); } catch { /* ignore */ }
-  }
-}
-
-// ── Rotation group CRUD (draft-based editor) ────────────────────────────────
-function startEditGroup(id) {
-  const group = selection.rotationGroups.find((g) => g.id === id);
-  if (!group) return;
-  setTransient("editing", JSON.parse(JSON.stringify(group)));
-  emit();
-}
-
-function startCreateGroup() {
-  setTransient("editing", {
-    id: nextGroupId(),
-    name: weT("轮播列表 {index}", { index: selection.rotationGroups.length + 1 }),
-    interval: DEFAULTS.rotationInterval,
-    order: "sequence",
-    trigger: "interval",
-    wallpaperIds: [],
-  });
-  emit();
-}
-
-function saveEditingGroup() {
-  const draft = selection.editing;
-  if (!draft) return;
-  const idx = selection.rotationGroups.findIndex((g) => g.id === draft.id);
-  const cleaned = {
-    id: draft.id,
-    name: typeof draft.name === "string" && draft.name.trim() ? draft.name.trim() : weT("轮播列表"),
-    interval: clampNum(draft.interval, ROTATION_INTERVAL_MIN, ROTATION_INTERVAL_MAX, DEFAULTS.rotationInterval),
-    trigger: draft.trigger === "videoEnd" ? "videoEnd" : "interval",
-    order: draft.order === "random" ? "random" : "sequence",
-    wallpaperIds: Array.isArray(draft.wallpaperIds)
-      ? draft.wallpaperIds.filter((x) => typeof x === "string" && x)
-      : [],
-  };
-  if (idx >= 0) selection.rotationGroups[idx] = cleaned;
-  else selection.rotationGroups.push(cleaned);
-  selection.rotationGroupId = cleaned.id;
-  setTransient("editing", null);
-  // 列表成员可能已变：进行中的轮换准备候选作废，下轮按新成员重评。
-  cancelRotationPrepare();
-  if (selection.rotationEnabled && !rotationCandidates().some((w) => w.id === selection.id)) {
-    const first = rotationCandidates()[0];
-    applySelection(first ? first.id : "");
-    return;
-  }
-  persistSelection();
-  syncRotationTimer();
-  emit();
-}
-
-function cancelEditGroup() {
-  setTransient("editing", null);
-  emit();
-}
-
-function deleteGroup(id) {
-  const idx = selection.rotationGroups.findIndex((g) => g.id === id);
-  if (idx < 0) return;
-  selection.rotationGroups.splice(idx, 1);
-  // 列表结构变化：进行中的轮换准备候选可能已不在活动列表 → 取消，下轮重评。
-  cancelRotationPrepare();
-  if (selection.rotationGroupId === id) {
-    selection.rotationGroupId = "";
-    if (selection.rotationEnabled) {
-      const fallback = firstUsableGroup();
-      if (fallback) selection.rotationGroupId = fallback.id;
-      else selection.rotationEnabled = false;
-    }
-  }
-  if (selection.editing && selection.editing.id === id) setSetting("editing", null);
-  // 删除是**结构变更**，必须落盘：原来只 `splice` 内存、不调 persistSelection ⇒ 删掉的列表
-  // 重启后「复活」（#292）。与 saveEditingGroup 同一条纪律：改完列表就 persist。
-  persistSelection();
-  syncRotationTimer();
-  emit();
-}
-
-function importPlaylistIntoDraft(playlist) {
-  if (!selection.editing || !playlist || !Array.isArray(playlist.wallpaperIds)) return;
-  selection.editing.wallpaperIds = playlist.wallpaperIds.slice();
-  emit();
-}
+// ── 轮播组 CRUD（草稿式编辑器）已按族搬出 ───────────────────────────────────
+// 新建/改名/删除/成员增删与两步确认整段住 src/client/handlers/rotation-crud.js；构建期内联回本作用域。
 
 
 // ── Hidden wallpapers (soft delete / restore, localStorage only) ───────────
@@ -1587,7 +1300,7 @@ function importPlaylistIntoDraft(playlist) {
 // wallpaper that is currently playing keeps playing (it only leaves the
 // lists). Rotation candidates exclude hidden ids via groupWallpapers(), so a
 // hidden wallpaper can never be auto-selected by the carousel. The membership
-// test itself lives in **src/picker-model.js**（`isHiddenWallpaper(id, hiddenIds)`）——
+// test itself lives in **src/picker/picker-model.js**（`isHiddenWallpaper(id, hiddenIds)`）——
 // 隐藏集合从调用点显式传入。
 
 function hideWallpapers(ids) {
@@ -1611,226 +1324,15 @@ function restoreWallpapers(ids) {
   }
 }
 
-// ── Custom uploads (read-A storage) ─────────────────────────────────────────
-// The HOST writes the uploaded bytes to its plugin-managed directory and
-// serves them through the same token/media/preview routes as WE media; the
-// client only POSTs the file, then refreshes the (already-merged) inventory.
-const UPLOAD_URL = "/wallpaper-engine/upload";
-const REMOVE_URL = "/wallpaper-engine/remove";
-const URL_IMPORT_URL = "/wallpaper-engine/url-import";
-const UPLOAD_TYPES = ["image/jpeg", "image/png", "image/webp", "video/mp4"];
+// ── 自定义上传处理器（read-A 存储）已按族搬出 ────────────────────────────────
+// 选文件、校验、命名、写入与删除整段住 src/client/handlers/upload-handlers.js；构建期内联回本作用域。
 
-// `isUploadedWallpaper(w)` / `isDirWallpaper(w)`（id 前缀判定）住在
-// **src/picker-model.js** —— ratingOf 的宽松分级与上传管理列表共用同一对判定。
+// ── 图片 URL 源（Bing 每日一图 / 用户直链）已按族搬出 ────────────────────────────
+// 草稿输入、导入、手动刷新、两枚入口整段住 src/client/handlers/url-source.js；构建期内联回本作用域。
 
-async function uploadWallpaperFile(file) {
-  const ctype = (file.type || "").toLowerCase();
-  if (!UPLOAD_TYPES.includes(ctype)) {
-    setTransient("uploadError", weT("仅支持 JPG / PNG / WebP 图片与 MP4 视频"));
-    emit();
-    return;
-  }
-  if (!/\.(jpe?g|png|webp|mp4)$/i.test(file.name)) {
-    setTransient("uploadError", weT("文件扩展名需为 .jpg / .png / .webp / .mp4"));
-    emit();
-    return;
-  }
-  setTransient("uploading", true);
-  setTransient("uploadError", "");
-  setTransient("uploadNote", "");
-  emit();
-  try {
-    const title = file.name.replace(/\.[^.]+$/, "").slice(0, 80);
-    const res = await apiFetch(UPLOAD_URL + "?title=" + encodeURIComponent(title), {
-      method: "POST",
-      headers: { "Content-Type": ctype },
-      body: file,
-      parse: "always", // 失败时也要读宿主给的原因（4xx/5xx 的 {error}）
-    });
-    const data = res.data || {};
-    if (!res.ok) throw new Error(hostFailureReason(res));
-    // Host dedup: uploading the same file again returns the existing entry
-    // (data.duplicate) instead of storing a second copy.
-    if (data.duplicate) {
-      setTransient("uploadNote", weT("已存在相同内容的壁纸，已直接选择原有的那张"));
-    }
-    await loadInventory();
-    applySelection(data.id);
-  } catch (err) {
-    setTransient("uploadError", weT("上传失败：{error}", { error: weT(err && err.message ? err.message : err) }));
-  }
-  setTransient("uploading", false);
-  emit();
-}
-
-async function removeUploadWallpaper(id) {
-  if (!id) return;
-  setTransient("uploading", true);
-  setTransient("uploadError", "");
-  emit();
-  try {
-    const res = await apiPostJson(REMOVE_URL, { id }, { parse: "always" });
-    if (!res.ok) throw new Error(hostFailureReason(res));
-    if (selection.id === id) applySelection("");
-    await loadInventory();
-  } catch (err) {
-    setTransient("uploadError", weT("移除失败：{error}", { error: weT(err && err.message ? err.message : err) }));
-  }
-  setTransient("uploading", false);
-  emit();
-}
-
-// ── 图片 URL 源（Bing 每日一图 / 用户直链）────────────────────────────────────
-// 宿主负责下载与落盘；成功后它就是一张普通自定义壁纸（筛选 / 轮播 / 玻璃照常）。
-// 失败时宿主保留旧图，这里只把原因显示出来。
-function onUrlDraft(e) {
-  setTransient("urlDraft", e.target.value);
-  emit();
-}
-
-async function importUrlWallpaper(kind) {
-  const isBing = kind === "bing";
-  const url = String(selection.urlDraft || "").trim();
-  if (!isBing && !url) {
-    setTransient("urlError", weT("请输入图片 URL"));
-    emit();
-    return;
-  }
-  setTransient("urlBusy", true);
-  setTransient("urlError", "");
-  setTransient("urlNote", "");
-  emit();
-  try {
-    const payload = isBing ? { action: "add", kind: "bing" } : { action: "add", kind: "url", url };
-    const res = await apiPostJson(URL_IMPORT_URL, payload, { parse: "always" });
-    if (!res.ok) throw new Error(hostFailureReason(res));
-    const data = res.data || {};
-    setTransient("urlNote", data.duplicate
-      ? weT("已更新这张 URL 壁纸")
-      : weT(isBing ? "已添加 Bing 每日一图" : "已从 URL 添加壁纸"));
-    if (!isBing) setTransient("urlDraft", "");
-    await loadInventory();
-    applySelection(data.id);
-  } catch (err) {
-    setTransient("urlError", weT("URL 导入失败：{error}", { error: weT(err && err.message ? err.message : err) }));
-  }
-  setTransient("urlBusy", false);
-  emit();
-}
-
-async function refreshUrlWallpaper(id) {
-  if (!id) return;
-  setTransient("urlBusy", true);
-  setTransient("urlError", "");
-  setTransient("urlNote", "");
-  emit();
-  try {
-    const res = await apiPostJson(URL_IMPORT_URL, { action: "refresh", id }, { parse: "always" });
-    if (!res.ok) throw new Error(hostFailureReason(res));
-    setTransient("urlNote", weT("已刷新这张 URL 壁纸"));
-    await loadInventory();
-  } catch (err) {
-    setTransient("urlError", weT("刷新失败：{error}", { error: weT(err && err.message ? err.message : err) }));
-  }
-  setTransient("urlBusy", false);
-  emit();
-}
-
-function addUrlWallpaper() { return importUrlWallpaper("url"); }
-function addBingWallpaper() { return importUrlWallpaper("bing"); }
-
-const UPLOAD_DIR_URL = "/wallpaper-engine/upload-dir";
-
-// Change where custom uploads are stored. The host persists the choice to its
-// config file (survives restarts) and migrates existing files by default —
-// users can point uploads at a non-system drive without touching config files.
-async function changeUploadDir(dir, migrate) {
-  if (!dir || !String(dir).trim()) {
-    setTransient("uploadError", weT("请输入存储位置路径"));
-    emit();
-    return;
-  }
-  setTransient("uploading", true);
-  setTransient("uploadError", "");
-  emit();
-  try {
-    const res = await apiPostJson(UPLOAD_DIR_URL,
-      { dir: String(dir).trim(), migrate: migrate !== false }, { parse: "always" });
-    if (!res.ok) throw new Error(hostFailureReason(res));
-    setTransient("editingUploadDir", false);
-    setTransient("uploadDirDraft", "");
-    await loadInventory();
-  } catch (err) {
-    setTransient("uploadError", weT("更改失败：{error}", { error: weT(err && err.message ? err.message : err) }));
-  }
-  setTransient("uploading", false);
-  emit();
-}
-
-const CACHE_DIR_URL = "/wallpaper-engine/cache-dir";
-const CACHE_DIR_BROWSE_URL = "/wallpaper-engine/cache-dir/browse";
-
-// Change where regenerable caches live (transcoded wallpapers / faststart variants /
-// scene frames / video previews / media-bridge). The host persists the choice to its
-// config file (survives restarts) and moves the known cache subdirectories by default —
-// the point is not making users edit config files, and not letting a multi-GB cache
-// pile up on the system drive. Nothing here is user-authored data: worst case the
-// moved-away cache is rebuilt on demand.
-async function changeCacheDir(dir, migrate) {
-  if (!dir || !String(dir).trim()) {
-    setTransient("cacheDirError", weT("请输入缓存位置路径"));
-    emit();
-    return;
-  }
-  setTransient("cacheDirError", "");
-  setTransient("cacheDirNote", "");
-  setTransient("cacheDirBusy", true);
-  emit();
-  try {
-    const res = await apiPostJson(CACHE_DIR_URL,
-      { dir: String(dir).trim(), migrate: migrate !== false }, { parse: "always" });
-    if (!res.ok) throw new Error(hostFailureReason(res));
-    const moved = Number((res.data && res.data.migrated) || 0);
-    const skipped = Number((res.data && res.data.skipped) || 0);
-    setTransient("editingCacheDir", false);
-    setTransient("cacheDirDraft", "");
-    setTransient("cacheDirBrowse", null);
-    // 生效值一律以 host 的解析链为准（重新拉清单回显）—— 设了 DSH_WE_CACHE_DIR 时
-    // 保存成功但生效值仍是环境变量那个目录，这条提示就是给那种情形看的。
-    setTransient("cacheDirNote", skipped > 0
-      ? weT("已迁移 {moved} 个缓存文件，{skipped} 个跳过", { moved, skipped })
-      : weT("已迁移 {moved} 个缓存文件", { moved }));
-    await loadInventory();
-  } catch (err) {
-    setTransient("cacheDirError", weT("更改失败：{error}", { error: weT(err && err.message ? err.message : err) }));
-  }
-  setTransient("cacheDirBusy", false);
-  emit();
-}
-
-const WE_ASSETS_DIR_URL = "/wallpaper-engine/we-assets-dir";
-
-// Set / clear the WE official-assets directory (host-persisted). Scene live
-// rendering then serves official pixels via /api/local-assets instead of the
-// renderer's programmatic recreations. Empty input clears the setting.
-// 保存后刷新 inventory（weAssetsAvailable 进 syncLayers key）→ live 渲染页
-// 带新参数重建，官方像素即刻生效。
-async function changeWeAssetsDir(dir) {
-  setTransient("weAssetsError", "");
-  emit();
-  try {
-    const res = await apiPostJson(WE_ASSETS_DIR_URL,
-      { dir: String(dir || "").trim() }, { parse: "always" });
-    if (!res.ok) throw new Error(hostFailureReason(res));
-    setTransient("editingWeAssetsDir", false);
-    setTransient("weAssetsDirDraft", "");
-    await loadInventory();
-    syncLayers(); // 可用性变化进 key → live iframe 带/去 localAssets=1 重建
-  } catch (err) {
-    setTransient("weAssetsError", weT("保存失败：{error}", { error: weT(err && err.message ? err.message : err) }));
-  }
-  emit();
-}
+// ── 三个目录设置（上传 / 缓存 / WE 素材）已按族搬出 ──────────────────────────────
+// 编辑态、浏览、迁移开关、保存与失败文案整段住 src/client/handlers/dir-settings.js（含四个路由常量）；
+// 构建期内联回本作用域。
 
 // ── Behind-body layer: wallpaper + scrim (plain DOM, NOT a slot) ───────────
 // Edge (and only Edge) paints its own floating "下载/投屏" media-overlay toolbar
@@ -1854,307 +1356,15 @@ const IS_EDGE = typeof navigator !== "undefined" && /Edg\//.test(navigator.userA
 // 助手声明在 src/client/media-frame.js：它们自带的模块级变量（媒体计时器、GPU 帧 pin、画布 ctx 句柄…）
 // 与各自的赋值点同处一文件；本文件保留「壁纸属性」的开关与快照状态（propsPanelOpen / propsState），
 // 因为改这两个状态的处理器（openUserPropsPanel / closeUserPropsPanel）仍在本文件。
-// ── 壁纸属性（WE 用户属性）──────────────────────────────────────────────────
-// 「壁纸属性」按钮 → 面板：读 host `/props/<token>`（把 project.json 的
-// general.properties 解析成 UI 描述），改动即时 `__wp.updateWebProps` 热更新到
-// 正在跑的壁纸，并写进设置（`userProps`，按 token 存）—— 刷新/重启后网页壁纸由
-// host 并进 HTML 种子、场景壁纸由 applyStoredUserProps 在就绪后回放。
-//
-// 条件求值器已抽到 src/we-cond.js（纯计算、零外界依赖；构建期由 build-client.mjs
-// 内联回本作用域，因此下面的 weEvalCondition(...) 调用点无需改动，见该文件头的契约）。
-
-// 面板状态：token 变了就重新拉一次（换壁纸/换目录）。
-let propsPanelOpen = false;
-let propsState = { token: "", loading: false, error: "", props: [], remote: false, we: null };
-
-/** 打开发送（侧栏下钻的入口）：先落状态再拉定义 —— 判据是"该有属性了"。 */
-function openUserPropsPanel() {
-  propsPanelOpen = true;
-  loadUserPropDefs(propTokenOf(selection), true);
-  emit();
-}
-
-/** 收起：只翻开关（定义留着，下次开不必重拉）。 */
-function closeUserPropsPanel() {
-  propsPanelOpen = false;
-  cancelUserPropsCommit(); // 面板关了：拖动期剩下的那次提交不再有意义
-  emit();
-}
-
-/** 当前 live 渲染 iframe（属性热更新与心跳读的是同一个）。 */
-
-/** token（propsUrl 末段；同时是设置里 userProps 的键）。 */
-function propTokenOf(selLike) {
-  const url = String((selLike && selLike.propsUrl) || "");
-  const i = url.lastIndexOf("/");
-  return i >= 0 ? url.slice(i + 1) : "";
-}
-
-function storedUserPropsOf(token) {
-  const all = selection.userProps;
-  const v = all && typeof all === "object" ? all[token] : null;
-  return v && typeof v === "object" && !Array.isArray(v) ? { ...v } : {};
-}
-
-/** 覆盖值写入设置（与默认值相同 = 删除该覆盖项）。 */
-function saveUserProp(token, name, value, isDefault) {
-  if (!token) return;
-  const all = { ...(selection.userProps || {}) };
-  const cur = { ...(all[token] || {}) };
-  if (isDefault) delete cur[name];
-  else cur[name] = value;
-  if (Object.keys(cur).length) all[token] = cur;
-  else delete all[token];
-  setSetting("userProps", all);
-}
-
-/** 热更新到正在跑的壁纸（渲染页 __wp.updateWebProps → 场景对象脚本 / 网页 shim）。 */
-function applyUserProps(wire) {
-  const frame = liveFrameEl();
-  if (!frame) return false;
-  try {
-    const wp = frame.contentWindow && frame.contentWindow.__wp;
-    if (!wp || typeof wp.updateWebProps !== "function") return false;
-    wp.updateWebProps(wire);
-    return true;
-  } catch {
-    return false;
-  }
-}
-
-function loadUserPropDefs(token, force) {
-  if (!token) return;
-  if (!force && (propsState.token === token && (propsState.props.length || propsState.loading))) return;
-  const url = PROPS_URL + "/" + encodeURIComponent(token);
-  propsState = { token, loading: true, error: "", props: propsState.token === token ? propsState.props : [], remote: true, we: propsState.token === token ? propsState.we : null };
-  apiJson(url)
-    .then((res) => {
-      const d = res.data;
-      // ⚠️ 这条 message 会被渲染进「壁纸属性」面板（见 picker-props-panel.js 的 error 分支），
-      //    所以它是**面向用户**的文案，尽管包在 Error 里。裸中文字面量会被 i18n-scan 的
-      //    Error 豁免放过 —— 用 weT 包住，改文案时才有词表口径可循。
-      if (!d || !d.ok) throw new Error((d && d.error) || weT("读取失败"));
-      if (propsState.token !== token) return; // 期间换了壁纸：丢弃
-      // 值以渲染页的实时表为准（场景壁纸的默认值在 scene.json 快照里，可能和
-      // project.json 不同 —— 上游 getProperties 正是为此存在）；拿不到就用宿主值。
-      let live = null;
-      try {
-        const frame = liveFrameEl();
-        const wp = frame && frame.contentWindow && frame.contentWindow.__wp;
-        live = wp && typeof wp.getProperties === "function" ? wp.getProperties() : null;
-      } catch { live = null; }
-      const props = (d.props || []).map((p) => {
-        if (!live || !(p.name in live)) return p;
-        return { ...p, value: live[p.name], overridden: Boolean(d.overrides && p.name in d.overrides) };
-      });
-      // issue #341：宿主只读带出的 WE 当前值（`wproperties`）。它**不参与**默认值合并，
-      // 只供面板「从 WE 导入」，所以这里单独存一份，进 UI 前剥掉宿主的绝对路径。
-      const we = d.we && d.we.ok && d.we.values && typeof d.we.values === "object"
-        ? { values: d.we.values, monitor: String(d.we.monitor || ""), profile: String(d.we.profile || "") }
-        : null;
-      propsState = { token, loading: false, error: "", props, remote: false, we };
-      emit();
-    })
-    .catch((e) => {
-      if (propsState.token !== token) return;
-      propsState = { token, loading: false, error: String((e && e.message) || e), props: [], remote: false, we: null };
-      emit();
-    });
-}
-
-/**
- * 「壁纸属性」拖动期的提交窗口（毫秒）：最后一次 input 之后安静这么久，才算这次拖动结束。
- *
- * 为什么需要这个定时器：面板对 color / slider 只能送 silent 的 input（见
- * src/picker-props-panel.js 的 renderUserPropRow）—— **React 的 onChange 对
- * `<input type="range">` / `<input type="color">` 是逐格触发的 input 事件**，不是原生
- * change 的"抬手"。把它当抬手（旧实现）等于拖动中每格 `emit()` 一次：emit 的订阅者里
- * 有全量 `applyEffects`（重建字体样式表 / 同步场景音频 / 强制同步样式计算）和整棵设置
- * 面板的重渲染 —— 原生颜色轮盘一次拖动上百格，正是用户报的「拖颜色时异常卡顿缓慢」
- * （与 commitLiveSetting 注释里那次用户实测同一条口径；场景/网页引擎侧的单次热更新
- * 实测只有 ~0.1ms，不是这里的量级）。
- *
- * 取值：180ms 比持久化写去抖（200ms）略短、又不与它同值 —— 两个窗口各管一件事（一个
- * 决定面板什么时候回显刷新，一个决定什么时候落盘），同值会让"只测其一"的守卫分不开它们。
- * 这是"拖动停下到回显跟上"的观感上限；改大没有收益，改小会让慢速拖动（每格间隔大于
- * 阈值）中途也各提交一次。
- */
-const USER_PROPS_COMMIT_MS = 180;
-let userPropsCommitTimer = null;
-/** 取消挂起的拖动提交（面板关闭 / 恢复默认 / 卸载）。 */
-function cancelUserPropsCommit() {
-  if (userPropsCommitTimer !== null && typeof clearTimeout === "function") clearTimeout(userPropsCommitTimer);
-  userPropsCommitTimer = null;
-}
-/**
- * 拖动期的尾部提交：连续 input 只留最后一次的定时器，到点才 `emit()` 一次。
- * 无定时器设施（验证环境）退化为立即 emit —— 与 persistSelection 同一条退化口径。
- */
-function scheduleUserPropsCommit() {
-  cancelUserPropsCommit();
-  if (typeof setTimeout !== "function") { emit(); return; }
-  userPropsCommitTimer = setTimeout(() => {
-    userPropsCommitTimer = null;
-    emit();
-  }, USER_PROPS_COMMIT_MS);
-}
-
-/** 一次属性改动：本地状态 + 热更新 + 持久化（silent = 拖动中，不 emit，尾部提交一次）。 */
-function onUserPropInput(def, value, silent) {
-  // 同一格可能被上报两次（React 对 range/color 会同时派发 onInput 与 onChange 两路
-  // 处理器，它们都是 silent 的）：值没变就没有热更新可做，也不该多安排一次提交。
-  // 只对 silent 早退 —— 显式提交（失焦 / 回车 / 组合框）即使值没变也必须走完，否则
-  // "把值选成当前显示值" 这种显式选择不会落进覆盖表（旧行为如此，别改）。
-  if (silent && sameUserPropValue(value, def.value)) return;
-  def.value = value;
-  def.overridden = !sameUserPropValue(value, def.default);
-  applyUserProps({ [def.name]: { value } });
-  saveUserProp(propsState.token, def.name, value, !def.overridden);
-  if (silent) scheduleUserPropsCommit();
-  else { cancelUserPropsCommit(); emit(); }
-}
-
-function sameUserPropValue(a, b) {
-  if (a === b) return true;
-  if (typeof a === "number" || typeof b === "number") return Number(a) === Number(b);
-  return false;
-}
-
-/** 恢复默认：清掉这张壁纸的全部覆盖值，并把默认值热更新回渲染页。 */
-function resetUserProps() {
-  const token = propsState.token;
-  if (!token) return;
-  cancelUserPropsCommit(); // 拖动期的尾部提交已无意义（下面这次 emit 就是最后一次）
-  const wire = {};
-  for (const p of propsState.props) {
-    p.value = p.default;
-    p.overridden = false;
-    if (p.default !== null) wire[p.name] = { value: p.default };
-  }
-  applyUserProps(wire);
-  const all = { ...(selection.userProps || {}) };
-  delete all[token];
-  setSetting("userProps", all);
-  emit();
-}
-
-/**
- * WE 当前值 → 面板值的类型归位（WE `config.json` 存在以字符串存布尔/数字的机器）。
- * 类型不对 ⇒ undefined（这项不导入，绝不把字符串塞进 slider）。
- */
-function wePropValueOf(p, raw) {
-  if (raw === null || raw === undefined) return undefined;
-  if (p.ptype === "bool") {
-    if (typeof raw === "boolean") return raw;
-    if (typeof raw === "string") {
-      const s = raw.trim().toLowerCase();
-      if (s === "true" || s === "1") return true;
-      if (s === "false" || s === "0") return false;
-    }
-    return undefined;
-  }
-  if (p.ptype === "slider") {
-    const n = typeof raw === "number" ? raw : Number(raw);
-    return Number.isFinite(n) ? n : undefined;
-  }
-  if (p.ptype === "color" || p.ptype === "file" || p.ptype === "directory" || p.ptype === "textinput" || p.ptype === "other") {
-    return typeof raw === "string" ? raw : undefined;
-  }
-  return raw; // combo：保留声明类型（与 project.json 同一口径）
-}
-
-/** 「从 WE 导入」能带来的改动摘要（面板按钮的文案/可用态 + tooltip 用）。 */
-function userPropsWeImport() {
-  const we = propsState.we && propsState.we.values ? propsState.we.values : null;
-  if (!we) return null;
-  const labels = [];
-  for (const p of propsState.props) {
-    if (!p || p.hidden) continue;
-    if (!Object.prototype.hasOwnProperty.call(we, p.name)) continue;
-    const next = wePropValueOf(p, we[p.name]);
-    if (next === undefined || sameUserPropValue(next, p.value)) continue;
-    labels.push(p.text || p.name);
-  }
-  return { count: labels.length, labels };
-}
-
-/**
- * 从 WE 当前值导入（issue #341）：把与面板当前显示不同的值写成用户覆盖值。
- *
- * 只做用户**显式**动作（面板按钮）：不自动应用 —— WE `config.json` 是外部状态，静默
- * 覆盖会让"我在插件里调的值"凭空消失。导入后与手工改值同一条落盘路径
- * （`settings.userProps`），所以刷新/重启后仍然生效。
- */
-function importUserPropsFromWe() {
-  const token = propsState.token;
-  const we = propsState.we && propsState.we.values ? propsState.we.values : null;
-  if (!token || !we) return false;
-  cancelUserPropsCommit();
-  const wire = {};
-  let changed = 0;
-  for (const p of propsState.props) {
-    // hidden（project.json 里 editable:false）与按钮统计同一口径：只读导入不碰它们 ——
-    // 面板不显示这些项，写进去用户在界面上看不见、也没法单独撤销（只能整张恢复默认）。
-    if (!p || p.hidden || typeof p.name !== "string") continue;
-    if (!Object.prototype.hasOwnProperty.call(we, p.name)) continue;
-    const next = wePropValueOf(p, we[p.name]);
-    if (next === undefined || sameUserPropValue(next, p.value)) continue;
-    p.value = next;
-    p.overridden = !sameUserPropValue(next, p.default);
-    wire[p.name] = { value: next };
-    changed += 1;
-  }
-  if (changed === 0) { emit(); return false; }
-  applyUserProps(wire);
-  const all = { ...(selection.userProps || {}) };
-  const cur = { ...(all[token] || {}) };
-  for (const p of propsState.props) {
-    if (!p || !Object.prototype.hasOwnProperty.call(wire, p.name)) continue;
-    if (p.overridden) cur[p.name] = wire[p.name].value;
-    else delete cur[p.name];
-  }
-  if (Object.keys(cur).length) all[token] = cur;
-  else delete all[token];
-  setSetting("userProps", all);
-  emit();
-  return true;
-}
-
-/** 就绪后回放覆盖值：网页壁纸由 host 并进 HTML 种子，场景壁纸没有种子通道。 */
-function applyStoredUserProps(selLike) {
-  if (!selLike) return;
-  const token = propTokenOf(selLike);
-  if (!token) return;
-  const ov = storedUserPropsOf(token);
-  const names = Object.keys(ov);
-  if (!names.length) return;
-  const wire = {};
-  for (const [k, v] of Object.entries(ov)) wire[k] = { value: v };
-  applyUserProps(wire);
-}
-
-/** Web 颜色 "r g b"（0–1 浮点）↔ #rrggbb */
-function weColorToHex(v) {
-  if (typeof v !== "string") return "#000000";
-  const parts = v.trim().split(/\s+/).map(Number);
-  if (parts.length < 3 || parts.some((n) => !Number.isFinite(n))) return "#000000";
-  const hex = parts.slice(0, 3)
-    .map((n) => Math.max(0, Math.min(255, Math.round(n * 255))).toString(16).padStart(2, "0"))
-    .join("");
-  return "#" + hex;
-}
-function weHexToColor(hex) {
-  const h = String(hex || "").replace(/^#/, "");
-  if (h.length !== 6) return "0 0 0";
-  const r = parseInt(h.slice(0, 2), 16) / 255;
-  const g = parseInt(h.slice(2, 4), 16) / 255;
-  const b = parseInt(h.slice(4, 6), 16) / 255;
-  return [r, g, b].map((n) => Math.round(n * 1000) / 1000).join(" ");
-}
+// ── 壁纸属性（WE 用户属性）的状态与处理器已按族搬出 ─────────────────────────────
+// 打开/收起、载入定义、覆盖写入、「从 WE 导入」、热更新、重启回放，连同它们的状态
+// （propsPanelOpen / propsState / 180ms 去抖计时器）整段住 src/client/handlers/props-panel.js；
+// 构建期由 scripts/build-client.mjs 内联回本作用域 —— 扁平作用域不变，调用点无需改动。
+// 面板标记仍住 src/picker/picker-props-panel.js（ctx 在本文件调用点组装）。
 
 let weBattery = null; // BatteryManager from navigator.getBattery (if available)
 /**
- * `pauseOnHidden` 的**持续期防抖**（issue #288）。
+ * `pauseOnHidden` 的**持续期防抖**。
  *
  * 宿主在虚拟桌面切换 / 焦点变化期间会瞬时把 `document.hidden` 误判为 true（Chromium 遮挡跟踪
  * 竞态，2–3 秒后被复查纠正）。旧逻辑对 `document.hidden` **零防抖、照单全收** ⇒ 一次瞬时抖动就
@@ -2213,7 +1423,7 @@ function isEffectivelyPlaying() {
   // 出帧物理上不可能，而首帧预算与运行期 stall 两条判据都以"有帧"为唯一证据。
   // 少了这一项，收拍期间窗口被最小化 / 切到别的标签页 ⇒ 渲染页被冻结 ⇒ 看护按
   // `LIVE_FIRST_FRAME_MAX_MS` 判 timeout；而 `liveFailCauseOf` 在"本窗口内确有整包
-  // 完成证据"时会归成渲染侧并**落盘**（实测事故 2026-10-27：一张 29.7MB 的场景壁纸
+  // 完成证据"时会归成渲染侧并**落盘**（实测事故：一张 29.7MB 的场景壁纸
   // 在隐藏期被判 timeout 写进 sceneLiveFailures，此后六天多每次启动都直接降级静态帧，
   // 直到下一次管线变更才被 migrateStaleLiveFailures 清掉）。
   // 运行期 stall 规则此前已有同款守卫（看护心跳的 `!isEffectivelyPlaying()` 分支），
@@ -2266,7 +1476,7 @@ function watchVideoState(video) {
   for (const t of ["play", "playing", "pause", "ended", "error", "emptied"]) {
     try { video.addEventListener(t, () => syncVideoState(video)); } catch { /* ignore */ }
   }
-  // 「当前视频播完就换下一张」（issue #230 后续诉求）：轮播组选了 `trigger: 'videoEnd'`
+  // 「当前视频播完就换下一张」：轮播组选了 `trigger: 'videoEnd'`
   // 时，壁纸视频的 ended 就是轮换信号 —— 与计时器二选一（syncRotationTimer 在该档不计时）。
   // 只认**当前层**那个 <video>：预热 / 探测元素也走 watchVideoState，它们播完不代表壁纸播完。
   // `loop` 会把 ended 吞掉，所以按 trigger 在建层时关掉 loop（见 video-layer 的
@@ -2344,46 +1554,9 @@ const PICKER_TAB_LEGACY = {
   wallpaper: "library", font: "appearance", effects: "playback",
   audio: "playback", mascot: "system", advanced: "system",
 };
-// ── 可见页签表（ADR-0013 D3① 的"页签安全" + P-D S5e 的 D-6(b) 收口）──────────
-// 口径：**整页**都归某个子包浏览器半边的页签，只有在那一半真的在台上时才进导航。为什么必须
-// gate：页签内容全部来自面板节注册表（`wePanelSectionsOf`）；子包浏览器半边缺席时注册表里
-// 没有那个 panelId 的节，页签会渲染成一块**空白面板** —— 没有报错、也没有空态提示，用户只
-// 看到"点进去什么都没有"。所以"可见"不能是静态表，必须是**注册表现存性**的现算。
-//
-// 为什么用注册表现存性当"dsh.client 存在性"的可观测代理：浏览器侧拿不到构建期的 dsh.client
-// 元数据（那是宿主/打包器的信息），但它能看见**注册表里有没有这个 panelId 的节** —— 节是
-// 子包浏览器半边在求值时登记的，缺席 ⇒ 零节。这个代理不需要第二套"谁在场"的探测通道，也不
-// 会像 DOM/全局探测那样被加载时序骗过去。
-//
-// ⚠️ **不要**在这里接一张"组件名 → 页签"的表：那是浏览器侧的第二份可见面映射，D3② 明文禁止
-// （判据见 test/verify-component-visibility.mjs 的双向对账）。`TAB_SECTION_OWNER` 只写
-// "页签 id → 面板节注册表 id"（同一套 id 空间），不写组件名。将来某页整页归新子包时**只改
-// TAB_SECTION_OWNER 一行**，其余页签没有 owner ⇒ 恒可见。
-const TAB_SECTION_OWNER = { library: "library" };
-// 每次渲染现算、**不缓存**注册表快照：注册表是子包浏览器半边求值时写入的，可能晚于首次渲染
-// （求值 → 注册 → 监听器触发重画），缓存会把"晚到"永久判成"缺席"。
-function visiblePickerTabs() {
-  return PICKER_TABS.filter((t) => {
-    const owner = TAB_SECTION_OWNER[t.id];
-    if (!owner) return true;
-    return wePanelSectionsOf(owner).length > 0;
-  });
-}
-// 生效页签 = 存着的那个（旧 id 迁移 + `PICKER_TABS` 校验照旧）若不在可见表里 ⇒ 回落第一个可见。
-// 空表（一个可见页签都没有）理论上不可达；真出现也不把 activeTab 设成空值，退回存着的 id。
-function resolvePickerTab(id) {
-  const tabs = visiblePickerTabs();
-  if (tabs.some((t) => t.id === id)) return id;
-  return tabs.length ? tabs[0].id : id;
-}
-function readSavedPickerTab() {
-  try {
-    let v = localStorage.getItem(PICKER_TAB_KEY);
-    if (v && PICKER_TAB_LEGACY[v]) v = PICKER_TAB_LEGACY[v];
-    if (v && PICKER_TABS.some((t) => t.id === v)) return v;
-  } catch { /* ignore */ }
-  return "library";
-}
+// ── 可见页签表与页签记忆已按族搬出 ──────────────────────────────────────────
+// PICKER_TABS（按注册表现存性现算）、PICKER_TAB_KEY / PICKER_TAB_LEGACY 与
+// readSavedPickerTab 整段住 src/client/picker-tabs.js；构建期内联回本作用域。
 
 // ── 设置页「全局字体」节的折叠态（ADR-0008 D4 三次修订）──────────────
 // 那个节**两档都画**（侧栏 + 设置页），但两档各有自己的开合状态 —— 与 `qp-tab` /
@@ -2441,113 +1614,8 @@ function writeSavedPickerOpen(key, on) {
   try { localStorage.setItem(key, on ? "1" : "0"); } catch { /* ignore */ }
 }
 
-// ── 仓库 star 数（「关于」页签那行「⭐ 当前 N star」）────────────────────────────
-// 数据由宿主代取（packages/about-notice/lib/routes/github-stars.js：只读一条腿、10 分钟 TTL、落盘缓存兜底、
-// 失败静默），客户端只管"什么时候问一次"与"怎么显示"。**不是设置**：不进 selection、
-// 不落盘 —— 换机器 / 清缓存都只是重新取一次，没有需要持久化的用户意图。
-// 与宿主同一量级的 TTL：避免每次重渲染、每次切页签都打一次网络（GitHub 未认证限流
-// 60 次/小时 **整机共享**）。失败不写 at ⇒ 下次切到关于页立刻重试（失败不该被冷却）。
-const STAR_COUNT_TTL = 10 * 60 * 1000;
-let starCount = { value: null, at: 0, busy: false, tried: false, stale: false, fetchedAt: 0 };
-function loadStarCount(force) {
-  if (starCount.busy) return;
-  if (!force && starCount.tried && Date.now() - starCount.at < STAR_COUNT_TTL) return;
-  starCount = { value: starCount.value, at: starCount.at, busy: true, tried: true };
-  apiJson("/star-count")
-    .then((res) => {
-      const d = res && res.data;
-      const n = d && d.ok && Number.isFinite(d.count) ? d.count : null;
-      // 冷却用**本地**时间戳（不是宿主的 fetchedAt）：宿主的缓存可能本身就是上一次的
-      // 旧值（离线兜底那条腿），拿它当年龄会让客户端每次切页签都去问一次 —— 冷却的意义
-      // 是"别重复问"，数据到底多旧由宿主那一层的 TTL 负责。
-      // 但"多旧"必须**显示**出来：宿主的 stale 分支回的就是上一次取到的值（断网 / 证书
-      // 拦截时会一直回它），客户端不标日期的话，几十天前的数会和实时数长得一模一样。
-      starCount = {
-        value: n, at: n == null ? 0 : Date.now(), busy: false, tried: true,
-        stale: Boolean(d && d.ok && d.stale),
-        fetchedAt: d && Number.isFinite(d.fetchedAt) ? d.fetchedAt : 0,
-      };
-      emit();
-    })
-    .catch(() => {
-      starCount = { value: null, at: 0, busy: false, tried: true };
-      emit();
-    });
-}
-// 那行字的唯一出处（渲染器直接读它 —— 与 SliderRow 一类模块级助手同口径）。
-// 三种态各有明确文案：还没问过 ⇒ 空串（不占位）、正在问 ⇒ 说明在取、取不到 ⇒ 如实说。
-// 第四种是"有值但陈旧"（宿主 stale 分支）：**必须带取数日期**，否则断网时它会冒充实时数。
-/** 宿主 fetchedAt → 本地 `YYYY-MM-DD`；非法就给空串（宁可退回普通文案，也不显示 NaN）。 */
-function starCountFetchedDate() {
-  const t = Number(starCount.fetchedAt);
-  if (!Number.isFinite(t) || t <= 0) return "";
-  const d = new Date(t);
-  if (!Number.isFinite(d.getTime())) return "";
-  const pad = (n) => String(n).padStart(2, "0");
-  return d.getFullYear() + "-" + pad(d.getMonth() + 1) + "-" + pad(d.getDate());
-}
-/** 陈旧值**且能说出取数日期**时才返回日期：说不清多旧的旧值不许冒充实时数。 */
-function starCountStaleDate() {
-  return starCount.stale && starCount.value != null ? starCountFetchedDate() : "";
-}
-function starCountLabel() {
-  if (starCount.busy && starCount.value == null) return weT("⭐ 正在获取 star 数…");
-  if (starCount.value != null) {
-    const count = Number(starCount.value).toLocaleString("en-US");
-    const date = starCountStaleDate();
-    if (date) return weT("⭐ 当前 {count} star（{date} 取到）", { count, date });
-    // 陈旧但拿不到时间戳 ⇒ 按"取不到"处理（否则它和实时数长得一模一样，正是这次事故的形态）。
-    if (starCount.stale) return weT("⭐ 暂时取不到 star 数");
-    return weT("⭐ 当前 {count} star", { count });
-  }
-  if (starCount.tried) return weT("⭐ 暂时取不到 star 数");
-  return "";
-}
-// 数字那行的 tooltip（渲染器同样只读模块级助手）：陈旧时把"没连上"说清楚，
-// 别让「实时数据」四个字挂在一个几十天前的值上。
-function starCountTitle() {
-  if (starCountStaleDate()) {
-    return weT("这次没能连上 GitHub，显示的是上一次取到的一次值（不是实时数）");
-  }
-  return weT("来自 GitHub API 的实时数据（带缓存；拉不到时显示上一次取到的值）");
-}
-
-// 滑杆右侧那格「数值区」的可输入形态（SliderRow 的 opts.numberEdit 用它）。
-//
-// 为什么单独一个组件、并且**编辑期不受控**：受控写法（value 由设置渲染、每敲一键就写设置）
-// 在"删空重打"这一路会自锁 —— 退格把框清成空串，空串不是合法值 ⇒ 不写设置 ⇒ React 又把旧值
-// 渲回去，用户看到的是"数字删不掉"（实测反馈原话：「我在输入框里不能删除已有数字」）。所以：
-//   · 未编辑（聚焦前）：value = 设置值，跟着滑杆拖动 / 别处改动同步显示；
-//   · 编辑中：自己管自己（defaultValue + 本地 draft），**空串也是合法中间态**，随便删；
-//   · 回车 / 失焦：夹取到 [min, max] 后交给同一个处理器（第二参 false = 完整路径），并收起
-//     draft 回到受控 —— 值真被拒（越界回落默认）时也能立刻看到真实值。
-// draft 只在编辑期覆盖显示，"删空 + 回车"于是回落设置值，而不是把 0 写进去。
-function NumberValueInput(props) {
-  const { label, min, max, step, unit, value, onCommit, title } = props;
-  const [draft, setDraft] = React.useState(null);
-  const editing = draft !== null;
-  const commit = (raw) => {
-    setDraft(null);
-    const s = String(raw == null ? "" : raw).trim();
-    if (s === "") return;                       // 空 = 放弃这次编辑，保留原值
-    const n = Number(s);
-    if (!Number.isFinite(n)) return;
-    onCommit(Math.max(Number(min), Math.min(Number(max), n)));
-  };
-  return React.createElement("input", {
-    className: "we-picker__value-input", type: "number",
-    min: String(min), max: String(max), step: String(step),
-    title: title || undefined,
-    "aria-label": label + " " + unit,
-    ...(editing ? { defaultValue: draft } : { value: String(value) }),
-    onFocus: () => { if (!editing) setDraft(String(value)); },
-    onInput: (e) => setDraft(e.currentTarget.value),
-    onBlur: (e) => commit(e.currentTarget.value),
-    onKeyDown: (e) => {
-      if (e.key === "Enter") { commit(e.currentTarget.value); e.currentTarget.blur(); }
-    },
-  });
-}
+// ── 仓库 star 数的取数与文案已按族搬出 ──────────────────────────────────────
+// 缓存键、取数、陈旧标注与失败降级整段住 src/client/handlers/star-count.js；构建期内联回本作用域。
 
 // ── Settings picker ─────────────────────────────────────────────────────────
 // `key` is only needed when a SliderRow sits inside a conditionally-rendered
@@ -2774,151 +1842,9 @@ function markGpuFrameProbed(wid, pinned) {
   gpuFrameUi.probedAt = Date.now();
 }
 
-// ── 壁纸库页签的处理器（渲染器只读值 + 调这些）────────────────────────────────
-// `src/panel-tabs.js` 的契约是「只读 + 组装 React 树」：**写设置 / 改状态 / 发通知都归这里**。
-// 下面这些处理器是 ctx 的**供给方**（同模态框 / 属性面板那条契约）：渲染器只读值 + 调它们，
-// 本身不引用 `selection` / `emit`，也不写本文件模块作用域的 `propsPanelOpen` /
-// `pickerFocusPending` / `pickerOpener`（**别人的状态**）。
-// 判据：`test/verify-client.mjs` 的接缝判据（页签与那两个渲染器同一条口径）。
-function setPickerOpener(el) { pickerOpener = el; }
-function onTogglePropsPanel() {
-  propsPanelOpen = !propsPanelOpen;
-  if (propsPanelOpen) {
-    loadUserPropDefs(propTokenOf(selection), true);
-  }
-  emit();
-}
-/** 两个「选择壁纸」入口只差草稿标志：普通下钻（点卡片即应用）与轮播编辑器的草稿下钻。 */
-function openPicker(draft) {
-  setTransient("pickerOpen", true);
-  setTransient("pickerDraft", draft);
-  setTransient("modalView", "normal");
-  pickerFocusPending = true; // 打开后焦点落入下钻视图（见 modalInitialFocus）
-  emit();
-}
-function onOpenPicker() { openPicker(false); }
-function onOpenPickerDraft() { openPicker(true); }
-// 轮播列表编辑器的**草稿**（住在 selection.editing；保存才由 saveEditingGroup 落盘）。
-function onEditName(e) {
-  if (selection.editing) { selection.editing.name = e.target.value; emit(); }
-}
-function onEditInterval(e) {
-  if (!selection.editing) return;
-  // ⚠️ 取值域用 ROTATION_INTERVAL_MIN/MAX 而不是 schemaRange("rotationInterval")：
-  // `rotationInterval` 是 DEFAULTS_ONLY 键（**不在 KINDS 里**）⇒ 问 KINDS 得到的是
-  // [undefined, undefined] ⇒ clampNum 恒回落默认值 30，界面上"选任何时间都无效"
-  // （issue #230 的根因）。真源见 lib/settings-schema.js 的那对常量。
-  selection.editing.interval = clampNum(Number(e.target.value), ROTATION_INTERVAL_MIN, ROTATION_INTERVAL_MAX, DEFAULTS.rotationInterval);
-  emit();
-}
-function onEditTrigger(e) {
-  if (!selection.editing) return;
-  selection.editing.trigger = e.target.value === "videoEnd" ? "videoEnd" : "interval";
-  emit();
-}
-function onEditOrder(e) {
-  if (selection.editing) { selection.editing.order = e.target.value; emit(); }
-}
-// 两个可编辑路径（上传目录 / 官方资源路径）的**草稿**状态 —— 都在 selection 的瞬态字段里。
-function onStartEditUploadDir() {
-  setTransient("editingUploadDir", true);
-  setTransient("uploadDirDraft", selection.inventory.uploadDir || "");
-  emit();
-}
-function onUploadDirDraft(e) { setTransient("uploadDirDraft", e.target.value); emit(); }
-function onCancelEditUploadDir() { setTransient("editingUploadDir", false); emit(); }
-function onCacheDirDraft(e) { setTransient("cacheDirDraft", e.target.value); emit(); }
-// 缓存位置（高级页签）的草稿态 —— 与上传目录同口径：生效值从 inventory 取。
-// 「更改」= 打开草稿行（保留确认/迁移提示那一步）**并**弹出目录浏览器 —— 网页拿不到
-// 原生选择框（给不了绝对路径），这块面板就是等价物：宿主列目录、用户点着进出。
-function onStartEditCacheDir() {
-  setTransient("editingCacheDir", true);
-  setTransient("cacheDirDraft", selection.inventory.cacheDir || "");
-  setTransient("cacheDirError", "");
-  setTransient("cacheDirNote", "");
-  openCacheDirBrowse(selection.inventory.cacheDir || "");
-  emit();
-}
-function openCacheDirBrowse(path) {
-  setTransient("cacheDirBrowse", {
-    path: path || "", display: path || "", dirs: [], parent: null,
-    home: "", truncated: false, loading: true, error: "",
-  });
-  browseCacheDir(path);
-}
-function onCloseCacheDirBrowse() { setTransient("cacheDirBrowse", null); emit(); }
-function onCacheDirBrowseInput(e) {
-  const b = selection.cacheDirBrowse;
-  if (b) setTransient("cacheDirBrowse", { ...b, display: e.target.value });
-  emit();
-}
-function onCacheDirBrowseGo() {
-  const b = selection.cacheDirBrowse;
-  if (b) browseCacheDir(b.display);
-}
-function onCacheDirBrowseEnter(entryPath) { browseCacheDir(entryPath); }
-function onCacheDirBrowseUp() {
-  const b = selection.cacheDirBrowse;
-  if (b && b.parent) browseCacheDir(b.parent);
-}
-// 选中：地址栏草稿（改了没跳转也算数）填进 cacheDirDraft，收起浏览器 —— 保存/迁移
-// 语义仍在草稿行那一步（与上传目录同族口径：选完还要按保存）。
-function onPickCacheDir() {
-  const b = selection.cacheDirBrowse;
-  const picked = b ? String(b.display || b.path || "").trim() : "";
-  if (picked) setTransient("cacheDirDraft", picked);
-  setTransient("cacheDirBrowse", null);
-  setTransient("editingCacheDir", true);
-  emit();
-}
-// 拉一级目录列表（根视图传空）。失败**保住旧列表**只亮错误行：浏览是辅助，
-// 不能因为一次读失败把用户已经走到的位置丢掉。
-async function browseCacheDir(path) {
-  const prev = selection.cacheDirBrowse || {};
-  setTransient("cacheDirBrowse", { ...prev, path: path || "", loading: true, error: "" });
-  emit();
-  try {
-    const q = path ? "?path=" + encodeURIComponent(path) : "";
-    const res = await apiJson(CACHE_DIR_BROWSE_URL + q, { parse: "always" });
-    if (!res.ok) throw new Error(hostFailureReason(res));
-    const d = res.data || {};
-    setTransient("cacheDirBrowse", {
-      path: d.current || "",
-      display: d.current || "",
-      home: d.home || "",
-      dirs: Array.isArray(d.dirs) ? d.dirs : [],
-      parent: d.parent || null,
-      truncated: d.truncated === true,
-      loading: false,
-      error: "",
-    });
-  } catch (err) {
-    setTransient("cacheDirBrowse", {
-      ...prev,
-      loading: false,
-      error: weT("无法读取该目录：{error}", { error: weT(err && err.message ? err.message : err) }),
-    });
-  }
-  emit();
-}
-function onCancelEditCacheDir() {
-  setTransient("editingCacheDir", false);
-  setTransient("cacheDirBrowse", null);
-  setTransient("cacheDirError", "");
-  emit();
-}
-function onStartEditWeAssetsDir() {
-  setTransient("editingWeAssetsDir", true);
-  setTransient("weAssetsDirDraft", selection.inventory.weAssetsDir || "");
-  setTransient("weAssetsError", "");
-  emit();
-}
-function onWeAssetsDirDraft(e) { setTransient("weAssetsDirDraft", e.target.value); emit(); }
-function onCancelEditWeAssetsDir() {
-  setTransient("editingWeAssetsDir", false);
-  setTransient("weAssetsError", "");
-  emit();
-}
+// ── 「壁纸库」页签的处理器已按族搬出 ──────────────────────────────────────────
+// 搜索、分页、下钻、选择、批量操作、素材目录编辑态等整段住 src/client/handlers/library-tab-handlers.js；
+// 构建期内联回本作用域（保存/浏览仍在 src/client/handlers/dir-settings.js）。
 
 // ── 外观 / 播放 / 系统页签的处理器（同上一条：渲染器只读值 + 调这些）────────────
 function onLeftSidebarGlass(e) { setSetting("leftSidebarGlass", e.target.checked); emit(); }
@@ -2942,9 +1868,9 @@ function onSidebarCornerSquare(side, corner, square) {
   if (key) setSetting(key, square === true);
   emit();
 }
+const onGlassOptics = (e) => { setSetting("glassOptics", e.target.checked); emit(); };
 // 标题栏液态玻璃（titlebarGlass）：与左侧栏同一形状的**乙类**总开关 —— 门控属性挂在
 // 玻璃后端（现 packages/glass/src/glass.js，ADR-0016 第三刀出户；本文件只翻存储键，切换不重建任何东西）。
-const onGlassOptics = (e) => { setSetting("glassOptics", e.target.checked); emit(); };
 function onTitlebarGlass(e) { setSetting("titlebarGlass", e.target.checked); emit(); }
 // 「思考块液态玻璃」三挡分段（关 / 液态玻璃 / 原生）：一次写两键 —— 原生挡赢过玻璃挡的
 // 互斥由 glass-layer.js 的门控属性保证（thinkingNative ⇒ 不挂 data-we-thinking-glass），
@@ -2968,7 +1894,7 @@ const onCapsuleColor = (hex, live) => {
   commitLiveSetting("capsuleColor", hex, live);
 };
 
-// ── 以下处理器模块级 —— 快捷播放面板（src/quick-panel.js）与设置页**共用同一批处理器**。
+// ── 以下处理器模块级 —— 快捷播放面板（src/ui/quick-panel.js）与设置页**共用同一批处理器**。
 //    ⚠️ 分档（ADR-0008 D4）：侧栏档只画**简化配置**（全局材质旋钮 + 各面总开关），
 //    高级行的处理器在那份 ctx 里是"取用即抛错"的占位器 —— 所以这里给的是**全量**模块级处理器，
 //    "哪一档真的用到哪些"由 quick-panel 的 provided 对象与 QP_CTX_SETTINGS_ONLY 名单决定。
@@ -3015,7 +1941,7 @@ const onCaretColor = (hex, live) => {
 };
 
 function onSidebarGlass(e) { setSetting("sidebarGlass", e.target.checked); emit(); }
-// 侧栏全透明（issue #137）：显式放弃可读性下限。与 onSidebarGlass 同形 —— 门控属性
+// 侧栏全透明：显式放弃可读性下限。与 onSidebarGlass 同形 —— 门控属性
 //（data-we-sidebar-fullclear）由 applyGlass 挂/摘，CSS 那组规则只认属性。
 function onSidebarFullClear(e) { setSetting("sidebarFullClear", e.target.checked); emit(); }
 
@@ -3030,57 +1956,8 @@ function onMarketStickyClip(e) { setSetting("marketStickyClip", e.target.checked
 const onMarketStickyFade = (px, live) =>
   commitLiveSetting("marketStickyFade", clampNum(px, ...schemaRange("marketStickyFade"), DEFAULTS.marketStickyFade), live);
 
-// ── 「玻璃 UI」各子项的「独立配置」开关（写的是**模式**）───────────────────
-// ⚠️ 只有 `glassMode` 一个键：能读自己的值这件事，由"注册表 params ↔ 接线点"（守卫 ④）
-//    与"写了必须被 CSS 读到"（⑬）保证。
-function onToggleChildIndependent(id, on) {
-  const next = Object.assign({}, selection.glassMode);
-  if (on) next[id] = "custom"; else delete next[id];
-  setSetting("glassMode", next);
-  emit();
-}
-/** 某一个子项的「独立配置」是否已开（**只看模式**）。 */
-function childIndependentOn(id) {
-  return !!(selection.glassMode && selection.glassMode[id] === "custom");
-}
-// 子 UI 独立参数：直接写它自己的键（键名由 childGlassKey 生成，与 schema 同源）。
-function onGlassChildParam(id, param, value) { setSetting(childGlassKey(id, param), value); emit(); }
-// 场景 / 网页实时渲染的总开关就是**显式重试入口**：除写设置外还要清空全部失败记忆
-//（含**会话内**的传输类软失败 —— 它不在设置里），并重建层与音频互斥态。
-// 五件事必须一起发生，所以它是一个处理器，而不是渲染器里的五行。
-function onToggleSceneLive(e) {
-  setSetting("sceneLive", e.target.checked);
-  setSetting("sceneLiveFailures", {});
-  prepareLiveTimeouts.clear(); // 准备期 live 超时冷却一并清零
-  clearLiveSessionFailures();  // 会话内的传输类软失败同样要清
-  syncLayers();                // key 的 live 段变化 → 层重建（升级/降级）
-  syncSceneAudio(selection);   // 音频互斥状态随形态切换
-  emit();
-}
-function onLiveBootDelay(secs) { setSetting("liveBootDelay", secs); emit(); }
-function onSceneLiveFps(f) { setSetting("sceneLiveFps", f); syncLayers(); emit(); }
-// 自动画质开关：值进渲染页 URL（autoq=0）⇒ 必须重建层（syncLayers）。
-// ⚠️ #371：switchRow 走 React 委托，onChange 收到的是**合成事件**——这里若写 `v === true`
-// （v 是事件对象）恒为 false ⇒ 开关只能写 false（"能关不能开"）。与 onTitlebarGlass /
-// onPauseOnHidden 等同款，取 e.target.checked。
-function onSceneAutoQuality(e) { setSetting("sceneAutoQuality", e.target.checked === true); syncLayers(); emit(); }
-// 软件渲染兜底（#270）：关掉即恢复「软渲染也照跑实时」，下次 sync 会把暂停态解除。
-function onSceneSoftRenderPause(e) { setSetting("sceneSoftRenderPause", e.target.checked === true); syncLayers(); emit(); }
-function onPlaybackRate(rate) { setSetting("playbackRate", rate); emit(); }
-function onFpsCap(cap) {
-  // 用户主动改上限：这一轮抽帧升级允许当场换源（自动触发的那一轮不允许，见 upgradeByUser）。
-  try { noteFpsCapChange(); } catch { /* ignore */ }
-  setSetting("fpsCap", cap);
-  refreshMediaInfo(true);
-  emit();
-}
-function onFlip(e) { setSetting("flip", e.target.checked); emit(); }
-function onAdapterTarget(e) { setSetting("adapterTarget", e.target.value); emit(); }
-function onPauseOnHidden(e) { setSetting("pauseOnHidden", e.target.checked); emit(); }
-function onPauseOnBlur(e) { setSetting("pauseOnBlur", e.target.checked); emit(); }
-function onPauseOnBattery(e) { setSetting("pauseOnBattery", e.target.checked); emit(); }
-function onStartPaused(e) { setSetting("startPaused", e.target.checked); emit(); }
-function onToggleLiveDiag() { toggleLiveDiag(); emit(); }
+// ── 「玻璃 UI」各子项的「独立配置」开关已按族搬出 ────────────────────────────
+// 模式写入与校验整段住 src/client/handlers/settings-toggle-handlers.js；构建期内联回本作用域。
 // ── 「扩展」页签（一号模块：点击效果与拖尾效果）的处理器 ──────────────────────
 // 形状与上面一致：控件只报事件，写设置 + 重渲染都在这里。那一层没有网络往返、"点了就有反应"是
 // 每帧现读设置 ⇒ 开关与档位走 emit 的完整路径，滑块走 commitLiveSetting 的 live 档
@@ -3153,10 +2030,10 @@ function onParallaxSmooth(v, live) { commitLiveSetting("parallaxSmooth", v, live
 /** 客户端缩放上限（px）：显示尺寸最多 72px（头像）/ 96px（立绘），把原图按它缩一遍 ——
  *  直接把 8MB 的原图发上去只会让宿主目录变大、每次加载多传几倍字节。
  *  ⚠️ 头像是**例外**：裁切链要按原图分辨率取样，72px 的显示尺寸放大 4 倍也才 288 —
- *  它用 src/avatar-import.js 的 AVATAR_IMPORT_MAX_EDGE（1024）。 */
+ *  它用 src/extensions/avatar-import.js 的 AVATAR_IMPORT_MAX_EDGE（1024）。 */
 const IMAGE_IMPORT_MAX_EDGE = 512;
 // 头像导入的两道闸（边长 1024 / 体积 4 MiB）、零解码尺寸探针与两层 MIME 清单全部住在
-// `src/avatar-import.js` —— **纯函数**，因此 `test/verify-scene-live.mjs` 能 import 真实现、
+// `src/extensions/avatar-import.js` —— **纯函数**，因此 `test/verify-scene-live.mjs` 能 import 真实现、
 // 用真字节喂它（"源码里有没有这行字"测不出位域读错一位：1024 读成 0 ⇒ 闸恒放行）。
 /** 选图腿的 accept：默认直传层；调用方要收更多格式就显式传（头像传两层之和）。 */
 function pickImageFile(onFile, accept) {
@@ -3276,373 +2153,14 @@ async function postImageAsset(path, blob, what) {
   return { ok: true, name: name };
 }
 
-// ── 「扩展」页签（一号模块：自定义会话头像）的处理器 ────────────────────────────
-// 控件只报事件，写设置 + 重渲染都在这里。装饰层（src/avatar-layer.js）每收到一次 emit
-// 就按当前设置重画一遍，所以：开关 / 导入 / 清除走完整路径（emit）；两个滑块走
-// commitLiveSetting 的 live 档，但**额外补一次 syncAvatarLayer()** —— 那一层是 emit 的
-// 订阅者（不 emit 就不会被叫到），而拖动时的即时反馈正是这个模块的主要看点。
-function onAvatarEnabled(e) { setSetting("avatarEnabled", e.target.checked); emit(); }
-function onAvatarSize(v, live) { commitLiveSetting("avatarSize", v, live); if (live) syncAvatarLayer(); }
-function onAvatarRadius(v, live) { commitLiveSetting("avatarRadius", v, live); if (live) syncAvatarLayer(); }
-/** 助手头像的出现间隔（issue #231）：只影响分组判定，没有样式变量 ⇒ 抬手那一次 emit 重算即可
- *  （渲染器不重算分组；分组由 emit 订阅链里的 syncAvatarLayer 触发，见下）。 */
-function onAvatarAiRepeatRows(v, live) {
-  // 取值域走 schemaRange（与其它滑块同一口径：改 KINDS 不会漏改这里的第二份数字）。
-  commitLiveSetting("avatarAiRepeatRows", clampNum(Math.round(Number(v)), ...schemaRange("avatarAiRepeatRows"), DEFAULTS.avatarAiRepeatRows), live);
-  if (live) syncAvatarLayer();
-}
-// 上传裁切（issue #191 问题 1）：用户口径是"上传非正方形、或主体不在中央时效果很差"。
-// 做法是**导入时先裁再传**（而不是存裁切参数第二次渲染）：
-//   · 盘上那张就是裁完的方形图 ⇒ 预览、会话里、以及"以后任何读到它的地方"天然一致，
-//     不存在"存了参数但某处忘了应用"的漏网点；
-//   · **零新设置键**（不动 KINDS / 夹具 / 预设段），也就没有"预设带不带裁切参数"的语义问题。
-// 代价：裁切是一次性的、事后不可再调（要重调就重新导入 —— 与"替换图片"同一条路）。
-const AVATAR_CROP_VIEW = 260; // 弹窗取景框边长（px，与 CSS 里那格同值）
-/** 待裁的原图（**内存**里，不是设置）：唯一消费者是当前这次弹窗。 */
-let avatarCropPending = null;
-/** 超限**被拦下**的原图（内存里）：用户在提示行点「自动压缩后导入」时走它。 */
-let avatarOverflowPending = null;
-/** 导入前的裁切弹窗：先让用户框选构图，确认后才真正上传。 */
-function onAvatarPick(side) {
-  // 收的格式 = 直传层 ∪ 仅光栅化层（AVATAR_PICK_ACCEPT 与两层清单同住 src/avatar-import.js）。
-  pickImageFile((file) => onAvatarFileChosen(side, file), AVATAR_PICK_ACCEPT);
-}
-/**
- * 选好图之后的**第一站**：先过两道闸，再进裁切弹窗（`#185` 后续，用户口径）。
- *
- * 顺序就是这道闸的全部价值 —— `avatarImportLimit` 只读文件头，**一次都不解码**；
- * 超限则当场拦下并记住这张图（`avatarOverflowPending`），让面板画一行提示 + 一枚
- * 「自动压缩后导入」。用户点它才真的解码 → 缩到 1024 → 无损重编（见 `onAvatarAutoCompress`）。
- */
-async function onAvatarFileChosen(side, file) {
-  if (!file) return;
-  const type = String(file.type || "").toLowerCase();
-  // 白名单两层都收；认不出的 MIME（或浏览器不给 type）仍放行给解码腿去判 ——
-  // 这里只挡"明确不在清单里"的，别把扩展名不规范的图也一起拒了。
-  const known = (IMAGE_DIRECT_ACCEPT + "," + IMAGE_RASTER_ACCEPT).split(",");
-  if (type && !known.includes(type)) {
-    setTransient("avatarOverflow", null);
-    setTransient("avatarError", weT("仅支持 JPG / PNG / WebP / SVG / GIF / BMP / AVIF 图片"));
-    emit();
-    return;
-  }
-  const size = await probeImageSize(file);
-  const verdict = avatarImportLimit(file, size);
-  if (verdict.ok) {
-    avatarOverflowPending = null;
-    setTransient("avatarOverflow", null);
-    await openAvatarCrop(side, file);
-    return;
-  }
-  // 拦下：把"哪一条超了、实测多少"说清楚（笼统的"图太大"等于什么都没说）。
-  avatarOverflowPending = { side: side, file: file };
-  setTransient("avatarError", "");
-  setTransient("avatarOverflow", {
-    side: side,
-    bytes: verdict.bytes,
-    width: verdict.width,
-    height: verdict.height,
-    overBytes: verdict.overBytes,
-    overEdge: verdict.overEdge,
-    // 压缩后仍可能装不下的提示用得上（超大图压到 1024 也可能 > 4 MiB —— 见 ext-avatar 文案）。
-    compressible: true,
-  });
-  emit();
-}
-/**
- * 「自动压缩后导入」：解码 → 缩到 1024 → **无损优先**重编（PNG，装不下才退 WebP）→ 进裁切弹窗。
- *
- * 为什么压在 1024 而不是更小：用户要的是"信息不丢失"，1024 是显示尺寸（72px）的 14 倍，
- * 肉眼与矢量几乎没有差别；PNG 优先则保证**像素级无损**（只有 PNG 真装不下时才退视觉无损的
- * WebP，并在面板上如实说明）。
- */
-async function onAvatarAutoCompress() {
-  const pending = avatarOverflowPending;
-  if (!pending) return;
-  setTransient("avatarCompressing", true);
-  setTransient("avatarError", "");
-  emit();
-  try {
-    const src = await decodeImageFile(pending.file);
-    const shrunk = await downscaleDecoded(src, AVATAR_IMPORT_MAX_EDGE, pending.file, true);
-    // 压缩结果包成 File 再进裁切弹窗：裁切腿吃的是 File（它要 type 与 size）。
-    const name = "avatar-compressed." + (shrunk.blob.type === "image/png" ? "png" : "webp");
-    const compressed = (typeof File === "function")
-      ? new File([shrunk.blob], name, { type: shrunk.blob.type })
-      : shrunk.blob;
-    setTransient("avatarCompressing", false);
-    avatarOverflowPending = null;
-    setTransient("avatarOverflow", null);
-    await openAvatarCrop(pending.side, compressed);
-  } catch (err) {
-    setTransient("avatarCompressing", false);
-    setTransient("avatarError", weT("压缩失败：{error}", { error: err && err.message ? err.message : String(err) }));
-    emit();
-  }
-}
-/** 打开裁切弹窗（读原图尺寸 → 填瞬态 → 交给面板画）。 */
-async function openAvatarCrop(side, file) {
-  if (!file || !/^image\//.test(String(file.type || ""))) {
-    setTransient("avatarError", weT("仅支持 JPG / PNG / WebP / SVG / GIF / BMP / AVIF 图片"));
-    emit();
-    return;
-  }
-  let url;
-  // ⚠️ `w` / `h` 必须声明在 try **之外**：它们要在 catch 之后写进瞬态（`avatarCropW/H`）。
-  // 写进 try 内会让 catch 里的赋值抛 `ReferenceError` —— 裁切弹窗照弹但几何恒为 0
-  // （图不可见），且 `emit()` 到不了（首次选图界面毫无反应）。
-  let w;
-  let h;
-  try {
-    const src = await decodeImageFile(file);
-    w = Number(src.width) || 0;
-    h = Number(src.height) || 0;
-    if (src.close) { try { src.close(); } catch { /* ignore */ } }
-    if (!w || !h) throw new Error(weT("读不出图片尺寸"));
-    url = URL.createObjectURL(file);
-  } catch (err) {
-    setTransient("avatarError", weT("导入失败：{error}", { error: err && err.message ? err.message : String(err) }));
-    emit();
-    return;
-  }
-  // 待裁的原图**存在内存里**（不是设置）：它的唯一消费者是这次弹窗。
-  avatarCropPending = { side: side, file: file };
-  setTransient("avatarError", "");  setTransient("avatarCropSide", side);
-  setTransient("avatarCropUrl", url);
-  setTransient("avatarCropW", w);
-  setTransient("avatarCropH", h);
-  setTransient("avatarCropZoom", 1);
-  setTransient("avatarCropX", 0);
-  setTransient("avatarCropY", 0);
-  emit();
-}
-/** 关掉裁切弹窗（撤掉预览 URL，**不上传**）。 */
-function closeAvatarCrop() {
-  const url = selection.avatarCropUrl;
-  if (url) { try { URL.revokeObjectURL(url); } catch { /* ignore */ } }
-  avatarCropPending = null;
-  setTransient("avatarCropSide", "");
-  setTransient("avatarCropUrl", "");
-  setTransient("avatarCropW", 0);
-  setTransient("avatarCropH", 0);
-  setTransient("avatarCropZoom", 1);
-  setTransient("avatarCropX", 0);
-  setTransient("avatarCropY", 0);
-  emit();
-}
-/**
- * 取景框里那张图的实际绘制几何（换算成"显示 px"）。
- *
- * 口径：方形取景框边长 `AVATAR_CROP_VIEW`；`zoom = 1` 时图**短边刚好铺满**取景框
- * （cover 语义 —— 再小就会在框里露白），放大只增不减。`x` / `y` 是 -1..1 的归一化平移，
- * 边界取"图不能露出空白"的最大可移动量。
- */
-function avatarCropGeometry() {
-  const w = Number(selection.avatarCropW) || 0;
-  const h = Number(selection.avatarCropH) || 0;
-  const zoom = Math.max(1, Number(selection.avatarCropZoom) || 1);
-  if (!w || !h) return { dw: 0, dh: 0, dx: 0, dy: 0, base: 1 };
-  const base = AVATAR_CROP_VIEW / Math.min(w, h); // 短边铺满
-  const dw = w * base * zoom;
-  const dh = h * base * zoom;
-  const slackX = Math.max(0, (dw - AVATAR_CROP_VIEW) / 2);
-  const slackY = Math.max(0, (dh - AVATAR_CROP_VIEW) / 2);
-  const nx = Math.max(-1, Math.min(1, Number(selection.avatarCropX) || 0));
-  const ny = Math.max(-1, Math.min(1, Number(selection.avatarCropY) || 0));
-  return {
-    dw: dw, dh: dh, base: base,
-    dx: -slackX * nx, // 向右拖（nx>0）⇒ 图左移
-    dy: -slackY * ny,
-  };
-}
-/**
- * 拖动 / 缩放期间把取景框里那张图**就地**挪到新几何（live 档的"看得见的那部分"）。
- *
- * 为什么不是 emit：拖动与滚轮一次就是上百个事件，emit 会重渲染整棵设置面板（与
- * `commitLiveSetting` 的两档纪律相同）。渲染器只在完整渲染时按 ctx 里的几何写 inline
- * style，而 live 档**没有**重渲染 ⇒ 图必须由这里自己挪。几何仍然只来自唯一实现
- * `avatarCropGeometry()`；抬手那一次照常 emit，React 写回的值与这里逐字相同。
- */
-function syncAvatarCropLive() {
-  if (typeof document === "undefined" || typeof document.querySelector !== "function") return;
-  let view;
-  try { view = document.querySelector(".we-crop__view"); } catch { return; }
-  const img = view && typeof view.querySelector === "function" ? view.querySelector(".we-crop__img") : null;
-  if (!img || !img.style) return;
-  const geo = avatarCropGeometry();
-  img.style.width = geo.dw + "px";
-  img.style.height = geo.dh + "px";
-  img.style.left = ((AVATAR_CROP_VIEW - geo.dw) / 2 + geo.dx) + "px";
-  img.style.top = ((AVATAR_CROP_VIEW - geo.dh) / 2 + geo.dy) + "px";
-  // 缩放滑块也跟着回真值：live 档没有重渲染，不补这一下，滚轮放大了图而滑块还停在 100%
-  // （滑块自己的 liveFill 只在**它的** input 事件里跑，滚轮不经过它）。
-  try {
-    const row = document.querySelector(".we-crop");
-    const range = row && typeof row.querySelector === "function" ? row.querySelector('input[type="range"]') : null;
-    if (!range) return;
-    const pct = Math.round((Math.max(1, Number(selection.avatarCropZoom) || 1)) * 100);
-    range.value = String(pct);
-    const lo = Number(range.min); const hi = Number(range.max);
-    if (typeof range.style.setProperty === "function" && isFinite(lo) && isFinite(hi) && hi > lo) {
-      range.style.setProperty("--we-fill", ((pct - lo) / (hi - lo) * 100) + "%");
-    }
-    const input = row.querySelector(".we-picker__value-input");
-    if (input) input.value = String(pct);
-    else {
-      const out = row.querySelector(".we-picker__value");
-      if (out) out.textContent = pct + "%";
-    }
-  } catch { /* 回显是增强，失败不影响取值 */ }
-}
-/** 拖动取景：把**这一步**的指针增量换成归一化平移（1 = 可用位移的满量）。 */
-function onAvatarCropDrag(dxPx, dyPx) {
-  const geo = avatarCropGeometry();
-  const slackX = Math.max(0, (geo.dw - AVATAR_CROP_VIEW) / 2);
-  const slackY = Math.max(0, (geo.dh - AVATAR_CROP_VIEW) / 2);
-  const nx = slackX > 0 ? (Number(selection.avatarCropX) || 0) - dxPx / slackX : 0;
-  const ny = slackY > 0 ? (Number(selection.avatarCropY) || 0) - dyPx / slackY : 0;
-  // 拖动是"看得见的那部分" ⇒ 走 live 档（面板不重渲染），图由 syncAvatarCropLive 就地挪。
-  commitLiveTransient("avatarCropX", Math.max(-1, Math.min(1, nx)), true);
-  commitLiveTransient("avatarCropY", Math.max(-1, Math.min(1, ny)), true);
-  syncAvatarCropLive();
-}
-/** 缩放取景（滑块：绝对值）。 */
-function onAvatarCropZoom(z, live) {
-  const v = Math.max(1, Math.min(4, Number(z) || 1));
-  commitLiveTransient("avatarCropZoom", v, live);
-  if (live) syncAvatarCropLive();
-}
-/**
- * 滚轮缩放（增量）。**必须从 `selection` 现读当前值**：live 档不 emit，渲染器手里的
- * `sel.avatarCropZoom` 会停在事件发生前那一版 —— 拿它累加的话连滚十格也只放大一步。
- */
-function onAvatarCropWheel(delta) {
-  const cur = Math.max(1, Number(selection.avatarCropZoom) || 1);
-  // 按百分位取整：滚轮一格是 ±0.1，浮点累加会留下 1.2000000000000002 这类尾巴
-  // （它会被写进滑块回显，也让「滚十格正好到上限」变得不确定）。
-  const v = Math.round(Math.max(1, Math.min(4, cur + (Number(delta) || 0))) * 100) / 100;
-  commitLiveTransient("avatarCropZoom", v, true);
-  syncAvatarCropLive();
-}
-/** 把取景框里那一块**按原图分辨率**裁出来（再用既有 downscale 链缩到 512）。 */
-async function cropAvatarToBlob() {
-  const pending = avatarCropPending;
-  if (!pending) throw new Error(weT("没有待裁的图片"));
-  const src = await decodeImageFile(pending.file);
-  const w = Number(src.width) || 0;
-  const h = Number(src.height) || 0;
-  const geo = avatarCropGeometry();
-  // 显示几何 → 原图像素：取景框边长对应原图 (AVATAR_CROP_VIEW / (base*zoom)) 个像素。
-  const perSrc = 1 / (geo.base * Math.max(1, Number(selection.avatarCropZoom) || 1));
-  const side = AVATAR_CROP_VIEW * perSrc;
-  // 取景框左上角在图坐标里的位置：图中心 + dx/dy，再退半个框。
-  const cx = w / 2 - geo.dx * perSrc;
-  const cy = h / 2 - geo.dy * perSrc;
-  const sx = Math.max(0, Math.min(w - side, cx - side / 2));
-  const sy = Math.max(0, Math.min(h - side, cy - side / 2));
-  const out = document.createElement("canvas");
-  out.width = Math.max(1, Math.round(side));
-  out.height = Math.max(1, Math.round(side));
-  const g = out.getContext("2d");
-  if (!g) throw new Error(weT("没有可用的画布"));
-  g.drawImage(src, sx, sy, side, side, 0, 0, out.width, out.height);
-  if (src.close) { try { src.close(); } catch { /* ignore */ } }
-  const toBlob = (type, quality) => new Promise((resolve) => {
-    try { out.toBlob((b) => resolve(b), type, quality); } catch { resolve(null); }
-  });
-  const webp = await toBlob("image/webp", 0.92);
-  return (webp && webp.type === "image/webp") ? webp : (await toBlob("image/png"));
-}
-/** 确认裁切 → 上传裁好的图（走既有 postImageAsset 那条腿）。 */
-async function onAvatarCropConfirm() {
-  const pending = avatarCropPending;
-  if (!pending) { closeAvatarCrop(); return; }
-  const side = pending.side;
-  setTransient("avatarBusy", side);
-  emit();
-  try {
-    const cut = await cropAvatarToBlob();
-    if (!cut) throw new Error(weT("裁切失败"));
-    const img = await downscaleImageBlob(cut, AVATAR_IMPORT_MAX_EDGE);
-    const posted = await postImageAsset("/avatar/" + side, img.blob, weT("头像"));
-    if (!posted.ok) throw new Error(posted.error);
-    // 记账：文件名进设置（它同时是"设置过没有"与 `<img>` 的缓存键）。
-    setSetting(side === "ai" ? "avatarAiImage" : "avatarUserImage", posted.name);
-    setTransient("avatarBusy", "");
-    closeAvatarCrop(); // 它自己会 emit
-  } catch (err) {
-    setTransient("avatarBusy", "");
-    setTransient("avatarError", weT("导入失败：{error}", { error: err && err.message ? err.message : String(err) }));
-    closeAvatarCrop();
-  }
-}
-function onAvatarClear(side) {
-  setTransient("avatarError", "");
-  apiDelete("/avatar/" + side, { parse: "always" }).then((r) => {
-    if (!r.ok) throw new Error(assetRouteFailure(r, weT("头像")));
-    setSetting(side === "ai" ? "avatarAiImage" : "avatarUserImage", "");
-    emit();
-  }).catch((err) => {
-    setTransient("avatarError", weT("清除失败：{error}", { error: err && err.message ? err.message : String(err) }));
-    emit();
-  });
-}
-
-// ── 「系统」页签（自定义吉祥物立绘）的处理器 ──────────────────────────────────
-// 与头像同一条导入链（pickImageFile / downscaleImageFile / postImageAsset），差别只有：
-//   · 路由不带 side（立绘只有一张，再导入即覆盖 —— 宿主那边清同族旧文件）；
-//   · 除文件名外还记一个**显示盒**（`<宽>x<高>`）：立绘按自己的宽高比适配 96×192 的框，
-//     结果存下来给主页面那只吉祥物用（拖动 / 贴边 / 视口钳位都读它）。
-// 立绘的尺寸直接改主页面那只（RopeDock 是 emit 的订阅者）⇒ 全部走完整路径。
-// 盒的**设计上限**（MASCOT_BOX_MAX_W/H）真源在 lib/settings-schema.js —— `mascotBox`
-// 档限量级与上传腿的适配框同作用域引用这一对常量，两侧永不漂；短边下限是上传腿
-// 自己的口径（"太小的图标点不到"），schema 不知道它。
-const MASCOT_BOX_MIN_SIDE = 28;
-function onMascotPick() { pickImageFile((file) => uploadMascotFile(file)); }
-async function uploadMascotFile(file) {
-  if (!file || !/^image\/(png|jpeg|webp)$/.test(String(file.type || ""))) {
-    setTransient("mascotError", weT("仅支持 JPG / PNG / WebP 图片"));
-    emit();
-    return;
-  }
-  setTransient("mascotError", "");
-  setTransient("mascotBusy", true);
-  emit();
-  try {
-    const img = await downscaleImageFile(file, IMAGE_IMPORT_MAX_EDGE);
-    // 显示盒：等比适配 96×192（大图缩到框内）；小图不放大，只为"太小的图标点不到"
-    // 留一条下限（短边 < 28px 才放大到 28px）。
-    const fit = Math.min(MASCOT_BOX_MAX_W / img.width, MASCOT_BOX_MAX_H / img.height);
-    const lift = Math.max(1, MASCOT_BOX_MIN_SIDE / Math.min(img.width, img.height));
-    const k = Math.min(fit, lift);
-    const box = Math.max(1, Math.round(img.width * k)) + "x" + Math.max(1, Math.round(img.height * k));
-    const posted = await postImageAsset("/mascot", img.blob, weT("立绘"));
-    if (!posted.ok) throw new Error(posted.error);
-    setSetting("mascotImage", posted.name);
-    setSetting("mascotImageBox", box);
-  } catch (err) {
-    setTransient("mascotError", weT("导入失败：{error}", { error: err && err.message ? err.message : String(err) }));
-  } finally {
-    setTransient("mascotBusy", false);
-    emit();
-  }
-}
-function onMascotClear() {
-  setTransient("mascotError", "");
-  // 回执是**布尔**（真删掉 = true / 失败 = false）：`onMascotFormConfirm` 要拿它决定"改不改档位"，
-  // 所以这里不能把结果吞掉。失败路径自己已经把原因写进 `mascotError` 并 emit。
-  return apiDelete("/mascot", { parse: "always" }).then((r) => {
-    if (!r.ok) throw new Error(assetRouteFailure(r, weT("立绘")));
-    setSetting("mascotImage", "");
-    setSetting("mascotImageBox", "");
-    emit();
-    return true;
-  }).catch((err) => {
-    setTransient("mascotError", weT("清除失败：{error}", { error: err && err.message ? err.message : String(err) }));
-    emit();
-    return false;
-  });
-}
+// ── 「扩展」页签（一号模块：自定义会话头像）的处理器已按族搬出 ──────────────────────
+// 开关 / 两个滑块 / 出现间隔、图片选择与自动压缩、裁切弹窗的开关，连同 AVATAR_CROP_VIEW 与
+// 两份 pending 状态整段住 src/client/handlers/avatar-ext-handlers.js；构建期内联回本作用域。
+// 裁切几何与出图住 src/client/handlers/image-assets.js（同一族，搬在它之前）。
+// ── 用户图片资产导入的共用腿（会话头像裁切 / 吉祥物立绘）已按族搬出 ────────────────
+// 取景框几何、拖动/缩放/滚轮手势、裁切出图与确认、清空，以及吉祥物立绘的选择/上传/清除
+// 整段住 src/client/handlers/image-assets.js；构建期由 scripts/build-client.mjs 内联回本作用域。
+// 「适配方式」onObjectFit 是外观处理器，不属于本族，仍在下面。
 
 /**
  * 适配方式（覆盖 / 填充 / 居中 / 拉伸）：除写设置外，Edge 的 canvas 渲染路径把 fit 存在
@@ -3708,141 +2226,9 @@ function cardKeyDown(e) {
   if (e.key === "Enter" || e.key === " ") { e.preventDefault(); e.currentTarget.click(); }
 }
 
-// ── 播放控制处理器（模块级）─────────────────────────────────────────────────
-// 设置页与快捷播放面板（quick-panel.js，官方侧栏 tab 与低版本抽屉共用）调用**同一份实现**
-// （语义唯一真源，不是两份手抄）—— 它们改的也是同一批设置键。
-function playbackIsVideoLike(selLike) {
-  const isLiveScene = (selLike.type === "scene" || selLike.type === "web") && liveRenderEnabled(selLike);
-  return !isLiveScene && (selLike.type === "video"
-    || (selLike.type === "scene" && Boolean(selLike.sceneVideo)));
-}
-// 播放/暂停: 意图 =「播放」但元素并没有真的在播时（被拒 / 解码失败 /
-// 被浏览器暂停），点击必须【重试播放】而不是把意图翻成 false —— 否则这个
-// 按钮在冻住状态下等于没反应，用户没有可用的「继续」。
-function onTogglePlay() {
-  if (selection.playing && playbackIsVideoLike(selection) && !selection.videoPlaying) {
-    const layer = document.getElementById(LAYER_ID);
-    const v = layer && layer.querySelector("video");
-    if (v && v.dataset) delete v.dataset.wePlayRefused; // 清掉拒绝标记才能重试
-    setTransient("videoError", "");
-    emit(); // syncLayers → applyVideoPlayback 会重新 play()
-    return;
-  }
-  setTransient("playing", !selection.playing);
-  emit();
-}
-// 音乐开关：只翻总开关，不动 videoVolume —— 关掉再打开能恢复原音量。
-// 例外：**开启时若音量为 0**（默认值），自动提到默认可听音量 —— 否则开关
-// 打开了却依然无声，用户把这条读作「音量开/关都不生效」（实测）。
-function onToggleAudio() {
-  const enabling = selection.videoAudioEnabled === false;
-  selection.videoAudioEnabled = enabling;
-  if (enabling && clampNum(selection.videoVolume, 0, 1, 0) <= 0) {
-    selection.videoVolume = DEFAULT_AUDIO_VOLUME;
-  }
-  const layer = document.getElementById(LAYER_ID);
-  const v = layer && layer.querySelector("video");
-  if (v) weApplyAudio(v);
-  syncSceneAudio(selection);
-  if (sceneAudioEl && selection.videoAudioEnabled !== false && weAudioVolume() > 0) {
-    const p = sceneAudioEl.play();
-    if (p && typeof p.catch === "function") p.catch(() => { /* ignore */ });
-  }
-  persistSelection();
-  emit();
-}
-// 音量滑块（0–100%）：视频 / 场景内嵌 MP4 / 场景包内音频共用同一 videoVolume。
-// 拖动档（live）照样即时改音量（听得见），只是不 emit —— 见 commitLiveSetting。
-function onVideoVolume(pct, live) {
-  selection.videoVolume = clampNum(Number(pct) / 100, 0, 1, 0);
-  const layer = document.getElementById(LAYER_ID);
-  const vid = layer && layer.querySelector("video");
-  if (vid) weApplyAudio(vid);
-  syncSceneAudio(selection);
-  if (sceneAudioEl && selection.videoAudioEnabled !== false && weAudioVolume() > 0) {
-    const p = sceneAudioEl.play();
-    if (p && typeof p.catch === "function") p.catch(() => { /* ignore */ });
-  }
-  persistSelection();
-  if (!live) emit();
-}
-function onClear() {
-  // 清掉壁纸 = 这张的属性面板也失去对象：顺手把「壁纸属性」收起来。不收的话开关会
-  // 「挂着」，下次随便选一张带属性的壁纸时面板会**自动弹开**（用户没点过它）。
-  propsPanelOpen = false;
-  applySelection("");
-}
-// 手动点开一张壁纸 = 明确想看它：作废它的 live 失败记忆（sceneLiveFailures，持久
-// 降级），让实时渲染重试一次（真失败会自动回退并重新记账）。没有这条路时，一张
-// 「某次首帧超时」的壁纸会被**永久**降级到无音频桥形态 —— 音频驱动的壁纸（如
-// 音域回响）就此黑屏且用户无路可走（实测）。只清手动路径：轮换提交不清。
-function clearLiveFailure(id) {
-  const k = String(id || "");
-  const m = selection.sceneLiveFailures;
-  if (!k || !m || !m[k]) return;
-  const next = Object.assign({}, m);
-  delete next[k];
-  setSetting("sceneLiveFailures", next);
-}
-function onGroupChange(e) {
-  // 换列表 ⇒ 清掉待确认（不变量 3）：否则"删除「A」？"会跟着新选中的 B 一起显示。
-  disarmConfirm();
-  const nextGroupId = e.target.value;
-  selection.rotationGroupId = nextGroupId;
-  // 选「— 选择轮播列表 —」（空值）= 不轮播：停在当前壁纸、停掉轮转、取消进行中的准备，
-  // **不切图**。原来空值也会走下面的 applySelection(候选第一张)，而空列表时 candidates 退化成
-  // "全部可播放" ⇒ 一选空就被当成"换了一组"，壁纸当场被换掉。
-  if (!nextGroupId) {
-    selection.rotationEnabled = false;
-    cancelRotationPrepare();
-    persistSelection();
-    syncRotationTimer();
-    emit();
-    return;
-  }
-  if (selection.rotationEnabled) {
-    const first = rotationCandidates()[0];
-    if (first) applySelection(first.id);
-    else applySelection("");
-    return;
-  }
-  persistSelection();
-  syncRotationTimer();
-  emit();
-}
-function onToggleRotation() {
-  selection.rotationEnabled = !selection.rotationEnabled;
-  // 关闭轮换：进行中的准备（staging/探测元素）一并取消，不再落实切换。
-  if (!selection.rotationEnabled) cancelRotationPrepare();
-  if (selection.rotationEnabled) {
-    if (!selection.rotationGroupId) {
-      const usable = firstUsableGroup();
-      if (usable) selection.rotationGroupId = usable.id;
-    }
-    if (!rotationCandidates().some((w) => w.id === selection.id)) {
-      const first = rotationCandidates()[0];
-      if (first) {
-        applySelection(first.id);
-        return;
-      }
-    }
-  }
-  persistSelection();
-  syncRotationTimer();
-  emit();
-}
-// 「下一张」（快捷面板）：轮播开着按活动列表推进、关着按可播放网格推进；
-// 锚点是【实际显示】的那张（与轮换同一锚点判定，避免 A→B→A 乒乓）。
-function onNextWallpaper() {
-  const list = selection.rotationEnabled ? rotationCandidates() : rotationPoolAll();
-  if (list.length < 2) return;
-  const anchor = rotationAnchorWallpaper();
-  const anchorId = anchor ? anchor.id : selection.id;
-  const cur = list.findIndex((w) => w.id === anchorId);
-  const next = list[(cur + 1 + list.length) % list.length];
-  if (next && next.id !== anchorId) applySelection(next.id, { fromManual: true });
-}
-
+// ── 播放控制处理器（模块级）已按族搬出 ─────────────────────────────────────────
+// 播放/暂停、静音、音量（live 档不 emit）、清除当前壁纸、清 live 失败记忆、换组、
+// 开停轮播、下一张 —— 整段住 src/client/handlers/playback-handlers.js，构建期内联回本作用域。
 // ── 外观 / 画面处理器（模块级）──────────────────────────────────────────────
 // 与上面那批播放控制处理器同源理由：快捷播放面板的「外观」「播放」两页与设置页
 // 同名页签**共用同一批渲染器**（renderAppearanceTab / renderEffectsTab 的
@@ -3880,149 +2266,10 @@ const onLayerReset = (key) => {
   emit();
 };
 
-// ── 模块级 / 页签级 / 全局重置（issue #192）────────────────────────────────────
-// 键集一律取自 lib/settings-schema.js 的 `RESET_MODULES`（模块级）/ `RESET_TABS`（页签级）/
-// `PROFILE_PRESET_KEYS`（全局）—— 都在那一侧定义，这一侧不手抄键表。
-// ⚠️ 必须是**整批赋值 + 一次 persistSelection + 一次 emit**：逐键走 `setSetting` 会发 N 次
-// debounce、N 次整棵面板重渲染（本仓"写必成对"纪律，同 src/fontset-store.js 的注释）。
-/**
- * 把给定的键整批写回默认值，返回真正改动的键数。
- * 只碰"确实有默认值"的键：缺默认值的键原样留着，免得把 `undefined` 写进 store ——
- * 那会被宿主 sanitize 折成默认值，看着像"重置生效了"，实际是绕了一圈的静默改写。
- */
-function resetKeysToDefault(keys) {
-  let touched = 0;
-  for (let i = 0; i < keys.length; i += 1) {
-    const k = keys[i];
-    if (!Object.prototype.hasOwnProperty.call(DEFAULTS, k)) continue;
-    if (selection[k] === DEFAULTS[k]) continue;
-    selection[k] = DEFAULTS[k];
-    touched += 1;
-  }
-  if (touched) persistSelection();
-  return touched;
-}
-/**
- * 模块级重置（**无需确认**：单模块代价低 —— 用户口径见 issue #192）。
- * 覆盖**两处**的模块：扩展页签的三个（avatar / fx / parallax）与外观页签的六个
- * （theme / detail / glass / corners / uiColor / font）—— 同一个入口，键集由模块名查表。
- */
-const onResetModule = (groupName) => {
-  const keys = (typeof RESET_MODULES === "object" && RESET_MODULES && RESET_MODULES[groupName]) || [];
-  if (!keys.length) return;
-  resetKeysToDefault(keys);
-  emit();
-};
-/**
- * 页签级重置（issue #192 用户口径：「每个选项卡后面加重置，重置指定选项卡」）。
- * 键集取自 `RESET_TABS`（schema 里手写并由守卫对账的完整划分）。
- * 走两步确认 ⇒ 这个函数只负责"确认之后真的做"，确认由面板用 armConfirm 上膛。
- */
-const onResetTab = (tabId) => {
-  const keys = (typeof RESET_TABS === "object" && RESET_TABS && RESET_TABS[tabId]) || [];
-  resetKeysToDefault(keys);
-  disarmConfirm(); // 确认行自己收掉（它内部会 emit）
-};
-/**
- * 全局重置（**必须二次确认**）：确认由面板走既有 `armConfirm` 两步确认构件完成
- * （`selection.armedConfirm` 是单值 ⇒ 结构上同一时刻只有一个动作待确认，见那段注释），
- * 这里只负责"确认之后真的做"。
- * 范围 = `PROFILE_PRESET_KEYS`（全部会持久化的设置键）；**不含导入的资产文件**
- * （头像图 / 吉祥物立绘 / 字体集住各自的目录，删不删是另一件事 —— 重置设置不该顺手删用户的图）。
- */
-const onResetAll = () => {
-  resetKeysToDefault(PROFILE_PRESET_KEYS);
-  disarmConfirm(); // 确认行自己收掉（它内部会 emit）
-};
-// 配色 (accent color) + 玻璃透明度 (glass transparency) + 玻璃颜色 (glass base
-// tint): applied instantly through applyEffects() (--we-accent /
-// --we-glass-alpha / --we-surface-tint-light/dark), persisted so the settings page keeps
-// its custom look across reloads.
-const onAccent = (hex, live) => {
-  if (!/^#[0-9a-f]{6}$/i.test(hex)) return;
-  commitLiveSetting("accent", hex, live);
-};
-// ── 全局 UI 配色（用户口径）────────────────────────────────────────
-// 「UI 配色自定义」总开关：与 fontCustom 同形（默认关）。开启后「全局配色」不再生效、改由
-// 五个元素键分别决定（面板那一行会被禁用，见 panel-tabs 的 renderAppearanceUiColorSection）。
-const onToggleUiColorCustom = (v) => {
-  setSetting("uiColorCustom", !!v);
-  applyEffects();
-  emit();
-};
-// 五个元素各自的颜色。⚠️ 空串 = **跟随「全局配色」**（不是"回宿主原生"）—— effects.js 里
-// `selection[k] || selection.accent` 就是这条语义的实现处；面板的「跟随」按钮写空串。
-const onUiColorElement = (field, hex, live) => {
-  if (hex !== "" && !/^#[0-9a-f]{6}$/i.test(hex)) return;
-  if (UI_COLOR_KEYS.indexOf(field) < 0) return; // 只认那五个键（渲染器传错名字时不静默写脏）
-  commitLiveSetting(field, hex, live);
-};
-// #159②：玻璃颜色**内部永远是一对** `{light, dark}`（见 lib/settings-schema.js 的 readGlassColors）。
-// 色板行只写"当前在设的那一侧"；开关关着时两侧写同一个色 —— 与颜色角色的 onThemeColor 同构。
-// 读那一对用 `panelGlassPair`（家在 lib/settings-schema.js，ADR-0016 第二刀归位；**自带归一、不引用工厂作用域里的兄弟**，
-// 因为 test/verify-scene-live.mjs 把 glass-panel.js 当真模块 import；这里不另存一份口径，
-// 免得"读的一侧"和"画的一侧"漂开（走到这儿的值可能仍是标量：老预设定档直传 / 台架 selection）。
-const onGlassColor = (mode, hex, live) => {
-  if (!/^#[0-9a-f]{6}$/i.test(hex)) return;
-  const cur = panelGlassPair(selection);
-  // 缺的那一侧用本次选的色补上 —— **绝不写半对**：半对在另一配色下会退化成兜底色，
-  // 用户的观感就是"没染上"（readGlassColors 也会把它补回另一侧，但那要等下一次 sanitize）。
-  const next = { light: cur.light || hex, dark: cur.dark || hex };
-  if (selection.glassDarkSeparate === true) next[mode === "dark" ? "dark" : "light"] = hex;
-  else { next.light = hex; next.dark = hex; }
-  commitLiveSetting("glassColor", next, live);
-};
-// 「深色单独设置」开关（玻璃色那一行）：关掉时把两侧**收敛到浅色那一侧** —— 这就是"一个颜色
-// 同时用于两套"的字面含义。不做收敛的话，关掉后深色还留着上一次的深色值，再打开会突然跳回旧值。
-// 与 onThemeDarkSeparate（字体角色那一个）同构：开关本身不改任何渲染，只是面板的显隐 + 写入口径。
-const onGlassDarkSeparate = (v) => {
-  const on = v === true;
-  setSetting("glassDarkSeparate", on);
-  if (!on) {
-    const cur = panelGlassPair(selection);
-    const light = cur.light || cur.dark;
-    if (light) setSetting("glassColor", { light, dark: light });
-  }
-  applyEffects(); emit();
-};
-const onGlassAlpha = (pct, live) =>
-  commitLiveSetting("glassAlpha", clampNum(pct, ...schemaRange("glassAlpha"), DEFAULTS.glassAlpha), live);
-// 遮罩浓度（#254）：只折算宿主 Modal 遮罩 token 的 alpha（玻璃层写 --we-mask-strength）。
-const onGlassMaskStrength = (pct, live) =>
-  commitLiveSetting("settingsMaskStrength", clampNum(pct, ...schemaRange("settingsMaskStrength"), DEFAULTS.settingsMaskStrength), live);
-// 玻璃保真度（默认 100 = 完整可读性红线）：唯一的「颜色 vs 可读」权衡旋钮，
-// 数学入口在 effects.js 的 weClampSurfaceColor 第三参 + --we-glass-fidelity。
-const onGlassFidelity = (pct, live) =>
-  commitLiveSetting("glassFidelity", clampNum(pct, ...schemaRange("glassFidelity"), DEFAULTS.glassFidelity), live);
-// 镜面高光强度（#404，默认 100 = 现状）：0 = 主块三档与侧栏派生档的釉光全部归零，
-// 只保留底与霜；100 = 与接线前逐值相同。落地在 glass-layer.js 的 --we-sheen-scale。
-const onGlassSheenStrength = (pct, live) =>
-  commitLiveSetting("glassSheenStrength", clampNum(pct, ...schemaRange("glassSheenStrength"), DEFAULTS.glassSheenStrength), live);
-// 额外补雾化的选择器（#200）：值是一串 CSS 选择器（逗号 / 换行分隔，最多 8 条）。
-// 消毒只走 settings-schema 的 sanitizeExtraGlassSelectors —— 读侧（sanitizeFromSchema）
-// 与本模块生成侧（glass-extra.js）**共用同一份**判据，所以用户敲到一半的非法串既不会进
-// 规则、也不会被"修剪"成另一个选择器。**不做防抖**：只有清单真的变了才会重写 <style>
-// （glass-extra 里那句内容比对），且一次只写一条文本节点，代价与拖滑杆同量级。
-const onGlassSurfacePolicy = (id, policy) => {
-  if (!["left-sidebar", "right-sidebar", "settings-window", "content", "declared", "extra"].includes(id)
-    || !["auto", "native"].includes(policy)) return;
-  setSetting("glassSurfacePolicy", { ...selection.glassSurfacePolicy, [id]: policy });
-  applyEffects(); emit();
-};
-const onExtraGlassSelectors = (text) => {
-  setSetting("extraGlassSelectors", text == null ? "" : String(text));
-  applyEffects();
-  emit();
-};
-// 对话栏玻璃保真度（默认 100）：独立于全局的第二把尺子，只作用对话栏玻璃面
-// （气泡 / 输入卡片 / 对话内 markdown 家族 —— styles.js 消费 --we-chat-readability-*）。
-const onChatGlassFidelity = (pct, live) =>
-  commitLiveSetting("chatGlassFidelity", clampNum(pct, ...schemaRange("chatGlassFidelity"), DEFAULTS.chatGlassFidelity), live);
-// 主题随壁纸（**默认关**）：开关本身只写设置；**打开时**立刻按当前壁纸补判一次，
-// 不等下一次换壁纸（补判走与换壁纸同一条入口；关时那条入口整体空转，不写主题）。
-const onToggleThemeFollow = (v) => {
-  setSetting("themeFollow", !!v); themeFollowOnWallpaper(selection); emit();
-};
+// ── 模块级 / 页签级 / 全局重置已按族搬出 ─────────────────────────────────────
+// resetKeysToDefault 与三个 onReset* 整段住 src/client/handlers/reset-and-accent-handlers.js；构建期内联回本作用域。
+// ── 全局 UI 配色处理器已按族搬出 ─────────────────────────────────────────────
+// 角色/元素配色写入、自定义开关、清除整段住 src/client/handlers/color-handlers.js；构建期内联回本作用域。
 
 // ── 字体 / 主题处理器 + 三个 ctx 构造器 ──────────────────────────────────────
 // 它们只读模块级单例 `selection`、只调模块级函数（setFontValues / applyEffects / emit /
@@ -4097,231 +2344,10 @@ function fontSetCtx() {
   };
 }
 
-// ── 玻璃预设的接线（渲染器只读 ctx、动作经 on*；store 与失败语义见 src/preset-store.js）──
-// 与 fontSetCtx 同形：清单/错误是宿主投影，busy 是在途标记，删除走 armConfirm 两步确认。
-// 应用预设会**整机快照覆盖**（settings 段 + 勾选的资产段）⇒ 动作前先清掉挂着的删除确认
-//（上下文切换必清，同字体集）。
-/**
- * 保存对话框的**资产可用位 + 默认勾**（ADR-0011 D4，三态）：
- *   · 默认勾：字体 ✅ / 吉祥物 ✅ / 头像 ❌（头像体积翻倍、与"分享一份外观配置"关系最弱）；
- *   · available = 本机现在**有**那份资产 —— **只决定提示文案**（勾上是"带过去"还是"声明无"），
- *     **不再禁用开关、也不再把勾选钳成 false**（那样用户就没法声明"这一族是无"）：
- *     字体段的可带判据 = 活动字体集至少改过一个颜色角色（全默认的字体集没有个性）；
- *     吉祥物 = selection.mascotImage 非空；头像 = 两张任一非空。
- * 纯函数、零副作用：调用点（打开保存对话框时）把产物经 setTransient 存进 glassPresetAssetChecks。
- */
-function presetAssetChecksNow() {
-  const fontValues = (() => {
-    const out = {};
-    for (const key of FONTSET_KEYS) out[key] = selection[key];
-    return sanitizeFontset(out);
-  })();
-  const fontAvailable = Boolean(fontValues.themeColors
-    && typeof fontValues.themeColors === "object"
-    && Object.keys(fontValues.themeColors).length > 0);
-  const mascotAvailable = Boolean(selection.mascotImage);
-  const avatarAvailable = Boolean(selection.avatarUserImage || selection.avatarAiImage);
-  const prev = (selection.glassPresetAssetChecks && typeof selection.glassPresetAssetChecks === "object")
-    ? selection.glassPresetAssetChecks : {};
-  return {
-    // 用户上一轮的勾选保留（重开对话框不丢他的选择）；available 位每次现算，**只决定提示文案**。
-    // ⚠️ 勾选**不再**被 available 钳住：勾上 = "按本机现状声明这一族" —— 本机没有
-    //    图 ⇒ 宿主落 `null`（**显式声明「无」**，套用它的人回到内置），这是用户有权做的声明；
-    //    不勾 = 不动对方。**别把勾选钳成 false 或禁用行**：那会让用户自存预设永远无法声明「无」。
-    font: prev.font !== false,
-    mascot: prev.mascot !== false,
-    avatar: prev.avatar === true,
-    // 吉祥物族的**指向**（第四态）：`""` = 按本机现状，形态值 = 这一族只存"指向出厂自带的那一只"。
-    // 与勾选同款：保留上一轮的选择（重开对话框不丢），值域由宿主再判一次（认不清就丢）。
-    mascotPoint: typeof prev.mascotPoint === "string" ? prev.mascotPoint : "",
-    fontAvailable,
-    mascotAvailable,
-    avatarAvailable,
-  };
-}
-
-function glassPresetCtx() {
-  const done = () => { setTransient("glassPresetBusy", false); emit(); };
-  const busy = (promise) => { setTransient("glassPresetBusy", true); emit(); promise.then(done, done); };
-  // 待确认的动作（应用 / 真保存 / 导入 / 删除）共用 busy；错误行由 store 内部的
-  // setPresetError 收口。
-  return {
-    presets: selection.glassPresets,
-    loading: selection.glassPresetBusy === true,
-    error: selection.glassPresetError,
-    note: selection.glassPresetNote,
-    saving: selection.glassPresetSaving === true,
-    // 对话框用途："save"（存进预设栏）/ "export"（导出为文件）/ ""（关着）。
-    // 渲染器据此画名字行 + 勾选 +「保存预设」，或只画勾选 +「下载 .json」。
-    saveTarget: selection.glassPresetSaveTarget,
-    // 导出的目标预设 id（对话框里那个下拉的当前值）。与 saveTarget 同住一个瞬态字段组：
-    // 保存用 ""，导出用"选中的那一份"。
-    exportTargetId: selection.glassPresetTargetId,
-    draftName: selection.glassPresetDraftName,
-    armedId: armedIdOf("gpreset"),
-    assetChecks: selection.glassPresetAssetChecks,
-    // 勾选/取消只改视图态 —— 真正的名单在「保存预设」那一下才交给 store。
-    onAssetToggle: (kind, on) => {
-      const next = Object.assign({}, selection.glassPresetAssetChecks);
-      next[kind] = on === true;
-      setTransient("glassPresetAssetChecks", next);
-      emit();
-    },
-    // 吉祥物族的**指向**（第四态）：`""` = 按本机现状；形态值 = "这一段只存指向出厂自带的那一只"。
-    // 与勾选同住 glassPresetAssetChecks（内存 UI 瞬态，不进 settings schema）；值域外的值一律折成 ""。
-    onMascotPoint: (value) => {
-      const next = Object.assign({}, selection.glassPresetAssetChecks);
-      next.mascotPoint = ROPE_FORM_VALUES.includes(value) ? value : "";
-      setTransient("glassPresetAssetChecks", next);
-      emit();
-    },
-    // #219 首次应用的引导：**只在"清单已加载 + 还没存过自己的预设 + 没点过不再提示"**
-    // 三条同时成立时拦一次。自动路径（firstRunAdopt 直接调 applyPreset）不经过这里，
-    // 所以首装自动采用不受影响。
-    guideTargetId: selection.glassPresetGuideTargetId,
-    hiddenBuiltin: selection.glassPresetHidden,
-    onApply: (id) => {
-      disarmConfirm();
-      const rows = Array.isArray(selection.glassPresets) ? selection.glassPresets : [];
-      // 清单没加载成功 ⇒ 判不了就不拦（应用本身马上会把宿主错误给出来）。
-      const neverSaved = selection.glassPresetsLoaded === true
-        && selection.presetGuideDismissed !== "1"
-        && !rows.some((r) => r && r.origin === "user");
-      if (neverSaved) {
-        setTransient("glassPresetGuideTargetId", id);
-        emit();
-        return;
-      }
-      setTransient("glassPresetGuideTargetId", "");
-      busy(applyPreset(id));
-    },
-    // 引导里的「先存一份再继续」：数据层直调 saveGlassPreset（不弹对话框），
-    // 保存成功才应用原目标；保存失败留在引导行（用户仍可「仍然应用」）。
-    onGuideSaveAndApply: () => {
-      const target = selection.glassPresetGuideTargetId;
-      const checks = presetAssetChecksNow();
-      const embeds = ["font", "mascot", "avatar"].filter((k) => checks[k] === true);
-      const stamp = new Date().toLocaleString();
-      setTransient("glassPresetAssetChecks", checks);
-      setTransient("glassPresetGuideTargetId", "");
-      emit();
-      busy(saveGlassPreset(weT("当前配置 {time}", { time: stamp }), embeds).then((savedId) => {
-        if (savedId && target) return applyPreset(target);
-        if (!savedId && target) {
-          setTransient("glassPresetGuideTargetId", target);
-          emit();
-        }
-        return false;
-      }));
-    },
-    onGuideApplyAnyway: () => {
-      const target = selection.glassPresetGuideTargetId;
-      setTransient("glassPresetGuideTargetId", "");
-      emit();
-      if (target) busy(applyPreset(target));
-    },
-    // 「不再提示」= 永久关掉引导（设置键，宿主文件、与端口无关），并照常应用 ——
-    // 用户点的是应用，不该被这个确认取消掉。
-    onGuideDismiss: () => {
-      setSetting("presetGuideDismissed", "1");
-      const target = selection.glassPresetGuideTargetId;
-      setTransient("glassPresetGuideTargetId", "");
-      emit();
-      if (target) busy(applyPreset(target));
-    },
-    onRestoreHidden: (id) => { disarmConfirm(); busy(restoreGlassPreset(id)); },
-    onOpenSave: () => {
-      setTransient("glassPresetSaving", true);
-      setTransient("glassPresetSaveTarget", "save");
-      setTransient("glassPresetTargetId", "");
-      setTransient("glassPresetDraftName", "");
-      setTransient("glassPresetError", "");
-      setTransient("glassPresetNote", "");
-      // 可用位在打开对话框那一刻现算（字体集/立绘/头像可能刚被改过）。
-      setTransient("glassPresetAssetChecks", presetAssetChecksNow());
-      disarmConfirm();
-      emit();
-    },
-    // 导出（ADR-0011 D7 + 用户口径）：入口**独立成一行**（网格下方与
-    // 保存 / 导入并列），不再逐格挂键 —— 所以这里不再收 id，默认选中清单里
-    // **第一份读得出来的**（broken 的没有可导出的正文，宿主对它 422）。
-    // 仍是"先弹同一组资产勾选对话框，确认后才发起下载"。
-    onOpenExport: () => {
-      const first = (Array.isArray(selection.glassPresets) ? selection.glassPresets : [])
-        .find((r) => !r.broken);
-      setTransient("glassPresetSaving", true);
-      setTransient("glassPresetSaveTarget", "export");
-      setTransient("glassPresetTargetId", first ? first.id : "");
-      setTransient("glassPresetError", "");
-      setTransient("glassPresetNote", "");
-      // 可用位在这里现算，但**勾选默认重置**成 D4 默认值：导出的对象是"那一份预设"，
-      // 不是当前 selection —— 沿用上一轮为"保存"勾过的状态反而容易带错东西。
-      // 指向同理重置（导出的是"那一份"，别把上一轮为保存选过的指向带进去）。
-      setTransient("glassPresetAssetChecks", Object.assign(presetAssetChecksNow(), { font: true, mascot: true, avatar: false, mascotPoint: "" }));
-      disarmConfirm();
-      emit();
-    },
-    // 换"导出哪一份"：只改目标 id。资产勾选与可用位**不动** —— 可用位回答的是
-    // "本机现在有没有这份资产"，与选中的是哪一份预设无关。
-    onExportTargetChange: (id) => {
-      setTransient("glassPresetTargetId", String(id == null ? "" : id));
-      emit();
-    },
-    // 导出的确认步：普通链接导航（宿主带 Content-Disposition: attachment 应答）——
-    // 不引入 blob / showSaveFilePicker / window.confirm。勾选名单走 ?assets= 查询参数。
-    onExportCommit: () => {
-      const id = selection.glassPresetTargetId;
-      if (!isGlassPresetId(id)) return;
-      const checks = selection.glassPresetAssetChecks || {};
-      const embeds = ["font", "mascot", "avatar"].filter((k) => checks[k] === true);
-      // 指向出厂自带（第四态）：走 ?point=mascot:<形态> —— 与内嵌互斥（那一段没有字节可带），
-      // 所以有指向时把 `mascot` 从内嵌名单里摘掉（否则宿主会照旧把本机那张图内嵌进去）。
-      const point = ROPE_FORM_VALUES.includes(checks.mascotPoint) ? checks.mascotPoint : "";
-      setTransient("glassPresetSaving", false);
-      setTransient("glassPresetSaveTarget", "");
-      setTransient("glassPresetTargetId", "");
-      emit();
-      const a = document.createElement("a");
-      a.href = exportGlassPresetUrl(id, embeds.filter((k) => !(k === "mascot" && point)), point);
-      a.download = id + ".json";
-      document.body.appendChild(a);
-      a.click();
-      a.remove();
-    },
-    onDraftName: (v) => { setTransient("glassPresetDraftName", String(v == null ? "" : v)); emit(); },
-    // 对话框第一步的「下一步」/ 名字框里的 Enter：只做最小校验（名字非空 ——
-    // 空名字在保存时也会被 store 拦，但提前拦能让错误行贴着输入框出现）。
-    onSaveCommit: () => {
-      if (!String(selection.glassPresetDraftName || "").trim()) {
-        setPresetError(weT("先给预设起个名字"));
-        return;
-      }
-      emit();
-    },
-    // 对话框第二步的「保存预设」：勾选名单此刻才交给 store（saveGlassPreset 内部会做
-    // 资产前置校验 —— 勾了但本机没有的组合给可判定原因）。成功后收起对话框。
-    onSaveCommit2: () => {
-      const checks = selection.glassPresetAssetChecks || {};
-      const embeds = ["font", "mascot", "avatar"].filter((k) => checks[k] === true);
-      busy(saveGlassPreset(selection.glassPresetDraftName, embeds).then((id) => {
-        if (id) { setTransient("glassPresetSaving", false); setTransient("glassPresetDraftName", ""); }
-        emit(); // 收起输入行的分支写完 store 必须通知（渲染纪律判据）
-      }));
-    },
-    onCancelSave: () => {
-      setTransient("glassPresetSaving", false);
-      setTransient("glassPresetSaveTarget", "");
-      setTransient("glassPresetTargetId", "");
-      setTransient("glassPresetDraftName", "");
-      emit();
-    },
-    onArmDelete: (id) => armConfirm("gpreset:" + id),
-    onDisarm: () => disarmConfirm(),
-    onDelete: (id) => { disarmConfirm(); busy(deleteGlassPreset(id)); },
-    // 导出对话框的确认步在上面（onExportCommit —— 普通链接，宿主附件应答）。
-    onImportFile: (file) => { disarmConfirm(); busy(importGlassPreset(file)); },
-  };
-}
+// ── 玻璃预设的接线已按族搬出 ──────────────────────────────────────────────────
+// 资产可用位三态、玻璃预设 ctx（保存 / 应用 / 引导 / 导出 / 导入 / 删除两步确认）
+// 整段住 src/client/handlers/glass-preset-handlers.js；构建期内联回本作用域。
+// 导出预设的一次性 <a> 也随族搬走，body 挂载白名单里记在该文件名下。
 
 // 角色色。默认「单色」—— 一个色同时写进 light/dark 两套（内部始终存两套，
 // 因为令牌服务的值必须是 {light,dark} 对，缺一套在另一套配色下会不可读）。
@@ -4432,7 +2458,7 @@ const officialColorOf = (tokens) => {
 
 // 字体自定义：总开关 + 颜色/字重/字体族，各项立即生效并持久化。
 // 打开开关时**顺手**去要一次本机字体清单（宿主那次扫描很贵，只在用户真的进这一区时才发生；
-// 清单本身不参与字体值，拿不到也不影响任何别的功能 —— 见 src/system-fonts.js）。
+// 清单本身不参与字体值，拿不到也不影响任何别的功能 —— 见 src/settings/system-fonts.js）。
 const onToggleFontCustom = (v) => {
   setSetting("fontCustom", !!v); applyEffects(); emit();
   if (v) ensureSystemFonts(false);
@@ -4482,208 +2508,13 @@ const onFontResetAll = () => {
   setTransient("fontAdvanced", false); applyEffects(); emit();
 };
 
-// ── 壁纸库 / 库视图处理器 ────────────────────────────────────────────────────
-const onRefresh = () => loadInventory();
-// Filter changes: persist + re-validate so wallpapers outside the selected
-// categories drop out of the grid/rotation immediately.
-// 内容分级是**多档勾选**（v7 起值是数组）：切某一档 = 往集合里加/删，且不允许把最后一档
-// 取消（一个都不勾等于全库空白，用户只会以为坏了）。
-const onRatingFilterToggle = (tier, on) => {
-  const cur = Array.isArray(selection.contentRatingFilter) ? selection.contentRatingFilter : [];
-  const next = RATING_TIERS.filter((t) => (t === tier ? on : cur.indexOf(t) !== -1));
-  if (!next.length) return;
-  setSetting("contentRatingFilter", next);
-  revalidateSelection();
-};
-// 类型筛选也是**多档勾选**（v8 起值是数组，与内容分级同款）：不允许取消最后一档
-//（一个都不勾等于网格空白）。类型只筛列表与「下一张」候选，不拦正在播的壁纸。
-const onTypeFilterToggle = (tier, on) => {
-  const cur = Array.isArray(selection.typeFilter) ? selection.typeFilter : [];
-  const next = TYPE_TIERS.filter((t) => (t === tier ? on : cur.indexOf(t) !== -1));
-  if (!next.length) return;
-  setSetting("typeFilter", next);
-  revalidateSelection();
-};
-// 「文件夹」筛选：单选取值（夹子之间互斥）。只写设置 + 重渲染（**不** revalidate ——
-// 它不参与播放闸门，见 picker-model 的 `matchesFolderFilter`；换夹子不该把正在播的壁纸踢掉）。
-const onFolderFilterChange = (value) => {
-  setSetting("folderFilter", value || "all");
-  emit();
-};
-// 方向筛选：单档枚举，只筛**可见列表** —— 不改变轮播成员 / 「下一张」候选，
-// 也不拦正在应用的壁纸（尺寸未知 / 正方形的条目只在「全部方向」里出现）。
-const onOrientationFilterChange = (value) => {
-  if (value !== "all" && value !== "landscape" && value !== "portrait") return;
-  setSetting("orientationFilter", value);
-  emit();
-};
-// Card style: classic (CD-rack) vs fixed (overlap-proof).
-const onLayoutChange = (value) => {
-  setSetting("pickerLayout", value);
-  emit();
-};
-// Edge 兼容渲染开关：关闭后任何浏览器都走原生 <video>。改的是渲染模式，
-// syncLayers 的 wantKey 已并入模式，emit 会重建壁纸层并立即按新路径生效。
-const onEdgeCompatChange = (checked) => {
-  setSetting("edgeCompat", checked);
-  emit();
-};
-// 轮播实时覆盖（#254）：0 = 跟随列表预设；> 0 只改本次运行的间隔，**不写回列表**。
-function onRotationLiveInterval(e) {
-  setSetting("rotationLiveInterval", clampNum(Number(e.target.value), ...schemaRange("rotationLiveInterval"), DEFAULTS.rotationLiveInterval));
-  syncRotationTimer();
-  emit();
-};
-/**
- * 轮播推进方式（「按间隔」/「当前视频播完就换」）。写进**当前列表**（与 interval 同口径：
- * 每个列表记自己的节奏），然后重排计时器 —— 视频结束档要在建层时关掉 loop，而已经上屏
- * 的那一层不会自己变，所以这里额外触发一次层同步。
- */
-const onGroupTrigger = (e) => {
-  const group = activeRotationGroup();
-  if (!group) return;
-  group.trigger = e.target.value === "videoEnd" ? "videoEnd" : "interval";
-  persistSelection();
-  syncRotationTimer();
-  // 已经上屏的视频层要跟着换 loop 语义（否则"切到视频结束档"要等下一次换壁纸才生效）。
-  const layer = typeof document !== "undefined" && document.getElementById ? document.getElementById(LAYER_ID) : null;
-  const media = layer && typeof layer.querySelector === "function" ? layer.querySelector("video") : null;
-  if (media && "loop" in media) {
-    try { media.loop = group.trigger !== "videoEnd"; } catch { /* ignore */ }
-  }
-  emit();
-};
-// 图内过场周期（图片 / 幻灯片壁纸内部多张图之间的切换间隔）。单位是**秒**，0 = 跟随 WE
-// 项目里声明的 `imageswitchtimes`；与 rotationInterval（壁纸之间、分钟）是两件事。
-// 改完原地重装过场层：图片档的层键只有 type+url，改设置不会触发 syncLayers 重建。
-const onPictureSlideSeconds = (e) => {
-  const seconds = clampNum(Number(e.target.value), ...schemaRange("pictureSlideSeconds"), DEFAULTS.pictureSlideSeconds);
-  setSetting("pictureSlideSeconds", seconds);
-  if (selection.type === "image") refreshImageSlideshow(selection);
-  emit();
-};
-// 「删除」按钮**只置令牌**；真正的删除在问句行的「确认」里（不变量 2）。两件事分开的
-// 好处：守卫可以分别断言"第一下不删"与"确认才删"，而不是只验一个 if。
-const onArmDeleteGroup = () => {
-  const group = activeRotationGroup();
-  if (!group) return;
-  armConfirm("group:" + group.id);
-};
-const onDeleteGroup = () => {
-  const group = activeRotationGroup();
-  if (!group) return;
-  disarmConfirm();
-  deleteGroup(group.id);
-};
-
-// 切换过场（类型 / 方向 / 速度）：只写选择 —— 下一次换壁纸（手动点选或轮换提交）
-// 生效，不需要重建当前层。
-const onSwitchTransition = (id) => {
-  if (!SWITCH_TRANSITION_VALUES.includes(id)) return;
-  setSetting("switchTransition", id); emit();
-};
-const onSwitchTransitionDir = (dir) => {
-  if (!SWITCH_DIRS.includes(dir)) return;
-  setSetting("switchTransitionDir", dir); emit();
-};
-const onSwitchTransitionSpeed = (id) => {
-  if (!SWITCH_SPEED_VALUES.includes(id)) return;
-  setSetting("switchTransitionSpeed", id); emit();
-};
-// Mascot pull-cord show/hide, persisted with the other toggles.
-const onRopeVisibilityChange = (e) => {
-  setSetting("ropeShown", e.target.checked); emit();
-};
-/**
- * 点吉祥物环上的内置项 = **换成出厂自带**（用户口径：内置项不再禁用；
- * 并入 #180 后，平铺卡片换成 3D 环、单击换成两步确认）：
- *   · 本机没有自定义立绘 ⇒ 纯档位切换（写一个键、零网络，与旧行为一字不差）；
- *   · 本机有自定义立绘 ⇒ 这里只**上膛**（`mascotPendingForm` + `armedConfirm`），真正的动作在
- *     `onMascotFormConfirm`：走与「清除」按钮**同一条路**（宿主删同族文件），成功后才摘引用 + 钉 form
- *     —— 失败就一个字段都不动（屏上仍是那张自定义图），原因进 `mascotError`。
- * 与预设的第四态（`assets.mascot` 字符串 = 指向内置形态 ⇒ 清本机立绘族 + 钉 `ropeForm`）同语义：
- * 三个入口（环上内置项 / 「清除」按钮 / 套用"指向出厂自带"的预设）在"这一族归谁"上必须给同一个结果。
- */
-const onRopeFormChange = (form) => {
-  if (!ROPE_FORM_VALUES.includes(form)) return;
-  // ── 自定义立绘生效时不能直接改形态（用户口径：「按钮要可点击」）──────────
-  // `ropeArtOf` 的优先序是「有自定义立绘就用它」⇒ 只写 ropeForm 对屏上那只**毫无影响**。
-  // **禁用内置项与 ‹ › 这条路不能留**：用户实测的反馈正是"按钮都没办法点"。
-  // 现在把它做成一条**真能生效**的动作：代价是清除那张自定义立绘，
-  // 而清除在宿主那边是 DELETE、**不可恢复** ⇒ 走两步确认（与本仓其它破坏性动作同一口径）。
-  if (selection.mascotImage) {
-    setTransient("mascotPendingForm", String(form));
-    setTransient("armedConfirm", "mascot-form");
-    emit();
-    return;
-  }
-  setSetting("ropeForm", form); emit();
-};
-// 确认后的形态切换：**先真的把文件删掉、拿到成功再改档位**（合并口径）。
-// ⚠️ 顺序不能反 —— mascotImage 还在时写 ropeForm 就是"写了没人读"（ropeArtOf 仍取自定义）；
-// 而"先写档位再删文件"在 DELETE 失败时会留下"档位变了、图还在"的半截状态（屏上没变化、
-// 设置里却已经不是原来那只）⇒ 删除失败就一个字段都不动，原因由 onMascotClear 进 mascotError。
-const onMascotFormConfirm = () => {
-  const form = selection.mascotPendingForm;
-  disarmConfirm();
-  setTransient("mascotPendingForm", "");
-  if (!ROPE_FORM_VALUES.includes(form)) { emit(); return; }
-  const cleared = selection.mascotImage ? onMascotClear() : Promise.resolve(true);
-  cleared.then((ok) => {
-    if (!ok) return;
-    setSetting("ropeForm", form);
-    setSetting("mascotImage", "");
-    setSetting("mascotImageBox", "");
-    emit();
-  });
-};
-const onRopeScaleChange = (scale) => {
-  setSetting("ropeScale", clampNum(scale, ROPE_SCALE_MIN, ROPE_SCALE_MAX, DEFAULTS.ropeScale)); emit();
-};
-
-// 当前 live 渲染页的 iframe（面板「重新截」的抓帧源）。
-// livePointerFrame 由 syncLayers 每次挂上 live 层时更新；切到非 live 壁纸后它可能
-// 仍指向已移除的旧元素，所以再用 DOM 查一次兜底。
-const currentLiveFrame = () => {
-  const ref = livePointerFrame;
-  if (ref && (!("isConnected" in ref) || ref.isConnected)) return ref;
-  try {
-    const node = document.getElementById(LAYER_ID);
-    const f = node && typeof node.querySelector === "function" ? node.querySelector("iframe.we-live-iframe") : null;
-    if (f) return f;
-  } catch { /* ignore */ }
-  return null;
-};
-
-// 自定义画面（截屏导入）：从 WE 等处截图后导入，成为该壁纸的「自定义画面」档
-// （?v=4）显示源。
-const setCustomFrameLocal = (wid, on) => {
-  const m = Object.assign({}, selection.customFrames || {});
-  if (on) m[wid] = true; else delete m[wid];
-  selection.customFrames = m;
-};
-
-// Close the picker library view (ESC / 返回 button share this path).
-const closePicker = () => {
-  // 关库视图 ⇒ 清掉待确认（不变量 3）：否则重新打开时会看到一个针对上次那个对象的问句。
-  disarmConfirm();
-  setTransient("pickerOpen", false);
-  setTransient("pickerDraft", false);
-  setTransient("batchMode", false);
-  setTransient("batchSelected", []);
-  emit();
-  // Focus restore: return focus to the「选择壁纸」button that opened the
-  // view (WCAG focus management).
-  if (pickerOpener && pickerOpener.isConnected) {
-    try { pickerOpener.focus(); } catch { /* ignore */ }
-  }
-};
-
-const INTERVALS = [1, 5, 10, 30, 60, 120];
-
+// ── 壁纸库 / 库视图处理器已按族搬出 ───────────────────────────────────────────
+// 刷新、分级/类型/文件夹/方向筛选、布局、Edge 兼容、轮播间隔与触发、过场、Rope 显隐/形态/比例、
+// 立绘两步确认、当前 live 帧、自定义帧记忆、关闭选择器、INTERVALS 档位表
+// 整段住 src/client/handlers/library-handlers.js；构建期内联回本作用域。
 // ── Pagination row: big libraries must not render every card at once (hundreds
 //    of thumbnails per emit make the picker lag). The slicing itself is the
-//    model's (`pageSlice` in src/picker-model.js); 这里只画「上一页 / 下一页」。──
+//    model's (`pageSlice` in src/picker/picker-model.js); 这里只画「上一页 / 下一页」。──
 const pagerRow = (count, page, pages, onPrev, onNext) =>
   React.createElement("div", { className: "we-picker__pager" },
     React.createElement("span", { className: "we-picker__hint" },
@@ -4701,7 +2532,7 @@ const pagerRow = (count, page, pages, onPrev, onNext) =>
   );
 
 // ── 模态框交互的接线 ───────────────────────────────────────────────────────
-// 契约：渲染器（`src/picker-modal.js`）**不写 `selection`、不自己发通知** ⇒
+// 契约：渲染器（`src/picker/picker-modal.js`）**不写 `selection`、不自己发通知** ⇒
 // 「改状态 + 发通知」的动作一律留在这里（模块级），经 `ctx` 交给渲染器；标记里只剩
 // `onClick: onShowNormalView` 这样的引用。判据是接缝那几条（同 `panel-tabs` / 属性面板口径）。
 const onShowNormalView = () => { disarmConfirm(); setTransient("modalView", "normal"); emit(); };
@@ -4740,537 +2571,9 @@ const onPickCard = (w) => {
   }
 };
 
-function WallpaperPicker() {
-  useWeLocale(); // 设置页壁纸库：语言切换 → 整棵选择器（含 render* 渲染器）重渲染
-  const sel = useStore();
-  // ── 组件行状态面（ADR-0013 D3②/D3③）──────────────────────────────────────
-  // 宿主行状态（`/inventory` 的 `components`，透传见 loadInventory）在这里读**一次**，之后
-  // 经 ctx 传进各渲染器（渲染器不得直接读 selection）；判定只有一处实现 —— 本文件的
-  // `weComponentVisible`。可见页签表（D3① 的"页签安全"）另见 visiblePickerTabs。
-  const components = sel.inventory && sel.inventory.components;
-  const visibleTabs = visiblePickerTabs();
-  // 视频类壁纸（原生视频 + 内嵌 MP4 场景）: 只有它们有
-  // 「真实播放态」的概念。实时渲染（live iframe）形态必须排除在外：它没有
-  // <video> 元素可回写真实状态，且 sceneVideo 在 live 形态下非空（降级备用），
-  // 沿用视频类判定会让 playbackLive 恒为 videoPlaying=true —— 「暂停」后按钮
-  // 永不变「播放」（实测）。
-  const isLiveScene = (sel.type === "scene" || sel.type === "web") && liveRenderEnabled(sel);
-  const isVideoLike = !isLiveScene && (sel.type === "video"
-    || (sel.type === "scene" && Boolean(sel.sceneVideo)));
-  // 卡片上显示/按钮用的播放态: 视频类壁纸以 <video> 元素的真实状态为准。
-  // 意图为「播放」但元素被拒/解码失败时，面板必须说「已暂停」并把按钮显示成
-  // 「播放」，否则用户面对一张冻住的壁纸却只有「暂停」可点 —— 没有「继续」。
-  const playbackLive = isVideoLike ? sel.videoPlaying : sel.playing;
-  // 播放/暂停 / 音轨 / 音量 / 关闭 / 轮播切换 / 换列表：处理器见「播放控制处理器」段
-  //（快捷播放面板共用同一份实现）。
-
-  // 画面滑块（暗化 / 壁纸透明度 / 壁纸模糊 / 亮度 / 对比度 / 饱和度）与外观细调
-  //（配色 / 玻璃颜色 / 玻璃透明度 / 边框 / 雾化）：处理器见「外观 / 画面处理器」段
-  //（快捷播放面板共用同一份实现）。
-  // 主题随壁纸的开关处理器同「外观 / 画面处理器」段。
-
-  // 出图来源：当前场景壁纸在「自动 ⇄ 自定义画面」之间切换（按壁纸记忆）。
-  // 只有一档可切（没导入自定义画面）时**不动** —— 避免"点了没反应"。
-  const onRefreshFrame = () => {
-    if (sel.type !== "scene" || !sel.sceneFrameUrl) return;
-    const wid = String(sel.id);
-    const total = frameVariantCount(sel, wid);
-    if (total < 2) return;
-    // 推进**下标**、存**档位值**：值域有洞（0 与 4），取模会造出 1/2/3 这种退役档位。
-    const cur = Number(sel.frameVariants && sel.frameVariants[wid]) || 0;
-    const idx = Math.max(0, FRAME_VARIANTS.findIndex((f) => f.id === cur));
-    const next = FRAME_VARIANTS[(idx + 1) % total].id;
-    const map = Object.assign({}, selection.frameVariants || {});
-    map[wid] = next;
-    selection.frameVariants = map;
-    // 切换作用于出图来源：把层切到该档的画面。
-    setSetting("url", frameUrlWithVariant(sel.sceneFrameUrl, next)); syncLayers(); emit();
-  };
-  // 清除 GPU 抓帧缓存（<key>_gpu.png）：按用户决策 GPU 帧优先于全部档位，
-  // 所以「切档位 / 换回 CPU 生成画面」的前置动作就是先删掉它。删除后立刻按
-  // 当前档位重挂静态帧（scene-frame 响应带 no-store，重挂即重新取图）。
-  const onClearGpuFrame = () => {
-    if (sel.type !== "scene" || !sel.sceneFrameUrl || gpuFrameUi.busy) return;
-    const wid = String(sel.id || "");
-    const token = gpuFrameToken(sel.sceneFrameUrl);
-    if (!wid || !token) return;
-    gpuFrameUi.wid = wid;
-    gpuFrameUi.busy = true;
-    emit();
-    // 清除 = 删主帧（单主帧语义）。这是共享资源：清掉后其他窗口在下一次回填点
-    // 各自按自己的画布尺寸重抓——与旧单槽时代一致，用户显式点「清除」即此意。
-    apiDelete("/scene-frame-cache/" + encodeURIComponent(token), { parse: true })
-      .then((r) => {
-        // 真·失败只有一种：宿主 500（unlink 被权限/占用挡住）。`removed:false`
-        //（200）= 主帧本来就没有 —— 目标态已达成，按成功走：探测读数本来就说
-        // 没有帧，两面一致。
-        if (!r.ok) {
-          gpuFrameUi.busy = false;
-          gpuFrameUi.error = weT("清除失败：宿主返回 {status}", { status: r.status });
-          emit();
-          return;
-        }
-        gpuFrameUi.error = "";
-        markGpuFrameProbed(wid, false);
-        forgetGpuFramePin(token);
-        // 请求期间用户可能已经切走：槽位状态属于发起时那张壁纸，URL 重写/渲染恢复
-        // 只对「还是它」的情况做（同 A4 的身份校验；否则会把当前壁纸的 URL 改写成
-        // 「当前帧 URL + 旧壁纸的档位」→ 画面与面板读数不一致）。
-        if (String(selection.id || "") !== wid) { gpuFrameUi.busy = false; emit(); return; }
-        gpuFrameUi.busy = false;
-        const variant = Number(selection.frameVariants && selection.frameVariants[wid]) || 0;
-        setSetting("url", frameUrlWithVariant(sel.sceneFrameUrl, variant)); syncLayers(); emit();
-      })
-      .catch(() => {
-        gpuFrameUi.busy = false;
-        gpuFrameUi.error = weT("清除失败：请求未完成");
-        emit();
-      });
-  };
-  // 「重新截」：实时渲染**开着时也要能用** —— GPU 实时帧就是切换途中 / live 首帧
-  // 之前给用户看的那张静帧，构图或时机不对时（黑帧、旧视口、切走时那张）用户必须
-  // 能立刻重抓，而不是先关掉实时渲染再回来。
-  // 走的是自动回填那条同一条安全路径（先抓帧 + 内容门禁 → 成功后才清旧帧 → PUT），
-  // 所以抓不到时**不会**把原来那张删掉；失败原因直接显示在面板上。
-  const onRecaptureGpuFrame = () => {
-    if (sel.type !== "scene" || !sel.sceneFrameUrl || gpuFrameUi.recapturing) return;
-    const live = currentLiveFrame();
-    if (!live) {
-      gpuFrameUi.error = weT("拿不到实时画面（实时渲染没在运行）→ 想抓实时帧请先开「场景实时渲染」");
-      emit();
-      return;
-    }
-    gpuFrameUi.recapturing = true;
-    gpuFrameUi.error = "";
-    emit();
-    // force：即使槽里已有 GPU 帧也重抓一张（用户显式要求换一张）。
-    scheduleLiveFrameBackfill(live, { force: true });
-  };
-  const onCustomFrameFile = (e) => {
-    const file = e.target.files && e.target.files[0];
-    try { e.target.value = ""; } catch { /* ignore */ }
-    if (!file || sel.type !== "scene" || !sel.id) return;
-    const wid = String(sel.id);
-    const ctype = (file.type === "image/jpeg" || file.type === "image/png" || file.type === "image/webp")
-      ? file.type : "image/png";
-    apiFetch("/custom-frame/" + encodeURIComponent(wid), {
-      method: "POST",
-      headers: { "Content-Type": ctype },
-      body: file,
-    }).then((r) => {
-      if (!r.ok) throw new Error("宿主返回 " + r.status);
-      setCustomFrameLocal(wid, true);
-      const map = Object.assign({}, selection.frameVariants || {});
-      map[wid] = 4;
-      selection.frameVariants = map;
-      // 上传可能花掉秒级（截屏多 MB）：期间用户切走就只记账到发起时那张壁纸，
-      // 不改当前壁纸的 URL（否则当前壁纸会被套上旧壁纸的档位 4）。
-      if (String(selection.id || "") !== wid) { persistSelection(); emit(); return; }
-      // 落盘只能挂在这条分支上（不能挂在下面那个 `if` 里）：`setSetting("url", …)` 只在有
-      // `sceneFrameUrl` 时才发，而上面刚写的 `customFrames` / `frameVariants` 是**客户端持久化字段**
-      // —— 漏掉 persist 就是"导入的自定义画面刷新后不见了"（同族缺陷的另一头）。
-      if (sel.sceneFrameUrl) setSetting("url", frameUrlWithVariant(sel.sceneFrameUrl, 4));
-      else persistSelection();
-      syncLayers(); emit();
-    }).catch(() => { /* 导入失败保持现状 */ });
-  };
-  const onClearCustomFrame = () => {
-    if (!sel.id) return;
-    const wid = String(sel.id);
-    apiDelete("/custom-frame/" + encodeURIComponent(wid))
-      .then((r) => {
-        if (!r.ok) throw new Error("宿主返回 " + r.status);
-        setCustomFrameLocal(wid, false);
-        const map = Object.assign({}, selection.frameVariants || {});
-        const cur = Number(map[wid]) || 0;
-        if (cur === 4) map[wid] = 0;
-        selection.frameVariants = map;
-        if (String(selection.id || "") !== wid) { persistSelection(); emit(); return; }
-        if (cur === 4 && sel.sceneFrameUrl) {
-          setTransient("url", frameUrlWithVariant(sel.sceneFrameUrl, 0));
-          syncLayers();
-        }
-        persistSelection(); emit();
-      }).catch(() => { /* ignore */ });
-  };
-
-  // ESC anywhere closes the library view. Capture phase + stopPropagation so the
-  // shell's own ESC handling (which may close the whole settings panel) never
-  // sees the key while the view is open.
-  React.useEffect(() => {
-    const onKey = (e) => {
-      if (e.key === "Escape" && selection.pickerOpen) {
-        e.stopPropagation();
-        closePicker();
-      }
-    };
-    if (typeof window !== "undefined" && window.addEventListener) {
-      window.addEventListener("keydown", onKey, true);
-      return () => { window.removeEventListener("keydown", onKey, true); };
-    }
-  }, []);
-
-  // ── 页签状态：调节面板分六个页签（壁纸库/外观/播放/系统/扩展/关于 —— 前四个由原六域
-  //    合并，「扩展」「关于」后加），每份实例独立记忆（设置页与仓库抽屉互不影响）；只存
-  //    localStorage，不进 config.json。useState 必须在下方早退分支之前调用（Rules of Hooks）。 ──
-  const [activeTab, setActiveTab] = React.useState(() => resolvePickerTab(readSavedPickerTab()));
-  const switchTab = (id) => {
-    // 校验走**可见页签表**（不是 PICKER_TABS）：子包浏览器半边缺席时被 gate 掉的页签不该再能被
-    // 切进去（那正是"点进一块空面板"的来源）。
-    if (!visibleTabs.some((t) => t.id === id) || id === activeTab) return;
-    // 切页签 ⇒ 清掉待确认（不变量 3）：问句行随页签一起离屏，不能留着它等回来。
-    disarmConfirm();
-    // 下钻的库视图也随页签一起退出：否则切走再切回来，看到的还是库而不是该页内容。
-    if (selection.pickerOpen) setTransient("pickerOpen", false);
-    setTransient("pickerDraft", false);
-    // 「关于」页才去问 star 数（TTL 内是空操作）：别的页签一次网络都不发。
-    if (id === "about") loadStarCount(false);
-    setActiveTab(id);
-    try { localStorage.setItem(PICKER_TAB_KEY, id); } catch { /* ignore */ }
-  };
-  // 停在「关于」页刷新页面这条路径不走 switchTab（activeTab 直接从 localStorage 读出来），
-  // 用一次订阅式 effect 补上；TTL 同日历口径，重复触发是空操作。
-  React.useEffect(() => { if (activeTab === "about") loadStarCount(false); }, [activeTab]);
-
-  // 页签安全（ADR-0013 D3① + D-6(b)）：可见页签表变了（面板节注册表变化 / 组件行状态随
-  // inventory 轮询回到本地）而当前页签不在表里 ⇒ 回落到第一个可见页签，自愈、不用用户自己点走。
-  // 表为空（空表意味着一个页签都没有，理论不可达）时什么都不做 —— 绝不把 activeTab 设成空值。
-  // deps 用 `[activeTab, components]`：`visibleTabs` 每次渲染都是新数组，拿它当依赖会每帧触发；
-  // 而 `components` 只在 inventory 重新落地时换引用（`setTransient("inventory", next)`）。
-  // 注册表变更是"只增"（子包浏览器半边求值时登记，没有反注册 API）⇒ 可见集只会变大，晚到的节
-  // 最多让某页签从"缺席"变"可见"，不会把已选中的页签挤出表 ⇒ 不需要把注册表版本写进依赖。
-  React.useEffect(() => {
-    if (!visibleTabs.length || visibleTabs.some((t) => t.id === activeTab)) return;
-    switchTab(visibleTabs[0].id);
-  }, [activeTab, components]);
-
-  // ── 外观页各节的折叠态（本档 = 设置页）──────────────────────────────────────────
-  //    用户口径（二次修订）：「设置页则是**全部开启**但也支持隐藏」⇒
-  //    下面五个门在本档**默认都展开**，但每个都能点节头收起（与侧边栏同一套构件）。
-  //    与侧边栏那一侧同序：细节 / 玻璃 UI / 侧边栏圆角 / 全局 UI 配色 / 全局字体。
-  //    hook 必须在早退分支之前调用（Rules of Hooks），与 activeTab 相邻。
-  const [pickerFontOpen, setPickerFontOpen] = React.useState(readSavedPickerFontOpen);
-  const togglePickerFontSection = () => {
-    setPickerFontOpen((prev) => {
-      const next = !prev;
-      writeSavedPickerFontOpen(next);
-      return next;
-    });
-  };
-  const [pickerUiColorOpen, setPickerUiColorOpen] = React.useState(readSavedPickerUiColorOpen);
-  const togglePickerUiColorSection = () => {
-    setPickerUiColorOpen((prev) => {
-      const next = !prev;
-      writeSavedPickerUiColorOpen(next);
-      return next;
-    });
-  };
-  // 「细节 / 玻璃 UI / 侧边栏圆角」三节（二次修订：设置页也支持隐藏）。
-  // ⚠️ 与上面两个同形，但三者共用一条读法（都默认展开）—— 所以抽成一个**自定义 hook**
-  //    生成，避免把同一段"读-写-翻转"抄三遍（抄三遍就一定会有一处漏写 localStorage）。
-  //    名字必须以 `use` 开头：它内部调 `React.useState`，React 的规则要求 hook 只能从
-  //    组件或**另一个 hook** 里以固定顺序调用（三次调用顺序恒定 ⇒ 合法）。
-  const usePickerSectionOpen = (key) => {
-    const [open, setOpen] = React.useState(() => readSavedPickerOpen(key));
-    const toggle = () => setOpen((prev) => {
-      const next = !prev;
-      writeSavedPickerOpen(key, next);
-      return next;
-    });
-    return [open, toggle];
-  };
-  const [pickerDetailOpen, togglePickerDetailSection] = usePickerSectionOpen(PICKER_DETAIL_OPEN_KEY);
-  const [pickerGlassUiOpen, togglePickerGlassUiSection] = usePickerSectionOpen(PICKER_GLASS_UI_OPEN_KEY);
-  const [pickerCornersOpen, togglePickerCornersSection] = usePickerSectionOpen(PICKER_CORNERS_OPEN_KEY);
-  const [pickerPresetsOpen, togglePickerPresetsSection] = usePickerSectionOpen(PICKER_PRESETS_OPEN_KEY);
-
-  // 本机字体清单的触发点**两处都有**（三次修订）：字体节回到设置页之后，
-  // 这里也要一份 —— 否则「全局字族」那排下拉在本档是空的死旋钮（清单由宿主现扫描）。
-  // 三条门与侧栏那侧同形：停在外观页 + 字体节展开 + 字体自定义打开；TTL 内是空操作。
-  React.useEffect(() => {
-    if (activeTab === "appearance" && pickerFontOpen && sel.fontCustom) ensureSystemFonts(false);
-  }, [activeTab, pickerFontOpen, sel.fontCustom]);
-
-  // 侧栏深链（快捷播放面板底栏的「更多外观设置 ›」/「更多播放设置 ›」）：请求"打开
-  // 设置页后停在哪一页"。打开对话框由 src/sidebar-right.js 的 DOM 路径负责，这里只管
-  // 落地 —— 走**同一个 switchTab**（清待确认 / 退出下钻 / 写 localStorage 这些副作用
-  // 一处不落），落地后把请求清掉（一次性；否则用户几分钟后自己开设置会被旧请求劫持）。
-  // 组件没挂载时请求就先躺在 store 里，挂载后这一趟 effect 消费它 —— 两条路都覆盖。
-  React.useEffect(() => {
-    const req = selection.settingsTabRequest;
-    if (!req) return;
-    if (req === activeTab || !visibleTabs.some((t) => t.id === req)) {
-      setTransient("settingsTabRequest", "");
-      return;
-    }
-    switchTab(req);
-  }, [sel.settingsTabRequest, activeTab]);
-
-  // 库视图虚拟滚动的窗口（机制与几何见 src/picker-modal.js 顶注）：hooks 必须长在组件
-  // 里（renderPickerModal 是纯渲染器），经 ctx 传下去。classic CD 架不虚拟化 ⇒ 渲染侧
-  // 不把 gridRef 挂到网格上，测量 effect 拿不到元素就整体空转。count 给**上界**（正常 /
-  // 隐藏两个列表 + 关闭卡都 ≤ 库存 + 1；无滚动容器时窗口 = count，渲染侧按真实列表
-  // 长度钳），viewTag 戳这份窗口量自哪个形态 —— 换形态 / 开关下钻的一帧按未测量处理
-  // （首窗 + 零占位），测量 effect 随 tag 进 deps 立刻跟上。
-  const pickerGridRef = React.useRef(null);
-  const pickerRootRef = React.useRef(null);
-  // ── 吉祥物 3D 环的「面板宽度」（「左右拉宽、顶格」）──────────────────────
-  // 环要随可用宽度等比放大才填得满，而**渲染器是纯函数、拿不到宽度** ⇒ 在这里量一次、
-  // 经 ctx 的 `paneWidth` 传下去（渲染器量不到时退回 scale=1，见 panel-tabs 的 SCALE）。
-  // 量的是**环那一行的可用宽度**（`.we-picker__mascot-carousel` 是 width:100% 的 flex 行，
-  // 它的宽度不随窗口的 max-width 变 ⇒ 拿它当"可用宽度"不会自我指涉）。
-  // ⚠️ 这个控件住在**系统**页签（不是外观）⇒ deps 用 `activeTab`，切到系统页时重量一次；
-  //   只在挂载时量会让"先开壁纸页再切系统页"永远停在 scale=1（**实测踩过**）。
-  // ⚠️ 元素**不存在时不更新**（而不是写 0）：别的页签上根本没有这个元素，写 0 会白白触发
-  //   一次重渲染；到了系统页自然会重量到真值。
-  const [paneW, setPaneW] = React.useState(0);
-  React.useEffect(() => {
-    const root = pickerRootRef.current;
-    if (!root) return undefined;
-    const measure = () => {
-      const el = root.querySelector(".we-picker__mascot-carousel");
-      if (!el || !el.clientWidth) return;                 // 本页签没画它 ⇒ 保持原值
-      const w = el.clientWidth;
-      // 容差 2px：避免亚像素抖动把整棵面板反复重渲染。
-      setPaneW((prev) => (Math.abs(prev - w) < 2 ? prev : w));
-    };
-    measure();
-    const ro = typeof ResizeObserver === "function" ? new ResizeObserver(measure) : null;
-    if (ro) ro.observe(root);
-    window.addEventListener("resize", measure);
-    return () => {
-      if (ro) ro.disconnect();
-      window.removeEventListener("resize", measure);
-    };
-  }, [activeTab]);
-  const pickerViewTag = sel.pickerOpen
-    ? (sel.modalView === "hidden" ? "hidden" : (sel.pickerDraft ? "draft" : "normal"))
-    : "closed";
-  const pickerVwin = qpVirtWindow(pickerGridRef, (sel.inventory.wallpapers || []).length + 1,
-    PICKER_CARD_H, PICKER_CARD_GAP, true, pickerViewTag);
-
-  if (!sel.loaded) {
-    return React.createElement("div", { className: "we-picker" },
-      React.createElement("span", { className: "we-picker__hint" }, weT("扫描 Wallpaper Engine…")));
-  }
-  if (sel.inventory.error) {
-    return React.createElement("div", { className: "we-picker" },
-      React.createElement("div", { className: "we-picker__error" },
-        weT("未检测到 Wallpaper Engine：{error}", { error: weT(sel.inventory.error) })),
-      React.createElement("button", {
-        className: "we-picker__btn", type: "button", onClick: onRefresh, disabled: sel.loading,
-      }, sel.loading ? weT("刷新中…") : weT("重试")));
-  }
-
-  const list = sel.inventory.wallpapers;
-  // WE「已安装」文件夹：摊平成一维选项（层级用 depth 表达），并取当前选中夹子的成员集。
-  // 选中的夹子**已经不在**宿主清单里（用户在 WE 里删了/改名了）⇒ 按「全部」处理 ——
-  // 否则下拉会停在一个不存在的 id 上、网格永远空着，而用户看不出是为什么。
-  const folderOptions = flattenWallpaperFolders(sel.inventory.folders, 0, []);
-  const activeFolder = folderOptions.find((folder) => folder.id === sel.folderFilter) || null;
-  const folderFilter = activeFolder ? activeFolder.id : "all";
-  const folderWallpaperIds = activeFolder ? activeFolder.wallpaperIds : null;
-  // 派生数据 + 分页全部由 **src/picker-model.js** 算（`pickerModel`）：可播放网格、两个
-  // 过滤下拉的分档计数、隐藏列表，以及三个列表各自的当页切片。搜索是大小写不敏感的
-  // 标题子串匹配（空查询 = 不过滤），每页 24 张，页号越界自动 clamp。这里只把状态喂
-  // 进去、把结果取出来 —— 组件体不再就地算这些（分级/类型/隐藏的判定也在那边）。
-  const {
-    query, playableList, basePlayable, ratingCounts, typeCounts, orientationCounts, hiddenList,
-    editorPageView,
-  } = pickerModel({
-    wallpapers: list,
-    hiddenIds: selection.hiddenIds,
-    search: sel.search,
-    ratingFilter: sel.contentRatingFilter,
-    typeFilter: sel.typeFilter,
-    folderFilter,
-    folderWallpaperIds,
-    orientationFilter: sel.orientationFilter,
-    editorPage: sel.editorPage,
-  });
-  // CD-rack mode: compact one-page grid (no pagination, no virtualization —
-  // aspect-ratio cards with overlapping rows don't fit the fixed-pitch model).
-  const cdMode = sel.pickerLayout === "classic";
-  const current = list.find((w) => w.id === sel.id) || null;
-  const uploadedList = list.filter((w) => isUploadedWallpaper(w) && !isDirWallpaper(w));
-  const groups = sel.rotationGroups;
-  const group = activeRotationGroup();
-  const candidates = rotationCandidates();
-  const playableCount = candidates.length;
-  const editing = sel.editing;
-
-  // ── 壁纸属性面板的接线────────────────────────────────────
-  // 面板标记搬去了 `src/picker-props-panel.js`（构建期内联回本作用域）。这里只做**组装**：
-  // 面板状态（开关 / token / 加载态 / 错误 / 属性表 / 实时渲染是否接管）与三个动作
-  // （该重拉时重拉、改一个属性、恢复默认）都留在本文件 —— 状态与处理器是 ctx 的**供给方**，
-  // 渲染器只拿值 + 回调（同模态框那条契约）。判定就一句：
-  // token 变了且不在加载中才重拉。
-  // ── 页签面板内容（函数声明提升，renderActiveTab 在 return 里先调用）──────
-  // 六页签 = 三个单渲染器（「外观」「扩展」「关于」）+ 两个合并渲染器（「播放」= 效果 + 声音，
-  // 「系统」= 吉祥物 + 高级）+ 壁纸库。「关于」除组件行状态外不取任何 ctx 字段（其余是静态
-  // 内容）；「扩展」只取 `onResetModule` 与组件行状态，其余整包转交给注册表里的模块（每个
-  // 模块的控件由它自己的渲染器画）。
-  // 组件行状态面（ADR-0013 D3②）：**经 ctx 传进渲染器**（渲染器不得直接读 selection）；
-  // 判定本身只有一处实现 —— 本文件的 `weComponentVisible(components, name)`。
-  // `components` 在本组件体上方读了一次，这里只是把它塞进各渲染器的 ctx。
-  const extensionCtx = () => ({
-    components,
-    sel: selection,
-    onPerfEnabled, onPerfFloatToggle,
-    onFxEnabled, onFxClick, onFxClickStyle, onFxClickSize, onFxClickGlow,
-    onFxTrail, onFxTrailStyle, onFxTrailLength, onFxTrailWidth, onFxTrailGlow,
-    onFxOpacity, onFxBlend, onFxColorMode, onFxColor,
-    onParallaxEnabled, onParallaxBg, onParallaxMascot, onParallaxUi, onParallaxSmooth,
-    onParallaxPlugin,
-    onParallaxUiChatDepth, onParallaxUiComposerDepth, onParallaxUiSidebarDepth, onParallaxUiBubbleDepth,
-    onParallaxPluginDepth,
-    // 认到的插件槽位（用户口径 m02697-②）：只给**槽键字符串**（画一行一个）。发现逻辑在
-    // packages/parallax/src/parallax-layer.js（与层自己每帧扫的是同一份名单），这里只是转交；
-    // P-A 起问的是**注册表**（`weDiscoveredGroupsOf`）—— 那一层住在自己的包里，本 bundle 的
-    // 作用域里既没有它的函数名也不该有（没有这层 / 没声明就是空数组，不是 undefined）。
-    // **插件前端那一块自己的开关**（用户诉求 m03549）关着时层也不认它们，面板就跟着空 ——
-    // 名单与"真的会动"必须同源，否则会出现点了没反应的滑杆。它与「界面元素跟随」互不依赖。
-    parallaxPluginSlots: sel.parallaxPlugin === true ? weDiscoveredGroupsOf('parallax').sort() : [],
-    onAvatarEnabled, onAvatarSize, onAvatarRadius, onAvatarAiRepeatRows, onAvatarPick, onAvatarClear,
-    // 上传裁切（issue #191 问题 1）：几何在这里现算（唯一实现），渲染器只读结果。
-    onAvatarCropZoom, onAvatarCropDrag, onAvatarCropWheel, onAvatarCropConfirm, onAvatarCropCancel: closeAvatarCrop,
-    avatarCropGeo: avatarCropGeometry(), avatarCropView: AVATAR_CROP_VIEW,
-    // 超限拦截（#185 后续）：面板画提示行 + 「自动压缩后导入」按钮，处理器在 client 这一侧。
-    onAvatarAutoCompress,
-    // 模块级重置（issue #192）：各模块头的 ↺ 把该模块的键整批写回默认值。
-    onResetModule,
-  });
-  const renderActiveTab = () => {
-    if (activeTab === "about") return renderAboutTab({
-      components,
-      // 「重新查看本版更新公告」的落点：立请求位 + emit 让 `UpdateNotice` 重渲染。
-      // 不变量：这两个动作必须留在本文件这一侧 —— `renderAboutTab` 体内不许出现
-      // `setSetting(` / 字面 `emit(` / `apiJson|apiFetch(`（判据见 test/verify-about.mjs），
-      // 所以那条腿只调这个回调。请求位由 `UpdateNotice.dismiss()` 清。
-      onReopenNotice: () => { noticeReopenRequest = true; emit(); },
-    });
-    if (activeTab === "extensions") return renderExtensionsTab(extensionCtx());
-    if (activeTab === "appearance") return renderAppearanceTab({
-      setSetting, setTransient,
-      fontSet: fontSetCtx(),
-      glassPresets: glassPresetCtx(),
-      // 「全局字体」节的折叠态（ADR-0008 D4 三次修订）：设置页也画那一节 ⇒ 本档自己一份
-      // 开合状态（picker-font-open），展开后字体清单由上面的 effect 去要。
-      fontOpen: pickerFontOpen, onToggleFontSection: togglePickerFontSection,
-      // 「全局 UI 配色」节（含原「输入光标」节的光标颜色行）：同样本档自己一份开合状态；
-      // 处理器是模块级的（onAccent / onCaretColor / onToggleUiColorCustom / onUiColorElement）。
-      uiColorOpen: pickerUiColorOpen, onToggleUiColorSection: togglePickerUiColorSection,
-      onToggleUiColorCustom, onUiColorElement,
-      onGlassSurfacePolicy, surfaceStatus: weGlassSurfaceStatus(),
-      officialColorOf, onAccent, onCapsuleBlur, onCapsuleColor, onBlur, onBorder, onCaretColor, onChatGlassFidelity, onComponentFamily, onComponentFont, onExtraGlassSelectors, onFontAdvanced, onFontResetAll, onGlassAlpha, onGlassMaskStrength, onGlassColor, onGlassDarkSeparate, onGlassFidelity, onGlassOptics, onGlassSheenStrength, onGlobalFamily, onLeftSidebarGlass, onTitlebarGlass, onRefreshSystemFonts, onSidebarAlpha, onSidebarBlur, onSidebarColor, onSidebarContentAlpha, onSidebarContentColor, onSidebarCornerRadius, onSidebarCornerSquare, onSidebarFollowGlobal, onSidebarGlass, onSidebarFullClear, onFloaterSolidBase, onMarketStickyClip, onMarketStickyFade, onThemeColor, onThemeColorClear, onThemeDarkSeparate, onThemeFamily, onThemeSize, onThemeTypeOnly, onThemeWeight, onThinkingMode, onTableReadability, onToggleFontCustom, onToggleThemeFollow, sel,
-
-      // 玻璃 UI 子项开关 + 独立配置 + 独立参数（见 onToggleChildIndependent 那段注释）
-      onToggleChildIndependent, onGlassChildParam, childIndependentOn,
-      // 二次修订：设置页也**支持隐藏**这几节（默认全展开）——
-      // 「细节 / 玻璃 UI / 侧边栏圆角」三个门是本档新增的，与「全局 UI 配色 / 全局字体」
-      // 那两个同形。顺序与侧边栏同序（两侧都走 renderAppearanceTab 这一处装配）。
-      // 「主题预设」：与其他节同口径升折叠节 —— 只在设置页画 ⇒ 没有侧栏半边。
-      detailOpen: pickerDetailOpen, onToggleDetailSection: togglePickerDetailSection,
-      glassUiOpen: pickerGlassUiOpen, onToggleGlassUiSection: togglePickerGlassUiSection,
-      cornersOpen: pickerCornersOpen, onToggleCornersSection: togglePickerCornersSection,
-      // 模块级重置（issue #192）：外观页签下每个模块（主题 / 细节 / 玻璃 UI / 侧边栏圆角 /
-      // 全局 UI 配色 / 全局字体）节头右端各一枚 ↺。
-      onResetModule,
-      presetsOpen: pickerPresetsOpen, onTogglePresetsSection: togglePickerPresetsSection,
-    });
-    if (activeTab === "playback") return React.createElement(React.Fragment, null,
-      renderEffectsTab({
-        setSetting, setTransient,
-        onBackgroundBrightness, onBackgroundContrast, onBackgroundSaturate, onClearCustomFrame, onClearGpuFrame, onCustomFrameFile, onFlip, onFpsCap, onLayerPositionX, onLayerPositionY, onLayerReset, onLayerScale, onLiveBootDelay, onObjectFit, onOpenPicker, onPlaybackRate, onRecaptureGpuFrame, onRefreshFrame, onSceneAutoQuality, onSceneSoftRenderPause, onSceneLiveFps, onScrim, onToggleSceneLive, onWallpaperBlur, onWallpaperOpacity, sel, setPickerOpener,
-      }),
-      renderAudioTab({
-        setSetting, setTransient,
-        onToggleAudio, onVideoVolume, sel,
-      }),
-    );
-    if (activeTab === "system") return React.createElement(React.Fragment, null,
-      renderMascotTab({
-        components,
-        onMascotClear, onMascotPick, onRopeFormChange, onMascotFormConfirm, onDisarmConfirm: disarmConfirm, onRopeScaleChange, onRopeVisibilityChange, sel,
-        // ⚠️⚠️ 吉祥物环的等比缩放基准**必须接在这一档**（实测「左右拉宽没生效」）：
-        //   吉祥物控件由**系统**页签渲染（不是外观页签），我上一轮把它加进了外观档的 ctx
-        //   ⇒ 渲染器永远收到 undefined ⇒ scale 恒为 1、拉宽毫无效果。
-        //   而当时的判据是**直接调 renderMascotTab**（隔离测试）⇒ 它当然全绿。
-        //   教训：隔离测试证明不了"线接上了"；接线必须单独有判据（见 verify-client 的接线判据）。
-        paneWidth: paneW,
-      }),
-      renderAdvancedTab({
-        setSetting, setTransient,
-        onAdapterTarget, onEdgeCompatChange, onLayoutChange, onPauseOnBattery, onPauseOnBlur, onPauseOnHidden, onToggleLiveDiag, onStartPaused, sel,
-        onStartEditCacheDir, onCancelEditCacheDir, onCacheDirDraft,
-        onCacheDirBrowseInput, onCacheDirBrowseGo, onCacheDirBrowseEnter, onCacheDirBrowseUp, onPickCacheDir, onCloseCacheDirBrowse,
-      }),
-    );
-    return renderWallpaperTab({
-      setSetting, setTransient,
-      INTERVALS, armedConfirm: sel.armedConfirm, cdMode, current, editing, editorPageView, group, groups, isLiveScene, onArmConfirm: armConfirm, onArmDeleteGroup, onCancelEditUploadDir, onCancelEditWeAssetsDir, onClear, onDeleteGroup, onDisarmConfirm: disarmConfirm, onEditInterval, onEditName, onEditOrder, onEditTrigger, onGroupChange, onGroupTrigger, onRotationLiveInterval, onPictureSlideSeconds, onOpenPicker, onOpenPickerDraft, onRefresh, onStartEditUploadDir, onStartEditWeAssetsDir, onSwitchTransition, onSwitchTransitionDir, onSwitchTransitionSpeed, onToggleAudio, onTogglePlay, onTogglePropsPanel, onToggleRotation, onUploadDirDraft, onUrlDraft, addUrlWallpaper, addBingWallpaper, refreshUrlWallpaper, onWeAssetsDirDraft, pagerRow, playableCount, playableList, playbackLive, propsPanelOpen, renderUserPropsPanel, sel, setPickerOpener, uploadedList,
-    });
-  };
-  const tabIdx = Math.max(0, visibleTabs.findIndex((t) => t.id === activeTab));
-
-  return React.createElement("div", { className: "we-picker", "data-we-cards": sel.pickerLayout, ref: pickerRootRef },
-    // ── Card header (mirrors the skin-center's pluginCard header): plugin
-    //    name + live wallpaper count badge + description. ──
-    React.createElement("div", { className: "we-picker__card-head" },
-      React.createElement("span", { className: "we-picker__card-name" }, weT("壁纸引擎")),
-      React.createElement("span", { className: "we-picker__card-badge" }, String(playableList.length)),
-      React.createElement("span", { className: "we-picker__card-desc" }, weT("本地 Wallpaper Engine 壁纸 · 液态玻璃主题")),
-    ),
-    // ── 页签栏（分段式）：六个页签互斥展示，替代三十控件的单列长滚动。
-    //    指示胶囊随 activeTab 平移（transform 合成器属性，不引发布局）；宽度按
-    //    **可见页签表**的长度现算 ⇒ 加页签只改那张表、组件行关闭只改可见性，这里零改动。 ──
-    React.createElement("div", { className: "we-tabs", role: "tablist", "aria-label": weT("壁纸引擎设置分区") },
-      React.createElement("span", {
-        className: "we-tabs__pill",
-        "aria-hidden": "true",
-        style: {
-          width: "calc((100% - 6px) / " + visibleTabs.length + ")",
-          transform: "translateX(" + tabIdx * 100 + "%)",
-        },
-      }),
-      visibleTabs.map((t) => React.createElement("button", {
-        key: t.id,
-        type: "button",
-        role: "tab",
-        "aria-selected": activeTab === t.id ? "true" : "false",
-        className: "we-tabs__tab" + (activeTab === t.id ? " we-tabs__tab--active" : ""),
-        onClick: () => switchTab(t.id),
-      }, t.label)),
-    ),
-    React.createElement("div", { className: "we-tabpanel", role: "tabpanel" },
-      // 库视图是**页内下钻**：pickerOpen 时页签面板整区切换成
-      // 壁纸网格，ESC / 顶部「返回」退出，切页签也会退出（见 switchTab）。
-      sel.pickerOpen ? renderPickerModal({
-        sel, closePicker, current, playbackLive, playableList, hiddenList,
-        cdMode, query, basePlayable, ratingCounts, typeCounts, orientationCounts,
-        folderOptions, folderFilter, onFolderFilterChange,        gridRef: pickerGridRef, vwin: pickerVwin,
-        armedConfirm: sel.armedConfirm, onArmConfirm: armConfirm, onDisarmConfirm: disarmConfirm,
-        onClear, onTogglePlay, onRatingToggle: onRatingFilterToggle, onTypeToggle: onTypeFilterToggle,
-        onOrientationChange: onOrientationFilterChange,
-        onShowNormalView, onShowHiddenView,
-        onToggleBatchMode, onArmBatchHide, onBatchHide, onBatchCancel, onSearchInput, onPickCard,
-      }) : React.createElement(React.Fragment, null,
-        // 页签内容 → **每个页签末尾一个重置**（issue #192 用户口径：重置指定选项卡）→
-        // 全局重置（只在「系统」页签末尾，即设置页里最接近"最底部"的位置）。
-        renderActiveTab(),
-        renderTabReset({
-          armedConfirm: sel.armedConfirm, onArmConfirm: armConfirm,
-          onDisarmConfirm: disarmConfirm, onResetTab,
-        }, activeTab),
-        activeTab === "system"
-          ? renderResetSection({
-              armedConfirm: sel.armedConfirm, onArmConfirm: armConfirm,
-              onDisarmConfirm: disarmConfirm, onResetAll,
-            })
-          : null,
-      )),
-  );
-}
+// ── 壁纸选择器组件 WallpaperPicker 已整段搬出 ─────────────────────────────────
+// 组件体（hooks / 窗口测量 / 渲染接线）住 src/client/picker-component.js；构建期内联回本作用域，
+// 函数声明提升 ⇒ WallpaperPickerSection 与 renderPickerModal 的调用点文本零改动。
 
 // ── Settings section wrapper (first-level page) ─────────────────────────────
 // Mirrors the skin-center's sectionList > pluginCard structure: the picker is
@@ -5291,7 +2594,7 @@ function WallpaperPickerSection() {
 // A chibi ship-whale maid grips a pull-cord and floats over the chat. Drag it
 // along the top to reposition; on release it snaps back to the TOP edge (and is
 // clamped so it can never be dragged out of view). What it opens depends on the
-// host (src/sidebar-right.js 是唯一模式真源):
+// host (src/ui/sidebar-right.js 是唯一模式真源):
 //   · harness ≥0.1.5（有官方右侧栏）：点击/下拉 → openTab 展开右侧栏的「壁纸」
 //     tab（快捷播放面板融进官方侧栏，抽屉不启动）；
 //   · 低版本宿主：点击/下拉 → 右滑抽屉（玻璃面板自右向左划出，内容同一份
@@ -5413,239 +2716,13 @@ function readRopePos(size) {
   };
 }
 
-// ── One-time "what's new" notice ─────────────────────────────────────────────
-// The notice carries four user-facing stories:
-//   ① session avatars got a big import upgrade — SVG / GIF / BMP / AVIF now
-//      supported, oversized images get an「auto-compress & import」escape hatch,
-//      and a crop dialog runs before upload (Extensions tab),
-//   ② a batch of fixes — live scene wallpapers in multiple windows stop kicking
-//      each other off; web-wallpaper audio reactivity under the strict sandbox;
-//      inline code in thinking blocks, native dropdown popups and the preset
-//      dialog display correctly again,
-//   ③ Linux X11 occlusion power saving — a covered window drops frames, a fully
-//      covered one pauses (more battery left),
-//   ④ a bold tip: enabling dark mode + the「作者自用」preset is one of the
-//      plugin's best looks.
-// The notice art (GitHub star plea, shipped as lib/about/update-notice.jpg and
-// served by the /about-qr whitelist route — same family as the contact QRs,
-// NOT inlined: see src/about-assets.js) sits at the top with a caption
-// that links straight to the repo — this is the star entry the notice carries.
-// The dismissal version is stored WITH the
-// settings (host file, port-independent) so it survives DSH Desktop's random
-// --port restarts and never re-shows after being closed. Bump NOTICE_VERSION
-// next release to announce something new again (swap the art bytes in
-// lib/about/, the path stays put — ETag revalidation picks it up).
-//
-// ⚠️ 公告**等配图就绪才弹**（art-gate，见 UpdateNotice）：面板 bundle 宿主每次开页
-// 都从磁盘现读，而后端路由只在 DSH 重启时换血 —— 更新后未重启的窗口期里，旧后端
-// 的 /about-qr 白名单还没有 update-notice.jpg ⇒ 图 404。若照旧立刻弹窗，用户看到
-// 裂图，而「知道了」一关整版公告永久退场，配图等于永远没人看到。
-// ⚠️ 公告正文与配图是**随版本换血**的：改内容就要升哨兵（否则看过旧版的用户永远看不到
-// 新说明，改了等于没改 ⇒ 重弹一次是设计意图）。配图下方那行是**求星跳转** —— 与正文四条
-// 各管一件事，同守 `art === "ready"` 的门控。
-// ⚠️ 1.4.2 是**纯缺陷修复版**（拖动吉祥物导致右侧栏按帧开合），公告正文一个字没改
-// ⇒ 哨兵**故意**停在 "1.4.1"：为一次 bugfix 再弹一遍同样的六条，是在消费用户的注意力。
-// 下一个有用户可见新内容的版本才动这个值。
-const NOTICE_VERSION = "1.4.1";
-// 配图就绪探针的节奏：HEAD 轮询到新白名单在场（= 后端已重启）才弹；旧后端一直
-// 不在场超过 WAIT 则降级为**无图**弹出（文案信息完整；求星入口另有「关于」页那枚常驻按钮
-// 与它的重看按钮，不靠弹窗这一条命）。探针打在 /about-qr 上是自清洁的：404 响应 no-store、200
-// no-cache（packages/about-notice/lib/routes/about-qr.js），怎么轮询都不会污染 Electron 缓存。
-const NOTICE_ART_WAIT_MS = 90000;
-// 探针的**退避表**（不是固定间隔）：旧后端在场时，1.5s 一拍的固定轮询在一个时限里就是
-// 60 个 HEAD，而每个 404 都会在 DevTools 控制台留下一行 —— 用户看到的是"一屏红字"
-// （实测：未重启的后端 + 面板多开几次 ≈150 行 404）。
-// 请求本身是自清洁的，但刷屏不是。换成 1.5→3→6→12→30（表尾封顶）后，同一时限内
-// 总请求数 **≤10**（见 noticeArtSchedule），而"新后端一上线就带图弹"的灵敏度几乎不变
-// —— 第一拍仍在挂载瞬间，最坏情况只是晚一拍发现。
-const NOTICE_ART_BACKOFF_MS = [1500, 3000, 6000, 12000, 30000];
-// 同一次**页面加载**内只探一个结论：面板可反复开关（每次挂载都新建组件、重跑 effect），
-// 但"这台机器上这个后端有没有那张图"是页面级事实 —— 缓存下来后多开面板只发一轮请求。
-// 空串 = 还没结论；"ready"/"timeout" 是**终态**（不做 TTL：页面刷新即重新探，恰好等价于
-// "后端重启后刷新页面就能拿到图"）。用模块级变量而不是 store 字段：纯视图态，进 store
-// 会平白多一对瞬态字段要过直写棘轮（与 art 用组件本地 state 同一条理由）。
-let noticeArtVerdict = "";
-// 「重新查看本版更新公告」的**请求位**（关于页那枚按钮经 `onReopenNotice` 回调写它；消费在
-// `UpdateNotice`，清在它的 `dismiss()`）。
-// 不变量：① 它是**页面级视图态**（刷新即失效）—— 公告"看过了"的真源始终是 `settings.noticeSeen`，
-// 这里只记"刚才有人点过重看"；② 它是**模块级变量而非 store 字段**，与上面的 `noticeArtVerdict`
-// 同一条理由（纯视图态进 store 会平白多一个瞬态字段要过直写棘轮）。
-let noticeReopenRequest = false;
-
-/**
- * 配图探针的时刻表（**纯函数**：判据在真源码上跑它，见 test/verify-about.mjs ⑤）。
- * @param {number} waits   总时限（ms）—— 到点仍未就绪就降级
- * @param {number[]} backoff 退避表（ms，表尾持续复用 = 封顶）
- * @returns {number[]} 每次请求的相对时刻（ms），首个恒为 0（挂载即探）
- * 末拍允许被时限**截短**（`min(step, left)`）：这样"等满时限"那一拍仍然真的发出，
- * 降级判定紧跟其后（失败回来时看是否超时）。
- */
-function noticeArtSchedule(waits, backoff) {
-  const out = [0];
-  let t = 0;
-  let i = 0;
-  for (;;) {
-    const left = waits - t;
-    if (left <= 0) break;
-    const step = backoff[Math.min(i, backoff.length - 1)];
-    const next = t + Math.min(step, left);
-    if (next <= t) break;
-    out.push(next);
-    t = next;
-    i += 1;
-  }
-  return out;
-}
-
-// ❗ 的字体强制：U+2757 在正文字体栈里落到细杆字形（实测渲染成细红竖线，用户口径
-// 是"红色感叹号"）—— 单包一层 span 强制走 Segoe UI Emoji，出来的才是胖红感叹号。
-const noticeEx = (n) => React.createElement("span",
-  { style: { fontFamily: '"Segoe UI Emoji", "Noto Color Emoji", sans-serif' } }, "❗".repeat(n) + " ");
-
-function UpdateNotice() {
-  useWeLocale(); // 更新说明是长文案，语言切换后要跟着换（同一棵 RopeDock 子树）
-  const sel = useStore();
-  // Art-gate 探针：pending（探测中，什么都不弹）→ ready（新后端在场，带图弹）→
-  // timeout（等满 WAIT 仍 404，降级为无图弹）。用组件本地 state 而不是共享
-  // selection —— 纯视图态，进 store 会平白多一对瞬态字段要过直写棘轮。
-  //
-  // ⚠️ **手动重看时必须从 pending 起步**，不能拿缓存结论当初始值：`noticeArtVerdict` 是
-  // **页面级**缓存，可能停在任何终态（`timeout` = 那次没等到图、按无图降级过）。拿它当初始
-  // art 会让重看直接按"无图公告"渲染，而**配图下方那行求星链接与配图同一条门控** ⇒ 那条腿
-  // 整条不渲染，用户看到的就是"点了没反应"。从 pending 起步 + 下面 effect 让手动请求重新探
-  // 一次，语义才对：手动重看应当现算"这台机器的后端**现在**有没有这张图"。
-  const [art, setArt] = React.useState(noticeReopenRequest ? "pending" : (noticeArtVerdict || "pending"));
-  // ⚠️ 上面这个初始化式读模块级 `noticeReopenRequest`（模块级 `let`，声明在 `UpdateNotice`
-  //    之前）—— 模块求值期不读它，只在组件渲染期读，所以不存在 TDZ 面。
-  // Only render once the host settings (source of truth) are applied, so the
-  // persisted noticeSeen is final. On a fresh port/restart the localStorage
-  // origin is empty (noticeSeen == "") and would briefly flash the notice before
-  // the host GET merges the real value — wait for hostLoaded to avoid that.
-  const eligible = sel.hostLoaded && sel.noticeSeen !== NOTICE_VERSION;
-  // 「重新查看本版更新公告」：关于页那枚按钮把请求位立起来，本组件**随时挂载** ⇒ emit() 一响
-  // 这里就重渲染、读到 true ⇒ 即使 noticeSeen 已是本版也照样展示一次（这正是该按钮的用途：
-  // 公告是"一等版本弹一次"的展示面，用户想再看时不该只能改设置文件）。
-  // 只读、不消费：请求位由 `dismiss()` 清（见那里），这样"知道了"一关就回到正常口径。
-  const reopenRequested = noticeReopenRequest;
-  // 更新公告整块（含配图那条 `/about-qr/update-notice.jpg` 腿）归 `about-notice` 组件行
-  // （ADR-0013 D3②）：那一行关掉 ⇒ 公告**整块不弹**，探针也一个请求都不发（路由整族没了，
-  // 探到的是必然的 404）。判据只此一处实现 —— `weComponentVisible`。
-  // ⚠️ 手动请求那条支路**仍受这一行约束**（按钮本身也长在这一行的 gate 之内，见
-  // `renderAboutTab`）：两者同源，不会出现"重开后无按钮"或"行关了还能弹"的错配。
-  const componentOn = weComponentVisible(sel.inventory && sel.inventory.components, "about-notice");
-  React.useEffect(() => {
-    // 已关过本版公告、且这次也不是手动请求 ⇒ 一个请求都不发（每次开面板都探一遍是纯浪费）。
-    if (!eligible && !reopenRequested) return undefined;
-    // 组件行（about-notice）不可用 ⇒ 它那一族路由整族没注册，探到的是必然的 404 —— 一个请求
-    // 都不发。与上面那句**分开写**：两条门挡的是两件不同的事（用户已关公告 / 组件行关了）。
-    if (!componentOn) return undefined;
-    // 同一页面已有结论 ⇒ 直接采纳，一个请求都不再发（多开面板 / 来回切页不复探）。
-    // ⚠️ **手动重看不吃这条缓存**：用户点「重新查看本版更新公告」的语义是"现在让我再看看"，
-    // 要的是"此刻这台机器的后端有没有那张图"的现算结论（他可能刚重启过 DSH）。吃缓存会按旧
-    // 结论（可能是 timeout 的无图形态）弹出来，那条求星腿就跟着没了。
-    if (noticeArtVerdict && !reopenRequested) { setArt(noticeArtVerdict); return undefined; }
-    let alive = true;
-    const timers = [];
-    const schedule = noticeArtSchedule(NOTICE_ART_WAIT_MS, NOTICE_ART_BACKOFF_MS);
-    const probe = (i) => {
-      // apiHead 不抛（api-client 契约）：404/断网都是 ok:false —— 落到时刻表的下一拍，
-      // 走完最后一拍仍在 404 就降级（timeout = 无图弹出，文案信息完整）。
-      apiHead(NOTICE_ART_PATH).then((r) => {
-        if (!alive) return;
-        if (r.ok) { noticeArtVerdict = "ready"; setArt("ready"); return; }
-        if (i + 1 >= schedule.length) { noticeArtVerdict = "timeout"; setArt("timeout"); return; }
-        timers.push(setTimeout(() => probe(i + 1), schedule[i + 1] - schedule[i]));
-      });
-    };
-    timers.push(setTimeout(() => probe(0), schedule[0]));
-    return () => { alive = false; for (const t of timers) clearTimeout(t); };
-  }, [eligible, componentOn, reopenRequested]);
-  // 展示条件：正常口径（本版没看过）**或** 用户手动请求重看（关于页那枚按钮）。
-  // 两条都受 `componentOn` 约束（组件行关了 ⇒ 公告整族没了）。
-  // `reopenRequested` 进依赖数组：请求位在 effect 之外被置起来时（关于页点击 → emit → 本组件
-  // 重渲染）要重新评估探针那一段，否则"手动重看却拿不到 art 结论"会卡在 pending 不显示。
-  const show = componentOn && (reopenRequested || eligible) && (art === "ready" || art === "timeout");
-  const dismiss = () => {
-    // Persist the dismissed version through the settings pipeline (localStorage
-    // cache + host file). emit() re-renders this component (useStore) to hide it.
-    setSetting("noticeSeen", NOTICE_VERSION);
-    // 手动请求也要清掉：否则这一次关掉后 `show` 仍为真（请求位还立着）⇒ 关不掉。
-    // 命令式写法（不是 setState）—— 与请求位的模块级归属一致：它记的是"请求发生过了"。
-    noticeReopenRequest = false;
-    emit();
-  };
-  if (!show) return null;
-  // ══ UPDATE NOTICE COPY（begin）══════════════════════════════════════════════
-  // 下面到 end 之间的区段是**纯公告文案**：CI 的 `notice` 快通道只在这一段内放行
-  // "只改字符串内容"的提交。判据是**内容级**的（见 test/tools/ci-routing.mjs 的
-  // judgeNoticeEdit）：① 区块外逐字节完全一致；② 区块内剥掉字符串内容后的**代码骨架**
-  // 逐字一致。改结构（增删条目、改 props、加分支）⇒ 骨架变 ⇒ 回落 `npm run verify:all`。
-  // ⚠️ 不要在这里写注释以外的逻辑：注释会被骨架判据剥掉（所以写注释是安全的），
-  //    任何可执行 token 的增删都会让骨架判据判红。
-  return React.createElement("div", { className: "we-update-notice", role: "alert" },
-    React.createElement("div", { className: "we-update-notice__title" }, weT("🎉 更新：图片幻灯片壁纸 · 桌宠联动重写 · 玻璃更稳")),
-    // 只有 ready 才渲染配图与说明行（timeout 降级态无图弹出，正文信息自足）。
-    // 图下那行是**求星入口**（见下面的说明），所以它随配图同一条门控：无图降级态没有它，
-    // 但求星入口另有「关于」页那枚常驻按钮兜住，不是唯一命脉。
-    art === "ready" ? React.createElement("img", {
-      className: "we-update-notice__art",
-      src: apiUrl(NOTICE_ART_PATH),
-      alt: weT("新朋友「星来」登场"),
-      // D3③ 的 `<img>` 兜底：探针过了（HEAD 通）但取字节时仍失败 ⇒ 就地退回那条**无图公告**
-      // （与等满时限的降级态同一个形态，正文信息自足），不留破图。
-      onError: () => setArt("timeout"),
-    }) : null,
-    art === "ready" ? React.createElement("div", { className: "we-update-notice__art-cap" },
-      // 求星入口：配图下方这一行是**真跳转**（不是纯文字指路），用户读完图就能一步到仓库。
-      // 用 `<a>` 而不是 `<button>`：外链交给浏览器原生行为（新窗 / 中键 / 修饰键都对），
-      // 与关于页那枚 Star 按钮同款；`we-picker__btn--primary`（实心 accent + 墨随 accent）
-      // 在公告的恒定深色玻璃底上**逐字沿用**，不另造一套公告专用按钮样式。
-      // ⚠️ **不变量：公告底部只许有一枚 `<button>`**（`知道了`）。`test/compat-harness-pages.mjs`
-      // 用 `document.querySelector('.we-update-notice__btn')` 定位"知道了"来关公告；再加一枚
-      // 同名 class 的 `<button>` 会让它点到错的那枚。所以求星这条腿用 `<a>` + 自己的
-      // `we-update-notice__star` 类。
-      // 只在 `art === "ready"` 时渲染（与配图同一条门控）：无图降级态的正文信息自足，
-      // 且求星入口另有「关于」页那枚常驻按钮与它的重看按钮 —— 这条腿不是唯一命脉。
-      React.createElement("a", {
-        className: "we-update-notice__star we-picker__btn we-picker__btn--primary",
-        href: ABOUT_REPO_URL,
-        target: "_blank",
-        rel: "noopener noreferrer",
-        title: weT("在浏览器里打开项目仓库"),
-      }, weT("⭐ 去 GitHub 点亮 Star"))) : null,
-    React.createElement("div", { className: "we-update-notice__body" },
-      // 行文体例（用户口径：简单公告）：简洁 + 大字 —— 只讲五件事，
-      // 全部走 16pt callout（.we-update-notice__callout），每条一句不加尾巴长文。
-      React.createElement("p", { className: "we-update-notice__callout" },
-        "① ", noticeEx(2), React.createElement("strong", null, weT("关掉也能再看")),
-        weT("：本公告点「知道了」后不再自动弹出，想回顾就到「设置 → 壁纸引擎 → 关于」点「重新查看本版更新公告」。")),
-      React.createElement("p", { className: "we-update-notice__callout" },
-        "② ", noticeEx(2), React.createElement("strong", null, weT("图片 / 幻灯片壁纸")),
-        weT("：WE preset 型图片项目直接可用；多图项目自动成图集，播放页新增「图片轮播」节奏下拉（跟随壁纸 / 5 秒–5 分钟）。")),
-      React.createElement("p", { className: "we-update-notice__callout" },
-        "③ ", noticeEx(2), React.createElement("strong", null, weT("玻璃更稳")),
-        weT("：首启与行开关不再闪黑或残留坏滤镜；第三方弹窗在玻璃下不再半透明透字。")),
-      React.createElement("p", { className: "we-update-notice__callout" },
-        "④ ", noticeEx(2), React.createElement("strong", null, weT("桌宠联动重写")),
-        weT("：接入官方安装引导，设置页开关点按立即生效，重开页面不再回弹。")),
-      React.createElement("p", { className: "we-update-notice__callout" },
-        "⑤ ", noticeEx(2), React.createElement("strong", null, weT("头像排版修复")),
-        weT("：消息行改两列布局，第三方表情包不再抢占行首、不再冒出「两张头像并排」；表情收进横排容器排在正文之后。")),
-      React.createElement("p", { className: "we-update-notice__callout" },
-        "⑥ ", noticeEx(2), React.createElement("strong", null, weT("另修一批")),
-        weT("：设置面板分段控件与色板行不再被长说明挤扁，中文字体名正常显示；库存加载失败不再误关自动轮播；大清单恢复压缩提速；UI 受压自动降帧防冻结；非默认玻璃配色不再遮挡壁纸。")),
-      React.createElement("p", { className: "we-update-notice__hint" },
-        weT("升级后建议重启一次 DSH，改动才完整生效；本提示每个新版本只出现一次，点下方按钮关闭后不再弹出。"),
-        weT("本版已发布到 npm，可直接按包名安装。")),
-    ),
-    React.createElement("button", { className: "we-update-notice__btn we-picker__btn", type: "button", onClick: dismiss }, weT("知道了")),
-  );
-  // ══ UPDATE NOTICE COPY（end）════════════════════════════════════════════════
-}
+// ── 更新公告（what's new）已按族搬出 ─────────────────────────────────────────
+// 哨兵版本、配图探针节奏、UpdateNotice 组件与整套文案住 src/client/update-notice.js；
+// 构建期内联回本作用域（CONST 里 UPDATE NOTICE COPY 标记随组件一起走）。
 
 // ── 首次安装：自动套用「深色 + 作者自用」（用户口径，取代原来的推广弹窗）──────
 // 口径：新装默认就是作者在用的那套观感，不再弹窗问"要不要试试"。
-// 触发点只有一个 —— `src/persistence.js` 的 `loadPersisted()` 发现**宿主没有存档
+// 触发点只有一个 —— `src/settings/persistence.js` 的 `loadPersisted()` 发现**宿主没有存档
 // 且本机也没有本地存档**（真正第一次）。升级用户、重装宿主但本地存档还在的用户，
 // 一概不受影响；套用后存档被写出，下次启动走宿主分支，天然只触发一次。
 //
@@ -5781,7 +2858,7 @@ function useLegacySaturateCoupling() {
 
 // ── 跨包扩展注册（P-A）：三项「扩展」里有两项（点击拖尾 packages/fx、3D packages/parallax）
 //    从 P-A 起各自住在自己的包里 —— 它们的描述符与行为层**不再出现在本 bundle 的作用域里**，
-//    唯一通道是 src/extension-registry.js 这张共享注册表。本文件是**组装根**：
+//    唯一通道是 src/extensions/extension-registry.js 这张共享注册表。本文件是**组装根**：
 //      · 留在主包的那一项（自定义会话头像）在这里自登记（模块作用域，不用等挂载）；
 //      · 挂载期按注册表把每一层的 sync 接上 store 订阅（见下面 ctx.effect）；
 //      · 拆卸期逐层 dispose（收尾所有权与"关掉=逐字节回原生"这条不变量同源）。
@@ -5792,7 +2869,7 @@ weRegisterExtensionModule("avatar", AVATAR_EXTENSION_MODULE);
 weRegisterLayerHooks("avatar", { sync: syncAvatarLayer, dispose: disposeAvatarLayer });
 weRegisterExtensionModule("perf", PERF_EXTENSION_MODULE);
 
-// ── 首帧后空闲门（#158）────────────────────────────────────────────────────────
+// ── 首帧后空闲门────────────────────────────────────────────────────────
 // 口径：宿主 `ClientEntries.start()` 对**每个**插件都 `create` + `loader.await()`，
 // 插件没法把自己摘出启动关键路径（审计 docs/archive/wip/ISSUE-AUDIT-148PLUS.md 的更正 ①）；
 // 能减的只有"启动期别让宿主干重活"。inventory 的冷路径在大库上要等整轮扫描
@@ -5820,639 +2897,18 @@ function afterFirstPaint() {
   });
 }
 
-function apply(ctx) {
-  // 0. i18n：把插件文案接上宿主的 locale 服务（`ctx.get("locale")`，可选服务 + 短轮询 ——
-  //    缺服务时静默停在默认语言，见 src/i18n/i18n.js）。放在最前面：界面首次渲染就要按当前
-  //    语言取词；服务通常已在（dsh-web-app 的 base bundle 自带），轮询只是兜底。
-  if (ctx.effect) ctx.effect(() => weI18nAttach(ctx) || undefined);
-
-  // 0b. 启动预取（字体集清单）：与设置无关，启动链却要等 settings 之后才发 —— 这里先发，
-  //     链走到它时通常已经回来（只预取一次；失败不影响启动链）。
-  //     ⚠️ **inventory 不在这里预取**（#158）：大库（2600 项目 / 13,941 文件）上
-  //     `/inventory` 冷调用要等整轮扫描，实测总延迟 1.6–2.0 s。插件激活期就发，等于让
-  //     宿主的启动和这轮全盘扫描抢同一段 I/O；而首帧之前没有任何界面在等它。改为首帧后
-  //     空闲时再发（见 apply 末尾启动链里的 `afterFirstPaint`）。
-  try {
-    prefetchFontSetList();
-  } catch { /* 预取失败走原路径（启动链各步自己会发请求） */ }
-
-  // 0c. 玻璃行停用时的残留回收（见 reclaimGlassResidue 的注释：清理函数住在玻璃子包，
-  //     行停用后那个 bundle 不求值 ⇒ 只能由永远加载的主包来收）。
-  //     ⚠️ **不发额外请求**：早先版本在这里 `setTimeout` + `apiJson(INVENTORY_URL)` 自探一次，
-  //     结果在 vm 沙箱（live-frame-backfill-smoke）里与夹具的 fetch 桩抢时序，把
-  //     "有画面 + 体积达标 ⇒ PUT 回填" 那一档整个压掉（实测 11 条判据连锁红）。
-  //     结论：回收只挂在**本来就有的数据流**上 —— `loadInventory` 拿到新 components 时
-  //     即时回收（见那里），再加上本函数在每次 `emit` 里对**已缓存的** components 复核一次。
-  //     页面刷新后什么都不点的情况由 `loadInventory` 的启动链覆盖（它本来就会跑一次）。
-
-  // 1. Mount the behind-body wallpaper + scrim layers and keep them in sync
-  //    with the selection store. ctx.effect gives fiber-lifetime cleanup.
-  if (ctx.effect) {
-    ctx.effect(() => {
-      const unsub = subscribe(syncLayers);
-      const unsubEffects = subscribe(applyEffects);
-      // 「扩展」页签的那几层（P-A 起统一走注册表）：接法与壁纸层同形 —— 每次 emit 重判一次
-      // "该不该活"。三层各自的性质不同（画布层内容驱动、视差层收敛驱动、头像层改宿主 DOM），
-      // 但**接法只有一个**：注册表说有哪些层，这里就 subscribe 谁的 sync；参数不在这里传，
-      // 每一层自己每帧现读 `selection`。三项里两项住在自己的包里，本 bundle 的作用域里
-      // 根本没有它们的函数名 —— 这正是这张注册表存在的理由。
-      const layerUnsubs = new Map();
-      const attachLayer = (layerId, hooks) => {
-        if (layerUnsubs.has(layerId)) return;
-        layerUnsubs.set(layerId, subscribe(hooks.sync));
-      };
-      // 迟到注册（子包产物在挂载之后才求值）：补订阅 + 立刻对时 + emit 一次让面板把新模块画上。
-      weSetLayerAttacher((layerId, hooks) => {
-        attachLayer(layerId, hooks);
-        try { hooks.sync(); } catch { /* 单层启动失败不许带崩挂载 */ }
-        emit();
-      });
-      // 注册表本身变了也要重画（迟到登记的扩展模块描述符 —— 与层钩子同一次 bundle 求值）。
-      weSetRegistryListener(() => emit());
-      for (const [layerId, hooks] of weLayerHooks()) attachLayer(layerId, hooks);
-      // 启动对时：挂载后的第一次 emit 由 applySelection 触发，但「轮播开关 / 场景实时
-      // 渲染 / 帧率档 / 播放倍速」这族键不在 emit 订阅链里（syncRotationTimer /
-      // syncSceneAudio 需显式调用）—— preset-store 的 reapplyAll() 只在应用预设时跑。
-      // 这里补一次对时，让挂载那一刻就按真实设置运转（幂等：按当前值重排定时器 / 音频）。
-      try { reapplyAll(); } catch { /* 挂载期静默：无媒体层时是空操作 */ }
-      // Occlusion pause: re-apply the effective playing state whenever the
-      // page hides/shows or the window loses/gains focus (see occlusionActive).
-      // Fires syncLayers → play/pause on the video; decode drops to 0 while
-      // minimized / covered by another app, exactly like desktop WE.
-      // #288：pauseOnHidden 的持续期防抖。瞬时 hidden（虚拟桌面切换 / 焦点竞态）直接忽略，
-      // 只有持续 ≥ HIDDEN_PAUSE_DEBOUNCE_MS 才置 hiddenHoldActive 并 emit（走正常暂停管线）；
-      // 回来时立刻清状态并 emit。绑定随 fiber 注销（下面的 cleanup）。
-      let hiddenDebounce = 0;
-      let hiddenHoldBound = false;
-      const applyHiddenHold = () => {
-        const hidden = typeof document !== "undefined" && document.hidden === true;
-        if (!hidden) {
-          if (hiddenDebounce) { clearTimeout(hiddenDebounce); hiddenDebounce = 0; }
-          if (hiddenHoldActive) { hiddenHoldActive = false; emit(); }
-          return;
-        }
-        if (hiddenHoldActive || hiddenDebounce) return;
-        hiddenDebounce = setTimeout(() => {
-          hiddenDebounce = 0;
-          if (typeof document !== "undefined" && document.hidden === true) {
-            hiddenHoldActive = true;
-            emit();
-          }
-        }, HIDDEN_PAUSE_DEBOUNCE_MS);
-      };
-      applyHiddenHold();
-      if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
-        document.addEventListener("visibilitychange", applyHiddenHold);
-        hiddenHoldBound = true;
-      }
-      const onOcclusionChange = () => emit();
-      const ocListeners = [];
-      if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
-        for (const t of ["visibilitychange", "blur", "focus"]) {
-          window.addEventListener(t, onOcclusionChange);
-          ocListeners.push(t);
-        }
-      }
-      // 视频壁纸的**提交前预热**：指针按到/停在卡片上时就把它预到元数据（见 src/video-layer.js
-      // 的 warmVideoUrl）—— 点击发生在抬手，按下→抬手、以及鼠标停在卡片上的这段时间都是白捡的
-      // 窗口（手动点选没有准备链）。capture + passive：不拦事件、不进冒泡链。
-      const onWarmPointerDown = (ev) => { try { warmVideoForPointer(ev, true); } catch { /* ignore */ } };
-      const onWarmPointerOver = (ev) => { try { warmVideoForPointer(ev, false); } catch { /* ignore */ } };
-      let warmBound = false;
-      if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
-        document.addEventListener("pointerdown", onWarmPointerDown, { capture: true, passive: true });
-        document.addEventListener("pointerover", onWarmPointerOver, { capture: true, passive: true });
-        warmBound = true;
-      }
-      // 可见性恢复（最小化 → 还原 / 页面从 bfcache 回来）：**只在"隐藏 → 可见"这一个方向**
-      // 做两件事 —— 一次两帧的复合成微推（见 nudgeWallpaperRepaint）与"画面真的回到屏上了吗"
-      // 的留痕（见 probeWallpaperOnScreen）。普通 focus（用户点回窗口）不做，否则每次点窗口
-      // 都要动一次层；两件事都是事件级、不进热路径。
-      const onBackVisible = () => {
-        if (typeof document !== "undefined" && document.hidden) return;   // 还在隐藏态
-        try { nudgeWallpaperRepaint(); } catch { /* ignore */ }
-        try { probeWallpaperOnScreen("back-visible"); } catch { /* ignore */ }
-      };
-      let backVisBound = false, pageShowBound = false;
-      if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
-        document.addEventListener("visibilitychange", onBackVisible);
-        backVisBound = true;
-      }
-      if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
-        window.addEventListener("pageshow", onBackVisible);
-        pageShowBound = true;
-      }
-      // 客户端 JS 异常的**留痕**：这台机器打不开 DevTools ⇒ 没有这一条，一次渲染期异常就只剩
-      // "UI 崩了"这句转述（实测过：面板白屏时诊断缓冲里什么也没有）。只**记录**、不改行为；
-      // 与其它监听器一样随 fiber 注销（HMR 重挂不会叠）。
-      const onClientError = (ev) => {
-        try {
-          const err = ev && (ev.error || ev.reason);
-          const type = (ev && ev.type) ? ev.type : "error";
-          const msg = String((err && err.message) || (ev && ev.message) || err || ev || "").slice(0, 240);
-          const where = (err && err.stack) ? " @ " + String(err.stack).split("\n").slice(0, 3).join(" <- ") : "";
-          liveLog("client-error", type + ": " + msg + where);
-        } catch { /* 连记录都失败就放弃，绝不在错误处理里再抛 */ }
-      };
-      if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
-        window.addEventListener("error", onClientError);
-        window.addEventListener("unhandledrejection", onClientError);
-      }
-      // 遮挡判定**不能只靠事件**：原生模态（`window.confirm` / `alert`）会把焦点交给自己的窗口，
-      // 而**回来时的 focus 事件不保证送达** —— 判定就会一直停在「窗口失焦」，壁纸从此不恢复
-      // （真机形态：删除确认弹窗之后壁纸停住、输入框也收不到键，只剩重载能救）。
-      // 事件之外再**低频复核**一次，且只在判定**变了**时 emit ⇒ 常态零代价、不 churn。
-      let lastOcclusion = occlusionReason();
-      let ocWatch = 0;
-      if (typeof setInterval === "function") {
-        ocWatch = setInterval(() => {
-          const now = occlusionReason();
-          if (now === lastOcclusion) return;
-          lastOcclusion = now;
-          // 留痕：这条日志是"事件丢了、靠复核补上"的唯一事后证据（真机排查时缺的就是它）。
-          try { liveLog("play-state", liveStateBrief("occlusion-recheck")); } catch { /* ignore */ }
-          emit();
-        }, OCCLUSION_RECHECK_MS);
-      }
-      // 图片 URL 源（Bing 每日一图）由宿主每天换图：客户端在**存在这类源**时低频重拉清单，
-      // 让正在显示的壁纸跟着换（宿主把 lastFetchedAt 带进 media URL 当版本号 ⇒ 层键变化）。
-      // ⚠️ 只有**正在显示**的那张是 URL 源时才重拉：轮询只为拿到版本号，不该让大库每半小时
-      // 做一次整库重建，更不能在轮播过场准备期间把 applySelection 的 cancelRotationPrepare
-      // 撞进来（那会跳一张 / 卡顿）。
-      let urlWatch = 0;
-      if (typeof setInterval === "function") {
-        urlWatch = setInterval(() => {
-          if (disposed) return;
-          if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
-          const list = selection.inventory.wallpapers || [];
-          const current = list.find((w) => w && w.id === selection.id);
-          if (!current || !current.urlSource) return;
-          if (selection.rotationTimer) return;   // 过场准备中：下一拍再说
-          loadInventory().catch(() => { /* 失败保持现状，下一次再试 */ });
-        }, URL_SOURCE_POLL_MS);
-      }
-      // 壁纸库自动刷新：WallpaperMachine 会自己把新壁纸下到库目录（Library/<id>/），
-      // 但它**只在宿主真的找到这个库**时才需要轮询。判据是 /inventory 回的
-      // wallpaperMachineRoots（宿主按磁盘实测报的数）—— 不用「installDir 为空」当
-      // 「没有 Steam」的代理：探测不到 Steam 的 Windows 用户会因此被拖进每 30s 一次
-      // 的大库重拉（#396 评审）。轮询走 silent：不亮 loading、清单没变不 emit、不重算选择。
-      let invWatch = 0, invPollFails = 0, invPollSkip = 0;
-      if (typeof setInterval === "function") {
-        invWatch = setInterval(() => {
-          if (disposed) return;
-          if (typeof document !== "undefined" && document.visibilityState === "hidden") return;
-          if (!selection.inventory.wallpaperMachineRoots) return;
-          if (selection.rotationTimer) return;   // 过场准备中：下一拍再说
-          if (invPollSkip > 0) { invPollSkip -= 1; return; }
-          loadInventory({ silent: true }).then(() => {
-            // loadInventory 自己吞异常 ⇒ 失败只能从库存的 error 字段读。
-            if (selection.inventory && selection.inventory.error) {
-              invPollFails += 1;
-              if (invPollFails >= 3) { invPollFails = 0; invPollSkip = 6; }   // 连败 3 次 ⇒ 退避约 3 分钟
-            } else {
-              invPollFails = 0;
-            }
-          });
-        }, INVENTORY_POLL_MS);
-      }
-
-      // 持久化监听器: pagehide → 立即 flush 未落盘的设置; visibilitychange →
-      // 页面回到前台时重试失败过的 PUT。注册在这里 (而不是模块作用域) 才能随
-      // fiber 注销 — 否则每次插件重载/HMR 都会在同一页面再叠一对, 永不释放。
-      // 字体集是**另一条**通道（src/fontset-store.js），同形但各自记自己的脏标记 ⇒ 各自注册。
-      let pageHideBound = false, visBound = false;
-      let fontPageHideBound = false, fontVisBound = false;
-      if (typeof window !== "undefined" && typeof window.addEventListener === "function") {
-        window.addEventListener("pagehide", onPageHideFlush);
-        pageHideBound = true;
-        window.addEventListener("pagehide", onPageHideFlushFontSet);
-        fontPageHideBound = true;
-      }
-      if (typeof document !== "undefined" && typeof document.addEventListener === "function") {
-        document.addEventListener("visibilitychange", onVisibilityResyncPersist);
-        visBound = true;
-        document.addEventListener("visibilitychange", onVisibilityResyncFontSet);
-        fontVisBound = true;
-      }
-      // 样式标签也按 fiber 生命周期注入 (dispose 会移除, 见下方 cleanup)
-      ensurePluginCss();
-      petLink.warmup();
-      // Battery optimization (省电暂停): navigator.getBattery is deprecated but
-      // still functional in Chromium; feature-detected so other engines just
-      // no-op. 'chargingchange' covers plug/unplug; onOcclusionChange re-applies
-      // the effective playing state.
-      let batteryCleanup = null;
-      let disposed = false;
-      if (typeof navigator !== "undefined" && typeof navigator.getBattery === "function") {
-        navigator.getBattery().then((bm) => {
-          // The plugin effect may have been torn down (disable / HMR) while
-          // this promise was pending — registering listeners then would leak.
-          if (disposed) return;
-          weBattery = bm;
-          bm.addEventListener("chargingchange", onOcclusionChange);
-          batteryCleanup = () => bm.removeEventListener("chargingchange", onOcclusionChange);
-          emit(); // already on battery → pause immediately
-        }).catch(() => { /* battery API unavailable: no-op */ });
-      }
-      syncLayers();
-      applyEffects();
-      // 每一层挂载后的第一次对时（幂等）：注册表里有哪层就对哪层，没有的不调用。
-      for (const [, hooks] of weLayerHooks()) {
-        try { hooks.sync(); } catch { /* 单层对时失败不许带崩挂载 */ }
-      }
-      return () => {
-        disposed = true;
-        petLink.dispose();
-        unsub();
-        unsubEffects();
-        weSetLayerAttacher(null);
-        weSetRegistryListener(null);
-        for (const [, unsubLayer] of layerUnsubs) unsubLayer();
-        layerUnsubs.clear();
-        if (ocWatch) { try { clearInterval(ocWatch); } catch { /* ignore */ } ocWatch = 0; }
-        if (urlWatch) { try { clearInterval(urlWatch); } catch { /* ignore */ } urlWatch = 0; }
-        if (invWatch) { try { clearInterval(invWatch); } catch { /* ignore */ } invWatch = 0; }
-        if (typeof window !== "undefined" && typeof window.removeEventListener === "function") {
-          for (const t of ocListeners) window.removeEventListener(t, onOcclusionChange);
-          if (pageShowBound) window.removeEventListener("pageshow", onBackVisible);
-          window.removeEventListener("error", onClientError);
-          window.removeEventListener("unhandledrejection", onClientError);
-          if (pageHideBound) window.removeEventListener("pagehide", onPageHideFlush);
-          if (fontPageHideBound) window.removeEventListener("pagehide", onPageHideFlushFontSet);
-        }
-        if (backVisBound && typeof document !== "undefined" && typeof document.removeEventListener === "function") {
-          document.removeEventListener("visibilitychange", onBackVisible);
-        }
-        if (warmBound && typeof document !== "undefined" && typeof document.removeEventListener === "function") {
-          document.removeEventListener("pointerdown", onWarmPointerDown, { capture: true });
-          document.removeEventListener("pointerover", onWarmPointerOver, { capture: true });
-        }
-        if (visBound && typeof document !== "undefined" && typeof document.removeEventListener === "function") {
-          document.removeEventListener("visibilitychange", onVisibilityResyncPersist);
-        }
-        // #288：防抖状态与监听随 fiber 一起收（模块级 hiddenHoldActive 必须复位，
-        // 否则禁用期间页面若是隐藏的，重挂后会带着旧态直接暂停）。
-        if (hiddenHoldBound && typeof document !== "undefined" && typeof document.removeEventListener === "function") {
-          document.removeEventListener("visibilitychange", applyHiddenHold);
-        }
-        if (hiddenDebounce) { clearTimeout(hiddenDebounce); hiddenDebounce = 0; }
-        hiddenHoldActive = false;
-        if (fontVisBound && typeof document !== "undefined" && typeof document.removeEventListener === "function") {
-          document.removeEventListener("visibilitychange", onVisibilityResyncFontSet);
-        }
-        if (batteryCleanup) { batteryCleanup(); batteryCleanup = null; }
-        weBattery = null;
-        clearRotationTimer();
-        // 卸载/禁用要收掉「进行中的准备」与「领养槽位」：否则 staged iframe 继续
-        // 跑 rAF/WebGL、探测 <video> 以无句柄后台解码器的形态活到页面关闭，
-        // 而且 prep 的兜底定时器之后仍会 commit（往已卸载的插件里建层）。
-        cancelRotationPrepare();
-        disposePreparedMedia();
-        // 预热槽位同一条纪律：留着就是一个没有句柄的解复用器（页面关闭前不会自己走）。
-        disposeWarmVideo();
-        // 每一层的收尾都归它自己：画布层摘节点 + 解绑监听与 rAF；视差层摘监听、rAF 与 body
-        // 上的 CSS 变量/开关属性（否则重挂会残留上一份位移）；头像层摘注入节点与行标记、
-        // 断开观察者、撤开关属性（"关掉 = 逐字节回原生"在卸载路径上的同一个动作）。
-        // 逐层包 try/catch：某一层收尾抛错不许把后面的层留在屏上。
-        for (const [layerId, hooks] of weLayerHooks()) {
-          try { hooks.dispose(); } catch (err) {
-            try { reportClientDiag("layer-dispose-failed:" + layerId, String((err && err.message) || err)); } catch { /* 诊断本身不许再抛 */ }
-          }
-        }
-        // 关掉音频闸并退役渐变中的旧层：禁用/重挂时旧层不能被留在屏上等退役定时器
-        // （≤1.3s 的可见残留），闸也不该跨过一次重挂活着（准备链的 BGM 起播会被它
-        // 推迟到那个定时器触发为止）。这两条收尾本身是正确性要求：跨过一次重挂活着的闸
-        // 会让准备链的 BGM 起播被推迟，而留在屏上的旧层要等退役定时器（≤1.3s 可见残留）。
-        // 先清闸、再退役渐变层：卸载不是「渐变结束」，走放行会 restoreNodeAudio →
-        // syncSceneAudio → play()，刚被闸压住的场景 BGM 反而在禁用时响一下（smoke 场景 H
-        // 锁定）。清掉闸后 retireFadingLayer 内部的
-        // releaseRotationAudioGateFor 直接早退；场景音频元素也一并拆掉 —— 不拆的话
-        // 禁用后正在播的 BGM 不会停止。
-        rotationAudioGate = null;
-        retireFadingLayer();
-        stopSceneAudioEl();
-        cancelLiveFrameBackfill(); // 卸载后不得再发 HEAD/PUT（少这一步就漏一次）
-        stopLiveWatch();
-        cancelLiveMount("unload"); // 延迟期那个正在预热的渲染页也要终止（否则卸载后仍在后台跑）
-        abortTranscodeUpgrade(); // 含 clearUpgradePoll + AbortController.abort（否则卸载后 500ms 轮询永久泄漏）
-        cancelPendingPersist(); // 模块级 persistTimer 不属于 fiber：不取消则 200ms 后仍会写一次
-        cancelPendingFontSet(); // 字体集那条通道的 timer 同理（各自一个模块级 timer）
-        cancelUserPropsCommit(); // 「壁纸属性」拖动期的尾部提交也是模块级 timer（同上）
-        // media-info 探测的 AbortController 也要断开 (token 可能永远不再变化)
-        abortMediaInfoProbe();
-        // sceneVideo 时序补拉: 卸载后不该再拉 inventory (也不该钉住本次求值的闭包)
-        if (sceneVideoResyncTimer && typeof window !== "undefined" && typeof window.clearTimeout === "function") {
-          window.clearTimeout(sceneVideoResyncTimer);
-        }
-        sceneVideoResyncTimer = null;
-        weStopDraw();
-        const node = document.getElementById(LAYER_ID);
-        if (node) { releaseLayerMedia(node); node.remove(); }
-        const scrim = document.getElementById(SCRIM_ID);
-        if (scrim) scrim.remove();
-        clearEffects();
-        setWallpaperActive(false);
-        // 主样式标签: 每次 bundle 求值都会注入一份 (HMR 后旧 <style>
-        // 永久留在 <head>), 故只移除本次求值这一代, 重挂载由 ensurePluginCss() 补回。
-        if (typeof document !== "undefined" && typeof document.querySelector === "function") {
-          const cssTag = document.querySelector("style[data-plugin-css=" + JSON.stringify(TAG_ID) + "]");
-          if (cssTag && cssTag.dataset && cssTag.dataset.pluginCssGen === CSS_GEN
-              && typeof cssTag.remove === "function") cssTag.remove();
-        }
-      };
-    });
-  }
-
-  // 1b. 「文字颜色角色」令牌层：后台轮询 theme 服务（启动竞态：实测 7ms 时还没有、
-  //     325ms 才有），拿到后按设置给每个角色上色；拿不到就**什么都不做** —— 全局
-  //     令牌层是**唯一**的上色通道：`#we-font-patch` 那类全局回落通道已不存在，
-  //     所以拿不到服务时角色色就是不上色，而不是换一条腿顶上。
-  //     - 不声明 `inject: ["theme"]`：缺服务时声明式依赖会让插件 park。
-  //     - 首次写入前先取宿主墨色基线，否则退出契约会把我们的颜色当宿主原值快照。
-  //     - 不监听配色变化重注册：值给的是 {light,dark} 对，配色切换由服务自己换值。
-  if (ctx.effect && typeof ctx.get === "function" && typeof document !== "undefined") {
-    ctx.effect(() => {
-      let layer = null;
-      // 排版层：**必须独立 source** —— 同 source 再注册会整层替换，会把颜色层顶掉。
-      // 它不碰 --dsw-alias-label-*，因此与宿主墨色基线（onBeforeFirstWrite）无关。
-      let typeLayer = null;
-      let unsub = null;
-      const cancelPoll = pollThemeService(ctx, {
-        intervalMs: 250,
-        timeoutMs: 6000,
-        onReady: (theme) => { themeFollowAttach(theme, ctx);   // 主题随壁纸：同一个服务句柄，接上即补评一次（开关默认关，关着时这次补评整体空转）
-          // 首装的主题腿：applyPreset 若跑得比服务就绪早，那一次写会因句柄为空而静默跳过
-          // ⇒ 这里补一次（幂等；非首装时 firstRunAuthorPending 为假，零开销）。
-          try { flushFirstRunAuthorTheme(); } catch { /* 增强腿，不阻断主题层 */ }
-          try {
-            const available = scanThemeTokens(document);
-            // 样式表扫描是清单的权威来源（active.tokens 为空、exportInspectTokens 只有 14 条）；
-            // 再叠一层 computed 存在性探测，跨源样式表读不到 cssRules 时也能判定。
-            const hasToken = (t) => available.has(t)
-              || (typeof getComputedStyle === "function"
-                && getComputedStyle(document.body).getPropertyValue(t).trim() !== "");
-            layer = createThemeLayer({
-              theme,
-              // 绑在「字体自定义」总开关下：关闭 = 连颜色一起恢复原生（与面板文案一致）。
-              // `|| {}` 是第二道：这几个 getter 会在**订阅回调**里被调到，而订阅回调不在 try 里 ——
-              // 数据侧已有兜底（selection 初始化必带字体键），这里再挡一次，免得"某个键缺失"
-              // 升级成"改一下设置整块面板崩"。
-              getColors: () => (selection.fontCustom ? (selection.themeColors || {}) : {}),
-              isAvailable: hasToken,
-              onBeforeFirstWrite: () => { try { snapshotHostFontDefaults(); } catch { /* 基线失败不阻断上色 */ } },
-            });
-            typeLayer = createThemeLayer({
-              theme,
-              source: THEME_TYPE_SOURCE,
-              // 全局字族也在这一层生效（作为**每个角色的默认**）。本机字体的栈里要拼
-              // `var(--we-host-font-family, …)`，那是"开写之前"的宿主快照 ⇒ 本层也挂一次
-              // onBeforeFirstWrite（它是幂等的"已快照则跳过"，与颜色层共用同一份快照）。
-              onBeforeFirstWrite: () => { try { snapshotHostFontDefaults(); } catch { /* 基线失败不阻断字体 */ } },
-              buildPayload: () => buildTypePayload(
-                selection.fontCustom ? (selection.themeSize || {}) : {},
-                hasToken,
-                selection.fontCustom ? (selection.themeWeight || {}) : {},
-                selection.fontCustom ? (selection.themeFamily || {}) : {},
-                fontFamilyStack,
-                selection.fontCustom ? (selection.globalFamily || "") : ""),
-            });
-            layer.sync();
-            typeLayer.sync();
-            // 订阅回调必须自己收异常：它跑在 emit() 里，抛出去就是"改一下设置整个面板崩"。
-            unsub = subscribe(() => {
-              try { if (layer) layer.sync(); if (typeLayer) typeLayer.sync(); } catch { /* 令牌层是增强 */ }
-            });
-          } catch { /* 主题层是增强：任何异常都不该影响壁纸主路径 */ }
-        },
-      });
-      return () => {
-        try { if (unsub) unsub(); } catch { /* ignore */ }
-        try { if (cancelPoll) cancelPoll(); } catch { /* ignore */ }
-        // 交给服务的 disposer 把令牌还原（实测干净）；这里只保证调用一次
-        try { if (layer) layer.dispose(); } catch { /* ignore */ }
-        try { if (typeLayer) typeLayer.dispose(); } catch { /* ignore */ }
-      };
-    });
-  }
-
-  // 2. Settings page as a FIRST-LEVEL settings section (mirrors the skin-center
-  //    in dsh-web-ui-all: its own nav entry, rendered inside the panel content
-  //    column). The picker renders inside the liquid-glass card shell.
-  //    `label` 用 **thunk**（官方 SlotLabel 支持"每次读取时求值"）：语言切换后设置导航里
-  //    的那一行跟着换文字，不需要重注册座位。nav-icon.js / sidebar-right.js 的 DOM 锚点
-  //    认的就是这个词的当前译文。
-  if (ctx.slots) {
-    ctx.slots.inject("settings.section", () =>
-      ctx.slots.register(
-        { name: "settings.section", id: "wallpaper-engine", order: 500, label: () => weT("壁纸引擎") },
-        () => React.createElement(WallpaperPickerSection),
-      ),
-    );
-  }
-
-  // 2b. 设置导航图标：官方 nav 的图标是 shell 里 navIcon(id) 的硬编码映射，第三方
-  //     section 一律拿兜底齿轮 —— 用 DOM 补丁把「壁纸引擎」那格换成自绘 SVG
-  //    （src/nav-icon.js；补丁失败 = 保留齿轮，不抛、不重试）。
-  if (ctx.effect && typeof document !== "undefined") {
-    ctx.effect(() => installWeNavIcon() || undefined);
-  }
-
-  // 2c. 官方右侧栏接入（harness ≥0.1.5）：能力门在 src/sidebar-right.js —— 座位
-  //     声明则面板融进右侧栏 tab，未声明则保持抽屉态。低版本宿主上回调永远不跑，
-  //     插件也不会 park（可选服务全靠 ctx.get，不写进 inject）。
-  if (ctx.effect && typeof document !== "undefined") {
-    ctx.effect(() => installSidebarRight(ctx) || undefined);
-  }
-
-  // 2d. 壁纸侧栏快捷键（官方桌面默认 Cmd/Ctrl+Alt+W）：注册进宿主的 shortcuts 服务
-  //     （可选服务 + 短轮询，缺服务安静跳过），命令在宿主快捷键编辑器里可改键。
-  if (ctx.effect && typeof document !== "undefined") {
-    ctx.effect(() => installWallSidebarShortcut(ctx) || undefined);
-  }
-
-  // 2e. 这些副作用**必须挂 fiber**（已在 `src/live-layer.js` 与本文件的轮换恢复监听两处收口）：
-  //     诊断留痕（加载即留痕 / 窗口失焦·隐藏 / 60s 心跳）与「重启恢复」档的交互即退出监听
-  //     （pointerdown/keydown，once），以及「隐藏期轮换推迟到可见时补做」的
-  //     visibilitychange/focus 两条监听。理由：宿主每次 revision 变化
-  //     都会 tearDownEntryFiber 后用新模块体重跑一遍，不挂 fiber ⇒ 旧实例的定时器
-  //     与监听器永不释放（实测同一 document 214 个页 id、一次 window blur 被 117 份实例各记一条）。
-  //     与官方契约一致（原文与现场见 src/live-layer.js 的 installLiveDiagnostics）。
-  //     焦点交还（#148 宿主半）同理由同形态：document/window 级监听器，拆除函数交给 fiber。
-  if (ctx.effect && typeof document !== "undefined") {
-    ctx.effect(() => installLiveDiagnostics() || undefined);
-    ctx.effect(() => installLiveBootRestore() || undefined);
-    ctx.effect(() => installRotationResumeListeners() || undefined);
-    ctx.effect(() => installFocusHandback() || undefined);
-  }
-
-  // 3b. 皮肤中心互操作（皮肤在台上 ⇒ 我方整族退场）：只读对方两条公开信号，
-  //     见文件顶部互操作块。随 fiber 注销（卸载即摘下观察器与轮询）。
-  if (ctx.effect && typeof document !== "undefined") {
-    ctx.effect(() => installSkinInterop() || undefined);
-  }
-
-  // 3. Chat-interface rope dock: the draggable pull-cord + glass repo side
-  //    panel, portalled onto <body> under its own React root — independent of
-  //    the settings view, floating above the conversation. Feature-detected
-  //    (react-dom without createRoot → skip) so minimal host/mocks stay safe.
-  if (ctx.effect && typeof document !== "undefined" &&
-      typeof ReactDOM !== "undefined" && typeof ReactDOM.createRoot === "function") {
-    ctx.effect(() => {
-      let host = document.getElementById(ROPE_DOCK_ID);
-      if (!host && document.body && typeof document.createElement === "function") {
-        host = document.createElement("div");
-        host.id = ROPE_DOCK_ID;
-        document.body.appendChild(host);
-      }
-      if (!host) return undefined;
-      const root = ReactDOM.createRoot(host);
-      root.render(React.createElement(RopeDock, null));
-      return () => {
-        try { root.unmount(); } catch { /* already gone */ }
-        if (host.parentNode) host.parentNode.removeChild(host);
-      };
-    });
-  }
-
-  // 3c. 性能监控悬浮窗（issue #263）：同样是 body 下的独立 React root，浮在对话上。
-  //     RopeDock 是常驻入口，这里不同 —— 组件内部读 perfEnabled / perfFloat，关着就
-  //     return null，不会画任何东西；打开后关掉配置面板仍然常驻（这正是用户要的）。
-  if (ctx.effect && typeof document !== "undefined" &&
-      typeof ReactDOM !== "undefined" && typeof ReactDOM.createRoot === "function") {
-    ctx.effect(() => {
-      let host = document.getElementById(PERF_FLOAT_HOST_ID);
-      if (!host && document.body && typeof document.createElement === "function") {
-        host = document.createElement("div");
-        host.id = PERF_FLOAT_HOST_ID;
-        document.body.appendChild(host);
-      }
-      if (!host) return undefined;
-      const root = ReactDOM.createRoot(host);
-      root.render(React.createElement(PerfFloat, null));
-      return () => {
-        try { root.unmount(); } catch { /* already gone */ }
-        if (host.parentNode) host.parentNode.removeChild(host);
-      };
-    });
-  }
-
-  // 启动时暂停（#349）：宿主设置落地后（`loadPersisted` 末尾置 `hostLoaded`）统一在这里
-  // 把播放意图置为暂停。位置在库存恢复**之前**（`loadInventory → revalidateSelection →
-  // applySelection`），于是壁纸以暂停态挂载，而不是"先自动播放、随后才被暂停"（会闪一帧）。
-  // 两个瞬态都置位：`playing` 是用户意图（面板按钮/出图闸门读它），`videoPlaying` 是元素
-  // 真实态，启动时元素尚未挂载 ⇒ 不置位的话视频卡会在首帧前谎报「播放中」。
-  // 只改瞬态、不落盘；手动点「播放」后本次会话照常播放。
-  function applyStartPaused() {
-    if (selection.startPaused === true && selection.playing) {
-      setTransient("playing", false);
-      setTransient("videoPlaying", false);
-    }
-  }
-
-  // Settings first (host file, port-independent), then the ACTIVE FONTSET (its values live in
-  // fontsets/<id>.json — a different store on the same host), then inventory — so the
-  // selection restore inside loadInventory()'s revalidateSelection() sees the persisted id
-  // and can resolve its media URL, and the first paint already has the user's fonts.
-  //
-  // ⚠️ 终止 `.catch` 是**必须**的：这条链上任何一步 reject，后面的 `loadInventory` 就永不执行 ——
-  // 选择器永久停在「扫描 Wallpaper Engine…」，一次性提示也不收敛（用户只能靠刷新或禁用插件自救）。
-  // 各步内部已各自消化可预期的失败（宿主不可达 / 存储被拒 / 坏 JSON），这一条兜的是"没预料到的那次抛"。
-  // #158：库存这一腿排在**首帧之后**再跑（`afterFirstPaint` 见上）。大库上它要等一轮全盘
-  // 扫描，而首帧之前没有任何界面等它 ⇒ 没必要在宿主启动那几百毫秒里跟它抢 I/O。
-  // 与 settings / fontset 分离不影响正确性：链尾的 `revalidateSelection()` 只依赖库存本身。
-  loadPersisted()
-    .then(applyStartPaused)
-    .then(loadFontSet)
-    .then(afterFirstPaint)
-    .then(() => { prefetchInventoryOnce(); return loadInventory(); })
-    .then(loadGlassPresets)
-    .catch((err) => {
-    // 链断在任何一步都可能留下没被消费的启动预取；它们属于**这一次**启动链，
-    // 不能留到用户后来的手动刷新 / 切字体集时冒充新响应（陈旧库存/清单）。
-    inventoryBootPrefetch = null;
-    try { cancelFontSetListPrefetch(); } catch { /* 模块未内联时也不许二次抛 */ }
-    try { reportClientDiag("boot-chain-failed", String((err && err.message) || err)); } catch { /* 诊断本身不许再抛 */ }
-  });
-}
+// ── 浏览器半边入口 apply(ctx) 已整段搬出 ─────────────────────────────────────
+// fiber 生命周期、启动链与宿主服务接线住 src/client/plugin-apply.js；构建期内联回本作用域，
+// 函数声明提升 ⇒ 下面 `exports.apply = apply;` 文本零改动。
 
 exports.apply = apply;
 exports.inject = inject;
-// ── 桌宠联动（packages/pet-link）的宿主侧门面 ──────────────────────────────────────────
-// 收口后这半边是**独立产物**（packages/pet-link/lib/client.pet-link.js）：它自己那一行求值，
-// 再用 host.registerPetLink(petLink) 把服务登记回来。跨包求值顺序不保证（src/extension-registry.js
-// 的注释：顺序必须由声明决定，不靠数组序）⇒ 主包**不许**假设子包已装载，所以这里把主包发出的
-// 一次性接线先记下来，登记到达时补做（petLinkWireAttach）；之后所有调用直接转发。
-// 本文件里 9 处 `petLink.*` 调用点因此**文本零改动**：它们读的就是这个作用域里的这个裸名。
-//
-// 缺席语义**必须**与"子包在场但没拿到运行资格"分开：
-//   · mascot.tap() 在缺席时**抛错**（不是空操作）—— 下面那两处
-//     `try { petLink.mascot.tap(); } catch { wallSidebarToggle(); }` 靠的就是"缺席 = 抛"来回落
-//     原生吉祥物行为；空操作会让吉祥物点击在子包缺席时既不联动、也不回落（静默失效）。
-//   · 其余方法缺席时安静 no-op，与"子包在场但未拿到资格"的观感一致。
-const petLinkWiring = {
-  armed: false,      // warmup() ⇒ true；dispose() ⇒ false（最后一次生效）
-  gesture: null,     // registerGesture(cb) 的最后一次实参
-  sidebarSet: false, // registerSidebar(desc) 是否调用过
-  sidebar: null,     // 其最后一次实参（null = 摘下）
-};
-
-/** 登记到达时把主包已发出的一次性接线补做（补接失败只影响联动，不许带崩子包装载）。 */
-function petLinkWireAttach(api) {
-  try {
-    if (petLinkWiring.gesture && typeof api.mascot.registerGesture === "function") {
-      api.mascot.registerGesture(petLinkWiring.gesture);
-    }
-    if (petLinkWiring.sidebarSet && typeof api.mascot.registerSidebar === "function") {
-      api.mascot.registerSidebar(petLinkWiring.sidebar);
-    }
-    if (petLinkWiring.armed && typeof api.warmup === "function") api.warmup();
-  } catch { /* 见上：补接是尽力而为 */ }
-}
-
-/** 子包登记入口（桥键 registerPetLink）：先入槽，再把缓冲补做；返回服务本身便于子包自用。 */
-function petLinkRegister(api) {
-  weRegisterPetLink(api);
-  petLinkWireAttach(api);
-  return api;
-}
-
-const petLink = {
-  performer: {
-    onGrab() { const api = wePetLinkService(); if (api) api.performer.onGrab(); },
-    onPull(ratio) { const api = wePetLinkService(); if (api) api.performer.onPull(ratio); },
-  },
-  mascot: {
-    tap() {
-      const api = wePetLinkService();
-      if (!api) throw new Error("[wallpaper-engine] 桌宠联动浏览器半边未装载（pet-link 子包未启用 / 未构建）");
-      api.mascot.tap();
-    },
-    registerGesture(cb) {
-      petLinkWiring.gesture = cb;
-      const api = wePetLinkService();
-      return api ? api.mascot.registerGesture(cb) : undefined;
-    },
-    registerSidebar(desc) {
-      petLinkWiring.sidebarSet = true;
-      petLinkWiring.sidebar = desc;
-      const api = wePetLinkService();
-      return api ? api.mascot.registerSidebar(desc) : undefined;
-    },
-  },
-  warmup() {
-    petLinkWiring.armed = true;
-    const api = wePetLinkService();
-    return api ? api.warmup() : Promise.resolve(false);
-  },
-  dispose() {
-    petLinkWiring.armed = false;
-    const api = wePetLinkService();
-    if (api) api.dispose();
-  },
-};
+// ── 桌宠联动的宿主侧门面已按族搬出 ───────────────────────────────────────────
+// petLinkWiring（登记/补接线/warmup/dispose 转发与"缺席=抛错"语义）整段住
+// src/client/pet-link-facade.js；构建期内联回本作用域，9 处 petLink.* 调用点文本零改动。
 
 // ── 跨包浏览器半边通道（ADR-0014 S5.1 / S5.4「宿主注入显式键集」）────────────────────
-// 显式键集表已独立到 `src/host-bridge.js`（契约真源；构建期内联在本正文之前，同处一个
+// 显式键集表已独立到 `src/core/host-bridge.js`（契约真源；构建期内联在本正文之前，同处一个
 // 扁平工厂作用域 ⇒ 正文里的活绑定照旧以 getter 形式给出去，产物行为逐字不变）。
 // 搬走的原因：这张表是跨包契约，改一个键要同时对账 6 处 `} = host;` 解构名单（判据见
 // test/verify-subpackage-client-half.mjs 的 D-7；产物里的申报表由构建期从解构派生），不该埋在 6,000+ 行正文深处。
@@ -6473,5 +2929,5 @@ function glassStatusRegister(api) {
   return api;
 }
 
-// HOST_BRIDGE_BINDINGS / HOST_BRIDGE_KEYS / exports.hostBridgeKeys 见 src/host-bridge.js。
+// HOST_BRIDGE_BINDINGS / HOST_BRIDGE_KEYS / exports.hostBridgeKeys 见 src/core/host-bridge.js。
 return module.exports;

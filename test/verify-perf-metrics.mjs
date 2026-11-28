@@ -14,6 +14,7 @@
  *   5. 旧属性面板接线必须彻底消失（否则两份读数会互相打脸）。
  */
 import { readFileSync } from 'node:fs';
+import { clientText as clientFamilyText } from './tools/src-scope.mjs';
 import { fileURLToPath } from 'node:url';
 import { dirname, join } from 'node:path';
 import { EventEmitter } from 'node:events';
@@ -112,17 +113,18 @@ check('重置后回到无基线状态', snapshot().cpu === 0);
 
 // ── 3. 静态接线：模块登记、悬浮窗挂载与旧接线清除 ─────────────────────────
 const build = read('scripts/build-client.mjs');
-const extPerf = read('src/ext-perf.js');
-const clientText = read('src/client.js');
+const extPerf = read('src/extensions/ext-perf.js');
+// 取文口径：客户端正文族（正文 + src/client/*.js）—— 性能监视岛与 ctx 接线随组件体/处理器搬家。
+const clientText = clientFamilyText();
 const probeText = read('src/live-layer/probe.js');
 const watchText = read('src/live-layer/watch.js');
 const mediaFrameText = read('src/client/media-frame.js');
-const panelText = read('src/picker-props-panel.js');
+const panelText = read('src/picker/picker-props-panel.js');
 const panelCss = read('src/styles/panel.js');
 const diagText = read('lib/routes/diag.js');
 
 check('ext-perf.js 已登记进 INLINE_MODULES（带唯一性 markers）',
-  /file:\s*['"]src\/ext-perf\.js['"]/.test(build)
+  /file:\s*['"]src\/extensions\/ext-perf\.js['"]/.test(build)
   && build.includes("'const PERF_EXTENSION_MODULE = {'")
   && build.includes("'function renderPerfIsland(ctx)'"));
 check('client.js 注册 perf 模块',

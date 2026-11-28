@@ -135,7 +135,7 @@ const CSS_QUICK = `  /* ── Rope dock: chibi pull-cord + glass repo drawer �
      玻璃 sliders in settings retint this panel live. Open/close = transform +
      opacity fade, token-driven; closed keeps visibility hidden (delayed so the
      fade-out finishes first) with pointer-events off. 只在低版本宿主使用 ——
-     官方右侧栏已接管同一份内容（见 src/sidebar-right.js）。 */
+     官方右侧栏已接管同一份内容（见 src/ui/sidebar-right.js）。 */
 /* ADR-0016 第四刀：抽屉本体**无门**（几何/关闭态/面板色底）—— 玻璃行停用时抽屉
    仍是一块可用的实底滑出面板；玻璃皮只留在 --open 态那条门内规则里。 */
 .we-repo-panel {
@@ -360,7 +360,7 @@ const CSS_QUICK = `  /* ── Rope dock: chibi pull-cord + glass repo drawer �
      （分级下拉的 margin-left:auto 恰是第二行首项，把它推到右侧）。 */
   .we-qp__viewbar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
   .we-qp__viewbar .we-qp__search { flex: 1 1 100%; min-width: 0; max-width: 300px; width: auto; }
-  /* 内容分级：下拉 + 多档勾选（与壁纸选择器同款设计；用户口径 2026-10-30 ——
+  /* 内容分级：下拉 + 多档勾选（与壁纸选择器同款设计 ——
      四枚胶囊在快捷面板里同样观感差）。候选框的限宽/省略在 .we-picker__rating-*
      里统一定义，这里只把按钮尺寸收进本面板的密度。 */
   /* 两个下拉共用同一套面板密度（字号 / 高度 / 内距 / 圆角）—— 之前只有分级按钮
@@ -368,7 +368,7 @@ const CSS_QUICK = `  /* ── Rope dock: chibi pull-cord + glass repo drawer �
      控件字号与框高不一致；宽度仍各自不同（摘要字数不同）。
      ⚠️ 模板字符串里禁止出现裸反引号（会把 CSS 模板提前终止；verify-glass-surfaces 有判据）。 */
   .we-qp__rating-menu { margin-left: auto; max-width: 210px; }
-  /* 宽度按用户口径收到原来的 ~60%（2026-10-31）：108px→70px、96px→54px；同时把内距
+  /* 宽度按用户口径收到 ~60%：108px→70px、96px→54px；同时把内距
      与图标间距压紧，「内容分级」四字（11px×4=44px）在 70px 里仍能完整显示（已算：
      10px 内距 ×2 + 44 + 4 间距 + 9 图标 + 2 边框 = 69px ≤ 70px），不触发省略号。 */
   .we-qp__rating-btn,

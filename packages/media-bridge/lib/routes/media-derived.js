@@ -83,7 +83,7 @@ export function registerMediaDerivedRoutes(webServer, c) {
       // （`transcodeCached` = 一条 `existsSync`；无参数 / 上限 ≤ 0 ⇒ `transcode: null`）。
       // 客户端据此在**建层之前**就把抽帧版当 src（而不是先取原片、等探针回来再换源）。
       // ⚠️ 这个回答**绝不能**顺手起一次转码：每个被选中的壁纸都跑一次 ffmpeg 是这条路由
-      // 历史上真实发生过的浪费（见 src/video-layer.js 的 mediaInfoInFlight 注释）。
+      // 历史上真实发生过的浪费（见 src/wallpaper/video-layer.js 的 mediaInfoInFlight 注释）。
       let transcode = null;
       try {
         const rawFps = Number(new URL(req.url || '/', 'http://x').searchParams.get('fps')) || 0;

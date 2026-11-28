@@ -895,7 +895,7 @@ function createPetLinkActionKit({ rt, tune, facing, animNameOf, bubbles, renewLe
     const rect = rectOf(det);
     if (!rect) return false;
     const key = target.x < centerOf(rect).x ? 'walkLeft' : 'walkRight';
-    // ⚠️ 朝向必须是 `'left'`（= **不翻转**），不是"往哪边走"。
+    // ⚠️ 朝向必须是 `'left'`（=**不翻转**），不是"往哪边走"。
     // dsh-pet 渲染端：`transform = facing === 'right' ? 'scaleX(-1)' : ''`，
     // 它的自带素材统一朝左、靠 flip 出右向。而我们的九段素材**自带方向**
     // （`通用-右侧螃蟹步` 画面朝右、`左侧` 朝左），再传 `right` 会被镜像成反向

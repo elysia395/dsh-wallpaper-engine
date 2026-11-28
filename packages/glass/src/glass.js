@@ -70,7 +70,7 @@ function applyGlass(selection, s) {
   };
   /** 面 × 参数 → 取值：**模式是 custom** 读 profile，否则读全局。
    *
-   *  ⚠️ custom 档上**没设过值**（undefined / null / 空串）时仍回落全局（#324）：
+   *  ⚠️ custom 档上**没设过值**（undefined / null / 空串）时仍回落全局：
    *  `conversationColor` 这类键在 schema 里没有默认值，用户只翻开关、没点色板时它
    *  是 undefined；旧写法直接把它交给 `weClampSurfaceColor`，颜色一缺就掉到主题常量
    *  （深色 #0d1524 / 浅色 #ffffff），面板上看着"跟随全局"、实际画的是另一块板。
@@ -213,7 +213,7 @@ function applyGlass(selection, s) {
 
   // 标题栏液态玻璃：壳层顶栏（AppFrame 那个 grid 容器，锚点是**运行时探针**打的
   // `data-we-titlebar-anchor` —— 宿主类名是 CSS-module 构建哈希、跨构建漂移，写死必然在
-  // 下次升级静默失效（#235）；探针见 glass-layer.js 的 findTitlebarFrame）默认只是那条不透明的
+  // 下次升级静默失效；探针见 glass-layer.js 的 findTitlebarFrame）默认只是那条不透明的
   // 底色（上面主包 src/styles/shell.js 的「外壳画布底」把外壳画布清成 transparent 之后，这一层是唯一
   // 必须保留底色的面）。
   // 打开后 CSS 把它换成**与其余面板同一张配方表**，且与左侧栏那条**逐条同形**
@@ -293,7 +293,7 @@ function applyGlass(selection, s) {
   s.setProperty("--we-sidebar-tint", sidebarTint.toFixed(1) + "%");
   if (selection.sidebarGlass) document.body.setAttribute("data-we-sidebar-glass", "on");
   else document.body.removeAttribute("data-we-sidebar-glass");
-  // 侧栏全透明（issue #137）：独立于「要不要玻璃」的第三态门控 —— 玻璃开着时它把
+  // 侧栏全透明：独立于「要不要玻璃」的第三态门控 —— 玻璃开着时它把
   // 地板/色染/釉光三组变量在侧栏子树里就地归零，玻璃关着时它接管右栏那条原生
   // 不透明兜底。与 data-we-sidebar-glass 一样是"值与门正交"的属性；配对的卸载
   // 撤除在玻璃行为层的 disposeGlassLayer（漏撤 ⇒ 插件卸载后规则组照旧生效）。
@@ -313,7 +313,7 @@ function applyGlass(selection, s) {
   // 玻璃把层令牌换成半透明后，市场的吸顶行（搜索框 + 分类 pill）也是半透明的：卡片墙从
   // 底下滚过时，卡片文字直接透上来压在搜索框上。给吸顶行补实底能修，但那行就不再是玻璃
   // 了 ⇒ 换成"把吸顶行下面的那层内容裁掉"：吸顶行照旧半透明，下面没有东西可透。
-  // ⚠️ 门是**属性在不在**，属性值是渐隐带宽度 px：0 是有效值（= 硬切口），所以不能像
+  // ⚠️ 门是**属性在不在**，属性值是渐隐带宽度 px：0 是有效值（=硬切口），所以不能像
   //    data-we-floater-solid="on" 那样拿值当门 —— 0 与"关"是两件不同的事。
   // DOM 行为在 glass-market-sticky.js：它只读这个属性，不读 settings（"读谁"只在这里决定）。
   // 配对撤除：disposeGlassLayer（属性）+ stopMarketStickyClip（宿主元素上的 mask）。

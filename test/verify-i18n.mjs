@@ -33,7 +33,7 @@ import { scanCjkStrings, needsTranslation } from './tools/i18n-scan.mjs';
 import { stripExportBlocks } from './tools/js-text.mjs';
 // 词表族（组装点 + 7 个域模块）的**按构建顺序**读法：单一真源是 scripts/build-client.mjs 的
 // INLINE_MODULES（见 test/tools/src-scope.mjs）。词表已按域拆到同族模块，键序由内联顺序决定。
-import { parseInlineModules } from './tools/src-scope.mjs';
+import { parseInlineModules, clientText } from './tools/src-scope.mjs';
 
 const ROOT = fileURLToPath(new URL('../', import.meta.url));
 
@@ -94,7 +94,7 @@ const VALUE_ALLOW = [
   })),
   {
     value: '设置',
-    why: '**宿主的**标签候选（src/sidebar-right.js 的 settingsLabelCandidates）：' +
+    why: '**宿主的**标签候选（src/ui/sidebar-right.js 的 settingsLabelCandidates）：' +
       '这一串要照字面去匹配宿主 DOM，翻译它反而匹配不到（我们的词表里 "设置" 是动词义 "Set"，' +
       '与宿主菜单项的 "Settings" 不是同一个词）。理由见该函数上方注释与 docs/adr/0007。',
   },
@@ -581,7 +581,8 @@ console.log('⑤ 运行期行为（vm 沙箱里跑词表族 src/i18n-copy*.js + 
 // ══ ⑥ 跟随契约（源码级）═══════════════════════════════════════════════════════
 console.log('⑥ 跟随契约（可选服务 / 不 park / 顶层订阅）');
 {
-  const clientSrc = readFileSync(join(ROOT, 'src', 'client.js'), 'utf8');
+  // 取文口径：客户端正文族（正文 + src/client/*.js）。组件体自 2026-11-28 起住 picker-component.js。
+const clientSrc = clientText();
   const i18nSrc = readFileSync(join(ROOT, 'src', 'i18n', 'i18n.js'), 'utf8');
   check('inject 里没有 locale（缺服务的旧宿主不该被 park）',
     !/const inject = \[[^\]]*"locale"/.test(clientSrc) && /const inject = \["slots"\]/.test(clientSrc),
@@ -601,8 +602,14 @@ console.log('⑥ 跟随契约（可选服务 / 不 park / 顶层订阅）');
       if (at < 0) throw new Error('verify-i18n: src/client/rope-dock.js 里找不到 function RopeDock');
       return s.slice(at);
     })() },
-    { name: 'UpdateNotice', src: clientSrc.slice(clientSrc.indexOf('function UpdateNotice')) },
-    { name: 'QuickPanel', src: readFileSync(join(ROOT, 'src', 'quick-panel.js'), 'utf8').slice(readFileSync(join(ROOT, 'src', 'quick-panel.js'), 'utf8').indexOf('function QuickPanel')) },
+    // 更新公告组件自 2026-11-28 起住 src/client/update-notice.js（与 RopeDock 同一条取法）。
+    { name: 'UpdateNotice', src: (() => {
+      const s = readFileSync(join(ROOT, 'src', 'client', 'update-notice.js'), 'utf8');
+      const at = s.indexOf('function UpdateNotice');
+      if (at < 0) throw new Error('verify-i18n: src/client/update-notice.js 里找不到 function UpdateNotice');
+      return s.slice(at);
+    })() },
+    { name: 'QuickPanel', src: readFileSync(join(ROOT, 'src', 'ui', 'quick-panel.js'), 'utf8').slice(readFileSync(join(ROOT, 'src', 'ui', 'quick-panel.js'), 'utf8').indexOf('function QuickPanel')) },
   ];
   const noHook = componentsWithoutLocaleHook(comps.map((c) => c.src.slice(0, 400)));
   check('五个顶层组件都订阅了语言（否则切语言只换一半）', noHook.length === 0,
@@ -611,15 +618,15 @@ console.log('⑥ 跟随契约（可选服务 / 不 park / 顶层订阅）');
     componentsWithoutLocaleHook(['function A() { return null; }']).length === 1
     && componentsWithoutLocaleHook(['function A() { useWeLocale(); return null; }']).length === 0);
 
-  const navSrc = readFileSync(join(ROOT, 'src', 'nav-icon.js'), 'utf8');
+  const navSrc = readFileSync(join(ROOT, 'src', 'ui', 'nav-icon.js'), 'utf8');
   check('DOM 锚点用当前译文匹配（nav label / 设置入口），不冻结中文常量',
     /weT\("壁纸引擎"\)/.test(navSrc)
     && !/WE_NAV_LABEL/.test(navSrc)
-    && /weT\("壁纸引擎"\)/.test(readFileSync(join(ROOT, 'src', 'sidebar-right.js'), 'utf8')));
+    && /weT\("壁纸引擎"\)/.test(readFileSync(join(ROOT, 'src', 'ui', 'sidebar-right.js'), 'utf8')));
   check('语言切换会重放 DOM 补丁（weOnLocaleChange）', /weOnLocaleChange\(/.test(navSrc));
 
   check('官方注册面用 thunk（label/title/description 现读现算）',
-    /label: \(\) => weT\(/.test(clientSrc) && /title: \(\) => weT\(/.test(readFileSync(join(ROOT, 'src', 'sidebar-right.js'), 'utf8')));
+    /label: \(\) => weT\(/.test(clientSrc) && /title: \(\) => weT\(/.test(readFileSync(join(ROOT, 'src', 'ui', 'sidebar-right.js'), 'utf8')));
 }
 
 console.log('\n' + (failed ? 'I18N CHECKS FAILED — ' + failed + ' failed' : 'I18N CHECKS PASSED')

@@ -4,7 +4,7 @@
  *   GET `${BASE}/pet-link/pet/state` → { ok, installed, name, version, path, runtimePresent,
  *                                        installUrl, installCommand, running, ... }
  *
- * 安装 / 卸载 / 安装进度三条路由已于 2026-11-01 移除（自研下载解包绕过 DSH 依赖管理、
+ * 安装 / 卸载 / 安装进度三条路由已于移除（自研下载解包绕过 DSH 依赖管理、
  * 与 link: 布局冲突，实测造成重复注册 / 误判未安装 / 启动崩溃）；安装改走 DSH 官方入口。
  * 本文件只负责「装了没有、什么版本、运行时在不在」的只读探测。
  *

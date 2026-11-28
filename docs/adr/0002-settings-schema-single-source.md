@@ -68,6 +68,6 @@
 ## 参考
 
 - 真源与逐键语义：`lib/settings-schema.js`
-- 共用的校验入口：`lib/index.js`（宿主）、`src/persistence.js`（客户端）
+- 共用的校验入口：`lib/index.js`（宿主）、`src/settings/persistence.js`（客户端）
 - 构建期内联机制：`docs/adr/0003-build-time-module-inlining.md`
 - 共享内核白名单与发布面：`docs/CODE-STRUCTURE.md`

@@ -24,6 +24,7 @@ import { fileURLToPath } from 'node:url';
 import vm from 'node:vm';
 import { createTranscodeKit } from '../lib/media/transcode.js';
 import { stripComments } from './tools/js-text.mjs';
+import { clientText as clientFamily } from './tools/src-scope.mjs';
 
 const results = [];
 /** 转码编码器兜底（issue：只有 NVENC ⇒ 无 NVENC 的 ffmpeg 必然全失败）。 */
@@ -84,7 +85,7 @@ const results = [];
   const host = readFileSync(new URL('../lib/index.js', import.meta.url), 'utf8')
     + readFileSync(new URL('../lib/media/transcode.js', import.meta.url), 'utf8');
   const derived = readFileSync(new URL('../packages/media-bridge/lib/routes/media-derived.js', import.meta.url), 'utf8');
-  const layer = readFileSync(new URL('../src/video-layer.js', import.meta.url), 'utf8');
+  const layer = readFileSync(new URL('../src/wallpaper/video-layer.js', import.meta.url), 'utf8');
   check('抽帧缓存键只有一份：落盘与"有没有缓存"共用 transcodeCacheKey(abs, mtimeMs, fps)',
     /function transcodeCacheKey\(abs, mtimeMs, fps\)/.test(host)
       && /const key = transcodeCacheKey\(abs, st\.mtimeMs, fps\);/.test(host)
@@ -353,7 +354,7 @@ const transcodePending = []; // { fps, url, controller, resolve, reject }
 const transcodeResolved = []; // snapshots of completed requests (fps, aborted)
 // 夹具**故意用原生可解的容器/编码**（mp4 里的 avc1 = H.264，浏览器直接能播）：这正是
 // 帧率上限必须仍然生效的那一类源。
-// 口径：上限的判据是"源帧率是否高于上限"，与容器能不能原生播无关（见 src/video-layer.js
+// 口径：上限的判据是"源帧率是否高于上限"，与容器能不能原生播无关（见 src/wallpaper/video-layer.js
 // 的 capNeedsTranscode）。所以夹具必须站在"原生可解 + 高帧率"这一侧。
 const mediaInfo = { width: 3840, height: 2160, codec: 'avc1', fps: 120 };
 
@@ -570,7 +571,7 @@ function stateMachineHarness(parts) {
 // 只排空上述 async API 的有限 Promise 链，不依赖网络或墙钟等待。
 async function settleStateMachine() { for (let i = 0; i < 12; i++) await Promise.resolve(); }
 async function verifySelectionStateMachines() {
-  const video = readFileSync(new URL('../src/video-layer.js', import.meta.url), 'utf8');
+  const video = readFileSync(new URL('../src/wallpaper/video-layer.js', import.meta.url), 'utf8');
   const prep = readFileSync(new URL('../src/media-prep.js', import.meta.url), 'utf8');
   for (const [label, parts] of [
     ['source', stateMachineParts(video, prep)], ['bundle', stateMachineParts(code, code, true)],
@@ -773,14 +774,15 @@ async function main() {
 
   // ---- 结构契约：转码字段的写入权（抽模块后钉住）----
   // 契约的可核对形式：
-  //   · 三个字段的**状态机**写入必须全在 视频通道 src/video-layer.js；
+  //   · 三个字段的**状态机**写入必须全在 视频通道 src/wallpaper/video-layer.js；
   //   · src/client.js 只允许"换壁纸/切走时复位"（= null / = "idle"）；
   //   · 两个新入口必须真的被 client.js 调用（搬移后接线不能断）；
   //   · transcode.js 必须登记进 INLINE_MODULES 且**真的进了产物**（防孤儿：文件在却不进 bundle）。
   {
-    const clientSrc = readFileSync(new URL('../src/client.js', import.meta.url), 'utf8');
+    // 取文口径：客户端正文族 —— 转码状态门面与 apply 里的接线自 2026-11-28 起分开住。
+const clientSrc = clientFamily();
     const prepSrc = readFileSync(new URL('../src/media-prep.js', import.meta.url), 'utf8');
-    const tcSrc = readFileSync(new URL('../src/video-layer.js', import.meta.url), 'utf8');
+    const tcSrc = readFileSync(new URL('../src/wallpaper/video-layer.js', import.meta.url), 'utf8');
     const bundle = readFileSync(new URL('../lib/client.js', import.meta.url), 'utf8');
     const build = readFileSync(new URL('../scripts/build-client.mjs', import.meta.url), 'utf8');
     const FIELDS = ['mediaInfo', 'transcodeState', 'transcodeProgress'];
@@ -789,7 +791,7 @@ async function main() {
     const isReset = (v) => v === 'null' || v === '"idle"';
     const badInClient = [];
     for (const f of FIELDS) for (const v of writes(clientSrc, f)) if (!isReset(v)) badInClient.push(f + ' = ' + v);
-    check('client.js 对三个转码字段只做复位（状态机写入在 视频通道 src/video-layer.js）', badInClient.length === 0,
+    check('client.js 对三个转码字段只做复位（状态机写入在 视频通道 src/wallpaper/video-layer.js）', badInClient.length === 0,
       badInClient.join('; ')
       || '复位写入 ' + FIELDS.map((f) => f + '×' + writes(clientSrc, f).length).join(' '));
     // 防空转：transcode.js 里若没有状态机写入，上面那条判据就是空对空。
@@ -809,11 +811,11 @@ async function main() {
     check('client.js 不再直写探测状态（探测的 token/AbortController 只属于 transcode.js）',
       !/\bmediaInfoToken\s*=/.test(clientSrc) && !/\bmediaInfoAbort\s*=/.test(clientSrc)
       && !/\bmediaInfoToken\s*=/.test(prepSrc) && !/\bmediaInfoAbort\s*=/.test(prepSrc));
-    // ④ 之后：抽帧换源链路**并入视频通道**（原 `视频通道 src/video-layer.js` 已删除）⇒ 这条判据的
+    // ④ 之后：抽帧换源链路**并入视频通道**（原 `视频通道 src/wallpaper/video-layer.js` 已删除）⇒ 这条判据的
     // 语义跟着搬家：从「transcode.js 已登记进 INLINE_MODULES」改成「并入视频通道、且不再是
     // 独立项」。原判据的真实意图**原样保留**：防孤儿（登记了却进不了 bundle）+ 只有一份。
     check('抽帧换源链路已并入视频通道（video-layer.js 已登记、transcode.js 不再是独立项）',
-      /file:\s*'src\/video-layer\.js'/.test(build)
+      /file:\s*'src\/wallpaper\/video-layer\.js'/.test(build)
       && !/file:\s*'src\/transcode\.js'/.test(build)
       && (bundle.match(/async function refreshMediaInfo\(/g) || []).length === 1);
   }

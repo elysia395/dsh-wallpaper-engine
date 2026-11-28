@@ -101,7 +101,7 @@ function RopeDock() {
     }
   };
   // 吉祥物触发的统一入口（click / 手势 / 快捷键共用一组模块级开关，见
-  // src/sidebar-right.js 的 wallSidebarToggle/Open/Close）：官方态 → 控制器切换
+  // src/ui/sidebar-right.js 的 wallSidebarToggle/Open/Close）：官方态 → 控制器切换
   // 右侧栏（展开且正显示「壁纸」⇒ 收起；否则展开并聚焦本 tab）；抽屉态 → 开关抽屉。
   const finishDrag = (clientX, clientY, canceled) => {
     const d = dragRef.current;
@@ -186,7 +186,7 @@ function RopeDock() {
     if (hidden) setOpen(false);
   }, [open, hidden]);
 
-  // 模块桥（src/sidebar-right.js 的 ropeDrawerControl）：抽屉的三个动作注册给
+  // 模块桥（src/ui/sidebar-right.js 的 ropeDrawerControl）：抽屉的三个动作注册给
   // 快捷键与统一开关使用 —— 组件 state 只能由组件自己改。吉祥物隐藏时撤销注册
   // （此时抽屉开不出来，快捷键 resolve 走 pass 不吞键）；卸载时同样撤销。
   React.useEffect(() => {

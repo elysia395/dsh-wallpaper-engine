@@ -113,7 +113,7 @@ console.log('PASS 真实官方侧栏按反击开合时长运行，恢复临时�
 }
 
 {
-  const sidebar = readFileSync(new URL('../src/sidebar-right.js', import.meta.url), 'utf8');
+  const sidebar = readFileSync(new URL('../src/ui/sidebar-right.js', import.meta.url), 'utf8');
   const prefix = sidebar.slice(0, sidebar.indexOf('/** 强制抽屉态'));
   let expanded = false, kind = 'wallpaper-library', toggles = 0;
   const ctrl = { active: () => ({ kind }), isExpanded: () => expanded,
@@ -134,7 +134,7 @@ console.log('PASS 真实官方侧栏按反击开合时长运行，恢复临时�
 }
 
 {
-  const sidebar = readFileSync(new URL('../src/sidebar-right.js', import.meta.url), 'utf8');
+  const sidebar = readFileSync(new URL('../src/ui/sidebar-right.js', import.meta.url), 'utf8');
   const prefix = sidebar.slice(0, sidebar.indexOf('/** 强制抽屉态'));
   let drawerOpen = true;
   const api = new Function('closeDrawer', prefix + `

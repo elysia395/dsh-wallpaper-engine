@@ -1,6 +1,6 @@
 /**
  * live-layer-watch.js — 实时管线的**看护 tick / 转移重试 / 抓帧回填**域。
- * （心跳读数、首帧预算、载荷账本与失败归因 2026-11-07 S4 折进同族 live-layer/probe.js。）
+ * （心跳读数、首帧预算、载荷账本与失败归因在同族 `live-layer/probe.js`。）
  *
  * 纯搬移：下列声明与函数体逐字未改，只换了声明住哪。构建期由 scripts/build-client.mjs 按
  * INLINE_MODULES 顺序内联进同一工厂作用域（本模块排在组装点 src/live-layer.js 之前）。
@@ -21,8 +21,8 @@ let liveWatch = null; // { frame, wid, timer, startedAt, hardAt, budget, firstFr
 let liveTransferRetryTimer = 0;
 const liveTransferAttempts = new Map(); // wid -> 传输类软失败的次数（成功即清零）
 
-// ── UI 受压时给实时渲染页降帧（#248）──────────────────────────────────────────
-// 现场（#248）：大 dsh-context 页 + Scene 60fps + 液态玻璃 ⇒ 每次切页整窗卡 ~10s；
+// ── UI 受压时给实时渲染页降帧──────────────────────────────────────────
+// 现场：大 dsh-context 页 + Scene 60fps + 液态玻璃 ⇒ 每次切页整窗卡 ~10s；
 // 流式输出期间主线程出现 1.2s+ 停顿，宿主心跳告警「页面主线程可能卡死」，换视频壁纸即消失。
 // 机制：scene 渲染页与 DSH UI 同源、跑在**同一个渲染主线程**（web 壁纸才是跨源沙箱的
 // 独立进程），UI 的重活（大 DOM 挂载、流式渲染）会直接挤占壁纸的帧循环，反之亦然。
@@ -54,7 +54,7 @@ function liveGuardIsDisabled() {
   return liveGuardDisabled;
 }
 
-// 只在「玻璃真在算值」时降帧：#248 的整页代价来自 backdrop-filter 每帧重采样壁纸；
+// 只在「玻璃真在算值」时降帧：整页代价来自 backdrop-filter 每帧重采样壁纸；
 // 玻璃行关闭 / 皮肤让路态（glass.js 会摘掉门控属性）时没有这笔账，别误伤纯壁纸用户。
 function liveGuardGlassOn() {
   try { return !!(document.body && document.body.hasAttribute("data-we-glass-page")); } catch { return false; }
@@ -245,7 +245,7 @@ function startLiveWatch(frame, wid) {
   try { document.addEventListener("visibilitychange", watch.onVisible); } catch { watch.onVisible = null; }
   watch.timer = setInterval(() => {
     if (!frame.isConnected) { liveLog("watch-stop", "iframe 已从文档移除", "info", true); stopLiveWatch(); return; }
-    // 心跳迟到 = 主线程被占（#248）：这一拍本身就是「UI 受压」的证据。
+    // 心跳迟到 = 主线程被占：这一拍本身就是「UI 受压」的证据。
     const tickAt = Date.now();
     const tickGap = tickAt - (watch.lastTick || tickAt);
     watch.lastTick = tickAt;
@@ -258,7 +258,7 @@ function startLiveWatch(frame, wid) {
     const isWeb = selection.type === "web";
     const wstate = isWeb ? liveStateOf(frame) : null;
     const alive = liveHeartbeatAlive(frame, stats, wstate, isWeb);
-    // 软渲染兜底（#270）：首帧出来后探测一次 GPU 后端。软渲染（SwiftShader /
+    // 软渲染兜底：首帧出来后探测一次 GPU 后端。软渲染（SwiftShader /
     // llvmpipe / 无 WebGL）撑不起实时 WebGL，继续跑会把整页拖死；这时 pause()
     // 渲染页、留住最后一帧当静态画面。用户关掉「软件渲染时暂停」即恢复旧行为。
     if (watch.firstFrame && !watch.softRender && liveSoftRenderProbeNow()
@@ -509,7 +509,7 @@ function suspendLivePayload(frame, watch) {
 //     冷却后自动重试一次；绝不写共享设置（那会让一次饿死变成所有窗口的永久降级）。
 //   · `stall`（运行期连续无帧）⇒ 同样只进会话内：失焦/被遮挡的窗口（Chromium 对
 //     遮挡页冻结 rAF）也会"看起来"在无帧运行，而它跟传输停滞一样不是"这张壁纸
-//     渲染不出来"的证据 —— 落盘就会把本机的其它窗口一起拉黑（issue #129 实测：
+//     渲染不出来"的证据 —— 落盘就会把本机的其它窗口一起拉黑（实测：
 //     focus=0 的窗口 stall 落盘后，正常窗口也变静态）。本会话内软失败 + 冷却重试。
 //   · 其余（首帧超时且确有本窗口的整包完成证据 / 渲染页加载错误）⇒ 维持原语义：落盘记忆。
 function liveFail(reason) {

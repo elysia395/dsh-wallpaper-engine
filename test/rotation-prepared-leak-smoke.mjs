@@ -1074,7 +1074,7 @@ const fireProbe = (probe, ev) => {
  * 夹具：把"这个 `<video>` 已经解码好了"这件事按**浏览器事实**标出来，再发事件。
  *
  * 为什么需要：canplay 的 spec 含义就是 `readyState ≥ HAVE_FUTURE_DATA(3)`（手上已经有帧）。
- * 闸门读的是**当下这一帧**（见 src/live-layer.js 的 layerContentReady / src/video-layer.js 的
+ * 闸门读的是**当下这一帧**（见 src/live-layer.js 的 layerContentReady / src/wallpaper/video-layer.js 的
  * videoContentReady），所以夹具只发事件、不标 readyState，量到的是"元素没有画面"这个**假的**
  * 浏览器事实 —— 会与产品判据（也见 T2：无帧不得放行）自相矛盾。
  */

@@ -1,5 +1,5 @@
 /**
- * supervisor-protocol.js — media-bridge 监督者的**协议常量与纯函数**（2026-11-07 从
+ * supervisor-protocol.js — media-bridge 监督者的**协议常量与纯函数**从
  * `supervisor.js` 纯搬移折出：进程生命周期留在 supervisor.js，这里只放"纯计算"）。
  *
  * 为什么单独一层：协议版本、引导预算、spawn 姿势、空闲/重启窗口、命令白名单、

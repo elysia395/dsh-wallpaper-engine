@@ -89,14 +89,14 @@ const subpackageRecipes = () => {
 const registersFile = (text, rel) =>
   new RegExp('["\']?file["\']?\\s*:\\s*["\']' + rel.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '["\']').test(text);
 
-/** 装配共享注册表（src/extension-registry.js）并登记「扩展」页签的三项。
+/** 装配共享注册表（src/extensions/extension-registry.js）并登记「扩展」页签的三项。
  *
  *  为什么挂载台需要它：三份 bundle（主包 / packages/fx / packages/parallax）的**求值顺序不保证**，
  *  panel-tabs 的 extensionModules() 只问注册表。挂载台是**按文件** import 的，于是必须自己把表
  *  装起来 —— 否则 weExtensionModules 是裸标识符（ReferenceError，且只在渲染「扩展」页签时才炸）。
  *
- *  ⚠️ 这里用字面量路径 join(root, 'src', 'extension-registry.js') 来 import：本守卫因此是
- *  src/extension-registry.js 的真实覆盖（test/verify-guard-map.mjs 的「零覆盖」那条判据认它）。
+ *  ⚠️ 这里用字面量路径 join(root, 'src', 'extensions', 'extension-registry.js') 来 import：本守卫因此是
+ *  src/extensions/extension-registry.js 的真实覆盖（test/verify-guard-map.mjs 的「零覆盖」那条判据认它）。
  *  幂等：两块挂载台共用同一个模块实例，重复登记会撞注册表的「id 重复注册」抛错。
  */
 let weExtensionRegistryPromise = null;
@@ -107,9 +107,9 @@ function installExtensionRegistry() {
   return weExtensionRegistryPromise;
 }
 async function loadExtensionRegistry() {
-  const reg = await import(pathToFileURL(join(root, 'src', 'extension-registry.js')).href);
+  const reg = await import(pathToFileURL(join(root, 'src', 'extensions', 'extension-registry.js')).href);
   Object.assign(globalThis, reg);
-  const avatarMod = await import(pathToFileURL(join(root, 'src', 'ext-avatar.js')).href);
+  const avatarMod = await import(pathToFileURL(join(root, 'src', 'extensions', 'ext-avatar.js')).href);
   const fxMod = await import(pathToFileURL(subFxFile('ext-fx.js')).href);
   const parallaxMod = await import(pathToFileURL(subParallaxFile('ext-parallax.js')).href);
   // 故意**乱序**登记：屏上顺序必须由描述符的 order 决定（注册序 / 数组序不是契约）。
@@ -1198,7 +1198,7 @@ const src = clientText();
 // ⚠️ 这里**在定义点**统一剥掉文件末尾的 `export { … }`：本文件有两处把它喂给 `new Function`
 // （模块级自由变量形态复现台），而 `new Function` 不是模块环境 ⇒ 不剥就是语法错误。
 // 同一手法见 `test/verify-client.mjs` 的 effects 段；构建期内联时也是这么剥的。
-const qpSrc = stripExportBlocks(readFileSync(join(root, 'src', 'quick-panel.js'), 'utf8'));
+const qpSrc = stripExportBlocks(readFileSync(join(root, 'src', 'ui', 'quick-panel.js'), 'utf8'));
 check('前置：qpSrc 已剥掉 `export { … }`（两处 new Function 依赖这条）',
   !/^\s*export\b/m.test(qpSrc), '残留 export ⇒ new Function 会当场语法错误');
 // 同上，但**剥掉注释**：面板那条下钻的判据要找"最后一个 renderUserPropsPanel() 调用点"，
@@ -1395,7 +1395,7 @@ const liveFlagChecks = (() => {
       && !/function\s+liveHeartbeatReady/.test(body),
     // `src/live-layer.js` 的 `export { … }` 块里**只许出现本文件真的声明过的名字**。
     // 背景（本轮顺手发现的既存缺陷）：`retireFadingLayer` / `nudgeWallpaperRepaint` 两个名字
-    // 其实住在 `src/layer-core.js`，却被抄进了这张导出表 —— 内联构建把整块 `export` 剥掉、
+    // 其实住在 `src/wallpaper/layer-core.js`，却被抄进了这张导出表 —— 内联构建把整块 `export` 剥掉、
     // 又把两个文件并进同一个作用域，所以调用点照样解析、`lib/client.js` 一切正常；
     // 但"导出自己没声明的名字"在任何**真** ESM 语境下都是链接期错误
     // （`node --check src/live-layer.js` 报 `Export 'nudgeWallpaperRepaint' is not defined in module`）。
@@ -2029,13 +2029,13 @@ for (const [name, ok] of clientChecks) check(name, ok);
     // P4-15：入口调用点从 panel-tabs.js 挪进 client.js 的 `onToggleLiveDiag`（渲染器只调处理器）。
     && /function onToggleLiveDiag\(\) \{ toggleLiveDiag\(\); emit\(\); \}/.test(src)
     && /onToggleLiveDiag/.test(tabsSrc));
-  // ── 视频壁纸走**独立通道**（`src/video-layer.js`），不走实时那条路 ──────────────────
+  // ── 视频壁纸走**独立通道**（`src/wallpaper/video-layer.js`），不走实时那条路 ──────────────────
   // 现场（实测）：视频档此前过实时管线的切层内容闸门 ⇒ 整次切换（含过场）被推迟到首个
   // 可解码帧（源越大 / 帧率上限越高越久，十几秒）。正解不是调阈值，而是给视频一条自己的
   // 通道：就绪判据 = 海报**已加载** / 首帧 / 预算，且没画面时旧壁纸留屏（绝不露层底色 ——
   // 改成"poster 属性存在即放行"时出现过"十几秒纯色"，那正是这条注释要防的）。
   {
-    const CH = readFileSync(new URL('../src/video-layer.js', import.meta.url), 'utf8');
+    const CH = readFileSync(new URL('../src/wallpaper/video-layer.js', import.meta.url), 'utf8');
     const LIVE = liveText();
     check('视频通道有独立的就绪判据 videoContentReady（海报已加载 / 首帧）',
       CH.includes('function videoContentReady(video)')
@@ -2094,8 +2094,8 @@ for (const [name, ok] of clientChecks) check(name, ok);
       && src.includes('addEventListener("pointerover", onWarmPointerOver, { capture: true, passive: true });')
       && CH.includes('VIDEO_WARM_HOVER_MS')
       && src.includes('disposeWarmVideo();')
-      && readFileSync(join(root, 'src', 'picker-modal.js'), 'utf8').includes('"data-we-id": String(w.id)')
-      && readFileSync(join(root, 'src', 'quick-panel.js'), 'utf8').includes('"data-we-id": String(w.id)'));
+      && readFileSync(join(root, 'src', 'picker', 'picker-modal.js'), 'utf8').includes('"data-we-id": String(w.id)')
+      && readFileSync(join(root, 'src', 'ui', 'quick-panel.js'), 'utf8').includes('"data-we-id": String(w.id)'));
     // faststart：从"落盘变体"改成"服务期虚拟布局"（磁盘 0），以及"字节布局不得中途改换"。
     //   · 真机取证（当时加的临时插桩，已随该次提交删除）：播放器对 `Range: bytes=0-` 会
     //     **顺流整读**，moov 在尾部的源于是要读到文件末尾才报元数据，耗时 ∝ 文件大小
@@ -2161,7 +2161,7 @@ const hostLib = hostLibComposed;
     //   · 围栏 —— 通道文件里不得出现清单里的任何符号；
     //   · **反空转地板** —— 清单里的符号必须仍真实存在于实时模块（否则有人改名之后，
     //     围栏就成了"查一堆不存在的名字"，永远绿）。
-    const CHANNEL_FILES = ['../src/video-layer.js', '../src/layer-core.js'];
+    const CHANNEL_FILES = ['../src/wallpaper/video-layer.js', '../src/wallpaper/layer-core.js'];
     const LIVE_ONLY = [
       'liveRenderEnabled', 'liveRenderUrl', 'applyLiveControls', 'startLiveWatch', 'stopLiveWatch',
       'liveFail', 'liveFrameEl', 'buildLivePoster', 'scheduleLiveMount', 'createLiveFrame',
@@ -2192,13 +2192,13 @@ const hostLib = hostLibComposed;
     // 并入的 transcode.js —— 免得以后"扩容"成一份过期名单（那种名单会静静地不再看守）。
     check('⑦ 围栏名单恰好覆盖视频通道（通道 + 共用核心，不含已并入的 transcode.js）',
       CHANNEL_FILES.length === 2
-      && CHANNEL_FILES.includes('../src/video-layer.js')
-      && CHANNEL_FILES.includes('../src/layer-core.js')
+      && CHANNEL_FILES.includes('../src/wallpaper/video-layer.js')
+      && CHANNEL_FILES.includes('../src/wallpaper/layer-core.js')
       && !CHANNEL_FILES.some((f) => f.includes('transcode')));
   }
     // 搬移要**真的发生**：符号在核心里有定义，且原处不再有副本（否则只是复制一份、
     // 两条通道各留一个 —— 改一边另一边不动，那比不搬更坏）。
-    const coreSrc = readFileSync(new URL('../src/layer-core.js', import.meta.url), 'utf8');
+    const coreSrc = readFileSync(new URL('../src/wallpaper/layer-core.js', import.meta.url), 'utf8');
     const liveSrc = liveText();
     const movedBlocks = ['nudgeWallpaperRepaint', 'onScreenBrief', 'retireFadingLayer', 'startLayerTransition', 'layerKeyDiff', 'switchTransitionOf', 'releaseLayerMedia', 'openRotationAudioGate', 'mediaFramesOf',
       'scheduleFadingLayerRemoval', 'applyInlineStyle'];
@@ -2208,7 +2208,7 @@ const hostLib = hostLibComposed;
       movedBlocks.map((n) => n + ':' + defsInFile(coreSrc, n) + '/' + defsInFile(liveSrc, n)).join(' '));
     // ③ 的搬移同理：视频档的媒体构建必须在**视频通道**里，media-prep 只留委托。
     const prepSrc = readFileSync(new URL('../src/media-prep.js', import.meta.url), 'utf8');
-    const videoSrc = readFileSync(new URL('../src/video-layer.js', import.meta.url), 'utf8');
+    const videoSrc = readFileSync(new URL('../src/wallpaper/video-layer.js', import.meta.url), 'utf8');
     check('③ 视频档的媒体构建在视频通道里，media-prep 里不再有副本（只剩委托）',
       defsInFile(videoSrc, 'buildVideoMedia') === 1
       && defsInFile(prepSrc, 'buildVideoMedia') === 0
@@ -2379,19 +2379,19 @@ const hostLib = hostLibComposed;
   //    它跟另三个模块的关键差别是**它动宿主的会话 DOM**（给消息行补头像节点）——
   //    所以"产物里只有一份"在这里更要紧：两份注入逻辑就是同一行补两个头像。
   check('avatar-layer.js 已登记进 INLINE_MODULES 且在产物里只有一份',
-    /file:\s*'src\/avatar-layer\.js'/.test(build)
+    /file:\s*'src\/extensions\/avatar-layer\.js'/.test(build)
     && (bundle.match(/function syncAvatarLayer\(\)/g) || []).length === 1
     && (bundle.match(/function disposeAvatarLayer\(\)/g) || []).length === 1
     // 补头像只有一条路径（行标记 + 节点填充都在它里），混回两份 = 一行补两个头。
     && (bundle.match(/function avatarDecorateRow\(/g) || []).length === 1
     && (bundle.match(/function avatarFillNode\(/g) || []).length === 1);
   check('ext-perf.js 已登记进 INLINE_MODULES 且在产物里只有一份',
-    /file:\s*'src\/ext-perf\.js'/.test(build)
+    /file:\s*'src\/extensions\/ext-perf\.js'/.test(build)
     && (bundle.match(/function renderPerfIsland\(ctx\)/g) || []).length === 1
     && bundle.includes('PERF_EXTENSION_MODULE')
     && bundle.includes('weRegisterExtensionModule("perf", PERF_EXTENSION_MODULE)'));
   check('ext-avatar.js 已登记进 INLINE_MODULES 且在产物里只有一份',
-    /file:\s*'src\/ext-avatar\.js'/.test(build)
+    /file:\s*'src\/extensions\/ext-avatar\.js'/.test(build)
     && (bundle.match(/function renderAvatarIsland\(ctx\)/g) || []).length === 1
     && bundle.includes('avatarRadius') && bundle.includes('avatarUserImage')
     // A3 起**不再**断言"三项写在同一张静态数组里"：avatar 仍住主包，fx / parallax 各住自己的
@@ -2419,10 +2419,10 @@ const hostLib = hostLibComposed;
     const m = /order:\s*(\d+)/.exec(text.slice(i, i + 4000));
     return m ? Number(m[1]) : null;
   };
-  const avatarExtSrc = readFileSync(join(root, 'src', 'ext-avatar.js'), 'utf8');
+  const avatarExtSrc = readFileSync(join(root, 'src', 'extensions', 'ext-avatar.js'), 'utf8');
   const fxExtSrc = readFileSync(subFxFile('ext-fx.js'), 'utf8');
   const parExtSrc = readFileSync(subParallaxFile('ext-parallax.js'), 'utf8');
-  const perfExtSrc = readFileSync(join(root, 'src', 'ext-perf.js'), 'utf8');
+  const perfExtSrc = readFileSync(join(root, 'src', 'extensions', 'ext-perf.js'), 'utf8');
   check('屏上顺序 = 描述符的 order（avatar 1 / fx 2 / parallax 3 / perf 4）· 不靠数组序',
     orderOfModule(avatarExtSrc, 'AVATAR_EXTENSION_MODULE') === 1
     && orderOfModule(fxExtSrc, 'FX_EXTENSION_MODULE') === 2
@@ -3284,7 +3284,7 @@ check('host 侧 /media-control 只收 POST + 动作走 mediaBackend.control（�
     .filter((line) => line.includes('switchRow(')
       && (line.includes('mediaIntegration') || line.includes('audioSource')));
   const tabsCode = stripComments(tabsSrc);
-  const qpCode = stripComments(readFileSync(join(root, 'src', 'quick-panel.js'), 'utf8'));
+  const qpCode = stripComments(readFileSync(join(root, 'src', 'ui', 'quick-panel.js'), 'utf8'));
   check('两键退役为常开（schema kind const + 默认接入）',
     schemaMod.DEFAULTS.audioSource === 'auto' && schemaMod.KINDS.audioSource.kind === 'const'
       && schemaMod.DEFAULTS.mediaIntegration === true && schemaMod.KINDS.mediaIntegration.kind === 'const'
@@ -3421,10 +3421,10 @@ check('属性面板热更新走 __wp.updateWebProps',
   src.includes('function applyUserProps(') && src.includes('wp.updateWebProps(wire)'));
 check('属性面板值以渲染页实时表为准（getProperties）',
   src.includes('wp.getProperties()') && src.includes('function loadUserPropDefs('));
-// 求值器自 P1-7 起是**独立模块** src/we-cond.js（构建期内联回客户端作用域）。
+// 求值器自 P1-7 起是**独立模块** src/core/we-cond.js（构建期内联回客户端作用域）。
 // 断言改为三件事：模块在位、产物里确实有它、client.js 不再自带实现 —— 免得抽出去之后
 // 两边各留一份（那正是要防的漂移）。
-const weCondSrc = readFileSync(join(root, 'src', 'we-cond.js'), 'utf8');
+const weCondSrc = readFileSync(join(root, 'src', 'core', 'we-cond.js'), 'utf8');
 const bundleSrc = readFileSync(join(root, 'lib', 'client.js'), 'utf8');
 check('条件求值器已抽成独立模块并被内联（fail open）',
   /\(function weEvalCondition|function weEvalCondition\(/.test(weCondSrc)
@@ -3437,13 +3437,13 @@ check('场景就绪后回放覆盖值（无 HTML 种子通道）',
 // 用户口径：库视图只保留**顶部**返回按钮（底部那个是重复的）。
 // 计数口径：UI 重构后选择壁纸是**页内下钻视图**（不再有遮罩/弹框）⇒ closePicker
 // 只剩顶部「返回」按钮这 1 处绑定。
-// P3-11 阶段 2：库视图标记已搬到 src/picker-modal.js ⇒ 这三条文本断言跟着**所属文件**走
+// P3-11 阶段 2：库视图标记已搬到 src/picker/picker-modal.js ⇒ 这三条文本断言跟着**所属文件**走
 // （同下面诊断族那批"按所属文件分家"的口径）。计数口径仍覆盖**整个客户端半**
 // （client.js + picker-modal.js），所以在别处再加一个返回/关闭绑定照样会被判出。
-const modalSrc = readFileSync(join(root, 'src', 'picker-modal.js'), 'utf8');
+const modalSrc = readFileSync(join(root, 'src', 'picker', 'picker-modal.js'), 'utf8');
 const clientHalf = src + '\n' + modalSrc;
-// 官方侧栏接入（src/sidebar-right.js）：能力门 / 两段注册 / 模式真源的断言读它。
-const sidebarSrc = readFileSync(join(root, 'src', 'sidebar-right.js'), 'utf8');
+// 官方侧栏接入（src/ui/sidebar-right.js）：能力门 / 两段注册 / 模式真源的断言读它。
+const sidebarSrc = readFileSync(join(root, 'src', 'ui', 'sidebar-right.js'), 'utf8');
 check('库视图只留顶部返回按钮（页内下钻，无遮罩绑定）',
   (clientHalf.match(/onClick: closePicker/g) || []).length === 1
     && modalSrc.includes('we-picker__modal-foot" },'),
@@ -3608,7 +3608,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
         })());
     }
     // ⚠️ 血泪判据：**面板渲染器必须是模块级声明**，不能是 `apply()` 里的闭包。
-    //    `src/sidebar-right.js` 是 prelude（在 `apply()` **之前**求值），它注册的渲染回调
+    //    `src/ui/sidebar-right.js` 是 prelude（在 `apply()` **之前**求值），它注册的渲染回调
     //    引用不到 apply 的作用域 ⇒ 真机上 `ReferenceError: renderUserPropsPanel is not defined`
     //    ⇒ React 卸载整棵树 ⇒ **整个页面空白**（实测复现；不是"这里不画"那种局部问题）。
     //    设置页那条路察觉不到：它经 ctx 显式收这个函数，所以只有侧栏会炸。
@@ -3767,7 +3767,12 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
         return at === -1 || at > boundary;
       });
     };
-    const notPromoted = strayProcessors(src);
+    // 2026-11-28 起这批处理器按族搬进 src/client/handlers/color-handlers.js：构建期内联在**正文之前**，
+    // 所以"在族拼文本里的位置"不再是判据。仍留在正文里的那些必须在组件之前；只在模块里声明的
+    // 天生就在组件之外 —— 只要求族里声明得到。
+    const promotedBody = readFileSync(join(root, 'src', 'client.js'), 'utf8');
+    const inBody = (n) => promotedBody.includes('const ' + n + ' = ') || promotedBody.includes('function ' + n + '(');
+    const notPromoted = strayProcessors(src).filter((n) => inBody(n));
     check('外观 / 画面处理器已提升到模块级（设置页与侧栏共用同一份实现）',
       notPromoted.length === 0, notPromoted.join(', ') || PROMOTED.length + ' 个都在组件之前');
     check('negative control: 仍住在组件里的处理器会被同一条判据判出',
@@ -3796,7 +3801,17 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       const i = posOf(n);
       return i === -1 || i > boundary;
     });
-    const stray = flagged(compStart);
+    // 2026-11-28 起玻璃预设 ctx 搬进 src/client/handlers/glass-preset-handlers.js：构建期把它内联在**正文
+    // 之前**，所以"在族拼文本里的位置"不再是判据。仍留在正文里的名字必须在组件之前；只在模块里
+    // 声明的（含 glassPresetCtx）天生就在组件之外 —— 只要求族里声明得到。
+    const fontBodyText = readFileSync(join(root, 'src', 'client.js'), 'utf8');
+    const posInBody = (n) => {
+      const a = fontBodyText.indexOf('function ' + n + '(');
+      const b = fontBodyText.indexOf('const ' + n + ' = ');
+      if (a === -1) return b;
+      return b === -1 ? a : Math.min(a, b);
+    };
+    const stray = flagged(compStart).filter((n) => posOf(n) === -1 || posInBody(n) !== -1);
     check('字体 / 主题处理器与 ctx 构造器也在模块级（组件之前声明，不再每次渲染重建）',
       stray.length === 0, stray.join(', ') || PROMOTED_FONT.length + ' 个都在组件之前');
     // 独立地板：名单空了的话上面那条 `stray.length === 0` 是**恒真**的 —— 空域上的"全部合格"
@@ -3832,7 +3847,11 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       const i = posOf(text, n);
       return i === -1 || i > boundary;
     });
-    const stray = flagged(src, compStart);
+    // 2026-11-28 起这批处理器按族搬进 src/client/handlers/library-handlers.js：构建期把它们内联在
+    // **正文之前**，于是"在正文里的位置"不再是判据（族拼文本会把模块排在正文之后）。
+    // 现在判两件：①族里声明得到（漏搬/删掉 ⇒ 判红）；②仍留在正文里的那些必须在组件之前。
+    const bodyText = readFileSync(join(root, 'src', 'client.js'), 'utf8');
+    const stray = flagged(src, compStart).filter((n) => posOf(src, n) === -1 || posOf(bodyText, n) !== -1);
     check('壁纸库 / 库视图处理器与纯常量也在模块级（组件之前声明）',
       stray.length === 0, stray.join(', ') || PROMOTED_HANDLERS.length + ' 个都在组件之前');
     // 负对照：把**真实组件内成员**喂进同一条界线，必须判得出；再把它的声明提到组件之前，
@@ -3962,7 +3981,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
 // panel-tabs 是 bundle-inline 形态：这些符号在真产物里由 settings-schema / system-fonts
 // 的内联段供给；真模块导入形态下必须当 global 预置，缺一个就是渲染期 ReferenceError。
 {
-  const sysMod = await import(pathToFileURL(join(root, 'src', 'system-fonts.js')).href);
+  const sysMod = await import(pathToFileURL(join(root, 'src', 'settings', 'system-fonts.js')).href);
   const schemaEarly = await import(pathToFileURL(join(root, 'lib', 'settings-schema.js')).href);
   Object.assign(globalThis, {
     sanitizeFamilyKey: schemaEarly.sanitizeFamilyKey,
@@ -4038,11 +4057,11 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
   // 折叠逻辑（`collapsible` 短路 + aria-expanded + caret）正是本节新判据要验的东西，
   // 挂个替身等于"判据测替身"（比红更糟）。
   globalThis.sectionHead =
-    (await import(pathToFileURL(join(root, 'src', 'section-head.js')).href)).sectionHead;
+    (await import(pathToFileURL(join(root, 'src', 'ui', 'section-head.js')).href)).sectionHead;
   // 模块级重置按钮（issue #192）：同样是 panel-tabs 与 glass-panel 共用的构件，同样给**真实现**
   // —— 判据要验"每处节头都挂上了 ↺"，挂替身就等于判据测替身。
   globalThis.moduleResetButtonNode =
-    (await import(pathToFileURL(join(root, 'src', 'module-reset.js')).href)).moduleResetButtonNode;
+    (await import(pathToFileURL(join(root, 'src', 'ui', 'module-reset.js')).href)).moduleResetButtonNode;
   // ⚠️ 域模块（-appearance / -effects / -mascot）的节头调的是**薄包装** `moduleResetButton(...)`：
   //    它是 panel-tabs.js 的工厂作用域自由名字（打包后同作用域）；按文件 import 时是裸标识符
   //    ⇒ 这里同样挂**真实现**（不是替身：判据要验"每处节头都挂上了 ↺"）。
@@ -4491,11 +4510,11 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
   };
   const textKinds = (tree) => [...new Set(treeStrings(tree))].sort();
 
-  // ── 共享地基符号的替身（src/we-base.js）──────────────────────────────────────
+  // ── 共享地基符号的替身（src/core/we-base.js）──────────────────────────────────────
   // `weClampTo` / `weNow` / `weBody` 在构建期是同一作用域里的兄弟模块符号，单文件 import 时
   // 却是**裸标识符** ⇒ 下面所有"单独 import 真模块"的腿（fx / parallax / avatar 三层）都要在
   // 运行前把这三枚补到 globalThis 上，跑完还原（别的腿可能正判"这些名字不存在"）。
-  const weBaseMod = await import(pathToFileURL(join(root, 'src', 'we-base.js')).href);
+  const weBaseMod = await import(pathToFileURL(join(root, 'src', 'core', 'we-base.js')).href);
   const stubWeBase = () => {
     const keys = ['weClampTo', 'weNow', 'weBody'];
     const prev = {};
@@ -4718,7 +4737,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       'panel-tabs 源码口径');
     // 模块级 ↺ 必须**覆盖外观页签下的每个模块**（用户口径："外观下的模块也要能单独重置"）：
     // 六个外观节各有一处调用，且共用构件必须阻止冒泡（否则点 ↺ 会连带收起该节）。
-    const mrSrc = readFileSync(join(root, 'src', 'module-reset.js'), 'utf8').replace(/\r\n/g, '\n');
+    const mrSrc = readFileSync(join(root, 'src', 'ui', 'module-reset.js'), 'utf8').replace(/\r\n/g, '\n');
     const gpSrc = readFileSync(join(root, 'packages', 'glass', 'src', 'glass-panel.js'), 'utf8').replace(/\r\n/g, '\n')
       + '\n' + readFileSync(join(root, 'packages', 'glass', 'src', 'glass-presets-panel.js'), 'utf8').replace(/\r\n/g, '\n');
     // ⚠️ 刀4 之后节的渲染器搬到了 src/panel-tabs/*.js 域模块 ⇒ 扫**页签族全文**（组装点在末尾），
@@ -4759,8 +4778,9 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       + ' dup=' + tabDup.join(',') + ' uncovered=' + uncovered.join(',')
       + ' overlap=' + overlapWithExcluded.join(',') + ' stray=' + strayExcluded.join(','));
     // 面板侧：页签重置**挂在渲染点一处**（六处渲染器各挂一遍必然漏一个）。
-    const clSrc3 = readFileSync(join(root, 'src', 'client.js'), 'utf8').replace(/\r\n/g, '\n');
-    check('#192 页签重置：单一挂载点 + 关于页签不给假按钮 + 处理器在 client.js',
+    // 取文口径：客户端正文族 —— 重置节与处理器自 2026-11-28 起住 src/client/handlers/reset-and-accent-handlers.js。
+    const clSrc3 = clientText().replace(/\r\n/g, '\n');
+    check('#192 页签重置：单一挂载点 + 关于页签不给假按钮 + 处理器在客户端正文族',
       ptSrc.includes('function renderTabReset(ctx, tabId)')
       && ptSrc.includes('if (tabId === "about") return null;')
       && ptSrc.includes('renderConfirmRow(armedConfirm, token,')
@@ -4774,7 +4794,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
   }
   {
     // ── #191 问题 2：连续同侧消息只在首条显示头像 ──────────────────────────────
-    const avSrc = readFileSync(join(root, 'src', 'avatar-layer.js'), 'utf8').replace(/\r\n/g, '\n');
+    const avSrc = readFileSync(join(root, 'src', 'extensions', 'avatar-layer.js'), 'utf8').replace(/\r\n/g, '\n');
     // ⚠️ 刀4 之后 `src/styles.js` 只是 31 行组装点 ⇒ 样式判据必须读**样式族全文**（styleText()）。
     const stSrc = styleText();
     check('#191/#231 头像分组：一回合一张脸 + 贴在可见行 + 续行用 visibility 隐藏（不摘节点 ⇒ 不踩回 #154）',
@@ -4805,8 +4825,11 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     // 做法是"**导入时先裁再传**"（盘上那张就是裁完的方形图）⇒ 零新设置键、预览与会话天然一致。
     // 判据盯三件事：① 裁切几何只有一份实现（渲染器不自己再算一遍）；② 上传腿走既有的
     // postImageAsset（不新开第二条落盘通道）；③ 弹窗有取消路径（取消 = 不上传、撤 URL）。
-    const clSrc2 = readFileSync(join(root, 'src', 'client.js'), 'utf8').replace(/\r\n/g, '\n');
-    const eaSrc = readFileSync(join(root, 'src', 'ext-avatar.js'), 'utf8').replace(/\r\n/g, '\n');
+    // 取文口径：**客户端正文族**（正文 + src/client/*.js 助手模块，见 test/tools/src-scope.mjs）。
+    // 裁切实现 2026-11-28 起住 src/client/handlers/image-assets.js；判据管的是"这一族里有没有、是不是
+    // 唯一一份"，不是"住在哪个文件"——按单文件读会让搬家把判据静默变成恒假。
+    const clSrc2 = clientText().replace(/\r\n/g, '\n');
+    const eaSrc = readFileSync(join(root, 'src', 'extensions', 'ext-avatar.js'), 'utf8').replace(/\r\n/g, '\n');
     check('#191 上传裁切：唯一几何实现 + 走既有上传腿 + 有取消路径',
       clSrc2.includes('function avatarCropGeometry()')
       && clSrc2.includes('function cropAvatarToBlob()')
@@ -4826,10 +4849,10 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     // 上面那组判据只钉"函数在不在、顺序对不对"（源码口径）。但 `parseBitmapHeaderSize`
     // 是这轮**唯一含位运算的新代码** —— 位域读错一位就会把 1024 读成 0（闸随之恒放行）。
     // 所以这里 import **真实现**、用合成的最小文件头喂它，断言的是**返回值**而不是源码形状。
-    // 之所以能这么测：`src/avatar-import.js` 是纯函数（零 DOM、零异步、零外界），
+    // 之所以能这么测：`src/extensions/avatar-import.js` 是纯函数（零 DOM、零异步、零外界），
     // 而它独立成文件的理由与 section-head / module-reset 完全相同（按文件 import 的替身
     // 必须取到真实现）。
-    const ai = await import(pathToFileURL(join(root, 'src', 'avatar-import.js')).href);
+    const ai = await import(pathToFileURL(join(root, 'src', 'extensions', 'avatar-import.js')).href);
     /** 造一个 PNG 头（89 50 4E 47 0D 0A 1A 0A + 长度 + IHDR + 宽 + 高）。 */
     const pngHead = (w, h) => {
       const b = new Uint8Array(32);
@@ -5085,7 +5108,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     // ⑦ **变异负对照**（判据有牙的证据，不是恒真式）：把真实现的 `ispe` 宽度读成高度
     //    （`hit.start + 4` → `hit.start + 8`），把变异体 import 一次 —— ① 那条
     //    「4096×2048」的判据必须在这个变异体上判红。改坏了还不红，说明判据是形状死钉。
-    const aiText = readFileSync(join(root, 'src', 'avatar-import.js'), 'utf8');
+    const aiText = readFileSync(join(root, 'src', 'extensions', 'avatar-import.js'), 'utf8');
     const mutatedText = aiText.replace(
       '  const width = readU32BE(b, hit.start + 4);',
       '  const width = readU32BE(b, hit.start + 8);');
@@ -5160,11 +5183,13 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     //   ④ 自动压缩**无损优先**（PNG 排在 WebP 前面）；
     //   ⑤ 结构上不泄原始文件：上传的那份 blob 来自**裁切画布**（于是 SVG 这类"客户端收得下、
     //      宿主不认"的格式只可能以像素形态落盘，同源存储型 XSS 无从谈起）。
-    const gsrc = readFileSync(join(root, 'src', 'client.js'), 'utf8').replace(/\r\n/g, '\n');
-    const eSrc = readFileSync(join(root, 'src', 'ext-avatar.js'), 'utf8').replace(/\r\n/g, '\n');
-    // 闸的常量与探针住在 src/avatar-import.js（纯函数，上面那组判据用真字节喂它）；
+    // 取文口径：客户端正文族（正文 + src/client/*.js 助手模块）。头像裁切/确认自 2026-11-28 起
+    // 住 src/client/handlers/image-assets.js；按单文件读会让"上传的是裁切画布"这条判据在搬家后恒假。
+    const gsrc = clientText().replace(/\r\n/g, '\n');
+    const eSrc = readFileSync(join(root, 'src', 'extensions', 'ext-avatar.js'), 'utf8').replace(/\r\n/g, '\n');
+    // 闸的常量与探针住在 src/extensions/avatar-import.js（纯函数，上面那组判据用真字节喂它）；
     // 这里钉的是**接线**：client 正文有没有真的用它们、以及用的顺序对不对。
-    const aiSrc = readFileSync(join(root, 'src', 'avatar-import.js'), 'utf8').replace(/\r\n/g, '\n');
+    const aiSrc = readFileSync(join(root, 'src', 'extensions', 'avatar-import.js'), 'utf8').replace(/\r\n/g, '\n');
     const limitsInPlace = aiSrc.includes('const AVATAR_IMPORT_MAX_EDGE = 1024;')
       && aiSrc.includes('const AVATAR_IMPORT_MAX_BYTES = 4 * 1024 * 1024;');
     const headFn = aiSrc.includes('function parseBitmapHeaderSize(buffer)');
@@ -5218,7 +5243,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     // 折叠三角、只剩一个 auto ⇒ 它贴在最右端。用户要的是**所有模块都长成主题那样**。
     // 于是两件事：① 节头里 ↺ 排到折叠三角**之后**（坐进原来"小绿点"那一列）；
     //            ② 有三角同排时 ↺ 不再抢剩余空间（让位给三角的 auto）。
-    const headSrc = readFileSync(join(root, 'src', 'section-head.js'), 'utf8').replace(/\r\n/g, '\n');
+    const headSrc = readFileSync(join(root, 'src', 'ui', 'section-head.js'), 'utf8').replace(/\r\n/g, '\n');
     // ⚠️ 同上：CSS 住在 src/styles/*.js 域模块里，`src/styles.js` 只是组装点 ⇒ 读样式族全文。
     const styleSrc = styleText();
     /** 节头尾部次序：标签 → 折叠三角 → ↺（正/负对照共用**这一个**函数）。 */
@@ -5352,7 +5377,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     // 源码口径：这一层的要点全是"看不见的形态"（不建 DOM、只用独立属性可用量、中心对称、
     // 到位就停、系数可配、特效层不参与）。逐条钉住，改坏了当场红。
     const parSrc = readFileSync(subParallaxFile('parallax-layer.js'), 'utf8');
-    const weBaseSrc = readFileSync(join(root, 'src', 'we-base.js'), 'utf8');
+    const weBaseSrc = readFileSync(join(root, 'src', 'core', 'we-base.js'), 'utf8');
     check('parallax-layer.js 不建 DOM + 独立属性直接写位移 + 中心对称(负向) + 收敛驱动 + 特效不参与 + 帧内零测量',
       parSrc.includes("const PARALLAX_DIRECTION = -1;")
       && parSrc.includes("const PARALLAX_ATTR = 'data-we-parallax';")
@@ -5363,7 +5388,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       && parSrc.includes('const PARALLAX_BG_MIN = 0;') && parSrc.includes('const PARALLAX_BG_MAX = 10;')
       && parSrc.includes('const PARALLAX_SMOOTH_MAX = 98;')
       // 没有 DOM 的环境（无头沙箱 / SSR 探测）一律从这一个入口静默返回：body 入口是共享地基
-      // src/we-base.js 的 `weBody()`（无 DOM 一律 null），这里断言"层只经它取 body"。
+      // src/core/we-base.js 的 `weBody()`（无 DOM 一律 null），这里断言"层只经它取 body"。
       && parSrc.includes('weBody()')
       && !parSrc.includes('parallaxBody')
       && weBaseSrc.includes('function weBody()')
@@ -6308,7 +6333,8 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     // 存档与面板**从此同一个单位**（0..10 / 步长 0.1，真源 = lib/settings-schema.js 的 KINDS）⇒
     // 面板不再 ×100、src/client.js 那一侧也不再 ÷100（与「暗化」「边框」那条旧口径分道扬镳）；
     // 单位仍用**裸** "%"（裸单位才有拖动期就地回显，预格式化整串拖动期数字不跟手）。
-    const clientSrcPar = readFileSync(join(root, 'src', 'client.js'), 'utf8');
+        // 取文口径：客户端正文族 —— 组件体自 2026-11-28 起住 src/client/picker-component.js。
+    const clientSrcPar = clientText();
     const pctRows = ['Chat', 'Composer', 'Sidebar', 'Bubble'].map((name) => ({
       args: ', 0, 10, 0.1, sel.parallaxUi' + name + 'Depth, onParallaxUi' + name + 'Depth',
       unit: '"%", "parallax-ui-' + name.toLowerCase() + '-depth"',
@@ -6375,7 +6401,8 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
   // 事件；处理器若写成布尔形参（v）再写 v === true，那个比较**恒为假** ⇒ 勾上写不回设置（只能写
   // false，界面与存档就分叉了）。这两个键必须与 onTitlebarGlass / onPauseOnHidden 同一口径。
   {
-    const toggleSrc = readFileSync(join(root, 'src', 'client.js'), 'utf8');
+    // 取文口径：客户端正文族 —— 场景开关键处理器自 2026-11-28 起住 src/client/handlers/settings-toggle-handlers.js。
+    const toggleSrc = clientText();
     const SCENE_TOGGLES = [['onSceneAutoQuality', 'sceneAutoQuality'], ['onSceneSoftRenderPause', 'sceneSoftRenderPause']];
     // 判据做成函数，负对照喂合成文本 —— 把 (e) 换回旧的 (v) 必须判红。
     const eventShaped = (text) => SCENE_TOGGLES.every(([fn, key]) =>
@@ -6392,13 +6419,13 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
   // 这一层的判据口径与视差层相反：它**要**建节点（往宿主的消息行里插），但无头沙箱里
   // 连 `document` 都没有 ⇒ 一半靠"零抛错零副作用"（开着也不许炸），一半靠**源码口径**
   // 把"只碰哪几类消息行 / 关掉怎么回原生 / 名字从哪来 / 观察者怎么早退"逐条钉住。
-  const avatarLayerMod = await import(pathToFileURL(join(root, 'src', 'avatar-layer.js')).href);
-  const extAvatarMod = await import(pathToFileURL(join(root, 'src', 'ext-avatar.js')).href);
+  const avatarLayerMod = await import(pathToFileURL(join(root, 'src', 'extensions', 'avatar-layer.js')).href);
+  const extAvatarMod = await import(pathToFileURL(join(root, 'src', 'extensions', 'ext-avatar.js')).href);
   {
     const PREV_SEL = globalThis.selection;
     const restoreWeBase = stubWeBase();
-    // 单独 import 时这两枚在**构建期**是同一作用域的兄弟模块符号（src/api-client.js 的
-    // apiUrl、src/avatar-layer.js 的默认名/头像几何）⇒ 按内联规则补替身。
+    // 单独 import 时这两枚在**构建期**是同一作用域的兄弟模块符号（src/core/api-client.js 的
+    // apiUrl、src/extensions/avatar-layer.js 的默认名/头像几何）⇒ 按内联规则补替身。
     const PREV_API_URL = globalThis.apiUrl;
     globalThis.apiUrl = (p) => '/wallpaper-engine' + String(p || '');
     let threw = '';
@@ -6447,7 +6474,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
         // ⚠️ `humanMb` 给**真实现**（不是替身）：它就是超限文案里那句 "{mb}" 的格式化器，
         // 替身会让"这个函数在产物里根本不存在"这种缺陷溜过去（ext-avatar 只在超限时调它，
         // 别的用例喂的是没有超限的 sel ⇒ 那条路覆盖不到）。
-        humanMb: (await import(pathToFileURL(join(root, 'src', 'avatar-import.js')).href)).humanMb,
+        humanMb: (await import(pathToFileURL(join(root, 'src', 'extensions', 'avatar-import.js')).href)).humanMb,
       };
       const prevFns = {};
       for (const k of Object.keys(stubs2)) { prevFns[k] = globalThis[k]; globalThis[k] = stubs2[k]; }
@@ -6519,7 +6546,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       }
     }
     // 源码口径：这一层的要点全是"看不见的形态"或"只准碰哪几类行"。逐条钉住，改坏了当场红。
-    const avSrc = readFileSync(join(root, 'src', 'avatar-layer.js'), 'utf8');
+    const avSrc = readFileSync(join(root, 'src', 'extensions', 'avatar-layer.js'), 'utf8');
     // 收窄导出面（task-17 第 56 条）：`avatarGlyphSvgString` 零跨模块按名引用 ⇒ 只删导出面。
     // 它是内置默认头像的**几何真源**（:107 声明，:164 内部使用）⇒ 本体与用法必须仍在；
     // 否则后人会把它当死代码连声明一起清掉，默认头像静默变成空 glyph。
@@ -6610,7 +6637,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
       }
     }
     const mod = extAvatarMod.AVATAR_EXTENSION_MODULE;
-    const extAvSrc = readFileSync(join(root, 'src', 'ext-avatar.js'), 'utf8');
+    const extAvSrc = readFileSync(join(root, 'src', 'extensions', 'ext-avatar.js'), 'utf8');
     const wantOff = [globalThis.weT('启用自定义会话头像')];
     const wantOn = wantOff.concat(PARAMS.map((k) => globalThis.weT(k)));
     check('ext-avatar.js 可单独 import · 注册表项形状 · 关着只画总开关、开着才画两方各行与两个滑块',
@@ -7322,7 +7349,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
   // ── #254 随机过场 / 随机方向：只在换层那一跳抽，池里排除硬切 ─────────────────
   // issue 的验收是统计性的（6000 次里 6 种非硬切过场各约 1000、从不含 cut、时长恒 > 0；
   // 方向 4000 次四向均匀）。这里用**真源码**装出 switchTransitionOf：常量块取自
-  // src/client.js（与界面同源），函数体取自 src/layer-core.js；再把 Math.random 换成
+  // src/client.js（与界面同源），函数体取自 src/wallpaper/layer-core.js；再把 Math.random 换成
   // 常量跑一遍，证明同一判据会判红（负对照）。
   {
     const src = clientText();
@@ -7340,7 +7367,7 @@ check('官方侧栏接入用能力门 + 可选服务（不写进 inject，低版
     check('#254 随机过场源码可装配（8 个过场 / 5 个方向）',
       ids.length === 8 && ids.includes('random') && dirs.length === 5 && dirs.includes('random'),
       '过场=[' + ids.join(',') + '] 方向=[' + dirs.join(',') + ']');
-    const coreSrc = readFileSync(new URL('../src/layer-core.js', import.meta.url), 'utf8');
+    const coreSrc = readFileSync(new URL('../src/wallpaper/layer-core.js', import.meta.url), 'utf8');
     const fnSrc = fnBody(coreSrc, 'switchTransitionOf') + '\n}'; // fnBody 切到 '\n}' 之前，补回闭合括号
     const factory = new Function('DEFAULTS', [
       'const weT = (s) => s;',

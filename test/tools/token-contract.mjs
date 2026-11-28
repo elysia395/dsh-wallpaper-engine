@@ -204,7 +204,7 @@ const NOTES = {
   '--dsw-alias-bg-layer-2': '面板层次 2',
   '--dsw-alias-bg-layer-3': '面板层次 3',
   '--dsw-alias-button-elevated-fill': '抬高按钮实色（侧栏「新建会话」等）',
-  '--dsw-alias-bg-overlay': '弹层/浮出层底（issue #71 全表面玻璃）',
+  '--dsw-alias-bg-overlay': '弹层/浮出层底（全表面玻璃）',
   '--dsw-alias-bg-base': '页面基底 —— 壁纸可见性的关键前提（transparent）',
   '--dsw-specific-sidebar-fill': '侧栏填充（宿主 Mica/深色主题各有一份）',
   '--dsw-alias-markdown-code-block': 'markdown 代码块底',

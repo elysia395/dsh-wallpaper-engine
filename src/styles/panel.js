@@ -40,7 +40,7 @@ const CSS_PANEL = `  /* ── 吉祥物形态**3D 圆环转盘**（四次返工
   }
   .we-picker__mascot-window {
     position: relative; flex: 0 1 auto; min-width: 0;
-    /* 宽度：width:100% + **行内的 max-width**（= 环的水平外沿，随 scale 变）。
+    /* 宽度：width:100% + **行内的 max-width**（=环的水平外沿，随 scale 变）。
        窗口**贴住环**：铺满整行会在环两侧留下大片空白（"中间一小坨"的成因），
        写死一个数又会在宽面板里显得窄。高度同样走行内（见渲染器 WINDOW_H_PX）。 */
     width: 100%;
@@ -225,14 +225,14 @@ const CSS_PANEL = `  /* ── 吉祥物形态**3D 圆环转盘**（四次返工
   }
   /* 类型 + 播放态：宽卡片里是标题下的独立一行（普通块级）。 */
   .we-picker__current-meta { display: block; font-size: 0.75em; opacity: 0.55; margin-top: 2px; }
-  /* 播放失败 / 选择被过滤排除的原因（#84）: 紧跟在 meta 行下的一句可读说明，
+  /* 播放失败 / 选择被过滤排除的原因: 紧跟在 meta 行下的一句可读说明，
      这两种情况都表现为「壁纸一片空白且无从下手」，故必须可见但克制。 */
   .we-picker__current-error { font-size: 0.75em; opacity: 0.9; margin-top: 2px; color: #e5534b; }
 
   /* Primary action (选择壁纸): the ONE solid-accent control per view — accent
      is reserved for primary action + selection states, never decoration.
      墨色不写死 #fff：accent 可以是任意亮度（用户配色），亮 accent（黄）上的
-     白字就是 issue #127 的「文字与背景同色」—— 按 accent 亮度选墨。 */
+     白字就是「文字与背景同色」—— 按 accent 亮度选墨。 */
   .we-picker__btn--primary {
     color: var(--we-accent-ink, #fff);
     background: var(--we-accent, #4f8cff);
@@ -684,7 +684,7 @@ const CSS_PANEL = `  /* ── 吉祥物形态**3D 圆环转盘**（四次返工
   .we-picker__tab--active {
     background: var(--we-accent, #4f8cff);
     border-color: var(--we-accent, #4f8cff);
-    /* 墨随 accent 亮度选（issue #127 同款：亮 accent 上写死白字不可读）。 */
+    /* 墨随 accent 亮度选（同款：亮 accent 上写死白字不可读）。 */
     color: var(--we-accent-ink, #fff);
   }
   .we-picker__modal-body {
@@ -697,7 +697,7 @@ const CSS_PANEL = `  /* ── 吉祥物形态**3D 圆环转盘**（四次返工
   .we-picker__modal-body .we-picker__grid { max-height: none; }
   /* 库视图虚拟滚动的占位行（picker-modal 的 renderVSpacer）：撑出未渲染部分的高度。
      网格里必须 grid-column 全跨整行，否则会占一个卡位把可见卡片挤错行。行高常量
-     PICKER_CARD_H / PICKER_CARD_GAP 在 src/picker-modal.js 顶层，两边必须同步改。 */
+     PICKER_CARD_H / PICKER_CARD_GAP 在 src/picker/picker-modal.js 顶层，两边必须同步改。 */
   .we-picker__vspacer { width: 100%; pointer-events: none; }
   .we-picker__grid .we-picker__vspacer { grid-column: 1 / -1; }
   .we-picker__modal-foot { display: flex; align-items: center; justify-content: space-between; }
@@ -773,7 +773,7 @@ const CSS_PANEL = `  /* ── 吉祥物形态**3D 圆环转盘**（四次返工
      frame-rate-cap tier row in the 效果 tab both wrap their buttons in .we-picker__seg. */
   .we-picker__seg { display: flex; gap: 4px; flex: 1; min-width: 0; }
   .we-picker__rate {
-    /* basis 用 auto 而不是 0（#253）：flex-basis:0 的项在换行计算里按 0 宽参与，11 个键
+    /* basis 用 auto 而不是 0：flex-basis:0 的项在换行计算里按 0 宽参与，11 个键
        会全挤在同一行、各自压到几像素。auto 让换行先看见每键的内容宽，再由父级分配剩余。 */
     flex: 1 1 auto; min-width: 56px; height: var(--we-ui-h, 30px); padding: 0; text-align: center; font-size: 0.78em;
     border: 1px solid var(--dsw-alias-border-l2, rgba(128, 128, 128, 0.35));

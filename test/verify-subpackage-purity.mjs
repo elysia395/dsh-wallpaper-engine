@@ -454,7 +454,7 @@ check('负对照基准：字体包扫描面非空（src 面 ≥1 且有 src/clie
 check('负对照：字体包 src 面清空判红（0 文件 => 判据真空为真，必须被堵）',
   fontsCoverageProblems(mkFontsPkg(), [{ abs: join(ROOT, 'packages', 'fonts', 'lib', 'client.fonts.js'), text: '' }]).some((s) => /src 面 0 个文件/.test(s)));
 check('负对照：字体包 src/client.js 不在扫描面内判红（冻结入口缺锚即红）',
-  fontsCoverageProblems(mkFontsPkg(), [{ abs: join(ROOT, 'packages', 'fonts', 'src', 'fontset-store.js'), text: '' }]).some((s) => /冻结的浏览器半边入口/.test(s)));
+  fontsCoverageProblems(mkFontsPkg(), [{ abs: join(ROOT, 'packages', 'fonts', 'src', 'settings', 'fontset-store.js'), text: '' }]).some((s) => /冻结的浏览器半边入口/.test(s)));
 check('负对照：字体包名漂移（packages 下找不到）判红，不回落到"0 违反"',
   fontsCoverageProblems(null, []).some((s) => /包名漂移/.test(s)));
 check('负对照：服务名对账在 hostServiceName=null 时整体关闸（不误报旧口径输入）',

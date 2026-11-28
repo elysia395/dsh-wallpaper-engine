@@ -2,7 +2,7 @@
  * verify-api-client.mjs — 宿主 API 客户端的守卫。
  *
  * 两件事：
- *   ① **不变量**：业务代码**零裸 `fetch(`** —— 新代码必须走 src/api-client.js（单一出入口）。
+ *   ① **不变量**：业务代码**零裸 `fetch(`** —— 新代码必须走 src/core/api-client.js（单一出入口）。
  *   ② **行为**：用注入的假 fetch 测本模块自己的契约（前缀、no-store、HEAD/DELETE 不解析、
  *      非 2xx 不改判、网络中断不抛、JSON 解析失败不吞 ok、POST 序列化）。
  *      每条带负对照。
@@ -17,11 +17,11 @@ import { fileURLToPath } from 'node:url';
 import { stripComments } from './tools/js-text.mjs';
 
 const root = join(dirname(fileURLToPath(import.meta.url)), '..');
-const api = await import(new URL('../src/api-client.js', import.meta.url).href);
+const api = await import(new URL('../src/core/api-client.js', import.meta.url).href);
 const { BASE, apiUrl, apiUrlWithMount, apiFetch, apiJson, apiHead, apiPostJson, apiDelete } = api;
 
 /**
- * ① 的不变量：**业务代码零裸 `fetch(`** —— 客户端每个模块都必须走 `src/api-client.js`。
+ * ① 的不变量：**业务代码零裸 `fetch(`** —— 客户端每个模块都必须走 `src/core/api-client.js`。
  * 不做"≤ 基线"的棘轮：终态就是 0，留一个基线数字只会让人以为还有余量。
  */
 let failed = 0;
@@ -65,16 +65,16 @@ console.log('\n① 裸 fetch 清点（业务代码必须为 0）');
   // 所以先钉住"枚举真的非退化：模块数够、出入口与主客户端都在清单里、文件非空"。
   check('负对照：磁盘枚举覆盖面成立（src/** ≥14 个模块、含出入口与主客户端、都非空）',
     CLIENT_MODULES.length === srcWalk.length && srcWalk.length >= 14
-    && ['src/api-client.js', 'src/client.js', 'src/panel-tabs.js'].every((f) => CLIENT_MODULES.includes(f))
+    && ['src/core/api-client.js', 'src/client.js', 'src/panel-tabs.js'].every((f) => CLIENT_MODULES.includes(f))
     && CLIENT_MODULES.every((rel) => readFileSync(join(root, rel), 'utf8').length > 500),
     CLIENT_MODULES.length + ' 个模块（磁盘枚举 src/**）');
   check('负对照：判据能数出合成文本里的裸 fetch',
     (strip("const r = await fetch('/x'); // fetch( in comment").match(/\bfetch\s*\(/g) || []).length === 1);
-  check('src/api-client.js 存在且是出入囗模块',
-    readFileSync(join(root, 'src/api-client.js'), 'utf8').includes('async function apiFetch'));
+  check('src/core/api-client.js 存在且是出入囗模块',
+    readFileSync(join(root, 'src/core/api-client.js'), 'utf8').includes('async function apiFetch'));
   // 唯一的 fetch 调用点在出入口模块内部（`pickFetch` 里把它取出来），不在业务代码里。
   check('fetch 只在出入口模块内部被"取用"（业务代码零调用）',
-    readFileSync(join(root, 'src/api-client.js'), 'utf8').includes('const doFetch = pickFetch(o.fetch);'));
+    readFileSync(join(root, 'src/core/api-client.js'), 'utf8').includes('const doFetch = pickFetch(o.fetch);'));
 }
 
 // ── ①b 二进制响应消费者必须 parse: false ─────────────────────────────────────
@@ -136,12 +136,12 @@ console.log('\n② URL 前缀 / 默认值');
 }
 
 // ── ②b 挂载前缀（反代子路径部署，issue #409）────────────────────────────────────
-// 前缀探测住 src/app-mount.js：资源名 → document.baseURI → 站点根。判据的口径同文件头：
+// 前缀探测住 src/wallpaper/app-mount.js：资源名 → document.baseURI → 站点根。判据的口径同文件头：
 // **宁可不补，也不乱补** —— 根路径部署必须逐字节退回现状。
 console.log('\n②b 挂载前缀（#409）');
 {
   const { weAppMount, weNormalizeMount, weAppBase, weAppMountReset } = await import(
-    new URL('../src/app-mount.js', import.meta.url).href);
+    new URL('../src/wallpaper/app-mount.js', import.meta.url).href);
 
   check('根路径部署：baseURI 为 / ⇒ 空串（apiUrl 与改动前逐字节一致）',
     weAppMount({ baseURI: 'http://h:1/', origin: 'http://h:1' }) === '');
@@ -190,7 +190,7 @@ console.log('\n②b 挂载前缀（#409）');
     && apiUrlWithMount('data:text/plain,1', M) === 'data:text/plain,1');
   check('负对照：拼接核若改成无条件拼 BASE（不看已带前缀）会被判出',
     apiUrlWithMount(M + BASE + '/x', M) === M + BASE + '/x');
-  const apiSrcTxt = strip(readFileSync(join(root, 'src/api-client.js'), 'utf8'));
+  const apiSrcTxt = strip(readFileSync(join(root, 'src/core/api-client.js'), 'utf8'));
   check('接线：apiUrl 的前缀来自 app-mount（独立模块形态按站点根）',
     apiSrcTxt.includes("typeof weAppBase === 'function'")
     && apiSrcTxt.includes("weAppBase() : ''")
@@ -200,7 +200,7 @@ console.log('\n②b 挂载前缀（#409）');
 // ── ②b' ?we-app-mount= 逃生舱（探测出错时唯一的人工干预口子）──────────────────
 console.log("\n②b' 挂载覆盖（?we-app-mount=）");
 {
-  const { weAppMount } = await import(new URL('../src/app-mount.js', import.meta.url).href);
+  const { weAppMount } = await import(new URL('../src/wallpaper/app-mount.js', import.meta.url).href);
   const sub = '/app/Harness/dsh';
   check('显式指定优先于资源名与 baseURI 证据（含尾斜杠归一化）',
     weAppMount({ search: '?we-app-mount=' + sub + '/', resources: ['/x/assets/a.js'], baseURI: 'http://h:1/x/' }) === sub
@@ -325,7 +325,7 @@ console.log('\n④ POST 序列化');
 // ── ⑤ 源码不变量 ────────────────────────────────────────────────────────────
 console.log('\n⑤ 源码不变量');
 {
-  const code = strip(readFileSync(join(root, 'src/api-client.js'), 'utf8'));
+  const code = strip(readFileSync(join(root, 'src/core/api-client.js'), 'utf8'));
   check('模块内零 !important', !/!\s*important/.test(code));
   check('模块不读 selection / DOM（纯网络出入口）', !/\bselection\b/.test(code) && !/querySelector/.test(code));
   check('不硬编码宿主地址（只走相对前缀）',
@@ -333,15 +333,15 @@ console.log('\n⑤ 源码不变量');
 }
 
 // ── ⑥ 出入口必须真的在产物里（"孤儿模块"防线）────────────────────────────────
-// `src/api-client.js` 一度是**孤儿**：文件在、守卫在逐条测它，但它既不在 `INLINE_MODULES`
+// `src/core/api-client.js` 一度是**孤儿**：文件在、守卫在逐条测它，但它既不在 `INLINE_MODULES`
 // 里、也没有被任何文件 import ⇒ **从不进 bundle**。那时调用点一改用它就会 ReferenceError，
 // 而没有任何守卫会红 —— 浏览器半的模块只有登记进构建清单才存在。
 console.log('\n⑥ 出入口已登记进构建清单、并真的进了产物');
 {
   const build = readFileSync(join(root, 'scripts/build-client.mjs'), 'utf8');
   const bundle = readFileSync(join(root, 'lib/client.js'), 'utf8');
-  check('INLINE_MODULES 登记了 src/api-client.js',
-    /file:\s*'src\/api-client\.js'/.test(build));
+  check('INLINE_MODULES 登记了 src/core/api-client.js',
+    /file:\s*'src\/core\/api-client\.js'/.test(build));
   check('产物里确有 apiFetch 实现（已内联，不是只登记）',
     bundle.includes('async function apiFetch('));
   check('产物里只有**一份**实现（防"正文自带一份旧的"两处漂移）',

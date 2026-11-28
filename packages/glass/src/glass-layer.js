@@ -19,7 +19,7 @@
  *   glass.js（applyGlass / toRgbTriple）· glass-surfaces.js（经 glass-extra 间接）
  *   glass-extra.js（syncExtraGlassCss / disposeExtraGlassCss）
  *
- * detectSoftwareRender（#95）随之从主包 src/client.js 迁入：它是玻璃域的探测（软渲染 ⇒
+ * detectSoftwareRender随之从主包 src/client.js 迁入：它是玻璃域的探测（软渲染 ⇒
  * backdrop-filter 被静默忽略），唯一消费者就是下面 sync 里的 data-we-glass-fallback 挂载，
  * 守卫（verify-softrender）按产物提取执行。
  */
@@ -100,7 +100,7 @@ function detectSoftwareRender() {
   return (softRenderFallback = probeGlassRenderer().software);
 }
 
-// ── 标题栏容器锚点：运行时探针，不写死宿主构建哈希（#235）─────────────────────
+// ── 标题栏容器锚点：运行时探针，不写死宿主构建哈希─────────────────────
 // 宿主 AppFrame 是那条整页 grid 容器的类名（随机哈希前缀 + 固定 local 名 frame），前缀是
 // CSS-module 的构建哈希：宿主每换一次构建就可能变一次。写进选择器 ⇒ 宿主一升级，标题栏
 // 玻璃（含软件渲染回退两条）就静默失效；而两道硬门都还成立 ⇒ 现场表现是「开关怎么点都
@@ -212,13 +212,13 @@ function applyGlassLayer() {
   const fidNum = Number(selection.glassFidelity);
   const glassFidelity = Number.isFinite(fidNum) ? Math.min(1, Math.max(0, fidNum / 100)) : 1;
   s.setProperty("--we-glass-fidelity", String(glassFidelity));
-  // - 镜面高光强度（#404，0–100，默认 100 = 现状）：只缩放釉光的两组变量 ——
+  // - 镜面高光强度（0–100，默认 100 = 现状）：只缩放釉光的两组变量 ——
   //   主块三档（--we-panel-sheen-*）与侧栏派生那一路（--we-sidebar-sheen）。
   //   100 ⇒ 1 = 与接线前逐值相同；0 = 两组归零，只留底与霜。
   const sheenNum = Number(selection.glassSheenStrength);
   const sheenScale = Number.isFinite(sheenNum) ? Math.min(1, Math.max(0, sheenNum / 100)) : 1;
   s.setProperty("--we-sheen-scale", String(sheenScale));
-  // 宿主 Modal 遮罩浓度（#254）：0–100 ⇒ 0–1；CSS 侧按主题把 --dsw-alias-bg-mask-1
+  // 宿主 Modal 遮罩浓度：0–100 ⇒ 0–1；CSS 侧按主题把 --dsw-alias-bg-mask-1
   // 的 alpha 乘上它（100 = 宿主原值浅 0.24 / 深 0.50，0 = 完全不遮）。
   const maskNum = Number(selection.settingsMaskStrength);
   const maskStrength = Number.isFinite(maskNum) ? Math.min(1, Math.max(0, maskNum / 100)) : 1;
@@ -264,7 +264,7 @@ function applyGlassLayer() {
   else document.body.removeAttribute("data-we-thinking-glass");
   if (thinkingGlass && selection.tableReadability !== false) document.body.setAttribute("data-we-table-readability", "on");
   else document.body.removeAttribute("data-we-table-readability");
-  // 标题栏容器锚点（#235）：顶栏玻璃那一族 CSS 只认 [data-we-titlebar-anchor]，不再写死宿主
+  // 标题栏容器锚点：顶栏玻璃那一族 CSS 只认 [data-we-titlebar-anchor]，不再写死宿主
   // 构建哈希 —— 探针判据与理由见本文件 findTitlebarFrame 的注释。关掉标题栏玻璃 / 皮肤让路
   // = 这一面整组不生效，标记也一并摘掉（`&& !skinYield` 正是让路早退路径的摘锚点）。
   syncTitlebarAnchor(selection.titlebarGlass === true && !skinYield);
@@ -301,7 +301,7 @@ function applyGlassLayer() {
   if (selection.sidebarGlass && selection.sidebarFollowGlobal && !skinYield) document.body.setAttribute("data-we-sidebar-follow", "on");
   else document.body.removeAttribute("data-we-sidebar-follow");
 
-  // 软件渲染钩子（#95，见本文件头部 detectSoftwareRender）：@supports 只做语法检查，软件
+  // 软件渲染钩子（见本文件头部 detectSoftwareRender）：@supports 只做语法检查，软件
   // 合成下 backdrop-filter 被静默忽略时它依然为真，所以近不透明回退必须靠运行时
   // 探测来挂载。命中时 CSS（body[data-we-glass-fallback]）让面板/侧栏/内容面/
   // 弹层改用与 @supports 回退完全相同的配方，并显式 backdrop-filter: none。
@@ -344,13 +344,13 @@ function disposeGlassLayer() {
   // 标题栏液态玻璃门（与上面那个同批）：漏撤 ⇒ 插件卸载 / 禁用后，顶栏仍挂着玻璃底与
   // 雾化层，而壳层自己的不透明底色被压住 —— 表现为"插件没了，标题栏还是玻璃的"。
   document.body.removeAttribute("data-we-titlebar-glass");
-  // 标题栏容器的锚点标记（#235，挂在**宿主元素**上而非 body）：同批摘掉 —— 它是本插件
+  // 标题栏容器的锚点标记（挂在**宿主元素**上而非 body）：同批摘掉 —— 它是本插件
   // 打到宿主 DOM 上的属性，插件禁用 / HMR 卸载后不能留在页面上。
   if (typeof document !== "undefined" && document
       && typeof document.querySelectorAll === "function") {
     for (const el of document.querySelectorAll("[data-we-titlebar-anchor]")) el.removeAttribute("data-we-titlebar-anchor");
   }
-  // 思考块液态玻璃门（PR #130 引入）：同批的卸载残留口径 —— 漏撤 ⇒ 插件卸载后
+  // 思考块液态玻璃门（引入）：同批的卸载残留口径 —— 漏撤 ⇒ 插件卸载后
   // 宿主思考条的规则组照旧生效。合并 #132 时补上（第 ⑨ 组清理对称判据的要求）。
   // 三挡的另一半（对话区原生挡）同批：漏撤 ⇒ 卸载后对话区令牌仍被钉回原生值。
   document.body.removeAttribute("data-we-thinking-glass");
@@ -391,7 +391,7 @@ function disposeGlassLayer() {
     "--we-chat-glass-fidelity", "--we-chat-surface-tint-light", "--we-chat-surface-tint-dark",
     "--we-chat-surface-tint-rgb-light", "--we-chat-surface-tint-rgb-dark",
   ]) s.removeProperty(v);
-  // 额外补雾化通道（#200）：这一份是**运行期生成的** <style>，不在静态样式表里 ⇒
+  // 额外补雾化通道：这一份是**运行期生成的** <style>，不在静态样式表里 ⇒
   // 必须显式撤标签（与上面那批 body 属性 / 变量成对，理由同"清理对称性"）。
   disposeExtraGlassCss();
   // 市场吸顶条裁切：摘监听 + 把写在宿主元素上的 mask 全部还回去（成对，理由同"清理对称性"）。

@@ -151,7 +151,7 @@ function themeFollowParseColor(value) {
   return null;
 }
 
-/** 颜色 → 主题判决：'dark' / 'light'；拿不到颜色返回 ''（= 不动）。 */
+/** 颜色 → 主题判决：'dark' / 'light'；拿不到颜色返回 ''（=不动）。 */
 function themeFollowVerdict(rgb) {
   if (!Array.isArray(rgb) || rgb.length < 3) return "";
   return themeFollowLuminance(rgb) > THEME_FOLLOW_LIGHT_ABOVE ? "light" : "dark";

@@ -10,7 +10,7 @@ import vm from 'node:vm';
 // 剥注释：共享的字符串感知实现（test/tools/js-text.mjs）。
 import { stripComments, stripExportBlocks } from './tools/js-text.mjs';
 // 刀3：样式族取文（8 个域模块 + 组装点，构建序拼接）——别再自己 readFileSync 单文件。
-import { styleText, panelText, scopeText } from './tools/src-scope.mjs';
+import { styleText, panelText, scopeText, clientText } from './tools/src-scope.mjs';
 // P-D S3b：窄键 `rotationIntervalDefault` 必须与设置 schema 的默认值**同源**（下面有判据）。
 import { DEFAULTS as SCHEMA_DEFAULTS, FPS_CAP_VALUES as SCHEMA_FPS_CAP_VALUES } from '../lib/settings-schema.js';
 // 分支级"改了 store 却没通知"的分析与审计工具**同源**（避免两份判据分叉）；
@@ -489,7 +489,7 @@ const readoutOfSlider = (row) => {
 // 「扩展」页签的三张卡现在来自三个 bundle：avatar（本 bundle 模块作用域注册）、fx、parallax。
 // 子包产物只在 loader 上注册自己那份 bundle，真正的注册动作发生在它们各自的 factory：
 // 它们用 require('dsh-plugin-wallpaper-engine') 取主 bundle 的**显式键集**
-// （src/host-bridge.js 的 HOST_BRIDGE_BINDINGS），再 registerExtensionModule / registerLayerHooks。
+// （src/core/host-bridge.js 的 HOST_BRIDGE_BINDINGS），再 registerExtensionModule / registerLayerHooks。
 // 所以这里必须在 apply(ctx) **之前**、同一个 vm 上下文里把两份产物求值掉，且 requireMock 要把
 // 主 bundle 的导出面交给它们 —— 否则页签只剩 avatar，:788 会红（这正是本判据要看见的形态）。
 // 求值顺序**故意反着来**（先 parallax 后 fx）：屏上顺序必须由 descriptor.order 决定，
@@ -1031,7 +1031,9 @@ setTimeout(async () => {
     //    函数体）取出来，在受控的 `wePanelSectionsOf` / `localStorage` 桩下求值。判据与实现
     //    同源 —— 实现若回到恒 `PICKER_TABS`，① 立刻红（负对照 ④ 在同一个求值器上跑）。
     {
-      const srcRaw = readFileSync(new URL('../src/client.js', import.meta.url), 'utf8');
+      // 取文口径：客户端正文族（正文 + src/client/*.js）。PICKER_TABS / TAB_SECTION_OWNER 自
+      // 2026-11-28 起住 src/client/picker-tabs.js；按单文件读会让装置自检直接判红。
+      const srcRaw = clientText();
       const src = srcRaw.replace(/\r\n/g, '\n');
       const litOf = (needle, re) => {
         const m = src.match(re);
@@ -1234,7 +1236,9 @@ setTimeout(async () => {
       // 头像与立绘共用同一条腿 —— 文案里的 `{what}` 由调用点给），并要求请求走 `parse: "always"`
       //（否则非 2xx 的信封读不到，永远只剩裸状态码）。
       {
-        const clientSrcForAvatar = readFileSync(new URL('../src/client.js', import.meta.url), 'utf8');
+        // 取文口径：客户端正文族（正文 + src/client/*.js 助手模块）。头像裁切与立绘上传自
+        // 2026-11-28 起住 src/client/handlers/image-assets.js；按单文件读会让"调用点走同一腿"这条判据恒假。
+        const clientSrcForAvatar = clientText();
         assert.ok(/function assetRouteFailure\(res, what\)/.test(clientSrcForAvatar)
           && /res\.status === 404 \|\| res\.status === 405/.test(clientSrcForAvatar)
           && clientSrcForAvatar.includes('宿主里没有{what}路由：重启 DSH 后再试')
@@ -2382,7 +2386,9 @@ setTimeout(async () => {
       //    ⇒ 渲染器永远收到 undefined ⇒ scale 恒为 1，而**所有隔离判据照样全绿**。
       //    隔离测试证明不了"线接上了"，所以这里直接读源码核对这条线。
       {
-        const cliSrc = readFileSync(new URL('../src/client.js', import.meta.url), 'utf8');
+        // 取文口径：客户端正文族 —— WallpaperPicker 组件体自 2026-11-28 起住
+        // src/client/picker-component.js（量宽 effect 与 ctx 接线都在组件里）。
+        const cliSrc = clientText();
         // ① 量宽度的 effect 必须在，且量的是环那一行（拿"可用宽度"而不是自我指涉的窗口）
         assert.ok(/querySelector\("\.we-picker__mascot-carousel"\)/.test(cliSrc),
           '★ 必须有一个量环那一行宽度的 effect（量不到就永远是设计档尺寸）');
@@ -2649,7 +2655,9 @@ setTimeout(async () => {
       // mascotImage 写进去的动作，而它需要真文件 + 网络）。行为侧那半边由
       // test/verify-scene.mjs 的真 socket 路由用例（导入 / 覆盖 / 清除）覆盖。
       {
-        const srcNow = readFileSync(new URL('../src/client.js', import.meta.url), 'utf8');
+        // 取文口径：客户端正文族（正文 + src/client/*.js 助手模块）。吉祥物立绘的清除处理器
+        // 自 2026-11-28 起住 src/client/handlers/image-assets.js，按单文件读会让"能截出来"这条前置恒假。
+        const srcNow = clientText();
         const tabsNow = panelText();
         assert.ok(/function ropeArtOf\(selLike\)/.test(srcNow)
           && /apiUrl\("\/mascot\?v=" \+ encodeURIComponent\(name\)\)/.test(srcNow),
@@ -3635,7 +3643,9 @@ setTimeout(async () => {
     //    处理器漏进 ctx 时开关照渲染、点了没反应（`onChange` 收到的是 undefined），
     //    而所有渲染判据照样全绿。所以这里直接读源码核对这条线（与 paneWidth 同款防线）。
     {
-      const cliSrc = readFileSync(new URL('../src/client.js', import.meta.url), 'utf8');
+      // 取文口径：客户端正文族（正文 + src/client/*.js）。onStartPaused 自 2026-11-28 起住
+      // src/client/handlers/settings-toggle-handlers.js；按单文件读会让这条判据恒假。
+      const cliSrc = clientText();
       const call = cliSrc.match(/renderAdvancedTab\(\{([\s\S]*?)\}\)/);
       assert.ok(call, '（前置）找不到 renderAdvancedTab 的调用点');
       assert.ok(/\bonStartPaused\b/.test(call[1]),
@@ -3742,8 +3752,10 @@ setTimeout(async () => {
     // lib/settings-schema.js），源码里没有手写键列表可抠，而且抠名字也证明不了
     // "宿主真的会接受"。所以改判 ①键集派生 ②结构上必须委托 ③**行为**逐键与 golden 一致。
     {
-      const src = readFileSync(new URL('../src/client.js', import.meta.url), 'utf8');
-      const persistSrc = readFileSync(new URL('../src/persistence.js', import.meta.url), 'utf8');
+      // 取文口径：客户端正文族（正文 + src/client/*.js 助手模块）—— 处理器搬出正文后，
+      // 按单文件读会让"持久化直写必须与落盘配对"扫不到它们（漏判），也会把豁免名单判成空转。
+      const src = clientText();
+      const persistSrc = readFileSync(new URL('../src/settings/persistence.js', import.meta.url), 'utf8');
       const host = readFileSync(new URL('../lib/index.js', import.meta.url), 'utf8');
       const schemaMod = await import(new URL('../lib/settings-schema.js', import.meta.url).href);
       const { sanitizeFromSchema, serializeSettings, CLIENT_ONLY, DEFAULTS_ONLY, KINDS, DEFAULTS } = schemaMod;
@@ -3769,7 +3781,7 @@ setTimeout(async () => {
         'id 必须在两侧白名单里但不在 DEFAULTS 里（它是选中项，不是设置项）');
 
       // ①b F3 阶段 2：六个字体键**不在** settings 的持久化白名单里 —— 它们的值住
-      //    `fontsets/<id>.json`（客户端通道见 src/fontset-store.js，宿主侧见 lib/routes/fontsets.js）。
+      //    `fontsets/<id>.json`（客户端通道见 src/settings/fontset-store.js，宿主侧见 lib/routes/fontsets.js）。
       //    与下面的 golden 夹具互为印证：这些键一旦回到白名单，宿主输出就会多出它们、夹具当场漂移。
       //    kind 元数据与默认值**仍须在册**：`sanitizeFontset` 按 `KINDS` 的 kind 消毒、按 `DEFAULTS` 兜底。
       const FONT_KEYS = ['themeColors', 'themeDarkSeparate', 'themeSize', 'themeWeight', 'themeFamily', 'globalFamily', 'componentFonts'];
@@ -3842,7 +3854,7 @@ setTimeout(async () => {
       //      · `src/live-layer.js` ×2 —— `syncLayers` 内部，**本次渲染正由 emit 驱动**（源码注释写明
       //        "这里不 emit：本次 syncLayers 正是由 emit 驱动的"）；
       //      · `src/effects.js` ×3 —— **卸载清理**（禁用 / HMR 后不留上一张壁纸的播放态）。
-      //      · `src/preset-store.js` ×1 —— 通道失败文案的唯一写点（`setPresetError` 助手：
+      //      · `src/settings/preset-store.js` ×1 —— 通道失败文案的唯一写点（`setPresetError` 助手：
       //        清单 / 应用 / 保存 / 删除四条路的失败与清空都汇到它，写点收口是一处 ——
       //         引入玻璃预设时按本棘轮要求归的类）。
       //      给它们注入入口是**仪式**而不是收口（"禁裸写会逼出任意豁免"那条注记就是这个意思）⇒ 这条
@@ -3924,11 +3936,11 @@ setTimeout(async () => {
           why: '卸载清理（禁用 / HMR 后不留上一张壁纸的播放态）；无 emit 是刻意的 —— 这一路径本身就是"把屏上痕迹收干净"',
           fields: ['sceneAudioUrl', 'sceneHasAudio'],
         },
-        'src/fontset-store.js': {
+        'src/settings/fontset-store.js': {
           why: '字体集通道内部的加载态/错误文案/清单；面板经 client.js 的渲染期读取消费（不是每次改动都 emit）',
           fields: ['fontSetActive', 'fontSetError', 'fontSets'],
         },
-        'src/preset-store.js': {
+        'src/settings/preset-store.js': {
           why: '玻璃预设通道内部的清单投影（活跃清单；已删除的出厂不回来，无隐藏形态）；错误文案已收口到 setPresetError 单写点（verify-client ①e 棘轮）',
           fields: ['glassPresets'],
         },        'src/live-layer.js': {
@@ -3945,16 +3957,16 @@ setTimeout(async () => {
             'sceneFrameUrl', 'sceneHasAudio', 'sceneLiveActive', 'sceneLiveSrc', 'sceneVideo',
             'schemeColor', 'slideIntervalMs', 'slidesUrl', 'transcodeState', 'type', 'webLiveSrc'],
         },
-        'src/persistence.js': {
+        'src/settings/persistence.js': {
           why: '启动加载期的一次性赋值（宿主→本地合并的结果），随后由调用方 emit',
           fields: ['hostLoaded', 'sidebarPresent'],
         },
-        'src/system-fonts.js': {
+        'src/settings/system-fonts.js': {
           why: '本机字体清单通道的瞬态（不落盘、不进字体集）：清单 / 在途 / 失败文案 / 取得时刻'
             + '由 ensureSystemFonts 的取数生命周期写入，面板渲染期读取（client.js selection 初始化处有同段注释）',
           fields: ['systemFonts', 'systemFontsApproximate', 'systemFontsAt', 'systemFontsError', 'systemFontsLoading'],
         },
-        'src/video-layer.js': {
+        'src/wallpaper/video-layer.js': {
           why: '视频通道拥有这三个字段的写入权（client.js 那段注释写明）；进度由 /transcode-progress 轮询驱动，'
             + '源码在 syncLayers 内部明确标注 "no emit() here"',
           fields: ['mediaInfo', 'transcodeProgress', 'transcodeReady', 'transcodeState'],
@@ -4159,7 +4171,10 @@ setTimeout(async () => {
         setTransient: '它就是入口本身（只写内存）：通知由调用点负责',
         setCustomFrameLocal: '两个调用点（onCustomFrameFile / onClearCustomFrame）在各自分支里都 emit',
       };
-      const silent = panelSrcs.flatMap((t) => silentHandlers(t))
+      // 口径同上：运行时是一个扁平作用域，处理器可以调用兄弟模块里的通知助手（2026-11-28 搬迁后
+      // onRatingFilterToggle / onTypeFilterToggle 的通知走正文的 emit）—— 按单文件判会误报，
+      // 按作用域整体判一次（与 ①i 同一口径）。
+      const silent = silentHandlers(panelSrcs.join('\n;\n'))
         .filter((n) => !(n in HANDLERS_NOTIFY_ELSEWHERE));
       assert.deepEqual(silent, [],
         '面板处理器写 store 却不会通知（视图会静默停在旧状态）：' + silent.join(', '));
@@ -4192,7 +4207,11 @@ setTimeout(async () => {
         //（weApplyAudio + syncSceneAudio），不是"改了不生效"。同 commitLiveSetting 的两档口径。
         onVideoVolume: 'live 档有意不 emit（拖动中不重渲染，回显由控件就地更新）；抬手档 emit',
       };
-      const branchSilent = panelSrcs.flatMap((t) => pathNotifications(t))
+      // 取文口径：运行时是**一个扁平作用域**（正文 + INLINE_MODULES 全部内联进同一工厂），
+      // 所以处理器完全可以调用兄弟模块里的通知助手。按单文件判会把"跨文件但同作用域"的通知
+      // 当成缺失（2026-11-28 头像裁切搬进 src/client/handlers/image-assets.js 后，onAvatarCropConfirm
+      // 的通知走的就是仍留在正文的 closeAvatarCrop —— 实测假阳性）。合并成一份作用域文本判一次。
+      const branchSilent = pathNotifications(panelSrcs.join('\n;\n'))
         .map((s) => s.split('@')[0]).filter((n) => !(n in BRANCH_NOTIFY_ELSEWHERE));
       assert.deepEqual(branchSilent, [],
         '有分支路径写了 store 却在该路径最后一次写之后没有通知：' + branchSilent.join(', '));
@@ -4225,11 +4244,11 @@ setTimeout(async () => {
         'positive control: 两支各自写、各自通知 ⇒ 不算');
 
       // ② 结构：两侧都必须**委托**给 schema，宿主不得再有手写逐键白名单。
-      //    ⚠️ `serializeSelection` 住在 src/persistence.js ⇒ 那一条按文件归属分源；
+      //    ⚠️ `serializeSelection` 住在 src/settings/persistence.js ⇒ 那一条按文件归属分源；
       //    `sanitizeSettings` 住在 client.js，是对同一份 schema 的另一侧入口。
       assert.ok(/sanitizeFromSchema\(o, "client"\)/.test(src), '客户端 sanitizeSettings 必须委托给 schema');
       assert.ok(/serializeSettings\(selection\)/.test(persistSrc),
-        '客户端 serializeSelection 必须委托给 schema（现在住在 src/persistence.js）');
+        '客户端 serializeSelection 必须委托给 schema（现在住在 src/settings/persistence.js）');
       assert.ok(/sanitizeFromSchema\(raw, 'host'\)/.test(host), '宿主 sanitizeSettings 必须委托给 schema');
       const handWritten = (host.match(/clampNum\(o\.|clampStr\(o\./g) || []).length;
       assert.equal(handWritten, 0,
@@ -4468,8 +4487,11 @@ setTimeout(async () => {
     // DSH_MUT_LIB 变异也能验到；负对照用同一个函数对变异文本判假。
     const hasInventoryFailureEarlyReturn = (src) => {
       const at = src.indexOf('if (next.error) {');
-      const seed = src.indexOf('selection.rotationSeeded = true;');
-      const disable = src.indexOf('selection.rotationEnabled = false;');
+      // ⚠️ 从 at 之后找这两句：构建期把 src/client/*.js 助手模块内联在**正文之前**，这些处理器
+      // （onToggleRotation 等）同样会写 rotationEnabled / rotationSeeded —— 从头找会把前置模块
+      // 里的那次写到前面去，判据随之恒假（2026-11-28 把播放处理器搬出正文后实测）。
+      const seed = src.indexOf('selection.rotationSeeded = true;', at);
+      const disable = src.indexOf('selection.rotationEnabled = false;', at);
       if (at < 0 || seed < 0 || disable < 0) return false;
       if (!(at < seed && at < disable)) return false;
       return /emit\(\);\s*return;/.test(src.slice(at, seed));
@@ -4517,14 +4539,14 @@ setTimeout(async () => {
   }
   assert.ok(effects.length > 0, '效果链至少要跑过一次（effects 记录 ' + effects.length + ' 条）');
 
-// ⑦ 条件求值器住在独立模块（src/we-cond.js），因此可以直接 import 做**行为**测试
+// ⑦ 条件求值器住在独立模块（src/core/we-cond.js），因此可以直接 import 做**行为**测试
 // —— 这是抽模块的核心收益（不必对 src/client.js 做文本断言）。
 // 期望值是**行为快照**：抽模块只允许"行为不动"。
 // ⚠️ 已知语义：本求值器把 `===` / `!==` 也走**宽松**比较（当前实现如此）。
 //    若将来要改成严格比较，必须同步本表并评估对真实壁纸 condition 的影响。
 {
   const { weEvalCondition, weCondTokenize, weCondParse } = await import(
-    new URL('../src/we-cond.js', import.meta.url).href);
+    new URL('../src/core/we-cond.js', import.meta.url).href);
 
   const CASES = [
     // [说明, 表达式, values, 期望]
@@ -4618,8 +4640,8 @@ setTimeout(async () => {
 }
 
 // ── P3-11 阶段 2/3：搬出去的渲染器都只经 ctx（不写 selection / 不自发通知）──────
-// 两次搬迁的契约同口径：模态框 → `src/picker-modal.js`（那 11 处原本内联改 `selection.*`
-// 的箭头都成了 ctx 里的具名回调，动作体留在组件里）；属性面板 → `src/picker-props-panel.js`
+// 两次搬迁的契约同口径：模态框 → `src/picker/picker-modal.js`（那 11 处原本内联改 `selection.*`
+// 的箭头都成了 ctx 里的具名回调，动作体留在组件里）；属性面板 → `src/picker/picker-props-panel.js`
 // （面板状态与「改一个属性」的动作同样留在组件里，渲染器只拿值 + 回调）。
 // 判据只有这一处：数"越过接缝直呼"的次数 —— **按代码判**（先剥注释，否则这些文件的头注
 // 自己提到这两个词就会被误伤）。
@@ -4636,9 +4658,9 @@ setTimeout(async () => {
   };
   // 每条都带一个**非空转锚点**：那串必须在文件里真的存在，否则"零次越界"只是扫了个空文件。
   const RENDERERS = [
-    { file: '../src/picker-modal.js', user: '库视图',
+    { file: '../src/picker/picker-modal.js', user: '库视图',
       anchor: ['function renderPickerModal(ctx)', 'we-picker__modal-head'] },
-    { file: '../src/picker-props-panel.js', user: '属性面板',
+    { file: '../src/picker/picker-props-panel.js', user: '属性面板',
       anchor: ['function renderPickerPropsPanel(ctx)', 'we-picker__props-row'] },
     // P4-15：`panel-tabs.js` 此前**不在**这张表里 —— 它用的是上面那条更弱的判据（只数
     // `selection.` 字面量），于是三类越界全都漏过去了：直接 `emit()`、写模块状态
@@ -4735,7 +4757,7 @@ setTimeout(async () => {
 // 相邻关系绑定 116 个选择器，见文件头注）。判据盯**代码**：装配函数体内不得再出现标记，
 // 且必须调用子渲染器；负对照证明同一条判据能判出"标记确实在子渲染器里"（否则是个恒真判据）。
 {
-  const src = readFileSync(new URL('../src/picker-modal.js', import.meta.url), 'utf8');
+  const src = readFileSync(new URL('../src/picker/picker-modal.js', import.meta.url), 'utf8');
   // 取"函数体"：从声明处到下一个同级声明（`\n  function `/`\n  export {`）—— 不靠行号。
   const bodyOf = (name) => {
     const i = src.indexOf('function ' + name + '(');
@@ -4768,7 +4790,7 @@ setTimeout(async () => {
 // 判据盯**代码**：装配函数体内不得再出现那批标记，且必须调子渲染器；负对照证明同一条
 // 判据能判出"标记确实在子渲染器里"（否则是个恒真判据）。
 {
-  const src = readFileSync(new URL('../src/quick-panel.js', import.meta.url), 'utf8');
+  const src = readFileSync(new URL('../src/ui/quick-panel.js', import.meta.url), 'utf8');
   const bodyOf = (name) => {
     const i = src.indexOf('function ' + name + '(');
     assert.ok(i >= 0, '找不到 ' + name + '（判据不得空转）');
@@ -4810,7 +4832,7 @@ setTimeout(async () => {
 //   · 容器只改相对位置（宿主换会话 / 插队头）⇒ MutationObserver 也要触发重测；
 //   · 卸载 ⇒ RO / MO / scroll 监听全部解绑。
 {
-  const src = readFileSync(new URL('../src/quick-panel.js', import.meta.url), 'utf8');
+  const src = readFileSync(new URL('../src/ui/quick-panel.js', import.meta.url), 'utf8');
   const constOf = (name) => {
     const m = new RegExp('const ' + name + ' = [^;]+;').exec(src);
     assert.ok(m, '找不到虚拟滚动常量 ' + name + '（判据不得空转）');
@@ -4920,7 +4942,7 @@ setTimeout(async () => {
 // 那次 measure 把窗口收成一小段后就再也不重测（"新会话只显示一部分壁纸、滚到底没有更多"）。
 // 判据：显示后窗口必须重测，且**迟到的 sc 也补挂了 scroll 监听**，真滚动能继续翻。
 {
-  const src = readFileSync(new URL('../src/quick-panel.js', import.meta.url), 'utf8');
+  const src = readFileSync(new URL('../src/ui/quick-panel.js', import.meta.url), 'utf8');
   const constOf = (name) => {
     const m = new RegExp('const ' + name + ' = [^;]+;').exec(src);
     assert.ok(m, '找不到虚拟滚动常量 ' + name + '（判据不得空转）');
@@ -5176,7 +5198,9 @@ setTimeout(async () => {
 // ③ **行为**：拿真 `src/effects.js` 在带间谍的 DOM 替身上跑，live 档必须不读 getComputedStyle、
 // 不碰字体 / 场景音频，但照样写样式变量；同一份替身下无参调用必须**两样都做**（负对照）。
 {
-  const clientSrc = readFileSync(new URL('../src/client.js', import.meta.url), 'utf8');
+  // 取文口径：客户端正文族（正文 + src/client/*.js 助手模块）。播放/外观处理器搬出正文后，
+  // 按单文件读会让 declOf('onVideoVolume') 取到空串（判据恒假）。
+  const clientSrc = clientText();
   const effectsText = readFileSync(new URL('../src/effects.js', import.meta.url), 'utf8');
   const declOf = (name) => {
     const i = clientSrc.indexOf('function ' + name + '(') >= 0
@@ -5421,10 +5445,10 @@ setTimeout(async () => {
 //      focusout 来自别的元素）；
 //   ③ 两道保险（记住项过期 / 交还频率）各自负对照；
 //   ④ 拆除函数摘干净、可重装，且重复安装不叠加。
-// 全部走**真 src/focus-handback.js**（`with` + Proxy 的同一套挂载台；未知自由名直接抛，
+// 全部走**真 src/wallpaper/focus-handback.js**（`with` + Proxy 的同一套挂载台；未知自由名直接抛，
 // 漏抄依赖清单会响亮地红）。
 {
-  const fhSrc = readFileSync(new URL('../src/focus-handback.js', import.meta.url), 'utf8');
+  const fhSrc = readFileSync(new URL('../src/wallpaper/focus-handback.js', import.meta.url), 'utf8');
   const buildFh = (source) => {
     const listeners = [];
     const focused = [];
@@ -5868,7 +5892,8 @@ setTimeout(async () => {
 // 判据口径：凡 `clampNum(…, DEFAULTS.<键>)` 的调用，取值域必须写成 `...schemaRange("<键>")`
 // （两处都要、且键名必须与被钳的那个键一致）⇒ 以后改 `KINDS` 不会再有第二处要改。
 {
-  const src = readFileSync(new URL('../src/client.js', import.meta.url), 'utf8');
+  // 取文口径：客户端正文族 —— 处理器搬进 src/client/*.js 后，单文件读会漏掉它们的取值域。
+  const src = clientText();
   // ⚠️ 正则要同时认得**两种形态**：修好的 `clampNum(v, ...schemaRange("k"), DEFAULTS.k)` 源码里只有
   //    三个实参（spread 在运行期展开成两个），而写手的旧形态是四个（`v, 0, 60, DEFAULTS.k`）。
   //    所以按"最后一个实参是 DEFAULTS.<键>"来切，把它前面的部分整体当"取值域"。
@@ -5899,7 +5924,9 @@ setTimeout(async () => {
 // ② 只读对方（绝不写它的标记）；③ 退场在玻璃三层门控点都生效、复位带滞回、手动重选立刻退；
 // ④ 复位按记忆且不抢用户新选择。
 {
-  const clientSrc = readFileSync(new URL('../src/client.js', import.meta.url), 'utf8');
+  // 取文口径：客户端正文族 —— 皮肤互操作的 ctx.effect 挂载点在 apply() 里，自 2026-11-28
+  // 起住 src/client/plugin-apply.js。
+  const clientSrc = clientText();
   const glassSrc = readFileSync(new URL('../packages/glass/src/glass.js', import.meta.url), 'utf8');
   // ADR-0016 第三刀：effects 的玻璃段随玻璃层出户 ⇒ 门控判据读 glass-layer 源码。
   const glassLayerSrc = readFileSync(new URL('../packages/glass/src/glass-layer.js', import.meta.url), 'utf8');
@@ -6077,7 +6104,7 @@ setTimeout(async () => {
   //    本组两条负对照的锚点是**跨行**字面量 —— 不归一时一个字都匹配不到、`replace` 原样返回
   //    ⇒ 判据会在 Windows 上红成"锚点漂了"（实测：本判据第一次跑 CI 就是这么红的）。
   //    与 verify-glass-surfaces / verify-scene-live 同一口径、同一处方。
-  const navRaw = readFileSync(new URL('../src/nav-icon.js', import.meta.url), 'utf8');
+  const navRaw = readFileSync(new URL('../src/ui/nav-icon.js', import.meta.url), 'utf8');
   const navSrc = navRaw.replace(/\r\n?/g, '\n');
   const navSwapOk = (el) => !!el && el.tagName === 'svg' && el.attrs.class === 'Dws9Sa_navIcon';
 

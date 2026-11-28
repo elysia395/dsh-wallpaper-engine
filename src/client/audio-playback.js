@@ -10,7 +10,7 @@
  */
 // 把期望音量写到元素上。muted 与 volume 必须成对设置：只设 volume=0 时部分
 // 浏览器仍会在 seek/换源后出声，而只设 muted 会让音量滑块看起来没生效。
-// 轮换音频闸生效期间，闸内（= 正在淡入的新层）元素一律按 0 处理，见下方
+// 轮换音频闸生效期间，闸内（=正在淡入的新层）元素一律按 0 处理，见下方
 // openRotationAudioGate。
 function weApplyAudio(video) {
   if (!video) return;
@@ -62,7 +62,7 @@ function setLiveVolumeNow(frame, volume) {
     return true;
   } catch { return false; }
 }
-// 恢复（= 旧层已退场）：新层音源按当前设置出声，场景包 BGM 此刻才起播。
+// 恢复（=旧层已退场）：新层音源按当前设置出声，场景包 BGM 此刻才起播。
 function restoreNodeAudio(node) {
   // isConnected 只在**明确**为 false（已被替换/移除）时跳过：测试 mock 无此属性。
   if (node && node.isConnected !== false) {
@@ -177,7 +177,7 @@ function applyVideoPlayback(video) {
 }
 
 // ── 源元数据 + 抽帧转码（抽帧转码 / 帧率上限）────────────────────────────────
-// 这一族的实现住在 **`src/video-layer.js`**（探测 → 决策 → 进度轮询 → 落地/回退；
+// 这一族的实现住在 **`src/wallpaper/video-layer.js`**（探测 → 决策 → 进度轮询 → 落地/回退；
 // 构建期内联回本作用域，调用点无需改动）。它拥有 `selection.mediaInfo` / `transcodeState` /
 // `transcodeProgress` 三个字段的写入权；依赖清点、入口与不变量见该文件头。
 function codecLabel(codec) {

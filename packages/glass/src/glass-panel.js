@@ -427,10 +427,10 @@ function renderAppearanceGlassSection(ctx) {
       SliderRow(weT("玻璃保真度"), 0, 100, 5, sel.glassFidelity, onGlassFidelity, "%", "glass-fidelity", {
         tooltip: weT("100 = 完整可读性红线（默认）：自定义玻璃色经亮度钳制，正文对比度始终 ≥4.5:1 —— 深色主题下颜色被压暗、浅色主题下被提亮。拉低后颜色更贴你选的原色，但正文在极端明暗的壁纸上可能看不清；看不清字时把本项拉回 100，或按「看不清字三步」调节。"),
       }),
-      // 镜面高光（#404）：玻璃面板顶上那道白色镜面高光的强度。它由两组变量给出 ——
+      // 镜面高光：玻璃面板顶上那道白色镜面高光的强度。它由两组变量给出 ——
       // 主块三档（--we-panel-sheen-*，左侧栏 / 标题栏读它）与右侧栏由透明度派生的
       // 那一路（--we-sidebar-sheen）—— 一个旋钮同时覆盖，0 = 全部归零、只留底与霜。
-      // 刻意不做成"逐面独立"：釉光是材质的整体特征，#404 的原话是"单独关掉釉光"。
+      // 刻意不做成"逐面独立"：釉光是材质的整体特征，原话是"单独关掉釉光"。
       SliderRow(weT("镜面高光"), 0, 100, 5, sel.glassSheenStrength, onGlassSheenStrength, "%", "glass-sheen", {
         tooltip: weT("玻璃面板表面那层白色镜面高光（釉光）的强度：100 = 现状；0 = 完全去掉，只保留底色与雾化。左侧栏、标题栏与侧栏的高光也一起吃这个旋钮。"),
       }),
@@ -485,7 +485,7 @@ function renderAppearanceGlassSection(ctx) {
         hint: weT("dsh-better-sidebar 侧栏毛玻璃适配"),
         tooltip: weT("dsh-better-sidebar 侧栏（文件 / 终端 / Git 等面板）的毛玻璃适配；关闭则恢复其原生外观"),
       }),
-      // 侧栏全透明（issue #137）：放弃可读性下限换全透的显式开关。刻意**不跟在
+      // 侧栏全透明：放弃可读性下限换全透的显式开关。刻意**不跟在
       // 侧栏液态玻璃的门后面** —— 玻璃关着时右栏那条原生不透明兜底同样是"透不出来"
       // 的一极，本开关在两个状态都要可达（issue 里用户正是在玻璃关着的档位打的补丁）。
       sel.sidebarPresent && switchRow(weT("侧栏全透明"), sel.sidebarFullClear === true, onSidebarFullClear, {

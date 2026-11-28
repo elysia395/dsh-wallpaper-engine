@@ -183,7 +183,7 @@ function weSurfaceGeometry(target, id, owned) {
 }
 
 /**
- * 从「在布局里且展开」的右栏面板中挑出**前景**那一份（#382）。
+ * 从「在布局里且展开」的右栏面板中挑出**前景**那一份。
  * fullscreen 与 push 并存是宿主 fullscreen 模式的常态：fullscreen 是宿主明确声明的前景
  * dock 模式（glass-css 里有专门的抬升规则），优先认领它；没有 fullscreen 时才接受唯一
  * 一份 push。多份同模式同时展开 ⇒ 判不出前景，返回 null 保守退回原生。
@@ -300,7 +300,7 @@ function weSurfaceRefresh(state) {
   // ── 读/写分相 ───────────────────────────────────────────────────────────
   // `weSurfaceGeometry` 每轮要沿祖先链做 getComputedStyle + 对目标 getBoundingClientRect；
   // 原来紧跟着在同一个循环里写 marker / plate 样式 ⇒ 下一轮读又被自己的写强制布局。
-  // trace 2026-10-30：启动期 6 次 sync 的几何测量全是这种「读—写—读」抖动。
+  // trace启动期 6 次 sync 的几何测量全是这种「读—写—读」抖动。
   // 先把失配记录摘掉、把所有 target 的几何一次读完（本段不做任何 DOM 写），
   // 写完的循环再统一写 —— 读阶段不会被自己的写打断。
   for (const [target, entry] of entries) {

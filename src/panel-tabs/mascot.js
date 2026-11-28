@@ -96,7 +96,7 @@
     // ── 环的几何（全部**由项数与卡宽推出**，没有魔法数）──────────────────────────────
     const n = items.length;
     const STEP_DEG = 360 / n;                       // 相邻两卡的角度间隔（环闭合 ⇒ 整除 360）
-    const BOX_S = at(MASCOT_BOX_PX);                // 卡宽（= 立绘显示宽，两者必须相等）
+    const BOX_S = at(MASCOT_BOX_PX);                // 卡宽（=立绘显示宽，两者必须相等）
     const PERSP_S = at(MASCOT_PERSP_PX);            // 透视（必须与半径同乘，见上）
     const RADIUS_PX = at((MASCOT_BOX_PX / 2) / Math.tan(Math.PI / n) * MASCOT_RING_FACTOR);
     /** 真模：JS 的 `%` 对负数返回负值，`((x % n) + n) % n` 才是数学模。 */
@@ -143,7 +143,7 @@
     const WINDOW_H_PX = Math.ceil(CARD_H_PX * FRONT_ZOOM) + 12;
 
     // ── 与 settings 对齐的**逻辑索引**（只读；写只发生在处理器里，见文件上方说明）────────
-    // 不一致 ⇒ 以 `activeIdx`（= 当前生效的形态）为准：**不变量优先于"走近路"**。
+    // 不一致 ⇒ 以 `activeIdx`（=当前生效的形态）为准：**不变量优先于"走近路"**。
     const alignedLogical = norm(mascotRingLogical) === activeIdx ? mascotRingLogical : activeIdx;
     /** 第 i 张卡相对**前排**的最短偏移（槽位，∈ [−n/2, n/2]）：决定它的透明度。 */
     const slotOffsetOf = (i) => shortest(alignedLogical, i);

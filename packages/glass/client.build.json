@@ -31,7 +31,7 @@
     },
     {
       "file": "src/glass-extra.js",
-      "why": "「额外补雾化的选择器」（#200）：把用户点名的选择器编译成 ::before 载体规则，写进本通道自己的 <style>（ADR-0016 迁入）",
+      "why": "「额外补雾化的选择器」：把用户点名的选择器编译成 ::before 载体规则，写进本通道自己的 <style>（ADR-0016 迁入）",
       "markers": [
         "const EXTRA_GLASS_TAG_ID = ",
         "function weExtraGlassCss(",
@@ -59,7 +59,7 @@
     },
     {
       "file": "src/glass-layer.js",
-      "why": "玻璃行为层（ADR-0016 第三刀新落点）：主包 src/effects.js 的玻璃段（全局玻璃量 / 染色地板写入 / 思考块门控 / 胶囊 / 侧栏跟随 / 软渲染钩子）+ clearEffects 的玻璃摘除清单逐字迁入，组成 registerLayerHooks('glass') 的 sync/dispose；detectSoftwareRender（#95）随之从主包 src/client.js 迁入",
+      "why": "玻璃行为层（ADR-0016 第三刀新落点）：主包 src/effects.js 的玻璃段（全局玻璃量 / 染色地板写入 / 思考块门控 / 胶囊 / 侧栏跟随 / 软渲染钩子）+ clearEffects 的玻璃摘除清单逐字迁入，组成 registerLayerHooks('glass') 的 sync/dispose；detectSoftwareRender 随之从主包 src/client.js 迁入",
       "markers": [
         "function detectSoftwareRender() {",
         "function applyGlassLayer() {",
@@ -68,7 +68,7 @@
     },
     {
       "file": "src/glass-presets-panel.js",
-      "why": "「主题预设」独立节的渲染器（2026-11-07 从 glass-panel.js 纯搬移折出）：出厂名字走词表、破坏性动作两步确认、坏预设禁用但可删、资产勾选对话框；只画界面，数据与网络全经 gp ctx。",
+      "why": "「主题预设」独立节的渲染器（从 glass-panel.js 折出）：出厂名字走词表、破坏性动作两步确认、坏预设禁用但可删、资产勾选对话框；只画界面，数据与网络全经 gp ctx。",
       "markers": [
         "let gpImportInput = null;",
         "function renderGlassPresetsBlock(gp) {"
